@@ -11,7 +11,7 @@ import { expect, it, onTestFailed } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { launchWebScaffold, selectedSessionFixture, watchConsole } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, showSessionPanel } from './support.ts'
 
 const DIR = fileURLToPath(new URL('../../../snapshots/web/subagent-fork-schedule', import.meta.url))
 const LABEL = 'Check child reminder refusal'
@@ -21,8 +21,8 @@ it('places the inherited-history divider between the parent turn and the child p
   const paths = await Promise.all(['session.v4.jsonl', 'session.1.v4.jsonl']
     .map(file => selectedSessionFixture(join(DIR, file))))
   const childPrompt = parseSessionLog(await readFile(paths[1]!, 'utf8')).findLast(event =>
-    event.type === 'user/message' && event.data.source.kind === 'user')
-  if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no user prompt')
+    event.type === 'user/message' && event.data.source.kind === 'agent-message')
+  if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no delegated task')
   const scaffold = await launchWebScaffold({
     replayFixture: paths[0]!, replayChildFixtures: [paths[1]!], compareReplaySession: false,
   })
@@ -43,15 +43,15 @@ it('places the inherited-history divider between the parent turn and the child p
 
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: LABEL, delivery: 'caller',
-      signal: new AbortController().signal, parent, prompt: [...childPrompt.data.content],
+      signal: new AbortController().signal, parent, prompt: childPrompt.data.content.slice(1),
     })
     try {
       await activation.result
     } finally {
       await activation.dispose()
     }
-    await page.getByRole('button', { name: '1 subagent' }).click()
-    await page.getByRole('tree', { name: 'Subagent sessions' }).getByRole('treeitem', { name: new RegExp(LABEL) }).click()
+    const subagents = (await showSessionPanel(page)).locator('[data-session-panel-section="subagents"]')
+    await subagents.getByRole('tree', { name: 'Subagent sessions' }).getByRole('treeitem', { name: new RegExp(LABEL) }).click()
     const divider = page.getByRole('separator', { name: 'Inherited history above' })
     await divider.waitFor({ timeout: 15_000 })
     expect(await divider.count()).toBe(1)

@@ -45,7 +45,9 @@ test('loads the repository approval score policy', () => {
   assert.equal(policy.defaultPoints, 1)
   assert.deepEqual([...policy.reviewerPoints], [
     ['07akioni', 2],
+    ['creatixchu', 2],
     ['imccyu', 2],
+    ['leggasai', 2],
     ['tianyicui', 2],
     ['tianyicui-bot', 2],
     ['turtle1999', 2],
@@ -667,6 +669,21 @@ for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089]
     assert.deepEqual(result.approvals, [])
   })
 }
+
+test('turtle2099 contributes fixed author points without a history lookup', async () => {
+  const output = []
+  const result = await runApprovalCheck({
+    event: pullRequestEvent({ author: 'Turtle2099' }), policySource, runUrl: 'https://github.example/run/1',
+    getMergedCount: async () => { throw new Error('fixed author credit must skip history') },
+    getOwnership: async () => ({ totalLines: 10, reviewerLines: { writer: 2 } }),
+    api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
+    write: line => output.push(line),
+  })
+  assert.deepEqual(result.authorCredit, { mergedCount: null, points: 0.2 })
+  assert.equal(result.approvals[0].points, 1.8)
+  assert.equal(result.state, 'success')
+  assert.ok(output.includes('Author credit: 0.2 (fixed for @Turtle2099).'))
+})
 
 test('combines author credit and reviewer ownership at the passing threshold', async () => {
   for (let mergedCount = 0; mergedCount <= 90; mergedCount++) {

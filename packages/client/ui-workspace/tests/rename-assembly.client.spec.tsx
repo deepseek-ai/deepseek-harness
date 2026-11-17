@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /**
@@ -49,7 +50,7 @@ async function createRuntime(): Promise<SlotTestRuntime> {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   return runtime
 }
 
@@ -94,10 +95,10 @@ describe('session rename through the assembled browser', () => {
       summary: { title: 'Persisted title', displayTitle: 'Session title', cwd: '/w/alpha' },
       session: { rename: vi.fn() },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
-    await runtime.mount({ inject: [...inject], apply })
+    await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
     const registerAction = (id: string, order: number, priority: number, label: string) => {
       runtime.slots.register(
         { name: 'sidebar.workspaces.session.menu.item', id, order, priority },
@@ -123,7 +124,7 @@ describe('session rename through the assembled browser', () => {
     fireEvent.click(trigger)
     await view.findByRole('menuitem', { name: '置顶会话' })
     expect(view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      '置顶会话', '重命名', '分叉会话', '复制 Session ID', 'Export action', 'Last action', '归档会话',
+      '置顶会话', '重命名', '标为未读', '分叉会话', '复制 Session ID', 'Export action', 'Last action', '归档会话',
     ])
     expect(view.getAllByRole('separator')).toHaveLength(3)
     const last = view.getByRole('menuitem', { name: 'Last action' })
@@ -168,10 +169,10 @@ describe('session rename through the assembled browser', () => {
       summary: { title: '旧标题', displayTitle: '旧标题', cwd: '/w/alpha' },
       session: { rename },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
-    await runtime.mount({ inject: [...inject], apply })
+    await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
     const view = runtime.renderRoot()
 
     // The current session's group auto-expands; open the row's action menu.
@@ -210,10 +211,10 @@ describe('session rename through the assembled browser', () => {
       summary: { title: '旧标题', displayTitle: '旧标题', cwd: '/w/alpha' },
       session: { rename },
     })
-    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+    await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
     await seedWorkspace(runtime)
     await declareFrame(runtime)
-    await runtime.mount({ inject: [...inject], apply })
+    await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
     const view = runtime.renderRoot()
     await runtime.flush()
 

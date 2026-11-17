@@ -25,9 +25,9 @@ Review each Session's change requests, checks, and diffs, start a new Session in
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins and enable Change requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the header button opens the panel. GitHub pull requests that the Session creates with `gh pr create`, opens with `gh pr view`, `gh pr edit`, or `gh pr checkout`, or works on as its branch or updates with a later `git push`, appear as change requests without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
+Open Plugins and enable Change requests & worktrees in the Official group. In a Git workspace, check Worktree in the composer before the first message to start the Session in a new worktree. In a Session whose directory is inside a Git checkout, the Session panel toggle in the header shows the checkout and its change requests. GitHub pull requests that the Session creates with `gh pr create`, opens with `gh pr view`, `gh pr edit`, or `gh pr checkout`, or works on as its branch or updates with a later `git push`, appear as change requests without further steps. Run `gh auth login --hostname <host>` in a terminal to sign in; the panel shows the command when sign-in is missing. The [panel package](../client-ui-forge/README.md#use-this-package) describes each control.
 
-The same switch enables the model's [`create_worktree`](../tool-worktree/README.md) tool. Turning it off removes both the panel and the tool while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
+The same switch enables the model's [worktree tools](../tool-worktree/README.md): `enter_worktree` and `exit_worktree`. Turning it off removes both the panel and the tools while retaining existing checkouts and branches. For profiles that already selected the standalone worktree bundle, follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.md) before enabling this bundle.
 
 -----
 
@@ -37,7 +37,7 @@ The same switch enables the model's [`create_worktree`](../tool-worktree/README.
 <details>
 <summary>Maintainer details — click to expand</summary>
 
-The bundle mounts the forge registry, GitHub provider, Session bindings, the worktree model tool, and the panel as six top-level rows. The tool and the panel share the one `worktree` service, so one `worktree` row override configures both, and one archive of a Session reclaims its checkout once; the row's Keep worktrees when archiving switch on the Plugins page turns the cleanup off for both. The panel records worktrees requested before a Session starts; model-created worktrees do not acquire the panel's recovery records, but both kinds take part in archive cleanup. The rows use the Session projection, working-directory, filesystem, subprocess, and sandbox services from base-backed profiles; archive cleanup also needs the Workspace registry and Session query of those profiles.
+The bundle mounts the forge registry, the GitHub and GitLab providers, Session bindings, the worktree model tool, and the panel as seven top-level rows. The tool and the panel share the one `worktree` service, so one `worktree` row override configures both, and one archive of a Session reclaims its checkout once; the row's Keep worktrees when archiving switch on the Plugins page turns the cleanup off for both. The panel records worktrees requested before a Session starts; model-created worktrees do not acquire the panel's recovery records, but both kinds take part in archive cleanup. The rows use the Session projection, working-directory, filesystem, subprocess, and sandbox services from base-backed profiles; archive cleanup also needs the Workspace registry and Session query of those profiles.
 
 </details>
 
@@ -53,7 +53,7 @@ The bundle mounts the forge registry, GitHub provider, Session bindings, the wor
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the [`create_worktree`](../tool-worktree/README.md#model-experience) tool and the [panel’s directory notice](../client-ui-forge/README.md#model-experience) for Sessions that start in a worktree.
+Indirectly, through the [worktree tools](../tool-worktree/README.md#model-experience) and the [panel’s directory notice](../client-ui-forge/README.md#model-experience) for Sessions that start in a worktree.
 
 #### KV Cache effect
 
@@ -63,7 +63,7 @@ Enabling or disabling the bundle changes the model's tool schema list. Calls app
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- GitHub is the only code host provider, and the bundle serves github.com only; a GitHub Enterprise host needs a profile patch that lists it in the `forge-github` row's [`hosts`](../forge-github/README.md#use-this-package). No provider recognizes GitLab or other hosts.
+- The bundle serves github.com and gitlab.com only; a GitHub Enterprise or self-managed GitLab host needs a profile patch that lists it in the `forge-github` row's [`hosts`](../forge-github/README.md#use-this-package) or the `forge-gitlab` row's [`hosts`](../forge-gitlab/README.md#use-this-package). No provider recognizes other code hosts.
 - The model has no tool for bound change requests yet.
 
 -----

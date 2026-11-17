@@ -64,13 +64,15 @@ function fixture() {
     // A recovery URL is a readiness signal; sibling HMR work must settle first.
     '    void scope.get("loader").await().then(() => {',
     '      if (disposed || !scope.get("webServer") || !scope.get("connection")) return',
-    '      writeFileSync(config.url, scope.connection.authenticatedUrl(`http://127.0.0.1:${scope.webServer.port}`))',
+    '      writeFileSync(config.url, `http://127.0.0.1:${scope.webServer.port}`)',
     '    })',
     '  })',
     '}',
     '',
   ].join('\n'))
-  const observer = { id: 'matrix-log-observer', name: pathToFileURL(observerPath).href, config: { path: diagnostics, url: serverUrl, states } }
+  const observer = { id: 'matrix-log-observer', name: pathToFileURL(observerPath).href, config: {
+    path: diagnostics, url: serverUrl, states,
+  } }
   const plugin = join(root, 'probe.mjs')
   writeFileSync(plugin, [
     "import { appendFileSync, existsSync } from 'node:fs'",
@@ -134,8 +136,11 @@ function start(f: ReturnType<typeof fixture>, extra: string[] = [], nodeArgs: st
   }
   async function serves(currentServer = false) {
     await wait(() => /dsh web: http:\/\//u.test(stdout))
-    const url = currentServer ? readFileSync(f.serverUrl, 'utf8') : /dsh web: (http:\/\/[^\s]+)/u.exec(stdout)?.[1]
-    if (!url) throw new Error('Missing Web URL')
+    const publishedUrl = /dsh web: (http:\/\/[^\s]+)/u.exec(stdout)?.[1]
+    if (!publishedUrl) throw new Error('Missing Web URL')
+    const url = new URL(currentServer ? readFileSync(f.serverUrl, 'utf8') : publishedUrl)
+    // The real token plugin publishes once per process; HMR can replace the listener.
+    url.search = new URL(publishedUrl).search
     const auth = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(10_000) })
     const cookie = auth.headers.get('set-cookie')?.split(';', 1)[0]
     if (!cookie) throw new Error('Missing Web authentication cookie')

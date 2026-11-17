@@ -414,7 +414,7 @@ export async function findDesktopEntry(
     const path = join(dataDir, 'applications', `${desktopId}.desktop`)
     try {
       return parseDesktopEntry(await readFile(path, 'utf8'))
-    } catch {
+    } catch (_entryUnreadable) {
       // Swallows ENOENT/EACCES: try the next data directory.
     }
   }

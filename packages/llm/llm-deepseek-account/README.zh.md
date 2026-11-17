@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-account` 注册鉴权、账号模型列表和模型门控。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包负责凭据解析、账号目录和模型准入。
 
-鉴权解析返回 `x-dsh-auth-token` 和捕获同一 token 的失败回调。HTTP 401 的分类和凭据失效处理由此提供方负责；被拒绝的旧请求不能清除替换后的登录。
+鉴权解析向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取账号服务为目标地址释放的账号登录凭据，携带 `x-dsh-auth-token`，并附加使同一凭据失效的失败回调。HTTP 401 的分类由此提供方负责；被拒绝的旧请求不能清除替换后的登录。路由把自己的路由 id 和基础地址登记到该服务，使 DeepSeek Web 提供方把账号登录凭据发往同一部署。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-账号 token 仅由 `deepseekAccount.resolveToken(url)` 提供，目标地址必须通过账号服务的来源校验。未登录或目标不允许账号鉴权时，请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，目录为空；不会回退到 API key。其他凭据查询错误继续向调用者报告。
+凭据只来自账号登录：`ctx.deepseekAuth` 调用 `deepseekAccount.resolveRequestCredential(url)`，目标地址必须通过账号服务的来源校验。未登录或目标不允许账号鉴权时，请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败，目录为空；不会回退到 API key。其他凭据查询错误继续向调用者报告。本插件只在挂载了 `@deepseek-ai/dsh-deepseek-auth` 的组合中启动；`base` 组合包挂载它。
 
 路由的目录来自账号的 `GET /models` 列表，地址为 Messages `baseURL` 的 origin 加 `/models`（官方端点即 `https://api.deepseek.com/models`），不可配置。列表请求用 `x-dsh-auth-token` 携带账号 token，带上 harness 的 `User-Agent`，并拒绝重定向。
 
@@ -56,14 +56,14 @@ kind: "package-reference"
 | `modelsMaxAgeMs` | `600,000` | 首次使用后的自动刷新间隔，失败后也按此间隔重试；`0` 表示只在访问时刷新 |
 | `modelOverrides` | `{}` | 按模型 id 的字段覆盖 |
 
-账号请求的 HTTP 401 与响应正文无关：映射为 `ACCOUNT_TOKEN_INVALID`，并要求账号服务仅在当前 token 仍与请求所用 token 相同时清除凭据。403 和其他错误不会触发清除。账号模块负责退登后打断任务，本插件不遍历 Agent。
+账号请求的 HTTP 401 与响应正文无关：映射为 `ACCOUNT_TOKEN_INVALID`，并要求账号服务仅在当前 token 仍与请求所用 token 相同时清除凭据。403 和其他错误不会触发清除。`deepseek-account/signed-out` 之后，本插件取消最近一次绑定请求使用本路由的运行中 Agent 并保留其收件箱；请求以 `ACCOUNT_SIGN_IN_REQUIRED` 失败时发布 `deepseek-account/model-sign-in-required`，并向账号服务注册运行中任务报告，供其退登确认了解这些工作。账号退登时仍在途的模型请求或文件操作随其凭据的 `revoked` 信号结束，并以 `ACCOUNT_SIGN_IN_REQUIRED` 失败；列表请求仍只受 `modelsTimeoutMs` 期限约束。该请求的失败回调会取消同一批 Agent，因此比本插件存活更久的请求（路由在回合进行中被停用）仍会以退登原因结束其回合。
 
 设置命名空间采用 Cordis entry id，没有 entry 时采用插件名。产品保留 official 的 `llm-deepseek` entry id，账号使用 `llm-deepseek-account`。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-账号 token 读取与作废使用[共享凭据函数](../llm-deepseek/src/credential.ts)；本插件保留 HTTP 错误分类。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和 token 的 SHA-256 为键。
+账号凭据的读取与作废经由 `ctx.deepseekAuth`，后者调用账号服务的 `resolveRequestCredential`；本插件保留 HTTP 错误分类，并在 [`account-tasks.ts`](src/account-tasks.ts) 中拥有针对运行中 Agent 的退登策略。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求；在途的模型请求会把它的凭据和失败回调保留到请求结束，因此二者可能在释放之后执行。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入目录和门控。列表请求、缓存和目录解析来自共享传输包，API key 路由也使用它们；缓存只在内存中，以端点和凭据请求头的 SHA-256 为键。
 
 共享传输判定为 `QUOTA` 的失败请求离开本提供方前会被改写为 `ACCOUNT_QUOTA`，HTTP 402 响应与流内 SSE 错误都适用。共享传输与 `deepseek-official` 路由保留 `QUOTA`，因此账号路由的充值操作不会出现在 API Key 或第三方失败上。
 
@@ -99,6 +99,7 @@ kind: "package-reference"
 - 列表中的推理档位被忽略。
 - 当前版本能用的已列出模型一个都没有时，账号不提供任何模型，模型选择器显示通用的空状态，而不是升级提示。
 - 覆盖可以设置、但不能移除 `systemPromptUpdate` 与 `toolUpdate` 声明。
+- 本插件被停用期间，它此前启动且仍在运行的任务不会报告给账号的退登确认，退登也只能通过在途的模型请求结束该任务。此时正在执行工具的任务会运行到它的下一次模型请求，该请求因路由已不再注册而失败。
 
 <a id="dev-note"></a>
 ### 开发备注

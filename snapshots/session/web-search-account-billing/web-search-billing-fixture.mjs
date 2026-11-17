@@ -1,6 +1,7 @@
 /**
  * Signed-in DeepSeek account stand-in and Search API endpoint for the billing snapshots. The account releases one fixed
- * token, and the endpoint answers only a request that carries that token and no API key.
+ * token, and the endpoint answers only a request that carries that token and no API key. With the plugin config
+ * `signOutDuringSearch: true`, the account signs out when that request arrives and the endpoint leaves it unanswered.
  */
 import { applyLoopbackServerEffect } from '../loopback-fixture-server.mjs'
 
@@ -32,10 +33,12 @@ function transportInput(input, transportEndpoint) {
 }
 
 /** Provide the signed-in account and start the Search endpoint; both end with the plugin fiber. */
-export async function apply(ctx) {
+export async function apply(ctx, config) {
+  const signedOut = new AbortController()
   ctx.provide('deepseekAccount', {
-    resolveToken: async endpoint => endpoint.startsWith('https://api.deepseek.com/') ? ACCOUNT_TOKEN : undefined,
-    rejectToken: async () => {},
+    resolveRequestCredential: async endpoint => endpoint.startsWith('https://api.deepseek.com/')
+      ? { headers: { 'x-dsh-auth-token': ACCOUNT_TOKEN }, revoked: signedOut.signal, reject: async () => {} }
+      : undefined,
   })
   let restoreFetch = () => {}
   await applyLoopbackServerEffect(ctx, {
@@ -48,6 +51,11 @@ export async function apply(ctx) {
           return
         }
         request.resume()
+        if (config?.signOutDuringSearch === true) {
+          // The sign-out withdraws the credential this request carries, which ends the request on the client side.
+          signedOut.abort()
+          return
+        }
         response.writeHead(200, { 'content-type': 'application/json' })
         response.end(JSON.stringify({
           results: [{

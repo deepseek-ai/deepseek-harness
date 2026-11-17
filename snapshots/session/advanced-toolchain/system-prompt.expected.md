@@ -121,18 +121,18 @@ interface ToolArgsMap {
     /** Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access. Use the language of the user’s current request. */
     justification?: string;
   } & Record<string, JsonValue>;
-  /** List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before writing or configuring a plugin, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call. */
-  cordis_inspect_list: Record<string, JsonValue>;
-  /** Run a read-only query declared by an Inspect Provider. platform, provider, and method must come from cordis_inspect_list, and input must satisfy that method's schema. Use this Tool before writing plugin code to read exact Service methods, Event modes, plugin Config schemas, Tool schemas, theme tokens, or live Slot trees and props. Host queries run locally. A Client query waits for the first valid page response within the configured timeout; otherwise it reports a Client failure or asks you to reconnect and retry. This Tool cannot invoke business Service methods or modify the runtime. */
-  cordis_inspect_query: {
-    /** Runtime platform that owns the Provider. */
-    platform: "host" | "client";
-    /** Exact Provider ID returned by cordis_inspect_list. */
-    provider: string;
-    /** Exact method name declared by the Provider manifest. */
-    method: string;
-    /** Optional query input; it must satisfy the method input schema. */
-    input?: JsonValue;
+  /** Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page. */
+  cordis_inspect: {
+    query?: {
+      /** Provider platform. */
+      platform: "host" | "client";
+      /** Provider ID from the directory. */
+      provider: string;
+      /** Method name from the directory. */
+      method: string;
+      /** Arguments matching the method's input schema. */
+      input?: JsonValue;
+    };
   } & Record<string, JsonValue>;
   /** Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say "goal"; not for single-turn work. */
   create_goal: {
@@ -222,8 +222,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -233,8 +231,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent_fork: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -311,11 +307,6 @@ interface ToolArgsMap {
     /** Run as a background job: return a job id immediately instead of waiting; the return value arrives with the completion notice. */
     run_in_background?: boolean;
   } & Record<string, JsonValue>;
-  /** Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories. */
-  working_directory: {
-    /** Existing directory to enter. Omit to read the current directory. */
-    cd?: string;
-  } & Record<string, JsonValue>;
   /** Create or fully replace a UTF-8 text file. */
   write: {
     /** Path to write, resolved by the filesystem backend. Provide `file_path` before `content` in the arguments. */
@@ -387,8 +378,7 @@ interface ToolOutputMap {
       runnerFailed?: boolean;
     };
   };
-  cordis_inspect_list: JsonValue;
-  cordis_inspect_query: JsonValue;
+  cordis_inspect: JsonValue;
   create_goal: {
     goal: null;
   } | {
@@ -578,10 +568,6 @@ interface ToolOutputMap {
     runId: string;
     agentsStarted: number;
     result: JsonValue;
-  };
-  working_directory: {
-    /** Current absolute working directory. */
-    cwd: string;
   };
   write: {
     /** Canonical absolute path in the filesystem execution world. */

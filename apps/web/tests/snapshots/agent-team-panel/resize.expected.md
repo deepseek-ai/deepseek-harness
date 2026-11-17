@@ -1,26 +1,22 @@
-- dialog "Subagent sessions":
-  - heading "Subagents" [level=3]
-  - text: 1 external
-  - tree "Subagent sessions":
-    - 'treeitem "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher · External task" [disabled] [level=1]': "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher"
-  - region "Task board":
-    - heading "Shared tasks 1 completed · 1 in progress · 2 pending" [level=3]
-    - list:
-      - listitem:
-        - button "In progress Agent task":
-          - img "In progress"
-          - text: Agent task
-      - listitem:
-        - button "Completed Completed preparation":
-          - img "Completed"
-          - text: Completed preparation
-      - listitem:
-        - button "Pending Dependency task":
-          - img "Pending"
-          - text: Dependency task
-      - listitem:
-        - button "Blocked by dependencies Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport" [expanded]:
-          - img "Blocked by dependencies"
-          - text: Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport
-        - paragraph: Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work.
-        - paragraph: "Owner: Unowned"
+- region "Shared tasks":
+  - heading "Shared tasks" [level=2]
+  - text: 1 completed · 1 in progress · 2 pending
+  - list:
+    - listitem:
+      - button "In progress Agent task":
+        - img "In progress"
+        - text: Agent task
+    - listitem:
+      - button "Pending Dependency task":
+        - img "Pending"
+        - text: Dependency task
+    - listitem:
+      - button "Blocked by dependencies Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport" [expanded]:
+        - img "Blocked by dependencies"
+        - text: Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport
+      - paragraph: Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work.
+      - paragraph: "Owner: Unowned"
+    - listitem:
+      - button "Completed Completed preparation":
+        - img "Completed"
+        - text: Completed preparation

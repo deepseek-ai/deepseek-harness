@@ -43,22 +43,30 @@ function useAccountCommand(
   const [busy, setBusy] = useState(false)
   // A second click before the re-render still finds the first call pending.
   const pending = useRef(false)
-  const call = (operation: () => Promise<void>): void => {
+  // `operation` resolves to whether the Host accepted the call.
+  const call = (operation: () => Promise<boolean>): void => {
     if (pending.current) return
     pending.current = true
     setBusy(true)
     // The Host keeps the diagnostic; the page reports one retryable outcome.
-    void operation().catch(() => { face.failed() }).finally(() => { pending.current = false; setBusy(false) })
+    void operation()
+      .then((accepted) => { if (!accepted) face.failed() })
+      .catch(() => { face.failed() })
+      .finally(() => { pending.current = false; setBusy(false) })
   }
   const run = (entry: ConnectorAccountEntry, command: ConnectorAccountCommand): void => {
     const { key } = entry
     switch (command.kind) {
       case 'start':
-        call(async () => { face.follow(key, await face.start(key, command.operation)) })
+        call(async () => {
+          const started = await face.start(key, command.operation)
+          if (started.ok) face.follow(key, started.value)
+          return started.ok
+        })
         return
       case 'cancel': {
         const operation = entry.operation
-        if (operation !== undefined) call(async () => { await face.cancel(key, operation.id) })
+        if (operation !== undefined) call(async () => (await face.cancel(key, operation.id)).ok)
         return
       }
       case 'open':

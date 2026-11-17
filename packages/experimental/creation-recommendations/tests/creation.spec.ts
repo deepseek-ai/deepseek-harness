@@ -1,22 +1,39 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards'
 import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { readFile, rm } from 'node:fs/promises'
+import { readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as CreationRecommendations from '../src/index.ts'
-import { ACTION, fixture, callId, proposal, installedBundle, recordCard, writeBundle } from './fixture.ts'
+import { ACTION, fixture, cardId, proposal, installedBundle, recordCard, writeBundle } from './fixture.ts'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 /** The Remote result for a recorded page decision. */
 function settled(phase: string, data: object) {
-  return { status: 'settled', decision: { callId, action: ACTION, phase, data } }
+  return { status: 'settled', decision: { cardId, action: ACTION, phase, data } }
 }
 
 describe('interface creation', () => {
+  it('resolves the Creator guide and location references from the shipped dsh-doc skill', async () => {
+    const skill = new URL('../../../preset/agent-preset/skills/dsh-doc/', import.meta.url)
+    const content = await readFile(new URL('SKILL.md', skill), 'utf8')
+    expect(content).toContain('name: dsh-doc')
+    expect(content).toContain('references/plugin-development.md')
+    const guides = new URL('../references/', import.meta.url)
+    const documents = [await readFile(new URL('references/plugin-development.md', skill), 'utf8')]
+    for (const file of await readdir(guides)) documents.push(await readFile(new URL(file, guides), 'utf8'))
+    for (const document of documents) {
+      expect(document).not.toContain('cordis-plugin-development')
+      for (const match of document.matchAll(/`(references\/[^`]+)`/gu)) {
+        expect(await readFile(new URL(match[1]!, skill), 'utf8')).toMatch(/^# /u)
+      }
+    }
+  })
+
   it('loads page planning with a live duplicate-check catalog and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
     f.bundles.push(
@@ -58,6 +75,9 @@ describe('interface creation', () => {
     const spec = await f.complete()
     expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', agentPreset: 'cordis' })
     expect(spec.parent).toBe(f.agent)
+    const prompt = spec.prompt.find(block => block.type === 'text')!.text
+    expect(prompt).toContain('Load the dsh-doc skill and read references/plugin-development.md from its reported base directory.')
+    expect(prompt).not.toContain('cordis-plugin-development')
     const guide = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/session-tab.md'))
     expect(spec.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
     expect(await readFile(guide, 'utf8')).toContain('conversation.view')
@@ -89,12 +109,12 @@ describe('interface creation', () => {
     await f.fiber.dispose()
     const child = await f.ctx.agents.create({ sessionId: brandString<SessionId>('existing-creator-child'),
       meta: { parentSession: f.agent.id, origin: 'subagent' } })
-    await f.propose('call-creation-1', proposal, child.agent)
-    const receipt = { callId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
+    await f.propose('card-creation-1', proposal, child.agent)
+    const receipt = { cardId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
     recordCard(child.agent.session, receipt)
     f.bundles.push(installedBundle(receipt.bundleName))
     await f.ctx.plugin(CreationRecommendations)
-    expect(f.cardOf(callId, child.agent)).toEqual(receipt)
+    expect(f.cardOf(cardId, child.agent)).toEqual(receipt)
     expect(f.manager.listBundles).not.toHaveBeenCalled()
   })
 
@@ -117,7 +137,7 @@ describe('interface creation', () => {
   it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
     const f = await fixture()
     const initialContent = '| 项目 | 负责人 | 状态 |\n| A | 小李 | 未开始 |\n| B | 小王 | 进行中 |\n| C | 小陈 | 已完成 |'
-    await f.propose('call-creation-1', { ...proposal, details: { ...proposal.details, initialContent } })
+    await f.propose('card-creation-1', { ...proposal, details: { ...proposal.details, initialContent } })
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.fiber.dispose()
     await f.ctx.plugin(CreationRecommendations)
@@ -137,7 +157,7 @@ describe('interface creation', () => {
   it('uses the profile workspace when an accepted Session has no recorded working directory', async () => {
     const f = await fixture()
     const handle = await f.ctx.agents.create({ sessionId: brandString<SessionId>('without-cwd') })
-    await f.propose('call-creation-1', proposal, handle.agent)
+    await f.propose('card-creation-1', proposal, handle.agent)
     await f.act('create', 'sidebar-right', undefined, handle.agent)
     const spec = await f.entered.promise
     expect(spec.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
@@ -151,7 +171,7 @@ describe('interface creation', () => {
     for (const invalid of ['', '  ', 'x'.repeat(1001)]) {
       expect(await f.act('create', 'page', invalid)).toEqual({ status: 'refused', reason: 'invalid-location' })
     }
-    expect(await f.ctx.actionCards.act(f.agent, callId, 'create')).toEqual({ status: 'refused', reason: 'invalid-location' })
+    expect(await f.ctx.actionCards.act(f.agent, cardId, 'create')).toEqual({ status: 'refused', reason: 'invalid-location' })
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.act('create', 'page', '  左侧入口打开全屏日历  ')
     const spec = await f.complete()
@@ -270,9 +290,9 @@ describe('interface creation', () => {
   })
 
   it('keeps a Session usable when profile recovery fails, and checks again before any retry', async () => {
-    const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recover' })
+    const f = await fixture({ cardId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recover' })
     await f.propose()
-    recordCard(f.agent.session, { callId: brandString<ToolCallId>('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
+    recordCard(f.agent.session, { cardId: brandString<ActionCardId>('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
     await f.fiber.dispose()
     f.manager.listBundles.mockRejectedValue(new Error('profile read failed'))
     await f.ctx.plugin(CreationRecommendations)
@@ -300,9 +320,9 @@ describe('interface creation', () => {
   it('settles an already removed plugin without another removal and refuses incomplete old receipts', async () => {
     const f = await fixture()
     await f.propose()
-    recordCard(f.agent.session, { callId, phase: 'installed', slot: 'page' })
+    recordCard(f.agent.session, { cardId, phase: 'installed', slot: 'page' })
     expect(await f.act('undo')).toEqual({ status: 'refused', reason: 'unavailable' })
-    recordCard(f.agent.session, { callId, phase: 'installed', slot: 'page', bundleName: '@dsh-local/removed' })
+    recordCard(f.agent.session, { cardId, phase: 'installed', slot: 'page', bundleName: '@dsh-local/removed' })
     await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
@@ -311,7 +331,7 @@ describe('interface creation', () => {
   it('offers Undo on a page that an earlier build recorded as kept', async () => {
     const f = await fixture()
     await f.propose()
-    recordCard(f.agent.session, { callId, phase: 'kept', slot: 'page', bundleName: '@dsh-local/view-kept' })
+    recordCard(f.agent.session, { cardId, phase: 'kept', slot: 'page', bundleName: '@dsh-local/view-kept' })
     f.bundles.push(installedBundle('@dsh-local/view-kept'))
     expect(await f.act('create')).toEqual(settled('kept', { slot: 'page', bundleName: '@dsh-local/view-kept' }))
     expect(await f.act('undo')).toEqual(settled('removed', { slot: 'page', bundleName: '@dsh-local/view-kept', application: 'applied' }))
@@ -321,11 +341,11 @@ describe('interface creation', () => {
   it('ignores page receipts whose data no longer validates and decisions of other kinds', async () => {
     const f = await fixture()
     await f.propose()
-    const other = { callId: brandString<ToolCallId>('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
+    const other = { cardId: brandString<ActionCardId>('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
     appendPluginRecord(f.agent.session, 'plugin:action-cards/decision', other)
-    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed', data: { slot: 'elsewhere' } })
+    f.ctx.actionCards.record(f.agent, { cardId, action: ACTION, phase: 'installed', data: { slot: 'elsewhere' } })
     expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
-    f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed' })
+    f.ctx.actionCards.record(f.agent, { cardId, action: ACTION, phase: 'installed' })
     expect(await f.act('create')).toEqual({ status: 'accepted' })
     expect(f.ctx.actionCards.view(f.agent.session).decisions['other-card']).toEqual(other)
   })
@@ -353,7 +373,7 @@ describe('interface creation', () => {
   })
 
   it('reconciles an unconfirmed card before Not now, so its installed page keeps Undo', async () => {
-    const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/view-recover' })
+    const f = await fixture({ cardId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/view-recover' })
     await f.propose()
     await f.fiber.dispose()
     f.manager.listBundles.mockRejectedValue(new Error('profile read failed'))
@@ -370,7 +390,7 @@ describe('interface creation', () => {
   it('reconciles an interrupted receipt with the installed profile before retrying', async () => {
     const f = await fixture()
     await f.propose()
-    recordCard(f.agent.session, { callId, phase: 'interrupted', slot: 'page', bundleName: '@dsh-local/recovered' })
+    recordCard(f.agent.session, { cardId, phase: 'interrupted', slot: 'page', bundleName: '@dsh-local/recovered' })
     f.bundles.push(installedBundle('@dsh-local/recovered'))
     expect((await f.act('create')).status).toBe('settled')
     expect(f.current()?.phase).toBe('installed')
@@ -379,7 +399,7 @@ describe('interface creation', () => {
   })
 
   it('recovers a lost creation as interrupted and retains installation errors', async () => {
-    const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recovered' })
+    const f = await fixture({ cardId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recovered' })
     expect(f.current()?.phase).toBe('interrupted')
     f.bundles.push({ ...installedBundle('@dsh-local/recovered'), enabled: false })
     await f.fiber.dispose()
@@ -479,7 +499,7 @@ describe('interface creation', () => {
 
   it('does not start after the owner stops or the root disappears during receipt recovery', async () => {
     for (const target of ['plugin', 'agent'] as const) {
-      const f = await fixture({ callId, phase: 'failed', slot: 'page', bundleName: '@dsh-local/failed' })
+      const f = await fixture({ cardId, phase: 'failed', slot: 'page', bundleName: '@dsh-local/failed' })
       await f.propose()
       const entered = Promise.withResolvers<undefined>()
       const gate = Promise.withResolvers<ReturnType<typeof f.manager.listBundles> extends Promise<infer T> ? T : never>()
@@ -563,7 +583,7 @@ describe('interface creation', () => {
     await vi.waitFor(() => { expect(f.manager.listBundles).toHaveBeenCalledTimes(2) })
     await f.fiber.dispose()
     expect(f.current()?.phase).toBe('installing')
-    if (replacement !== undefined) expect(f.cardOf(callId, replacement.agent)).toBeUndefined()
+    if (replacement !== undefined) expect(f.cardOf(cardId, replacement.agent)).toBeUndefined()
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
     expect(f.bundles.map(bundle => bundle.name)).toContain(name)
   })
@@ -584,7 +604,7 @@ describe('interface creation', () => {
     const seed = [...f.events]
     await f.agentHandle.dispose()
     const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed })
-    const current = () => f.cardOf(callId, reopened.agent)
+    const current = () => f.cardOf(cardId, reopened.agent)
     expect(current()?.phase).toBe('installing')
     expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({ status: 'accepted' })
     f.bundles.push(installedBundle(name))
@@ -653,9 +673,9 @@ describe('interface creation', () => {
       return { application: 'applied', changed: true, stage: 'install', target: path }
     })
     expect(await f.act('restore')).toEqual(settled('installed', { slot: 'page', bundleName, application: 'applied' }))
-    expect(installing).toEqual({ callId, phase: 'installing', slot: 'page', bundleName })
+    expect(installing).toEqual({ cardId, phase: 'installing', slot: 'page', bundleName })
     expect(f.manager.installBundle).toHaveBeenLastCalledWith(directory)
-    expect(f.current()).toEqual({ callId, phase: 'installed', slot: 'page', bundleName, application: 'applied' })
+    expect(f.current()).toEqual({ cardId, phase: 'installed', slot: 'page', bundleName, application: 'applied' })
     expect(f.startActivation).toHaveBeenCalledOnce()
   })
 
@@ -670,7 +690,7 @@ describe('interface creation', () => {
     expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'source-missing' })
     expect(f.events).toHaveLength(logged)
     expect(f.current()?.phase).toBe('removed')
-    recordCard(f.agent.session, { callId, phase: 'removed', slot: 'page' })
+    recordCard(f.agent.session, { cardId, phase: 'removed', slot: 'page' })
     expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'unavailable' })
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
   })
@@ -684,7 +704,7 @@ describe('interface creation', () => {
     await f.act('undo')
     f.manager.installBundle.mockRejectedValueOnce(new Error('profile locked'))
     expect(await f.act('restore')).toEqual(settled('failed', { slot: 'page', bundleName }))
-    expect(f.current()).toEqual({ callId, phase: 'failed', slot: 'page', bundleName })
+    expect(f.current()).toEqual({ cardId, phase: 'failed', slot: 'page', bundleName })
     expect(f.startActivation).toHaveBeenCalledOnce()
   })
 
@@ -699,7 +719,7 @@ describe('interface creation', () => {
     await f.act('undo')
     f.bundles.push(installedBundle(installed.bundleName!))
     expect(await f.act('restore')).toEqual(settled('installed', { slot: 'page', bundleName: installed.bundleName }))
-    expect(f.current()).toEqual({ callId, phase: 'installed', slot: 'page', bundleName: installed.bundleName })
+    expect(f.current()).toEqual({ cardId, phase: 'installed', slot: 'page', bundleName: installed.bundleName })
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
   })
 

@@ -39,7 +39,7 @@ kind: "package-reference"
 
 ### 查找可引用的会话
 
-`listCandidates(agent, query?, limit?)` 列出除 agent 自身外的会话，按 id、工作目录、投影标题或显示标题做不区分大小写的过滤，并把同目录会话排在前面。每个候选的 `label` 使用最新标题；标题缺失或不可读时回退到会话 id。显示标题优先使用 subagent 的持久创建 label，再回退到该标题。候选还会报告其工作目录是否就是发起方 agent 的工作目录，宿主因此可以只在位置能区分该行时才显示它。浏览器消费方通过 `ctx.remote.sessionReferenceResolver.candidates` 调用同一发现能力；该方法在 `displayTitle` 存在时用它标记规范 mention。
+`listCandidates(agent, query?, limit?)` 列出除 agent 自身外的会话，通过共享的[文本搜索](../../util/text-search/README.zh.md)过滤（投影标题和显示标题模糊匹配；会话 id 和工作目录按子串匹配，包括标题缺失时代替标题的 id），先把同目录会话排在前面，再按匹配程度排序。每个候选的 `label` 使用最新标题；标题缺失或不可读时回退到会话 id。显示标题优先使用 subagent 的持久创建 label，再回退到该标题。候选还会报告其工作目录是否就是发起方 agent 的工作目录，宿主因此可以只在位置能区分该行时才显示它。浏览器消费方通过 `ctx.remote.sessionReferenceResolver.candidates` 调用同一发现能力；该方法在 `displayTitle` 存在时用它标记规范 mention。
 
 ### 配置
 

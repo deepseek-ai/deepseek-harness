@@ -755,15 +755,15 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
   const events = parseSessionLog(logs[0]!.content)
   const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
-  expect(calls).toEqual(['cordis_inspect_list', 'run_code', 'subagent', 'workflow', 'cordis_inspect_list'])
+  expect(calls).toEqual(['cordis_inspect', 'run_code', 'subagent', 'workflow', 'cordis_inspect'])
   const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
   expect(results).toHaveLength(5)
   expect(results.every(result => result.isError === false)).toBe(true)
   const dispatches = events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [event.data] : [])
-  expect(dispatches).toEqual([expect.objectContaining({ name: 'cordis_inspect_list', isError: false })])
+  expect(dispatches).toEqual([expect.objectContaining({ name: 'cordis_inspect', isError: false })])
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-  expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
+  expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Runtime', 'Tool'])
   expect(textOf(2)).toBe('started subagent agent-1')
   expect(events.filter(event => event.type === 'subagent/catalog').map(event => event.data))
     .toContainEqual(expect.objectContaining({ childId: logs[1]!.header.id, name: 'agent-1' }))
@@ -783,7 +783,7 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(headers[1]!.tools?.map(tool => tool.name)).toEqual(['run_code'])
   for (const header of [headers[0]!, headers[2]!]) {
     const names = header.tools?.map(tool => tool.name) ?? []
-    expect(names).toEqual(expect.arrayContaining(['cordis_inspect_list', 'subagent', 'workflow']))
+    expect(names).toEqual(expect.arrayContaining(['cordis_inspect', 'subagent', 'workflow']))
     expect(names).not.toContain('run_code')
   }
 }
@@ -827,7 +827,7 @@ function verifyMcpError(log: string, secret: string, oauth: boolean): void {
   expect(results[0]).toMatchObject({ isError: true })
   const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
   expect(diagnostic).toBe(oauth
-    ? 'Error: SdkError: Error: MCP OAuth requires authorization: scope'
+    ? 'Error: MCP OAuth requires authorization: scope'
     : 'Error: MCP fixture rejected Bearer [redacted]')
   expect(log).not.toContain(secret)
   const resultIndex = events.findIndex(event => event.type === 'tool/result')
@@ -887,31 +887,6 @@ async function verifyBackgroundConfinementFailure(log: string, cwd: string): Pro
   expect(JSON.parse(await readFile(join(cwd, 'confinement-audit.json'), 'utf8'))).toEqual({ confineCalls: 1, spawnCalls: 0 })
 }
 
-/** Directory changes remain user context while relative tools follow the committed directory. */
-function verifyWorkingDirectory(log: string, cwd: string): void {
-  const events = records(log)
-  const directories = events.filter(event => event.type === 'working-directory/change')
-    .map(event => (event.data as JsonObject).cwd)
-  expect(directories).toEqual([join(cwd, 'selected'), join(cwd, 'second'), cwd])
-  expect(events.filter(event => event.type === 'system/message')).toHaveLength(1)
-  const users = events.filter(event => event.type === 'user/message').map(event => event.data as JsonObject)
-  const contexts = users.flatMap(message => {
-    const source = message.source as JsonObject
-    if (source.kind !== 'runtime-context') return []
-    return (source.sections as JsonObject[]).filter(section => section.name === 'working-directory:current')
-      .map(section => section.text)
-  })
-  expect(contexts).toEqual([cwd, join(cwd, 'selected'), join(cwd, 'second'), cwd]
-    .map(directory => `Current working directory: ${JSON.stringify(directory)}.`))
-  const notices = users.filter(message => (message.source as JsonObject).kind === 'working-directory')
-    .map(message => (message.content as JsonObject[]).map(block => block.text).join(''))
-  expect(notices).toEqual([
-    `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(join(cwd, 'selected'))}.`,
-    `The working directory changed from ${JSON.stringify(join(cwd, 'selected'))} to ${JSON.stringify(join(cwd, 'second'))}.`,
-    `The working directory ${JSON.stringify(join(cwd, 'second'))} is unavailable. The working directory is now ${JSON.stringify(cwd)}.`,
-  ])
-}
-
 /** Run fixture Git with deterministic commit identity and no user hooks or configuration. */
 function snapshotGit(cwd: string, args: string[]): string {
   const result = spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'commit.gpgSign=false', ...args], {
@@ -929,7 +904,7 @@ function snapshotGit(cwd: string, args: string[]): string {
   return result.stdout.trim()
 }
 
-/** Verify Git-owned state independently of the Session and exclude only its volatile administration files from the file oracle. */
+/** Verify Git-owned state independently of the Session, and the directory changes and notices of entering, leaving, and losing a worktree. */
 async function verifyWorktree(log: string, cwd: string): Promise<void> {
   const checkout = join(cwd, '.agents', 'worktrees', 'isolated')
   expect(await readFile(join(cwd, '.git', 'config'))).toEqual(await readFile(join(cwd, '.git', 'config.before-worktree')))
@@ -944,10 +919,27 @@ async function verifyWorktree(log: string, cwd: string): Promise<void> {
   expect(snapshotGit(checkout, ['rev-parse', 'HEAD'])).toBe(snapshotGit(cwd, ['rev-parse', 'HEAD']))
   expect(snapshotGit(cwd, ['worktree', 'list', '--porcelain'])).toContain(`worktree ${checkout}`)
   expect(snapshotGit(cwd, ['check-ignore', '.agents/worktrees/isolated/result.txt'])).toBe('.agents/worktrees/isolated/result.txt')
+  // The second worktree is removed while the Session works in it; its branch stays and the Session recovers to the source checkout.
+  const removed = join(cwd, '.agents', 'worktrees', 'doomed')
+  expect(existsSync(removed)).toBe(false)
+  expect(snapshotGit(cwd, ['worktree', 'list', '--porcelain'])).not.toContain(`worktree ${removed}`)
+  expect(snapshotGit(cwd, ['rev-parse', '--verify', 'refs/heads/doomed'])).toBe(snapshotGit(cwd, ['rev-parse', 'HEAD']))
   const events = records(log)
-  expect(events.filter(event => event.type === 'working-directory/change').map(event => (event.data as JsonObject).cwd))
-    .toEqual([checkout, cwd])
+  expect(events.filter(event => event.type === 'workspace-root/change').map(event => event.data))
+    .toEqual([checkout, cwd, checkout, cwd, removed, cwd].map(directory => ({ cwd: directory })))
   expect(events.filter(event => event.type === 'system/message')).toHaveLength(1)
+  const notices = events.filter(event => event.type === 'user/message').map(event => event.data as JsonObject)
+    .filter(message => (message.source as JsonObject).kind === 'working-directory')
+    .map(message => (message.content as JsonObject[]).map(block => block.text).join(''))
+  expect(notices).toEqual([
+    `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(checkout)}.`,
+    `The working directory changed from ${JSON.stringify(checkout)} to ${JSON.stringify(cwd)}.`,
+    // enter_worktree returns the Session to the first worktree, and exit_worktree leaves it again.
+    `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(checkout)}.`,
+    `The working directory changed from ${JSON.stringify(checkout)} to ${JSON.stringify(cwd)}.`,
+    `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(removed)}.`,
+    `The working directory ${JSON.stringify(removed)} is unavailable. The working directory is now ${JSON.stringify(cwd)}.`,
+  ])
 }
 
 /** Exercise provider-cwd adoption through the shipped launcher without normalizing away the observation. */
@@ -1593,9 +1585,6 @@ describe('headless recorded-session snapshots', () => {
             }
             if (scenario.name === 'background-confinement-failure') {
               await verifyBackgroundConfinementFailure(actualLogs[0]!.content, cwd)
-            }
-            if (scenario.name === 'working-directory') {
-              verifyWorkingDirectory(actualLogs[0]!.content, await realpath(cwd))
             }
             if (scenario.name === 'worktree') {
               await verifyWorktree(actualLogs[0]!.content, await realpath(cwd))

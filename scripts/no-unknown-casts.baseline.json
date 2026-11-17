@@ -186,9 +186,6 @@
   "packages/api/session-controller/src/client/sessions/assistant-stream.ts": {
     "8a6d86a1925458d196d5a03716c20003a0347d08125c1e8461ed83001b6a1ac2": 1
   },
-  "packages/api/session-controller/src/client/sessions/history-records.ts": {
-    "8cd779a2bf2a4c61fb2963fbfbfe761c89a211e607ab1e064c3f9380331310d2": 1
-  },
   "packages/api/session-controller/src/client/transport.ts": {
     "6a6302072b3044d1366f925d2ccea779370ea82e46555e897fe556b5c0d23ff1": 1
   },
@@ -340,9 +337,6 @@
   "packages/bundle/headless/tests/startup.spec.ts": {
     "2e78263d16d54ccfd8d322bcdf1bf738bd8134e15c24063ece9a1d1b52f4ebd9": 1
   },
-  "packages/bundle/web-app/tests/browser-open.spec.ts": {
-    "2e78263d16d54ccfd8d322bcdf1bf738bd8134e15c24063ece9a1d1b52f4ebd9": 1
-  },
   "packages/bundle/web-app/tests/document-conversion.e2e.ts": {
     "95057a87f4a7358284982d7c73febfe26aed9f37a4ceb5b8df724f2b6bc1084c": 1
   },
@@ -357,9 +351,6 @@
     "afa692cdc0fd53b274f5d276d34ea54141b26bee0c5d67055a2fdb056dc398fe": 1,
     "e19d423d382674b8b4611741351c82f91680ea99c1b5423045df49d8be15855c": 1,
     "fdc5fcade0ba1abbc426ccccb07a1ad4998253799b8561815047d95178441cdf": 1
-  },
-  "packages/client/connection/tests/browser-auth.host.spec.ts": {
-    "d7dc9c349af8699fefcaffed26377443dd73ef95f1dc985f4de542ec133869f5": 1
   },
   "packages/client/connection/tests/browser-credentials.ts": {
     "df59c4c68576e18a532f9a917fb70176726a28c8600e8909501e42b990e12857": 1
@@ -376,12 +367,6 @@
     "12a2d457945d43a02ab415318a8f6744ef620abd1fe272e12a164fa4ff476289": 1,
     "37d0e226122b7a3a4253e22583da5c77cc3690554dc959c74bf570589f3224fd": 1
   },
-  "packages/client/hmr/tests/node-half.client.spec.ts": {
-    "46197efe57255c9d92d64476470c89d0602c7333bf98ad75509bf43c1b357a3b": 1
-  },
-  "packages/client/hmr/tests/transport.client.spec.ts": {
-    "3f1a5cec801bec1f78158f48fca9f53657f85a8bb1f6ff4690fce56ab5ff8e98": 1
-  },
   "packages/client/locale/tests/apply.client.spec.ts": {
     "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 1
   },
@@ -394,7 +379,6 @@
   "packages/client/modules/tests/node-half.client.spec.ts": {
     "621628e4e895b24171e82d1b3fa3ecb12970e8eb0dfccab8bacc8c5784188a28": 2,
     "6c4ace8d135ab45685d0152eefb0f8156bbf95f66cefedd9a1a8da081d3cb180": 1,
-    "8eb8ea3592cbd4e828a33b2cbe2876089d3923738996fb2259ded563811a1a85": 1,
     "c4f0b7f87a16d26a1e4e7ef7a07991e789f0bbcfdbe2240a97fcd879668b5b3f": 1,
     "f549d88ac2b1db67fb33f18a024c116051ff83d3f8ad0433ba4ceedc679e9044": 2
   },
@@ -569,15 +553,6 @@
   },
   "packages/client/ui-settings-models/tests/store.client.spec.ts": {
     "6b8b0a920c558092d20bc17623b7050e0f7403f896fde7da17bb45677899b910": 1
-  },
-  "packages/client/ui-settings-plugin-inventory/tests/browser-plugin.client.spec.tsx": {
-    "04984a2ce1486250236e638e0197da0a1a840855ed3975c59130a85358c7e5fe": 1,
-    "85f4d0d762126e709ae2178ca656f586dac1ba425eb1d8dd402cb5577d6e8225": 1
-  },
-  "packages/client/ui-settings-plugin-inventory/tests/components.client.spec.tsx": {
-    "0d78ec7c8ca39f70a4033ff4d330f8ef26832bb89932f98d1c87d76b4ce16d00": 1,
-    "79c53da50aa08004e201cebca842267ae2650a543b435a7906960f6492c2398b": 1,
-    "a3c1509d552d0102e118f3071a234002a5c83c30ca6923f8a87e9e3733ce0dcf": 1
   },
   "packages/client/ui-settings/tests/schema.client.spec.ts": {
     "0584be4cde4cd33049ef7c02e9d1562a30ec48ef2176f2f22b328b5be2903407": 1
@@ -881,17 +856,6 @@
   },
   "packages/core/tool-executor-ptc/tests/ptc.spec.ts": {
     "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 1
-  },
-  "packages/core/tool-executor-ptc/tests/py-types.spec.ts": {
-    "0d733b2c7c458f6a7c4d287ed741c321842339cbe5908a8720660883423474c0": 9,
-    "23ebbf16be06365be256c1ceb77869576a026644f3514e1737030c4556849f4a": 1,
-    "3ec1a0855f2cf4a5b3646725ea95c07addd33d5957ba6af530b944cd26f1ea8f": 1,
-    "43155833aa226b066cf374829e013176403ddbd6acd313ccf90f6cfb92ceec06": 1,
-    "5d1224b16a64bb138a708eb3e3e130df2ddf1f8f656617e3f1b3f2583250cf63": 1,
-    "6aecd519658d0d2fb040f0289d6db823e3f6bbb26fcb2b118dc7f7f2c1d3eb06": 1,
-    "9b2b04bd2ecde0c56b00ae050b721d56b3c29a1c834b982c9c2f6e62dbcd0a04": 1,
-    "d334b0b55263b6cb2125317ce96b766155b11455d40d600590f5302f5e0543cc": 1,
-    "d6650a0b52b5f7311afff190373b4a1cbd31ba44f9fa0dff09395f6f2901e32d": 1
   },
   "packages/core/tool-executor-ptc/tests/ts-types.spec.ts": {
     "054c87ca977d98749baf70bb5dcad1bb8d9e725d08a480b7804a181434633873": 1,

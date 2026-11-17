@@ -48,7 +48,6 @@ import type {
 } from './types.ts'
 import {
   RemoteStreamMuxServer,
-  rejectRemoteStreamUpgrade,
 } from './stream-server.ts'
 import {
   REMOTE_EVENT_STREAM_ENDPOINT,
@@ -148,6 +147,7 @@ type ConnectionRpcError = Extract<ConnectionRpcResult, { readonly ok: false }>['
 const NEVER_ABORTED_SIGNAL = new AbortController().signal
 const DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS = 2_000
 const DEFAULT_STREAM_INBOX_BYTES = 262_144
+const DEFAULT_STREAM_OUTBOX_BYTES = 1_048_576
 const EMPTY_ASYNC_ITERABLE: AsyncIterable<never> = {
   [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve({ value: undefined, done: true }) }),
 }
@@ -160,6 +160,11 @@ export interface Config {
   readonly websocketHeartbeatIntervalMs?: number
   /** Buffered uplink frame bytes one logical stream may hold before it fails with `gateway/uplink-overflow`. @default 262144 */
   readonly streamInboxBytes?: number
+  /**
+   * Encoded downlink bytes one WebSocket connection may have queued and unwritten before every logical stream on it
+   * pauses reading its source. Items leave in the order their streams produced them. @default 1048576
+   */
+  readonly streamOutboxBytes?: number
   /** Per-message compression for the Remote stream WebSocket; `'none'` disables the extension. @default 'deflate' */
   readonly websocketCompression?: 'none' | 'deflate'
 }
@@ -167,6 +172,7 @@ export interface Config {
 interface ResolvedConfig extends Config {
   readonly websocketHeartbeatIntervalMs: number
   readonly streamInboxBytes: number
+  readonly streamOutboxBytes: number
   readonly websocketCompression: 'none' | 'deflate'
 }
 
@@ -217,6 +223,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     websocketHeartbeatIntervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS)
       .default(DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS),
     streamInboxBytes: z.number().step(1).min(1).default(DEFAULT_STREAM_INBOX_BYTES),
+    streamOutboxBytes: z.number().step(1).min(1).default(DEFAULT_STREAM_OUTBOX_BYTES),
     websocketCompression: z.union([z.const('none'), z.const('deflate')]).default('deflate'),
   })
 
@@ -261,49 +268,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
           {
             heartbeatIntervalMs: resolved.websocketHeartbeatIntervalMs,
             streamInboxBytes: resolved.streamInboxBytes,
+            streamOutboxBytes: resolved.streamOutboxBytes,
             compression: resolved.websocketCompression === 'deflate',
           },
         )
-        const releases = new Set<Promise<void>>()
         webCtx.effect(function* () {
           yield async () => {
             await mux.close()
-            await Promise.all(releases)
           }
           const route: WebUpgradeRoute = {
             path: REMOTE_STREAM_MUX_PATH,
-            handler: (req, socket, head) => {
-              const admission = webCtx.connection.admitConnection(req)
-              if ('rejection' in admission) {
-                rejectRemoteStreamUpgrade(socket, admission.rejection)
-                return
-              }
-              const release = (): void => {
-                // release removes the API Peer synchronously, before awaiting
-                // scope cleanup or any logical-stream iterator's return.
-                const done = admission.release().catch((error: unknown) => {
-                  console.error('[api-gateway] Peer release failed:', error)
-                })
-                releases.add(done)
-                void done.then(() => { releases.delete(done) })
-              }
-              const closed = (): void => {
-                socket.removeListener('error', release)
-                release()
-              }
-              socket.on('error', release)
-              socket.once('close', closed)
-              if (socket.destroyed) {
-                closed()
-                return
-              }
-              try {
-                mux.handleUpgrade(req, socket, head, admission.peer)
-              } catch (error) {
-                release()
-                socket.destroy()
-                console.error('[api-gateway] Remote stream upgrade failed:', error)
-              }
+            auth: 'required',
+            handler: (req, socket, head, peer) => {
+              mux.handleUpgrade(req, socket, head, peer as PeerScope)
             },
           }
           yield webCtx.webServer.registerUpgrade(route)

@@ -195,7 +195,7 @@ export const inject = ['llm']
 export function apply(ctx) {
   // Loaded marker: proves the loader activated this plugin, independently of any model call.
   if (process.env.BASE_LLM_LOADED) {
-    try { writeFileSync(process.env.BASE_LLM_LOADED, 'loaded\n') } catch {}
+    try { writeFileSync(process.env.BASE_LLM_LOADED, 'loaded\n') } catch (_markerWriteFailed) { /* A spec that reads no marker loses nothing; one that reads it fails on the missing file. */ }
   }
   ctx.llm.registerAdapter(['deepseek-official'], new BaseFixtureAdapter())
 }

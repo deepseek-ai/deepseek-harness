@@ -7,6 +7,7 @@
   },
   "include": [
     "src/client",
+    "src/branch-name.ts",
     "src/commit-range.ts",
     "src/css-modules.d.ts",
     "src/lens-version.ts",
@@ -29,6 +30,9 @@
       "path": "../../client/store"
     },
     {
+      "path": "../../client/ui-context-menu"
+    },
+    {
       "path": "../../client/ui-conversation/tsconfig.client.json"
     },
     {
@@ -47,6 +51,9 @@
       "path": "../../client/ui-session"
     },
     {
+      "path": "../../client/ui-session-panel"
+    },
+    {
       "path": "../../client/ui-settings/tsconfig.client.json"
     },
     {
@@ -56,7 +63,7 @@
       "path": "../../client/ui-slots"
     },
     {
-      "path": "../../client/ui-workspace"
+      "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../../core/session"

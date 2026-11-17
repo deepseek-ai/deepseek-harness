@@ -1,4 +1,4 @@
-/** Notification extension rendered inside the sidebar account menu. */
+/** Notification extension rendered in the sidebar row above the account menu. */
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { Button, IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -23,7 +23,7 @@ export interface AccountNotificationsInjected {
 export type AccountNotificationsProps = PropsRuntime<'settings.launcher.notifications'>
   & InjectFace<AccountNotificationsInjected> & PropsLocale<'account.notifications'>
 
-/** @param props - account-menu availability and notification content. @returns the anchored notification stack. */
+/** @param props - account availability and notification content. @returns the notification stack. */
 export function AccountNotifications({ active, openAccount, useNotices, shown, ctaClicked, dismiss, t }: AccountNotificationsProps) {
   const notices = useNotices(value => value)
   return active && <AccountNoticeStack notices={notices} closeLabel={t('close')}

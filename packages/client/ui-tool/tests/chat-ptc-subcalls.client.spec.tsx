@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -130,7 +131,7 @@ async function bench(snapshot: ChatSnapshot) {
     summary: { title: 'S', displayTitle: 'S', cwd: '/w' },
     snapshot: { running: snapshot.legacy.runningCalls.length > 0 },
   })
-  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   const openWorkspacePath = vi.fn(async () => ({ ok: true, value: { opened: true } }))
   ctx.provide('layout', layout as never)
@@ -143,7 +144,7 @@ async function bench(snapshot: ChatSnapshot) {
   locale.register(CONVERSATION_NS, { zh: conversationZh, en: conversationEn })
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
 
   await runtime.root.declare(ROOT_CHILDREN, AppRoot)
   await runtime.mount({ inject: [...injectChat], apply: applyChat })

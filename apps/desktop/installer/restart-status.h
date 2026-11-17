@@ -8,6 +8,7 @@ namespace restart_status {
 struct Launch {
     std::wstring command;
     std::wstring program;
+    std::wstring directory;
     HANDLE job;
 };
 
@@ -28,7 +29,7 @@ static DWORD WINAPI LaunchWorker(void* data) {
             startup.lpAttributeList = attributes;
             PROCESS_INFORMATION process{};
             started = CreateProcessW(launch->program.c_str(), &launch->command[0], nullptr, nullptr, FALSE,
-                EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr, &startup.StartupInfo, &process) != FALSE;
+                EXTENDED_STARTUPINFO_PRESENT, nullptr, launch->directory.c_str(), &startup.StartupInfo, &process) != FALSE;
             if (started) {
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
@@ -61,6 +62,8 @@ extern "C" __declspec(dllexport) HANDLE __cdecl InstallerStartRestartStatus(LPCW
         const UINT sysLength = GetSystemDirectoryW(system, ARRAYSIZE(system));
         if (!length || length >= ARRAYSIZE(dll) || !sysLength || sysLength >= ARRAYSIZE(system)) return nullptr;
         auto launch = std::make_unique<restart_status::Launch>();
+        // An inherited installation directory would prevent its rename while the status window is alive.
+        launch->directory = system;
         launch->program = std::wstring(system) + L"\\rundll32.exe";
         launch->command = L"\"" + launch->program + L"\" \"" + dll + L"\",ShowRestartStatus \"" +
             installer + L"\" " + std::to_wstring(language) + L" " + theme + L" " + text;

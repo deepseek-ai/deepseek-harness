@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/shell-fs-tool-error-codes/guide.md
+/:
+  en: 4acb940add80fb71
+  zh: 33b2d046478b2cf3
+/shell-and-read-image-failures-use-consolidated-error-codes:
+  en: f67fb81f55897105
+  zh: f74bb4d9e995f156
+/shell-and-read-image-failures-use-consolidated-error-codes/change:
+  en: 623c6bfe8ffcfe7d
+  zh: ee26abc3d312b93b
+/shell-and-read-image-failures-use-consolidated-error-codes/migration:
+  en: 24d3f8972933bbe6
+  zh: f03379efdb5809b2

@@ -1,5 +1,5 @@
 ---
-description: "创建新的本地 Git 工作树并改变当前 Session 目录的模型工具。"
+description: "进入本地 Git 工作树（不存在时新建）并返回源检出的模型工具。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-让模型通过一次调用创建并进入新的 Git 工作树。Web 与 Desktop 通过“变更请求与工作树”提供本工具；其他 profile 可以选择本独立组合包。原生工具调用与 PTC 程序获得相同的带类型结果，创建操作沿用现有文件策略。
+让模型通过一次调用进入 Git 工作树（没有同名工作树时新建），并回到它来自的检出。Web 与 Desktop 通过“变更请求与工作树”提供这些工具；其他 profile 可以选择本独立组合包。原生工具调用与 PTC 程序获得相同的带类型结果，创建操作沿用现有文件策略。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 GUI 中启用[变更请求与工作树](../forge-bundle/README.zh.md)。独立组合包在插件页没有卡片。未组合 Web 应用的 profile 可以在 `dsh.profile.bundles` 中选择它；它一起加载[工作树运行时](../worktree/README.zh.md)与本工具。关闭后会移除 `create_worktree`，已有检出目录与分支会保留。内置 `working_directory` 工具仍然可用。
+在 GUI 中启用[变更请求与工作树](../forge-bundle/README.zh.md)。独立组合包在插件页没有卡片。未组合 Web 应用的 profile 可以在 `dsh.profile.bundles` 中选择它；它一起加载[工作树运行时](../worktree/README.zh.md)与本工具。关闭后会移除 `enter_worktree` 与 `exit_worktree`，已有检出目录与分支会保留；已在工作树中的 Session 会留在原处，直到 Host 操作移动它。
 
 在显式组合中，将此函数插件挂载到工作树运行时和工具注册表之后。
 
@@ -34,7 +34,7 @@ kind: "package-bundle"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-调用 `create_worktree({ name?: string, from?: string })`。成功会返回规范化检出路径 `path`、新分支 `branch`、固定提交 `baseCommit` 和源仓库根目录 `repositoryRoot`，并改变调用 Session 的当前工作目录。离开时调用 `working_directory({ cd: path })`；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
+调用 `enter_worktree({ name?: string, from?: string })`。工具只把这两个字段转给运行时，因此从不执行 fetch。Session 所在检出的工作树池中已有同名的已登记工作树时，调用把 Session 移入其中，分支与文件保持原样，返回它的 `path`、检出了分支时的 `branch`、Session 进入前所在的 `repositoryRoot`，以及 `created: false`。否则从 `from`（默认 HEAD）创建新的分支与检出目录并进入，返回 `path`、`branch`、固定提交 `baseCommit`、`repositoryRoot`，以及 `created: true`。省略 `name` 时总是用生成的名称新建。`from` 表示要新建工作树，所以名称已被占用时以 `WORKTREE_ALREADY_EXISTS` 失败。离开时调用 `exit_worktree()`：它把 Session 送回创建或进入该工作树时所在的检出，并返回该工作树的记录；检出目录与分支会保留。[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)拥有准确的 schema 与面向模型的描述。
 
 -----
 
@@ -44,7 +44,7 @@ kind: "package-bundle"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 插入 `worktree` 运行时行与 `tool-worktree` 消费方行。[`src/index.ts`](src/index.ts) 注册一个带类型的工具。运行时创建操作拥有 Git 行为、取消处理与工作目录切换。工具将运行时记录作为规范返回值，并渲染为 JSON；Host 展示使用通用卡片。销毁插件会注销工具。
+[`cordis.patch.yml`](cordis.patch.yml) 插入 `worktree` 运行时行与 `tool-worktree` 消费方行。[`src/index.ts`](src/index.ts) 注册两个带类型的工具。`enter_worktree` 请运行时进入指定名称的工作树，只有运行时报告 `WORKTREE_NOT_FOUND` 时才请它新建。运行时拥有 Git 行为、取消处理与工作目录切换。每个工具将运行时记录作为规范返回值，并渲染为 JSON；Host 展示使用通用卡片。销毁插件会注销这些工具。
 
 本包不发布运行时不变量伴随入口，因为工具不保留独立于工作树运行时的状态。
 
@@ -64,11 +64,11 @@ kind: "package-bundle"
 <a id="model-experience"></a>
 ## 模型体验
 
-### 创建工具
+### 工作树工具
 
 #### 模型看到什么
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)定义 `create_worktree`。每个成功结果包含已创建检出目录的规范路径、分支、基准提交与源检出目录的顶层目录。失败调用报告操作错误。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-worktree)定义 `enter_worktree` 与 `exit_worktree`。每个成功结果包含所进入或所离开工作树的规范路径与分支，以及 Session 来自的检出的顶层目录；创建以及离开自己创建的工作树时还包含基准提交。`created` 告诉模型 `enter_worktree` 是否新建了工作树。失败调用报告操作错误。
 
 #### Token 影响
 
@@ -83,7 +83,7 @@ kind: "package-bundle"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **必须有调用 Agent**——工具改变 Session 目录，没有 Agent 的调用会被拒绝。
-- **仅负责创建**——检查、合并、移除检出目录或删除分支不属于此工具；[运行时限制](../worktree/README.zh.md#known-limitations-and-deferred-work)同样适用。
+- **仅负责创建与进入**——列出、检查、合并、移除检出目录或删除分支不属于这些工具。`enter_worktree` 只能到达 Session 所在检出的池中的工作树：其他位置的工作树，或 Session 已在某个工作树内时的同级工作树，都无法按名称到达；[运行时限制](../worktree/README.zh.md#known-limitations-and-deferred-work)同样适用。
 
 <a id="dev-note"></a>
 ### 开发备注

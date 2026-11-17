@@ -200,7 +200,9 @@ function Comment({ comment, last, actions, labels, now, drafting, t }: {
     <div className={css.commentMain}>
       <div className={css.commentHeader}>
         <span className={css.login}>{login ?? t('thread.deletedAuthor')}</span>
-        <span className={css.time} title={comment.createdAt}>{formatAgo(comment.createdAt, now, t) ?? comment.createdAt}</span>
+        <Tooltip label={comment.createdAt} side="bottom" portal delayMs={500}>
+          <span className={css.time}>{formatAgo(comment.createdAt, now, t) ?? comment.createdAt}</span>
+        </Tooltip>
         {login !== null && login === actions.author && <Tag tone="outline">{t('thread.author')}</Tag>}
         {comment.author?.bot === true && <Tag tone="outline">{t('thread.bot')}</Tag>}
         {comment.pending && <Tag tone="warning">{t('review.pending')}</Tag>}
@@ -209,7 +211,7 @@ function Comment({ comment, last, actions, labels, now, drafting, t }: {
           <Menu open={menu} portal dense align="end" autoFocus onClose={() => { setMenu(false) }}
             items={[...editable ? [{ id: 'edit', label: t('review.edit') }] : [], ...deletable ? [{ id: 'delete', label: t('review.remove') }] : []]}
             onSelect={(id) => { setMenu(false); setMode(id === 'edit' ? 'edit' : 'delete') }}
-            anchor={<span className={css.menuAnchor}><Tooltip label={menuLabel} side="bottom">
+            anchor={<span className={css.menuAnchor}><Tooltip label={menuLabel} side="bottom" delayMs={500}>
               <button type="button" className={css.icon} aria-label={menuLabel} aria-haspopup="menu" aria-expanded={menu}
                 onClick={() => { setMenu(value => !value) }}><IconEllipsisOutlineRegular size={14} /></button>
             </Tooltip></span>} />

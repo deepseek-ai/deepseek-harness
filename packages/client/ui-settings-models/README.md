@@ -27,6 +27,8 @@ Desktop product events use the optional [product analytics service](../product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The section title and introduction form one group above the provider list. Expanded model fields separate adjacent field groups more than labels from their controls, and model-list actions follow the shared control-radius scale.
+
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
 DeepSeek Account appears first and DeepSeek second in the provider list; third-party providers retain their directory order.
@@ -37,7 +39,7 @@ A provider with a stored catalog error remains visible with its diagnostic and e
 
 After Apply closes an editor, its saved status appears when the current provider, settings, and credential snapshot is ready. Opening any row's editor, adding a provider, and opening a removal confirmation wait for that refresh. A newly opened Models section, or one retrying after a page-load failure, waits for a ready snapshot before mounting editors. A background refresh preserves an open draft while its editor remains mounted; a failed page load or provider removal can close it.
 
-Host configuration `credentialOnboarding` defaults to `true`. The Electron preload marker suppresses automatic credential onboarding and the Web welcome notice; Models settings and explicit API-key editing remain available. The [account plugin](../ui-settings-account/README.md#desktop-onboarding) owns the Desktop introduction. Other native shells can disable only the credential step with `credentialOnboarding: false`. Host publishes this public boolean through `webserver/index-inject`, and Client validates it before registering dialogs. It is page initialization data, not a durable completion marker.
+Host configuration `credentialOnboarding` defaults to `true`. The Electron preload marker suppresses automatic credential onboarding and the Web welcome notice; Models settings and explicit API-key editing remain available. The [account plugin](../ui-settings-account/README.md#desktop-onboarding) owns the Desktop introduction. Other native shells can disable only the credential step with `credentialOnboarding: false`. The field is volatile and reaches the browser through the plugin's [synced Config](../modules/README.md#synced-plugin-configuration): a change decides whether a credential step that has not mounted yet opens on its own, while a step that already mounted keeps its decision, so an open step stays open. A browser that receives no value uses `true`. The field is configuration, not a durable completion marker.
 
 ### API keys
 
@@ -59,7 +61,7 @@ The same fold edits the provider's `retryPolicy` for both families. **Retry poli
 
 The DeepSeek card edits the `llm-deepseek` endpoint, credentials, retry policy, and model catalog. It uses Messages, with the default endpoint placeholder `https://api.deepseek.com/anthropic`.
 
-Drag a model’s reorder handle to change its position within the provider, or focus the handle and use the up and down arrow keys. Apply saves the order; Cancel discards it. Each model keeps its settings, expanded options, and unfinished capacity text when moved. The full-row drag preview and reduced-motion-aware row animations share primitives with workspace reordering; before/after insertion markers follow the same style.
+Drag a model’s reorder handle to change its position within the provider, or focus the handle and use the up and down arrow keys. Apply saves the order; Cancel discards it. Each model keeps its settings, expanded options, and unfinished capacity text when moved. The full-row drag preview and reduced-motion-aware row animations share primitives with workspace reordering; before/after insertion markers follow the same style. Row spacing and the adjoining drop targets share one gap value so the space between rows accepts drops.
 
 Expand **Customized settings → Model options** to edit each model. When the model row is narrow, the main row shows only the model ID; expand the row to view or edit its display name. Wider rows show both fields side by side. Focusing a display name expands its row and keeps it open until explicitly collapsed. Tab reaches the option and delete buttons before the display name at every width. Both provider families share the same row layout, labels, and icons: context window and max output tokens occupy two columns, and **Input types** occupies a separate row with **Text** and **Image** checkboxes. A row without an input declaration displays the installed model’s input types, then the provider default, then Text. Known pi-ai providers load their installed catalog without endpoint I/O; opening a row does not write an override. Explicit input selections take precedence, including text-only overrides of vision models. Checkbox edits save the selected types, with at least one type required. DeepSeek writes `inputModalities`; pi-ai writes `input`. Unchecking Image for DeepSeek also removes `imagePixelBudget` and `imageMaxBytes`, because the adapter rejects those limits without image input. Clearing the input field in `cordis.patch.yml` restores adapter inheritance; **Restore default models** resets the entire catalog override. Declare only input types the upstream model can actually process.
 
@@ -83,17 +85,21 @@ The Models page includes **DeepSeek Account** (`deepseek-account`, **DeepSeek �
 
 -----
 
+Onboarding groups its title and explanation closely, then separates credential fields and the action row with larger gaps.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
+Model identity and capacity fields share columns; narrow cards stack their fields. Each provider editor keeps its cancel and save actions together at the scrolling edge, and focused controls retain clearance from that action group.
+
 The page never holds a full settings section: it holds only the REDACTED descriptor, so every edit lands as `settings.mutate` path ops against the stored section — a set per changed field, an unset per cleared one, and a single unset for a deleted provider row.
 
 ### Validation
 
-A typed API key is judged on its own field: after trimming, it must be non-empty and every character must be printable ASCII (`[\x21-\x7E]`), which is exactly what an HTTP header value can carry — the twin of `normalizeApiKey` in `@deepseek-ai/dsh-llm`, mirrored here because the source-plane split forbids importing it. A value matching a pasted `NAME=value` environment line or wrapped in matching quotes is refused as the same format failure. Empty ids, duplicate ids, empty explicit names, and unreadable, non-positive, or fractional capacities fail before any write. The retry fields come from the `retryPolicy` schema the namespace publishes: each union branch is a mode, number fields become inputs whose integer step, minimum, and maximum are checked from the schema, string lists become the code picker, nested objects become folds, and fields of other types are not shown. The labels, hints, messages, and code names are copy owned by this page; an unlabelled field shows its schema key. The two rules `resolveRetryPolicy` in `@deepseek-ai/dsh-llm` enforces beyond any field bound, an initial delay at most the maximum delay and no repeated code, are mirrored for the same reason, because `llm-deepseek` only logs a warning for a live policy it refuses. The card writes the policy field by field, so an unchanged inherited field stays inherited. DeepSeek's `models` is one replace-by-value array: the editor shows inherited effective rows until the first model edit materializes the complete array in the user layer, while reset unsets that override.
+A typed API key is judged on its own field: after trimming, it must be non-empty and every character must be printable ASCII (`[\x21-\x7E]`), which is exactly what an HTTP header value can carry — the twin of `normalizeApiKey` in `@deepseek-ai/dsh-credentials`, mirrored here because the source-plane split forbids importing it. A value matching a pasted `NAME=value` environment line or wrapped in matching quotes is refused as the same format failure. Empty ids, duplicate ids, empty explicit names, and unreadable, non-positive, or fractional capacities fail before any write. The retry fields come from the `retryPolicy` schema the namespace publishes: each union branch is a mode, number fields become inputs whose integer step, minimum, and maximum are checked from the schema, string lists become the code picker, nested objects become folds, and fields of other types are not shown. The labels, hints, messages, and code names are copy owned by this page; an unlabelled field shows its schema key. The two rules `resolveRetryPolicy` in `@deepseek-ai/dsh-llm` enforces beyond any field bound, an initial delay at most the maximum delay and no repeated code, are mirrored for the same reason, because `llm-deepseek` only logs a warning for a live policy it refuses. The card writes the policy field by field, so an unchanged inherited field stays inherited. DeepSeek's `models` is one replace-by-value array: the editor shows inherited effective rows until the first model edit materializes the complete array in the user layer, while reset unsets that override.
 
 ### Concurrency and credentials
 

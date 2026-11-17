@@ -142,7 +142,13 @@ describe('web e2e: the composer model switch is the default for later sessions',
         badge.textContent = ' — Provider identification badge with a long channel name'
         node.appendChild(badge)
       })
-      await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      if (pane === 'root') {
+        expect(original!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBe(240)
+        await expect.poll(async () => (await surface.boundingBox())!.x).toBeCloseTo(original!.x)
+      } else {
+        await expect.poll(async () => (await surface.boundingBox())!.width).toBeGreaterThan(original!.width + 50)
+      }
       await expect.poll(async () => {
         const box = (await surface.boundingBox())!
         return box.x >= 12 && box.x + box.width <= 378
@@ -157,7 +163,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     }
   })
 
-  it('keeps command popup search borders transparent in both palettes', async () => {
+  it('keeps command popup searches borderless in both palettes', async () => {
     const composer = page.locator('[data-composer-input]').first()
     await page.getByRole('button', { name: '添加文件或调用指令', exact: true }).click()
     const commandMenuBounds = await page.locator('[data-trigger-menu]').boundingBox()
@@ -187,14 +193,15 @@ describe('web e2e: the composer model switch is the default for later sessions',
         try {
           return [false, true].map((dark) => {
             body.toggleAttribute('data-ds-dark-theme', dark)
-            return getComputedStyle(input).borderColor
+            const style = getComputedStyle(input)
+            return { width: style.borderWidth, style: style.borderStyle }
           })
         } finally {
           if (previousTheme === null) body.removeAttribute('data-ds-dark-theme')
           else body.setAttribute('data-ds-dark-theme', previousTheme)
         }
       })
-      expect(borders).toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'])
+      expect(borders).toEqual([{ width: '0px', style: 'none' }, { width: '0px', style: 'none' }])
     } finally {
       await search.press('Escape')
       await composer.fill('')

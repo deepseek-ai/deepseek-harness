@@ -2,16 +2,16 @@
 
 import { readFile, realpath } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import * as yaml from 'js-yaml'
+import { pathToFileURL } from 'node:url'
 import Loader, { EntryGroup, ModuleLoader, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import Group from '@deepseek-ai/cordis-plugin-group'
-import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import Include, { applyEntryPatches, entryYamlErrorPosition, parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { Profile, RuntimeResolution } from '../profile.ts'
 import { installRuntimeInterception } from '../profile-resolution/resolver.ts'
 import { buildConfigSchemaDocument } from './document.ts'
 import type { CollectedConfigEntry, ConfigSchemaDiagnostic, ConfigSchemaDump } from './types.ts'
 import { isNativeConfigSchema } from './native.ts'
+import { includeFilename } from '../include-filename.ts'
 
 interface ParsedEntry {
   id?: string
@@ -51,6 +51,10 @@ function entryList(value: unknown): unknown[] {
   if (value === undefined) throw new Error('entry list config is missing')
   if (!Array.isArray(value)) throw new Error('expected a literal entry list; config expressions are not evaluated')
   return value as unknown[]
+}
+
+function hasNonRecordEntry(rows: readonly unknown[]): boolean {
+  return rows.some(row => !record(row) || (row.group === true && Array.isArray(row.config) && hasNonRecordEntry(row.config)))
 }
 
 function includePatches(value: unknown): PatchOptions[] | undefined {
@@ -126,7 +130,7 @@ export async function collectConfigSchemas(
       if (config === undefined) throw new Error('include config is missing')
       if (!record(config) || isJsExpr(config)) throw new Error('include config must be literal; config expressions are not evaluated')
       if (typeof config.path !== 'string') throw new Error('include path must be literal; config expressions are not evaluated')
-      const filename = fileURLToPath(new URL(config.path, baseUrl))
+      const filename = includeFilename(config.path, baseUrl)
       const extension = extname(filename)
       if (!['.json', '.yaml', '.yml'].includes(extension)) throw new Error(`include extension ${JSON.stringify(extension)} is not supported`)
       let source: unknown
@@ -148,18 +152,21 @@ export async function collectConfigSchemas(
       }
       if (content !== undefined) {
         try {
-          source = extension === '.json' ? JSON.parse(content) : yaml.load(content, { schema: entryListSchema })
+          source = extension === '.json' ? JSON.parse(content) : parseEntryYaml(content)
         } catch (error) {
           // Parser messages can quote configuration values; retain only the file and location.
-          const at = error instanceof yaml.YAMLException ? ` at line ${error.mark.line + 1}, column ${error.mark.column + 1}` : ''
+          const position = entryYamlErrorPosition(error)
+          const at = position === undefined ? '' : ` at line ${position.line}, column ${position.column}`
           throw new Error(`invalid ${extension === '.json' ? 'JSON' : 'YAML'} include ${filename}${at}`)
         }
       }
       const patches = includePatches(config.patches)
       const rows = entryList(source)
+      // Include rejects the whole file when any entry, including a group child, is not a mapping.
+      if (hasNonRecordEntry(rows)) throw new Error(`include ${filename} has an entry that is not a mapping; child declarations are unavailable`)
       let children: EntryOptions[]
       try {
-        children = applyEntryPatches(rows as EntryOptions[], patches, warn(path))
+        children = applyEntryPatches(rows as EntryOptions[], structuredClone(patches), warn(path)).data
       } catch (error) {
         throw new Error(`include patches could not be composed for ${filename}; child declarations are unavailable`, { cause: error })
       }

@@ -17,6 +17,8 @@ import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 
 assert.equal(Object.hasOwn(ptc, 'createRunCodeTool'), false)
+assert.equal(Object.hasOwn(ptc, 'jsonSchemaToPy'), false)
+assert.equal(Object.hasOwn(ptc, 'renderToolsSdkPy'), false)
 assert.equal(RunCodeConfig, ptc.Config)
 const ctx = new Context()
 try {
@@ -41,6 +43,9 @@ try {
   }
   await assert.rejects(definition.execute({ code: 'probe', description: 'Check shared error identity' }, execution),
     error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_RUN_FAILED')
+  runtime.run = async () => ({ output: [], outputTruncated: true })
+  assert.deepEqual(await definition.execute({ code: 'probe', description: 'Check successful truncated output' }, execution),
+    { logs: [], outputTruncated: true })
   runtime.run = async (spec) => {
     assert.deepEqual(Object.keys(spec.bindings[0].functions), ['private_probe'])
     assert.equal(spec.discardCompletion, true)

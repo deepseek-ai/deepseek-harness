@@ -18,7 +18,7 @@
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
-      "path": "../ui-session-status"
+      "path": "../ui-session-status/tsconfig.client.json"
     },
     {
       "path": "../store"
@@ -36,7 +36,7 @@
       "path": "../ui-session"
     },
     {
-      "path": "../ui-workspace"
+      "path": "../ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../ui-primitives"

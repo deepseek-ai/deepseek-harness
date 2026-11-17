@@ -7,7 +7,7 @@
 
 import * as vm from 'node:vm'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { assertObjectJsonSchema, JsonSchemaError } from '@deepseek-ai/dsh-tools'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -33,14 +33,6 @@ export interface ExecutionObserver {
 const SUPPORTED_AGENT_OPTIONS = new Set(['label', 'phase', 'schema', 'provider', 'model'])
 /** Deferred Claude Code options we name explicitly in the rejection message. */
 const DEFERRED_AGENT_OPTIONS = new Set(['effort', 'isolation', 'agentType'])
-
-/** Flatten a child's final output blocks to text (the non-schema `agent()` result). */
-function outputText(blocks: ContentBlock[]): string {
-  return blocks
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join('')
-}
 
 /** A short display label derived from the prompt when the script passes none. */
 function defaultLabel(prompt: string): string {
@@ -222,7 +214,7 @@ export class WorkflowExecution {
             return result.structured
           }
           this.observer.agentEnd({ ...info, outcome: 'completed' })
-          return outputText(result.output)
+          return extractTextContent(result.output)
         }
         this.observer.agentEnd({ ...info, outcome: 'failed' })
         return null

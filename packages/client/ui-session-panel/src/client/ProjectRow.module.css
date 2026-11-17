@@ -1,0 +1,41 @@
+/* [name] · [parent]: the name keeps its width up to the row, and the parent
+   fills the rest of the line and clips with an ellipsis. With less than 5em
+   left for it, the parent wraps onto a second line, which the one-line height
+   hides, so the row never shows a separator without a parent. The separator
+   is decorative, so assistive technology reads the name and the parent alone. */
+
+.folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  height: 1lh;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.folder:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.parent {
+  flex: 1 1 0;
+  min-width: 5em;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+}
+
+.parent::before {
+  padding: 0 4px;
+  content: '·' / '';
+}

@@ -426,7 +426,7 @@ REPL 用 Node 的 `domain` 接住程序启动的异步工作里抛出的错误�
 | `ptc-runtime-node` 的 `configuration.ts`（CUA 用它合并配置） | `resolvePersistentExecution` 返回 `executionMode`、`scriptPersistence`、`replScoped` 三个字段，一起合并：`script` 保持持久化的 VM Script，`replScoped: false`；`scoped-repl` 为 `replScoped: true`；函数体和 REPL 语句为 `persistent-in-memory` 加常量 `SCOPED_REPL_BY_DEFAULT`（目前为 true），覆盖 profile 里残留的值。这个常量同时决定 `config.ts` 里省略时的默认值，改它只改一行；`config.ts` 从 `configuration.ts` 导入这个函数，而 `configuration.ts` 本身也是包的发布入口；`configuration.ts` 只导入 `Config` 类型，所以打包不会生成共用的 chunk |
 | 文档、快照和测试 | 包 README 的配置项、行为说明和"已知限制"、config catalog、快照场景 `ptc-scoped-repl`；构建产物的 e2e 含 `replScoped: true` 用例 |
 
-tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使用"打印输出"那套说明。模型说明写明上面的精确行为，尤其是：输出用 `inspect(...)`，这句和其他模式共用；不支持顶层 `return`；每次调用开始时拷贝、旧代码不受影响；需要共享的可变状态放进对象；不声明直接赋值只改拷贝，前面的 `const` 也可以这样赋值；`let`、`const`、`class` 重新声明的初始化表达式读不到同名旧值，要在旧值上计算就直接赋值或换个名字；`var` 重新声明从旧值开始；调用中途失败时，没执行完的 `let`、`const`、`class`、`var` 重新声明保留旧值；块里的 `var` 也算这次调用的顶层名字，其他块里的声明只属于它的块；只能用 `import()`，相对路径按这个环境第一次调用的目录解析。测试整段逐字比对模型说明。
+tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使用"打印输出"那套说明。模型说明把上面的行为写成编写程序的规则，而不是逐条列出边界情况：输出用 `inspect(...)`，这句和其他模式共用；不支持顶层 `return`；每次调用在自己的顶层作用域里执行一段程序，它的顶层声明和继承来的名字以拷贝而不是引用的方式传给之后的程序，因此对象仍然共享；同一段程序里，对一个名字要么使用拷贝来的值，要么重新声明，不要两者都做；给拷贝来的名字赋值（包括前面的 `const`）只改这段程序的拷贝；不要在块里声明 `var`，因为块里的 `var` 会改变之后的程序拷贝到的值；之前的函数和仍在运行的代码保留它们捕获的值，需要共享的可变状态放进对象；程序在对已有名字的声明完成前失败时，之后的程序保留旧值；只能用 `import()`，没有 `require` 和 `module`，import 的相对路径按这个环境第一段程序的目录解析，`process.cwd()` 和读写文件的相对路径跟随每段程序的目录。保留状态的共用句子要求在程序结束前等待工具调用和子进程，因为保留状态的几种格式都不支持顶层 `return`。测试整段逐字比对模型说明。
 
 ## 考虑过的替代方案
 

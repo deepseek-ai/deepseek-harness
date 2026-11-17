@@ -7,10 +7,12 @@
  * remote-access snapshot owner itself and renders the real slot tree, so the Workspace access Hooks
  * are the renderer's bindings over one non-owner snapshot.
  */
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, screen } from '@testing-library/react'
-import type { TypertResourceKind } from '@deepseek-ai/dsh-api-remote-access/client'
+import type { AccessEffect, RemoteEndpoint, TypertResourceKind } from '@deepseek-ai/dsh-api-remote-access/client'
 import { ClientAccessState } from '@deepseek-ai/dsh-api-remote-access/src/client/state.ts'
+import { whenAllowed } from '@deepseek-ai/dsh-api-remote-access/src/client/when-allowed.ts'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -48,6 +50,8 @@ async function bench(access: ClientAccessState, options: { ungroupedSession?: Se
     apply(ctx) {
       ctx.provide('remoteAccess', {
         source: (kind: TypertResourceKind, id: string, action: string) => access.resource(kind, id, action),
+        whenAccess: (action: RemoteEndpoint, callback: () => AccessEffect) =>
+          whenAllowed(ctx, access.global(action), callback, `access-assembly: ${action}`),
       })
       ctx.slots.provideRoot({ keyedHooks: { remoteAccess: action => access.global(action) } })
     },
@@ -76,8 +80,8 @@ async function bench(access: ClientAccessState, options: { ungroupedSession?: Se
     { 'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SECTION_INJECT } } as never,
     SidebarFrame as never,
   )
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
-  await runtime.mount({ inject: [...inject], apply })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
+  await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
   return runtime
 }
 

@@ -9,14 +9,14 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 1bec3e5c70eae394
-  zh: 922d507fa65ae319
+  en: ddb1e263463e9ecd
+  zh: 1eb008f18b500dc3
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager/plugin-manager:
-  en: 2fbe2e5b88e81a54
-  zh: a9de46c13bda53d8
+  en: 8ad01461754a9c3b
+  zh: 67eb5c02a821643a
 /tool-schema-catalog/deepseek-ai-dsh-plugin-market:
   en: 1ec7b4cbc3d98e28
   zh: 1ec7b4cbc3d98e28
@@ -54,14 +54,8 @@
   en: 4910ab327694ee97
   zh: 17e79e4366cb636d
 /tool-schema-catalog/deepseek-ai-dsh-experimental-browser-use-stagehand-native/stagehand-tabs:
-  en: a0d5b9b891358120
-  zh: 25793a62709770b5
-/tool-schema-catalog/deepseek-ai-dsh-action-cards:
-  en: 60c9df6ffda98a1d
-  zh: 60c9df6ffda98a1d
-/tool-schema-catalog/deepseek-ai-dsh-action-cards/propose-action:
-  en: 633c32b6df889830
-  zh: b88ea00b2033c11b
+  en: 095b18f9376e073d
+  zh: abd8785f8acaa555
 /tool-schema-catalog/deepseek-ai-dsh-tool-ask-user:
   en: e713a4a11a15d13c
   zh: e713a4a11a15d13c
@@ -72,8 +66,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: 2c7a3166dfd9751c
-  zh: 1b52ae2d0f33b9a4
+  en: 93d8526bbc4936d2
+  zh: 963af83582d289c5
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9
@@ -113,12 +107,9 @@
 /tool-schema-catalog/deepseek-ai-dsh-tool-cordis:
   en: 76c7c62f9029b6f5
   zh: 76c7c62f9029b6f5
-/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect-list:
-  en: 594e5b42047969cc
-  zh: 72189ca21345c210
-/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect-query:
-  en: 42a647ba98527f9e
-  zh: c53ade6a47ea523f
+/tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect:
+  en: f804c4e7fccc1c45
+  zh: 7538d8201ef16ed9
 /tool-schema-catalog/deepseek-ai-dsh-tool-bash-persistent:
   en: bdd9e88c49029e05
   zh: bdd9e88c49029e05
@@ -237,8 +228,17 @@
   en: 927a5ac0974b7642
   zh: 927a5ac0974b7642
 /tool-schema-catalog/deepseek-ai-dsh-tool-skill/skill:
-  en: 9b159d5831855afb
-  zh: 275ee82af0e0f59a
+  en: c1124b6642c57712
+  zh: ede0a9f1479b4ecd
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list:
+  en: 6d68942100dd76e7
+  zh: 6d68942100dd76e7
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list/list-session:
+  en: 8a04c79a2d8ef256
+  zh: 06e93b69aa95c6e9
+/tool-schema-catalog/deepseek-ai-dsh-tool-session-list/list-workspace:
+  en: 7b1f0bed364dfcd2
+  zh: c907d8ff78f54268
 /tool-schema-catalog/deepseek-ai-dsh-tool-session-query:
   en: eac1dff4b6d9e195
   zh: eac1dff4b6d9e195
@@ -267,8 +267,8 @@
   en: 841abe0dd5913ea7
   zh: 841abe0dd5913ea7
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/list-subagent-models:
-  en: 0e21650bbe8c71c7
-  zh: fe4033efb38d51a3
+  en: 1fa8a23ffccd029f
+  zh: 5d1b9d618976d580
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/subagent:
   en: 9912eeda5bc40b43
   zh: 0cb70f9a0d923bee
@@ -312,26 +312,23 @@
   en: 8001eda7e9ff6a25
   zh: 2414761029f21404
 /tool-schema-catalog/deepseek-ai-dsh-tool-agent-team/team-task-update:
-  en: 9acd1c5b2fac9853
-  zh: 3bd81e9cd1f1c28d
+  en: 3c25013abbe19446
+  zh: 9552eaab1a25adb2
 /tool-schema-catalog/deepseek-ai-dsh-tool-todo:
   en: dea62d26fb18ff68
   zh: dea62d26fb18ff68
 /tool-schema-catalog/deepseek-ai-dsh-tool-todo/todo-write:
-  en: f252137b940b38d1
-  zh: 25bd9c6b1ce783d8
-/tool-schema-catalog/deepseek-ai-dsh-tool-working-directory:
-  en: 1bdc4627ca4fff29
-  zh: 1bdc4627ca4fff29
-/tool-schema-catalog/deepseek-ai-dsh-tool-working-directory/working-directory:
-  en: ac1944f6035b8b50
-  zh: f5fc005c13185211
+  en: 5cc19600afcd3e98
+  zh: 3740c4a584cde8a5
 /tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree:
   en: d5f5679abe86e316
   zh: d5f5679abe86e316
-/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/create-worktree:
-  en: 41950f76db71e7f7
-  zh: 654d2e5505ff3d3c
+/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/enter-worktree:
+  en: fb9a393b6fe3523f
+  zh: 02de205e99537ef2
+/tool-schema-catalog/deepseek-ai-dsh-experimental-tool-worktree/exit-worktree:
+  en: d0e4d70d5b5f607e
+  zh: 17000fe015d8d76a
 /tool-schema-catalog/deepseek-ai-dsh-tool-workflow:
   en: bb38a9d29f46563c
   zh: bb38a9d29f46563c

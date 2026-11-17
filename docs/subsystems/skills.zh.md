@@ -327,6 +327,28 @@ async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition
 
 Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
 
+<a id="ctxupstreamskills--upstreamskills"></a>
+
+### `ctx.upstreamSkills` — `UpstreamSkills`
+
+Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.
+
+```ts cordis-catalog
+/**
+ * Register the calling plugin's entry skill and start downloading the upstream files unless they are in place. The
+ * download starts at load so that a session without a client also gets the skill; a failure is logged as a warning
+ * and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download
+ * and removes the entry skill.
+ * @param registration - the plugin's provider name, entry, pinned files, and optional skills directory.
+ * @returns the handle the plugin's view observes and its check retries.
+ * @throws when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a
+ *   skill provider named `name` is already registered.
+ */
+register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle
+```
+
+Source: [`packages/connector/upstream-skills/src/index.ts`](../../packages/connector/upstream-skills/src/index.ts)
+
 <a id="skills-events"></a>
 
 ### `skills/*` events
