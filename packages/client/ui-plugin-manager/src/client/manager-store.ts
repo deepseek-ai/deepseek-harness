@@ -497,6 +497,8 @@ export interface PluginManagerFace {
   openGitUpdate: (target: PluginTabUpdate) => void
   /** Start the confirmed update. */
   runUpdate: () => void
+  /** Allow the build scripts the failed update's target installation left pending and run the same update again. */
+  approveUpdateBuildsAndRetry: () => void
   /** Leave the confirmation or the outcome; a running update keeps its dialog. */
   closeUpdate: () => void
   /** Fold or unfold a failed installation's pnpm output. */
@@ -889,6 +891,10 @@ export class PluginManagerController {
         this.openUpdateDialog(packageName, pkg.version, version, { kind: 'git', spec })
       },
       runUpdate: () => { void this.runUpdate() },
+      approveUpdateBuildsAndRetry: () => {
+        const pending = this.getSnapshot().update?.result?.result.pendingBuilds
+        if (pending !== undefined && pending.length > 0) void this.runUpdate(pending)
+      },
       closeUpdate: () => { if (this.getSnapshot().update?.phase !== 'running') this.patch({ update: null }) },
       toggleUpdateOutput: () => {
         const update = this.getSnapshot().update
@@ -949,16 +955,21 @@ export class PluginManagerController {
     for (const pkg of this.getSnapshot().packages.filter(item => item.update === 'registry')) await this.checkVersions(pkg.name)
   }
 
-  /** Hand the confirmed update to the Host, keep its outcome, then read the package and a registry package's versions again. */
-  private async runUpdate(): Promise<void> {
+  /**
+   * Hand the confirmed update, or a failed one retried with build approval, to the Host, keep its outcome, then read the
+   * package and a registry package's versions again.
+   * @param approvedBuilds - the pending build scripts the person allowed on the failed outcome.
+   */
+  private async runUpdate(approvedBuilds?: readonly string[]): Promise<void> {
     const update = this.getSnapshot().update
-    if (this.disposed || update === null || update.phase !== 'confirm') return
+    if (this.disposed || update === null || update.phase !== (approvedBuilds === undefined ? 'confirm' : 'done')) return
     const requestId = randomUUID() as PluginInstallRequestId
-    const running: UpdateState = { ...update, phase: 'running', steps: [], requestId, result: null }
+    const running: UpdateState = { ...update, phase: 'running', steps: [], requestId, result: null, outputOpen: false }
     this.patch({ update: running })
     const { source } = update
+    const approval = approvedBuilds === undefined ? {} : { approvedBuilds: [...approvedBuilds] }
     const answer = await this.ctx.remote.pluginManager.updateBundle(update.packageName, update.to,
-      source.kind === 'registry' ? { registry: source.registry, requestId } : { spec: source.spec, requestId })
+      source.kind === 'registry' ? { registry: source.registry, requestId, ...approval } : { spec: source.spec, requestId, ...approval })
     // Nothing closes or replaces a running update before its answer; after disposal `patch` publishes nothing.
     const current = this.getSnapshot().update as UpdateState
     this.patch({ update: { ...current, phase: 'done', ...answer.ok ? { result: answer.value } : { lost: answer.error.message } } })

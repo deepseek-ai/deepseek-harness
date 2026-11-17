@@ -147,6 +147,7 @@ function renderTab(
     openUpdate: vi.fn(),
     openGitUpdate: vi.fn(),
     runUpdate: vi.fn(),
+    approveUpdateBuildsAndRetry: vi.fn(),
     closeUpdate: vi.fn(),
     toggleUpdateOutput: vi.fn(),
     loadDetail: vi.fn(),
@@ -3223,6 +3224,23 @@ describe('registry versions and updates', () => {
       result: { from: '1.3.0', to: '1.4.0', step: 'install', result: change('failed'), restore: change('applied') },
     } })
     expect([...dialog().querySelectorAll('li')].map(item => item.getAttribute('data-state'))).toEqual(['done', 'done', 'failed', 'done'])
+  })
+
+  it('offers to allow the scripts pnpm blocked for the target and names them once the update succeeds', () => {
+    const blocked = change('failed', { pendingBuilds: ['native', '@scope/other'], packageResult: { exitCode: 1, output: 'ERR_PNPM_IGNORED_BUILDS', truncated: false, logPath: '/l', kind: 'build-blocked' } })
+    const { actions, set } = renderTab({ packages: [updatable()], update: {
+      ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: blocked, restore: change('applied') },
+    } })
+    const approval = within(dialog()).getByRole('group', { name: en.installApprovalTitle })
+    expect([...approval.querySelectorAll('code')].map(item => item.textContent)).toEqual(['native', '@scope/other'])
+    fireEvent.click(within(approval).getByRole('button', { name: en.installApproveAndRetry }))
+    expect(actions.approveUpdateBuildsAndRetry).toHaveBeenCalledOnce()
+    // A failure the reinstallation reports offers nothing: only the target's installation is retried with approval.
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'check', result: { ...blocked, changed: false } } } })
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: change('applied', { approvedBuilds: ['native'] }) } } })
+    expect(within(dialog()).getByText(en.installDoneApproved.replace('{names}', 'native'))).toBeTruthy()
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
   })
 
   it('shows a failed run\'s output once unfolded and an unknown outcome after a lost answer', () => {

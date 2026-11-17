@@ -15,6 +15,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { installable, updateCandidate, type PackageView, type UpdateSource, type UpdateState, type VersionCheck } from './manager-store.ts'
 import { managementText, registryText, restartText, type Translate } from './presentation.ts'
+import { BuildApproval } from './BuildApproval.tsx'
 import css from './PluginManagerPage.module.css'
 
 /** The tone of a summary or outcome glyph. */
@@ -386,7 +387,7 @@ function outcomeOf(update: UpdateState, title: string, t: Translate): Omit<Summa
 }
 
 /** The update dialog: confirmation, then the Host's steps, then the outcome. */
-export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput }: {
+export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput, onApproveBuilds }: {
   readonly update: UpdateState
   /** The package's display title. */
   readonly title: string
@@ -394,6 +395,8 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput 
   readonly onRun: () => void
   readonly onClose: () => void
   readonly onToggleOutput: () => void
+  /** Allow the target installation's pending build scripts and run the update again. */
+  readonly onApproveBuilds: () => void
 }): ReactNode {
   const running = update.phase === 'running'
   const steps = update.result === null ? update.steps : settledSteps(update.steps, update.result)
@@ -402,6 +405,9 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput 
   const output = [update.result?.result, update.result?.restore]
     .map(change => change !== undefined && failed(change.application) ? change.packageResult?.output : undefined)
     .find(text => text !== undefined && text !== '')
+  const target = update.phase === 'done' && update.result?.step === 'install' ? update.result.result : undefined
+  const pendingBuilds = target !== undefined && failed(target.application) ? target.pendingBuilds ?? [] : []
+  const approvedBuilds = target !== undefined && !failed(target.application) ? target.approvedBuilds ?? [] : []
   return (
     <Modal
       open
@@ -443,6 +449,10 @@ export function UpdateDialog({ update, title, t, onRun, onClose, onToggleOutput 
                 </span>
               </div>
             )}
+            {pendingBuilds.length > 0 ? <BuildApproval names={pendingBuilds} t={t} onApprove={onApproveBuilds} /> : null}
+            {approvedBuilds.length > 0
+              ? <p className={css.result} role="status">{t('installDoneApproved', { names: approvedBuilds.join(', ') })}</p>
+              : null}
             {output === undefined ? null : (
               <>
                 <button type="button" className={css.detailsToggle} aria-expanded={update.outputOpen} onClick={onToggleOutput}>

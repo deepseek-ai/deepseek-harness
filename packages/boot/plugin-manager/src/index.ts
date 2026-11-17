@@ -738,8 +738,8 @@ export class PluginManager extends TypertRemoteService {
    * @param name Installed profile dependency name.
    * @param version Exact version newer than the installed one.
    * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
-   * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
-   * installation's logs and cancellation.
+   * only by a bundle `listBundles` lists with `update: 'git'`; the request id naming the progress and the target
+   * installation's logs and cancellation; and the pending build scripts the target's installation allows first.
    * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
    */
   @Remote
@@ -772,6 +772,7 @@ export class PluginManager extends TypertRemoteService {
     const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
       saveExact, enabled, expected: { name, version },
       ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
+      ...options?.approvedBuilds === undefined ? {} : { approvedBuilds: options.approvedBuilds },
     }))
     if (this.ownerContext.get('hmr') === undefined) {
       announce('installing')

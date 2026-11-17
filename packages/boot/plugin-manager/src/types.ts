@@ -335,6 +335,11 @@ export interface UpdateBundleOptions {
   readonly spec?: string
   /** Names the update's progress and the target installation's logs; `cancelInstall` stops only that installation. */
   readonly requestId?: PluginInstallRequestId
+  /**
+   * Pending build scripts to allow before the target installs, as `InstallBundleOptions.approvedBuilds`; the
+   * reinstallation of a removed version allows none.
+   */
+  readonly approvedBuilds?: string[]
 }
 
 /** The step of an update its Host progress names. */

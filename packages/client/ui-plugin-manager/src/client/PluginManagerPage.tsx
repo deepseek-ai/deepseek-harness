@@ -38,6 +38,7 @@ import { managementText, noticeText, packageText, registryText, restartText, row
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
+import { BuildApproval } from './BuildApproval.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
 import { ClientSyncNotice } from './ClientSyncNotice.tsx'
 import css from './PluginManagerPage.module.css'
@@ -1085,7 +1086,6 @@ function InstallDialog({
   const errorId = useId()
   const templateHintId = useId()
   const guideId = useId()
-  const approvalId = useId()
   const registryId = useId()
   const registryErrorId = useId()
   const [guideOpen, setGuideOpen] = useState(false)
@@ -1459,18 +1459,7 @@ function InstallDialog({
             ? null
             : <SubjectCard subject={phase === 'done' && install.installedVersion !== null ? { ...subject, version: install.installedVersion } : subject} confirmed={install.confirmed} t={t} />}
           {approvable
-            ? (
-              <section className={css.approval} role="group" aria-labelledby={approvalId} data-install-approval>
-                <h3 id={approvalId} className={css.approvalTitle}>{t('installApprovalTitle')}</h3>
-                <p className={css.approvalText}>{t('installApprovalDescription')}</p>
-                <ul className={css.approvalList}>
-                  {pendingBuilds.map(name => <li key={name}><code>{name}</code></li>)}
-                </ul>
-                <p className={css.approvalText}>{t('installApprovalConsequence')}</p>
-                <p className={css.approvalCaution}>{t('installApprovalCaution')}</p>
-                <Button variant="primary" className={css.wide} onClick={onApproveBuilds}>{t('installApproveAndRetry')}</Button>
-              </section>
-            )
+            ? <BuildApproval names={pendingBuilds} t={t} onApprove={onApproveBuilds} />
             : null}
           {phase === 'done' && install.installed === null
             ? <p className={css.result} role="status">{t('installDoneNothing')}</p>
@@ -1931,6 +1920,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           onRun={props.runUpdate}
           onClose={props.closeUpdate}
           onToggleOutput={props.toggleUpdateOutput}
+          onApproveBuilds={props.approveUpdateBuildsAndRetry}
         />
       )}
       <InstallDialog

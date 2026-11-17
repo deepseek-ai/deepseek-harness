@@ -2450,6 +2450,30 @@ it.each([
   expect(readProfileManifest('test', dir).dependencies).toEqual({ extra: GIT_A })
 })
 
+it('reports the build scripts pnpm blocked for a Git target and allows them on a retried update', async () => {
+  const { manager, dir, bundle } = await fixture()
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  installedFromGit(dir)
+  const pnpm = gitPnpm(dir, bundle, { [GIT_A]: { name: 'extra', version: '1.0.0' }, [GIT_B]: { name: 'extra', version: '1.1.0' } })
+  const install = pnpm.getMockImplementation()!
+  let blocked = true
+  pnpm.mockImplementation(async (context, args, options) => {
+    if (args[0] !== 'add' || args[1] !== GIT_B || !blocked) return install(context, args, options)
+    blocked = false
+    writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+    return { exitCode: 1, output: 'ERR_PNPM_IGNORED_BUILDS', truncated: false, logPath: '/install.log', kind: 'build-blocked' as const }
+  })
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B })).toMatchObject({
+    step: 'install', result: { application: 'failed', pendingBuilds: ['native'] }, restore: { application: 'applied', version: '1.0.0' },
+  })
+  // The reinstallation allows nothing, so the target's blocked script stays undecided.
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: 'set this to true or false' } })
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'install', result: { application: 'applied', version: '1.1.0', approvedBuilds: ['native'] },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
+})
+
 it('updates a copy pnpm saved as a known host\'s shortcut to the HTTPS spec of another commit', async () => {
   const { manager, dir, bundle } = await fixture()
   const target = `git+https://github.com/o/plugins.git#${'b'.repeat(40)}&path:/packages/extra`
