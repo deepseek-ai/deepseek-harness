@@ -216,9 +216,14 @@ export class ImSender {
       this.openStreams.add(stream)
       const settlement = stream.done.then(
         async (result) => {
+          this.attribute(result.handle, options.session)
           await this.settle(id, pending, await this.confirmed(result))
         },
-        (error: unknown) => this.settle(id, pending, this.failure(error)),
+        (error: unknown) => {
+          const result = this.failure(error, stream.handle)
+          if (result.handle !== undefined) this.attribute(result.handle, options.session)
+          return this.settle(id, pending, result)
+        },
       ).catch((error: unknown) => {
         this.ctx.logger.error('IM stream receipt %s could not be saved; inspect the chat: %s', id, error)
       }).finally(() => {
@@ -392,16 +397,21 @@ export class ImSender {
   }
 
   /**
-   * The receipt status one thrown publication justifies (`PlatformError.published`).
+   * The receipt status one thrown publication justifies (`PlatformError.published`), or `partial` when a stream
+   * already published its initial handle before failing.
    * @param error - whatever the core raised.
+   * @param streamHandle - the handle already published by a stream, if any.
    * @returns `partial`, `failed` or `uncertain` — never `confirmed`.
    */
-  private failure(error: unknown): ImSendResult {
+  private failure(error: unknown, streamHandle?: MessageHandle): ImSendResult {
     if (error instanceof PartialSendError) {
       return {
         status: 'partial', handle: error.handle, ...error.report === undefined ? {} : { report: error.report },
         error: messageOf(error.cause),
       }
+    }
+    if (streamHandle !== undefined) {
+      return { status: 'partial', handle: streamHandle, error: messageOf(error) }
     }
     if (error instanceof StrictRenderError) {
       return { status: 'failed', report: error.report, error: error.message }

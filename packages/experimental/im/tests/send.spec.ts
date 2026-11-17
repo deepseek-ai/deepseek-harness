@@ -609,6 +609,42 @@ describe('ImSender.stream', () => {
     await vi.waitFor(() => { expect(receiptsOf(pool).get('op-aborted')?.status).toBe('uncertain') })
   })
 
+  it('records a stream whose initial frame opened and whose final edit was refused as partial with attribution', async () => {
+    const { bot, sender, pool, sessions } = await boot()
+    const sessionId = sessions.add('im-partial-stream', [{ chat: CHAT, writable: true, home: true }]).sessionId
+    const handle: MessageHandle = {
+      bot: 'fake:bot',
+      target: { channel: 'c1', platform: 'fake' } as never,
+      mode: 'card',
+      parts: [{ id: 'm_stream_1' }],
+      createdAt: 1,
+      edits: 0,
+      content: h('message', h.text('first')),
+    }
+    let rejectClose!: (reason: unknown) => void
+    let streamHandle: MessageHandle | undefined
+    const done = new Promise<never>((_resolve, reject) => { rejectClose = reject })
+    done.catch(() => {})
+    const fakeStream: MessageStream = {
+      update: () => { streamHandle = handle },
+      close: async () => await done,
+      abort: async () => false,
+      get state() { return 'open' as const },
+      get handle() { return streamHandle },
+      strategy: 'edit',
+      done,
+    }
+    const streamSpy = vi.spyOn(bot, 'stream').mockReturnValue(fakeStream)
+    const stream = await sender.stream(CHAT, { operationId: 'op-partial-stream', session: sessionId })
+    stream.update(h.text('first'))
+    rejectClose(new PlatformError('permission', 'final edit refused', { published: 'no' }))
+    await expect(stream.done).rejects.toThrow('final edit refused')
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-partial-stream')?.status).toBe('partial') })
+    expect(receiptsOf(pool).get('op-partial-stream')?.message).toBe('fake:bot|m_stream_1')
+    expect(sender.sessionOf('fake:bot|m_stream_1')).toBe(sessionId)
+    streamSpy.mockRestore()
+  })
+
   it('keeps a stream receipt pending when its outcome cannot be saved', async () => {
     const { ctx, sender, pool } = await boot()
     const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
