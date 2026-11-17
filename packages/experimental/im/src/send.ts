@@ -167,7 +167,7 @@ export class ImSender {
   private async publishNow(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImSendResult> {
     const confinedThread = this.grant(chat, options.session, options)
     const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
-    const quoted = withQuote(content, options.quote)
+    const quoted = withQuote(content, this.quoteId(chat, options.quote))
     const id = options.operationId
     if (id === undefined) {
       const result = await this.dispatch(this.botOf(chat), target, quoted, options)
@@ -192,9 +192,10 @@ export class ImSender {
     const confinedThread = this.grant(chat, options.session, options)
     const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
     const bot = this.botOf(chat)
+    const quoteId = this.quoteId(chat, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      return this.watched(this.quoted(bot.stream(target, options), options.quote), chat)
+      return this.watched(this.quoted(bot.stream(target, options), quoteId), chat)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
@@ -233,7 +234,7 @@ export class ImSender {
         this.settlements.delete(settlement)
       })
       this.settlements.add(settlement)
-      return this.watched(this.quoted(stream, options.quote), chat)
+      return this.watched(this.quoted(stream, quoteId), chat)
     })
   }
 
@@ -547,12 +548,25 @@ export class ImSender {
     return bot
   }
 
+  /**
+   * Resolve the platform-facing `<quote id>` for a quoted message key: uses the first recorded alias (e.g. QQ
+   * `msg_idx`) when the stored message belongs to `chat`, falling back to the key's message id otherwise.
+   */
+  private quoteId(chat: ImChatKey, quote: ImMessageKey | undefined): string | undefined {
+    if (quote === undefined) return undefined
+    const stored = this.deps.store.get(quote)
+    if (stored !== undefined && stored.chat.key === chat && stored.aliases?.[0] !== undefined) {
+      return stored.aliases[0]
+    }
+    return splitKey(quote).id
+  }
+
   /** The same stream with the reply quote wrapped around every state the caller publishes. */
-  private quoted(stream: MessageStream, quote: ImMessageKey | undefined): MessageStream {
-    if (quote === undefined) return stream
+  private quoted(stream: MessageStream, quoteId: string | undefined): MessageStream {
+    if (quoteId === undefined) return stream
     return {
-      update: (content) => { stream.update(withQuote(content, quote)) },
-      close: final => final === undefined ? stream.close() : stream.close(withQuote(final, quote)),
+      update: (content) => { stream.update(withQuote(content, quoteId)) },
+      close: final => final === undefined ? stream.close() : stream.close(withQuote(final, quoteId)),
       abort: options => stream.abort(options),
       get state() { return stream.state },
       get handle() { return stream.handle },
@@ -665,9 +679,9 @@ export function messageInThreads(message: ImMessage, threads: ReadonlySet<string
  * When `content` is already a `<message>` root (as output renderers produce), the `<quote>` element is inserted as its
  * first child rather than wrapping a second `<message>` around it, because `<message>` is only valid at the root.
  */
-function withQuote(content: Fragment, quote: ImMessageKey | undefined): Fragment {
-  if (quote === undefined) return content
-  const quoted = h('quote', { id: splitKey(quote).id })
+function withQuote(content: Fragment, quoteId: string | undefined): Fragment {
+  if (quoteId === undefined) return content
+  const quoted = h('quote', { id: quoteId })
   if (isElement(content) && content.type === 'message') return { ...content, children: [quoted, ...content.children] }
   return h('message', quoted, content)
 }

@@ -803,6 +803,15 @@ describe('ImSender referrers', () => {
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
   })
 
+  it('uses a same-chat alias as the outbound quote id while preserving the original referrer', async () => {
+    const { bot, sender, store } = await boot()
+    const quoted = await store.put({ ...inboundDraft(ImMessageKey('fake:bot', 'ROBOT1.0_m9'), REFERRER), aliases: ['REFIDX_9'] }, 'none')
+    const result = await sender.send(CHAT, h.text('hello'), { quote: quoted.key })
+    expect(result.status).toBe('confirmed')
+    expect(bot.operations[0]?.target?.referrer).toEqual(REFERRER)
+    expect(bot.operations[0]?.payload).toMatchObject({ quote: 'REFIDX_9' })
+  })
+
   it('leaves the target without a referrer for an unknown quote, another chat, or a message without one', async () => {
     const { bot, sender, store } = await boot()
     await sender.send(CHAT, h.text('unquoted'))
