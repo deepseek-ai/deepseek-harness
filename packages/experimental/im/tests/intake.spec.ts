@@ -278,15 +278,12 @@ describe('ImIntake admission', () => {
     expect(ownReply?.referrer).toBeUndefined()
 
     // Own outbound parts carrying platform aliases (e.g. QQ ext_info.ref_idx) are indexed so replies can quote them.
+    const sent = await bot.send({ chat: { id: 'chat', type: 'group' } }, h('message', h.text('own aliased')))
     await intake.outbound(bot, {
+      ...sent,
       handle: {
-        bot: bot.id,
-        target: { chat: { id: 'chat', type: 'group' } },
-        mode: 'text',
+        ...sent.handle,
         parts: [{ id: 'ROBOT1.0_own', kind: 'text', time: 1000, aliases: ['REFIDX_own'] }],
-        createdAt: 1000,
-        edits: 0,
-        content: h('message', h.text('own aliased')),
       },
     })
     expect(store.get(ImMessageKey('fake:bot', 'REFIDX_own'))).toMatchObject({
