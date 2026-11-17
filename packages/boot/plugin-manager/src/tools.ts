@@ -15,7 +15,7 @@ const ERROR_STEPS: Record<ManagementError['code'], string> = {
   'unaddressable': 'This entry has no unique profile patch target; tell the user to edit the profile patch file directly.',
   'unknown-plugin': 'Call list_plugins and retry with an exact entryId.',
   'invalid-spec': 'Retry with an npm package name, a git URL, a tarball URL, or an absolute local directory.',
-  'already-installed': 'The package is already installed; to install another version, call remove_bundle first, then install_bundle again.',
+  'already-installed': 'The package is already installed. To reload its files after an in-place change, call set_plugin with enabled true on its entry from list_plugins; to install another version, call remove_bundle first, then install_bundle again.',
   'ambiguous-install': 'The dependency change named no single package; call list_bundles to see what was installed.',
   'not-bundle': 'The package declares no dsh.bundle and cannot be managed as a plugin; install a DSH plugin bundle instead.',
   'not-removable': 'Call list_bundles; only bundles marked removable can be removed.',
