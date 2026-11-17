@@ -73,17 +73,17 @@ const MAX_STAGE_NAME_BYTES = 160
 const TRUNCATED = '\n… (truncated: the result exceeded the configured read limit)'
 
 /** Image formats a file extension publishes as a picture (`im_send_file`). */
-const IMAGE_TYPES: Readonly<Record<string, string>> = {
+const IMAGE_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
-}
+})
 /** Audio formats and their media types. */
-const AUDIO_TYPES: Readonly<Record<string, string>> = {
+const AUDIO_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   opus: 'audio/ogg', ogg: 'audio/ogg', mp3: 'audio/mpeg', wav: 'audio/wav', silk: 'audio/silk', m4a: 'audio/mp4',
-}
+})
 /** Video formats and their media types. */
-const VIDEO_TYPES: Readonly<Record<string, string>> = {
+const VIDEO_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
-}
+})
 
 /** A `#12` / `12` seq reference of `im_read` and `im_reply`. */
 const SEQ = /^#?(\d+)$/

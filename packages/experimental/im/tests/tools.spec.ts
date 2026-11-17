@@ -667,6 +667,13 @@ describe('im_send, im_reply and im_send_file', () => {
     const content = mounted.im.sends[0]?.content as { children: { attrs: Record<string, unknown> }[] }
     expect(content.children[0]?.attrs).toMatchObject({ name: 'notes.md', size: 3 })
     expect(content.children[0]?.attrs.src).toBe('data:application/octet-stream;base64,QUFB')
+
+    // Prototype property names like `constructor` must not match IMAGE_TYPES/AUDIO_TYPES/VIDEO_TYPES.
+    const protoResult = await mounted.call('im_send_file', { path: 'report.constructor' })
+    expect(protoResult.isError).toBe(false)
+    const protoContent = mounted.im.sends[1]?.content as { children: { type: string; attrs: Record<string, unknown> }[] }
+    expect(protoContent.children[0]?.type).toBe('file')
+    expect(protoContent.children[0]?.attrs.src).toBe('data:application/octet-stream;base64,QUFB')
   })
 
   it('refuses a path that is not a regular file and one the filesystem cannot read', async () => {
