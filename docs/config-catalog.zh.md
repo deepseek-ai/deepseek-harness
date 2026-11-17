@@ -5191,13 +5191,17 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-wecom`
 
-- `inject`: `skills` · `subprocess` · `systemPrompt`
-- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/wecom/src/index.ts:32`](../packages/connector/wecom/src/index.ts)
+- `inject`: `cliAccounts` · `upstreamSkills`
+- `source`: [`packages/connector/wecom/src/index.ts:30`](../packages/connector/wecom/src/index.ts)
 
 ```ts config-catalog
-/** Where wecom-cli and the upstream guides come from, a command's deadline, and a download's time limit. */
-export type Config = CliAccountConfig & UpstreamSkillsConfig
+/** Where wecom-cli and the upstream guides are. */
+export interface Config {
+  /** Absolute directory holding the `wecom-cli` executable; defaults to the installed platform package of `@wecom/cli`. */
+  binDir?: string
+  /** Absolute directory holding the upstream guides at their repository paths; when set, nothing is downloaded. */
+  skillsDir?: string
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
 

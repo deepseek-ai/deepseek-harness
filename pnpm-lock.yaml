@@ -7991,12 +7991,6 @@ importers:
 
   packages/connector/wecom:
     dependencies:
-      '@deepseek-ai/dsh-cli-account':
-        specifier: workspace:*
-        version: link:../cli-account
-      '@deepseek-ai/dsh-upstream-skills':
-        specifier: workspace:*
-        version: link:../upstream-skills
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -8010,6 +8004,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cli-account':
+        specifier: workspace:*
+        version: link:../cli-account
       '@deepseek-ai/dsh-client-ui-connector-account':
         specifier: workspace:*
         version: link:../../client/ui-connector-account
@@ -8022,6 +8019,9 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-upstream-skills':
+        specifier: workspace:*
+        version: link:../upstream-skills
 
   packages/context/agent-instructions:
     dependencies:

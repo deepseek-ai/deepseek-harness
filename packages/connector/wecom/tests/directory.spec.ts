@@ -2,10 +2,9 @@ import { constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import { resolveCliExecutable } from '../src/directory.ts'
+import { executableFileName, resolveCliExecutable } from '../src/directory.ts'
 
-const FILE = executableFileName('wecom-cli')
+const FILE = process.platform === 'win32' ? 'wecom-cli.exe' : 'wecom-cli'
 
 const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
 vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
@@ -17,6 +16,11 @@ const PACKAGE_BIN = join(
 
 beforeEach(() => {
   fs.accessSync.mockReset()
+})
+
+it('names the executable file with the .exe extension on Windows only', () => {
+  expect(executableFileName('win32')).toBe('wecom-cli.exe')
+  expect(executableFileName('darwin')).toBe('wecom-cli')
 })
 
 it('defaults to the executable in the bin directory of the platform package that @wecom/cli installs', () => {

@@ -62,12 +62,9 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `binDir` | 已安装 `@wecom/cli-<platform>-<arch>` 包的 `bin` | 包含可执行 `wecom-cli`（Windows 上为 `wecom-cli.exe`）的绝对目录 |
-| `commandTimeoutMs` | `30000` | 单次授权检查的期限，包含可执行文件查找 |
 | `skillsDir` | 无 | 按仓库路径存放 `skills/` 文件的目录；设置后不下载子指南 |
-| `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的归档下载前缀 |
-| `skillsTimeoutMs` | `120000` | 一个前缀送达完整归档的时限 |
 
-扫码授权最多等待用户 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。
+授权检查使用 [`cli-account` 行](../cli-account/README.zh.md#use-this-package)的 `commandTimeoutMs`，默认 30 秒。扫码授权最多等待用户 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 CLI 账号 Service 固定。子指南从 [`upstream-skills` 行](../upstream-skills/README.zh.md#use-this-package)的 `skillsUrls` 下载，每个前缀的时限是该行的 `skillsTimeoutMs`。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-wecom)是受支持字段的完整来源。
 
@@ -79,9 +76,9 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `wecom` 行插入，插件页以本包名作为授权区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `wecom` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `wecom` 行插入，插件页以本包名作为授权区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `wecom` skill 注册到 `ctx.upstreamSkills`，并把这个路径和授权注册到 `ctx.cliAccounts`。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，一次执行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用企业微信的命令完成每个操作，并从 `auth init` 的输出行中读取扫码链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
-[`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引和打开方式。上游只在其仓库发布这些子指南，没有放进 npm 包，因此由该库下载；它们是 skill 基础目录下的文件，不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
+[`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引和打开方式。上游只在其仓库发布这些子指南，没有放进 npm 包，因此由[上游技能 Service](../upstream-skills/README.zh.md) 下载；它们是 skill 基础目录下的文件，不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
 </details>
 
@@ -91,7 +88,8 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 ## 进一步探索
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
-- [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行与账号操作。
+- [CLI 账号 Service](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
+- [上游技能 Service](../upstream-skills/README.zh.md)——子指南的下载、校验与发布。
 - [Skill](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [连接器账号界面](../../client/ui-connector-account/README.zh.md)——发起授权操作的注册表和插件页区块。
 
@@ -132,7 +130,7 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 #### 模型看到什么
 
-该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出 `binDir` 中 `wecom-cli` 的路径；`binDir` 默认是 `@wecom/cli` 安装的平台包的 `bin` 目录。第二行针对按名称调用 `wecom-cli` 的子指南脚本，例如 `build_page.py`。
+该行加载期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `wecom-cli` 的路径；`binDir` 默认是 `@wecom/cli` 安装的平台包的 `bin` 目录。第二行针对按名称调用 `wecom-cli` 的子指南脚本，例如 `build_page.py`。
 
 ##### 运行时上下文条目
 

@@ -62,12 +62,9 @@ A check runs `auth show`. The authorization reads `authorized` or `unauthorized`
 | Field | Default | Meaning |
 |---|---|---|
 | `binDir` | the installed `@wecom/cli-<platform>-<arch>` package's `bin` | Absolute directory containing an executable `wecom-cli`, `wecom-cli.exe` on Windows |
-| `commandTimeoutMs` | `30000` | Deadline for one authorization check, including executable lookup |
 | `skillsDir` | none | Directory holding the files of `skills/` at their repository paths; when set, the guides are not downloaded |
-| `skillsUrls` | `['https://codeload.github.com']` | Archive download prefixes tried in order |
-| `skillsTimeoutMs` | `120000` | How long one prefix may take to deliver the whole archive |
 
-QR-code authorization waits up to 10 minutes for the user, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits.
+An authorization check gets the `commandTimeoutMs` of the [`cli-account` row](../cli-account/README.md#use-this-package), 30 seconds by default. QR-code authorization waits up to 10 minutes for the user, and each command keeps at most 1 MiB of stdout; the CLI account Service fixes both limits. The guides are downloaded from the `skillsUrls` of the [`upstream-skills` row](../upstream-skills/README.md#use-this-package), each within its `skillsTimeoutMs`.
 
 The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-wecom) is the exhaustive source of supported fields.
 
@@ -79,9 +76,9 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `wecom` row after the profile's other layers, and the Plugins page keys the authorization section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/wecom-cli` (`wecom-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the `wecom` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`cordis.patch.yml`](cordis.patch.yml) inserts this package as the `wecom` row after the profile's other layers, and the Plugins page keys the authorization section by this package name. [`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/wecom-cli` (`wecom-cli.exe` on Windows) is executable, registers the `wecom` skill with `ctx.upstreamSkills` under the pin in [`src/skills.ts`](src/skills.ts), and registers that path and the authorization with `ctx.cliAccounts`. The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account Service](../cli-account/README.md) gives the model that path in runtime context, runs each command by the same path, runs one operation at a time, and reports a failed command by its exit code. [`src/account.ts`](src/account.ts) carries out each operation with the WeCom commands and reads the QR-code link from the output lines of `auth init`. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
-[`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guides, and how to open them. Upstream publishes the guides only in its repository and not in the npm package, so the library downloads them; they are files under the skill's base directory, not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
+[`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guides, and how to open them. Upstream publishes the guides only in its repository and not in the npm package, so the [upstream skills Service](../upstream-skills/README.md) downloads them; they are files under the skill's base directory, not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
 
 </details>
 
@@ -91,7 +88,8 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
-- [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
+- [CLI account Service](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
+- [Upstream skills Service](../upstream-skills/README.md) — download, verification, and publication of the guides.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Connector account surfaces](../../client/ui-connector-account/README.md) — the registry and the Plugins page section that drive the authorization operations.
 
@@ -132,7 +130,7 @@ Loading appends a tool result and does not rewrite earlier context.
 
 #### What the model sees
 
-While the row is loaded, the [CLI account library](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of `wecom-cli` in `binDir`, which defaults to the `bin` directory of the platform package that `@wecom/cli` installs. The second line covers the guide scripts that call `wecom-cli` by name, such as `build_page.py`.
+While the row is loaded, the [CLI account Service](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of `wecom-cli` in `binDir`, which defaults to the `bin` directory of the platform package that `@wecom/cli` installs. The second line covers the guide scripts that call `wecom-cli` by name, such as `build_page.py`.
 
 ##### Runtime-context entry
 

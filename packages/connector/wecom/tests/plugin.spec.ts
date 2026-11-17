@@ -1,36 +1,35 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
-import SkillRegistry from '@deepseek-ai/dsh-skill'
-import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
-import type { ConnectorAccountRegistration } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import type { Context } from '@deepseek-ai/cordis'
+import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
+import { executableFileName } from '../src/directory.ts'
 import * as Wecom from '../src/index.ts'
-import { COPY, OPERATIONS, presentAccount, WECOM_PACKAGE } from '../src/presentation.ts'
-import type { WecomState } from '../src/types.ts'
-import { createBinDir, ScriptedSubprocess } from './harness.ts'
+import { WECOM_PACKAGE } from '../src/presentation.ts'
+import { createHost, type WecomHost } from './harness.ts'
 
-const CONFIG = { commandTimeoutMs: 5_000, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 }
+describe('Config', () => {
+  it('takes the CLI directory and the guides directory, which are optional and never empty', () => {
+    expect(Wecom.Config({})).toEqual({})
+    expect(Wecom.Config({ binDir: '/opt/wecom/bin', skillsDir: '/opt/wecom/skills' })).toEqual({ binDir: '/opt/wecom/bin', skillsDir: '/opt/wecom/skills' })
+    expect(() => Wecom.Config({ binDir: '' })).toThrow()
+    expect(() => Wecom.Config({ skillsDir: '' })).toThrow()
+  })
+})
 
 describe('WeCom plugin', () => {
+  let host: WecomHost
   let ctx: Context
-  let subprocess: ScriptedSubprocess
   let binDir: string
   let skillsDir: string
 
-  beforeEach(async () => {
-    ctx = new Context()
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(SystemPrompt)
-    subprocess = ctx.subprocess as ScriptedSubprocess
-    subprocess.respond = (process) => { process.reply({ stdout: 'unauthorized\n' }) }
-    binDir = await createBinDir()
-    skillsDir = await mkdtemp(join(tmpdir(), 'dsh-wecom-skills-'))
-  })
+  /** Start the Host the plugin loads on; the upstream skills Service downloads from `skills`. */
+  async function start(skills?: Parameters<typeof createHost>[0]): Promise<void> {
+    host = await createHost(skills)
+    ;({ ctx, binDir, skillsDir } = host)
+  }
 
   afterEach(async () => {
     await ctx.fiber.dispose()
@@ -41,21 +40,9 @@ describe('WeCom plugin', () => {
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
-  /** Stand in for the connector account registry the Web app provides, and keep what the plugin registers with it. */
-  function provideRegistry() {
-    const registered: ConnectorAccountRegistration<WecomState>[] = []
-    const withdrawn = vi.fn()
-    ctx.provide('connectorAccounts', {
-      register: (registration: ConnectorAccountRegistration<WecomState>) => {
-        registered.push(registration)
-        return withdrawn
-      },
-    })
-    return { registered, withdrawn }
-  }
-
   it('publishes one wecom entry skill over the configured guides, with a body that carries the DSH guidance', async () => {
-    await ctx.plugin(Wecom, { ...CONFIG, binDir, skillsDir })
+    await start()
+    await ctx.plugin(Wecom, { binDir, skillsDir })
 
     const catalog = await ctx.skills.list()
     expect(catalog.map(skill => `${skill.provider}/${skill.source}/${skill.name}`)).toEqual(['wecom/bundled/wecom'])
@@ -70,9 +57,9 @@ describe('WeCom plugin', () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-wecom-home-'))
     vi.stubEnv('DSH_HOME', home)
     try {
-      const registry = provideRegistry()
-      await ctx.plugin(Wecom, { ...CONFIG, binDir, skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
-      const account = registry.registered[0]!.source
+      await start({ skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
+      await ctx.plugin(Wecom, { binDir })
+      const account = host.pages[0]!.source
       expect(account.snapshot().account.skills).toBe('downloading')
       await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') }, { timeout: 10_000 })
       expect(await ctx.skills.list()).toEqual([])
@@ -82,10 +69,13 @@ describe('WeCom plugin', () => {
   })
 
   it('gives the executable path and the script PATH prefix in runtime context, and withdraws them and the skills on disposal', async () => {
-    const fiber = await ctx.plugin(Wecom, { ...CONFIG, binDir, skillsDir })
+    await start()
+    const fiber = await ctx.plugin(Wecom, { binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'wecom:cli',
-      text: cliPathContextText({ name: 'wecom:cli', product: 'WeCom', program: 'wecom-cli', executable: join(binDir, executableFileName('wecom-cli')), scripts: true }, process.platform),
+      text: cliPathContextText({
+        product: 'WeCom', program: 'wecom-cli', executable: join(binDir, executableFileName(process.platform)), scripts: true,
+      }, process.platform),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 
@@ -96,16 +86,14 @@ describe('WeCom plugin', () => {
   })
 
   it('shows the authorization on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
-    const registry = provideRegistry()
-    const fiber = await ctx.plugin(Wecom, { ...CONFIG, binDir, skillsDir })
-    expect(registry.registered).toHaveLength(1)
-    expect(registry.registered[0]).toMatchObject({
-      packageName: WECOM_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount,
-    })
-    expect(registry.registered[0]!.source.snapshot().account.state).toBe('unchecked')
+    await start()
+    const fiber = await ctx.plugin(Wecom, { binDir, skillsDir })
+    expect(host.pages).toHaveLength(1)
+    expect(host.pages[0]).toMatchObject({ key: WECOM_PACKAGE, packageName: WECOM_PACKAGE })
+    expect(host.pages[0]!.source.snapshot().account).toEqual({ state: 'unchecked', skills: 'installed' })
 
     await fiber.dispose()
 
-    expect(registry.withdrawn).toHaveBeenCalledOnce()
+    expect(host.withdrawn).toBe(1)
   })
 })

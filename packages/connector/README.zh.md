@@ -26,7 +26,7 @@ kind: "package-group"
 |---|---|---|
 | [`cli-account/`](cli-account/README.zh.md) | 保存 CLI 应用插件注册的厂商 CLI 和账号：在运行时上下文中把每个 CLI 的绝对路径告诉模型，让每个插件的账号操作一次只执行一个，并在插件页显示账号 | `ctx.cliAccounts` |
 | [`upstream-skills/`](upstream-skills/README.zh.md) | 保存 CLI 应用插件注册的入口技能：从厂商 GitHub 仓库的固定提交下载每个入口索引的上游文件，校验并缓存，再在这些文件之上列出入口技能 | `ctx.upstreamSkills` |
-| [`wecom/`](wecom/README.zh.md) | 企业微信插件：安装官方 `wecom-cli`，把它的绝对路径告诉模型，注册其 skill，并执行插件页发起的授权操作 | 注册到 `ctx.skills`、`ctx.systemPrompt` 与 `ctx.connectorAccounts` |
+| [`wecom/`](wecom/README.zh.md) | 企业微信插件：安装官方 `wecom-cli`，把它的绝对路径告诉模型，注册其 skill，并执行插件页发起的授权操作 | 注册到 `ctx.cliAccounts` 与 `ctx.upstreamSkills` |
 
 -----
 

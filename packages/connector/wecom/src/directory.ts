@@ -3,10 +3,18 @@
 import { accessSync, constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name wecom-cli's guides and scripts run it by. */
 export const PROGRAM = 'wecom-cli'
+
+/**
+ * Name the executable file as the platform package installs it.
+ * @param platform - the Host platform.
+ * @returns `wecom-cli`, or `wecom-cli.exe` on Windows.
+ */
+export function executableFileName(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? `${PROGRAM}.exe` : PROGRAM
+}
 
 function platformDirectory(): string {
   const platformPackage = `@wecom/cli-${process.platform}-${process.arch}`
@@ -25,7 +33,7 @@ function platformDirectory(): string {
  * @throws when the platform package is missing or the executable is not executable.
  */
 export function resolveCliExecutable(binDir: string | undefined): string {
-  const program = join(binDir ?? platformDirectory(), executableFileName(PROGRAM))
+  const program = join(binDir ?? platformDirectory(), executableFileName(process.platform))
   try {
     accessSync(program, constants.X_OK)
   } catch (error) {

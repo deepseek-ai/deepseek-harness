@@ -1,23 +1,21 @@
 /**
- * WeCom plugin: tells the model the managed wecom-cli's absolute path, registers
- * the `wecom` skill over the upstream guides it downloads, and shows the
- * authorization on the Plugins page through the connector account registry. The CLI's
- * authorization is shared with the user's own terminal.
+ * WeCom plugin: registers the managed wecom-cli and its authorization with `ctx.cliAccounts`, which tells the model the
+ * CLI's absolute path and shows the authorization on the Plugins page, and registers the `wecom` entry skill with
+ * `ctx.upstreamSkills`, which downloads the upstream guides it indexes. The CLI's authorization is shared with the
+ * user's own terminal.
  * @module @deepseek-ai/dsh-wecom
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
-import { registerUpstreamSkills, UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
-import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
-import type {} from '@deepseek-ai/dsh-skill'
-import type {} from '@deepseek-ai/dsh-subprocess'
-import type {} from '@deepseek-ai/dsh-system-prompt'
-import { WecomAccount } from './account.ts'
+import type {} from '@deepseek-ai/dsh-cli-account'
+import type {} from '@deepseek-ai/dsh-upstream-skills'
+import { performWith } from './account.ts'
 import { PROGRAM, resolveCliExecutable } from './directory.ts'
-import { COPY, OPERATIONS, presentAccount, WECOM_PACKAGE } from './presentation.ts'
+import { dictionaries, type WecomTextKey } from './locales.ts'
+import { copy, operations, presentAccount, WECOM_PACKAGE } from './presentation.ts'
 import { ENTRY, WECOM_SKILLS } from './skills.ts'
+import type { WecomAccountState, WecomCommand, WecomOperationKind, WecomPhase } from './types.ts'
 
 export type * from './types.ts'
 
@@ -25,33 +23,46 @@ export type * from './types.ts'
 export const name = 'wecom'
 
 /* jscpd:ignore-start -- CLI app plugins with downloaded guides declare the same services, config, and registration. */
-/** Services the CLI, its skills, and its runtime context need. */
-export const inject = ['skills', 'subprocess', 'systemPrompt']
+/** Services the CLI's authorization and the entry skill register with. */
+export const inject = ['cliAccounts', 'upstreamSkills']
 
-/** Where wecom-cli and the upstream guides come from, a command's deadline, and a download's time limit. */
-export type Config = CliAccountConfig & UpstreamSkillsConfig
+/** Where wecom-cli and the upstream guides are. */
+export interface Config {
+  /** Absolute directory holding the `wecom-cli` executable; defaults to the installed platform package of `@wecom/cli`. */
+  binDir?: string
+  /** Absolute directory holding the upstream guides at their repository paths; when set, nothing is downloaded. */
+  skillsDir?: string
+}
 
 /** Validates {@link Config}. */
-export const Config: z<Config> = z.intersect([CliAccountConfig, UpstreamSkillsConfig])
+export const Config: z<Config> = z.object({
+  binDir: z.string().min(1),
+  skillsDir: z.string().min(1),
+})
 
 /**
- * Register the CLI and its skills, and show the authorization on the Plugins page while the connector account registry runs.
- * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
- * @param config - CLI location, command deadline, and where the upstream guides come from.
+ * Register the entry skill, and the CLI with its authorization, whose view follows the guides' download.
+ * @param ctx - Context carrying the CLI account Service and the upstream skills Service.
+ * @param config - CLI location and the guides' directory.
  * @throws when `wecom-cli` is not executable or `skillsDir` is not a directory.
  */
 export function apply(ctx: Context, config: Config): void {
   const executable = resolveCliExecutable(config.binDir)
-  registerCliPathContext(ctx, { name: 'wecom:cli', product: 'WeCom', program: PROGRAM, executable, scripts: true })
-  const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
-  const skills = registerUpstreamSkills(ctx, { name: 'wecom', entry: ENTRY, set: WECOM_SKILLS, config })
-  const account = new WecomAccount(cli, ctx.logger, skills)
-  ctx.effect(() => () => account.dispose(), 'wecom: account')
-  ctx.effect(() => skills.watch((state) => { account.showSkills(state) }), 'wecom: guides')
-  ctx.inject(['connectorAccounts'], (scope) => {
-    scope.effect(() => scope.connectorAccounts.register({
-      key: WECOM_PACKAGE, packageName: WECOM_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
-    }), 'wecom: Plugins page authorization')
+  const guides = ctx.upstreamSkills.register({ name, entry: ENTRY, set: WECOM_SKILLS, skillsDir: config.skillsDir })
+  const account = ctx.cliAccounts.register<WecomAccountState, WecomOperationKind, WecomPhase, WecomCommand, WecomTextKey>({
+    name,
+    packageName: WECOM_PACKAGE,
+    cli: { product: 'WeCom', program: PROGRAM, executable, scripts: true },
+    account: { state: 'unchecked', skills: guides.state },
+    check: 'check',
+    cancellable: ['authorizing'],
+    authorizationHosts: ['work.weixin.qq.com'],
+    perform: performWith(guides),
+    dictionaries,
+    operations,
+    copy,
+    present: presentAccount,
   })
+  ctx.effect(() => guides.watch((skills) => { account.publish({ ...account.snapshot().account, skills }) }), 'wecom: guides')
 }
 /* jscpd:ignore-end */

@@ -1,5 +1,4 @@
 /** The WeCom text the Plugins page shows; the browser resolves it in its active language. */
-import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -276,5 +275,5 @@ export const pt: Record<WecomTextKey, string> = {
   'notice.connected': 'WeCom autorizado',
 }
 
-/** Render one key of the WeCom text in every shipped language. */
-export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })
+/** The dictionary of every shipped language. */
+export const dictionaries = { zh, en, ja, es, fr, de, ru, pt }
