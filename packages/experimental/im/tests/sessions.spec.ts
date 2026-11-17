@@ -1046,7 +1046,7 @@ describe('stored delivery validation', () => {
     expect(replaced1).toBe(initial.sessionId)
     expect(replaced2).toBeDefined()
     expect(replaced2).not.toBe(replaced1)
-    const finalRecord = harness.host.resolve(initial.key)
+    const finalRecord = harness.host.get(initial.key)
     expect(finalRecord?.generation).toBe(2)
     expect(finalRecord?.sessionId).not.toBe(replaced2)
   })

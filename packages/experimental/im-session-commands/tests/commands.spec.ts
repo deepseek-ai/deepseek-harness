@@ -614,8 +614,8 @@ describe('lifecycle', () => {
   it('rolls back the pending receipt when passthrough execute() returns undefined so retries pass through', async () => {
     const harness = await bootCommands({
       commands: { passthrough: ['compact'] },
-      dshCommands: [{ name: 'compact', description: 'Compact context' }],
     })
+    harness.ctx.commands.register({ name: 'compact', description: 'Compact context', handler: () => ({ kind: 'success' }) })
     await ensureShared(harness)
     // Simulate a command disappearing between `list(agent)` and `execute(...)`.
     vi.spyOn(harness.base.ctx.commands, 'execute').mockResolvedValue(undefined)
