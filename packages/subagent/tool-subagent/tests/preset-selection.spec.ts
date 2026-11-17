@@ -148,7 +148,7 @@ describe('spawn preset selection', () => {
   it('requires the preset service when selection is configured', async () => {
     const ctx = new Context()
     contexts.push(ctx)
-    await expect(tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' })).rejects.toThrow(/requires the agent-presets service/)
+    expect(() => { tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' }) }).toThrow(/requires the agent-presets service/)
   })
 
   it.each([

@@ -968,6 +968,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The web-runtime row advertises one URL for its Web GUI: the configured publicUrl, otherwise the listener origin; DSH_WEB_URL, the startup URL, and harness-dev-context read the same value.',
   },
   {
+    key: 'config',
+    pkg: 'client-config',
+    title: 'Browser synced configuration lookup',
+    mode: 'service',
+    implementations: ['client-modules'],
+    consumers: [],
+    note: 'Types-only declaration; the client-modules plugin face provides the read-only lookup of each package\'s current synced Config.',
+  },
+  {
     key: 'clientModules',
     pkg: 'client-modules',
     title: 'Client plugin graph host',

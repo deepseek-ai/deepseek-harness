@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -35,7 +36,7 @@ it('shows late registered kinds without preparing actions and withdraws them wit
   </>)
   const view = runtime.renderRoot()
   expect(view.queryByRole('button')).toBeNull()
-  const plugin = await runtime.mount({ inject, apply })
+  const plugin = await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   expect(view.queryByRole('button')).toBeNull()
   const resolve = vi.fn(() => new Promise<readonly MenuAction[]>(() => {}))
   const row = await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
@@ -67,7 +68,7 @@ it('shows the label tooltip on the compact toolbar button but not on row buttons
     {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
     {renderFactorySlot('contextMenu.button', { target: target('row'), label: 'Row menu' })}
   </>)
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'header', target: 'header', order: 0, resolve: () => [],
   })) } })
@@ -99,7 +100,7 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
       {renderSlot('shell.overlay', {})}
     </div>
   })
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'header', target: 'header', order: 0, resolve: () => [{ id: 'open', label: 'Open' }],
   })) } })
@@ -170,7 +171,7 @@ it('keeps an open button expanded after its owner updates display metadata in th
     update = setCurrent
     return renderFactorySlot('contextMenu.button', { target: current, label: 'Entity menu' })
   })
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'entity', target: 'entity', order: 0, resolve: () => [],
   })) } })

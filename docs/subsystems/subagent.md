@@ -86,7 +86,7 @@ interface SubagentStartRequest {
   readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
-  /** Content delivered as the child's user message. */
+  /** Initial task; local continuable children record it as a message from the parent agent. */
   readonly prompt: ContentBlock[]
   /**
    * The spawning agent. Its effective directory supplies the default cwd;
@@ -430,7 +430,18 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.subagentModelSelection` — `SubagentModelSelectionConfig`
 
-Host settings owner that records Session authorization before the first model request.
+Host settings owner whose current value authorizes explicit child routes in every Session.
+
+```ts cordis-catalog
+/**
+ * Read the routes the setting currently authorizes. Each call samples the
+ * live setting, so an edit applies to the next delegation in every Session.
+ * @returns a detached route list, or undefined when the setting is disabled.
+ * @throws {SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route,
+ *   or its routes are malformed or repeated. Disabled settings do not read or validate routes.
+ */
+allowedRoutes(): AllowedModelRoute[] | undefined
+```
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
 

@@ -403,12 +403,13 @@ export class SubagentManager {
         established = activation
         const child = requireLocalActivation(activation).handle.agent
         const childHeader = child.session.header
+        const task = createAgentMessage(parent, agentAddress(this.pathOf(parent, ancestry.root), parent.id), spec.prompt)
         return await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller'
-            ? withResultDeliveryGuidance(spec.prompt)
-            : spec.prompt,
-          { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
+            ? withResultDeliveryGuidance([...task.content])
+            : [...task.content],
+          { source: task.source, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,
           () => {
             this.assertAdmitting(parent)

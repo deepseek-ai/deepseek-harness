@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createScrollHandoff } from '../src/client/scroll-handoff.ts'
 
 /** A scroll container whose scrollTop the browser would clamp to `[0, max]`; jsdom has no layout. */
@@ -152,6 +152,142 @@ describe('createScrollHandoff', () => {
     expect(wheel(next, { deltaY: 40 }).defaultPrevented).toBe(true)
     handoff.bindViewportRef(null)
     expect(wheel(next, { deltaY: 40 }).defaultPrevented).toBe(false)
+  })
+
+  describe('drag scrolling', () => {
+    let frames: Map<number, FrameRequestCallback>
+    let now: number
+
+    beforeEach(() => {
+      frames = new Map()
+      now = 1000
+      let next = 0
+      vi.spyOn(performance, 'now').mockImplementation(() => now)
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        frames.set(++next, callback)
+        return next
+      })
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => { frames.delete(id) })
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    })
+
+    /** Run the pending frame `ms` after the previous one. */
+    function tick(ms = 16): void {
+      now += ms
+      const pending = [...frames.values()]
+      frames.clear()
+      for (const callback of pending) callback(now)
+    }
+
+    function place(element: HTMLElement, top: number, bottom: number): void {
+      element.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: top, width: 200, height: bottom - top })
+    }
+
+    function dragEvent(target: HTMLElement, type: string, init: MouseEventInit = {}): void {
+      // jsdom has no DragEvent; the hand-off reads only MouseEvent members.
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, ...init }))
+    }
+
+    /** The section scroller is visible from 140px to the viewport's bottom edge at 600px. */
+    function dragBound() {
+      const parts = bound()
+      place(parts.viewport, 0, 600)
+      place(parts.scroller, 140, 900)
+      return parts
+    }
+
+    it('moves the navigation away, then the section scroller, while a drag rests at the bottom edge', () => {
+      const { viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      tick(50)
+      expect(viewport.scrollTop).toBe(50)
+      tick(100)
+      expect(viewport.scrollTop).toBe(100)
+      tick(50)
+      expect(viewport.scrollTop).toBe(130)
+      expect(scroller.scrollTop).toBe(20)
+    })
+
+    it('slows toward the inner side of the edge band and stops outside it', () => {
+      const { viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 576 })
+      tick(40)
+      expect(viewport.scrollTop).toBe(20)
+      dragEvent(scroller, 'dragover', { clientY: 300 })
+      tick(40)
+      expect(viewport.scrollTop).toBe(20)
+      expect(frames.size).toBe(0)
+      dragEvent(scroller, 'dragover', { clientY: 300 })
+      expect(frames.size).toBe(0)
+    })
+
+    it('returns the section scroller to its top before the navigation at the top edge', () => {
+      const { viewport, scroller } = dragBound()
+      viewport.scrollTop = 130
+      scroller.scrollTop = 30
+      dragEvent(scroller, 'dragover', { clientY: 100 })
+      tick(50)
+      expect(scroller.scrollTop).toBe(0)
+      expect(viewport.scrollTop).toBe(110)
+    })
+
+    it('uses the viewport edges without a bound section scroller', () => {
+      const { handoff, viewport } = dragBound()
+      handoff.useSectionScroller().bindScrollerRef(null)
+      dragEvent(viewport, 'dragover', { clientY: 590 })
+      tick(30)
+      expect(viewport.scrollTop).toBeGreaterThan(0)
+    })
+
+    it('ignores an area too small for an edge band', () => {
+      const { scroller } = dragBound()
+      place(scroller, 700, 900)
+      dragEvent(scroller, 'dragover', { clientY: 599 })
+      expect(frames.size).toBe(0)
+    })
+
+    it.each(['drop', 'dragend'])('stops at %s', (type) => {
+      const { viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      dragEvent(scroller, type)
+      expect(frames.size).toBe(0)
+      tick(50)
+      expect(viewport.scrollTop).toBe(0)
+    })
+
+    it('stops when the drag leaves the viewport but not when it moves between its children', () => {
+      const { viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      dragEvent(scroller, 'dragleave', { relatedTarget: viewport })
+      expect(frames.size).toBe(1)
+      dragEvent(scroller, 'dragleave', { relatedTarget: document.body })
+      expect(frames.size).toBe(0)
+    })
+
+    it('stops once dragover stops arriving', () => {
+      const { viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      tick(50)
+      tick(700)
+      expect(viewport.scrollTop).toBe(50)
+      expect(frames.size).toBe(0)
+    })
+
+    it('keeps one frame loop across repeated dragover and cancels it on unbind', () => {
+      const { handoff, viewport, scroller } = dragBound()
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      expect(frames.size).toBe(1)
+      handoff.bindViewportRef(null)
+      expect(frames.size).toBe(0)
+      dragEvent(scroller, 'dragover', { clientY: 600 })
+      expect(frames.size).toBe(0)
+      expect(viewport.scrollTop).toBe(0)
+    })
   })
 
   it('hands every caller the same scroller binding', () => {

@@ -29,7 +29,7 @@ Mount this backend when a composition needs durable sessions backed by per-sessi
 
 ### When to choose it
 
-Choose this backend when consumers benefit from one artifact per session — navigation, external tooling, or a raw line-readable log. It is the sole first-party Session-persistence provider. The backend keeps sessions under a deployment-controlled root: project-local, shared, temporary, or centralized.
+Choose this backend when consumers benefit from one artifact per session — navigation, external tooling, or a raw line-readable log. Shipped profiles use this provider by default. The [SQLite provider](../session-persistence-sqlite/README.md) is a separate plugin that imports existing JSONL history on first open. The backend keeps sessions under a deployment-controlled root: project-local, shared, temporary, or centralized.
 
 ### Minimal configuration
 
