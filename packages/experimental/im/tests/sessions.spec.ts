@@ -675,6 +675,36 @@ describe('reset', () => {
     expect(harness.ctx.agents.get(a.sessionId)).toBeUndefined()
     await expect(harness.host.deliver(b.key, messagesDelivery('followup', [message('d-ok', 1)]))).resolves.toBeUndefined()
   })
+
+  it('rebuilds retired generation set on start() so stale deliveries are discarded after restart, and refuses stale writes inside deliver()', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+    first.failFormat()
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-seed', 1)]))).rejects.toThrow(/format offline/)
+
+    // Reset to generation 1, then inject an unadmitted generation-0 delivery on disk (simulating a crash between
+    // `deliver()` write and `admit()` discard) and restart into a fresh host.
+    await first.host.reset(record.key, 'clear')
+    first.pool.media.get('im_sessions')?.tables.get('deliveries')?.set(`${record.sessionId}|d-orphan`, {
+      session: record.sessionId,
+      delivery: { id: 'd-orphan', mode: 'followup', content: [{ type: 'text', text: 'orphan' }] },
+      createdAt: Date.now(),
+      admitted: false,
+    })
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool })
+    await second.host.whenRecovered()
+    expect(second.host.pendingDeliveries()).toBe(0)
+    expect(second.pool.media.get('im_sessions')?.tables.get('deliveries')?.has(`${record.sessionId}|d-orphan`)).toBe(false)
+
+    // Also verify deliver() refuses to write an intent once its resolved generation has been retired concurrently.
+    const gen1 = second.host.get(record.key)!.sessionId
+    const resetPromise = second.host.reset(record.key, 'clear-2')
+    const deliverPromise = second.host.deliver(gen1, messagesDelivery('followup', [message('d-race', 2)]))
+    await resetPromise
+    await expect(deliverPromise).rejects.toMatchObject({ code: 'unavailable' })
+  })
 })
 
 describe('ephemeral sessions', () => {
@@ -930,7 +960,7 @@ describe('agent hosting', () => {
 
     const replaced = await harness.host.reset(record.key, 'clear')
     expect(replaced).toBe(record.sessionId)
-    await expect(delivering).rejects.toThrow(/no longer hosted/)
+    await expect(delivering).rejects.toThrow(/discarded by a session reset/)
     expect(harness.host.pendingDeliveries()).toBe(0)
     expect(storedDeliveryIds(harness.pool)).toEqual([])
   })

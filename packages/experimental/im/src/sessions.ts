@@ -161,7 +161,10 @@ export class ImSessionHost implements ImSessions {
     this.disposed = false
     const domain = await this.ctx.storageDomain.open(imSessionsDomain)
     this.domain = domain
-    for (const [, record] of domain.table('sessions').entries()) this.index(record)
+    for (const [, record] of domain.table('sessions').entries()) {
+      this.index(record)
+      for (let g = 0; g < record.generation; g += 1) this.retired.add(sessionIdOf(record.key, g))
+    }
     for (const [id, stored] of domain.table('deliveries').entries()) this.deliveries.set(id, stored)
     for (const [id, stored] of domain.table('resets').entries()) this.resets.set(id, stored)
     this.retry()
@@ -306,7 +309,12 @@ export class ImSessionHost implements ImSessions {
     if (inputBytes(delivery) > this.config.maxInputBytes) {
       throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.', { permanent: true })
     }
-    await this.write(() => this.domainOf().table('deliveries').put(id, stored))
+    await this.write(() => {
+      if (this.hosted(record.sessionId) === undefined) {
+        throw new ImError('unavailable', `IM delivery ${delivery.id} was discarded by a session reset.`)
+      }
+      return this.domainOf().table('deliveries').put(id, stored)
+    })
     this.deliveries.set(id, stored)
     await this.admit(record.sessionId, id, true)
     // A reset that ran while this intent was being recorded drops the undelivered intents of the generation it
