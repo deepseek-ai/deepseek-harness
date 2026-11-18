@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, open, rename, rm, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
+import type { BigIntStats, StatOptions, Stats } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -42,13 +43,37 @@ it('collects recent complete records and reports malformed and incomplete entrie
   })
 })
 
-it('keeps a predecessor whose reported identity equals the current segment without a rotation', async () => {
+it('does not collect a rotated predecessor twice after it was appended', async () => {
+  const path = await fixture()
+  const current = join(path, 'operations.jsonl')
+  const previous = join(path, 'operations.previous.jsonl')
+  await writeFile(current, line(1))
+  const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const handle = await open(current, 'r')
+  const opener = vi.mocked(open).mockClear()
+    .mockImplementationOnce(async () => handle)
+    .mockImplementationOnce(async () => {
+      // The writer appends one record, then rotates: both names still denote one file.
+      await appendFile(current, line(2))
+      await rename(current, previous)
+      await writeFile(current, line(3))
+      return actualFs.open(previous, 'r')
+    })
+  try {
+    const result = await readOperationHistory(path, limits, new AbortController().signal)
+    expect(result.records).toEqual([record(1)])
+    expect(result).toMatchObject({ filesRead: 1, truncated: true, unavailableFiles: 0 })
+  } finally {
+    opener.mockClear()
+  }
+})
+
+it('compares exact bigint identities so two nearby Numbers cannot collapse one segment', async () => {
   const path = await fixture()
   const current = join(path, 'operations.jsonl')
   const previous = join(path, 'operations.previous.jsonl')
   const currentText = line('current')
   const previousText = line('old')
-  expect(Buffer.byteLength(currentText)).not.toBe(Buffer.byteLength(previousText))
   await writeFile(current, currentText)
   await writeFile(previous, previousText)
   const currentHandle = await open(current, 'r')
@@ -56,60 +81,27 @@ it('keeps a predecessor whose reported identity equals the current segment witho
   onTestFinished(async () => { await currentHandle.close(); await previousHandle.close() })
   const currentStat = await currentHandle.stat({ bigint: true })
   const previousStat = await previousHandle.stat({ bigint: true })
-  // Windows does not guarantee its 64-bit file ID is unique; one ID can name two segments.
+  const currentNumberStat = await currentHandle.stat()
+  const previousNumberStat = await previousHandle.stat()
+  // Adjacent 64-bit file IDs: distinct as bigints, one Number after the 53-bit mantissa.
+  const base = 2n ** 58n + 1000n
   currentStat.dev = 0n
-  currentStat.ino = 7n
+  currentStat.ino = base
   previousStat.dev = 0n
-  previousStat.ino = 7n
-  const currentStats = vi.spyOn(currentHandle, 'stat').mockResolvedValueOnce(currentStat)
-  const previousStats = vi.spyOn(previousHandle, 'stat').mockResolvedValueOnce(previousStat)
+  previousStat.ino = base + 1n
+  currentNumberStat.dev = 0
+  currentNumberStat.ino = Number(base)
+  previousNumberStat.dev = 0
+  previousNumberStat.ino = Number(base + 1n)
+  expect(currentNumberStat.ino).toBe(previousNumberStat.ino)
+  const optionAware = (exact: BigIntStats, numeric: Stats) =>
+    async (options?: StatOptions): Promise<BigIntStats | Stats> => options?.bigint === true ? exact : numeric
+  const currentStats = vi.spyOn(currentHandle, 'stat').mockImplementation(optionAware(currentStat, currentNumberStat))
+  const previousStats = vi.spyOn(previousHandle, 'stat').mockImplementation(optionAware(previousStat, previousNumberStat))
   const opener = vi.mocked(open).mockClear().mockResolvedValueOnce(currentHandle).mockResolvedValueOnce(previousHandle)
   try {
     const result = await readOperationHistory(path, limits, new AbortController().signal)
-    expect(result).toEqual({
-      records: [record('current'), record('old')],
-      bytesRead: Buffer.byteLength(currentText) + Buffer.byteLength(previousText),
-      filesRead: 2,
-      truncated: false,
-      invalidRecords: 0,
-      unavailableFiles: 0,
-      cancelled: false,
-    })
-  } finally {
-    currentStats.mockRestore()
-    previousStats.mockRestore()
-    opener.mockClear()
-  }
-})
-
-it('keeps a predecessor whose identity and size match but whose modification time differs', async () => {
-  const path = await fixture()
-  const current = join(path, 'operations.jsonl')
-  const previous = join(path, 'operations.previous.jsonl')
-  const currentText = line('a')
-  const previousText = line('b')
-  expect(Buffer.byteLength(currentText)).toBe(Buffer.byteLength(previousText))
-  await writeFile(current, currentText)
-  await writeFile(previous, previousText)
-  await utimes(current, 1_700_000_000, 1_700_000_000)
-  await utimes(previous, 1_700_000_100, 1_700_000_100)
-  const currentHandle = await open(current, 'r')
-  const previousHandle = await open(previous, 'r')
-  onTestFinished(async () => { await currentHandle.close(); await previousHandle.close() })
-  const currentStat = await currentHandle.stat({ bigint: true })
-  const previousStat = await previousHandle.stat({ bigint: true })
-  expect(currentStat.size).toBe(previousStat.size)
-  expect(currentStat.mtimeNs).not.toBe(previousStat.mtimeNs)
-  currentStat.dev = 0n
-  currentStat.ino = 7n
-  previousStat.dev = 0n
-  previousStat.ino = 7n
-  const currentStats = vi.spyOn(currentHandle, 'stat').mockResolvedValueOnce(currentStat)
-  const previousStats = vi.spyOn(previousHandle, 'stat').mockResolvedValueOnce(previousStat)
-  const opener = vi.mocked(open).mockClear().mockResolvedValueOnce(currentHandle).mockResolvedValueOnce(previousHandle)
-  try {
-    const result = await readOperationHistory(path, limits, new AbortController().signal)
-    expect(result.records).toEqual([record('a'), record('b')])
+    expect(result.records).toEqual([record('current'), record('old')])
     expect(result).toMatchObject({ filesRead: 2, unavailableFiles: 0, truncated: false })
   } finally {
     currentStats.mockRestore()

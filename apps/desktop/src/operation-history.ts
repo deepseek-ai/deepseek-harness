@@ -1,11 +1,10 @@
 /** Bounded, cancellable reads of Desktop-owned plugin operation history. */
+import type { BigIntStats } from 'node:fs'
 import { open, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setImmediate, setTimeout as wait } from 'node:timers/promises'
 import { parsePluginOperationRecord, type PluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 
-/** The segment this collector reads first; the other owned segment is its rotation predecessor. */
-const CURRENT_SEGMENT = 'operations.jsonl'
 /** Windows reports these while another handle temporarily owns an otherwise readable file. */
 const WINDOWS_TRANSIENT_OPEN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EBUSY', 'EPERM'])
 const WINDOWS_OPEN_RETRY_INITIAL_MS = 10
@@ -32,12 +31,12 @@ export interface OperationHistoryReadResult {
 }
 
 /**
- * Exact two-name key for one file; both stats are BigInt so a Windows 64-bit file ID
- * round-trips without the precision loss of its Number form.
- * @param info - Stats of the opened segment or of the current segment path.
+ * Exact two-name key for one file; BigInt stats keep a Windows 64-bit file ID at its
+ * value instead of the 53-bit Number form, where two adjacent IDs can coincide.
+ * @param info - Stats of the opened history segment.
  * @returns Device and inode as one comparable string.
  */
-function fileIdentity(info: { readonly dev: number | bigint; readonly ino: number | bigint }): string {
+function fileIdentity(info: BigIntStats): string {
   return `${String(info.dev)}:${String(info.ino)}`
 }
 
@@ -75,8 +74,8 @@ async function openSegment(filename: string, signal: AbortSignal): Promise<FileH
 /**
  * Read only the bounded tails of the two owned history files, newest segment first.
  * Cancellation is observed between bounded records after yielding to Worker messages and stops subsequent I/O and parsing.
- * A segment is deduplicated as already read only when its handle reports the identity, size and
- * nanosecond modification time of the segment already read, so an identity collision alone keeps it.
+ * A segment is deduplicated as already read when its handle reports the exact bigint identity of
+ * the segment already read, so records appended before a rotation stay in that one segment.
  * An already-issued OS read must settle before its handle closes.
  * @param directory - Desktop's operation history directory; unrelated files are never enumerated.
  * @param limits - Positive byte, record-size and record-count budgets.
@@ -96,11 +95,11 @@ export async function readOperationHistory(
   const records: PluginOperationRecord[] = []
   let bytesRead = 0
   let filesRead = 0
-  let lastRead: { readonly identity: string; readonly size: bigint; readonly mtimeNs: bigint } | undefined
+  let lastReadIdentity: string | undefined
   let truncated = false
   let invalidRecords = 0
   let unavailableFiles = 0
-  for (const name of [CURRENT_SEGMENT, 'operations.previous.jsonl']) {
+  for (const name of ['operations.jsonl', 'operations.previous.jsonl']) {
     if (cancelled()) break
     try {
       await using handle = await openSegment(join(directory, name), signal)
@@ -113,8 +112,7 @@ export async function readOperationHistory(
       }
       const identity = fileIdentity(fileStat)
       const size = Number(fileStat.size)
-      if (lastRead !== undefined && identity === lastRead.identity
-        && fileStat.size === lastRead.size && fileStat.mtimeNs === lastRead.mtimeNs) {
+      if (lastReadIdentity !== undefined && identity === lastReadIdentity) {
         truncated = true
         continue
       }
@@ -135,7 +133,7 @@ export async function readOperationHistory(
       }
       if (readOffset > 0) {
         filesRead++
-        lastRead = { identity, size: fileStat.size, mtimeNs: fileStat.mtimeNs }
+        lastReadIdentity = identity
       }
       if (cancelled()) break
       truncated ||= readStart > 0 || readOffset < readLength
