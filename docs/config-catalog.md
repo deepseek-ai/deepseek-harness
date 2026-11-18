@@ -2104,6 +2104,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-jobs-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-linear -->
+<a id="deepseek-aidsh-linear"></a>
+
+## `@deepseek-ai/dsh-linear`
+
+- `inject`: `mcpManager` · `systemPrompt`
+- `source`: [`packages/connector/linear/src/index.ts:29`](../packages/connector/linear/src/index.ts)
+
+```ts config-catalog
+/** Linear MCP endpoint and tool loading for the managed server entry. */
+export interface Config {
+  /** Streamable HTTP MCP endpoint; defaults to Linear's hosted server. */
+  url: string
+  /** `on-demand` (default) keeps Linear's tools hidden from each agent until it loads them; `eager` sends all of them. */
+  toolLoading: 'eager' | 'on-demand'
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-linear -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-account -->
 <a id="deepseek-aidsh-llm-deepseek-account"></a>
 
@@ -5087,7 +5106,7 @@ export type ApprovalPolicy = 'ask' | 'never'
 ## `@deepseek-ai/dsh-web`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web/src/index.ts:62`](../packages/web/web/src/index.ts)
+- `source`: [`packages/web/web/src/index.ts:77`](../packages/web/web/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -5099,7 +5118,10 @@ export type ApprovalPolicy = 'ask' | 'never'
  * fields rather than introduce a hidden priority chain.
  */
 export interface WebRuntimeConfig {
-  /** Explicit search provider id. Omitted = auto-select when exactly one usable. */
+  /**
+   * Explicit search provider id. Omitted = the usable DeepSeek provider assigned to the route of the model
+   * request, and otherwise auto-select when exactly one usable.
+   */
   readonly searchProvider: Volatile<string | undefined>
   /** Explicit fetch provider id. Omitted = auto-select when exactly one usable. */
   readonly fetchProvider: Volatile<string | undefined>

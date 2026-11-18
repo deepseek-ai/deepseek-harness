@@ -11,9 +11,67 @@ extern "C" __declspec(dllimport) HRESULT __cdecl InstallerApplyFrame(HWND window
 extern "C" __declspec(dllimport) HWND __cdecl InstallerShowProgress(HWND parent, HWND source,
     BOOL dark, UINT dpi, DWORD controlHover, DWORD controlPressed, const WCHAR* brand, const WCHAR* preparing, const WCHAR* extracting,
     const WCHAR* copying, const WCHAR* registering, const WCHAR* cleaning);
-extern "C" __declspec(dllimport) BOOL __cdecl InstallerFinishProgress(HWND window);
+extern "C" __declspec(dllimport) BOOL __cdecl InstallerFinishProgress(HWND window, const WCHAR* finish, const WCHAR* launch);
+extern "C" __declspec(dllimport) int __cdecl InstallerTakeFinishChoice(HWND window);
+
+struct CompletionProbe {
+    HWND progress;
+    ULONGLONG deadline;
+    RECT bounds;
+    bool requested = false;
+    bool completedDuringMove = false;
+};
+
+static void PollCompletion(HWND window, CompletionProbe& probe) {
+    const HWND finish = FindWindowExW(probe.progress, nullptr, L"Button", L"Finish");
+    const HWND launch = FindWindowExW(probe.progress, nullptr, L"Button", L"Launch");
+    if (finish && launch && IsWindowVisible(finish) && IsWindowVisible(launch)) {
+        GUITHREADINFO input{sizeof(input)};
+        RECT current;
+        probe.completedDuringMove = GetGUIThreadInfo(GetCurrentThreadId(), &input)
+            && input.hwndMoveSize == window && GetWindowRect(window, &current)
+            && EqualRect(&current, &probe.bounds) && IsWindowEnabled(finish)
+            && SendMessageW(launch, BM_GETCHECK, 0, 0) == BST_CHECKED
+            && GetPropW(window, L"HarnessInstaller.CompletedPercent") == reinterpret_cast<HANDLE>(100);
+    } else if (GetTickCount64() < probe.deadline) {
+        return;
+    }
+    SendMessageW(window, WM_CANCELMODE, 0, 0);
+}
+
+static bool CompleteWhileMinimized(HWND window, HWND progress) {
+    ShowWindow(window, SW_MINIMIZE);
+    const HWND foreground = GetForegroundWindow();
+    if (!IsIconic(window) || !InstallerFinishProgress(progress, L"Finish", L"Launch")) return false;
+    const ULONGLONG deadline = GetTickCount64() + 5000;
+    while (GetTickCount64() < deadline) {
+        const HWND finish = FindWindowExW(progress, nullptr, L"Button", L"Finish");
+        if (finish && IsWindowVisible(finish)) {
+            return IsIconic(window) && (foreground == window || GetForegroundWindow() != window)
+                && GetPropW(window, L"HarnessInstaller.Succeeded") != nullptr;
+        }
+        MSG message;
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&message);
+        MsgWaitForMultipleObjectsEx(0, nullptr, 16, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    }
+    return false;
+}
 
 static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    auto* probe = reinterpret_cast<CompletionProbe*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (probe && message == WM_ENTERSIZEMOVE) {
+        GetWindowRect(window, &probe->bounds);
+        PostMessageW(window, WM_APP, 0, 0);
+    }
+    if (probe && message == WM_APP) {
+        probe->requested = InstallerFinishProgress(probe->progress, L"Finish", L"Launch") != FALSE;
+        if (!probe->requested || !SetTimer(window, 1, 16, nullptr)) SendMessageW(window, WM_CANCELMODE, 0, 0);
+        return 0;
+    }
+    if (probe && message == WM_TIMER && wparam == 1) {
+        PollCompletion(window, *probe);
+        return 0;
+    }
     if (message == WM_DESTROY) { PostQuitMessage(0); return 0; }
     return DefWindowProcW(window, message, wparam, lparam);
 }
@@ -68,10 +126,12 @@ int wmain(int argc, wchar_t** argv) {
     HWND warmup = createProgress();
     if (!warmup) { DestroyWindow(window); return 5; }
     UpdateWindow(warmup);
-    ShowWindow(window, SW_MINIMIZE);
+    const bool minimizedCompletion = CompleteWhileMinimized(window, warmup);
     ShowWindow(window, SW_RESTORE);
     UpdateWindow(warmup);
     DestroyWindow(warmup);
+    RemovePropW(window, L"HarnessInstaller.CompletedPercent");
+    RemovePropW(window, L"HarnessInstaller.Succeeded");
     const DWORD initialGdi = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     HWND progress = createProgress();
     if (!progress) { DestroyWindow(window); return 5; }
@@ -124,14 +184,15 @@ int wmain(int argc, wchar_t** argv) {
     };
     bool captionStates = true;
     ShowWindow(progress, SW_HIDE);
-    for (int x : {504, 548}) {
+    {
+        constexpr int x = 504;
         const LPARAM point = MAKELPARAM(MulDiv(x + 20, dpi, 96), MulDiv(24, dpi, 96));
         captionStates = expectPixel(x, normalColor) && captionStates;
         SendMessageW(progress, WM_MOUSEMOVE, 0, point);
         captionStates = expectPixel(x, hoverColor) && captionStates;
         SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, point);
         captionStates = expectPixel(x, pressedColor) && captionStates;
-        const int other = x == 504 ? 548 : 504;
+        constexpr int other = 548;
         SendMessageW(progress, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(MulDiv(other + 20, dpi, 96), MulDiv(24, dpi, 96)));
         captionStates = expectPixel(other, normalColor) && captionStates;
         captionStates = expectPixel(x, normalColor) && captionStates;
@@ -167,12 +228,15 @@ int wmain(int argc, wchar_t** argv) {
     const LPARAM closePoint = MAKELPARAM(MulDiv(568, dpi, 96), MulDiv(24, dpi, 96));
     MSG closeMessage;
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
-    bool closeRelease = !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    bool closeDisabled = GetCapture() != progress && expectPixel(548, normalColor)
+        && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    SendMessageW(progress, WM_MOUSEMOVE, MK_LBUTTON, closePoint);
+    closeDisabled = closeDisabled && expectPixel(548, normalColor);
     SendMessageW(progress, WM_LBUTTONUP, 0, minimizePoint);
-    closeRelease = closeRelease && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    closeDisabled = closeDisabled && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
     SendMessageW(progress, WM_LBUTTONDOWN, MK_LBUTTON, closePoint);
     SendMessageW(progress, WM_LBUTTONUP, 0, closePoint);
-    closeRelease = closeRelease && PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE);
+    closeDisabled = closeDisabled && !PeekMessageW(&closeMessage, window, WM_CLOSE, WM_CLOSE, PM_REMOVE) && GetCapture() != progress;
     LARGE_INTEGER frequency, started, finished;
     QueryPerformanceFrequency(&frequency);
     std::vector<double> samples;
@@ -196,15 +260,45 @@ int wmain(int argc, wchar_t** argv) {
     std::printf("fixture=standalone-progress dpi=%d dark=%d frames=%d screen=%dx%d foreground=%d mean_ms=%.3f p50_ms=%.3f p95_ms=%.3f max_ms=%.3f\n",
         dpi, dark, frameCount, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), GetForegroundWindow() == window,
         total / samples.size(), samples[samples.size() / 2], samples[samples.size() * 95 / 100], samples.back());
-    const bool completed = InstallerFinishProgress(progress) &&
-        GetPropW(window, L"HarnessInstaller.CompletedPercent") == reinterpret_cast<HANDLE>(100);
-    WCHAR caption[160] = {};
-    GetWindowTextW(progress, caption, ARRAYSIZE(caption));
-    const bool finalCaption = wcscmp(caption, L"Extracting 100%") == 0;
+    CompletionProbe probe{progress, GetTickCount64() + 5000, {}};
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&probe));
+    SendMessageW(window, WM_SYSCOMMAND, SC_MOVE, 0);
+    if (restoreCursor) SetCursorPos(originalCursor.x, originalCursor.y);
+    KillTimer(window, 1);
+    SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+    const bool completed = probe.requested && probe.completedDuringMove;
+    bool finishActions = completed && InstallerTakeFinishChoice(progress) == -1;
+    bool finishInTabOrder = false, launchInTabOrder = false;
+    if (finishActions) {
+        const HWND finish = FindWindowExW(progress, nullptr, L"Button", L"Finish");
+        const HWND launch = FindWindowExW(progress, nullptr, L"Button", L"Launch");
+        const HWND close = FindWindowExW(progress, nullptr, L"Button", L"\x00d7");
+        const HWND first = GetNextDlgTabItem(window, nullptr, FALSE);
+        HWND tab = first;
+        for (int next = 0; tab && next < 4; ++next) {
+            finishInTabOrder |= tab == finish;
+            launchInTabOrder |= tab == launch;
+            tab = GetNextDlgTabItem(window, tab, FALSE);
+            if (tab == first) break;
+        }
+        SendMessageW(finish, BM_CLICK, 0, 0);
+        finishActions = InstallerTakeFinishChoice(progress) == 1 && InstallerTakeFinishChoice(progress) == -1;
+        SendMessageW(close, BM_CLICK, 0, 0);
+        finishActions = finishActions && InstallerTakeFinishChoice(progress) == 0;
+        SendMessageW(launch, BM_CLICK, 0, 0);
+        SendMessageW(window, WM_COMMAND, MAKEWPARAM(IDOK, BN_CLICKED), 0);
+        finishActions = finishActions && InstallerTakeFinishChoice(progress) == 0;
+    }
     DestroyWindow(progress);
     const DWORD finalGdi = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     DestroyWindow(window);
-    std::printf("client_frame=%d stock_preserved=%d completed=%d final_caption=%d caption_states=%d button_release=%d close_release=%d minimized=%d restored=%d gdi_before=%lu gdi_after=%lu\n",
-        clientFrame, failurePreservesStock, completed, finalCaption, captionStates, buttonRelease, closeRelease, minimized, restored, initialGdi, finalGdi);
-    return clientFrame && failurePreservesStock && completed && finalCaption && captionStates && buttonRelease && closeRelease && minimized && restored && finalGdi <= initialGdi ? 0 : 6;
+    std::printf("client_frame=%d stock_preserved=%d completed_during_move=%d caption_states=%d button_release=%d close_disabled=%d minimized=%d restored=%d gdi_before=%lu gdi_after=%lu\n",
+        clientFrame, failurePreservesStock, completed, captionStates, buttonRelease, closeDisabled, minimized, restored, initialGdi, finalGdi);
+    std::printf("minimized_completion=%d finish_actions=%d finish_tab=%d launch_tab=%d\n",
+        minimizedCompletion, finishActions, finishInTabOrder, launchInTabOrder);
+    return clientFrame && failurePreservesStock && completed && minimizedCompletion && finishActions
+        && finishInTabOrder && launchInTabOrder && captionStates && buttonRelease && closeDisabled
+        && minimized && restored && finalGdi <= initialGdi ? 0 : 6;
 }
