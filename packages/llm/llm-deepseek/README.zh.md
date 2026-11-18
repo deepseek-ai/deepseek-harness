@@ -11,7 +11,7 @@ kind: "package-reference"
 
 提供共享的 DeepSeek Messages 传输、请求配置和模型能力。组合 [API key](../llm-deepseek-api-key/README.zh.md) 或[账号](../llm-deepseek-account/README.zh.md)插件以提供鉴权、模型发现与 provider 注册。有效的设置更改在后续请求生效，进行中的请求保留原配置。本包可与 [pi-ai 适配器](../llm-pi-ai/README.zh.md)并用。
 
-`resolveAuth(connection)` 返回提供方持有的鉴权请求头，以及绑定本次请求凭据的可选失败回调。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
+`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：请求头、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。Messages 和 Files 直接使用这些请求头，不判断凭据类型。上传复用按端点和鉴权请求头的哈希隔离，不持久化原始凭据。
 
 ## 目录
 
@@ -67,6 +67,9 @@ kind: "package-reference"
 | `imageOffloadByteQuantum` | `64 MiB` | Files 模式最旧前缀移除量子 |
 | `inlineImageOffloadByteQuantum` | `10 MiB` | 内联模式最旧前缀移除量子 |
 | `imageOffloadCountQuantum` | `20` | 数量超限移除量子 |
+| `fileUploadConcurrency` | `3` | 每个模型请求同时上传 1 至 3 张不同图片，file ID 失效后的重传也遵守此限制 |
+| `fileUploadMaxRetries` | `2` | 每张图片最多额外上传 0 至 2 次，普通 429 重试和一次存储配额清理后的重试共用次数。设为 0 时跳过配额清理和上传重试。 |
+| `fileUploadRetryDelayMs` | `500` | 遇到限流后至少等待的毫秒数。服务端要求的 Retry-After 更长时按其要求等待，所有尝试共用单张图片的超时期限。 |
 | `filesApiTimeoutMs` | `20,000` | 每张图片 Files 解析截止时间 |
 | `fileExpiresAfterSeconds` | `604,800` | 请求的上传图片生存期与本地复用期限 |
 | `fileRefreshMarginSeconds` | `3,600` | 低于此剩余复用期时替换 id |
@@ -87,11 +90,11 @@ Messages 以内容块发送文本、思考、工具调用和工具结果，以 `
 <a id="account-credentials"></a>
 ### 账号凭据
 
-`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号服务](../../credentials/deepseek-account/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
+`deepseek-official` 仅解析配置的 API Key 引用。`deepseek-account` 仅解析[账号服务](../../account/deepseek-account/README.zh.md)保存的授权，其允许的 `inferenceOrigin` 默认为 `https://api.deepseek.com`。两条路由均不回退到另一凭证。退出登录删除账号授权，保留 API Key。
 
-Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号服务负责 HTTP 401 分类和凭据失效处理；传输层将错误交给其回调。
+Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 Bearer 前缀；API Key 使用 `x-api-key`。两种凭据模式均拒绝重定向。账号路由负责 HTTP 401 分类，账号服务负责凭据失效处理；传输层将错误交给凭据的回调。
 
-[共享凭据函数](src/credential.ts)为模型路由和 Web 提供方获取凭据，不决定请求头。`resolveDeepSeekApiKey(ctx, ref)` 返回规范化并校验后的密钥或 `undefined`；已安装的凭据服务具有权威性，仅在该服务缺席时读取启动环境。存储与密钥格式错误向上传播。`deepSeekApiKeyConfigured(ctx, ref)` 检查是否存在，不读取已存密钥值。账号函数将目标地址许可检查和精确 token 作废交给账号服务；作废时隔离存储失败，保留原请求错误。
+提供方插件通过两个适配器钩子提供凭据。`resolveAuth(connection, endpoint)` 返回发往 `endpoint` 的一次请求所携带的凭据：Messages、Files 和列表请求发送的请求头、可选的失败回调以及可选的 `revoked` 信号；未配置时返回 `undefined`。凭据的所有者撤回凭据时，该信号结束模型请求及其文件操作，失败回调为这次结束命名。`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`。插件的 API Key 和账号登录凭据都取自 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md)；本传输层不读取任何凭据。
 
 ### 带 thinking 与图片的流式调用
 
@@ -99,9 +102,9 @@ Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 B
 
 适配器通常通过 `/v1/files` 上传这些确切请求字节，并发送 file-id 引用。Files 请求与包含 file id 的模型请求均携带 `anthropic-beta: files-api-2025-04-14`。全部请求拒绝重定向，确保凭据仅发送到配置的源。文件解析失败或超时会按内联预算，用内联 base64 重建整份模型请求；一次请求绝不混用 file id 与内联图片。调用方取消会停止请求。
 
-上传超时后，下一次需要上传图片的模型请求直接使用内联图片。连续上传超时时，跳过的请求数依次为 1、2、4、8 次，之后继续翻倍，不受经过时间的影响。同一端点和凭据按请求计数，多张图片只算一次。纯文本请求和所有图片都命中文件 ID 缓存的请求不计数。同一端点和凭据下，实际上传成功会清除之前的超时计数，包括并发上传的超时。之后再超时，从跳过一次重新开始。即使网关已经恢复，也要等跳过规定次数后才会试传。
+上传超时后，下一次需要上传图片的模型请求直接使用内联图片。连续上传超时时，跳过的请求数依次为 1、2、4、8 次，之后继续翻倍，不受经过时间的影响。同一端点和凭据按模型请求计数，一次请求并发处理多张图片也只扣一次。上传超时立即回退到内联图片，只有收到 HTTP 429 才触发限流重试。纯文本请求和所有图片都命中文件 ID 缓存的请求不计数。同一端点和凭据下，实际上传成功会清除之前的超时计数，包括并发上传的超时。之后再超时，从跳过一次重新开始。即使网关已经恢复，也要等跳过规定次数后才会试传。
 
-缓存 id 按端点与凭据限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。上传通过 `expires_after[anchor]=created_at` 与 `expires_after[seconds]` 请求过期。Messages 文件元数据不含远端过期时间，因此本地复用期限使用原始上传时间加 `fileExpiresAfterSeconds`；这不保证远端文件删除。配额失败会先删除一批配置数量的最旧 harness 文件，再重试一次上传。
+缓存 id 按端点与凭据限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。上传通过 `expires_after[anchor]=created_at` 与 `expires_after[seconds]` 请求过期。Messages 文件元数据不含远端过期时间，因此本地复用期限使用原始上传时间加 `fileExpiresAfterSeconds`；这不保证远端文件删除。每个请求并发解析不同图片。上传收到 429 时可在单图期限内重试，等待时间达到或超过剩余期限时，立即改用内联图片。同一端点和凭据下的多个上传同时遇到存储配额错误时，每次重试使用一个已删除文件腾出的名额。名额用完后，才会再删除一批最旧的 harness 文件。
 
 Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留请求版本；内联回退有独立 base64 预算。两种模式都按配置的字节或数量量子移除最旧前缀。每张省略图片都有自己的模型可见占位符，包含显示名或附件 id，以及可用时的规范化尺寸、媒体类型与当前只读路径。分阶高水位策略避免每新增一张图片都改写旧请求前缀。
 
@@ -121,7 +124,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 成功的 Files 响应必须包含有效 JSON。上传、列举、获取和删除操作的 JSON 解码失败抛出 `INVALID_RESPONSE`，消息包含操作名称与 HTTP 状态，`LlmError.failure` 保留该状态，`cause` 保留原始解析错误。读取响应体时的传输和取消错误保留其原有身份。
 
-非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
+非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。被凭据的 `revoked` 信号结束的请求按提供方失败回调命名的失败上报，没有回调时为 `TRANSPORT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。DeepSeek 以 [`refusal`](https://api-docs.deepseek.com/guides/safety/#handle-refusals) 结束流时，适配器报告已计费用量，并以 `CONTENT_REFUSED` 失败。若提供方给出说明，例如哪些图片被拦截，错误会附带该说明。默认重试策略会结束本次尝试，Web 会撤回已流式显示的回复，Session 将其保存在 `assistant/attempt` 中，模型历史不会包含这段回复。流式输出前被拒绝的输入以 HTTP 400 返回，并以 `INVALID_REQUEST` 失败。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
 
 提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，在官方端点上且 `models` 为内置目录时改为提供官方模型列表；账号路由在登录时提供账号的模型列表（见 [API key](../llm-deepseek-api-key/README.zh.md) 与[账号](../llm-deepseek-account/README.zh.md)提供方）。传输层提供内置目录、目录条目字段的 schema 和能力解析，以及两条路由共用的列表机制：`requestModelListing`、按凭据区分的 `ModelListingCache`（由 `createModelListingCache` 持有，负责自动刷新、通知与插件清理），以及带客户端版本门控和列表角标的 `resolveListedCatalog` 与 `refuseListedModel`；`catalogModelInfo` 把列表角标附到公布的条目上。角标文字拒绝控制字符、Unicode 行分隔符、双向控制符及仅由空白或默认可忽略字符组成的字符串，组合 emoji 仍有效。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
 
@@ -220,4 +223,4 @@ loop 保留的响应块会追加到下一个请求，并保留其更早的可复
 
 无。
 
-`deepseek-official` 仅使用配置的 API Key 引用；`deepseek-account` 仅在账号提供方允许的推理来源使用已保存的 DSH 授权。两条路由共享 Messages 传输，模型与文件设置独立配置。账号凭证缺失或不适用于目标时拒绝请求并提示登录；两条路由均不回退到另一凭证。Chat 和 Files 请求拒绝重定向。账号提供方根据运行中 Agent 已记录的请求上下文负责退登取消，包括工具执行阶段；传输层接收现有请求的中止信号。
+`deepseek-official` 仅使用配置的 API Key 引用；`deepseek-account` 仅在账号提供方允许的推理来源使用已保存的 DSH 授权。两条路由共享 Messages 传输，模型与文件设置独立配置。账号凭证缺失或不适用于目标时拒绝请求并提示登录；两条路由均不回退到另一凭证。Chat 和 Files 请求拒绝重定向。账号路由插件根据运行中 Agent 已记录的请求上下文负责退登取消，包括工具执行阶段；传输层接收现有请求的中止信号，并结束凭据已被撤回的请求。

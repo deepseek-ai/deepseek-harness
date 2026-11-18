@@ -55,7 +55,9 @@ const systemPointerOption = {
   useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
 }
 
-function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag: D) {
+const toggle = z.object({ ...window, mouseButton: pointer.mouseButton.unwrap(), direction: z.enum(['down', 'up']) }).strict()
+
+function requestSchema<H extends z.ZodType, D extends z.ZodType, T extends z.ZodType>(hover: H, drag: D, button: T) {
   return z.discriminatedUnion('method', [
     operation('getCapabilities', {}), operation('listApps', {}),
     operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
@@ -72,6 +74,7 @@ function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag:
     operation('listActions', snapshot),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
     operation('invoke', snapshot),
+    z.object({ method: z.literal('toggleMouse'), params: button }).strict(),
     z.object({ method: z.literal('mouseMove'), params: hover }).strict(),
     z.object({ method: z.literal('click'), params: z.union([
       z.object({ ...snapshot, ...click }).strict(),
@@ -97,12 +100,12 @@ function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag:
 }
 
 /** Portable model operations, including standard hover without a system-pointer option. */
-export const Request = requestSchema(z.union(MouseMoveTargets), z.union(dragTargets))
+export const Request = requestSchema(z.union(MouseMoveTargets), z.union(dragTargets), toggle)
 
 /** Model operations for providers that can move the user's system pointer. */
 export const SystemPointerRequest = requestSchema(
   z.union(MouseMoveTargets.map(target => target.extend(systemPointerOption))),
-  z.union(dragTargets.map(target => target.extend(systemPointerOption))),
+  z.union(dragTargets.map(target => target.extend(systemPointerOption))), toggle.extend(systemPointerOption),
 )
 
 /** Native resource fields supplied or completed by the Host before dispatch. */

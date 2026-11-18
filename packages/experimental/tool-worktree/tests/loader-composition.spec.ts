@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -38,7 +38,7 @@ afterEach(async () => {
 })
 
 describe('worktree tool through real Loader composition', () => {
-  it('creates and enters a new checkout, reports canonical fields, and unregisters on disposal', async () => {
+  it('creates a checkout for a new name and enters an existing one, exits to the source checkout, reports canonical fields, and unregisters on disposal', async () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-loader-')))
     const repository = join(root, 'repo')
     await mkdir(repository)
@@ -87,30 +87,90 @@ describe('worktree tool through real Loader composition', () => {
     await context.loader.await()
 
     const agent = await context.agentLoop.create(brandString<SessionId>('worktree-loader'), {}, { cwd: repository })
-    const invoke = (name: string, agentValue = agent) => executeToolFixture(context!, {
-      name: 'create_worktree', callId: brandString<ToolCallId>(name), arguments: { name }, agent: agentValue, signal: new AbortController().signal,
+    const enter = (args: { name?: string; from?: string }, agentValue?: typeof agent) => executeToolFixture(context!, {
+      name: 'enter_worktree', callId: brandString<ToolCallId>(`enter-${args.name ?? 'generated'}`), arguments: args,
+      signal: new AbortController().signal,
+      ...agentValue === undefined ? {} : { agent: agentValue },
     })
-    const result = await invoke('new-checkout')
+    const exit = (agentValue?: typeof agent) => executeToolFixture(context!, {
+      name: 'exit_worktree', callId: brandString<ToolCallId>('exit'), arguments: {}, signal: new AbortController().signal,
+      ...agentValue === undefined ? {} : { agent: agentValue },
+    })
+    const text = (result: Awaited<ReturnType<typeof enter>>) => result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
     const path = join(repository, '.agents/worktrees/new-checkout')
+    const creation = { path, branch: 'new-checkout', baseCommit, repositoryRoot: repository }
+
+    // No worktree has the name, so the call creates one.
+    const result = await enter({ name: 'new-checkout' }, agent)
     expect(result.isError).not.toBe(true)
-    expect(result.value).toEqual({ path, branch: 'new-checkout', baseCommit, repositoryRoot: repository })
+    expect(result.value).toEqual({ ...creation, created: true })
     expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
     expect(context.workingDirectory.get(agent.session)).toBe(path)
     expect(await readFile(join(path, 'file.txt'), 'utf8')).toBe('committed\n')
 
-    const failure = await executeToolFixture(context, {
-      name: 'create_worktree', callId: brandString<ToolCallId>('no-agent'), arguments: {}, signal: new AbortController().signal,
-    })
+    const failure = await enter({})
     expect(failure.isError).toBe(true)
-    expect(failure.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
+    expect(text(failure)).toContain('requires a calling agent')
     expect(failure.isError && failure.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
-    const existing = await invoke('new-checkout')
-    expect(existing.isError && existing.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
-    expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({
-      card: 'generic', title: 'create_worktree', rawInput: { name: 'named' },
+    // Inside the new worktree the name selects its own empty pool, and the branch of a nested worktree already exists.
+    const nested = await enter({ name: 'new-checkout' }, agent)
+    expect(nested.isError && nested.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    // A forwarded `fetch` would make the runtime refuse `main`, which is not a remote-tracking branch.
+    const undeclared = await executeToolFixture(context, {
+      name: 'enter_worktree', callId: brandString<ToolCallId>('undeclared'), arguments: { from: 'main', fetch: true }, agent,
+      signal: new AbortController().signal,
     })
+    expect(undeclared.isError).not.toBe(true)
+    expect(undeclared.value).toMatchObject({ baseCommit, repositoryRoot: path, created: true })
+    // Leaving the generated worktree returns the Session to `new-checkout`.
+    expect((await exit(agent)).value).toMatchObject({ baseCommit, repositoryRoot: path })
+    expect(context.workingDirectory.get(agent.session)).toBe(path)
+    expect(context.tools.get('enter_worktree')!.presentCall!({ name: 'named' })).toEqual({
+      card: 'generic', title: 'enter_worktree', rawInput: { name: 'named' },
+    })
+
+    const left = await exit(agent)
+    expect(left.isError).not.toBe(true)
+    expect(left.value).toEqual(creation)
+    expect(left.content).toEqual([{ type: 'text', text: JSON.stringify(creation) }])
+    expect(context.workingDirectory.get(agent.session)).toBe(repository)
+    const outside = await exit(agent)
+    expect(outside.isError && outside.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_NOT_ENTERED' })
+    expect(text(outside)).toContain('no recorded worktree contains the working directory')
+    const agentless = await exit()
+    expect(agentless.isError && agentless.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    expect(context.tools.get('exit_worktree')!.presentCall!({})).toEqual({ card: 'generic', title: 'exit_worktree', rawInput: {} })
+
+    // The worktree now exists, so the same name enters it and creates nothing.
+    const branches = (await git('branch', '--list')).stdout
+    const entered = await enter({ name: 'new-checkout' }, agent)
+    expect(entered.isError).not.toBe(true)
+    expect(entered.value).toEqual({ path, branch: 'new-checkout', repositoryRoot: repository, created: false })
+    expect(entered.content).toEqual([{ type: 'text', text: JSON.stringify(entered.value) }])
+    expect(context.workingDirectory.get(agent.session)).toBe(path)
+    expect((await git('branch', '--list')).stdout).toBe(branches)
+    expect((await exit(agent)).value).toEqual(creation)
+
+    // A start revision asks for a new worktree, which an existing name refuses.
+    const refused = await enter({ name: 'new-checkout', from: 'HEAD' }, agent)
+    expect(refused.isError && refused.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    // Only a missing worktree leads to creation: other lookup failures are reported as they are.
+    const create = vi.spyOn(context.worktrees, 'create')
+    const invalid = await enter({ name: '../outside' }, agent)
+    expect(invalid.isError && invalid.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_INVALID_ARGUMENT' })
+    vi.spyOn(context.worktrees, 'enter').mockRejectedValueOnce(new Error('lookup failed'))
+    expect(text(await enter({ name: 'new-checkout' }, agent))).toContain('lookup failed')
+    expect(create).not.toHaveBeenCalled()
+    expect(context.workingDirectory.get(agent.session)).toBe(repository)
+
+    // Without a name the call creates a worktree with a generated name.
+    const generated = await enter({}, agent)
+    expect(generated.isError).not.toBe(true)
+    expect(generated.value).toMatchObject({ baseCommit, repositoryRoot: repository, created: true })
+    expect(create).toHaveBeenCalledOnce()
+
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')
     await entry!.fiber!.dispose()
-    expect(context.tools.schemas().some(tool => tool.name === 'create_worktree')).toBe(false)
+    expect(context.tools.schemas().some(tool => tool.name.endsWith('_worktree'))).toBe(false)
   })
 })

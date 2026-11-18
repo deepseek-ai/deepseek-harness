@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import fsPromises from 'node:fs/promises'
 import path from 'node:path'
+import timers from 'node:timers/promises'
 import url from 'node:url'
 import type { Dict } from '@deepseek-ai/cosmokit'
 
@@ -18,6 +19,18 @@ const HELPER_FILES = {
 }
 
 const cache: Dict<Promise<Resolve | undefined>> = Object.create(null)
+
+const RENAME_RETRIES = 10
+const RENAME_BACKOFF = 20
+
+/**
+ * On Windows a rename over a file that another process holds open fails with
+ * one of these; the lock is normally gone within milliseconds.
+ */
+function isTransientRenameError(error: unknown) {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'EACCES' || code === 'EPERM' || code === 'EBUSY'
+}
 
 /** Nearest ancestor of `dir` that owns a `package.json`, if any. */
 function findScope(dir: string) {
@@ -41,11 +54,25 @@ function resolveScope(baseUrl: string | undefined) {
 }
 
 async function write(filename: string, content: string) {
+  // The helper content is constant; skipping an identical rewrite avoids
+  // repeating the rename that another process may have blocked.
+  if (await fsPromises.readFile(filename, 'utf8').catch(() => undefined) === content) return
   // Another process may be writing the same path; `rename` is atomic, so a
   // concurrent reader only ever observes the complete helper.
   const temp = `${filename}.${process.pid}`
   await fsPromises.writeFile(temp, content)
-  await fsPromises.rename(temp, filename)
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fsPromises.rename(temp, filename)
+      return
+    } catch (error) {
+      if (attempt >= RENAME_RETRIES || !isTransientRenameError(error)) {
+        await fsPromises.rm(temp, { force: true }).catch(() => {})
+        throw error
+      }
+    }
+    await timers.setTimeout(RENAME_BACKOFF * (attempt + 1))
+  }
 }
 
 async function _createResolve(scope: string): Promise<Resolve | undefined> {
@@ -71,5 +98,8 @@ async function _createResolve(scope: string): Promise<Resolve | undefined> {
 export async function createResolve(baseUrl: string | undefined) {
   const scope = resolveScope(baseUrl)
   if (!scope) return
-  return await (cache[scope] ??= _createResolve(scope))
+  const resolve = await (cache[scope] ??= _createResolve(scope))
+  // A scope that cannot be prepared may succeed on a later attempt.
+  if (!resolve) delete cache[scope]
+  return resolve
 }

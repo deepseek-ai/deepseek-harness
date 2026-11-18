@@ -5,12 +5,12 @@
 - text: v{{version}} 实验性
 - paragraph:
   - code: "@deepseek-ai/dsh-experimental-forge-bundle"
-- paragraph: 在会话侧栏集中跟踪关联的 GitHub PR：查看检查状态、评审意见与代码差异，并把修改建议交给智能体继续处理。也可查看本地改动，用独立工作树隔离任务。GitHub 功能需要本机安装 gh 并登录。
+- paragraph: 在会话侧栏集中跟踪关联的代码变更请求，支持 GitHub PR 以及 GitLab MR：查看检查状态、评审意见与代码差异，并把修改建议交给智能体继续处理。也可查看本地改动，用独立工作树隔离任务。GitHub 功能需要本机安装 gh 并登录。GitLab 合并请求需要本机安装 glab 并登录。
 - region "详细介绍":
   - paragraph:
     - img "会话关联 GitHub PR，跟踪检查、评审与代码差异，并用工作树隔离任务改动"
 - heading "包含的组件" [level=4]
-- text: 共 6 个 · 6 已停用
+- text: 共 7 个 · 7 已停用
 - list:
   - listitem:
     - text: 工作树服务 创建命名的 Git 工作树，并切换当前会话的工作目录。
@@ -33,12 +33,17 @@
     - code: "@deepseek-ai/dsh-experimental-forge-github"
     - text: 已关闭
   - listitem:
+    - text: GitLab 变更请求 通过宿主上的 GitLab CLI 为 forge 注册表读写 GitLab 合并请求。
+    - code: forge-gitlab
+    - code: "@deepseek-ai/dsh-forge-gitlab"
+    - text: 已关闭
+  - listitem:
     - text: 会话变更请求 把变更请求绑定到创建、推送或跟踪它们的会话，并监听其状态。
     - code: forge-session
     - code: "@deepseek-ai/dsh-experimental-forge-session"
     - text: 已关闭
   - listitem:
-    - text: 变更请求面板 在侧栏标签页中显示会话的变更请求，并让新会话可以在工作树中开始。
+    - text: 变更请求面板 在会话面板中显示会话的变更请求，并让新会话可以在工作树中开始。
     - code: forge-panel
     - code: "@deepseek-ai/dsh-experimental-client-ui-forge"
     - text: 已关闭

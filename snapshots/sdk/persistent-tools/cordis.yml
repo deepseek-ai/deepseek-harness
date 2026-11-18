@@ -68,6 +68,10 @@
   name: '@deepseek-ai/dsh-tool-skill'
   disabled: true
 
+- id: upstream-skills
+  name: '@deepseek-ai/dsh-upstream-skills'
+  disabled: true
+
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
   disabled: true

@@ -2,17 +2,19 @@
 
 [English](working-directory.md) | 中文
 
-Session 的当前目录由 [`dsh-working-directory`](../../packages/session/working-directory/README.zh.md) 拥有。不可变 header 标识原始项目；`working-directory/change` 记录后续目录相关操作使用的有效目录。生成的[持久化目录](../persistence-catalog.zh.md) 拥有事件声明。
+Session 的当前目录由 [`dsh-working-directory`](../../packages/session/working-directory/README.zh.md) 拥有。不可变 header 标识原始项目；`workspace-root/change` 记录后续目录相关操作所用目录的每次移动。生成的[持久化目录](../persistence-catalog.zh.md) 拥有事件声明。
 
 ## 目录选择
 
-`ctx.workingDirectory.get(session)` 读取日志中的值。`ensure(agent)` 验证它，并在目录消失时恢复原始项目。`set(agent, path)` 验证并记录请求的变更。header 没有目录的 Session 使用配置的运行时回退目录；回退目录不可用时返回错误。
+`ctx.workingDirectory.get(session)` 读取日志中的值。`ensure(agent)` 验证它，并在目录消失时恢复原始项目。`set(agent, path)` 验证并记录由 Host 操作选定的移动，例如创建工作树、forge 面板或 SDK 请求；模型没有可以移动目录的工具。header 没有目录的 Session 使用配置的运行时回退目录；回退目录不可用时返回错误。
 
-变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。已有终端和持久 shell 保留自己的目录。沙箱可写根目录与项目归属继续绑定原始项目。
+`get` 是读取 Session 目录的唯一接口：相对路径从它解析，跟随 Session 检出的一切也以它为工作区根。服务记录的每次变更都是 `workspace-root/change`。写于模型还能移动目录时期的日志含有 `working-directory/change` 事件，现在没有写入方。服务忽略它们：这样的 Session 在原始项目中恢复，或在最近一条 `workspace-root/change` 的目录中恢复，下一次请求的上下文会报告该目录。
+
+变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。沙箱 `workspace-write` 边界、文件树与目录列举以及变更摘要也跟随它。已有终端和持久 shell 保留自己的目录。项目归属继续绑定原始项目。
 
 ## 模型上下文
 
-初始值与后续当前值通过必需的用户上下文快照到达模型，即使可选运行时上下文被禁用也不例外。每次已提交变更都会尝试通过普通 Agent 收件箱排入通知；取消或销毁可能丢弃尚未进入请求的通知。目录事件仍然保留，下一次获准进入的请求会收到当前值。目录上下文不进入系统提示词。[`working_directory`](../../packages/session/tool-working-directory/README.zh.md) 提供一个可选的 `cd` 参数。
+初始值与后续当前值通过必需的用户上下文快照到达模型，即使可选运行时上下文被禁用也不例外。每次已提交变更都会尝试通过普通 Agent 收件箱排入通知；取消或销毁可能丢弃尚未进入请求的通知。目录事件仍然保留，下一次获准进入的请求会收到当前值。目录上下文不进入系统提示词。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -26,13 +28,17 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.workingDirectory` — `WorkingDirectoryService`
 
-One owner for each Session's effective directory and its model-visible changes.
+One owner for each Session's directory and its model-visible changes.
+
+A Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.
 
 ```ts cordis-catalog
 /**
- * Read the committed directory without filesystem I/O.
+ * Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace
+ * root of everything that follows the Session's checkout.
  * @param session - Session whose directory is requested.
- * @returns its effective absolute directory.
+ * @returns the directory of the last Host move, the original project before any, or the deployment
+ * default when none is recorded.
  */
 get(session: Session): string
 
@@ -40,15 +46,17 @@ get(session: Session): string
  * Validate the current directory and restore the original project when it disappeared.
  * @param agent - live or unpublished Agent owning the Session.
  * @param signal - cancellation for filesystem inspection.
- * @returns the existing directory; recovery is committed before fulfillment.
- * A notice failure is warned without reverting the committed state.
+ * @returns the existing directory; recovery is committed before fulfillment. A notice failure is
+ * warned without reverting the committed state.
  * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
  *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
  */
 ensure(agent: Agent, signal?: AbortSignal): Promise<string>
 
 /**
- * Change one Session's directory without changing existing processes or permissions.
+ * Move one Session's directory to `path`. Existing processes keep their directories. Callers are
+ * Host operations that chose the directory; a model-supplied path would move the workspace-write
+ * boundary with it.
  * @param agent - live or unpublished Agent owning the Session.
  * @param path - absolute path or a path relative to its current directory.
  * @param signal - cancellation before the durable change.

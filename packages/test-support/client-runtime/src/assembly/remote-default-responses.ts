@@ -61,5 +61,9 @@ export const remoteDefaultResponses: RemoteTable = {
     'remoteAccess/follow': openStream([{ type: 'baseline', owner: true }]),
     // ui-sidebar-terminal header entry `agent-terminals`: the displayed Session's terminal roster, then open.
     'terminal/watch': openStream([[]]),
+    // ui-connector-account `apply`: the registered connector accounts, none in a default composition, then open.
+    'connectorAccounts/watch': openStream([{ accounts: [] }]),
+    // client-hmr browser `apply`: open without a baseline, so the page keeps the boot graph the harness composed.
+    'pluginEvents/follow': openStream(),
   },
 }

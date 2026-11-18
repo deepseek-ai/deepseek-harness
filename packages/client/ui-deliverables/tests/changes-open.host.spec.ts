@@ -85,14 +85,14 @@ async function fixture() {
 }
 
 describe('change summary route', () => {
-  it('serves the Host-held summary without its working directory, and 404 once it is gone', async () => {
-    const { read, data, summary } = await fixture()
+  it('serves the Host-held summary with the directory its paths are relative to, and 404 once it is gone', async () => {
+    const { read, data, summary, cwd } = await fixture()
     expect(changesSummaryUrl(brandString<SessionId>('owner'), 9)).toBe('api/changes.summary?sessionId=owner&seq=9')
     const response = await read()
     expect(response.status).toBe(200)
     expect(response.headers.get('cache-control')).toBe('no-store')
-    // The working directory and snapshot ids stay on the Host.
-    expect(await response.json()).toEqual({ turn: 1, total: 3, added: 3, deleted: 0, files: data.files })
+    // The snapshot ids stay on the Host.
+    expect(await response.json()).toEqual({ turn: 1, cwd, total: 3, added: 3, deleted: 0, files: data.files })
     expect((await read('?sessionId=owner&seq=8')).status).toBe(404)
     expect((await read('?sessionId=other&seq=9')).status).toBe(404)
     for (const bad of ['', '?seq=9', '?sessionId=owner', '?sessionId=owner&seq=x', '?sessionId=owner&seq=1.5']) {
@@ -193,14 +193,15 @@ describe('changed files native open route', () => {
     expect(isChangedFile({ path: 'a', display: '', added: 1, deleted: 2 })).toBe(false)
     expect(isChangedFile({ path: 'a', display: 'a', added: 1.5, deleted: 2 })).toBe(false)
     expect(isChangedFile([])).toBe(false)
-    expect(isChangesSummary({ turn: 1, total: 0, added: 0, deleted: 0, files: [] })).toBe(true)
-    expect(isChangesSummary({ turn: 1, total: 1, added: 1, deleted: 0, files: [{ path: 'a', display: 'a', added: 1, deleted: 0 }] })).toBe(true)
-    expect(isChangesSummary({ turn: '1', total: 0, added: 0, deleted: 0, files: [] })).toBe(false)
-    expect(isChangesSummary({ turn: 0, total: 0, added: 0, deleted: 0, files: [] })).toBe(false)
-    expect(isChangesSummary({ turn: 1, total: 1.5, added: 0, deleted: 0, files: [] })).toBe(false)
-    expect(isChangesSummary({ turn: 1, total: 0, files: [] })).toBe(false)
-    expect(isChangesSummary({ turn: 1, total: 0, added: 0, deleted: 'x', files: [] })).toBe(false)
-    expect(isChangesSummary({ turn: 1, total: 1, added: 1, deleted: 0, files: [{ path: 'a' }] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 0, added: 0, deleted: 0, files: [] })).toBe(true)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 1, added: 1, deleted: 0, files: [{ path: 'a', display: 'a', added: 1, deleted: 0 }] })).toBe(true)
+    expect(isChangesSummary({ turn: '1', cwd: '/w', total: 0, added: 0, deleted: 0, files: [] })).toBe(false)
+    expect(isChangesSummary({ turn: 0, cwd: '/w', total: 0, added: 0, deleted: 0, files: [] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 1.5, added: 0, deleted: 0, files: [] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 0, files: [] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 0, added: 0, deleted: 'x', files: [] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, cwd: '/w', total: 1, added: 1, deleted: 0, files: [{ path: 'a' }] })).toBe(false)
+    expect(isChangesSummary({ turn: 1, total: 0, added: 0, deleted: 0, files: [] })).toBe(false)
     expect(isChangesSummary([])).toBe(false)
     expect(isChangesEvent({ turn: 1 })).toBe(true)
     expect(isChangesEvent({ turn: 1, extra: true })).toBe(true)

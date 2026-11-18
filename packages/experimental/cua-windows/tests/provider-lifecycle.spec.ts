@@ -40,7 +40,7 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 1000, 'pipe')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 60_000, 'pipe')
   const backend = native.install.mock.calls[0]![2]
   expect(backend.helperPath).toBe(config.helperPath)
   expect(native.architecture).not.toHaveBeenCalled()
@@ -49,6 +49,7 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.permissionParameters('requestPermission', 'accessibility', 'en')).toEqual({ permission: 'accessibility' })
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
+  expect(backend.capabilities.methods).toContain('toggleMouse')
   expect(backend.sendKeyEvent).toBeUndefined()
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
@@ -105,7 +106,7 @@ it('prepares the Windows architecture and stdio transport for WSL', async () => 
   await apply(ctx, Config({}))
   expect(native.prepare.mock.calls[0]![0].architecture).toBe('arm64')
   expect(native.architecture).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 1000, 'stdio')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 60_000, 'stdio')
   expect(native.install.mock.calls[0]![2].helperPath).toBe('/mnt/c/cache/helper.exe')
 })
 

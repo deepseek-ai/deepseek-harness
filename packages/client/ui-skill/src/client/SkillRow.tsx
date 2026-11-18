@@ -27,15 +27,16 @@ function firstLine(text: string): string {
 
 /** Skill names are the only call argument the compact row presents. */
 function skillName(argsRaw: string, callId: string): string {
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(argsRaw)
-    if (typeof parsed === 'object' && parsed !== null) {
-      const name = (parsed as Record<string, unknown>).name
-      if (typeof name === 'string' && name !== '') return firstLine(name)
-    }
-  } catch {
+    parsed = JSON.parse(argsRaw)
+  } catch (_truncatedArgs) {
     // Streaming can expose a truncated JSON prefix; its first line is still
     // more useful than replacing the call with an unrelated catalog lookup.
+  }
+  if (typeof parsed === 'object' && parsed !== null) {
+    const name = (parsed as Record<string, unknown>).name
+    if (typeof name === 'string' && name !== '') return firstLine(name)
   }
   return argsRaw === '' ? callId : firstLine(argsRaw)
 }

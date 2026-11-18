@@ -44,7 +44,14 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 插件动态组合
 
-已打开的 Web 页面通过 HMR 传输跟随 Host 的完整模块图。启用普通插件会添加其 Loader 条目；停用会移除条目，并在其异步 effect 完成清理后回收未使用的模块与样式。再次启用会加载一个带样式的实例。其他 Loader 贡献方的条目及活动条目仍需使用的共享模块会保留。「设置 → 插件 → 插件列表」显示当前页面的同步失败，并提供不改变 Host 启用状态的重试。
+已打开的 Web 页面通过 HMR 传输跟随 Host 的完整模块图。启用普通插件会添加其 Loader 条目；停用会移除条目，并在其异步 effect 完成清理后回收未使用的模块与样式。再次启用会加载一个带样式的实例。其他 Loader 贡献方的条目及活动条目仍需使用的共享模块会保留。插件页面显示当前页面的同步失败，并提供不改变 Host 启用状态的重试。
+
+<a id="synced-plugin-configuration"></a>
+### 同步插件配置
+
+插件 Config 顶层的 `.volatile()` 字段会到达其浏览器面。包把 Config 接口放在 `src/types.ts` 供两个面共用，唯一的 Schemastery schema 只放在 Host 面；普通字段和所有 `role('secret')` 位置（包括 volatile 对象、字典、数组内部的位置）留在 Host。每个图行在 `config` 中携带这些值，因此它们随启动图和之后的每张图一起到达。只有 owner 的页面收到实际配置的值；其他所有 Peer（例如 LiveShare 查看端）在启动图和每个插件事件帧中收到各插件 schema 对空 Config 解析出的值，schema 拒绝空 Config 的行在这类页面上不带值。
+
+浏览器面不导出 `Config`；它的 `apply(ctx, config: SyncedConfig<Config>)` 为每个字段收到一个 `SyncedConfigRef`，二者都来自只放类型的包 [`@deepseek-ai/dsh-client-config/types`](../config/README.zh.md)。`config.field.get()` 在执行操作时读取当前冻结值，写法与 Host 相同。组件通过 hook 读取：插件在 slot `inject` 的 `hooks` 中注入引用，例如 `hooks: { fontSize: config.fontSize }`，组件调用 `useFontSize(value => value)`。每个字段都可能读到 `undefined`，插件需在每次读取时处理缺值；密钥字段是其中一种情况，因为 Host 从不下发它。变化按字段做 JSON 比较，所有变化字段都设置完后才通知订阅者，插件从不重新挂载。与 Host 每次激活重新解析 volatile 引用一样，插件每次激活都得到一个持有最新值的新 Config 对象；该激活开始拆除后（代码替换、行移除，或必需服务撤回后的卸载）不再收到新值。没有同步字段的插件收到一个空对象。`ctx.config.resolveConfigByPackage(packageName)` 返回另一个包当前激活的只读对象，没有运行中的激活时返回 `undefined`。Host 上，携带新值的图帧在插件自己的 `loader/volatile-update` 监听执行之前入队；这只在机制上排序，插件不得依赖浏览器先收到配置、后收到其他数据。导出自身 `Config` schema 的 Client 面保持 Cordis 原有配置解析；其行若同时带同步值，激活失败。
 
 <a id="host-release-changes"></a>
 ### Host release 变化
@@ -107,7 +114,10 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 | [`src/assets.ts`](src/assets.ts) | 包资源的媒体类型、导出、内容 revision、带 revision 的文件名与浏览器引用，由构建预设、资源路由和门禁共用 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：bootstrap 导出、`ctx.modules` 登记 |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`：加载／物化／失效机制 |
-| [`src/client/entries.ts`](src/client/entries.ts) | 页面条目对账、重试与代码替换 |
+| [`src/client/entries.ts`](src/client/entries.ts) | 页面条目对账、重试、代码替换与同步 Config 交付 |
+| [`src/client/synced-config.ts`](src/client/synced-config.ts) | `SyncedConfigRef` 的实现与每个包的同步 Config 对象 |
+| [`src/config-projection.ts`](src/config-projection.ts) | Host 侧投影 volatile Config 字段并剔除密钥 |
+| [`src/config-sync.ts`](src/config-sync.ts) | Host 侧发布每个图行的同步值，并监听其 `loader/volatile-update` |
 | [`src/client/entry-lifecycle.ts`](src/client/entry-lifecycle.ts) | 通过注册表清理 Loader fiber |
 | [`src/client/manifest.ts`](src/client/manifest.ts) | 协议类型、启动清单解析与 `dsh.client` 声明解析器 |
 
@@ -146,7 +156,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 
 - **基于元数据的 revision**——revision 标识文件系统代际，而非内容相等性。仅元数据变化也可能重载插件；mtime、ctime 和大小都无法反映的变化无法区分。
 - **有意采用扁平模块图**——每个 bundle 是一个模块节点，其边只指向表中的叶节点；接口（`loadCache`/`edges`/`invalidate`）已经支持通用模块图，因此可以改变 externalization 粒度而不更改接口。
-- **Host release 检测依赖图事件流**——页面只能从图帧得知 Host 换了 release。重启中的 Host 若在注册路由之前对 `/plugins/events` 返回非 200 状态，浏览器会永久关闭该事件流，页面在刷新前既不更新插件，也检测不到 release 变化。
+- **Host release 检测依赖图事件流**——页面只能从[插件事件流](../hmr/README.zh.md)的图帧得知 Host 换了 release。该流无法运行时（例如流以终止性错误结束后），页面在刷新前既不更新插件，也检测不到 release 变化。
 - **源码启动时 Host 半侧没有构建步骤**——从 TypeScript 源码启动的 Host 读取 `pnpm run dev:web` 放入其环境的 commit；没有该值的源码启动只发布版本号。
 - **Bootstrap 与代码替换限制**——页面保留 modules bootstrap 和静态平台模块的身份。移除或替换 bootstrap 需要刷新页面；动态替换请求会报告页面本地错误，并保留其 fiber 与导出；替换包代码及其所有现有消费者不属于普通启停同步。
 - **惰性提供会保留已请求的 body**——Host 在内存中保留每个 bundle 与惰性响应计划；脚本或 map body 在首次 `GET` 后保留缓存，HMR 还会保留上一代启动响应。内存仅随客户端实际请求的响应 body 增长，同时保留一代竞态容忍。

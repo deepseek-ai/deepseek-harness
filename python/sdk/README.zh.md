@@ -52,6 +52,8 @@ print(result.final_response)
 
 `harness.resume_session(saved_session_id)` 恢复持久化历史，并返回可调用 `run()` 的 `Session`。请保存原会话 id，并沿用其 `dsh_home` 和工作区。恢复会保留存储的目录、修复最后一个被中断的轮次，且不发送新输入。会话缺失、不可读、不兼容或被占用时会抛出异常，不创建替代会话。`start_session(id)` 只打开惰性句柄，不会请求持久化恢复。此 API 不恢复 shell、浏览器或其他外部进程。
 
+调用 `harness.resume_session(saved_session_id, {"permission_mode": "danger-full-access"})` 可在恢复后的执行开始前覆盖已保存的权限预设；省略选项或传入空字典时保留历史权限。若选项含未知键，或传入的选项既非字典也非 `None`，SDK 会在发送恢复请求前抛出 `TypeError`。所选预设同时更新 sandbox 和审批策略，并持久化供后续恢复使用；该预设必须存在于 profile 的权限服务中。标准 `sdk` profile 提供 `read-only`、`workspace-write` 和 `danger-full-access`。缺少该服务的 profile（如 `sdk-minimal`）会拒绝显式覆盖。已被提醒任务恢复的会话也会拒绝覆盖；请对该运行中会话使用 `/permission`。
+
 ```py
 with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     session = harness.resume_session(saved_session_id)
@@ -129,7 +131,7 @@ with DeepSeekHarness(
 
 `provider` 选择指定 Cordis 组合所注册的提供方路由；`model` 是该适配器解析出的模型 ID。`reasoning_effort` 是该确切路由可选的非空适配器自有标识符；省略时保留模型自身的默认值。`max_tokens` 是一个可选的正整数，用于限制根 agent 及其进程内后代在每次请求中输出的 token 数量；省略该参数时，由提供方的默认行为决定输出上限。缺少适配器、模型不可用或推理强度不受支持时，初始化会在提示词运行前拒绝。压缩（compaction）摘要继续使用压缩插件单独配置的上限。内置默认组合注册 `deepseek-official`。自定义组合可以挂载 `llm-pi-ai`，在其中配置各提供方专属的凭据和端点，并选择 pi-ai 已安装 catalog 中存在的任意提供方／模型组合。
 
-随附的 `sdk-minimal` profile 是独立显式配置树，而不是 `dsh-base` 上的 overlay。使用 `profile="sdk-minimal"` 选择它；普通 `model` 参数是唯一运行时模型选择，也适用于不在适配器建议目录中的模型 ID。它提供按平台选择的持久 shell、`read_image`、`working_directory`、本地执行、JSONL 会话和自动压缩。文本文件工具、设置、托管凭据、遥测、Web 工具与完整默认工具清单仍由独立的完整 `sdk` 与 `web` profile 提供。`sdk-minimal` profile 将不支持的斜杠输入保留在普通提示词路径上。
+随附的 `sdk-minimal` profile 是独立显式配置树，而不是 `dsh-base` 上的 overlay。使用 `profile="sdk-minimal"` 选择它；普通 `model` 参数是唯一运行时模型选择，也适用于不在适配器建议目录中的模型 ID。它提供按平台选择的持久 shell、`read_image`、本地执行、JSONL 会话和自动压缩。文本文件工具、设置、托管凭据、遥测、Web 工具与完整默认工具清单仍由独立的完整 `sdk` 与 `web` profile 提供。`sdk-minimal` profile 将不支持的斜杠输入保留在普通提示词路径上。
 
 ## 原生用户问答
 
@@ -149,4 +151,4 @@ with DeepSeekHarness(
 
 另见 [Python 教程](../../docs/user/guide/python-sdk.zh.md)、[可运行示例](examples/README.zh.md) 和 [运行时 wheel 包参考](../sdk-runtime/README.zh.md)。
 
-`Session.get_working_directory()` 读取有效工作目录；`set_working_directory(path)` 修改目录并返回校验后的绝对路径。两者都可创建未知 Session，而不运行模型轮次。相对路径以该 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。底层客户端提供同名方法，并以 `session_id` 作为首个参数。
+`Session.get_working_directory()` 读取有效工作目录；`set_working_directory(path)` 修改目录并返回校验后的绝对路径。两者都可创建未知 Session，而不运行模型轮次。相对路径以该 Session 当前目录解析。起始目录元数据与已有进程保持不变；`workspace-write` 边界移到新目录。底层客户端提供同名方法，并以 `session_id` 作为首个参数。

@@ -35,6 +35,8 @@ kind: "package-reference"
 
 宿主绑定可以返回 `new PtcImage(path, attachment)`，向 Node 程序提供已存储的图片。显式展示会将 `{ type: 'image', attachment }` 条目追加到 `result.output`，与 `{ type: 'text', text }` 条目按发出顺序排列。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。
 
+宿主绑定可以返回 `new PtcInspectableValue(value, text)`，为 JSON 对象或数组附加展示文本。Node 提供方向程序提供原有数据，仅在把未修改的原结果直接传给 `inspect` 时使用附带文本。该描述符只供宿主使用；拷贝、选定字段、修改后的结果和嵌套值使用普通格式。[运行时参考](../../../docs/subsystems/ptc-runtime.zh.md)定义提供方的义务。
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',
@@ -59,7 +61,7 @@ binding-global 与 error-class 名称必须匹配 `[A-Za-z_$][A-Za-z0-9_$]*`，�
 
 ### 可能出什么问题
 
-失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。契约误用以 `PtcRuntimeError` 拒绝：无效的请求或 spec 为 `PTC_RUNTIME_INVALID_ARGUMENT`，资源释放后或保留环境清理未完成时为 `PTC_RUNTIME_UNAVAILABLE`，同一所有者的并发运行或保留环境以其他沙箱策略启动时为 `PTC_RUNTIME_CONFLICT`。
+提供方通过 `result.outputTruncated` 标记捕获输出或诊断被截断；该标记不表示执行失败。要求返回的完成值不会被截断为成功结果。失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。契约误用以 `PtcRuntimeError` 拒绝：无效的请求或 spec 为 `PTC_RUNTIME_INVALID_ARGUMENT`，资源释放后或保留环境清理未完成时为 `PTC_RUNTIME_UNAVAILABLE`，同一所有者的并发运行或保留环境以其他沙箱策略启动时为 `PTC_RUNTIME_CONFLICT`。
 
 -----
 

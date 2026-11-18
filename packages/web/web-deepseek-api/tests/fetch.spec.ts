@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider, type DeepSeekFetchApiOptions } from '@deepseek-ai/dsh-web-deepseek-api'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { customGuidance } from './guidance.ts'
+import { keyCandidate } from './sources.ts'
 const fetchProvider = (options: DeepSeekFetchApiOptions) => new DeepSeekFetchApiProvider(() => options)
 const BASE = 'https://api.deepseek.test/api/v1/tools'
-const auth = (key: string, baseURL = BASE): DeepSeekFetchApiOptions['auth'] => ({ sources: [{ kind: 'api-key', baseURL, key }] })
+const auth = (key: string): DeepSeekFetchApiOptions['auth'] => ({ sources: [keyCandidate(`${BASE}/fetch`, key)] })
 const options = { auth: auth('ds-key'), guidance: customGuidance('fetch') }
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init })
@@ -18,7 +20,7 @@ describe('DeepSeek Fetch API', () => {
   it('posts the URL and returns the Markdown as a retrieved page', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ title: 'Example', content: '# Article\n\nBody' }))
     vi.stubGlobal('fetch', fetchMock)
-    const provider = fetchProvider({ ...options, auth: auth('ds-key', `${BASE}/`) })
+    const provider = fetchProvider(options)
     expect(await provider.fetch({ url: 'https://example.com/article' })).toEqual({
       url: 'https://example.com/article', statusCode: 200, body: { kind: 'text', content: '# Article\n\nBody' }, truncated: false,
     })
@@ -55,10 +57,10 @@ describe('DeepSeek Fetch API', () => {
         + 'Only the user should choose or change the endpoint.',
     })
   })
-  it('is available only with a credential source and a parseable base', () => {
+  it('is available only with a credential source', () => {
     expect(fetchProvider(options).available()).toBe(true)
-    expect(fetchProvider({ ...options, auth: auth('') }).available()).toBe(false)
-    expect(fetchProvider({ ...options, auth: auth('ds-key', 'not a url') }).available()).toBe(false)
+    expect(fetchProvider({ ...options, auth: { sources: [] } }).available()).toBe(false)
+    expect(fetchProvider({ ...options, auth: auth('') }).available()).toBe(true)
   })
   it('unregisters both providers with its plugin fiber', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ title: '', content: 'body' })))
@@ -66,6 +68,7 @@ describe('DeepSeek Fetch API', () => {
     try {
       await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' })
       ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'ds-key' } }]))
+      await ctx.plugin(DeepSeekAuth)
       const fiber = await ctx.plugin(webApiPlugin, { fetchBaseURL: BASE })
       await expect(ctx.web.fetch({ url: 'https://example.com' })).resolves.toMatchObject({ body: { content: 'body' } })
       await fiber.dispose()

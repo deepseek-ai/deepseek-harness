@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -14,14 +14,14 @@ import { PluginCardBody, type CatalogDetails, type PluginCardProps } from '../sr
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
-const callId = brandString<ToolCallId>('call-plugin-1')
+const cardId = brandString<ActionCardId>('call-plugin-1')
 const ACTION = 'enable_official_plugin'
 type Act = (verb: string, payload?: ActionCardFields) => Promise<ActionCardResult | undefined>
 type Describe = PluginCardProps['describe']
 const available: RecommendationDetails = {
   status: 'available', title: { en: 'Session search', zh: '会话搜索' }, description: { en: 'Search past conversations', zh: '检索过去的会话' }, enabled: false,
 }
-const proposal = { callId, turn: 1, action: ACTION, title: '搜索旧会话', brief: '帮你找到上周讨论的方案', details: { name: 'official-search' } as ActionCardFields }
+const proposal = { cardId, turn: 1, action: ACTION, title: '搜索旧会话', brief: '帮你找到上周讨论的方案', details: { name: 'official-search' } as ActionCardFields }
 
 function catalog() {
   return createSnapshotStore<Readonly<Record<string, CatalogDetails>>>({})
@@ -29,9 +29,9 @@ function catalog() {
 
 function props(decision?: { phase: string; data?: ActionCardFields }, details: RecommendationDetails = available, store = catalog()) {
   return {
-    proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision },
-    sessionId: brandString<SessionId>('session-1'), summary: <strong>{proposal.title}</strong>, Folded: FoldedText,
-    act: vi.fn<Act>(async () => ({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })),
+    proposal, decision: decision === undefined ? undefined : { cardId, action: ACTION, ...decision },
+    sessionId: brandString<SessionId>('session-1'), summary: <strong>{proposal.title}</strong>, fallback: <p>frame fallback</p>,
+    Folded: FoldedText, act: vi.fn<Act>(async () => ({ status: 'settled', decision: { cardId, action: ACTION, phase: 'enabled' } })),
     catalog: store, describe: vi.fn<Describe>(async () => details), openDetails: vi.fn<(name: string) => void>(),
     resolveText: (text: LocalizedText) => typeof text === 'string' ? text : text.zh ?? text.en,
     t: makeTranslate(zh),
@@ -40,7 +40,7 @@ function props(decision?: { phase: string; data?: ActionCardFields }, details: R
 
 async function shown(value: PluginCardProps) {
   const view = render(<PluginCardBody {...value} />)
-  await waitFor(() => { expect(value.describe).toHaveBeenCalledWith('session-1', callId) })
+  await waitFor(() => { expect(value.describe).toHaveBeenCalledWith('session-1', cardId) })
   await act(async () => {})
   return view
 }
@@ -85,7 +85,7 @@ it.each([
   expect(value.act).toHaveBeenCalledWith(verb)
   expect(screen.getByRole('button', { name: '正在处理…' }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: other }).hasAttribute('disabled')).toBe(true)
-  await act(async () => { pending.resolve({ status: 'settled', decision: { callId, action: ACTION, phase: 'dismissed' } }) })
+  await act(async () => { pending.resolve({ status: 'settled', decision: { cardId, action: ACTION, phase: 'dismissed' } }) })
   expect(screen.getByRole('button', { name: clicked }).hasAttribute('disabled')).toBe(false)
 })
 
@@ -213,10 +213,11 @@ it('renders a remembered plugin at once on a later card while refusals and lost 
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
 })
 
-it('renders only the frame summary when the card names no plugin', () => {
+it('shows only the frame fallback when the card names no plugin', () => {
   const value = { ...props(), proposal: { ...proposal, details: {} } }
   render(<PluginCardBody {...value} />)
-  expect(screen.getByText('搜索旧会话')).toBeTruthy()
+  expect(screen.getByText('frame fallback')).toBeTruthy()
+  expect(screen.queryByText('搜索旧会话')).toBeNull()
   expect(screen.queryByRole('button')).toBeNull()
   expect(value.describe).not.toHaveBeenCalled()
 })

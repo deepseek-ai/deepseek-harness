@@ -32,8 +32,8 @@ interface Evaluation {
   invoke: typeof invokeBinding
   pending: number
   pendingBytes: number
-  admit(text: string): void
-  image(attachment: PtcImage['attachment']): void
+  admit(entry: PtcOutput): void
+  truncateOutput(): void
   finish(error?: PtcRunFailure, value?: PtcJsonValue, discard?: boolean): void
 }
 
@@ -104,30 +104,23 @@ export class ProgramWorker {
     } finally { this.running = false }
   }
 
-  private output(): OutputLedger {
-    return new OutputLedger(this.config.maxOutputBytes, this.retainsState
-      ? `retained variables were cleared; outer output exceeded ${this.config.maxOutputBytes} bytes` : undefined)
-  }
-
   private message(message: string): string {
     return this.retainsState ? `${message}; retained variables were cleared` : message
   }
 
   private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {
+    const ledger = new OutputLedger(this.config.maxOutputBytes)
     if (this.exitOutcome !== undefined) {
-      const output = this.output()
       const failure: PtcRunFailure = spec.signal?.aborted
         ? { kind: 'abort', message: this.message('execution canceled') }
         : { kind: 'worker-exit', message: this.message(this.exitMessage(this.exitOutcome)) }
       try { await this.terminate() } catch (error: unknown) {
-        return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` })
+        return ledger.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` })
       }
-      return output.failure([], failure)
+      return ledger.failure([], failure)
     }
     this.stderr = ''
-    const ledger = this.output()
     const output: PtcOutput[] = []
-    let overflowed = false
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
       const phase = evaluation.completion !== undefined ? 'during execution' : 'before code started'
@@ -151,21 +144,19 @@ export class ProgramWorker {
       },
       spec, bindings, pending: 0, pendingBytes: 0,
       invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
-      admit: (text) => {
-        if (overflowed) return
-        if (!ledger.admit({ type: 'text', text }, output)) {
-          overflowed = true
-          output.push({ type: 'text', text })
-          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
-        }
+      truncateOutput: () => {
+        ledger.truncated = true
+        const channel = this.channel
+        if (evaluation.settled || this.closed || !channel || channel.$closed) return
+        void channel.discardOutput().catch((error: unknown) => {
+          // Ended evaluations need no notification; channel closure already owns failure reporting.
+          if (this.active !== evaluation || evaluation.settled || this.closed || channel.$closed) return
+          this.fail('protocol', `failed to send output-discard notification: ${messageOf(error)}`)
+        })
       },
-      image: (attachment) => {
-        if (overflowed || evaluation.settled) return
-        if (!ledger.admit({ type: 'image', attachment }, output)) {
-          overflowed = true
-          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
-          return
-        }
+      admit: (entry) => {
+        if (ledger.truncated) return
+        if (!ledger.admit(entry, output)) evaluation.truncateOutput()
       },
       finish: (error, value, discard = false) => {
         if (evaluation.settled) return
@@ -174,21 +165,16 @@ export class ProgramWorker {
         spec.signal?.removeEventListener('abort', onAbort)
         const initializationIncomplete = this.pendingInitialization !== undefined
         if (initializationIncomplete && error?.kind === 'exception') error = { ...error, message: this.message(error.message) }
-        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? ledger.limit(output)
-          : error ? ledger.failure(output, error) : ledger.success(output, value)
-        const outcome = complete()
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
-          let preserved = this.retainsState && !initializationIncomplete && !discard && outcome.error?.kind !== 'output-limit'
+          let preserved = this.retainsState && !initializationIncomplete && !discard
           if (preserved && interrupted) preserved = await this.interruptEvaluation(evaluation)
           let drained = true
           if (!preserved) drained = await this.terminate()
           if (interrupted && this.retainsState && error) {
             error = { ...error, message: `${error.message}; retained variables were ${preserved ? 'preserved' : 'cleared'}` }
           }
-          const completed = complete()
-          // The final interruption diagnostic also consumes output budget.
-          if (completed.error?.kind === 'output-limit' && preserved) drained = await this.terminate()
+          const completed = error ? ledger.failure(output, error) : ledger.success(output, value)
           return drained ? completed : ledger.failure(output, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
         }
         void cleanup().then((completed) => {
@@ -281,12 +267,13 @@ export class ProgramWorker {
   private dispatch(evaluation: Evaluation): void {
     const completion = this.channel?.run(evaluation.spec.cwd, evaluation.data).then(readProgramResult)
     evaluation.completion = completion
-    void completion?.then(({ error, value }) => {
+    void completion?.then(({ error, value, outputTruncated }) => {
       if (evaluation.settled) return
       if (this.pendingInitialization !== undefined && error === undefined) {
         this.fail('protocol', 'environment initialization completed without Host acceptance')
         return
       }
+      if (outputTruncated) evaluation.truncateOutput()
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
     }).catch((error: unknown) => {
@@ -333,7 +320,7 @@ export class ProgramWorker {
       stream.setEncoding('utf8')
       stream.on('data', (text: string) => {
         if (stream === handle.stderr) this.stderr = (this.stderr + text).slice(-this.config.maxOutputBytes)
-        this.active?.admit(text)
+        this.active?.admit({ type: 'text', text })
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
@@ -362,16 +349,16 @@ export class ProgramWorker {
       },
       log: (text: unknown) => {
         if (!this.ready || !this.active || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
-        if (!this.active.settled) this.active.admit(text)
+        if (!this.active.settled) this.active.admit({ type: 'text', text })
       },
       image: (id: unknown) => {
         const image = typeof id === 'string' ? this.images.get(id) : undefined
         if (!this.ready || !this.active || image === undefined) { this.fail('protocol', 'invalid program image'); return }
-        this.active.image(image)
+        if (!this.active.settled) this.active.admit({ type: 'image', attachment: image })
       },
       outputLimit: () => {
         if (!this.ready || !this.active) { this.fail('protocol', 'idle PTC output limit'); return }
-        this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+        this.active.truncateOutput()
       },
       invoke: async (global, name, wire) => {
         const evaluation = this.active
@@ -404,7 +391,7 @@ export class ProgramWorker {
         if (evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
         return value
       },
-    }, ['revoke'], (error, kind) => {
+    }, ['revoke', 'discardOutput'], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)
       else {
         if (kind === 'io') this.controlFailure = error.message

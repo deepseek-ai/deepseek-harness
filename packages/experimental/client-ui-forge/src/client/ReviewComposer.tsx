@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Button, IconChevronDownOutlineRegular, Menu, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ReviewQueue } from './review-queue.ts'
+import type { RemovedRecord, ReviewQueue } from './review-queue.ts'
 import { reviewRange, type ReviewSelection, type ReviewSource } from './review.ts'
 import type { NS } from './locales.ts'
 import type { ForgeCommentActionsProps } from './slots.ts'
@@ -26,6 +26,8 @@ export interface ReviewActions {
   readonly addToInput: (selection: ReviewSelection) => boolean
   /** Retain a new comment after its quote was accepted. */
   readonly onQuoted?: (selection: ReviewSelection) => void
+  /** Report a reference or publication receipt the reader removed from the view, so the report can offer to put it back. */
+  readonly onRemoved?: (removed: RemovedRecord) => void
   /** Publish one comment; an error string preserves the editor. */
   readonly publish?: (selection: ReviewSelection) => Promise<string | undefined>
   /** Add one comment to the pending review on the code host, starting one when needed; an error string preserves the editor. */
@@ -129,7 +131,7 @@ export function ReviewComposer({ selection, actions, close, visible = true, t }:
         })}
         {visible && actions.queue !== undefined && <SplitAction disabled={busy || actions.publishingBlocked === true || empty}
           label={t(busy ? 'review.publishing' : actions.reviewStarted === true ? 'review.queue' : 'review.startReview')}
-          run={() => { void send(actions.queue) }} menuLabel={t('review.githubActions')}
+          run={() => { void send(actions.queue) }} menuLabel={t('review.hostActions')}
           other={actions.publish === undefined ? undefined : t('review.publish')} menu={() => { void send(actions.publish) }} />}
         {actions.queue === undefined && actions.publish !== undefined && <Button size="sm" variant="primary"
           disabled={busy || actions.publishingBlocked === true || empty} onClick={() => { void send(actions.publish) }}>{t('review.publish')}</Button>}

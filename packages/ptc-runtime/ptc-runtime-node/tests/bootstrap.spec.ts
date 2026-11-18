@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClass, makeInspect, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
 import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
-import { encodePtcJsonWire } from '../src/json-wire.ts'
+import { encodePtcJsonWire, snapshotPtcJsonValue } from '../src/json-wire.ts'
+import type { BindingInspection } from '../src/bootstrap.ts'
 
 function host(): Pick<HostMethods, 'invoke'> {
-  return { invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)) }
+  return { invoke: vi.fn<HostMethods['invoke']>(async () => ({ value: encodePtcJsonWire(42) })) }
 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
@@ -33,7 +34,7 @@ describe('LogBuffer', () => {
     buffer.push('dropped')
     expect(seen).toEqual(['12345', '123'])
     expect(limits).toBe(1)
-    expect(buffer.remainingOutputBytes()).toBe(0)
+    expect(buffer.overflowed).toBe(true)
 
     const exactlyFull: string[] = []
     const fullBuffer = new LogBuffer(6, text => exactlyFull.push(text))
@@ -74,7 +75,7 @@ describe('makeInspect', () => {
     ['undefined property', { value: undefined }, '{ value: undefined }'],
   ])('displays a %s argument and continues execution', (_name, value, expected) => {
     const text: string[] = []
-    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    const { inspect } = makeInspect({ overflowed: false, push: line => text.push(line) }, new WeakMap(), () => {})
     inspect('before', value, 'after')
     expect(text).toHaveLength(1)
     expect(text[0]).toContain(expected)
@@ -85,7 +86,7 @@ describe('makeInspect', () => {
     const revoked = Proxy.revocable({}, {})
     revoked.revoke()
     const text: string[] = []
-    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    const { inspect } = makeInspect({ overflowed: false, push: line => text.push(line) }, new WeakMap(), () => {})
     inspect(revoked.proxy, { get value() { throw new Error('getter') } })
     expect(text).toEqual(['<Revoked Proxy> { value: [Getter] }\n'])
   })
@@ -114,7 +115,7 @@ describe('makeInspect', () => {
     const images = new WeakMap<object, string>()
     const text: string[] = []
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push: line => text.push(line) }, images, id => selected.push(id))
     const one = inspectedImage(collectImage, '/one.png')
     const two = inspectedImage(collectImage, '/two.png', 4, 8)
     images.set(one, 'one').set(two, 'two')
@@ -133,7 +134,7 @@ describe('makeInspect', () => {
     const images = new WeakMap<object, string>()
     const text: string[] = []
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push: line => text.push(line) }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     const read = vi.fn(() => image)
@@ -147,7 +148,7 @@ describe('makeInspect', () => {
     const images = new WeakMap<object, string>()
     const text: string[] = []
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push: line => text.push(line) }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     inspect({
@@ -161,7 +162,7 @@ describe('makeInspect', () => {
   it('selects registered images returned by a custom formatter', () => {
     const images = new WeakMap<object, string>()
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push() {} }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     inspect({ [nodeInspect.custom]() { return { image } } })
@@ -172,7 +173,7 @@ describe('makeInspect', () => {
   it('keeps collectors separate across reentrant inspection calls', () => {
     const images = new WeakMap<object, string>()
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push() {} }, images, id => selected.push(id))
     const one = inspectedImage(collectImage, '/one.png')
     const two = inspectedImage(collectImage, '/two.png')
     images.set(one, 'one').set(two, 'two')
@@ -190,7 +191,7 @@ describe('makeInspect', () => {
     const images = new WeakMap<object, string>()
     const text: string[] = []
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push: line => text.push(line) }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     expect(() => {
@@ -208,7 +209,7 @@ describe('makeInspect', () => {
   it('selects images from Map entries, Set values and enumerable symbol properties', () => {
     const images = new WeakMap<object, string>()
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push() {} }, images, id => selected.push(id))
     const one = inspectedImage(collectImage, '/one.png')
     const two = inspectedImage(collectImage, '/two.png', 4, 8)
     images.set(one, 'one').set(two, 'two')
@@ -225,7 +226,7 @@ describe('makeInspect', () => {
   it('reads Map and Set entries without consulting overridden methods', () => {
     const images = new WeakMap<object, string>()
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push() {} }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     const map = new Map([['image', image]])
@@ -239,7 +240,7 @@ describe('makeInspect', () => {
   it('finds images in cyclic containers alongside binary views', () => {
     const images = new WeakMap<object, string>()
     const selected: string[] = []
-    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const { inspect, collectImage } = makeInspect({ overflowed: false, push() {} }, images, id => selected.push(id))
     const image = inspectedImage(collectImage, '/image.png')
     images.set(image, 'image')
     const value: Record<string, unknown> = { binary: new Uint8Array([1, 2, 3]), image }
@@ -250,7 +251,7 @@ describe('makeInspect', () => {
 
   it('displays undefined arguments and cycles', () => {
     const text: string[] = []
-    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    const { inspect } = makeInspect({ overflowed: false, push: line => text.push(line) }, new WeakMap(), () => {})
     inspect(undefined)
     expect(text).toEqual(['undefined\n'])
     inspect(null)
@@ -259,6 +260,97 @@ describe('makeInspect', () => {
     cyclic.self = cyclic
     inspect(cyclic)
     expect(text.at(-1)).toBe('<ref *1> { self: [Circular *1] }\n')
+  })
+})
+
+describe('binding inspection metadata', () => {
+  it('emits unchanged object and array renderings in order with normalized newlines', () => {
+    const object = { value: 1 }
+    const array = [1, 2]
+    const empty = {}
+    const inspections = new WeakMap<object, BindingInspection>([
+      [object, { snapshot: { value: 1 }, text: 'object rendering' }],
+      [array, { snapshot: [1, 2], text: 'array rendering\n' }],
+      [empty, { snapshot: {}, text: '' }],
+    ])
+    const seen: string[] = []
+    const { inspect } = makeInspect({ overflowed: false, push: text => seen.push(text) }, new WeakMap(), () => {}, inspections)
+    inspect('before', object, array, empty, 'after')
+    expect(seen).toEqual(['before\n', 'object rendering\n', 'array rendering\n', 'after\n'])
+    expect(Reflect.ownKeys(object)).toEqual(['value'])
+  })
+
+  it('falls back when an Image field is replaced with another identity having the same metadata', () => {
+    const images = new WeakMap<object, string>()
+    const inspections = new WeakMap<object, BindingInspection>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect(
+      { overflowed: false, push: value => text.push(value) }, images, id => selected.push(id), inspections,
+    )
+    const original = inspectedImage(collectImage, '/same.png')
+    const replacement = inspectedImage(collectImage, '/same.png')
+    images.set(original, 'original')
+    images.set(replacement, 'replacement')
+    const value = { shot: original }
+    inspections.set(value, { snapshot: { shot: original }, text: 'original rendering' })
+    value.shot = replacement
+    inspect(value)
+    expect(text.join('')).not.toContain('original rendering')
+    expect(selected).toEqual(['replacement'])
+  })
+
+  it.each([
+    ['null field', (value: Record<string, unknown>) => { value.value = null }],
+    ['scalar field', (value: Record<string, unknown>) => { value.value = 'one' }],
+    ['object replacing a scalar', (value: Record<string, unknown>) => { value.value = {} }],
+    ['object replacing null', (value: Record<string, unknown>) => { value.nullable = {} }],
+    ['proxy', (value: Record<string, unknown>) => { value.nested = new Proxy({}, {}) }],
+    ['prototype', (value: Record<string, unknown>) => { Object.setPrototypeOf(value.nested, null) }],
+    ['renamed field', (value: Record<string, unknown>) => { delete value.value; value.changed = 1 }],
+    ['removed field', (value: Record<string, unknown>) => { delete value.value }],
+    ['hidden field', (value: Record<string, unknown>) => { Object.defineProperty(value, 'value', { enumerable: false }) }],
+  ] as const)('formats current data after changing a %s', (_name, change) => {
+    const value: Record<string, unknown> = { value: 1, nested: { answer: 42 }, nullable: null }
+    const snapshot = snapshotPtcJsonValue(value)!
+    const inspections = new WeakMap<object, BindingInspection>([[value, { snapshot, text: 'original rendering' }]])
+    const seen: string[] = []
+    const { inspect } = makeInspect({ overflowed: false, push: text => seen.push(text) }, new WeakMap(), () => {}, inspections)
+    change(value)
+    inspect(value)
+    expect(seen.join('')).not.toContain('original rendering')
+    expect(seen).toHaveLength(1)
+  })
+
+  it.each([null, 42, [], {}, { value: [undefined] }, { value: encodePtcJsonWire({}), inspection: 42 }])('rejects malformed binding result %j', async (resolution) => {
+    const remote = host()
+    remote.invoke = async () => resolution as never
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding resolution must be lossless JSON')
+  })
+
+  it.each([null, 42])('rejects inspection metadata for scalar %j', async (value) => {
+    const remote = host()
+    remote.invoke = async () => ({ value: encodePtcJsonWire(value), inspection: 'text' })
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding inspection requires an object or array')
+  })
+
+  it('rejects inspection metadata for non-JSON image identities', async () => {
+    const remote = host()
+    remote.invoke = async () => ({ value: [{ kind: 'image', id: 'one', attachmentId: 'one', path: '/one.png', width: 1, height: 1 }], inspection: 'text' })
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), new WeakMap(), () => Object.create({ image: true }) as Record<string, never>) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(tools.x?.({})).rejects.toThrow('binding inspection requires lossless JSON data')
+  })
+
+  it('registers inspection metadata while returning the original JSON value', async () => {
+    const remote = host()
+    remote.invoke = async () => ({ value: encodePtcJsonWire({ answer: 42 }), inspection: 'answer' })
+    const inspections = new WeakMap<object, BindingInspection>()
+    const [tools] = makeNamespaces({ namespaces: [toolNamespace(['x'])] }, remote, new Map(), inspections) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const value = await tools.x?.({})
+    expect(value).toEqual({ answer: 42 })
+    expect(inspections.get(value as object)).toEqual({ snapshot: { answer: 42 }, text: 'answer' })
   })
 })
 
@@ -299,6 +391,19 @@ describe('captureStreamWrites', () => {
   })
 })
 
+it('skips formatting after output is discarded, including later arguments in one inspect call', () => {
+  const rendered = vi.fn(() => 'must not format')
+  const value = { [nodeInspect.custom]: rendered }
+  const logs = new LogBuffer(4, () => {})
+  const images = new WeakMap<object, string>()
+  const image = {}
+  images.set(image, 'image')
+  const { inspect } = makeInspect(logs, images, () => {})
+  inspect('overflow', image, value)
+  inspect(value)
+  expect(rendered).not.toHaveBeenCalled()
+})
+
 describe('prepareCompletion', () => {
   it('omits undefined and passes lossless JSON values exactly', () => {
     expect(prepareCompletion(undefined, 100)).toEqual({})
@@ -319,14 +424,14 @@ describe('prepareCompletion', () => {
 
   it('reports an oversized value instead of substituting rendered text', () => {
     expect(prepareCompletion('x'.repeat(50), 10)).toEqual({
-      error: { kind: 'output-limit', message: 'outer output exceeded 10 bytes' },
+      error: { kind: 'output-limit', message: 'completion value exceeded 10 bytes' },
     })
   })
 
   it('measures the exact JSON serialization at and over the boundary', () => {
     expect(prepareCompletion('€', 5)).toEqual({ value: encodePtcJsonWire('€') })
     expect(prepareCompletion('€', 4)).toEqual({
-      error: { kind: 'output-limit', message: 'outer output exceeded 4 bytes' },
+      error: { kind: 'output-limit', message: 'completion value exceeded 4 bytes' },
     })
   })
 
@@ -337,9 +442,9 @@ describe('prepareCompletion', () => {
     })
   })
 
-  it('uses the remaining combined budget for invalid-output diagnostics', () => {
+  it('truncates invalid-output diagnostics without changing the failure kind', () => {
     expect(prepareCompletion(() => 1, 4, 64)).toEqual({
-      error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' },
+      error: { kind: 'invalid-output', message: 'pr' }, outputTruncated: true,
     })
   })
 })
@@ -354,10 +459,10 @@ describe('prepareException', () => {
     expect(prepareException(error, 1_000)).toEqual({ error: { kind: 'exception', message } })
   })
 
-  it('passes a fitting diagnostic and rejects one byte over without carrying its text', () => {
-    expect(prepareException('boom', 6, 64)).toEqual({ error: { kind: 'exception', message: 'boom' } })
-    expect(prepareException('boom', 5, 64)).toEqual({
-      error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' },
+  it('passes a fitting diagnostic and truncates one byte over without changing its kind', () => {
+    expect(prepareException('boom', 6)).toEqual({ error: { kind: 'exception', message: 'boom' } })
+    expect(prepareException('boom', 5)).toEqual({
+      error: { kind: 'exception', message: 'boo' }, outputTruncated: true,
     })
   })
 
@@ -377,8 +482,8 @@ describe('prepareException', () => {
 describe('makeNamespaces', () => {
   it('rejects malformed remote results and keeps prototype-colliding function names callable', async () => {
     const remote = host()
-    remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? [undefined] as never : encodePtcJsonWire(`${name}-ok`))
-    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? { value: [undefined] as never } : { value: encodePtcJsonWire(`${name}-ok`) })
+    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     expect(Object.getPrototypeOf(tools)).toBeNull()
     for (const name of ['__proto__', 'constructor', 'toString']) await expect(tools[name]?.({})).resolves.toBe(`${name}-ok`)
     await expect(tools.bad?.({})).rejects.toThrow('binding resolution must be lossless JSON')
@@ -388,7 +493,7 @@ describe('makeNamespaces', () => {
     const remote = host()
     const data = { namespaces: [toolNamespace(['x'])] }
     const classes = new Map([['tools', makeBindingErrorClass(TOOL_ERROR_CLASS)]])
-    const [tools] = makeNamespaces(data, remote, classes) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces(data, remote, classes, new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     const decorated = [1]
     Object.defineProperty(decorated, 'extra', { value: true })
     const throwing = Object.defineProperty({}, 'value', { enumerable: true, get() { throw new Error('getter failed') } })
@@ -407,7 +512,7 @@ describe('makeNamespaces', () => {
   it('uses ordinary Error when the namespace declares no rejection class', async () => {
     const remote = host()
     remote.invoke = async () => { throw new Error('helper denied') }
-    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>(), new WeakMap()) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(helpers.x?.({})).rejects.toMatchObject({ name: 'Error', message: 'helper denied' })
     await expect(helpers.x?.(() => 1)).rejects.toThrow('binding arguments must be lossless JSON')
   })

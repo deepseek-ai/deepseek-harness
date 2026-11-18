@@ -1,7 +1,7 @@
 /**
  * One-shot MCP server probe: connect, read the server identity, list tools,
- * close. Nothing registers on `ctx.tools`, no `serverName` is reserved, and
- * nothing persists — the probe answers a configuration surface's
+ * close. Nothing registers on `ctx.tools` and no `serverName` is reserved.
+ * OAuth refreshes persist updated credentials. The probe answers a configuration surface's
  * "test this server" without touching the live instance set. Expected
  * failures return a stage-classified value rather than throwing, so a wire
  * caller renders the outcome without exception mapping.
@@ -14,6 +14,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { McpProbeFailure, McpProbeResult, McpProbeStage, McpProbeSuccess } from './types.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { McpGeneration } from './generation.ts'
+import { oauthFailure } from './diagnostic.ts'
+import type { McpAuthorizationRequired } from './diagnostic.ts'
+import { McpOAuthCredentials } from './oauth-credentials.ts'
 import type { Config } from './index.ts'
 
 /** Options for one {@link probeServer} call. */
@@ -70,9 +73,25 @@ export async function probeServer(ctx: Context, config: Config, options: McpProb
   if (spec.signal?.aborted) abort()
   let stage: McpProbeStage = 'connect'
   let result: McpProbeSuccess | McpProbeFailure
+  let authorizationFailure: McpAuthorizationRequired | undefined
+  if (config.transport === 'streamable-http' && config.oauth !== undefined) client.onerror = (error) => {
+    const failure = oauthFailure(error)
+    if (failure !== undefined) { authorizationFailure = failure; abort() }
+  }
   try {
     const resolved = await generation.run(signal => binding.resolve(signal), remaining())
-    await generation.connect(resolved, remaining())
+    const oauthConfig = resolved.transport === 'streamable-http' ? resolved.oauth : undefined
+    const oauth = resolved.transport === 'streamable-http' && oauthConfig !== undefined
+      ? await generation.run(async (signal) => {
+        const credentials = new McpOAuthCredentials(ctx, oauthConfig)
+        const grant = await credentials.read(new URL(resolved.url).href, signal)
+        binding.remember(grant.tokens.access_token)
+        return credentials.transport(grant, signal, (url, init) => generation.run(() => globalThis.fetch(url, init)))
+      }, remaining()) : undefined
+    await generation.connect(resolved, remaining(), oauth?.fetch, oauth === undefined ? undefined : {
+      ...oauth.authProvider,
+      token: async () => binding.remember(await oauth.authProvider.token()),
+    })
     const identity = client.getServerVersion()
     const serverInfo = identity === undefined ? undefined : { name: identity.name, version: identity.version }
     stage = 'list'
@@ -93,9 +112,10 @@ export async function probeServer(ctx: Context, config: Config, options: McpProb
         if (page === spec.maxPages - 1) truncated = true
       }
     }
+    if (authorizationFailure !== undefined) throw authorizationFailure
     result = { ok: true, ...serverInfo === undefined ? {} : { serverInfo }, toolNames, truncated, durationMs: Date.now() - startedAt }
   } catch (error) {
-    result = { ok: false, stage, message: spec.signal?.aborted ? 'probe aborted' : binding.diagnostic(error, stage), durationMs: Date.now() - startedAt }
+    result = { ok: false, stage, message: spec.signal?.aborted ? 'probe aborted' : binding.diagnostic(authorizationFailure ?? error, stage), durationMs: Date.now() - startedAt }
   } finally {
     spec.signal?.removeEventListener('abort', abort)
   }

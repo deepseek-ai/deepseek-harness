@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-17-live-subagent-model-selection-setting.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-17-live-subagent-model-selection-setting.md
+/agent-note-live-subagent-model-selection-setting:
+  en: 01cc7a22f888d43f
+  zh: 7e8db3cb85eb61e5
+/agent-note-live-subagent-model-selection-setting/problem:
+  en: 63a11d729aada846
+  zh: a54b5069bb176440
+/agent-note-live-subagent-model-selection-setting/decision:
+  en: e6ea827eaf115283
+  zh: 994dd77261bc9f4c
+/agent-note-live-subagent-model-selection-setting/alternatives-considered:
+  en: 864544c31f8f92bc
+  zh: 3fbab0d1567228eb
+/agent-note-live-subagent-model-selection-setting/consequences:
+  en: 3035a4f2981e01b9
+  zh: 4b1f84b26258470c

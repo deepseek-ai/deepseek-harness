@@ -65,7 +65,6 @@ jobs:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
           BASE_SHA: ${{ needs.master.outputs.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          SINCE: ${{ needs.master.outputs.since }}
         run: |
           stop() {
             if [ "$CHECK_MODE" = block ]; then
@@ -75,24 +74,39 @@ jobs:
             echo "::warning title=Pre-Merge Check::$1"
             exit 0
           }
-          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$SINCE" =~ ^[0-9]+$ ]]; then
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             stop "the master diff check reported no base commit, so nothing was merged or compiled"
           fi
-          # A shallow fetch starts a background maintenance run that rewrites .git/shallow, and the second shallow fetch
-          # below then fails with "shallow file has changed since we read it".
-          fetch() {
-            git -c maintenance.auto=false -c gc.auto=0 fetch --no-tags --no-write-fetch-head "$@" origin "$HEAD_SHA" "$BASE_SHA"
-          }
-          fetch --shallow-since="$SINCE" ||
+          # The checkout is already shallow, and a shallow fetch starts a background maintenance run that rewrites
+          # .git/shallow, so the fetch below would fail with "shallow file has changed since we read it".
+          # The history is bounded by depth, not by date: a date window marks a merge commit shallow when one parent
+          # predates it, which drops the other parent too and lets the merge base settle on an older commit. Within its
+          # depth every commit keeps all parents; 150 covers the base-branch commits a 72-hour-old base can be behind.
+          git -c maintenance.auto=false -c gc.auto=0 fetch --no-tags --no-write-fetch-head --depth=150 --filter=blob:none origin "$HEAD_SHA" "$BASE_SHA" ||
             stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
-          # A time window records a merge commit itself as shallow when one of its parents predates the window, which
-          # drops the other, in-window parent too; a depth bound keeps both parents of every commit it covers.
           if ! git merge-base "$HEAD_SHA" "$BASE_SHA" >/dev/null; then
-            fetch --depth=20 --filter=blob:none ||
-              stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
+            stop "the pull request shares no commit with $BASE_SHA within 150 commits of history, so nothing was merged or compiled; merge master into it and push, then this check runs again"
           fi
-          git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com merge --no-ff --no-edit -m "Merge $BASE_SHA into $HEAD_SHA" "$BASE_SHA" ||
-            stop "the pull request cannot merge $BASE_SHA; merge master into it and push, then this check runs again"
+          # The blobless history makes Git fetch missing blobs from origin on demand. Within one process, Git's cache of
+          # loose-object directories does not see the merged blobs it writes, so a single `git merge` asks origin for
+          # them while it checks out the result, and origin, which has never seen them, refuses the whole fetch.
+          # The merge is computed by `git merge-tree` and checked out by a separate process, which rereads the
+          # directories.
+          set +e
+          merge_output=$(git merge-tree --write-tree "$HEAD_SHA" "$BASE_SHA")
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -eq 1 ]; then
+            echo "$merge_output"
+            stop "the pull request conflicts with $BASE_SHA; merge master into it and push, then this check runs again"
+          fi
+          if [ "$merge_status" -ne 0 ]; then
+            stop "git merge-tree could not merge $BASE_SHA (exit $merge_status), so nothing was compiled"
+          fi
+          merge_commit=$(git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com commit-tree "${merge_output%%$'\n'*}" -p "$HEAD_SHA" -p "$BASE_SHA" -m "Merge $BASE_SHA into $HEAD_SHA") ||
+            stop "the merged tree of $BASE_SHA could not be committed, so nothing was compiled"
+          git checkout --quiet --detach "$merge_commit" ||
+            stop "the merged tree of $BASE_SHA could not be checked out, so nothing was compiled"
           echo "merged=true" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v5.0.0

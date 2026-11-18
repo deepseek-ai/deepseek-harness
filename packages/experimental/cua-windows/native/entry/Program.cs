@@ -3,6 +3,8 @@ using System.CommandLine;
 using DeepSeek.Cua.Protocol;
 using DeepSeek.Cua.Windows;
 
+using var exceptionLog = args.Contains("--shared-server", StringComparer.Ordinal) ? new NativeExceptionLog() : null;
+
 try
 {
     if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))

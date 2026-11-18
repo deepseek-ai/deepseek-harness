@@ -37,7 +37,7 @@ The existing `dsh.conversation.<sessionId>` key remains. Readers accept both leg
 | `SessionInputShell.refreshLexiconSubscription()` / `DraftEditorRuntime.refreshLexiconSubscription()` | `InputHub` owns the Session-scope `inject` callback that connects the lexicon after caching the shell, reconnects when the service arrives or is replaced, and unsubscribes on disposal. Both connection and catalog updates rescan the current editor without writing old text back; `setDraft` does not establish the subscription |
 | `ConversationStoreState` / `createConversationStore` | Support structured input and legacy strings in draft storage, keeping View state and the original key |
 | `DefaultConversationViews` | Remove restoration and prefill effects, retaining persistence binding and unbinding. Initial saving reads the owner's current snapshot, never text captured during render |
-| The existing `selectWorkspace` callback in `apply.ts` | Keep the existing cross-Workspace draft-transfer rules, passing `draftSnapshot` instead of plain text so transfer retains references |
+| The cross-Workspace draft move (`moveDraft` in `apply.ts`) | Keep the existing cross-Workspace draft-transfer rules, passing `draftSnapshot` instead of plain text so transfer retains references |
 
 There is no new draft service, storage key, general task framework, or Session creation entry point. SlotRenderer, Host Session logs, command execution, and file-discovery RPCs are unchanged. `InputActions` remains the shared input-action entry; components receive no separate content-initialization callback.
 

@@ -464,6 +464,8 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-native-command')).toThrow('client bundle purity')
     expect(() => resolveId('@deepseek-ai/dsh-host-open-in-app')).toThrow(/purity/)
     expect(resolveId('@deepseek-ai/dsh-plugin-manager/registry')).toBeNull()
+    expect(resolveId('@deepseek-ai/dsh-api-session-controller/client/directories')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-api-session-controller/client')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-plugin-manager')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-plugin-manager/registry/internal')).toThrow(/purity/)
   })
@@ -494,6 +496,12 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-output-retention')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
+  })
+
+  it('inlines only the plugin market index source address entry', () => {
+    expect(resolveId('@deepseek-ai/dsh-plugin-market-index/source')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-plugin-market-index')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-plugin-market-index/source/internal')).toThrow(/purity/)
   })
 
   it.each(['file-drag'])('inlines the stateless %s entry without admitting its subpaths or UI plugin', (name) => {

@@ -66,10 +66,14 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - setValue(elementId: string, value: JsonValue) -> ActionResult — write a control value.
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
-## Simulated mouse
-Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
+## Screenshots
+Use an explicit window for screenshots.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
+
+## Simulated mouse
+Use an explicit window for pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - mouseMove(target: string | [number, number], options?: { relative?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
+- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; the opposite event is not sent automatically.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
 - drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean }) -> ActionResult — drag between two points of one window.
@@ -82,6 +86,8 @@ Available at app or window level depending on the platform.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: Modifier[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
 - sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier.
+
+click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 
@@ -145,7 +151,7 @@ interface ToolArgsMap {
     /** Optional positive safe-integer limit on automatic continuation rounds. */
     max_goal_rounds?: number;
   } & Record<string, JsonValue>;
-  /** Run a TypeScript program to observe and operate desktop applications. The global cua object is ready to use; retain application and window objects across calls. Only tools.cua is available inside the program. Call other session tools directly. Use inspect(...values) to display selected text and images. The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Use inspect(...values) to display output. Do not use console. The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. Variables, functions, and imported modules remain in memory for this Agent across calls. Each call runs one program in its own top-level scope. Its top-level let, const, var, class, and function declarations, and the names it received from earlier programs, are copied into the top-level scope of later programs: later programs receive copies of these variables, not references to them, so an object they hold is still shared. In one program, either use a copied name or declare it again; do not declare a name and also use its copied value. Assigning to a copied name, even one declared with const, changes only this program's copy, which later programs receive. Do not declare var inside blocks; a block-level var changes which value later programs copy. Functions and still-running code from earlier programs keep the values they captured, and assignments they make later are not copied; keep shared mutable state in objects. If a program fails before a declaration of an existing name finishes, later programs keep that name's earlier value. Use await import(...) for modules; require and module are unavailable. Relative import specifiers resolve from the working directory of this environment's first program, while process.cwd() and relative file paths follow each program's working directory. Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, output overflow, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before the program ends; raw output belongs to the active evaluation. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically. */
+  /** Run a TypeScript program to observe and operate desktop applications. The global cua object is ready to use; retain application and window objects across calls. Only tools.cua is available inside the program. Call other session tools directly. Use inspect(...values) to display selected text and images. The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Use inspect(...values) to display output. Do not use console. Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. Variables, functions, and imported modules remain in memory for this Agent across calls. Each call runs one program in its own top-level scope. Its top-level let, const, var, class, and function declarations, and the names it received from earlier programs, are copied into the top-level scope of later programs: later programs receive copies of these variables, not references to them, so an object they hold is still shared. In one program, either use a copied name or declare it again; do not declare a name and also use its copied value. Assigning to a copied name, even one declared with const, changes only this program's copy, which later programs receive. Do not declare var inside blocks; a block-level var changes which value later programs copy. Functions and still-running code from earlier programs keep the values they captured, and assignments they make later are not copied; keep shared mutable state in objects. If a program fails before a declaration of an existing name finishes, later programs keep that name's earlier value. Use await import(...) for modules; require and module are unavailable. Relative import specifiers resolve from the working directory of this environment's first program, while process.cwd() and relative file paths follow each program's working directory. Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before the program ends; raw output belongs to the active evaluation. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically. */
   cua_run_code: {
     /** The TypeScript program to execute, following this tool's execution instructions. */
     code: string;
@@ -239,8 +245,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -250,8 +254,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent_fork: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -331,11 +333,6 @@ interface ToolArgsMap {
     args?: Record<string, JsonValue>;
     /** Run as a background job: return a job id immediately instead of waiting; the return value arrives with the completion notice. */
     run_in_background?: boolean;
-  } & Record<string, JsonValue>;
-  /** Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories. */
-  working_directory: {
-    /** Existing directory to enter. Omit to read the current directory. */
-    cd?: string;
   } & Record<string, JsonValue>;
   /** Create or fully replace a UTF-8 text file. */
   write: {
@@ -427,6 +424,7 @@ interface ToolOutputMap {
   };
   cua_run_code: {
     logs: string[];
+    outputTruncated?: boolean;
     sandbox?: {
       mode: "read-only" | "workspace-write" | "danger-full-access";
       denied: boolean;
@@ -606,10 +604,6 @@ interface ToolOutputMap {
     runId: string;
     agentsStarted: number;
     result: JsonValue;
-  };
-  working_directory: {
-    /** Current absolute working directory. */
-    cwd: string;
   };
   write: {
     /** Canonical absolute path in the filesystem execution world. */

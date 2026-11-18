@@ -161,8 +161,8 @@ interface PaletteMetrics {
  */
 async function measurePalette(page: Page): Promise<PaletteMetrics> {
   await pointAt(page, 'away')
-  // Poll rather than sleep the linger out: the wait is the column's, and a
-  // fixed sleep would either race it or pad every palette.
+  // Poll rather than sleep out the column's delay and fade: a fixed sleep
+  // would either race them or pad every palette.
   await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).toBe(NO_THUMB)
   const quietThumb = await resolveThumb(page)
   await pointAt(page, 'list')
@@ -233,6 +233,50 @@ function resolveThumb(page: Page): Promise<string> {
 
 /** Fully transparent, which is how the quiet column spells "no thumb". */
 const NO_THUMB = 'rgba(0, 0, 0, 0)'
+
+/** The quiet rule's transition delay, less one frame of sampling slack. */
+const MIN_QUIET_DELAY_MS = 450
+
+/** What {@link leaveAndSampleThumb} observed between the leave and the quiet thumb. */
+interface LeaveSamples {
+  /** Distinct thumb colours seen, in order of first appearance. */
+  colours: string[]
+  /** Milliseconds from just before the leave until the first transparent frame. */
+  elapsedMs: number
+}
+
+/**
+ * Move the pointer away and read the list's thumb once per animation frame
+ * until it is transparent. The sampler starts in the page before the move, so
+ * the elapsed time is a lower bound on the hold whatever the round-trip
+ * latency of the harness is.
+ * @param page - the page under test.
+ * @returns the colours seen and how long the thumb took to go transparent.
+ */
+async function leaveAndSampleThumb(page: Page): Promise<LeaveSamples> {
+  const sampled = page.evaluate(async (none) => {
+    const list = document.querySelector<HTMLElement>('[data-sidebar-list-area]')
+    if (list === null) throw new Error('sidebar session list not in the DOM')
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--dsh-scrollbar-thumb)'
+    list.append(probe)
+    const start = performance.now()
+    const colours: string[] = []
+    try {
+      for (;;) {
+        const value = getComputedStyle(probe).color
+        if (!colours.includes(value)) colours.push(value)
+        if (value === none) return { colours, elapsedMs: performance.now() - start }
+        if (performance.now() - start > 10_000) throw new Error(`thumb never went quiet: ${colours.join(' → ')}`)
+        await new Promise(resolve => requestAnimationFrame(resolve))
+      }
+    } finally {
+      probe.remove()
+    }
+  }, NO_THUMB)
+  await pointAt(page, 'away')
+  return sampled
+}
 
 /**
  * Park the pointer over the session list or outside the sidebar entirely. The
@@ -385,16 +429,15 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('draws no thumb until the pointer is over the column, and lingers on the way out', async () => {
+  it('draws no thumb until the pointer is over the column, and fades it out shortly after the pointer leaves', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-scrollbar-pointer'))
     const revealed = await resolveThumb(page)
     expect(revealed).not.toBe(NO_THUMB)
-    await pointAt(page, 'away')
-    // The linger, measured as a state rather than a duration: the thumb is
-    // still drawn on the leave itself, and gone once the window has passed. A
-    // tighter timing assertion would pin the wall clock of a CI machine.
-    expect(await resolveThumb(page)).toBe(revealed)
-    await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).toBe(NO_THUMB)
+    // The delay is checked as a lower bound measured in the page: a slow
+    // harness only lengthens it, so no upper bound pins a CI wall clock.
+    const leave = await leaveAndSampleThumb(page)
+    expect(leave.colours[0]).toBe(revealed)
+    expect(leave.elapsedMs).toBeGreaterThanOrEqual(MIN_QUIET_DELAY_MS)
     // The reservation is unconditional, so nothing moved while the bar was
     // hidden — this is what buys `transparent` over hiding the bar itself.
     const quiet = await measureList(page)
@@ -410,6 +453,27 @@ describe('web e2e: sidebar session list scrollbar (reserved gutter / themed thum
     expect(await resolveThumb(page)).toBe(NO_THUMB)
     await pointAt(page, 'list')
     await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).toBe(revealed)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps the delay and drops the fade under reduced motion', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-scrollbar-reduced-motion'))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    try {
+      await pointAt(page, 'list')
+      await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).not.toBe(NO_THUMB)
+      const revealed = await resolveThumb(page)
+      // A zero duration with a non-zero delay still starts a transition, so
+      // the thumb holds its colour through the delay and then switches in one
+      // frame: no intermediate colour may appear.
+      const leave = await leaveAndSampleThumb(page)
+      expect(leave.colours).toEqual([revealed, NO_THUMB])
+      expect(leave.elapsedMs).toBeGreaterThanOrEqual(MIN_QUIET_DELAY_MS)
+    } finally {
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      await pointAt(page, 'list')
+      await expect.poll(async () => resolveThumb(page), { timeout: 10_000 }).not.toBe(NO_THUMB)
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

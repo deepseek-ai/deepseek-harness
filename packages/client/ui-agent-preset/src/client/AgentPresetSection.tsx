@@ -99,8 +99,10 @@ export function AgentPresetSection({
       </button>
     )
   return <section className={css.section}>
-    <h2 className={css.title}>{t('nav')}</h2>
-    <p className={css.intro}>{t('sectionIntro')}</p>
+    <div className={css.sectionHeader}>
+      <h2 className={css.title}>{t('nav')}</h2>
+      <p className={css.intro}>{t('sectionIntro')}</p>
+    </div>
     {state.error === null ? null : <p className={css.error} role="alert">{state.error}</p>}
     {([true, false] as const).map((builtIn) => {
       const rows = state.rows.filter(row => isBuiltInPreset(row) === builtIn

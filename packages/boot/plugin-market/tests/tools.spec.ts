@@ -77,6 +77,14 @@ it('lists configured indexes with English titles', async () => {
   expect((await call({ action: 'list_indexes' })).json).toEqual({ indexes: [{ url: URL_A, title: 'Localized', error: `Could not fetch ${URL_A}: offline` }] })
 })
 
+it('lists usable Git addresses without exposing invalid Git addresses from the profile', async () => {
+  const git = 'git+ssh://git@github.com/team/plugins.git'
+  const invalid = 'git+https://user:secret@github.com/team/plugins.git'
+  const { call, ctx } = await fixture([git, invalid])
+  expect(ctx.pluginMarket.listIndexes().find(source => source.url === invalid)?.error).toBeDefined()
+  expect((await call({ action: 'list_indexes' })).json).toEqual({ indexes: [{ url: git, title: null }] })
+})
+
 it('pages plugins with the default version\'s install target and registry plugin_manager accepts', async () => {
   serve(document)
   const { call } = await fixture()

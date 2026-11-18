@@ -15,6 +15,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -55,6 +56,7 @@ beforeEach(async () => {
   })
   await ctx.plugin(WebFetchLocal, {})
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'search-key' } }]))
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(WebDeepSeekApi, { searchBaseURL: SEARCH_API_BASE, sendOriginalQuestion: false })
   // The shipped deployment shape: the tool-call budget is declared by tool-web
   // config (default 30s, attached as ToolDefinition.timeoutMs) and enforced by

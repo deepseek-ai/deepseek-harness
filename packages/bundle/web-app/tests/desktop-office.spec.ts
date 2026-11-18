@@ -71,7 +71,7 @@ async function boot(profile: string, primaryRuntime: (root: string) => string | 
   onTestFinished(() => ctx.fiber.dispose())
   ctx.provide('profileContext', {
     name: profile, dir: '/profile', patchPath: '/profile/cordis.patch.yml', installAnchor: join(root, 'package.json'),
-    cwd: workspace, home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+    cwd: workspace, home: '/home', startedBundles: [], overlayPaths: [], telemetryDisabledEnv: undefined,
   })
   ctx.provide('dshHomePath', dshHomePath)
   provideWorkingDirectoryFixture(ctx, workspace)

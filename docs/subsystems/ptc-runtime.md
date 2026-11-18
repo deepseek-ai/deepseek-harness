@@ -101,6 +101,8 @@ interface PtcRunResult {
    * the outer result.
    */
   output: PtcOutput[]
+  /** Captured output or diagnostic text was truncated; execution still follows its normal completion, timeout and cancellation rules. */
+  outputTruncated?: boolean
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -115,7 +117,7 @@ type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 
 ## Bindings: host functions as program globals
 
-Each `PtcBindingNamespace` becomes a global object of async callables; PTC passes `tools`. Arguments and resolutions must be lossless JSON. Providers enforce their own transport caps; the seam sets no uniform binding-byte limit. An optional error-class descriptor creates program-visible typed rejections without naming a consumer inside the runtime. Binding names are own properties, so `__proto__` cannot traverse a prototype:
+Each `PtcBindingNamespace` becomes a global object of async callables; PTC passes `tools`. Arguments and resolutions must be lossless JSON, with host-issued `PtcImage` and `PtcInspectableValue` descriptors adapted by the provider. Providers enforce their own transport caps; the seam sets no uniform binding-byte limit. An optional error-class descriptor creates program-visible typed rejections without naming a consumer inside the runtime. Binding names are own properties, so `__proto__` cannot traverse a prototype:
 
 ```ts type-equiv
 /**
@@ -168,18 +170,41 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
- * lossy or non-cloneable value with a descriptive error rather than corrupting
- * the run. No seam-level byte cap applies to a binding resolution. A rejection
- * of this function surfaces inside the program as a rejection of the
- * corresponding call.
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage and
+ * PtcInspectableValue values. An inspectable resolution delivers its JSON object
+ * or array to the program and uses its text only when that unchanged value is
+ * inspected directly. A runtime rejects a lossy or non-cloneable value with a
+ * descriptive error rather than corrupting the run. No seam-level byte cap
+ * applies to a binding resolution. A rejection of this function surfaces inside
+ * the program as a rejection of the corresponding call.
  */
 type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 ```
 
+`PtcInspectableValue`, exported from `@deepseek-ai/dsh-ptc-runtime`, associates a lossless JSON object or array with host-authored text through `new PtcInspectableValue(value, text)`. The provider delivers the data itself to the program, without exposing the descriptor or adding program-visible properties. Direct `inspect` of the original result uses its text only while the data matches its initial snapshot; empty text emits nothing. Copies, field selections, modified results, and nested values use ordinary formatting. The Node process owns this association, which is neither serialized into Session logs nor transferred by copying a program value. See [`src/inspectable-value.ts`](../../packages/ptc-runtime/ptc-runtime/src/inspectable-value.ts).
+
+The data may contain host-issued `PtcImage` descriptors. The provider preserves their program `Image` identities in the inspection snapshot. Direct inspection of the unchanged container displays its supplied text; inspecting an Image field displays that image.
+
+```ts public-api
+/** A binding result whose unchanged object or array displays the supplied text when inspected directly. */
+declare class PtcInspectableValue {
+  readonly [key: string]: PtcJsonValue;
+  /** The JSON object or array delivered unchanged to the program. */
+  readonly value: PtcJsonValue[] | { [key: string]: PtcJsonValue };
+  /** Text shown by a direct inspection of the unchanged value; empty text emits nothing. */
+  readonly text: string;
+  /**
+   * Associate an object or array with its host-authored inspection text.
+   * @param value - Lossless JSON data retained for programmatic access.
+   * @param text - Text to display instead of generic object formatting.
+   */
+  constructor(value: PtcJsonValue[] | { [key: string]: PtcJsonValue }, text: string);
+}
+```
+
 ## Captured output and the failure taxonomy
 
-`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; captured-output truncation is reported independently through `outputTruncated`, while required completion values remain lossless. See the [Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md) for budget priority and execution semantics.
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -216,7 +241,7 @@ Failure kinds are **orthogonal outcomes reported independently** (per [defensive
  * - `'abort'` — {@link PtcRunRequest.signal} fired.
  * - `'worker-exit'` — the execution substrate died without settling (e.g. OOM).
  * - `'invalid-output'` — the completion value was not lossless JSON.
- * - `'output-limit'` — the serialized outer logs/value/diagnostic exceeded the configured cap.
+ * - `'output-limit'` — the required completion value exceeded the configured cap.
  * - `'protocol'` — the program sent invalid or over-budget control traffic.
  * - `'sandbox-unavailable'` — required confinement could not be established.
  */

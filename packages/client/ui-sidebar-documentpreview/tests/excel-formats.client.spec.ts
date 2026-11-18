@@ -2,13 +2,13 @@
 import { readFileSync } from 'node:fs'
 import { utils, write } from 'xlsx'
 import { expect, it } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { excelFormat } from '../src/client/excel/format.ts'
 import { mapXlsWorkbook } from '../src/client/excel/xls.ts'
 import { legacyWorkbook, xlsFixture } from './xls-fixture.ts'
 
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 const encode = (text: string) => new TextEncoder().encode(text)
 
 it.each(['xlsx', 'xls', 'csv', 'tsv'] as const)('resolves mixed-case %s paths and enforces byte limits', async (format) => {

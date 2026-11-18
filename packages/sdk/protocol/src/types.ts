@@ -119,6 +119,8 @@ export type { CommandExecution }
 export interface SessionResumeParams {
   /** Persisted session identity; missing or already owned sessions are rejected. */
   sessionId: string
+  /** Configured permission preset to persist before execution; omission retains saved permissions. */
+  permissionMode?: string
 }
 
 /** Wait for an existing SDK session and its managed descendants to finish. */
@@ -133,7 +135,7 @@ export interface SessionWorkingDirectoryParams {
   sessionId: string
 }
 
-/** Change one Session's effective directory without changing its origin or permissions. */
+/** Change one Session's effective directory without changing its origin; the workspace-write boundary follows it. */
 export interface SessionWorkingDirectorySetParams extends SessionWorkingDirectoryParams {
   /** Directory to enter; relative paths resolve against the Session's current directory. */
   path: string

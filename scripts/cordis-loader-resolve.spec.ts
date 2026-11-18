@@ -84,15 +84,18 @@ describe('Loader project resolution', () => {
     await expect(tree.import('./missing.js')).rejects.toThrow()
   })
 
-  it('retains native import when helper creation is denied', async () => {
+  it('retains native import while helper creation is denied and retries it later', async () => {
     const { root, baseUrl } = await fixture()
     const tree = await treeFor(baseUrl)
-    const denied = vi.mocked(fs.mkdir).mockRejectedValueOnce(Object.assign(new Error('read-only project'), { code: 'EACCES' }))
+    const denied = vi.mocked(fs.mkdir).mockRejectedValue(Object.assign(new Error('read-only project'), { code: 'EACCES' }))
     onTestFinished(() => { denied.mockReset() })
     expect(await createResolve(baseUrl)).toBeUndefined()
     expect(await tree.import('node:path')).toMatchObject({ join })
     await expect(tree.import('fixture-dep')).rejects.toThrow()
     expect(existsSync(join(root, '.cordis'))).toBe(false)
+    denied.mockReset()
+    expect(await tree.import('fixture-dep')).toMatchObject({ tag: 'bare-dep' })
+    expect(existsSync(join(root, '.cordis', 'resolve.mjs'))).toBe(true)
   })
 
   it('retains native import without a file-backed package scope', async () => {

@@ -55,7 +55,9 @@ try {
 
 `await harness.resumeSession(savedId)` restores a persisted session from the configured `dshHome` and returns a `HarnessSession` ready for `run()`. Save the original session id and reuse its home and workspace. Restoration preserves conversation history and its directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions reject without creating a replacement. `session(id)` remains a lazy handle for an in-process session; it does not request persisted restoration. Shell, browser, and other external processes are not restored by this API.
 
-`HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
+Pass `{ permissionMode: "danger-full-access" }` as the second argument to replace the saved permission preset before resumed execution. Omission preserves saved permissions. The profile must provide the named preset through its permission service; the selection updates sandbox and approval policy and persists for later resumes. Profiles without that service and sessions already restored by reminders reject explicit overrides.
+
+`HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata and existing processes remain unchanged; the `workspace-write` boundary moves to the new directory. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
 
 ### Running agent turns with DeepSeekHarness
 

@@ -2,10 +2,10 @@
 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconCheckCircleFillRegular, IconCloseCircleFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckCircleFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CheckState, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ChangeRequestTone } from './status.ts'
-import css from './ForgeTab.module.css'
+import css from './Forge.module.css'
 
 const BRANCH_ENDS = (
   <>
@@ -125,25 +125,24 @@ const CHECK_TONE: Record<CheckState, string | undefined> = {
 }
 
 /**
- * Draw the decorative outcome of one check beside its text: a filled circle
- * for success or failure, a half-filled ring while it runs, and an empty ring
- * for neutral, skipped, and cancelled checks.
+ * Draw the decorative outcome of one check beside its text, each inside the same ring: a check for success, a cross
+ * for failure, a half fill while it runs, and a dash for neutral, skipped, and cancelled checks. The ring has the
+ * radius and width of the success icon's, so mixed outcomes read as one set.
  * @param props.state - check outcome.
  * @param props.size - width and height in pixels, 16 by default.
  * @returns the glyph.
  */
 export function CheckGlyph({ state, size = 16 }: { readonly state: CheckState; readonly size?: number | undefined }): ReactNode {
-  const running = state === 'pending'
   return (
     <span className={clsx(css.checkGlyph, CHECK_TONE[state])} data-forge-check={state} aria-hidden="true">
-      {state === 'success' && <IconCheckCircleFillRegular size={size} />}
-      {state === 'failure' && <IconCloseCircleFillRegular size={size} />}
-      {state !== 'success' && state !== 'failure' && (
+      {state === 'success' ? <IconCheckCircleFillRegular size={size} /> : (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth={1.5} />
-          {running
-            ? <path d="M8 3.5A4.5 4.5 0 0 1 8 12.5Z" fill="currentColor" />
-            : <path d="M5.5 8H10.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />}
+          <circle cx="8" cy="8" r="7.25" stroke="currentColor" strokeWidth={1.3} />
+          {state === 'failure'
+            ? <path d="M5.9 5.9L10.1 10.1M10.1 5.9L5.9 10.1" stroke="currentColor" strokeWidth={1.5} strokeLinecap="square" />
+            : state === 'pending'
+              ? <path d="M8 2.8A5.2 5.2 0 0 1 8 13.2Z" fill="currentColor" />
+              : <path d="M5.5 8H10.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />}
         </svg>
       )}
     </span>

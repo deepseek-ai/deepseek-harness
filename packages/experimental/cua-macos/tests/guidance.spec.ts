@@ -1,4 +1,4 @@
-/** Model-facing guidance enumerates the full available object API without unavailable operations. */
+/** Model-facing guidance lists the object API with platform availability and input constraints. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
 import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
@@ -9,7 +9,7 @@ const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
   'getAccessibilityTree', 'listActions', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
-const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'click', 'scroll', 'drag']
+const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'toggleMouse', 'click', 'scroll', 'drag']
 
 it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
   for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
@@ -20,11 +20,13 @@ it('keeps file-tool instructions in PTC and limits the program guidance to avail
   expect(PROGRAM_GUIDANCE).toContain('session’s file tools')
 })
 
-it('keeps exactly three ordered operation headings', () => {
-  const heads = COMMON_GUIDANCE.match(/^## .+$/gm)
-  expect(heads).toEqual(['## Accessibility tree', '## Simulated mouse', '## Simulated keyboard'])
-  expect(COMMON_GUIDANCE.indexOf('## Accessibility tree')).toBeLessThan(COMMON_GUIDANCE.indexOf('## Simulated mouse'))
-  expect(COMMON_GUIDANCE.indexOf('## Simulated mouse')).toBeLessThan(COMMON_GUIDANCE.indexOf('## Simulated keyboard'))
+it('places observation chapters before simulated input with screenshots in their own chapter', () => {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog.match(/^## .+$/gm)).toEqual(['## Accessibility tree', '## Screenshots', '## Simulated mouse', '## Simulated keyboard'])
+    const screenshots = catalog.slice(catalog.indexOf('## Screenshots'), catalog.indexOf('## Simulated mouse'))
+    expect(screenshots).toContain('- getScreenshot() -> Image')
+    expect(catalog.slice(catalog.indexOf('## Simulated mouse'))).not.toContain('- getScreenshot(')
+  }
 })
 
 it('prefixes concise platform guidance before the shared catalog', () => {
@@ -38,6 +40,8 @@ it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a s
   expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
   expect(instructions).toContain('The question interrupts the user.')
   expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
+  expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemPointer?: boolean }")
+  expect(instructions).toContain('pass useSystemPointer: true on both down and up')
   const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
   expect(drag).toContain('useSystemPointer?: boolean')
   expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
@@ -67,7 +71,22 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   }
 })
 
-it('enumerates every available method once in its catalog entry', () => {
+it('documents explicit mouse-button events immediately after mouseMove', () => {
+  const lines = COMMON_GUIDANCE.split('\n')
+  const index = lines.findIndex(line => line.startsWith('- toggleMouse('))
+  expect(lines[index - 1]).toMatch(/^- mouseMove\(/)
+  expect(lines[index]).toBe("- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; the opposite event is not sent automatically.")
+  expect(index).toBeGreaterThan(lines.indexOf('## Simulated mouse'))
+  expect(index).toBeLessThan(lines.indexOf('## Simulated keyboard'))
+})
+
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('documents the default window release and the optional system hold', (catalog) => {
+  const entry = catalog.split('\n').find(line => line.startsWith('- toggleMouse('))
+  expect(entry).toContain('By default the window receives the events, even a release outside it, and the system button stays up.')
+  expect(entry).toContain('pass useSystemPointer: true on both down and up')
+})
+
+it('enumerates every public method once in its catalog entry', () => {
   const signatures = [
     ...apiNames.map(name => `cua.${name}(`),
     ...appNames.filter(name => name !== 'appHandle').map(name => `app.${name}(`),
@@ -79,8 +98,8 @@ it('enumerates every available method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(25)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(24)
+  expect(signatures).toHaveLength(26)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(25)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })
@@ -128,7 +147,8 @@ it('references Modifier without defining its members in shared guidance', () => 
 })
 
 it('states platform-dependent levels without qualifying grouped method names', () => {
-  expect(COMMON_GUIDANCE).toContain('## Simulated mouse\nUse an explicit window for screenshots and pointer input.')
+  expect(COMMON_GUIDANCE).toContain('## Screenshots\nUse an explicit window for screenshots.')
+  expect(COMMON_GUIDANCE).toContain('## Simulated mouse\nUse an explicit window for pointer input.')
   for (const heading of ['Accessibility tree', 'Simulated keyboard']) {
     expect(COMMON_GUIDANCE).toContain(`## ${heading}\nAvailable at app or window level depending on the platform.`)
   }
@@ -137,6 +157,15 @@ it('states platform-dependent levels without qualifying grouped method names', (
   expect(groups).not.toMatch(/^- (?:surface|window|app)\./m)
   expect(COMMON_GUIDANCE).toContain('target: string | [number, number]')
   expect(COMMON_GUIDANCE).toContain('from: [number, number]')
+})
+
+it('guides complex input combinations through platform-supported primitive operations', () => {
+  const advice = 'click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.'
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog).toContain(advice)
+    expect(catalog.indexOf(advice)).toBeGreaterThan(catalog.indexOf('- sendKeyEvent('))
+    expect(catalog.indexOf(advice)).toBeLessThan(catalog.indexOf('Raw tools use { method, params }'))
+  }
 })
 
 it('keeps consent, lock, observation, and no-replay rules', () => {
@@ -159,6 +188,6 @@ it('documents explicit inspection and separate key arguments', () => {
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })
 
-it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'emit', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+it('omits stale names and unrelated operations', () => {
+  for (const stale of ['getAXState', 'emit', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs']) expect(GUIDANCE).not.toContain(stale)
 })

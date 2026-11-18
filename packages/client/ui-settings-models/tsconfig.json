@@ -9,7 +9,10 @@
   ],
   "references": [
     {
-      "path": "../../host/webserver"
+      "path": "../../util/text-search"
+    },
+    {
+      "path": "../config"
     },
     {
       "path": "../../../vendor/schemastery"

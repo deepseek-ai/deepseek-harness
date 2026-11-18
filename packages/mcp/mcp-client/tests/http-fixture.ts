@@ -13,14 +13,16 @@ export interface HttpMcpFixture {
   close: () => Promise<void>
 }
 
-/** Start a local stateless MCP endpoint exposing one `ping` tool, optionally echoing the request credential in an MCP tool error. */
-export async function startHttpMcpFixture(options: { rejectToolCalls?: boolean } = {}): Promise<HttpMcpFixture> {
+/** Start a stateless MCP endpoint whose ping tool can echo request credentials in tool errors or authorization failures. */
+export async function startHttpMcpFixture(
+  options: { rejectToolCalls?: boolean; authorizationFailure?: boolean } = {},
+): Promise<HttpMcpFixture> {
   const calls: string[] = []
   const authorization: Array<string | undefined> = []
   const handler = createMcpHandler(({ requestInfo }) => {
     const mcp = new McpServer(
       { name: 'http-fixture', version: '1.0.0' },
-      { capabilities: { tools: {} } },
+      { capabilities: { tools: {} }, ...options.authorizationFailure ? { instructions: 'MCP_AUTHORIZED_INSTRUCTION: use the protected ping tool.' } : {} },
     )
     mcp.registerTool('ping', { description: 'Replies pong.', inputSchema: z.object({}) }, async (): Promise<CallToolResult> => {
       calls.push('ping')
@@ -31,7 +33,21 @@ export async function startHttpMcpFixture(options: { rejectToolCalls?: boolean }
     })
     return mcp
   })
-  const handle = toNodeHandler(handler)
+  const handle = toNodeHandler({
+    async fetch(request, context) {
+      if (options.authorizationFailure && request.method === 'POST') {
+        const body: unknown = await request.clone().json()
+        if (body !== null && typeof body === 'object' && 'method' in body && body.method === 'tools/call') {
+          calls.push('ping')
+          return new Response(`MCP fixture rejected ${request.headers.get('authorization')}`, {
+            status: 403,
+            headers: { 'www-authenticate': 'Bearer error="insufficient_scope", scope="admin"' },
+          })
+        }
+      }
+      return handler.fetch(request, context)
+    },
+  })
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     authorization.push(request.headers.authorization)
     // The adapter excludes explicit undefined on Node's optional HTTP fields.

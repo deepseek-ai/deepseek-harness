@@ -126,7 +126,7 @@
 }
 
 .sessionRow .title {
-  margin: 0 6px 0 var(--dsh-sidebar-label-gap);
+  margin: 0 12px 0 var(--dsh-sidebar-label-gap);
 }
 
 .slot {
@@ -199,31 +199,12 @@
   outline: none;
 }
 
-/* Hovering a session row marquees a title wider than its cell: Rows.tsx crawls
-   it at a constant speed to its far edge while the pointer rests on the row,
-   holds it there, and returns it to the start in one step when the pointer
-   leaves. The motion is scripted frame by frame (reduced motion jumps), so no
-   scroll-behavior applies here. */
+/* Hovering a session row marquees a title wider than its cell: the shared
+   hover marquee carries it at a constant speed to its far edge while the
+   pointer rests on the row, holds it there, fades the edges that still hide
+   text, and returns it to the start in one step when the pointer leaves. */
 .sessionRow .title {
   flex: 1;
-}
-
-/* While the marquee travels, both clipping edges fade in over 12px instead of
-   hard-cutting a character: the left once the title has moved off its start
-   (data-scrolled), the right while text still remains beyond the cell
-   (data-clipped) — at the far edge the right fade lifts so the final character
-   reads at full strength. The mask rides the title span itself, so the status
-   slot and every other leading cell keep their full color. */
-.sessionRow .title[data-scrolled] {
-  mask-image: linear-gradient(to right, transparent, #000 12px);
-}
-
-.sessionRow .title[data-clipped] {
-  mask-image: linear-gradient(to left, transparent, #000 12px);
-}
-
-.sessionRow .title[data-scrolled][data-clipped] {
-  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 
 .meta {
@@ -274,7 +255,12 @@
   flex: none;
   display: none;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
+}
+
+/* Keep 14px between the Session title and the first glyph, including its slot inset. */
+.sessionRow .rowActions {
+  margin-left: 1px;
 }
 
 @media (hover: hover) {
@@ -464,6 +450,11 @@
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.iconButton > svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Keep the focus ring on its original compact outline. */

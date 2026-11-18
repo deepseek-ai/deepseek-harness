@@ -241,6 +241,15 @@ describe('workflow runtime outcomes', () => {
     } finally { await handle.dispose() }
   })
 
+  it('accepts a complete workflow value when incidental runtime output was truncated', async () => {
+    const value = { value: 42, stopReason: 'completed', agentsStarted: 0 }
+    const { start } = await setup(() => Promise.resolve({ output: [], value, outputTruncated: true }))
+    const handle = start()
+    try {
+      expect(await handle.result).toEqual(value)
+    } finally { await handle.dispose() }
+  })
+
   it('carries a guest-reported fatal code onto the run result', async () => {
     const value = { value: null, stopReason: 'error', agentsStarted: 1, error: 'total agent cap (1)', errorCode: 'AGENT_CAP' }
     const { start } = await setup(() => Promise.resolve({ output: [], value }))

@@ -245,6 +245,25 @@ describe('Factory definition ledger', () => {
   })
 })
 
+describe('registering package', () => {
+  it('stamps the nearest Loader entry name, walking up through nested plugins, and nothing outside an entry', async () => {
+    const b = await boot()
+    b.erased.register({ name: 'root', children: { 't.rows': { kind: 'list', scope: 'root' } } }, C)
+    let outer: Context | undefined, inner: Context | undefined
+    await b.ctx.plugin({ inject: ['slots'], apply: (ctx: Context) => {
+      outer = ctx
+      ctx.plugin({ inject: ['slots'], apply: (child: Context) => { inner = child } })
+    } })
+    Object.assign(outer!.fiber, { entry: { options: { name: '@acme/dsh-rows' } } })
+    inner!.slots.register({ name: 't.rows', id: 'nested' }, C)
+    outer!.slots.register({ name: 't.rows', id: 'outer' }, C)
+    b.erased.register({ name: 't.rows', id: 'root' }, C)
+    expect(b.svc.entries('t.rows').map(entry => [entry.options.id, entry.module])).toEqual([
+      ['nested', '@acme/dsh-rows'], ['outer', '@acme/dsh-rows'], ['root', undefined],
+    ])
+  })
+})
+
 describe("built-in 'root'", () => {
   it('is declared at construction: spec readable, occupancy open, no plugin needed', async () => {
     const bench = await boot()

@@ -210,7 +210,7 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   },
   'minimal-image-compaction': {
     expectedFinalResponse: 'MINIMAL_IMAGE_OK',
-    expectedTools: { bash: ['command'], read_image: ['file_path'], working_directory: [] },
+    expectedTools: { bash: ['command'], read_image: ['file_path'] },
   },
   'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
@@ -252,7 +252,7 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   },
   'persistent-tools': {
     environment: { DSH_SYSTEM_PROMPT: MINIMAL_SYSTEM_PROMPT },
-    expectedTools: { bash: ['command'], str_replace_editor: ['command', 'path'], working_directory: [] },
+    expectedTools: { bash: ['command'], str_replace_editor: ['command', 'path'] },
     expectedSystem: MINIMAL_SYSTEM_PROMPT,
     expectedToolDescriptions: { bash: MINIMAL_BASH_DESCRIPTION },
     runtimeContext: {
@@ -268,6 +268,17 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
         provider: 'mock',
         model: 'mock-routed',
         reasoningEffort: 'max',
+        maxTokens: 777,
+      },
+    },
+  },
+  'subagent-dsh-sdk-empty-route': {
+    environment: { DSH_TEST_PARENT_PROVIDER: 'deepseek-official', DSH_TEST_PARENT_ROUTE_SCRIPT: 'empty-after-denied' },
+    dshSdkChild: {
+      config: dshSdkChildConfig,
+      agentConfig: {
+        provider: 'mock',
+        model: 'mock-routed',
         maxTokens: 777,
       },
     },
@@ -953,7 +964,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           await harness.start()
           subscription = harness.client.subscribeSessionTree(sessionId)
           await expect(harness.resumeSession('missing-session')).rejects.toThrow()
-          session = await harness.resumeSession(sessionId)
+          session = await harness.resumeSession(sessionId, { permissionMode: 'read-only' })
           expect(session.id).toBe(sessionId)
         }
         let result: RunResult | undefined
@@ -1512,7 +1523,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
           .toBeGreaterThan(events.findIndex(event => event.type === 'compaction/summary'))
       }
       expect(logs.some(log => log.content.includes('llm-replay: script exhausted')), `${scenario.name}: replay script covers every model request`).toBe(false)
-      if (scenario.name === 'subagent-dsh-sdk-diagnostic' || scenario.name === 'subagent-dsh-sdk-dynamic-route') {
+      if (scenario.name === 'subagent-dsh-sdk-diagnostic' || scenario.name === 'subagent-dsh-sdk-dynamic-route'
+        || scenario.name === 'subagent-dsh-sdk-empty-route') {
         const parentEvents = records(ordered[0]!.content)
         const notices = parentEvents.filter(event => event.type === 'user/message'
           && (event.data as JsonObject | undefined)?.source !== undefined
@@ -1524,7 +1536,9 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(catalog.every(event => (event.data as JsonObject).mode === 'external')).toBe(true)
         const expectedContent = scenario.name === 'subagent-dsh-sdk-diagnostic'
           ? 'partial child loader answer'
-          : 'child route: mock/mock-routed/max/777; cwd:'
+          : scenario.name === 'subagent-dsh-sdk-empty-route'
+            ? 'child route: mock/mock-routed/default/777; cwd:'
+            : 'child route: mock/mock-routed/max/777; cwd:'
         for (const notice of notices) expect(JSON.stringify(notice)).toContain(expectedContent)
         const finalAssistant = parentEvents.findLastIndex(event => event.type === 'assistant/message')
         for (const notice of notices) expect(parentEvents.indexOf(notice)).toBeLessThan(finalAssistant)

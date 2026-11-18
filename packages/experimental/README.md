@@ -36,8 +36,8 @@ Promotion requires a named product role, documented public behavior and limitati
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`action-cards`](action-cards/README.md) | Optional action cards below answers: the proposal tool, card state, user actions and status notices | `ctx.actionCards` |
-| [`client-ui-action-cards`](client-ui-action-cards/README.md) | Card frame below completed answers, kind bodies and the proposal process row | — |
+| [`action-cards`](action-cards/README.md) | Optional action cards below answers: `action-card` blocks, card state, user actions and status notices | `ctx.actionCards` |
+| [`client-ui-action-cards`](client-ui-action-cards/README.md) | Card frame below completed answers, kind bodies and the layer that hides card blocks | — |
 | [`creation-recommendations`](creation-recommendations/README.md) | Explicit-need creation of persistent removable interface plugins | — |
 | [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.md) | Personalized page card body with location selection and undo | — |
 | [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | `ctx.pluginRecommendations` |
@@ -45,6 +45,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`personalized-recommendations`](personalized-recommendations/README.md) | Default-disabled bundle of personalized pages, plugin recommendations and their action cards | — |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
 | [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |
+| [`deepseek-chat-import`](deepseek-chat-import/README.md) | Optional upload of DeepSeek website chat exports as Sessions in a chosen Workspace | `ctx.deepseekChatImport` |
 | [`ralph-bundle`](ralph-bundle/README.md) | Optional repeated delegation with an isolated workflow engine | — |
 | [`terminal-bundle`](terminal-bundle/README.md) | Optional global persistent terminal tools | — |
 | [`badge-skill-bundle`](badge-skill-bundle/README.md) | Optional powered-by-dsh badge skill | — |
@@ -97,6 +98,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`worktree`](worktree/README.md) | Creates a named Git worktree and changes the calling Session directory | `ctx.worktrees` |
 | [`forge`](forge/README.md) | Code host provider registry with shared change request polling | `ctx.forge` |
 | [`forge-github`](forge-github/README.md) | GitHub provider that reads pull requests through the host GitHub CLI | registers a provider on `ctx.forge` |
+| [`forge-gitlab`](forge-gitlab/README.md) | GitLab provider that reads and writes merge requests through the host GitLab CLI | registers a provider on `ctx.forge` |
 | [`forge-session`](forge-session/README.md) | Binds change requests to the Sessions that created, pushed, or tracked them | `ctx.forgeSession` |
 | [`client-ui-forge`](client-ui-forge/README.md) | GUI panel for a Session's Git checkout, worktrees, and bound pull requests | `ctx.forgePanel` |
 | [`forge-bundle`](forge-bundle/README.md) | Default-disabled pull request and worktree panel composition | — |

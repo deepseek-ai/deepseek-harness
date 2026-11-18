@@ -1,6 +1,6 @@
 /** Worker entry translates parser failures into its private response protocol. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { excelFixture } from './excel-fixture.ts'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.doUnmock('../src/client/excel/convert.ts') })
@@ -12,7 +12,7 @@ it('returns parsed sheets and bounded failure categories', async () => {
   await import('../src/client/excel/worker.ts')
   const handle: (event: MessageEvent) => void = globalThis.onmessage!
   const message = (bytes: Uint8Array<ArrayBuffer>, maxCells = 250_000) => {
-    handle({ data: { bytes, format: 'xlsx', limits: { ...Config({}).excel, maxCells } } } as MessageEvent)
+    handle({ data: { bytes, format: 'xlsx', limits: { ...EXCEL_DEFAULTS, maxCells } } } as MessageEvent)
   }
   message(await excelFixture())
   await vi.waitFor(() => { expect(post).toHaveBeenCalledWith(expect.objectContaining({ ok: true })) })
@@ -32,6 +32,6 @@ it('reports an unexpected parser failure as an invalid workbook', async () => {
   })
   await import('../src/client/excel/worker.ts')
   const handle: (event: MessageEvent) => void = globalThis.onmessage!
-  handle({ data: { bytes: new Uint8Array(), format: 'xlsx', limits: Config({}).excel } } as MessageEvent)
+  handle({ data: { bytes: new Uint8Array(), format: 'xlsx', limits: EXCEL_DEFAULTS } } as MessageEvent)
   await vi.waitFor(() => { expect(post).toHaveBeenCalledWith({ ok: false, code: 'invalid' }) })
 })

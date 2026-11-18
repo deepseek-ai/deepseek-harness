@@ -65,7 +65,7 @@ private enum ApplicationTarget {
     case running(ProcessIdentity)
     case pending(InstalledApplication, JSONValue)
 }
-enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint) }
+enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint), systemButtonDown(WindowRoute, CGMouseButton) }
 
 actor AXWorker {
     nonisolated let executor = NativeSerialExecutor()
@@ -370,6 +370,24 @@ actor AXWorker {
         case "selectText":
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
+        case "toggleMouse":
+            let id = try params.windowID()
+            let isDown = try params.string("direction") == "down"
+            let window: WindowInfo
+            if isDown {
+                guard NativePlatform.frontPID() == identity.pid else {
+                    throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Activate the selected application before pressing a mouse button")
+                }
+                window = try ax().coordinateWindow(identity, id, budget: &recovery).window
+            } else {
+                window = try NativePlatform.ownedWindow(identity.pid, id)
+            }
+            let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
+            if try params.optionalBoolean("useSystemPointer") == true {
+                return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
+            }
+            try await inputs().1.toggleMouse(in: route,
+                                             button: params.string("mouseButton"), isDown: isDown)
         case "click", "mouseMove":
             let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil

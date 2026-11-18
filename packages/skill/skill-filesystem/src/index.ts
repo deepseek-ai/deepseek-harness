@@ -619,7 +619,7 @@ async function settleWatcherOpening(opening: Promise<void> | undefined): Promise
   if (opening === undefined) return
   try {
     await opening
-  } catch {
+  } catch (_watchStartupFailed) {
     // Watch startup already logged the underlying failure; teardown only contains it.
   }
 }

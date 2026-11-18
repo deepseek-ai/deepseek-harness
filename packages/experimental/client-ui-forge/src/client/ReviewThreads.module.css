@@ -73,6 +73,30 @@
   overflow-wrap: anywhere;
 }
 
+/* A saved comment's header keeps its menu at the top end while the lines and tags wrap beside it. */
+.recordHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.recordInfo {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 20px;
+}
+
+/* A saved comment is plain text, drawn with its line breaks. */
+.plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .spacer { flex: 1; }
 
 /* Text actions inside a card: no fill, accent ink, the same height as the tags beside them. */

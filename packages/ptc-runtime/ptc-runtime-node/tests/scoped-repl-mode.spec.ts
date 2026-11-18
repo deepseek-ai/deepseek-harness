@@ -23,6 +23,8 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. '
     + 'Top-level declarations and await are supported; top-level return is not supported. '
     + 'Use inspect(...values) to display output. Do not use console. '
+    + 'Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. '
+    + 'Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. '
     + 'The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. '
     + 'Variables, functions, and imported modules remain in memory for this Agent across calls. '
     + 'Each call runs one program in its own top-level scope. '
@@ -40,7 +42,7 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     + "while process.cwd() and relative file paths follow each program's working directory. "
     + "Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. "
     + 'Timeout and cancellation results say whether retained variables were preserved or cleared. '
-    + 'Restart, sandbox changes, output overflow, or process failure clears them. '
+    + 'Restart, sandbox changes, or process failure clears them. '
     + 'Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. '
     + 'Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. '
     + 'After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. '

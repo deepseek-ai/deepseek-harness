@@ -74,44 +74,42 @@
       }
     },
     {
-      "name": "cordis_inspect_list",
-      "description": "List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before writing or configuring a plugin, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      }
-    },
-    {
-      "name": "cordis_inspect_query",
-      "description": "Run a read-only query declared by an Inspect Provider. platform, provider, and method must come from cordis_inspect_list, and input must satisfy that method's schema. Use this Tool before writing plugin code to read exact Service methods, Event modes, plugin Config schemas, Tool schemas, theme tokens, or live Slot trees and props. Host queries run locally. A Client query waits for the first valid page response within the configured timeout; otherwise it reports a Client failure or asks you to reconnect and retry. This Tool cannot invoke business Service methods or modify the runtime.",
+      "name": "cordis_inspect",
+      "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
       "parameters": {
         "type": "object",
         "properties": {
-          "platform": {
-            "type": "string",
-            "description": "Runtime platform that owns the Provider.",
-            "enum": [
-              "host",
-              "client"
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "platform": {
+                "type": "string",
+                "description": "Provider platform.",
+                "enum": [
+                  "host",
+                  "client"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "description": "Provider ID from the directory."
+              },
+              "method": {
+                "type": "string",
+                "description": "Method name from the directory."
+              },
+              "input": {
+                "description": "Arguments matching the method's input schema."
+              }
+            },
+            "required": [
+              "platform",
+              "provider",
+              "method"
             ]
-          },
-          "provider": {
-            "type": "string",
-            "description": "Exact Provider ID returned by cordis_inspect_list."
-          },
-          "method": {
-            "type": "string",
-            "description": "Exact method name declared by the Provider manifest."
-          },
-          "input": {
-            "description": "Optional query input; it must satisfy the method input schema."
           }
-        },
-        "required": [
-          "platform",
-          "provider",
-          "method"
-        ]
+        }
       }
     },
     {
@@ -371,10 +369,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -400,10 +394,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -634,19 +624,6 @@
       }
     },
     {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
-      }
-    },
-    {
       "name": "write",
       "description": "Create or fully replace a UTF-8 text file.",
       "parameters": {
@@ -684,7 +661,7 @@
     [
       {
         "name": "run_code",
-        "description": "Execute a TypeScript program against the available tools. Takes two required arguments: `code`, the BODY of an async function (erasable syntax only; top-level `await` and `return` work), and `description`, a short summary of what the program does. Call tools as `await tools.name(args)` per the declarations in the system prompt. Show selected text and images with inspect(...values). The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution's sandbox policy. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.",
+        "description": "Execute a TypeScript program against the available tools. Takes two required arguments: `code`, the BODY of an async function (erasable syntax only; top-level `await` and `return` work), and `description`, a short summary of what the program does. Call tools as `await tools.name(args)` per the declarations in the system prompt. Show selected text and images with inspect(...values). The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution's sandbox policy. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -795,44 +772,42 @@
         }
       },
       {
-        "name": "cordis_inspect_list",
-        "description": "List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before writing or configuring a plugin, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call.",
-        "parameters": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "cordis_inspect_query",
-        "description": "Run a read-only query declared by an Inspect Provider. platform, provider, and method must come from cordis_inspect_list, and input must satisfy that method's schema. Use this Tool before writing plugin code to read exact Service methods, Event modes, plugin Config schemas, Tool schemas, theme tokens, or live Slot trees and props. Host queries run locally. A Client query waits for the first valid page response within the configured timeout; otherwise it reports a Client failure or asks you to reconnect and retry. This Tool cannot invoke business Service methods or modify the runtime.",
+        "name": "cordis_inspect",
+        "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
         "parameters": {
           "type": "object",
           "properties": {
-            "platform": {
-              "type": "string",
-              "description": "Runtime platform that owns the Provider.",
-              "enum": [
-                "host",
-                "client"
+            "query": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "platform": {
+                  "type": "string",
+                  "description": "Provider platform.",
+                  "enum": [
+                    "host",
+                    "client"
+                  ]
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Provider ID from the directory."
+                },
+                "method": {
+                  "type": "string",
+                  "description": "Method name from the directory."
+                },
+                "input": {
+                  "description": "Arguments matching the method's input schema."
+                }
+              },
+              "required": [
+                "platform",
+                "provider",
+                "method"
               ]
-            },
-            "provider": {
-              "type": "string",
-              "description": "Exact Provider ID returned by cordis_inspect_list."
-            },
-            "method": {
-              "type": "string",
-              "description": "Exact method name declared by the Provider manifest."
-            },
-            "input": {
-              "description": "Optional query input; it must satisfy the method input schema."
             }
-          },
-          "required": [
-            "platform",
-            "provider",
-            "method"
-          ]
+          }
         }
       },
       {
@@ -1092,10 +1067,6 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "cwd": {
-              "type": "string",
-              "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-            },
             "description": {
               "type": "string",
               "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -1121,10 +1092,6 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "cwd": {
-              "type": "string",
-              "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-            },
             "description": {
               "type": "string",
               "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -1352,19 +1319,6 @@
             "script",
             "meta"
           ]
-        }
-      },
-      {
-        "name": "working_directory",
-        "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "cd": {
-              "type": "string",
-              "description": "Existing directory to enter. Omit to read the current directory."
-            }
-          }
         }
       },
       {

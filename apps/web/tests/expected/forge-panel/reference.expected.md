@@ -1,11 +1,9 @@
 - listitem:
-  - img "变更请求状态：需要处理"
-  - link "Add the pull request panel":
-    - /url: https://github.com/octo/demo/pull/7
-  - text: "#7 feat → main"
-  - button "在浏览器中打开"
-  - button "复制变更请求链接"
-  - 'button "从本会话移除 #7"'
+  - button "变更请求状态：需要处理 Add the pull request panel":
+    - img "变更请求状态：需要处理"
+    - text: Add the pull request panel
+  - text: "#7"
+  - button "#7 的操作"
   - 'button "收起 #7" [expanded]'
   - button "检查 已加载 1 项检查，仍有更多"
   - button "评审 等待评审"

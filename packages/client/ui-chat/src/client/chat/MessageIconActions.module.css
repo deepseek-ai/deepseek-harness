@@ -74,16 +74,16 @@
   cursor: pointer;
 }
 
-/* Action glyphs follow the same px delta as the text they serve; the
-   assistant completion row gives them two extra pixels. */
+/* Action glyphs follow the content font-size delta. */
 .action svg {
   width: calc(15px + var(--dsh-content-font-delta, 0px));
   height: calc(15px + var(--dsh-content-font-delta, 0px));
 }
 
 .actions[data-clock='end'] .action svg {
-  width: calc(17px + var(--dsh-content-font-delta, 0px));
-  height: calc(17px + var(--dsh-content-font-delta, 0px));
+  flex: none;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px));
 }
 
 @media (hover: hover) {

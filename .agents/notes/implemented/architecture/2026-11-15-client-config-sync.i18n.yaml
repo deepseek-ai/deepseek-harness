@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for 2026-11-15-client-config-sync.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-15-client-config-sync.md
+/agent-note-browser-plugin-configuration-sync:
+  en: 92fb1b35ccd50f2b
+  zh: 732f665dd12d0feb
+/agent-note-browser-plugin-configuration-sync/problem:
+  en: bad5854f1a21feb2
+  zh: df9f2c62aa7f1c8c
+/agent-note-browser-plugin-configuration-sync/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-browser-plugin-configuration-sync/decision/design-principles:
+  en: 1678ec9cbc83e49e
+  zh: 1548e5e08774de78
+/agent-note-browser-plugin-configuration-sync/decision/plugin-authoring:
+  en: 201c029071cc3812
+  zh: 03a7245772a95b54
+/agent-note-browser-plugin-configuration-sync/decision/ownership:
+  en: cb3e66c7d61b706b
+  zh: a255f85e9c411db9
+/agent-note-browser-plugin-configuration-sync/decision/ordering:
+  en: 5de9319764101262
+  zh: 4a5c5c417cf36d8e
+/agent-note-browser-plugin-configuration-sync/decision/push-order:
+  en: 5714f023a439e068
+  zh: 5d5ec5d5847fb2d4
+/agent-note-browser-plugin-configuration-sync/decision/delivery:
+  en: 9b8e644702108ef6
+  zh: 0d4f551c6007e989
+/agent-note-browser-plugin-configuration-sync/decision/push-channel:
+  en: 5596a32a26042882
+  zh: fbeae944656b39ac
+/agent-note-browser-plugin-configuration-sync/decision/scope-existing-uses-the-mechanism-can-absorb:
+  en: 79b8c68583897e07
+  zh: 15a0f33fa494ec9a
+/agent-note-browser-plugin-configuration-sync/verification:
+  en: b7ab56a86ef63b85
+  zh: b5fc8aae610659fc
+/agent-note-browser-plugin-configuration-sync/alternatives-considered:
+  en: 15ae5cd610d7208c
+  zh: 5f25271e318dbfe1
+/agent-note-browser-plugin-configuration-sync/consequences:
+  en: f85e3339246a9f84
+  zh: 11cbff9deeb78f88

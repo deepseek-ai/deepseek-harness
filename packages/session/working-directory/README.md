@@ -33,6 +33,8 @@ Mount alongside `fs`, `sessionProjections`, and `systemPrompt`. `defaultDirector
 
 -----
 
+Client programs that read the `workingDirectory` projection import its type declarations from `@deepseek-ai/dsh-working-directory/types`, which loads no runtime code.
+
 Directory validation and publication delegate through `working-directory/access`, so the owner of a directory being removed can hold `ensure` and `set` into that directory until its operation settles. A listener waits only for an operation on the requested or current path, honours the request's `signal` while waiting, and otherwise calls `next()` at once; a rejection fails that access and leaves the recorded directory unchanged, with no fallback. Existing subprocesses keep their own directories.
 
 <a id="understand-the-implementation"></a>
@@ -41,7 +43,7 @@ Directory validation and publication delegate through `working-directory/access`
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API. Failures are `WorkingDirectoryError` instances: `WORKING_DIRECTORY_INVALID` for an empty or malformed path, `WORKING_DIRECTORY_NOT_FOUND` when a requested change names no existing directory, and `WORKING_DIRECTORY_UNAVAILABLE` when neither the current directory nor the original project exists or the service has been disposed.
+The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Every change the service records is a `workspace-root/change`. The fold ignores the `working-directory/change` events earlier releases stored, which no writer records now, so a directory the model once chose never becomes the workspace. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API. Failures are `WorkingDirectoryError` instances: `WORKING_DIRECTORY_INVALID` for an empty or malformed path, `WORKING_DIRECTORY_NOT_FOUND` when a requested change names no existing directory, and `WORKING_DIRECTORY_UNAVAILABLE` when neither the current directory nor the original project exists or the service has been disposed.
 
 No runtime invariant companion is published because the service reads its only directory state from the Session projection and checks filesystem validity at use.
 
@@ -79,6 +81,7 @@ Directory transitions append context without replacing the stable system-prompt 
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- **Stored directory changes** — a Session stored by an earlier release resumes in its original project, even when it had entered a worktree or its model had changed directory. `enter_worktree` or another Host move returns it to the worktree.
 - **Missing original project** — when the current directory and the original project are both unavailable, prompt assembly rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
 
 <a id="dev-note"></a>

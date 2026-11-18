@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-client` lets the model use tools and resources from external Model Context Protocol (MCP) servers. Configure one server per entry; its tools use names such as `mcp__github__create_issue`. No server is enabled by default. Shipped profiles already provide [shared resource discovery and reading](../mcp-resources/README.md). An empty caller scope adds no MCP tools or prompt text. Server instructions join the logged system prompt as literal text; MCP prompt templates are unsupported. Slow or crashed servers can delay startup or fail calls until recovery.
+`dsh-mcp-client` lets the model use tools and resources from external Model Context Protocol (MCP) servers. Configure one server per entry; its tools use names such as `mcp__github__create_issue`. No server is enabled by default. Shipped profiles already provide [shared resource discovery and reading](../mcp-resources/README.md). An empty caller scope adds no MCP tools or prompt text. Server instructions join the logged system prompt as literal text; MCP prompt templates are unsupported. With `toolLoading: on-demand`, the system prompt lists the tools and each agent loads the ones it needs. Slow or crashed servers can delay startup or fail calls until recovery.
 
 ## Table of Contents
 
@@ -68,10 +68,18 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `reconnect.initialDelayMs` | `500` | First reconnect delay; doubles per consecutive failed attempt |
 | `reconnect.maxDelayMs` | `30,000` | Backoff ceiling; also the uptime after which the attempt budget resets |
 | `reconnect.maxAttempts` | `10` | Consecutive failed attempts per outage before giving up |
+| `toolLoading` | `eager` | `on-demand` keeps the server's tools out of every tool list until an agent loads them with `mcp__<serverName>__load_tools` |
+| `catalogDescriptionMaxLength` | `160` | Maximum characters of each tool summary in an on-demand server's prompt catalog |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-client) is the exhaustive source for every accepted field.
 
 After startup, the server's tools appear as `mcp__<serverName>__<tool>` — try a prompt that uses one. If the initial connection fails, the harness still starts but no tools from that server appear, and an error is logged. Setting `failOnStartupError: true` rejects plugin activation; [app-boot's startup policy](../../boot/app-boot/README.md) still permits an optional MCP entry to fail without aborting the harness.
+
+### Host for a server manager
+
+A plugin that manages servers at runtime, such as the [MCP manager](../mcp-manager/README.md), creates its own `McpClientHost` with `new McpClientHost(ctx)`. The host provides `ctx.mcpClientHost`, the only way such a plugin uses this package: it validates a server configuration, mounts server instances, probes servers, and creates explicit OAuth authorization owners. Instances the host mounts run below the managing plugin's fiber and end with it.
+
+`validate` resolves a server configuration through its transport's own schema and also refuses an invalid template token, reconnect policy, or OAuth beside an `Authorization` header, so each refusal names the field after the configuration path the caller passes.
 
 ### Tool naming and coexistence
 
@@ -95,6 +103,11 @@ The server's tools appear before the harness starts its first turn. Set `startup
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
 
+<a id="on-demand-tool-loading"></a>
+### On-demand tool loading
+
+Set `toolLoading: on-demand` for a server whose tool definitions are too large to send with every request. Its tools then stay out of the tool list: the system prompt lists each tool's raw name with the first line of its description, and the model loads the tools it needs with `mcp__<serverName>__load_tools`. A loaded tool joins only the calling agent's tool list; subagents, forks, and resumed sessions start without loaded tools. Each later sync, including one after a reconnect, re-registers the loaded tools the server still offers and removes the rest. A server tool named `load_tools` is left out of the catalog with a logged warning. Any agent that sees the loader can load every listed tool; see [Known Limitations](#known-limitations-and-deferred-work) for tool restrictions.
+
 <a id="runtime-templates-and-credentials"></a>
 ### Runtime templates and credentials
 
@@ -103,6 +116,13 @@ With `expandTemplates: true`, `command`, `args`, `env` values, `cwd`, `url`, and
 Credential notifications rebuild the connection only when the resolved values change; same-value notifications preserve the connection and its reconnect budget. The old connection must close and finish local cleanup before a replacement starts. Incomplete cleanup blocks replacement until the Host restarts.
 
 With template expansion enabled, failure diagnostics, tool-call failures, and MCP `isError` tool-result text keep upstream messages but replace every value the instance resolved, including earlier rotations and URL-encoded forms, with `[redacted]`; the failure keeps its `name` and `code`. Successful tool results retain their content.
+
+<a id="oauth"></a>
+### OAuth
+
+Set `oauth.credentialKey` to a stable `mcp-client/<id>` record address for a Streamable HTTP entry and load a credentials provider. Declare `inject: [credentials]` on the owning plugin entry so startup waits for that provider. OAuth cannot be combined with an `Authorization` header. Connections and probes only use committed grants and never open a browser or register a client. Missing credentials, rejected tokens, or an explicit insufficient-scope response put connections in `waiting-authorization`; probes return a failed result. Its reason is `missing` without a saved grant, `expired` when the access token expired and no refresh token remains, `binding` when the grant no longer matches the resolved `url` or OAuth options, `rejected` when a server rejects the token, and `scope` when the server requires more scope. A tool call in flight when authorization is lost fails with that reason, for example `MCP OAuth requires authorization: scope`. Probes may refresh and persist expired grants. Ordinary HTTP 403 errors do not change authorization state. Diagnostics, tool-call failures, and `isError` results replace every access token the connection sent with `[redacted]`.
+
+Explicit authorization uses the [manager](../mcp-manager/README.md#oauth-authorization) with Authorization and WebServer services. `oauth.clientId` selects a pre-registered public client; omission permits dynamic registration during explicit authorization. `oauth.scope` overrides the challenge scope; dynamic registration reuse requires the same configured scope. Changing the resolved `url`, `oauth.clientId`, or `oauth.scope` makes the saved grant unusable with reason `binding`, so the entry needs explicit authorization again. `oauth.requestTimeoutMs` defaults to 10,000 ms and `oauth.authorizationTimeoutMs` to 600,000 ms. Cancellation and retries wait up to `closeTimeoutMs` for unfinished authorization cleanup. Authorization-server requests and an OAuth entry's MCP requests require HTTPS, except for loopback HTTP, and reject redirects, so `url` must name the final endpoint. The browser callback is a `webserver/request` listener that exists only during an attempt and answers before route admission, because the authorization server's redirect arrives as a cross-site navigation, which [Connection](../../client/connection/README.md) refuses for every route. The listener handles only requests whose authority and path equal the redirect URI's and passes every other request on. The callback answers with a static Chinese and English page that says whether DSH received the authorization or asks the user to retry in DSH; it never echoes callback parameters. Resource headers are excluded from authorization-server requests. A failed attempt's `lastError` is a fixed or local message, such as `MCP OAuth request failed`; when that message omits the upstream cause, the Host logs the cause as a warning with resolved template values, the authorization code, the PKCE verifier, client secrets, and issued tokens replaced by `[redacted]`. Refreshes serialize through the credential provider, preserve the grant identity, and retain the registered token endpoint authentication method; successful reauthorization replaces the identity and connection without entering `waiting-authorization`.
 
 -----
 
@@ -126,19 +146,25 @@ This section explains the design decisions behind the bridge and points at the c
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await, host startup |
+| [`src/config.ts`](src/config.ts) | Schemas of the stdio, Streamable HTTP, and host configuration shapes, and the OAuth header rule |
+| [`src/host.ts`](src/host.ts) | The MCP client host: validation, instances below the host, probes, and authorization owners |
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/generation.ts`](src/generation.ts) | Transport ownership, cancellation, pending work, and confirmed closure |
 | [`src/credentials.ts`](src/credentials.ts) | Runtime template binding and redaction of every resolved value |
 | [`src/templates.ts`](src/templates.ts) | Credential template syntax, substitution, and reference discovery |
-| [`src/server-context.ts`](src/server-context.ts) | Resource-provider registration and literal server instructions |
+| [`src/server-context.ts`](src/server-context.ts) | Resource-provider registration, literal server instructions, and the on-demand tool catalog |
 | [`src/tools.ts`](src/tools.ts) | Tool bridge: discovery, naming, registration swap, execution, image projection |
+| [`src/tool-loading.ts`](src/tool-loading.ts) | On-demand loading: loader tool, prompt catalog, and each agent's loaded tools |
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | Status cell keyed by Fiber, retaining its final cleanup result |
 | [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
-| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup and probe budgets |
-| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics and secret-value redaction |
-| [`src/types.ts`](src/types.ts) | Client-safe connection status and probe outcome types (`./types`) |
+| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup, probe, operation, and cleanup budgets |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics, OAuth failure classification, and secret-value redaction |
+| [`src/oauth-options.ts`](src/oauth-options.ts) | OAuth configuration schema |
+| [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | Durable grant and client records, with refresh serialized by the credential provider |
+| [`src/oauth.ts`](src/oauth.ts) | Explicit browser authorization: callback, flow, and in-flight work under one owner |
+| [`src/types.ts`](src/types.ts) | Client-safe connection status, probe outcome, and OAuth attempt types (`./types`) |
 
 The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool schema and raw-result callback to the same canonical values, errors, and durable image projection. Each callback receives the exact `ToolExecution`, including its Agent and cancellation signal; SDK spec-type validation checks its result before projection. Callers own registration, cancellation deadlines, and provider teardown. The native Cua Driver provider uses this adapter without opening an MCP transport.
 
@@ -146,15 +172,15 @@ The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool sch
 
 `apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. Disposal cancels pending reconnects, closes the negotiating transport or attached client, waits for the in-flight attempt and queued syncs to quiesce, and unregisters the current generation.
 
-A manager composing instances (such as `dsh-mcp-manager`) observes one instance through `connectionStatusOf(fiber)`. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. `probeServer(ctx, config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
+The host's `mount` resolves each instance's status handle once activation finishes. The handle survives reloads of the same Fiber and retains the final connection and cleanup result after disposal; final disposal detaches its observers. Status observers may dispose the Fiber during a reload; cleanup still covers that connection attempt. The host's `probe(config, options)` tests a server without reserving a name or registering tools. Its `timeoutMs` bounds template resolution, connection, and listing together, independently of runtime `startupTimeoutMs`; cleanup uses `closeTimeoutMs` and reports `closeConfirmed` separately. Confirmed transport closure can still carry a `cleanupError`; either unconfirmed closure or a cleanup error blocks replacement.
 
 The SDK receives tool-list changes through legacy notifications or a modern subscription. The supervisor queues each re-sync and republishes the connected tool count; a fetch failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation and closes the connection before applying the reconnect policy. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
 
-With `expandTemplates` enabled, failure diagnostics name the operation and keep the cause chain with every resolved value replaced by `[redacted]`. With expansion disabled, diagnostics retain the full error text.
+With `expandTemplates` or OAuth enabled, failure diagnostics name the operation and keep the cause chain with every resolved value and OAuth access token replaced by `[redacted]`. With both disabled, diagnostics retain the full error text.
 
 ### Tool execution internals
 
-A tool call uses the SDK with the raw name, complete tool definition, JSON arguments, abort signal, and configured timeout. The SDK owns protocol validation and modern request headers. The bridge checks structured content against the advertised output schema itself, with the SDK's Node Ajv validator, because the SDK reports its own check as a `ProtocolError` that cannot be told apart from a server's JSON-RPC error. Canonical success is `{ content: JsonValue[], structuredContent? }`, preserving valid MCP JSON blocks for programmatic and PTC mode callers. An MCP `isError` result throws `McpToolError` with `MCP_TOOL_ERROR` before image persistence. Other tool and resource request failures throw `McpToolError`: after `MCP_CONNECTION_CLOSED` or `MCP_TIMEOUT` the request's outcome is unknown, `MCP_SERVER_UNAVAILABLE` means the request was not sent, `MCP_INVALID_RESULT` rejects a result that violates the MCP result schema or the advertised output schema, or an output schema that cannot be compiled, `MCP_UNSUPPORTED_TASK_EXECUTION` rejects the tool, and `MCP_REQUEST_FAILED` carries the JSON-RPC or SDK code in its message. Closure of the connection generation surfaces as `McpLocalError` with `MCP_CONNECTION_CLOSED`, and caller cancellation as the tool registry's `ABORTED`. `McpLocalError` codes also report local connection failures: `MCP_TIMEOUT`, `MCP_CREDENTIALS_UNAVAILABLE`, `MCP_CREDENTIAL_NOT_FOUND`, `MCP_INSTRUCTIONS_TOO_LARGE`, and `MCP_TOOL_REGISTRATION_FAILED`. The bridge validates each image batch before saving it; a refusal projects every image as diagnostic text. For a server that does not advertise `resources`, resource and template lists return empty pages without calling the SDK, whose fallback writes a diagnostic to stdout, where the ACP profile carries JSON-RPC.
+A tool call uses the SDK with the raw name, complete tool definition, JSON arguments, abort signal, and configured timeout. The SDK owns protocol validation and modern request headers. The bridge checks structured content against the advertised output schema itself, with the SDK's Node Ajv validator, because the SDK reports its own check as a `ProtocolError` that cannot be told apart from a server's JSON-RPC error. Canonical success is `{ content: JsonValue[], structuredContent? }`, preserving valid MCP JSON blocks for programmatic and PTC mode callers; each image block admitted to durable model context also carries its `attachment` reference, which PTC mode turns into an `Image`. An MCP `isError` result throws `McpToolError` with `MCP_TOOL_ERROR` before image persistence. Other tool and resource request failures throw `McpToolError`: after `MCP_CONNECTION_CLOSED` or `MCP_TIMEOUT` the request's outcome is unknown, `MCP_SERVER_UNAVAILABLE` means the request was not sent, `MCP_INVALID_RESULT` rejects a result that violates the MCP result schema or the advertised output schema, or an output schema that cannot be compiled, `MCP_UNSUPPORTED_TASK_EXECUTION` rejects the tool, and `MCP_REQUEST_FAILED` carries the JSON-RPC or SDK code in its message. Closure of the connection generation surfaces as `McpLocalError` with `MCP_CONNECTION_CLOSED`, and caller cancellation as the tool registry's `ABORTED`. `McpLocalError` codes also report local connection failures: `MCP_TIMEOUT`, `MCP_CREDENTIALS_UNAVAILABLE`, `MCP_CREDENTIAL_NOT_FOUND`, `MCP_INSTRUCTIONS_TOO_LARGE`, and `MCP_TOOL_REGISTRATION_FAILED`. The bridge validates each image batch before saving it; a refusal projects every image as diagnostic text. For a server that does not advertise `resources`, resource and template lists return empty pages without calling the SDK, whose fallback writes a diagnostic to stdout, where the ACP profile carries JSON-RPC.
 
 ### Environment scrubbing (stdio)
 
@@ -184,11 +210,11 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server without the tools capability connects with an empty tool set.
+After discovery succeeds, SDK-admitted MCP tools appear as native tools named `mcp__<serverName>__<rawName>` (or their deterministic normalized form), with the server description and input schema. A re-sync replaces the generation; disposal or an exhausted reconnect budget removes it. A server without the tools capability connects with an empty tool set. In PTC mode, each tool's SDK output declaration documents its `content` array: `MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.`
 
 #### Token effect
 
-The tool descriptions and input schemas enter every request while the tools are registered; re-syncs replace rather than accumulate schemas, and the server-qualified name adds tokens to every tool definition and call. A configured client also enables the [shared resource tools and server-name prompt](../mcp-resources/README.md#model-experience).
+The tool descriptions and input schemas enter every request while the tools are registered, and PTC mode adds the one-line `content` comment to each output declaration; re-syncs replace rather than accumulate schemas, and the server-qualified name adds tokens to every tool definition and call. A configured client also enables the [shared resource tools and server-name prompt](../mcp-resources/README.md#model-experience).
 
 #### KV Cache effect
 
@@ -198,7 +224,7 @@ The tool-definition prefix stays stable while the discovered set and schemas are
 
 #### What the model sees
 
-The public tool name and JSON arguments remain in assistant history. The canonical value retains the complete MCP JSON blocks and optional structured content for programmatic and PTC mode callers; supported image blocks project beside text in their original order after exact route-capability proof. Refused images, audio, embedded resources, resource links, and unknown blocks remain visible as bounded text diagnostics, and MCP `isError` rejects the call before image persistence.
+The public tool name and JSON arguments remain in assistant history. The canonical value retains the complete MCP JSON blocks and optional structured content for programmatic and PTC mode callers; supported image blocks project beside text in their original order after exact route-capability proof. When the program can read every image the final result keeps, a PTC program receives those image blocks as `Image`s that `inspect` shows as pictures, not base64, and the result's text and pictures enter the conversation only when inspected; otherwise the program receives the raw blocks and the complete result content is attached as additional context. Refused images, audio, embedded resources, resource links, and unknown blocks remain visible as bounded text diagnostics, and MCP `isError` rejects the call before image persistence.
 
 #### Token effect
 
@@ -207,6 +233,20 @@ Arguments, mapped text, and durable image references are retained until compacti
 #### KV Cache effect
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
+
+### On-demand tools
+
+#### What the model sees
+
+An on-demand server contributes one tool, `mcp__<serverName>__load_tools`, and a system prompt section titled `On-demand tools from MCP server <serverName>` that lists each tool's raw name and summary. The section appears only for an agent that sees the loader. A load returns the public names it added or found already loaded; the next request carries their definitions, and the session log records the tool addition.
+
+#### Token effect
+
+Until an agent loads a tool, the server costs the loader definition and one catalog line per tool, each summary capped by `catalogDescriptionMaxLength`, instead of every tool definition. Each loaded tool adds its full definition to that agent's requests.
+
+#### KV Cache effect
+
+A load changes the agent's tool list. Routes that declare tool updates append the addition and keep the prefix; other routes start a new request series. A changed server tool list rewrites the catalog section, as changed server instructions do.
 
 ### Server instructions
 
@@ -234,6 +274,8 @@ These limits describe what you cannot do with this plugin and when it needs oper
 - **Reconnect handles failed negotiation and transport close** — a failed initial connection or a crashed stdio child uses the configured reconnect budget. Ordinary HTTP request failures use the SDK transport's recovery; credential changes replace the connection.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Invalid protocol results or output schemas fail through the SDK** — the bridge does not accept legacy `toolResult` substitutes or bypass advertised schema validation.
+- **OAuth authorization needs a browser that reaches the Host web server directly** — the callback is that server's own origin: its bind address and port, over HTTPS when it serves TLS. A browser that reaches DSH only through a proxy or the Web app's `publicUrl` cannot finish authorization. A dynamic client registration is keyed by that callback, so a changed bind address or port, or a random port, registers a new client at the next explicit authorization; sign-out keeps the previous registration record.
+- **On-demand loading is outside tool restrictions** — loaded tools live in the calling agent's own scope, which `tools.restrict()` allow and deny masks do not filter, and those masks reject names absent from the inherited tool list. Deny a loadable tool by name with an execution guard (`tools.guard`). In PTC mode a program binds its tools when it starts, so a tool loaded inside `run_code` becomes callable from the next program.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.
 
 <a id="dev-note"></a>

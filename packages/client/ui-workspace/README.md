@@ -55,7 +55,7 @@ On devices without hover, expanded Workspace rows keep their menu and New Sessio
 
 The search shortcut expands a closed sidebar, including a drawer that retains its wide content, before focusing the search field.
 
-Collapsed search is one header action beside the view and add actions: activating it expands the field across the header. Opening or closing search in the expanded sidebar animates header spacing and field expansion together over 180 ms, disabled for reduced motion. Expanding the sidebar from its rail places the header at its final geometry while preserving the content fade-in. Rail search prepares the open field before expanding the sidebar, so the first wide render already contains the expanded field. Search titles leave space before the Unarchive click target even when truncated. A non-blank query replaces either browsing mode with one flat result list — case-insensitive title, Workspace, and Session id substring matches appear immediately, while a 250 ms debounced Host request adds ranked current-conversation content matches and snippets. Each new query aborts the preceding request; a failed content search leaves metadata matches visible without an additional warning. The list is capped at 20. Choosing an unarchived result clears and collapses search, opens the Session, and scrolls its row into view in the configured browsing mode; grouped browsing also expands its Workspace and the full Session list when required. Archived results offer Unarchive; attempting to open one explains that restriction without clearing the query or navigating.
+Collapsed search is one header action beside the view and add actions: activating it expands the field across the header. Opening or closing search in the expanded sidebar animates header spacing and field expansion together over 180 ms, disabled for reduced motion. Expanding the sidebar from its rail places the header at its final geometry while preserving the content fade-in. Rail search prepares the open field before expanding the sidebar, so the first wide render already contains the expanded field. Search titles leave space before the Unarchive click target even when truncated. A non-blank query replaces either browsing mode with one flat result list — title, Workspace, and Session id matches from the shared [text search](../../util/text-search/README.md) appear immediately, best match first, while a 250 ms debounced Host request adds ranked current-conversation content matches and snippets. Each new query aborts the preceding request; a failed content search leaves metadata matches visible without an additional warning. The list is capped at 20. Choosing an unarchived result clears and collapses search, opens the Session, and scrolls its row into view in the configured browsing mode; grouped browsing also expands its Workspace and the full Session list when required. Archived results offer Unarchive; attempting to open one explains that restriction without clearing the query or navigating.
 
 ### Managing sessions
 
@@ -89,6 +89,8 @@ Session rows share their existing action contributions between right-click and t
 
 `ctx.uiWorkspace.openSession(target)` synchronously replaces the owned `mainView` reference and returns the main area to Conversation without waiting for `reference.ready`, so history loading renders inside the selected Session view. The target may be a known Session id or a durable direct-parent subagent address; an explicit address does not require a preloaded parent catalog. `openWorkspace(id, beforeOpen?, options?)` opens a Workspace blank only if no later navigation has superseded the request; New Session opens the same blank as Workspace reopening, so it returns to that blank's unsent draft. `forkSession(id, onCreated?, options?)` creates the child without navigating or superseding a pending navigation; `allowMigration` carries the caller's migration permission. The optional synchronous preparation callback runs after the target is retained and only for a current Workspace request, so superseded requests do not move composer drafts. Navigation or owner disposal suppresses the late UI commit, not the underlying Session creation.
 
+The `mainView` reference retains the `conversation` facet. When the main view leaves a non-blank, unarchived Session, navigation first retains it as a `recentViews` reference without facets, so its history stays loaded and returning to it needs no history request, while Conversation assembly stops until it is shown again. A recent view that is running, awaits the user, or has an unread completion is always kept and does not count; up to `recentViewLimit` other recent views, 10 by default, are kept besides the main-view Session. `recentViewLimit` is a volatile field of the plugin's Host `Config`, set in its `cordis.yml` row and synced to the browser through [Client Modules](../modules/README.md#synced-plugin-configuration); a change takes effect without a page reload, releasing or keeping recent views by the new limit, and Sessions already released do not return. Until the browser receives a value, every counted recent view is kept. Beyond that the least recently left unpinned recent view is released first, then the least recently left pinned one; a released recent view returns only when the main view leaves that Session again. Returning a Session to the main view, removing or archiving it, or disposing the plugin releases its recent view.
+
 Session and Workspace rows derive their affordances from the browser root's access Hooks: `useWorkspaceAccess` gates a Workspace's create, rename, delete, and reorder verbs, and `useSessionAccess` gates a Session row's rename, fork, drag, pin, archive, and unarchive verbs plus the search result's restore control. A refused verb is not rendered, while every Host request remains authoritative. The Ungrouped header offers no New Session, because it has no backing Workspace to start one in. Startup restoration retains its main reference without changing the selected panel or cancelling a later navigation. Archiving the main Session releases its reference and clears the main selection. Selection failure leaves a global panel visible. Session rows read `usePanelInfo` to suppress their selected appearance while a global panel is active; search and directory-picker focus alone do not leave that panel.
 
 Navigation and startup restoration obtain the selected Session's projections from its `follow`; neither issues a separate projection refresh for that Session or its parent, except that restoring a saved blank first reloads that Session's projections, because listed values are cached hints that can lag its log after an unclean Host exit.
@@ -121,7 +123,41 @@ Client callers can pass `prompt`, `whenDraftExists`, and `clearPreviousDraft` in
 
 ### The directory-flow hole
 
-Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. The sidebar Add workspace action preserves an existing blank Session and its draft. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`), and the `workspace.picker` Factory declares `workspace.picker.directoryFlow`; the composed picker package's client half fills all three with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. The sidebar Add workspace action preserves an existing blank Session and its draft. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+
+### The reusable Workspace picker
+
+Another plugin renders the hero's Workspace picker through the root-scoped `workspace.picker` Component Factory instead of importing this package's component. Its caller input, the type `WorkspacePickerInput` from `ui-workspace/client`, is the hero's owner props: `open`, `anchorRef`, `selectedId`, `onPick`, and `onClose`. The caller owns the anchor control, the open state, and what a pick means, and closes the menu in `onPick`. An occurrence lists the existing Workspaces and, while a directory-picker package occupies `workspace.picker.directoryFlow`, **Add workspace...**, which runs that flow, calls `workspaces.create({ path })`, and passes the new Workspace id to `onPick`; adoption failures stay in this package's folder-error dialog. The definition and its hole are registered directly in `apply`, because they depend on no other declaration, and leave with this plugin.
+
+A caller needs only the standard `renderFactorySlot` prop that every registered component receives and the type-only `ui-workspace/client` import that loads the Factory declaration; its own registration declares nothing for the call. Without ui-workspace the call renders its optional `fallback`. The menu portals to the document body and positions against `anchorRef`, above a primitives `Modal`, so an occurrence may render inside the caller's dialog.
+
+```tsx
+import { useRef, useState } from 'react'
+import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+
+function WorkspaceField({ label, renderFactorySlot }: PropsRenderFactories & { label: string }) {
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<WorkspaceId | undefined>(undefined)
+  return (
+    <>
+      <button ref={anchorRef} type="button" onClick={() => { setOpen(value => !value) }}>{label}</button>
+      {renderFactorySlot('workspace.picker', {
+        open,
+        anchorRef,
+        selectedId: workspaceId,
+        onPick: (picked) => {
+          setOpen(false)
+          setWorkspaceId(picked)
+        },
+        onClose: () => { setOpen(false) },
+      })}
+    </>
+  )
+}
+```
 
 ### Session row actions
 
@@ -200,7 +236,7 @@ A dynamically loaded browser half follows the same component contract; which mod
 
 ### View state
 
-Workspace and Session rows are 32px high and share a 16px leading cell and 6px label gap, with 8px trailing padding. Grouped Session rows, flat lists, and search results use 2px row gaps; Workspace groups retain 4px gaps. Action centers are 29px apart, leaving 5px between their 24px targets. The built-in More action uses a 16px glyph; other built-in row actions use 14px glyphs. The time label has a -1px end margin, and the Workspace heading label has a -1px left offset. The expanded sidebar toolbar gives its collapsed search, view, and add controls a separate 1px trailing inset; the heading label and expanded search retain their own alignment. Session insertion markers compensate for the transparent side borders without moving row content.
+Workspace and Session rows are 32px high and share a 16px leading cell and 6px label gap, with 8px trailing padding. Grouped Session rows, flat lists, and search results use 2px row gaps; Workspace groups retain 4px gaps. Action centers are 28px apart, leaving 4px between their 24px targets. Built-in row action glyphs are 14px, with 14px between their SVG boxes. The time label has a -1px end margin, and the Workspace heading label has a -1px left offset. The expanded sidebar toolbar gives its collapsed search, view, and add controls a separate 1px trailing inset; the heading label and expanded search retain their own alignment. Session insertion markers compensate for the transparent side borders without moving row content. Session titles leave 12px before the resting timestamp and 14px between the title area and the first action SVG box.
 
 Once the Workspace baseline is ready, browser-persisted expansion and Session-order records retain only current Workspace ids plus Ungrouped and the flat-list account. `WorkspaceView.sessionIds` supplies real-Workspace membership, not Session display order. View actions receive complete account orders, never filtered rows. A new member without a Session summary waits for that summary, while a saved position survives a temporarily missing summary. Archive visibility is applied only when deriving rows. Pin and drag writes save complete orders; ordinary derivation does not write them. The selected blank Session remains an explicit position write, including during Workspace reconnection, when other saved members are retained until the baseline establishes membership. Ordering remains mounted while the sidebar is a rail or search replaces its body. Last updated derives from current summaries without reading saved positions; equal timestamps use Session ids as a stable tie-break.
 

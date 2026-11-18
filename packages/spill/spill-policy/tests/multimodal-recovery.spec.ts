@@ -171,8 +171,12 @@ describe('multimodal recovery through real providers', () => {
     const { execute, originals, cost, requestImages } = await setup()
     const result = await execute('ends')
     expect(result.isError).toBe(false)
-    expect(result.value).toEqual({ content: originals.ends })
     expect(result.content.map(block => block.type)).toEqual(['text', 'image', 'text', 'image', 'text'])
+    const [red, blue] = imagesOf(result.content)
+    const ends = originals.ends as Array<Record<string, JsonValue>>
+    expect(result.value).toEqual({ content: [
+      ends[0], { ...ends[1], attachment: red!.attachment }, ends[2], { ...ends[3], attachment: blue!.attachment }, ends[4],
+    ] })
     expect(textOf(result.content)).toContain('Omitted')
     expect(cost(result.content)).toBeLessThanOrEqual(CAP)
     expect(await requestImages(result.content)).toEqual(['red', 'blue'])
@@ -226,19 +230,20 @@ describe('multimodal recovery through real providers', () => {
       : '[await tools.ends({}), await tools.middle({}), await tools.small({})]'
     const result = await execute('run_code', {
       code: `const [ends, middle, small] = ${calls};
-inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));`,
+inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));
+inspect(ends.content[1], ends.content[3], typeof middle.content[1].data);`,
       description: 'Inspect independent image result budgets',
     })
     expect(result.isError).toBe(false)
-    expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length }) + '\n'] })
+    expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length }) + '\n', expect.stringContaining('string')] })
     const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
     expect(dispatches).toHaveLength(3)
     for (const dispatch of dispatches) expect(cost(dispatch.content)).toBeLessThanOrEqual(CAP)
     expect(dispatches.find(event => event.name === 'ends')?.content.filter(block => block.type === 'image')).toHaveLength(2)
     expect(textOf(dispatches.find(event => event.name === 'middle')!.content)).toContain('Omitted 1 images.')
     expect(dispatches.find(event => event.name === 'small')?.content).toEqual([text(SMALL)])
-    expect(imagesOf(result.content)).toEqual([])
-    expect(imagesOf(result.additionalContexts?.flatMap(context => context.content) ?? [])).toHaveLength(2)
+    expect(imagesOf(result.content)).toHaveLength(2)
+    expect(imagesOf(result.additionalContexts?.flatMap(context => context.content) ?? [])).toEqual([])
     expect(await requestImages(result.content, result.additionalContexts)).toEqual(['red', 'blue'])
   })
 })

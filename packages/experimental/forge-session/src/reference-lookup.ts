@@ -1,14 +1,14 @@
 /** Resolve unqualified CLI references in the shell execution world and persist only confirmed URLs. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-shell'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { z } from 'zod'
-import { ownChangeRequestUrls } from './commands.ts'
-import { ghReferences } from './references.ts'
+import type { CommandRules } from './commands.ts'
 
 const completedShell = z.object({
   kind: z.literal('foreground'),
@@ -19,7 +19,6 @@ const completedShell = z.object({
   aborted: z.literal(false),
 })
 const shellArguments = z.object({ command: z.string() })
-const resolvedReference = z.object({ url: z.string().regex(/^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/[1-9]\d*\/?$/) })
 
 /** One read-only lookup for a completed call that named a reference. */
 interface Lookup {
@@ -28,6 +27,10 @@ interface Lookup {
   readonly session: Session
   readonly command: string
   readonly cwd: string
+  /** Rule set the call was read with, which also reads the lookup's output. */
+  readonly rules: CommandRules
+  /** Id of the rule whose lookup runs. */
+  readonly rule: string
 }
 
 /**
@@ -41,9 +44,15 @@ interface Lookup {
  * disposal aborts and awaits all queries. Replay performs no lookup.
  * @param ctx - owning plugin context.
  * @param timeoutMs - shell deadline for one read-only lookup.
+ * @param rules - the current compiled command rules.
  * @param record - persists a confirmed URL without restoring dismissed bindings.
  */
-export function observeReferences(ctx: Context, timeoutMs: number, record: (session: Session, url: string) => void): void {
+export function observeReferences(
+  ctx: Context,
+  timeoutMs: number,
+  rules: () => CommandRules,
+  record: (session: Session, url: string) => void,
+): void {
   ctx.inject(['tools', 'shell', 'shellEnv'], (scope) => {
     const lifetime = new AbortController()
     const tasks = new Set<Promise<void>>()
@@ -81,11 +90,15 @@ export function observeReferences(ctx: Context, timeoutMs: number, record: (sess
       const argumentsResult = shellArguments.safeParse(exec.arguments)
       const shell = completedShell.safeParse(result.value)
       if (!argumentsResult.success || !shell.success) return []
-      const printed = result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      if (ownChangeRequestUrls(printed).length > 0) return []
+      const printed = extractTextContent(result.content, { separator: '\n' })
+      const current = rules()
+      const { command } = argumentsResult.data
+      const evidence = current.evidence(command)
+      if (evidence === undefined || current.printed(printed, evidence).length > 0) return []
       const session = exec.agent.session
-      return ghReferences(argumentsResult.data.command)
-        .flatMap(reference => reference.lookup === null ? [] : [{ exec, session, command: reference.lookup, cwd: shell.data.cwd }])
+      return current.named(command).flatMap(entry => entry.lookup === null
+        ? []
+        : [{ exec, session, command: entry.lookup, cwd: shell.data.cwd, rules: current, rule: entry.rule }])
     }
 
     /** Run lookups in call order; a failed lookup is logged and does not stop the next one. */
@@ -95,7 +108,8 @@ export function observeReferences(ctx: Context, timeoutMs: number, record: (sess
           await resolve(lookup, signal)
         } catch (error: unknown) {
           if (signal.aborted) return
-          scope.logger.warn(`forge-session: PR reference lookup failed; use a full PR URL to bind it: ${error instanceof Error ? error.message : String(error)}`)
+          const reason = error instanceof Error ? error.message : String(error)
+          scope.logger.warn(`forge-session: change request reference lookup failed; use a full change request URL to bind it: ${reason}`)
         }
       }
     }
@@ -114,10 +128,11 @@ export function observeReferences(ctx: Context, timeoutMs: number, record: (sess
       const output = await process.result()
       signal.throwIfAborted()
       if (output.exitCode !== 0 || output.signal !== null || output.timedOut || output.aborted || output.stdout.truncated) {
-        throw new Error('gh did not return a complete successful reference lookup')
+        throw new Error(`the ${lookup.rule} lookup did not complete successfully`)
       }
-      const parsed = resolvedReference.parse(JSON.parse(output.stdout.text))
-      record(lookup.session, parsed.url)
+      const url = lookup.rules.lookupUrl(output.stdout.text, lookup.rule)
+      if (url === undefined) throw new Error(`the ${lookup.rule} lookup printed no change request URL`)
+      record(lookup.session, url)
     }
   })
 }

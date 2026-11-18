@@ -15,7 +15,7 @@ from typing import Callable, TypeAlias, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
-from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, UserQuestionAnswer, UserQuestionRequest
+from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, ResumeSessionOptions, UserQuestionAnswer, UserQuestionRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 NotificationFilter: TypeAlias = Callable[[Notification], bool]
@@ -217,11 +217,20 @@ class HarnessClient:
         )
         return response.messageId
 
-    def resume_session(self, session_id: str) -> None:
-        """Restore a persisted session without sending a prompt; propagate restoration failures."""
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> None:
+        """Restore history; an explicit permission preset replaces saved permissions before execution."""
+        params: JsonObject = {"sessionId": session_id}
+        if options is not None:
+            if not isinstance(options, dict):
+                raise TypeError("resume_session options must be a dict or None")
+            for key in options:
+                if key != "permission_mode":
+                    raise TypeError(f"unknown resume_session option {key!r}; expected 'permission_mode'")
+            if "permission_mode" in options:
+                params["permissionMode"] = options["permission_mode"]
         self.request(
             "session/resume",
-            {"sessionId": session_id},
+            params,
             response_model=_EmptyResponse,
         )
 
@@ -250,7 +259,7 @@ class HarnessClient:
         return response.cwd
 
     def set_working_directory(self, session_id: str, path: str) -> str:
-        """Enter an absolute or Session-relative directory without changing origin or permissions."""
+        """Enter an absolute or Session-relative directory; the origin is unchanged and the write boundary follows."""
         response = self.request(
             "session/working-directory/set",
             {"sessionId": session_id, "path": path},

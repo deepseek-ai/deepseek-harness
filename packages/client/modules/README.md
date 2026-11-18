@@ -44,7 +44,14 @@ The application combo scripts carry only each plugin's `client.js` entry and reg
 
 ### Live plugin composition
 
-An open Web page follows the Host's complete module graph through the HMR transport. Enabling an ordinary plugin adds its Loader entry; disabling it removes the entry and waits for its asynchronous effects before evicting unused modules and styles. Re-enabling loads one instance with its styles. Other Loader contributors and shared modules still needed by active entries remain loaded. Settings → Plugins → Plugin list shows page-local synchronization failures and offers retry without changing Host enablement.
+An open Web page follows the Host's complete module graph through the HMR transport. Enabling an ordinary plugin adds its Loader entry; disabling it removes the entry and waits for its asynchronous effects before evicting unused modules and styles. Re-enabling loads one instance with its styles. Other Loader contributors and shared modules still needed by active entries remain loaded. The Plugins page shows page-local synchronization failures and offers retry without changing Host enablement.
+
+<a id="synced-plugin-configuration"></a>
+### Synced plugin configuration
+
+A plugin's top-level `.volatile()` Config fields reach its browser face. The package puts its Config interface in `src/types.ts` for both faces and keeps the only Schemastery schema on its Host face; ordinary fields and every `role('secret')` position, including positions inside a volatile object, dictionary, or array, stay on the Host. Each graph row carries the values in `config`, so they arrive with the boot graph and with every later graph. Only the owner's page receives the configured values; every other Peer, such as a LiveShare viewer, receives in the boot graph and in every plugin-events frame the values each plugin's schema resolves from an empty Config, and a row whose schema rejects an empty Config carries no values there.
+
+The browser face exports no `Config`; its `apply(ctx, config: SyncedConfig<Config>)` receives one `SyncedConfigRef` per field, both from the types-only package [`@deepseek-ai/dsh-client-config/types`](../config/README.md). `config.field.get()` reads the current frozen value at operation time, as on the Host. A component reads it through a hook: the plugin injects the reference in a slot `inject` `hooks` compartment, such as `hooks: { fontSize: config.fontSize }`, and the component calls `useFontSize(value => value)`. Every field may read `undefined`, so the plugin handles the absent value at each read; a secret field is one case, as the Host never sends it. Changes compare each field as JSON; every changed field is set before any subscriber runs, and the plugin is never remounted. As each Host activation resolves its own volatile references, each plugin activation receives its own Config object holding the latest values; once its teardown begins (code replacement, row removal, or an unload after a required service is withdrawn) it receives no further values. A plugin without synced fields receives an empty object. `ctx.config.resolveConfigByPackage(packageName)` returns the read-only object of another package's current activation, or `undefined` while none runs. On the Host the graph frame carrying new values is queued before the plugin's own `loader/volatile-update` listeners run; this orders the mechanism only, and plugins must not rely on the browser receiving configuration before their other data. A Client face that exports its own `Config` schema keeps ordinary Cordis configuration and fails to activate when its row also carries synced values.
 
 <a id="host-release-changes"></a>
 ### Host release changes
@@ -107,7 +114,10 @@ The host contributes structured index rows that inject, into `<head>`: the `wind
 | [`src/assets.ts`](src/assets.ts) | Package-asset media types, export, content revision, revisioned file name, and browser reference shared by the build preset, the asset route, and gates |
 | [`src/client/index.ts`](src/client/index.ts) | Browser half: bootstrap export, `ctx.modules` enrollment |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`: load/materialize/invalidate machinery |
-| [`src/client/entries.ts`](src/client/entries.ts) | Page entry reconciliation, retries and code replacement |
+| [`src/client/entries.ts`](src/client/entries.ts) | Page entry reconciliation, retries, code replacement, and synced Config delivery |
+| [`src/client/synced-config.ts`](src/client/synced-config.ts) | The `SyncedConfigRef` implementation and the per-package synced Config object |
+| [`src/config-projection.ts`](src/config-projection.ts) | Host projection of volatile Config fields with secrets removed |
+| [`src/config-sync.ts`](src/config-sync.ts) | Host publication of each graph row's synced values and their `loader/volatile-update` watches |
 | [`src/client/entry-lifecycle.ts`](src/client/entry-lifecycle.ts) | Loader fiber teardown through the registry |
 | [`src/client/manifest.ts`](src/client/manifest.ts) | Wire types, boot-manifest parsing, and the `dsh.client` declaration parser |
 
@@ -146,7 +156,7 @@ These limits define what the module system does not do. They are current package
 
 - **Metadata-based revisions** — revisions identify filesystem generations, not content equality. Metadata-only changes can reload a plugin; changes invisible in mtime, ctime, and size cannot be distinguished.
 - **Flat module graph by design** — every bundle is one module node whose edges point only at table leaves; the interface (`loadCache`/`edges`/`invalidate`) already supports a general module graph, so the externalization granularity can change without an interface change.
-- **Host release detection rides the graph stream** — a page learns another Host release only from a graph frame. When a restarting Host answers `/plugins/events` with a non-200 status before registering the route, the browser closes that stream for good, and the page neither updates plugins nor detects a release change until it reloads.
+- **Host release detection rides the graph stream** — a page learns another Host release only from a graph frame of the [plugin-events stream](../hmr/README.md). While that stream cannot run, for example after a terminal stream failure, the page neither updates plugins nor detects a release change until it reloads.
 - **Source launch has no build step for the Host half** — a Host started from TypeScript source reads the commit that `pnpm run dev:web` places in its environment; a source launch without it publishes the version alone.
 - **Bootstrap and code replacement limits** — the page retains its modules bootstrap and static platform identities. Removing or replacing the bootstrap requires a page reload; live replacement requests report a page-local error while retaining its fiber and exports; replacing package code and all existing consumers is outside ordinary enable/disable synchronization.
 - **Lazy delivery retains requested bodies** — the Host holds each bundle and lazy response plan; a script or map body remains cached after its first `GET`, and HMR additionally retains one prior startup generation. Memory grows only for response bodies that clients request while preserving one-generation race tolerance.
