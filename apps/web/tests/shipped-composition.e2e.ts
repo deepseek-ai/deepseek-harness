@@ -506,7 +506,6 @@ const EXPECTED_TOOLS = [
   'web_fetch',
   'web_search',
   'workflow',
-  'working_directory',
   'write',
 ]
 
@@ -598,9 +597,9 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  // Directory and conditional Team tools are global; presets supply the remaining registrations.
+  // Conditional Team tools are global; presets supply the remaining registrations.
   expect(ctx.tools.schemas().map(schema => schema.name)).toEqual([
-    'working_directory', 'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
+    'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
   ])
   const handle = await ctx.agents.create({
     sessionId: brandString<SessionId>('shipped-composition'),

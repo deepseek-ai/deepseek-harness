@@ -60,7 +60,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   const profile: ProfileContext = {
     name: 'test', dir, home, cwd: home, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor,
     startedBundles: loadProfileDirectory('test', dir, anchor).layers.map(layer => layer.packageName),
-    overlays: [], telemetryDisabledEnv: undefined,
+    overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (ctx) => {
     owner = ctx
@@ -79,7 +79,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   const model = new Model()
   ctx.llm.registerAdapter(['mock'], model)
   const agent = await ctx.agentLoop.create(brandString<SessionId>('recommendation-live'), { provider: 'mock', model: 'test' })
-  const callId = logProposal(ctx, agent, 'call-live', { title: 'Session search', brief: 'Search saved conversations', details: { name } })
+  const cardId = logProposal(ctx, agent, 'card-live', { title: 'Session search', brief: 'Search saved conversations', details: { name } })
   expect((await ctx.skills.list()).map(skill => skill.name)).toContain('official-plugins')
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(name)
   if (scenario === 'consumer-unload') {
@@ -95,12 +95,12 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     })
     await entered.promise
     const exclusive = vi.spyOn(ctx.hmr, 'runExclusive')
-    const action = ctx.actionCards.act(agent, callId, 'enable')
+    const action = ctx.actionCards.act(agent, cardId, 'enable')
     await vi.waitFor(() => { expect(exclusive).toHaveBeenCalledOnce() })
     release.resolve(undefined)
     await reload
     expect(await action).toEqual({ status: 'unconfirmed', reason: 'closing' })
-    expect(ctx.actionCards.view(agent.session).decisions[callId]).toEqual({ callId, action: ACTION, phase: 'unconfirmed' })
+    expect(ctx.actionCards.view(agent.session).decisions[cardId]).toEqual({ cardId, action: ACTION, phase: 'unconfirmed' })
     expect(ctx.get('pluginRecommendations')).toBeUndefined()
     expect(await ctx.skills.list()).toEqual([])
     await ctx.hmr.runExclusive(async () => {})
@@ -109,15 +109,15 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     expect(model.requests).toHaveLength(0)
     return
   }
-  const enabled = { callId, action: ACTION, phase: 'enabled' }
-  expect(await ctx.actionCards.act(agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })
+  const enabled = { cardId, action: ACTION, phase: 'enabled' }
+  expect(await ctx.actionCards.act(agent, cardId, 'enable')).toEqual({ status: 'settled', decision: enabled })
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
   expect([...ctx.loader.entries()].find(entry => entry.options.id === 'recommendation-probe')?.fiber).toBeDefined()
   expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
   // The outcome reaches the model with the next request; enabling starts no turn by itself.
   expect(agent.status).toBe('idle')
   expect(model.requests).toHaveLength(0)
-  expect(ctx.actionCards.view(agent.session).decisions[callId]).toEqual(enabled)
+  expect(ctx.actionCards.view(agent.session).decisions[cardId]).toEqual(enabled)
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Thanks.' }], source: { kind: 'user' } }))
   await agent.whenIdle()
   expect(model.requests).toHaveLength(1)

@@ -179,7 +179,7 @@ export function verifyProductUse(
       const content: unknown = existsSync(filename) ? loadCordisYaml(readFileSync(filename, 'utf8')) : row.config.initial
       configs.add(filename)
       if (!Array.isArray(content)) { failures.push(`${display(filename)}: Include requires an entry array or initial entries`); continue }
-      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {})
+      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {}).data
       scanEntries(entries, filename, reach, new Set([...stack, filename]))
     }
   }
@@ -261,7 +261,7 @@ function validCategory(path: string, category: ProductPackagePolicy['category'])
     case 'sdk': return path === 'packages/sdk/client'
     case 'build': return path === 'packages/typert/generator'
     case 'web-distribution': return path === 'packages/client/web' || path === 'packages/client/ui-dockkit'
-    case 'declarations': return path === 'packages/util/package-manifest'
+    case 'declarations': return path === 'packages/util/package-manifest' || path === 'packages/client/config'
     default: return assertNever(category)
   }
 }

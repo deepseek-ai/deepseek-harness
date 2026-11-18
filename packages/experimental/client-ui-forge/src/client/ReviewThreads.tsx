@@ -17,6 +17,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { formatAgo } from './format.ts'
 import { anchorRange, hunkExcerpt, type ThreadPlace } from './review-threads.ts'
 import { SplitAction } from './ReviewComposer.tsx'
+import { INPUT_QUOTE_COPY, settleQuote, type QuoteCopy } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewThreads.module.css'
 import composerCss from './ReviewComposer.module.css'
@@ -43,8 +44,10 @@ export interface ThreadWrites {
 export interface ThreadActions {
   /** Login of the change request's author, or null when the host hides it. */
   readonly author: string | null
-  /** Quote the whole thread in the main input without sending it; false when the input refused it. */
-  readonly addToInput: (thread: ForgeReviewThread, range: string | null) => boolean
+  /** Quote the whole thread without sending it; resolves to false when the quote was refused. */
+  readonly addToInput: (thread: ForgeReviewThread, range: string | null) => boolean | Promise<boolean>
+  /** Copy of the quote button; the input's copy by default. */
+  readonly quoteCopy?: QuoteCopy | undefined
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Read a file of the change request's repository at a commit. */
@@ -167,6 +170,47 @@ function TextForm({ label, initial, busy, error, cancel, children }: {
   </div>
 }
 
+/**
+ * Render the button that ends a card's header row and the menu of the card's less frequent actions.
+ * @param props - the menu's accessible name, its items, the handler of a chosen item, and availability.
+ * @returns the button and, while open, its menu.
+ */
+export function CardMenu({ label, items, select, disabled = false }: {
+  readonly label: string
+  readonly items: readonly { readonly id: string; readonly label: string }[]
+  readonly select: (id: string) => void
+  readonly disabled?: boolean
+}): ReactNode {
+  const [open, setOpen] = useState(false)
+  return <Menu open={open && !disabled} portal dense align="end" autoFocus onClose={() => { setOpen(false) }} items={items}
+    onSelect={(id) => { setOpen(false); select(id) }}
+    anchor={<span className={css.menuAnchor}><Tooltip label={label} side="bottom" delayMs={500}>
+      <button type="button" className={css.icon} disabled={disabled} aria-label={label} aria-haspopup="menu" aria-expanded={open && !disabled}
+        onClick={() => { setOpen(value => !value) }}><IconEllipsisOutlineRegular size={14} /></button>
+    </Tooltip></span>} />
+}
+
+/**
+ * Ask before a deletion under the content it deletes, which stays readable above the question.
+ * @param props - the question, the deleting answer's label, whether both answers wait, the failure, the answers, and copy.
+ * @returns the question with Cancel and the deleting answer.
+ */
+export function DeleteConfirm({ question, confirmLabel, disabled, error, cancel, confirm, t }: PropsLocale<typeof NS> & {
+  readonly question: string
+  readonly confirmLabel: string
+  readonly disabled: boolean
+  readonly error: string | null
+  readonly cancel: () => void
+  readonly confirm: () => void
+}): ReactNode {
+  return <div className={css.confirm} role="group" aria-label={question}>
+    <span className={css.confirmText}>{question}</span>
+    <Button size="sm" disabled={disabled} onClick={cancel}>{t('review.cancel')}</Button>
+    <Button size="sm" variant="primary" disabled={disabled} onClick={confirm}>{confirmLabel}</Button>
+    {error !== null && <div className={clsx(composerCss.error, css.confirmError)} role="alert">{error}</div>}
+  </div>
+}
+
 /** Tells the card which of its forms hold text the reader is writing, so it does not fold them away. */
 type Drafting = (form: string, active: boolean) => void
 
@@ -185,7 +229,6 @@ function Comment({ comment, last, actions, labels, now, drafting, t }: {
     drafting(comment.id, mode === 'edit')
     return () => { drafting(comment.id, false) }
   }, [drafting, comment.id, mode])
-  const [menu, setMenu] = useState(false)
   const writing = useWriting(t)
   const writes = actions.writes
   const login = comment.author?.login ?? null
@@ -200,19 +243,16 @@ function Comment({ comment, last, actions, labels, now, drafting, t }: {
     <div className={css.commentMain}>
       <div className={css.commentHeader}>
         <span className={css.login}>{login ?? t('thread.deletedAuthor')}</span>
-        <span className={css.time} title={comment.createdAt}>{formatAgo(comment.createdAt, now, t) ?? comment.createdAt}</span>
+        <Tooltip label={comment.createdAt} side="bottom" portal delayMs={500}>
+          <span className={css.time}>{formatAgo(comment.createdAt, now, t) ?? comment.createdAt}</span>
+        </Tooltip>
         {login !== null && login === actions.author && <Tag tone="outline">{t('thread.author')}</Tag>}
         {comment.author?.bot === true && <Tag tone="outline">{t('thread.bot')}</Tag>}
         {comment.pending && <Tag tone="warning">{t('review.pending')}</Tag>}
         {(editable || deletable) && mode === 'view' && <>
           <span className={css.spacer} />
-          <Menu open={menu} portal dense align="end" autoFocus onClose={() => { setMenu(false) }}
-            items={[...editable ? [{ id: 'edit', label: t('review.edit') }] : [], ...deletable ? [{ id: 'delete', label: t('review.remove') }] : []]}
-            onSelect={(id) => { setMenu(false); setMode(id === 'edit' ? 'edit' : 'delete') }}
-            anchor={<span className={css.menuAnchor}><Tooltip label={menuLabel} side="bottom">
-              <button type="button" className={css.icon} aria-label={menuLabel} aria-haspopup="menu" aria-expanded={menu}
-                onClick={() => { setMenu(value => !value) }}><IconEllipsisOutlineRegular size={14} /></button>
-            </Tooltip></span>} />
+          <CardMenu label={menuLabel} select={(id) => { setMode(id === 'edit' ? 'edit' : 'delete') }}
+            items={[...editable ? [{ id: 'edit', label: t('review.edit') }] : [], ...deletable ? [{ id: 'delete', label: t('review.remove') }] : []]} />
         </>}
       </div>
       {mode === 'edit'
@@ -225,14 +265,9 @@ function Comment({ comment, last, actions, labels, now, drafting, t }: {
         </TextForm>
         // Raw HTML renders nothing, as GitHub hides comments and unknown tags, and never enters the DOM.
         : <div className={css.body}><MarkdownText text={comment.body} labels={labels} variant="body" omitHtml /></div>}
-      {mode === 'delete' && <div className={css.confirm} role="group" aria-label={t(last ? 'thread.deleteLast' : 'thread.deleteConfirm')}>
-        <span className={css.confirmText}>{t(last ? 'thread.deleteLast' : 'thread.deleteConfirm')}</span>
-        <Button size="sm" disabled={writing.busy} onClick={() => { setMode('view') }}>{t('review.cancel')}</Button>
-        <Button size="sm" variant="primary" disabled={writing.busy} onClick={() => { void send({ kind: 'delete-comment', comment: comment.id }) }}>
-          {t(writing.busy ? 'thread.deleting' : 'review.remove')}
-        </Button>
-        {writing.error !== null && <div className={clsx(composerCss.error, css.confirmError)} role="alert">{writing.error}</div>}
-      </div>}
+      {mode === 'delete' && <DeleteConfirm question={t(last ? 'thread.deleteLast' : 'thread.deleteConfirm')}
+        confirmLabel={t(writing.busy ? 'thread.deleting' : 'review.remove')} disabled={writing.busy} error={writing.error}
+        cancel={() => { setMode('view') }} confirm={() => { void send({ kind: 'delete-comment', comment: comment.id }) }} t={t} />}
     </div>
   </div>
 }
@@ -354,8 +389,8 @@ export function ThreadCard({ thread, place, actions, t }: PropsLocale<typeof NS>
     </div>
     {writes !== null && thread.viewerCanReply && <Reply thread={thread} writes={writes} drafting={drafting} t={t} />}
     <div className={css.actions}>
-      <Button size="sm" onClick={() => { if (!actions.addToInput(thread, range)) actions.inputFailed() }}>
-        {t('review.addToInput')}
+      <Button size="sm" onClick={() => { settleQuote(actions.addToInput(thread, range), (accepted) => { if (!accepted) actions.inputFailed() }) }}>
+        {t((actions.quoteCopy ?? INPUT_QUOTE_COPY).add)}
       </Button>
       {url !== null && <Button size="sm" onClick={() => { actions.openLink(url) }}>
         <IconRightUpOutlineRegular size={14} />{t('thread.openOnHost')}

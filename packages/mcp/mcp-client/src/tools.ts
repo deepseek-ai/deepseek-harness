@@ -25,6 +25,7 @@ import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { describeError, McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
+import type { McpToolLoader } from './tool-loading.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -39,6 +40,8 @@ export interface ToolBridgeOptions {
    * @returns the text with secret values replaced.
    */
   redact?: (text: string) => string
+  /** On-demand loading: the generation is published to this loader instead of the tool registry. */
+  loader?: McpToolLoader
 }
 
 /**
@@ -54,7 +57,10 @@ export class McpToolRegistrationError extends McpLocalError {
 /** State for one sync generation: the current set of disposers keyed by public name. */
 export type ToolDisposers = Map<string, () => void>
 
-/** Canonical MCP result exposed to PTC mode without discarding protocol blocks. */
+/**
+ * Canonical MCP result exposed to PTC mode without discarding protocol blocks.
+ * Each image block admitted to durable model context also carries its `attachment` reference.
+ */
 export type McpResult<Structured extends JsonValue = JsonValue> = {
   content: JsonValue[]
   structuredContent?: Structured
@@ -114,7 +120,9 @@ export function publicToolName(serverName: string, rawName: string): string {
  *    generation of `ToolDefinition`s under public names. Any failure here
  *    (network error or duplicate raw name) rejects
  *    and leaves the previous generation registered untouched.
- * 2. Swap: dispose the previous generation, register the new one. A registry
+ * 2. Swap: dispose the previous generation, register the new one; an
+ *    on-demand server publishes it to its loader, which registers only the
+ *    loader tool and the tools agents loaded. A registry
  *    conflict here can only mean a foreign registration squats on this
  *    server's `mcp__<serverName>__` namespace — the partial generation is
  *    rolled back (zero tools from this server), logged, and rejected so the
@@ -122,7 +130,7 @@ export function publicToolName(serverName: string, rawName: string): string {
  *
  * @param client - Connected MCP Client instance used to list and call tools.
  * @param ctx - Cordis context providing the `tools` service for registration.
- * @param opts - server namespace, call timeout, generation signal, and optional error formatter.
+ * @param opts - server namespace, call timeout, generation signal, optional error formatter, and optional on-demand loader.
  * @param previous - Disposer map from the prior sync generation; disposed
  *   during the swap phase (only after the fetch phase succeeded).
  * @param eligible - Judged again at the commit point, after the listing
@@ -130,7 +138,8 @@ export function publicToolName(serverName: string, rawName: string): string {
  *   elapsed, connection closed) publishes nothing and leaves `previous`
  *   untouched.
  * @returns A map of registered public tool names to their unregister
- *   disposers — the exact set of live registrations owned by this server.
+ *   disposers — the exact set of live registrations owned by this server; an
+ *   on-demand server's map holds only its loader's publication.
  */
 export async function syncTools(
   client: Client,
@@ -140,7 +149,7 @@ export async function syncTools(
   eligible: () => boolean = () => true,
 ): Promise<ToolDisposers> {
   // Phase 1: fetch and build the next generation without touching the registry.
-  const definitions = new Map<string, ToolDefinition>()
+  const definitions = new Map<string, { rawName: string; definition: ToolDefinition }>()
   const response = client.getServerCapabilities()?.tools === undefined
     ? { tools: [] }
     : await client.listTools(undefined, { cacheMode: 'refresh', signal: opts.signal })
@@ -152,6 +161,10 @@ export async function syncTools(
         `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
       )
     }
+    if (publicName === opts.loader?.name) {
+      ctx.logger.warn(`mcp-client(${opts.serverName}): server tool "${tool.name}" is not offered because its name is the on-demand loader's`)
+      continue
+    }
     // The bridge checks structured output itself: the SDK reports its local check as a
     // ProtocolError indistinguishable from a server's JSON-RPC error.
     const { outputSchema: _outputSchema, ...callDefinition } = tool
@@ -160,7 +173,7 @@ export async function syncTools(
       const message = `Tool "${tool.name}" returned an invalid MCP result: ${reason}`
       return new McpToolError(opts.redact === undefined ? message : opts.redact(message), 'MCP_INVALID_RESULT')
     }
-    definitions.set(publicName, createMcpToolDefinition(ctx, {
+    definitions.set(publicName, { rawName: tool.name, definition: createMcpToolDefinition(ctx, {
       name: publicName,
       rawName: tool.name,
       description: tool.description ?? '',
@@ -197,7 +210,7 @@ export async function syncTools(
         if (opts.redact === undefined) return result
         return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
       },
-    }))
+    }) })
   }
 
   // Phase 2: swap generations — but only for a generation still entitled to
@@ -207,8 +220,13 @@ export async function syncTools(
   for (const dispose of previous.values()) dispose()
   const disposers: ToolDisposers = new Map()
   try {
-    for (const [publicName, definition] of definitions) {
-      disposers.set(publicName, ctx.tools.register(definition))
+    if (opts.loader === undefined) {
+      for (const [publicName, { definition }] of definitions) {
+        disposers.set(publicName, ctx.tools.register(definition))
+      }
+    } else {
+      const offered = new Map([...definitions.values()].map(({ rawName, definition }) => [rawName, definition]))
+      disposers.set(opts.loader.name, opts.loader.publish(offered))
     }
   } catch (error) {
     // A conflict on an `mcp__<serverName>__`-qualified name means a foreign
@@ -349,7 +367,7 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
     schema: {
       type: 'object',
       properties: {
-        content: { type: 'array', items: {} },
+        content: { type: 'array', items: {}, description: 'MCP content blocks in order. An image block is an Image when the program can read it; otherwise it is the raw MCP block.' },
         structuredContent: structuredSchema ?? {},
       },
       required: structuredSchema === undefined ? ['content'] : ['content', 'structuredContent'],
@@ -401,12 +419,18 @@ function createExecutor(
         ? { structuredContent: result.structuredContent as JsonValue }
         : {},
     }
-    if (containsImage(content)) {
-      const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
-      const projected = await prepareImageProjection(ctx, exec, content, rawName)
-      projections.set(exec, { value, fallback, content: projected })
+    if (!containsImage(content)) return value
+    const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
+    const { content: projected, attachments } = await prepareImageProjection(ctx, exec, content, rawName)
+    const admitted: McpResult = attachments === undefined ? value : {
+      ...value,
+      content: content.map((block, index) => {
+        const ref = attachments.get(index)
+        return ref === undefined || !isRecord(block) ? block : { ...block, attachment: { ...ref } }
+      }),
     }
-    return value
+    projections.set(exec, { value: admitted, fallback, content: projected })
+    return admitted
   }
 }
 
@@ -479,13 +503,14 @@ function imageDiagnostic(block: McpContentBlock, reason: string): string {
  * Decode, preflight, and durably save one MCP result's ordered image batch.
  * Any refusal projects every image as text while retaining the canonical raw
  * value for programmatic callers.
+ * @returns the projected content and, after admission, each image's reference by content index.
  */
 async function prepareImageProjection(
   ctx: Context,
   exec: ToolExecution,
   content: JsonValue[],
   toolName: string,
-): Promise<ContentBlock[]> {
+): Promise<{ content: ContentBlock[]; attachments?: ReadonlyMap<number, ImageAttachmentRef> }> {
   const decoded: SaveImageAttachment[] = []
   const validationErrors = new Map<number, string>()
   const imageIndexes: number[] = []
@@ -500,13 +525,13 @@ async function prepareImageProjection(
     }
   }
   if (validationErrors.size > 0) {
-    return projectContent(content, toolName, (block, index) => ({
+    return { content: projectContent(content, toolName, (block, index) => ({
       type: 'text',
       text: imageDiagnostic(
         block,
         validationErrors.get(index) ?? 'another image in the same result was invalid',
       ),
-    }))
+    })) }
   }
 
   let attachments: AttachmentStore
@@ -515,24 +540,27 @@ async function prepareImageProjection(
   } catch (error: unknown) {
     // resolveImageAdmission contains provider failures and throws Error only.
     const reason = (error as Error).message
-    return projectContent(content, toolName, block => ({ type: 'text', text: imageDiagnostic(block, reason) }))
+    return { content: projectContent(content, toolName, block => ({ type: 'text', text: imageDiagnostic(block, reason) })) }
   }
 
   try {
     const refs = await attachments.saveImages(decoded)
     const byIndex = new Map(imageIndexes.map((index, offset) => [index, refs[offset] as ImageAttachmentRef] as const))
-    return projectContent(content, toolName, (_block, index) => ({
-      type: 'image',
-      attachment: byIndex.get(index) as ImageAttachmentRef,
-    }))
+    return {
+      content: projectContent(content, toolName, (_block, index) => ({
+        type: 'image',
+        attachment: byIndex.get(index) as ImageAttachmentRef,
+      })),
+      attachments: byIndex,
+    }
   } catch (error: unknown) {
     const reason = isImageAdmissionError(error)
       ? `image admission rejected the result: ${error.message}`
       : 'durable image storage rejected the result'
-    return projectContent(content, toolName, block => ({
+    return { content: projectContent(content, toolName, block => ({
       type: 'text',
       text: imageDiagnostic(block, reason),
-    }))
+    })) }
   }
 }
 

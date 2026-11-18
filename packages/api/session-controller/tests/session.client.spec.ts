@@ -182,6 +182,172 @@ describe('live event path', () => {
   })
 })
 
+/** `count` consecutive plain Turns of six events each, starting at seq 0. */
+function turns(count: number): SessionEvent[] {
+  return Array.from({ length: count }, (_, turn) => plainTurn(SessionSeq(turn * 6), turn, `ask ${turn}`, `answer ${turn}`)).flat()
+}
+
+describe('buffered older pages', () => {
+  // 60 Turns hold 120 messages: the 50-message, two-Turn page rule cuts them into three pages.
+  const all = turns(60)
+
+  it('keeps only the last page visible and pages the buffered entries back without a request', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    await session.open()
+    session.bufferOlder()
+    const tail = eventSeqs(session)
+    expect(tail.length).toBeLessThan(all.length)
+    expect(tail.at(-1)).toBe(all.at(-1)!.seq)
+    expect(session.getSnapshot().hasMore).toBe(true)
+    while (session.getSnapshot().hasMore) {
+      await session.loadOlder({ deferConsumption: true })
+      expect(session.getSnapshot().historyLoadStatus).toBe('pendingConsumption')
+      expect(session.consumeOlder()).toBe(true)
+    }
+    expect(eventSeqs(session)).toEqual(all.map(event => event.seq))
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+  })
+
+  it('continues paging from the Host after the buffered entries run out', async ({ mock, start }) => {
+    const older = plainTurn(SessionSeq(0), 0, 'oldest', 'answer')
+    const window = turns(61).slice(6)
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(window, true)))
+    mock.remote.session.page.mockImplementation(pageRule(history(older)))
+    await session.open()
+    session.bufferOlder()
+    await session.loadThrough(SessionSeq(6))
+    expect(eventSeqs(session)[0]).toBe(6)
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+    await session.loadOlder()
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+    expect(eventSeqs(session)[0]).toBe(0)
+    expect(session.getSnapshot().hasMore).toBe(false)
+  })
+
+  it('serves a turn jump from buffered entries in jump-sized pages without a request', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    await session.open()
+    session.bufferOlder()
+    const tailStart = eventSeqs(session)[0]!
+    await session.loadThrough(SessionSeq(tailStart - 1))
+    // A jump page asks for 200 messages, more than the buffered entries carry, so one page returns all of them.
+    expect(eventSeqs(session)).toEqual(all.map(event => event.seq))
+    expect(session.getSnapshot().hasMore).toBe(false)
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+  })
+
+  it('drops buffered entries with the stream on resync', async ({ mock, start }) => {
+    const older = plainTurn(SessionSeq(0), 0, 'oldest', 'answer')
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    mock.remote.session.page.mockImplementation(pageRule(history(older, true)))
+    await session.open()
+    session.bufferOlder()
+    await session.resync()
+    await session.loadOlder()
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+    expect(eventSeqs(session)).toEqual(all.map(event => event.seq))
+  })
+
+  it('buffers again after live events grow the window and keeps the Host boundary of the first buffer', async ({ mock, start }) => {
+    const older = plainTurn(SessionSeq(0), 0, 'oldest', 'answer')
+    const window = turns(61).slice(6)
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(window, true)))
+    mock.remote.session.page.mockImplementation(pageRule(history(older)))
+    await session.open()
+    session.bufferOlder()
+    const firstTail = eventSeqs(session)[0]!
+    for (const event of plainTurn(SessionSeq(366), 61, 'more', 'answer')) await pushEvent(mock, event)
+    for (const event of turns(80).slice(372)) await pushEvent(mock, event)
+    session.bufferOlder()
+    expect(eventSeqs(session)[0]).toBeGreaterThan(firstTail)
+    while (session.getSnapshot().hasMore) await session.loadOlder()
+    expect(eventSeqs(session)[0]).toBe(0)
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+  })
+
+  it('repairs a live seq gap from the Host while older entries are buffered', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    mock.remote.session.page.mockImplementation(pageRule(history(turns(61))))
+    await session.open()
+    session.bufferOlder()
+    await pushEvent(mock, ev.assistant(SessionSeq(363), 60, 'late'))
+    await vi.waitFor(() => { expect(eventSeqs(session).at(-1)).toBe(363) })
+    expect(session.getSnapshot().openError).toBeNull()
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+  })
+
+  it('stays cold when a disconnect lands while a resync tears down its stream', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(turns(2))))
+    await session.open()
+    const resynced = session.resync()
+    await session.disconnect()
+    await resynced
+    expect(session.getSnapshot().openState).toBe('cold')
+    expect(mock.log.requests(FOLLOW)).toHaveLength(1)
+  })
+
+  it('keeps the start-of-history marker after a short window grows live and its buffer runs out', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(turns(2))))
+    await session.open()
+    // 30 Turns exceed one page by a few Turns, so the buffer holds a single page.
+    for (const event of turns(30).slice(12)) await pushEvent(mock, event)
+    session.bufferOlder()
+    expect(session.getSnapshot().hasMore).toBe(true)
+    await session.loadOlder()
+    expect(session.getSnapshot()).toMatchObject({ hasMore: false, historyWasPartial: true })
+    expect(mock.log.requests(PAGE)).toHaveLength(0)
+  })
+
+  it('consumes an arrived older page before buffering', async ({ mock, start }) => {
+    const older = plainTurn(SessionSeq(0), 0, 'oldest', 'answer')
+    const window = turns(61).slice(6)
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(window, true)))
+    mock.remote.session.page.mockImplementation(pageRule(history(older)))
+    await session.open()
+    await session.loadOlder({ deferConsumption: true })
+    expect(session.getSnapshot().historyLoadStatus).toBe('pendingConsumption')
+    session.bufferOlder()
+    expect(session.getSnapshot()).toMatchObject({ historyLoadStatus: 'idle', hasMore: true })
+    while (session.getSnapshot().hasMore) await session.loadOlder()
+    expect(eventSeqs(session)).toEqual(turns(61).map(event => event.seq))
+    expect(mock.log.requests(PAGE)).toHaveLength(1)
+  })
+
+  it('buffers nothing for a short, closed, or paging window', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    session.bufferOlder()
+    mock.stream(FOLLOW, followScript(history(turns(2))))
+    await session.open()
+    session.bufferOlder()
+    expect(eventSeqs(session)).toEqual(turns(2).map(event => event.seq))
+    expect(session.getSnapshot().hasMore).toBe(false)
+  })
+
+  it('disconnects to a cold Session that keeps nothing of its window and reconnects as a first open', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.stream(FOLLOW, followScript(history(all)))
+    await session.open()
+    session.bufferOlder()
+    await session.disconnect()
+    expect(session.getSnapshot()).toMatchObject({ openState: 'cold', hasMore: false })
+    expect(eventSeqs(session)).toEqual([])
+    await session.disconnect()
+    mock.stream(FOLLOW, followScript(history(all)))
+    await session.open()
+    expect(eventSeqs(session)).toEqual(all.map(event => event.seq))
+    expect(mock.log.requests(FOLLOW)).toHaveLength(2)
+  })
+})
+
 describe('paging', () => {
   it('prepends an older page and keeps seq continuity', async ({ mock, start }) => {
     const older = plainTurn(SessionSeq(0), 0, '旧问', '旧答')

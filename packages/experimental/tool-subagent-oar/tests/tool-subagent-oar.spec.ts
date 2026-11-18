@@ -1,6 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -45,7 +44,7 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
   expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
-  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
+  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
   for (const [runtime, name, expected] of [['codex', undefined, 'agent-1'], ['claude', 'reviewer', 'reviewer'], ['future', undefined, 'agent-2']] as const) {
     const result = await executeToolFixture(ctx, {
@@ -131,11 +130,11 @@ it('requires a caller and independently scoped one-shot providers', async (test)
   expect(JSON.stringify(inherited.content)).toContain('independent conversation')
 })
 
-it('passes an explicit child directory and presents the task description', async (test) => {
+it('starts the child in the parent directory and presents the task description', async (test) => {
   const { ctx, parent, calls } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(externalTool, { providers: { codex: 'codex-provider' } })
-  const args = { runtime: 'codex', description: 'Inspect child', prompt: 'task', cwd: 'packages' }
+  const args = { runtime: 'codex', description: 'Inspect child', prompt: 'task' }
   expect(ctx.tools.get('subagent_oar')?.presentCall?.(args)).toEqual({
     card: 'generic', title: 'Inspect child', rawInput: args,
   })
@@ -143,7 +142,7 @@ it('passes an explicit child directory and presents the task description', async
     agent: parent, name: 'subagent_oar', arguments: args, callId: brandString<ToolCallId>(randomUUID()), signal: test.signal,
   })
   expect(result.isError).toBe(false)
-  expect(calls[0]?.request.cwd).toBe(join(process.cwd(), 'packages'))
+  expect(calls[0]?.request.cwd).toBe(process.cwd())
 })
 
 it('supports direct composition with the declared optional defaults', async (test) => {

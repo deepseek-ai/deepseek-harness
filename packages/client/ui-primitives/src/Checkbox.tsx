@@ -1,6 +1,7 @@
 /** Controlled native checkbox with a caller-owned visible and accessible label. */
 
 import clsx from 'clsx'
+import { IconCheckOutlineRegular } from './icons/index.tsx'
 import css from './Checkbox.module.css'
 
 /**
@@ -25,9 +26,12 @@ export function Checkbox({ checked, onChange, label, disabled = false, title, cl
 }) {
   return (
     <label className={clsx(css.checkbox, className)} title={title}>
-      <input type="checkbox" checked={checked} disabled={disabled}
-        data-modal-autofocus={modalAutofocus || undefined}
-        onChange={(event) => { onChange(event.target.checked) }} />
+      <span className={css.control}>
+        <input type="checkbox" checked={checked} disabled={disabled}
+          data-modal-autofocus={modalAutofocus || undefined}
+          onChange={(event) => { onChange(event.target.checked) }} />
+        <span className={css.mark} aria-hidden="true"><IconCheckOutlineRegular size={12} /></span>
+      </span>
       <span>{label}</span>
     </label>
   )

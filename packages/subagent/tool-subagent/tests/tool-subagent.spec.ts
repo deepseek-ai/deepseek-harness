@@ -79,7 +79,7 @@ describe('dsh-tool-subagent', () => {
     expect(text(result)).toMatch(/^started subagent /)
   })
 
-  it('resolves an explicit child directory without changing the parent directory', async () => {
+  it('starts the child in the parent directory without changing it', async () => {
     let childCwd: string | undefined
     const ctx = await setup({ provider: 'mock' }, {
       onStart: (request) => { childCwd = request.cwd },
@@ -90,10 +90,9 @@ describe('dsh-tool-subagent', () => {
       const result = await callSubagent(ctx, {
         description: 'inspect packages',
         prompt: 'list the packages',
-        cwd: 'packages',
       }, { agent: parent })
       expect(result.isError).toBe(false)
-      expect(childCwd).toBe(path.resolve(parentCwd, 'packages'))
+      expect(childCwd).toBe(parentCwd)
       expect(ctx.workingDirectory.get(parent.session)).toBe(parentCwd)
     } finally {
       await ctx.fiber.dispose()
@@ -105,7 +104,6 @@ describe('dsh-tool-subagent', () => {
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual([
-      'cwd',
       'description',
       'name',
       'prompt',
@@ -269,8 +267,9 @@ describe('dsh-tool-subagent', () => {
       provider: 'alpha',
       model: 'child-model',
     })
-    expect(ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(schema => schema.name === 'subagent')?.description)
-      .toContain('this backend\'s route defaults')
+    const schema = ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(entry => entry.name === 'subagent')!
+    expect((schema.parameters as { properties: Record<string, { description: string }> }).properties['provider']!.description)
+      .toContain('to run the subagent on the default model configured for this tool.')
     expect(seen?.agentOptions).toEqual({
       provider: 'alpha',
       model: 'child-model',
@@ -331,7 +330,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     // Direct apply with only `provider` — no toolName, no agentOptions.
-    await tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
+    tool.apply(ctx, { maxDepth: 'provider-managed', provider: 'bare' })
     await new Promise(r => setTimeout(r, 10))
 
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
@@ -354,7 +353,7 @@ describe('dsh-tool-subagent', () => {
     // Tool first: no provider yet — the tool must be absent, not broken.
     // Direct apply (schema bypass): also covers the waiting-note's default
     // toolName fallback, which validated config pre-fills.
-    await tool.apply(ctx, { provider: 'mock' })
+    tool.apply(ctx, { provider: 'mock' })
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(false)
     // Backend arrives (as a delayed sibling fiber would): the tool appears.
     await mock.mountScriptedProvider(ctx, { name: 'mock', reply: 'late but fine' })
@@ -367,7 +366,7 @@ describe('dsh-tool-subagent', () => {
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await tool.apply(ctx, {
+    tool.apply(ctx, {
       provider: 'later-continuable',
       maxDepth: 'provider-managed',
     })
@@ -572,13 +571,13 @@ describe('dsh-tool-subagent', () => {
     // load with "cannot get property … without inject". Guard the shape directly.
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'systemPrompt'])
 
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(tool) as Record<string, unknown>
     expect(unwrapped).toBe(tool)
     expect(unwrapped.name).toBe('tool-subagent')
-    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt'])
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })
@@ -626,10 +625,12 @@ describe('dsh-tool-subagent', () => {
 
   it('validates maxDepth during initialization without Schemastery', async () => {
     const ctx = await projectedContext()
-    await expect(tool.apply(ctx, {
-      provider: 'unused',
-      maxDepth: Number.NaN,
-    })).rejects.toThrow('subagent maxDepth must be a non-negative safe integer')
+    expect(() => {
+      tool.apply(ctx, {
+        provider: 'unused',
+        maxDepth: Number.NaN,
+      })
+    }).toThrow('subagent maxDepth must be a non-negative safe integer')
   })
 
   it.each([
@@ -819,7 +820,7 @@ describe('dsh-tool-subagent local activation', () => {
         return {}
       },
     })
-    await tool.apply(ctx, {
+    tool.apply(ctx, {
       provider: 'gated',
       toolName: 'subagent_gated',
       maxDepth: 3,

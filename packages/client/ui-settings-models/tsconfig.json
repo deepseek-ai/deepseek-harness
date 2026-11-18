@@ -12,7 +12,7 @@
       "path": "../../util/text-search"
     },
     {
-      "path": "../../host/webserver"
+      "path": "../config"
     },
     {
       "path": "../../../vendor/schemastery"

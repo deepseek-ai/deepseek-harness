@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { baseBranches, parseBaseBranches, parseName, parseRemotes, parseTopLevel, remoteOrder, upstreamBranch } from '../src/parse.ts'
+import {
+  parseBaseBranches, parseName, parseRemotes, parseTopLevel, parseWorktreeBases, remoteOrder, remoteRepository, upstreamBranch,
+} from '../src/parse.ts'
 import type { GitRemote } from '../src/parse.ts'
 
 describe('parseTopLevel', () => {
@@ -27,24 +29,85 @@ describe('parseName', () => {
   })
 })
 
-describe('baseBranches', () => {
-  it('puts the checked-out branch first without repeating it', () => {
-    expect(baseBranches('feat', 'main\nfeat\nfix\n', 10)).toEqual(['feat', 'main', 'fix'])
+describe('parseWorktreeBases', () => {
+  const remotes: GitRemote[] = [
+    { name: 'upstream', urls: ['https://github.com/acme/demo.git'] },
+    { name: 'origin', urls: ['git@github.com:me/demo.git'] },
+    { name: 'team/fork', urls: ['/srv/team.git'] },
+    { name: 'empty', urls: [] },
+  ]
+  const output = [
+    'refs/remotes/upstream/HEAD\0refs/remotes/upstream/master',
+    'refs/remotes/origin/HEAD\0refs/remotes/origin/main',
+    'refs/remotes/team/fork/HEAD\0refs/remotes/team/fork/gone',
+    'refs/remotes/empty/HEAD\0refs/heads/main',
+    'refs/remotes/origin/alias\0refs/remotes/origin/main',
+    'refs/heads/alias\0refs/heads/main',
+    'refs/heads/topic\0',
+    'refs/remotes/upstream/master\0',
+    'refs/remotes/origin/main\0',
+    'refs/remotes/team/fork/feature\0',
+    'refs/remotes/upstream/release/2.4\0',
+    'refs/remotes/upstream/dev\0',
+    'refs/heads/main\0',
+    'refs/remotes/stray/main\0',
+    'refs/heads/Fix/Login\0',
+    'refs/tags/v1\0',
+    '',
+  ].join('\r\n')
+  const repositories = (remote: GitRemote): string | null => remote.urls[0] ?? null
+
+  it('pins the checked-out branch and each remote default, then groups local branches and each remote in remote order', () => {
+    expect(parseWorktreeBases(output, 'main', remotes, '', 10, repositories)).toEqual({
+      current: { ref: 'refs/heads/main', name: 'main' },
+      defaults: [
+        { ref: 'refs/remotes/upstream/master', name: 'upstream/master', remote: 'upstream' },
+        { ref: 'refs/remotes/origin/main', name: 'origin/main', remote: 'origin' },
+      ],
+      local: [{ ref: 'refs/heads/topic', name: 'topic' }, { ref: 'refs/heads/Fix/Login', name: 'Fix/Login' }],
+      remotes: [
+        {
+          name: 'upstream',
+          repository: 'https://github.com/acme/demo.git',
+          branches: [{ ref: 'refs/remotes/upstream/release/2.4', name: 'upstream/release/2.4' }, { ref: 'refs/remotes/upstream/dev', name: 'upstream/dev' }],
+        },
+        { name: 'team/fork', repository: '/srv/team.git', branches: [{ ref: 'refs/remotes/team/fork/feature', name: 'team/fork/feature' }] },
+      ],
+    })
   })
 
-  it('keeps the checked-out branch when the listing omits it', () => {
-    expect(baseBranches('old', 'main\nfeat\n', 2)).toEqual(['old', 'main'])
-    expect(baseBranches('main', '', 50)).toEqual(['main'])
+  it('keeps the branches whose names contain the query, ignoring case, at most `limit` in each group', () => {
+    expect(parseWorktreeBases(output, 'main', remotes, ' FIX ', 10, repositories)).toEqual({ current: null, defaults: [], local: [{ ref: 'refs/heads/Fix/Login', name: 'Fix/Login' }], remotes: [] })
+    const limited = parseWorktreeBases(output, null, remotes, '', 1, repositories)
+    expect(limited.current).toBeNull()
+    expect(limited.local).toEqual([{ ref: 'refs/heads/topic', name: 'topic' }])
+    expect(limited.remotes.map(remote => remote.branches.length)).toEqual([1, 1])
   })
 
-  it('lists the branches of a detached HEAD in listed order', () => {
-    expect(baseBranches(null, 'main\r\nfeat\r\n', 10)).toEqual(['main', 'feat'])
-    expect(baseBranches(null, '', 10)).toEqual([])
+  it('names no current branch on a detached HEAD or an unborn branch', () => {
+    expect(parseWorktreeBases(output, null, remotes, '', 10, repositories).current).toBeNull()
+    expect(parseWorktreeBases('', 'main', [], '', 10, repositories)).toEqual({ current: null, defaults: [], local: [], remotes: [] })
+  })
+})
+
+describe('remoteRepository', () => {
+  const recognize = (url: string) => url.startsWith('https://host.test/') ? { owner: 'acme', name: 'demo' } : undefined
+
+  it('names the first recognized repository, else the first URL, else nothing', () => {
+    expect(remoteRepository({ name: 'origin', urls: ['/srv/demo.git', 'https://host.test/acme/demo.git'] }, recognize)).toBe('acme/demo')
+    expect(remoteRepository({ name: 'fork', urls: ['/srv/fork.git'] }, recognize)).toBe('/srv/fork.git')
+    expect(remoteRepository({ name: 'empty', urls: [] }, recognize)).toBeNull()
   })
 
-  it('returns at most `limit` names and skips empty lines', () => {
-    expect(baseBranches('main', '\nmain\n\nfeat\nfix\n', 2)).toEqual(['main', 'feat'])
-    expect(baseBranches(null, 'main\nfeat\nfix\n', 1)).toEqual(['main'])
+  it.each([
+    ['a user name and token', 'https://oauth2:glpat-secret@gitlab.internal.test/group/repo.git', 'https://gitlab.internal.test/group/repo.git'],
+    ['a token as the user name', 'https://ghp_secret@git.internal.test/acme/demo.git', 'https://git.internal.test/acme/demo.git'],
+    ['an `@` in the password', 'https://user:p@ss@git.internal.test:8443/repo', 'https://git.internal.test:8443/repo'],
+    ['an SSH user', 'ssh://git@git.internal.test:2222/acme/demo.git', 'ssh://git.internal.test:2222/acme/demo.git'],
+    ['an `@` only in the path', 'https://git.internal.test/users/@me/repo.git', 'https://git.internal.test/users/@me/repo.git'],
+    ['the scp-like form, which has no password', 'git@git.internal.test:acme/demo.git', 'git@git.internal.test:acme/demo.git'],
+  ])('shows an unrecognized URL with %s without its user information', (_label, url, shown) => {
+    expect(remoteRepository({ name: 'selfhost', urls: [url] }, recognize)).toBe(shown)
   })
 })
 

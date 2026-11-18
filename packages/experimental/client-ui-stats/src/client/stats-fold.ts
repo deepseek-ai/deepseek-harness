@@ -1,5 +1,6 @@
 /** Event folding and per-step metric derivation for the Statistics table. */
 
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { AssistantMessage, ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
@@ -267,10 +268,7 @@ const OPAQUE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 export function triggerSenderOf(message: UserMessage): string | null {
   const kind: string = message.source.kind
   if (kind !== 'agent-message' && kind !== 'team-message') return null
-  let text = ''
-  for (const block of message.content) {
-    if (block.type === 'text') text += block.text
-  }
+  const text = extractTextContent(message.content)
   const team = TEAM_MESSAGE_PREFIX.exec(text)
   /* v8 ignore next -- a matched capture group is always present. */
   if (team !== null) return team[1]?.trim() ?? null
@@ -291,11 +289,7 @@ function answerOf(message: AssistantMessage): {
   body: string
   truncated: boolean
 } | null {
-  const parts: string[] = []
-  for (const block of message.content) {
-    if (block.type === 'text') parts.push(block.text)
-  }
-  const text = parts.join('\n').trim()
+  const text = extractTextContent(message.content, { separator: '\n' }).trim()
   if (text === '') return null
   return {
     preview: text.length > ANSWER_LIMIT ? text.slice(0, ANSWER_LIMIT) : text,

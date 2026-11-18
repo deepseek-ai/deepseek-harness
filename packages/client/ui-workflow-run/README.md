@@ -43,6 +43,8 @@ Completion updates the visible status immediately but delays its automatic close
 <details>
 <summary>Implementation internals — click to expand</summary>
 
+Nested phase and member slots continue the parent text column; the indent follows the leading slot and text gap at each font size, including narrow layouts.
+
 The node is a deterministic replay of durable session events: `tool-workflow/run-start` creates one Context keyed by `runId`, and member starts, member endings, and the run ending update that Context in log order. A history tail containing only updates remains pending until an older page supplies the unique start, after which prepend, complete replay, and live append produce the same state.
 
 ### Disclosure choices

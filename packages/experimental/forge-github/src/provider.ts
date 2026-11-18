@@ -2,7 +2,8 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure,
+  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
+  ForgeCommitList, ForgeFailure, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery,
   ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
@@ -23,8 +24,16 @@ import { readViewed, writeViewed } from './viewed.ts'
 import { gitHubReviewerCandidates, requestGitHubReviews, updateGitHubBranch } from './overview.ts'
 import { writeGitHubReview } from './review-writes.ts'
 import { readReviewThreads } from './threads.ts'
+import { readDescription } from './description.ts'
+import { countViewerLists, readViewerList, VIEWER_FILTERS } from './viewer.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
+
+/** GitHub's wording of a primary or secondary rate limit refusal, in a GraphQL error or a REST error body. */
+const RATE_LIMIT = /\brate limit\b/i
+
+/** HTTP status GitHub answers when a client sends requests too quickly. */
+const TOO_MANY_REQUESTS = '429'
 
 /** Status code `gh api` appends to the message of a failed request. */
 const HTTP_STATUS = /\(HTTP (\d{3})\)/
@@ -48,6 +57,8 @@ export interface GitHubLimits {
   readonly maxCommits: number
   /** Most files whose viewed marks one read lists. */
   readonly maxViewedFiles: number
+  /** Most pull requests one viewer list read returns, at most GitHub's search page size of 100. */
+  readonly maxViewerItems: number
 }
 
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
@@ -56,6 +67,7 @@ export class GitHubProvider implements ForgeProvider {
   readonly hosts: readonly string[]
   readonly label = 'GitHub'
   readonly changeRequestNoun = 'pull-request'
+  readonly viewer: ForgeViewerCapability
   private readonly served: ReadonlySet<string>
 
   async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
@@ -89,12 +101,47 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check and review bytes, counted and read review threads, listed commits, and listed
-   * viewed files.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, listed commits, listed
+   * viewed files, and listed viewer pull requests.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
     this.served = new Set(this.hosts)
+    this.viewer = { hosts: this.hosts, filters: VIEWER_FILTERS, maxItems: limits.maxViewerItems }
+  }
+
+  /**
+   * Read one list of the signed-in user's open pull requests through one GraphQL search.
+   * @see readViewerList
+   * @throws when the limit is not a positive integer no greater than `maxViewerItems`.
+   */
+  async listForViewer(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure> {
+    const failure = this.hostFailure(query.host)
+    if (failure !== undefined) return failure
+    if (!Number.isSafeInteger(query.limit) || query.limit <= 0 || query.limit > this.limits.maxViewerItems) {
+      throw new Error(`forge-github: viewer list limit must be a positive integer no greater than ${this.limits.maxViewerItems}`)
+    }
+    return await readViewerList(this.graphql, query, signal)
+  }
+
+  /**
+   * Count the signed-in user's open pull requests in every list through one GraphQL request.
+   * @see countViewerLists
+   */
+  async countForViewer(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> {
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    return await countViewerLists(this.graphql, host, signal)
+  }
+
+  /**
+   * Read a pull request's description and labels through GraphQL.
+   * @see readDescription
+   */
+  async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readDescription(this.graphql, ref, signal)
   }
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
@@ -398,6 +445,7 @@ export class GitHubProvider implements ForgeProvider {
     const { message, status } = refusal(output)
     if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
     if (status === NOT_ACCEPTABLE || TOO_LARGE.test(output.stderr) || TOO_LARGE.test(output.stdout)) return { code: 'too-large', message }
+    if (status === TOO_MANY_REQUESTS || RATE_LIMIT.test(message)) return { code: 'rate-limited', message }
     return { code: status === '404' || /could not resolve to a pullrequest/i.test(output.stderr) ? 'not-found' : 'unavailable', message }
   }
 
@@ -542,7 +590,8 @@ function responseFailure(output: GhOutput, body: unknown): ForgeFailure {
     ? firstLine(body.message) : undefined
   const message = firstLine(output.stderr) ?? detail
     ?? (output.exitCode === 0 ? 'unexpected GitHub response' : `gh exited with ${output.exitCode}`)
-  return { code: AUTHENTICATION.test(message) ? 'unauthenticated' : 'unavailable', message }
+  const limited = typeof body === 'object' && body !== null && 'type' in body && body.type === 'RATE_LIMITED'
+  return { code: AUTHENTICATION.test(message) ? 'unauthenticated' : limited || RATE_LIMIT.test(message) ? 'rate-limited' : 'unavailable', message }
 }
 
 function parseJson(text: string): unknown {

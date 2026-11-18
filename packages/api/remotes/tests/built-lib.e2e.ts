@@ -195,7 +195,9 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           '@deepseek-ai/dsh-api-remotes',
         ]) {
           const plugin = instantiate(id)
-          await client.plugin({ inject: plugin.inject, apply: plugin.apply })
+          // The connection Client face reads its recovery timing from its synced Config; an absent value uses the defaults.
+          const config = id === '@deepseek-ai/dsh-client-connection' ? { recovery: { get: () => undefined } } : undefined
+          await client.plugin({ inject: plugin.inject, apply: plugin.apply }, config)
         }
         client.typert.contexts.registerClient('agent', {
           identity: candidate => 'builtAgentId' in candidate ? candidate.builtAgentId : undefined,

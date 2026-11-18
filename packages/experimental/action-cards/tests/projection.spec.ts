@@ -1,18 +1,20 @@
 import { expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   appendPluginRecord, Session, SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
+import type { PluginRecordMap } from '@deepseek-ai/dsh-session/types'
 import { actionCardProjection, type ActionCardState } from '../src/projection.ts'
-import type { ActionCardDecision } from '../src/types.ts'
+import type { ActionCardId } from '../src/types.ts'
 
 const projection = actionCardProjection
 const args = { action: 'test_action', title: 'Counter', brief: 'Keep count visible', details: { value: 'a' } }
 let seq = 0
 
-function init(inherited = 0): ActionCardState {
-  const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('cards'), createdAt: 0, isSeeded: inherited > 0 }
+function init(inherited = 0, origin?: 'subagent'): ActionCardState {
+  const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('cards'), createdAt: 0, isSeeded: inherited > 0,
+    ...origin === undefined ? {} : { origin } }
   return projection.init(header, SessionLogOffset(inherited))
 }
 
@@ -20,102 +22,106 @@ function turn(value: number): SessionEvent<'turn/start'> {
   return { type: 'turn/start', seq: SessionSeq(seq++), time: 0, data: { turn: value } }
 }
 
-function call(callId: string, value: object | string = args, turnNumber = 1, name = 'propose_action'): SessionEvent<'tool/call'> {
-  return { type: 'tool/call', seq: SessionSeq(seq++), time: 0,
-    data: { turn: turnNumber, step: 1, callId: brandString<ToolCallId>(callId), name, arguments: typeof value === 'string' ? value : JSON.stringify(value) } }
+/** A fenced block of the given language holding the JSON of `value`, or the string as written. */
+function block(value: object | string = args, language = 'action-card'): string {
+  return `\`\`\`${language}\n${typeof value === 'string' ? value : JSON.stringify(value)}\n\`\`\``
 }
 
-function result(callId: string, isError = false, turnNumber = 1): SessionEvent<'tool/result'> {
-  return { type: 'tool/result', seq: SessionSeq(seq++), time: 0, surfaceOp: 'append',
-    data: { turn: turnNumber, step: 1,
-      message: createToolResultMessage({ callId: brandString<ToolCallId>(callId), content: [], isError }) } }
+function answer(content: readonly ContentBlock[] | string, turnNumber = 1, interrupted = false): SessionEvent<'assistant/message'> {
+  const message = createAssistantMessage({ content: typeof content === 'string' ? [{ type: 'text', text: content }] : content,
+    source: { provider: 'test', model: 'test' } })
+  return { type: 'assistant/message', seq: SessionSeq(seq++), time: 0, surfaceOp: 'append',
+    data: { turn: turnNumber, step: 1, stream: [], message, ...interrupted ? { interrupted: true } : {} } }
 }
 
-function spliced(inserted: number, removedCount?: number, target: 'next-turn' | 'next-step' = 'next-turn'): SessionEvent<'agent/inbox/spliced'> {
-  return { type: 'agent/inbox/spliced', seq: SessionSeq(seq++), time: 0, data: { target, start: 0, ...removedCount === undefined ? {} : { removedCount },
-    inserted: Array.from({ length: inserted }, () => createUserMessage({ content: [{ type: 'text', text: 'next' }], source: { kind: 'user' } })) } }
+function idOf(event: SessionEvent<'assistant/message'>): ActionCardId {
+  return brandString<ActionCardId>(event.data.message.id)
 }
 
-function records(...data: ActionCardDecision[]): readonly SessionEvent[] {
+function records(...data: PluginRecordMap['plugin:action-cards/decision'][]): readonly SessionEvent[] {
   const session = Session.create(brandString<SessionId>('records'))
   for (const value of data) appendPluginRecord(session, 'plugin:action-cards/decision', value)
   return session.snapshotEvents()
 }
 
 const fold = (events: readonly SessionEvent[], state = init()) => events.reduce(projection.apply, state)
+const card = (id: string) => brandString<ActionCardId>(id)
+const notice = (through: number): SessionEvent<'user/message'> => ({ type: 'user/message', seq: SessionSeq(99), time: 0, surfaceOp: 'append',
+  data: createUserMessage({ content: [{ type: 'text', text: 'status' }],
+    source: { kind: 'action-cards', through: SessionSeq(through), form: 'notice', summary: 'status' } }) })
 
-it('admits a successful propose_action call as a card in its turn and ignores failed, malformed and other calls', () => {
-  const state = fold([turn(1), call('c1'), result('c1')])
-  expect(state.view.proposals).toEqual({ c1: { callId: 'c1', turn: 1, ...args } })
-  expect(state.calls).toEqual({})
-  for (const events of [
-    [call('c2'), result('c2', true)],
-    [call('c3', '{broken')],
-    [call('c4', { ...args, title: ' ' })],
-    [call('c5', { ...args, details: 'text' })],
-    [call('c6', args, 1, 'other_tool'), result('c6')],
-    [result('unrelated')],
+it('admits the first valid action-card block of an answer as a card named by the answer message id', () => {
+  const offered = answer(`Here is an option.\n\n${block()}\n`)
+  expect(fold([turn(1), offered]).view.proposals).toEqual({ [idOf(offered)]: { cardId: idOf(offered), turn: 1, ...args } })
+  const second = answer(`${block('{broken')}\n${block({ ...args, title: ' ' })}\n${block({ ...args, title: '  Second  ' })}\n${block()}`)
+  expect(fold([second]).view.proposals[idOf(second)]?.title).toBe('Second')
+  const split = answer([{ type: 'text', text: 'No card yet.' }, { type: 'text', text: block({ ...args, title: 'Later block' }) }])
+  expect(fold([split]).view.proposals[idOf(split)]?.title).toBe('Later block')
+  for (const content of [
+    'Plain answer.',
+    block(args, 'json'),
+    block({ ...args, details: 'text' }),
+    block({ ...args, brief: '' }),
+    block({ title: 'Counter', brief: 'b', details: {} }),
   ]) {
-    expect(fold(events).view.proposals).toEqual({})
+    const state = init()
+    expect(fold([answer(content)], state)).toBe(state)
   }
-  const trimmed = fold([call('c7', { ...args, title: '  Counter  ' }), result('c7')])
-  expect(trimmed.view.proposals.c7?.title).toBe('Counter')
-  const pending = fold([call('c8')])
-  expect(Object.keys(pending.calls)).toEqual(['c8'])
-  expect(projection.apply(pending, turn(2)).calls).toEqual({})
-  const idle = fold([turn(3)])
-  expect(projection.apply(idle, turn(4))).toBe(idle)
+  const reasoning = answer([{ type: 'reasoning', text: block() }, { type: 'text', text: 'Answer without a card.' }])
+  expect(fold([reasoning]).view.proposals).toEqual({})
 })
 
-it('keeps the first admitted card of a turn and replaces only unstarted earlier cards', () => {
-  const first = fold([turn(1), call('a'), result('a')])
-  const late = fold([call('b'), result('b')], first)
-  expect(Object.keys(late.view.proposals)).toEqual(['a'])
-  const next = fold([turn(2), call('c', args, 2), result('c', false, 2)], first)
-  expect(next.view.decisions).toEqual({ a: { callId: 'a', action: 'test_action', phase: 'replaced' } })
-  const started = fold(records({ callId: brandString<ToolCallId>('a'), action: 'test_action', phase: 'creating' }), first)
-  const afterStart = fold([turn(2), call('c', args, 2), result('c', false, 2)], started)
-  expect(afterStart.view.decisions.a?.phase).toBe('creating')
-  expect(afterStart.view.decisions.c).toBeUndefined()
+it('keeps the first card of a turn across steps, and replaces only unstarted earlier cards', () => {
+  const firstAnswer = answer(block())
+  const first = fold([turn(1), firstAnswer])
+  const a = idOf(firstAnswer)
+  expect(fold([answer(block({ ...args, title: 'Late' }))], first)).toEqual(first)
+  const nextAnswer = answer(block(args), 2)
+  const next = fold([turn(2), nextAnswer], first)
+  expect(Object.keys(next.view.proposals)).toEqual([a, idOf(nextAnswer)])
+  expect(next.view.decisions).toEqual({ [a]: { cardId: a, action: 'test_action', phase: 'replaced' } })
+  const started = fold(records({ cardId: a, action: 'test_action', phase: 'creating' }), first)
+  const laterAnswer = answer(block(args), 2)
+  const afterStart = fold([turn(2), laterAnswer], started)
+  expect(afterStart.view.decisions[a]?.phase).toBe('creating')
+  expect(afterStart.view.decisions[idOf(laterAnswer)]).toBeUndefined()
   // Replacement crosses kinds: a card of another action replaces the unstarted one too.
-  const other = fold([turn(2), call('d', { ...args, action: 'other_action' }, 2), result('d', false, 2)], first)
-  expect(other.view.decisions).toEqual({ a: { callId: 'a', action: 'test_action', phase: 'replaced' } })
+  const otherAnswer = answer(block({ ...args, action: 'other_action' }), 2)
+  expect(fold([turn(2), otherAnswer], first).view.decisions).toEqual({ [a]: { cardId: a, action: 'test_action', phase: 'replaced' } })
 })
 
-it('counts user messages queued for later turns for the card tool and leaves cards to it', () => {
-  const queued = fold([turn(1), spliced(1, undefined, 'next-step'), spliced(2), call('a'), result('a')])
-  expect(queued.queued).toBe(2)
-  expect(Object.keys(queued.view.proposals)).toEqual(['a'])
-  expect(queued.view.decisions).toEqual({})
-  expect(fold([spliced(0, 2)], queued).queued).toBe(0)
-  expect(fold([spliced(0, 5)]).queued).toBe(0)
+it('creates no card from an interrupted answer or in a subagent Session', () => {
+  const state = init()
+  expect(fold([answer(block(), 1, true)], state)).toBe(state)
+  const offered = answer(block(), 2)
+  expect(Object.keys(fold([answer(block(), 1, true), offered]).view.proposals)).toEqual([idOf(offered)])
+  const subagent = init(0, 'subagent')
+  expect(fold([turn(1), answer(block())], subagent)).toBe(subagent)
 })
 
 it('ignores the events a forked Session inherits from its parent', () => {
-  const parent = [turn(1), call('a'), result('a')]
+  const parent = [turn(1), answer(block())]
   // Every event created so far precedes the fork point.
   const inherited = init(seq)
   expect(fold(parent, inherited)).toBe(inherited)
-  const own = fold([turn(2), call('b', args, 2), result('b', false, 2)], inherited)
-  expect(Object.keys(own.view.proposals)).toEqual(['b'])
-  expect(own.view.decisions).toEqual({})
+  const own = answer(block(), 2)
+  const forked = fold([turn(2), own], inherited)
+  expect(Object.keys(forked.view.proposals)).toEqual([idOf(own)])
+  expect(forked.view.decisions).toEqual({})
 })
 
 it('records valid decisions as pending status until a status notice acknowledges them', () => {
   const [created, malformed, dismissed] = records(
-    { callId: brandString<ToolCallId>('a'), action: 'test_action', phase: 'creating', data: { value: 1 } },
-    { callId: brandString<ToolCallId>('a'), action: 'test_action', phase: '' },
-    { callId: brandString<ToolCallId>('b'), action: 'test_action', phase: 'dismissed' },
+    { cardId: card('a'), action: 'test_action', phase: 'creating', data: { value: 1 } },
+    { cardId: card('a'), action: 'test_action', phase: '' },
+    { cardId: card('b'), action: 'test_action', phase: 'dismissed' },
   )
   const state = fold([created!, malformed!, dismissed!])
   expect(state.view.decisions).toEqual({
-    a: { callId: 'a', action: 'test_action', phase: 'creating', data: { value: 1 } },
-    b: { callId: 'b', action: 'test_action', phase: 'dismissed' },
+    a: { cardId: 'a', action: 'test_action', phase: 'creating', data: { value: 1 } },
+    b: { cardId: 'b', action: 'test_action', phase: 'dismissed' },
   })
   expect(state.pendingStatus).toEqual({ a: created!.seq, b: dismissed!.seq })
-  const notice = (through: number): SessionEvent<'user/message'> => ({ type: 'user/message', seq: SessionSeq(99), time: 0, surfaceOp: 'append',
-    data: createUserMessage({ content: [{ type: 'text', text: 'status' }],
-      source: { kind: 'action-cards', through: SessionSeq(through), form: 'notice', summary: 'status' } }) })
   expect(projection.apply(state, notice(created!.seq)).pendingStatus).toEqual({ b: dismissed!.seq })
   const user: SessionEvent<'user/message'> = { type: 'user/message', seq: SessionSeq(100), time: 0, surfaceOp: 'append',
     data: createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } }) }
@@ -123,10 +129,10 @@ it('records valid decisions as pending status until a status notice acknowledges
 })
 
 it('publishes proposals and decisions as one view reused across internal state changes', () => {
-  const state = fold([turn(1), call('a'), result('a')])
+  const state = fold([turn(1), answer(block())])
   const view = projection.wire.view(state)
   expect(view).toBe(state.view)
   expect(projection.wire.viewSchema.parse(view)).toEqual(view)
-  expect(projection.wire.view(fold([spliced(1), call('pending')], state))).toBe(view)
+  expect(projection.wire.view(projection.apply(state, notice(0)))).toBe(view)
   expect(projection.stateSchema.parse(state)).toEqual(state)
 })

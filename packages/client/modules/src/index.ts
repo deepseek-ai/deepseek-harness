@@ -39,8 +39,10 @@ import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
 import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
+import { SyncedConfigPublisher } from './config-sync.ts'
 import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
 
 export { stripClientSuffix } from './client/manifest.ts'
@@ -469,7 +471,7 @@ function buildComboSourceMap(
     if (sourceMap !== undefined) {
       try {
         section = comboSectionMap(resource, sourceMap)
-      } catch {
+      } catch (_malformedSourceMap) {
         // An invalid authored source URL is a malformed map, so the generated
         // bundle remains debuggable through the same identity fallback.
       }
@@ -662,6 +664,7 @@ export class ClientModuleRegistry extends Service {
   private previousBatchResponses = new Map<string, LazyResponse>()
   private flushQueued = false
   private composed: WebBootGraph
+  private readonly syncedConfig: SyncedConfigPublisher
 
   /**
    * Build the service: subscribe, seed, and run the activation flush.
@@ -692,7 +695,14 @@ export class ClientModuleRegistry extends Service {
     // Activation pass: the initial scan IS the incremental path over the
     // current entries, flushed synchronously (nothing async between subscribe,
     // seed, and flush).
-    for (const entry of ctx.loader.entries()) this.dirty.add(entry.options.name)
+    const entries = [...ctx.loader.entries()]
+    for (const entry of entries) this.dirty.add(entry.options.name)
+    this.syncedConfig = new SyncedConfigPublisher(ctx, entries, () => {
+      // Only rows and rev change: the batch artifacts and the prior batch generation stay.
+      const rows = this.syncedConfig.apply(this.composed.entries, this.table)
+      this.composed = { ...this.composed, entries: rows, rev: shortHash(JSON.stringify({ entries: rows, batches: this.composed.batches })) }
+      this.notifyGraphChanged()
+    })
     this.composed = this.compose()
     const failures: Error[] = []
     this.flush(err => failures.push(err))
@@ -707,17 +717,27 @@ export class ClientModuleRegistry extends Service {
       )
     }
     ctx.inject(['webServer'], registerWebCarrier)
-    ctx.on('webserver/index-inject', (table) => {
-      table.push(...bootInjections(this.composed))
+    ctx.on('webserver/index-inject', (table, peer) => {
+      table.push(...bootInjections(this.graphFor(peer.principal)))
     })
   }
 
   /**
-   * Current composed entry graph (stable object between changes).
-   * @returns the graph served as `window.__DSH_BOOT__`.
+   * Current composed entry graph (stable object between changes), carrying the configured synced values.
+   * @returns the graph served as the owner's `window.__DSH_BOOT__`.
    */
   graph(): WebBootGraph {
     return this.composed
+  }
+
+  /**
+   * The current graph as one Peer may see it: the owner receives the configured synced values, and every other Peer
+   * receives each row's schema defaults in their place.
+   * @param principal - the Peer's principal; undefined for the owner or an in-process caller.
+   * @returns the graph served to that Peer at first render and in plugin-events frames.
+   */
+  graphFor(principal: Principal | undefined): WebBootGraph {
+    return this.syncedConfig.graphFor(this.composed, principal)
   }
 
   /**
@@ -808,8 +828,10 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Fires after any flush that recomposed the graph (row added/removed, or a
-   * rebuilt rev change). Pull model: listeners re-read {@link graph}.
+   * Fires after the graph's rows or rev change: a flush that recomposed the
+   * graph (row added/removed, or a rebuilt rev change), or a republication of
+   * synced configuration alone, which leaves the batch artifacts unchanged.
+   * Pull model: listeners re-read {@link graph}.
    * @param listener - notified with no payload.
    * @returns the unsubscriber.
    */
@@ -868,10 +890,11 @@ export class ClientModuleRegistry extends Service {
     this.batchResponses = batchResponses
     this.responses = responses
     const batches = artifacts.map(artifact => artifact.descriptor)
+    const rows = this.syncedConfig.apply(entries, this.table)
     return {
-      rev: shortHash(JSON.stringify({ entries, batches })),
+      rev: shortHash(JSON.stringify({ entries: rows, batches })),
       release: this.release,
-      entries,
+      entries: rows,
       batches,
     }
   }
@@ -974,14 +997,15 @@ export class ClientModuleRegistry extends Service {
     while (true) {
       const candidate = join(dir, 'package.json')
       if (existsSync(candidate)) {
+        let name: unknown
         try {
-          const name = (JSON.parse(readFileSync(candidate, 'utf8')) as { name?: unknown }).name
-          if (typeof name === 'string' && (expectedPackageName === undefined || name === expectedPackageName)) {
-            return { path: candidate, packageName: name }
-          }
-        } catch {
+          name = (JSON.parse(readFileSync(candidate, 'utf8')) as { name?: unknown }).name
+        } catch (_unreadableManifest) {
           // An unreadable or malformed intermediate manifest cannot own the
           // module; keep walking toward the declaring package root.
+        }
+        if (typeof name === 'string' && (expectedPackageName === undefined || name === expectedPackageName)) {
+          return { path: candidate, packageName: name }
         }
       }
       const parent = dirname(dir)
@@ -1288,7 +1312,7 @@ export class ClientModuleRegistry extends Service {
       }
     }
     // Anything else under /plugins (including unadvertised combinations and
-    // /plugins/events when the HMR row is absent) is an unknown resource.
+    // an unknown path) is an unknown resource.
     return { status: 404 }
   }
 

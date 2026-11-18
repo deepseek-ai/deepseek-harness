@@ -1,15 +1,14 @@
-/** Register the card frame, the tool row, their copy and the body registry. */
+/** Register the card frame, the hidden answer block, their copy and the body registry. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-action-cards/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import { ActionCardTail, type TailInjected } from './Card.tsx'
-import { ProposeRow } from './ProposeRow.tsx'
+import { ACTION_CARD_FENCE, ActionCardTail, HiddenCardBlock, type TailInjected } from './Card.tsx'
 import { ActionCardRegistry } from './registry.ts'
 import { de, en, es, fr, ja, pt, ru, zh, type ActionCardKey } from './locales.ts'
 
@@ -51,13 +50,13 @@ function registerUi(ctx: Context, registry: ActionCardRegistry): void {
       sessionId,
       hooks: { bodies: registry.source },
       bind: locale => ctx.locale.bind(locale),
-      act: async (callId, verb, payload) => {
-        const result = await ctx.remote.actionCards.act(sessionId, callId, verb, payload)
+      act: async (cardId, verb, payload) => {
+        const result = await ctx.remote.actionCards.act(sessionId, cardId, verb, payload)
         return result.ok ? result.value : undefined
       },
     }),
   }, ActionCardTail))
-  ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
-    { name: 'tool.call.toolview', key: 'propose_action', locale: 'actionCards' }, ProposeRow,
+  ctx.slots.inject('conversation.chat.markdown.fence', () => ctx.slots.register(
+    { name: 'conversation.chat.markdown.fence', key: ACTION_CARD_FENCE, id: '@deepseek-ai/dsh-client-ui-action-cards/block' }, HiddenCardBlock,
   ))
 }

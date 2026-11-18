@@ -48,16 +48,18 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         return (window, parameters.GetProperty("x").GetDouble(), parameters.GetProperty("y").GetDouble());
     }
 
-    internal async Task<object> Execute(NativeRequest request, ClientState state, NativeConfig config, CancellationToken cancellation)
+    internal async Task<object> Execute(NativeRequest request, ClientState state, NativeConfig config, CancellationToken cancellation,
+        Action<NativeFailure> reportFailure)
     {
+        var context = new RequestContext(config, cancellation, mta, sta, reportFailure);
         if (request.Method == "screenshot")
         {
-            var context = new RequestContext(config, cancellation, mta, sta);
             AppState app;
             WindowState window;
             await queue.WaitAsync(cancellation);
             try
             {
+                context.Check();
                 DesktopSession.RequireInteractive();
                 app = state.App(String(request.Params, "appHandle"));
                 window = Selected(app, request.Params, context);
@@ -68,7 +70,6 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         await queue.WaitAsync(cancellation);
         try
         {
-            var context = new RequestContext(config, cancellation, mta, sta);
             context.Check();
             var parameters = request.Params;
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
@@ -148,7 +149,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 {
                     var target = Selected(app, parameters, context);
                     await clipboard.Paste(app, target, String(parameters, "text"), OptionalString(parameters, "format") ?? "text",
-                        parameters.GetProperty("maxClipboardBytes").GetInt32(), parameters.GetProperty("pasteReadTimeoutMs").GetInt32(), context);
+                        parameters.GetProperty("maxClipboardBytes").GetInt32(), context);
                     return ActionResult(foreground);
                 }
                 case "mouseMove":
@@ -168,6 +169,12 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     }
                     var pointed = Coordinate(app, parameters, context);
                     return Input.MouseMove(app, pointed.Window, pointed.X, pointed.Y, context);
+                }
+                case "toggleMouse":
+                {
+                    var target = Selected(app, parameters, context);
+                    Input.ToggleMouse(app, target, String(parameters, "mouseButton"), String(parameters, "direction"), context);
+                    return ActionResult(foreground);
                 }
                 case "scroll":
                 {

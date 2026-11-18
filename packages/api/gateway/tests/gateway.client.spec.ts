@@ -37,6 +37,12 @@ import { parseRemoteStreamClientMessage } from '../src/stream-protocol.ts'
 
 type FixtureApprovalOutcome = 'allowed' | 'unavailable'
 const fixtureContextTag = Symbol('fixture-context-tag')
+
+/** Connection's synced Config with fixed recovery timing; omission models a value the Host did not send. */
+type ConnectionSyncedConfig = Parameters<typeof applyConnection>[1]
+function connectionConfig(recovery?: ReturnType<ConnectionSyncedConfig['recovery']['get']>): ConnectionSyncedConfig {
+  return { recovery: { get: () => recovery, getSnapshot: () => recovery, subscribe: () => () => {} } }
+}
 type AgentWireId = TypertContextWire<TypertContextMap['agent']>
 const agentId = (value: string): AgentWireId => value as AgentWireId
 
@@ -655,9 +661,6 @@ describe('Client Remote transport readiness', () => {
   it.each([false, true])('replaces a stalled carrier and restores events (socket opened: %s)', async (autoOpen) => {
     await withFakeWebSocket('https://harness.example', async () => {
       vi.useFakeTimers()
-      vi.stubGlobal('__DSH_CONNECTION_RECOVERY__', {
-        backoffBaseMs: 10, backoffMaxMs: 10, generationReadyTimeoutMs: 100,
-      })
       Object.assign(globalThis.location, { hostname: 'harness.example', search: '' })
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       FakeWebSocket.autoOpen = autoOpen
@@ -666,7 +669,9 @@ describe('Client Remote transport readiness', () => {
       ctx.on('connection/reset', reset)
       try {
         await ctx.plugin(TypertRegistry)
-        await ctx.plugin({ inject: [], apply: applyConnection })
+        await ctx.plugin({ inject: [], apply: applyConnection }, connectionConfig({
+          backoffBaseMs: 10, backoffMaxMs: 10, generationReadyTimeoutMs: 100,
+        }))
         await ctx.plugin({ inject, apply })
         await vi.advanceTimersByTimeAsync(0)
         const connection = ctx.get('connection') as ConnectionHandle
@@ -2116,7 +2121,7 @@ describe('Client Typert API', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(TypertRegistry)
-      await ctx.plugin({ inject: [], apply: applyConnection })
+      await ctx.plugin({ inject: [], apply: applyConnection }, connectionConfig())
       await ctx.plugin({ inject, apply })
       const connection = ctx.get('connection') as ConnectionHandle | undefined
       if (connection === undefined) throw new Error('injected Connection service is unavailable')

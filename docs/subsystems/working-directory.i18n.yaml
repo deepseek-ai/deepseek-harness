@@ -3,11 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/working-directory.md
 /working-directory:
-  en: 0882d8b4c09c2890
-  zh: a75af7ce19f661fa
+  en: 45832e24372ea387
+  zh: 7e0f31726fa1dc4e
 /working-directory/directory-selection:
-  en: b67e268cc9422d31
-  zh: 4c7243c87aadcd7a
+  en: 4cf56f80c75a2b0c
+  zh: 97d6813aa8636e3c
 /working-directory/model-context:
-  en: 9789081854cbdd35
-  zh: 1f6712c4e5b9c47e
+  en: 872112549d003dca
+  zh: 48bfd30fdf25c234

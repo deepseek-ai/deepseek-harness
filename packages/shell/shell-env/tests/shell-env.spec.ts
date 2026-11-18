@@ -72,7 +72,7 @@ describe('ShellEnvRegistry', () => {
     const ctx = new Context()
     ctx.provide('profileContext', {
       name: 'web', dir: '/profiles/web', patchPath: '/profiles/web/cordis.patch.yml', installAnchor: '/dsh/package.json',
-      cwd: '/work', home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+      cwd: '/work', home: '/home', startedBundles: [], overlayPaths: [], telemetryDisabledEnv: undefined,
     })
     const registry = new ShellEnvRegistry(ctx, { dshHome: './test-dsh-home' })
     expect(registry.collect(execution())).toMatchObject({

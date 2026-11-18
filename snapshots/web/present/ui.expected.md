@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Use one run_code program to
   - text: PTC mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

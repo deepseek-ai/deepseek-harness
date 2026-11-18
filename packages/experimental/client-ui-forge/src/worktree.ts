@@ -11,9 +11,10 @@ import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-se
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { z } from 'zod'
+import { isRemoteRef } from './branch-name.ts'
 import type {
-  ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRestoration, ForgeWorktreeState,
-  ForgeWorktreeWaiting, WorktreeRecord,
+  ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRequest, ForgeWorktreeRestoration,
+  ForgeWorktreeState, ForgeWorktreeWaiting, WorktreeRecord,
 } from './types.ts'
 
 /** Plugin record type of worktree requests, withdrawals, and creations. */
@@ -30,7 +31,7 @@ const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
 }).strict()
 
 const recordSchema: z.ZodType<WorktreeRecord> = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('request'), from: z.string().min(1).nullable() }).strict(),
+  z.object({ action: z.literal('request'), from: z.string().min(1).nullable(), name: z.string().min(1).exactOptional() }).strict(),
   z.object({ action: z.literal('cancel') }).strict(),
   z.object({ action: z.literal('created'), worktree: worktreeSchema }).strict(),
   z.object({ action: z.literal('restoring') }).strict(),
@@ -38,7 +39,7 @@ const recordSchema: z.ZodType<WorktreeRecord> = z.discriminatedUnion('action', [
 ])
 
 const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
-  request: z.object({ from: z.string().min(1).nullable() }).strict().nullable(),
+  request: z.object({ from: z.string().min(1).nullable(), name: z.string().min(1).nullable() }).strict().nullable(),
   created: worktreeSchema.nullable(),
   locked: z.boolean(),
   stepped: z.boolean(),
@@ -59,7 +60,7 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 5,
+  stateVersion: 8,
   stateSchema,
   init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
@@ -95,7 +96,7 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
       return state.locked ? state : { ...state, locked: true }
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
-    case 'working-directory/change':
+    case 'workspace-root/change':
       return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:
@@ -118,7 +119,7 @@ function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorkt
   const settled = state.created !== null
   switch (data.action) {
     case 'request':
-      return state.locked || settled ? state : { ...state, request: { from: data.from } }
+      return state.locked || settled ? state : { ...state, request: { from: data.from, name: data.name ?? null } }
     case 'cancel':
       return state.locked || settled || state.request === null ? state : { ...state, request: null }
     case 'created':
@@ -134,6 +135,9 @@ function applyRecord(state: ForgeWorktreeState, event: SessionEvent): ForgeWorkt
 
 /** A failed attempt to create a requested worktree; `cause` holds the worktree service's error. */
 export class CreationFailure extends Error {
+  /** Whether the branch or the checkout directory of that name already existed. */
+  readonly exists: boolean
+
   /**
    * @param branch - branch the attempt created.
    * @param phase - step that failed.
@@ -143,20 +147,30 @@ export class CreationFailure extends Error {
   constructor(readonly branch: string, readonly phase: CreateWorktreePhase, readonly reason: string, cause: unknown) {
     super(`The requested worktree ${branch} could not be created`, { cause })
     this.name = 'CreationFailure'
+    // The worktree service's failures are routed by name and code; a rebuilt error keeps both.
+    this.exists = cause instanceof Error && cause.name === 'WorktreeError' && 'code' in cause && cause.code === 'WORKTREE_ALREADY_EXISTS'
   }
 }
 
 /**
  * The failure a waiting message shows for an attempt.
  * @param error - what the attempt threw.
- * @param from - base branch of the attempt, or null for HEAD.
+ * @param from - base of the attempt, or null for HEAD.
+ * @param fetch - whether the attempt fetched its remote base branch first.
  * @returns the failure.
  */
-function failureOf(error: unknown, from: string | null): ForgeWorktreeFailure {
+function failureOf(error: unknown, from: string | null, fetch: boolean): ForgeWorktreeFailure {
   return error instanceof CreationFailure
-    ? { branch: error.branch, from, phase: error.phase, message: error.reason }
-    : { branch: null, from, phase: 'prepare', message: messageOf(error) }
+    ? { branch: error.branch, from, fetch, phase: error.phase, message: error.reason, exists: error.exists }
+    : { branch: null, from, fetch, phase: fetch ? 'fetch' : 'prepare', message: messageOf(error), exists: false }
 }
+
+/** The next decision on a message that waits after a failed or stopped attempt. */
+type CreationDecision =
+  /** Make another attempt; `fetch` false skips fetching a remote base branch for it. */
+  | { readonly kind: 'retry'; readonly fetch: boolean }
+  /** The request no longer asks for a worktree, so the message goes on. */
+  | { readonly kind: 'recheck' }
 
 /** Work on a Session's checkout that runs as maintenance of its Agent. */
 export type HeldWork = (agent: Agent, signal: AbortSignal) => Promise<void>
@@ -167,7 +181,7 @@ interface CreationHold {
   /** Stops the running attempt. */
   stop: AbortController | undefined
   /** The wait for the next decision: another attempt, or reading the request again. */
-  next: PromiseWithResolvers<'retry' | 'recheck'> | undefined
+  next: PromiseWithResolvers<CreationDecision> | undefined
 }
 
 /** A message's wait for the restoration or leaving of the removed worktree the Session works in. */
@@ -182,8 +196,10 @@ interface RestorationHold {
 type Hold = CreationHold | RestorationHold
 
 /**
- * Creates requested worktrees, one attempt with a new branch name per call,
- * and holds the turn of a message while the Session's worktree is not ready.
+ * Creates requested worktrees, one attempt per call on the requested branch
+ * name or on a new generated one, fetching a remote-tracking base branch
+ * first unless the attempt skips it, and holds the turn of a message while
+ * the Session's worktree is not ready.
  * A hold is maintenance of the Session's Agent that starts while the message
  * enters the inbox, before the delivery wakes the Agent, so the Agent starts
  * the message's turn once the hold ends. A creation hold makes an attempt
@@ -302,22 +318,27 @@ export class WorktreeCreations {
   /**
    * Make another attempt for the message that waits after a failed or stopped one.
    * @param session - Session whose message waits.
+   * @param fetch - false skips fetching a remote-tracking base branch for this attempt, which then starts from the
+   * commit last fetched.
    * @returns whether a waiting message without a running attempt took the decision.
    */
-  retry(session: Session): boolean {
+  retry(session: Session, fetch: boolean): boolean {
     const hold = this.holds.get(session)
     if (hold?.kind !== 'creation' || hold.next === undefined) return false
-    hold.next.resolve('retry')
+    hold.next.resolve({ kind: 'retry', fetch })
     return true
   }
 
   /**
-   * Read the request again after it changed; a withdrawn request lets the waiting message go on.
+   * Read the request again after it changed: a request that no longer asks for a worktree lets the waiting message
+   * go on, and a request that still does keeps it waiting for another attempt.
    * @param session - Session whose request changed.
    */
   recheck(session: Session): void {
     const hold = this.holds.get(session)
-    if (hold?.kind === 'creation') hold.next?.resolve('recheck')
+    if (hold?.kind !== 'creation') return
+    const state = this.states.stateOf(session)
+    if (state.request === null || state.created !== null || state.locked) hold.next?.resolve({ kind: 'recheck' })
   }
 
   /**
@@ -395,32 +416,39 @@ export class WorktreeCreations {
   }
 
   /**
-   * Create a Session's requested worktree with a new branch name, enter it, and
-   * record it on the Session. The running creation is readable through
-   * {@link WorktreeCreations.of} until the record exists or the attempt fails.
+   * Create a Session's requested worktree on the requested branch name, or on a
+   * new generated one, enter it, and record it on the Session. The running
+   * creation is readable through {@link WorktreeCreations.of} until the record
+   * exists or the attempt fails.
    * @param agent - Agent of the Session.
-   * @param from - base branch, or null for HEAD of the current checkout.
+   * @param request - base, or null for HEAD of the current checkout, and branch name, or null to generate one.
    * @param signal - cancellation of the attempt.
    * @param held - whether a message waits for the creation before its turn starts.
+   * @param fetch - whether the attempt fetches its base first; true only for a remote-tracking base branch.
    * @returns the created worktree.
    * @throws {@link CreationFailure} when the attempt fails; the cancellation reason once `signal` aborts.
    */
-  async create(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
-    return await this.run(signal, operation => this.createCheckout(agent, from, operation, held))
+  async create(agent: Agent, request: ForgeWorktreeRequest, signal: AbortSignal, held: boolean, fetch: boolean): Promise<CreatedWorktree> {
+    return await this.run(signal, operation => this.createCheckout(agent, request, operation, held, fetch))
   }
 
-  private async createCheckout(agent: Agent, from: string | null, signal: AbortSignal, held: boolean): Promise<CreatedWorktree> {
+  private async createCheckout(
+    agent: Agent, { from, name }: ForgeWorktreeRequest, signal: AbortSignal, held: boolean, fetch: boolean,
+  ): Promise<CreatedWorktree> {
     const worktrees = this.ctx.get('worktrees')
     if (worktrees === undefined) throw new Error('No worktree service is mounted')
     const session = agent.session
-    let status: ForgeWorktreeCreation = { phase: 'prepare', branch: generatedWorktreeName(this.prefix, session.id), from, held }
+    let status: ForgeWorktreeCreation = {
+      phase: fetch ? 'fetch' : 'prepare', branch: name ?? generatedWorktreeName(this.prefix, session.id), from, fetch, held,
+    }
     this.failures.delete(session)
     this.live.set(session, status)
     this.changed(session)
     try {
       let created: CreatedWorktree
       try {
-        created = await worktrees.create(agent, { name: status.branch, ...from === null ? {} : { from } }, signal, (phase) => {
+        const request = { name: status.branch, ...from === null ? {} : { from }, ...fetch ? { fetch } : {} }
+        created = await worktrees.create(agent, request, signal, (phase) => {
           status = { ...status, phase }
           this.live.set(session, status)
           this.changed(session)
@@ -492,26 +520,28 @@ export class WorktreeCreations {
    */
   private async runCreation(agent: Agent, hold: CreationHold, signal: AbortSignal): Promise<void> {
     const session = agent.session
+    let skipFetch = false
     for (;;) {
       const state = this.states.stateOf(session)
       if (state.request === null || state.created !== null || state.locked) return
       const stop = new AbortController()
       hold.stop = stop
+      const fetch = !skipFetch && isRemoteRef(state.request.from)
       try {
-        await this.create(agent, state.request.from, AbortSignal.any([signal, stop.signal]), true)
+        await this.create(agent, state.request, AbortSignal.any([signal, stop.signal]), true, fetch)
         return
       } catch (error) {
         signal.throwIfAborted()
         if (stop.signal.aborted) this.failures.delete(session)
-        else this.failures.set(session, failureOf(error, state.request.from))
+        else this.failures.set(session, failureOf(error, state.request.from, fetch))
         this.changed(session)
       } finally {
         hold.stop = undefined
       }
-      while (await this.wait(hold, signal) !== 'retry') {
-        const current = this.states.stateOf(session)
-        if (current.request === null || current.created !== null || current.locked) return
-      }
+      const decision = await this.wait(hold, signal)
+      // A recheck decides only once the request no longer asks for a worktree.
+      if (decision.kind === 'recheck') return
+      skipFetch = !decision.fetch
     }
   }
 
@@ -566,7 +596,7 @@ export class WorktreeCreations {
   private async preStep(agent: Agent, step: number, signal: AbortSignal, next: () => Promise<PreStepDecision>): Promise<PreStepDecision> {
     const state = this.states.stateOf(agent.session)
     if (step !== 1 || state.request === null || state.created !== null || state.stepped) return await next()
-    await this.create(agent, state.request.from, signal, false)
+    await this.create(agent, state.request, signal, false, isRemoteRef(state.request.from))
     const decision = await next()
     if (decision.kind === 'reject' || decision.messages.length === 0) return decision
     const notices = agent.inbox.nextStep.filter(message => message.source.kind === 'working-directory')

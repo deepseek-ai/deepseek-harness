@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { FsVersion } from '@deepseek-ai/dsh-fs'
@@ -589,7 +589,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
 
 
 describe('current working directory', () => {
-  it('routes subsequent files to the new directory while keeping the original permission root', async () => {
+  it('routes subsequent files to the new directory, and the permission root follows the directory there and back', async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-current-'))
     const next = join(dir, 'next')
     await mkdir(next)
@@ -608,9 +608,9 @@ describe('current working directory', () => {
       })
       const agent = handle.agent
       const session = agent.session
-      const policy = ctx.sandboxPolicy.resolve({ session })
       await ctx.workingDirectory.set(agent, next)
       const current = ctx.workingDirectory.get(session)
+      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(current)
       const read = await executeToolFixture(ctx, {
         signal: testToolSignal, callId: brandString<ToolCallId>('read-current'), name: 'read',
         arguments: { file_path: 'note.txt' }, agent,
@@ -639,7 +639,8 @@ describe('current working directory', () => {
         async run(spec: PtcRunSpec): Promise<PtcRunResult> {
           const read = spec.bindings.find(binding => binding.global === 'tools')?.functions.read
           if (read === undefined) throw new Error('missing read binding')
-          const value = await read({ file_path: 'note.txt' })
+          const resolved = await read({ file_path: 'note.txt' })
+          const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
           expect(JSON.stringify(value)).toContain('current')
           return { output: [], value }
         }
@@ -658,7 +659,8 @@ describe('current working directory', () => {
       expect(write.meta).toMatchObject({ path: join(current, 'created.txt') })
       expect(await readFile(join(next, 'created.txt'), 'utf8')).toBe('edited')
       await expect(readFile(join(dir, 'created.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(policy.workspaceRoot)
+      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(ctx.workingDirectory.get(session))
+      expect(ctx.workingDirectory.get(session)).not.toBe(current)
       expect(session.header.cwd).toBe(dir)
     } finally {
       await ctx.fiber.dispose()

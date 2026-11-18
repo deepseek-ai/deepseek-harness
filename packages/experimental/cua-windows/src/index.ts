@@ -14,7 +14,7 @@ const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'windows',
   methods: [
     'getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState',
-    'listActions', 'performAction', 'invoke', 'mouseMove', 'click', 'setValue', 'selectText',
+    'listActions', 'performAction', 'invoke', 'mouseMove', 'toggleMouse', 'click', 'setValue', 'selectText',
     'typeText', 'paste', 'pressKey', 'sendKeyEvent', 'scroll', 'drag', 'screenshot',
   ],
   appLevelAccessibility: false,
@@ -39,7 +39,13 @@ export interface Config extends CuaConfig {
 /** Validate platform configuration before locating and launching the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
-  connectTimeoutMs: CuaConfigFields.connectTimeoutMs.default(30_000),
+  timeoutMs: CuaConfigFields.timeoutMs.default(60_000),
+  connectTimeoutMs: CuaConfigFields.connectTimeoutMs.default(600_000),
+  screenshotTimeoutMs: CuaConfigFields.screenshotTimeoutMs.default(60_000),
+  axTimeoutMs: CuaConfigFields.axTimeoutMs.default(60_000),
+  // Currently unused on Windows: paste does not wait for clipboard consumption.
+  pasteReadTimeoutMs: CuaConfigFields.pasteReadTimeoutMs.default(60_000),
+  graceMs: CuaConfigFields.graceMs.default(60_000),
   windowsPowerShellPath: Schema.string().min(1).default('powershell.exe'),
   pollIntervalMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(25),
   textEventIntervalMs: CuaConfigFields.textEventIntervalMs.default(0),
@@ -60,7 +66,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new AbortController()
   const prepare = async () => {
     const wsl = host === 'wsl' ? await prepareWsl({ subprocess: ctx.subprocess, signal: controller.signal,
-      timeoutMs: config.connectTimeoutMs, graceMs: config.graceMs, powershellPath: config.windowsPowerShellPath }) : undefined
+      timeoutMs: config.timeoutMs, graceMs: config.graceMs, powershellPath: config.windowsPowerShellPath }) : undefined
     let helperPath = config.helperPath
     if (helperPath === undefined) {
       const architecture = wsl?.architecture ?? nativeHostArchitecture(process.platform, process.arch)
@@ -79,9 +85,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'cua-windows.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  // Temporary native-runtime configuration.
-  const launchWaitMs = 1000
-  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, launchWaitMs, host === 'wsl' ? 'stdio' : 'pipe')
+  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, config.timeoutMs, host === 'wsl' ? 'stdio' : 'pipe')
   ctx.effect(() => () => runtime.dispose(), 'cua-windows.native-runtime')
   installCua(ctx, config, {
     helperPath, createChannel: (_owner, native) => runtime.connect(native), getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,

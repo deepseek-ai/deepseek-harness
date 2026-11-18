@@ -35,7 +35,7 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   ctx.provide('workspaceRegistry', { list: () => workspaces, archivedSessionIds: [] } as never)
   ctx.agents.setFactory({
     createAgent: async (ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> => {
@@ -162,6 +162,30 @@ describe('sessions.fork', () => {
       expect(open).not.toHaveBeenCalled()
       expect(observe).not.toHaveBeenCalled()
       expect(create).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('shares the whole selected prefix of a live observation, which carries no persisted count', async () => {
+    const ctx = await composed()
+    try {
+      const source = ctx.sessions.create(sid('unreported-source'), { meta: { cwd: '/proj' } })
+      source.append('turn/start', { turn: 1 })
+      source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
+      vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(async (...args) => {
+        const observation = await observe(...args)
+        expect(observation.persistedEventCount).toBeUndefined()
+        return observation
+      })
+      const create = vi.spyOn(ctx.agents, 'create')
+
+      const result = await (await remote(ctx)).fork({ sessionId: source.id, allowMigration: false })
+
+      if (!result.ok) throw result.error
+      expect(create.mock.calls[0]?.[0].parentSource).toMatchObject({ sessionId: source.id, endSeq: 2 })
+      expect(ctx.sessions.get(result.value.sessionId)?.inheritedEventCount).toBe(2)
     } finally {
       await ctx.fiber.dispose()
     }

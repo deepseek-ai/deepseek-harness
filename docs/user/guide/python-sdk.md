@@ -183,7 +183,7 @@ Create a new root Session and ask it to create and list a shared task. Its first
 |---|---|
 | System prompt | `DSH_SYSTEM_PROMPT`, falling back to `You are a helpful software engineer assistant.` |
 | Model in `minimal.py` | `--model`, then `DSH_MODEL`, then `deepseek-v4-flash` |
-| Model-facing tools | Persistent `bash` on Linux/macOS or `pwsh` on Windows, `read_image`, and `working_directory` |
+| Model-facing tools | Persistent `bash` on Linux/macOS or `pwsh` on Windows, and `read_image` |
 | Shell timeout | 300 seconds |
 | Optional runtime context | Absent |
 | Context compaction | Automatic; summarizes older history through an additional model request |

@@ -17,6 +17,48 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+/* A compact card sits beside its anchor's end edge with its top on the
+   anchor's top: the insets keep it 8px from the anchor and from the viewport's
+   edges. When that would cross the viewport, the first fallback that fits
+   places it: beside the start edge; on either side with its bottom at the
+   viewport's margin; then, with room on neither side, below the anchor from
+   the anchor's start edge, or above it, so the card does not cover its anchor.
+   A card too tall for that holds the viewport's bottom and end margins.
+   Chromium tries five fallbacks, so there the browser's own overflow shift
+   keeps such a card inside the viewport instead, against its edges. */
+.compact {
+  position-area: inline-end span-block-end;
+  inset: 0 8px 8px;
+  position-try-fallbacks:
+    flip-inline,
+    --dsh-hover-card-low,
+    --dsh-hover-card-low flip-inline,
+    --dsh-hover-card-below,
+    --dsh-hover-card-above,
+    --dsh-hover-card-held;
+}
+
+@position-try --dsh-hover-card-low {
+  position-area: inline-end span-all;
+  align-self: end;
+}
+
+@position-try --dsh-hover-card-below {
+  position-area: block-end span-inline-end;
+  inset: 8px 8px 8px 0;
+}
+
+@position-try --dsh-hover-card-above {
+  position-area: block-start span-inline-end;
+  inset: 8px 8px 8px 0;
+}
+
+@position-try --dsh-hover-card-held {
+  position-area: span-all;
+  justify-self: end;
+  align-self: end;
+}
+
 .copyable {
   cursor: pointer;
 }

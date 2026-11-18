@@ -55,7 +55,7 @@ kind: "package-bundle"
 
 `tool-subagent-control` 行显式设置 `interrupt: false`，因此普通 subagent 和 Team 模式均不提供 `interrupt_agent`。在后续 patch 中为该行设置 `config.interrupt: true` 可启用它。插件自身的默认值仍为 `true`。
 
-内置 `working_directory` 工具改变后续操作使用的目录，已有进程与写权限保持独立。当前目录信息出现在用户上下文中。默认文件编辑使用 `read`、`write` 和 `edit`。`str_replace_editor` 工具仍可显式启用。要将它加入基于 base 的 profile，请在 profile、home 或逐次调用 patch 中添加以下条目：
+当前目录信息出现在用户上下文中；创建工作树等 Host 操作会移动目录，模型没有可以移动目录的工具。默认文件编辑使用 `read`、`write` 和 `edit`。`str_replace_editor` 工具仍可显式启用。要将它加入基于 base 的 profile，请在 profile、home 或逐次调用 patch 中添加以下条目：
 
 ```yaml
 - insert:

@@ -9,8 +9,8 @@ import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 try {
   // Node >= 21.7 native; throws when the file does not exist.
   process.loadEnvFile(new URL('.env', import.meta.url).pathname)
-} catch {
-  // No .env — fine, the environment may already carry the variables.
+} catch (_missingEnvFile) {
+  // Without a root .env, tests read credentials from the process environment.
 }
 
 const DEFAULT_E2E_MAX_WORKERS = 4
