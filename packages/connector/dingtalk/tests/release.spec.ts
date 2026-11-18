@@ -1,11 +1,14 @@
-/** dws and its skills: configured directories, or the pinned release downloaded, verified, and published into the cache. */
+/**
+ * dws and its skills: configured directories, or the pinned release downloaded, verified, and published into the cache,
+ * and a profile's own cache directory, where the release in place replaces the earlier ones.
+ */
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { chmod, mkdir, mkdtemp, readdir, readFile, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { strToU8, zipSync, type Zippable } from 'fflate'
@@ -18,6 +21,8 @@ const renameHook = vi.hoisted(() => ({
   before: undefined as (() => Promise<void>) | undefined,
   beforeSync: undefined as (() => void) | undefined,
 }))
+/** The one path whose removal fails with the given error, as a directory in use does on Windows. */
+const removeHook = vi.hoisted(() => ({ refused: undefined as { readonly path: string; readonly error: Error } | undefined }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return {
@@ -27,6 +32,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       renameHook.before = undefined
       await before?.()
       return actual.rename(from, to)
+    },
+    rm: async (...args: Parameters<typeof actual.rm>) => {
+      if (removeHook.refused?.path === args[0]) throw removeHook.refused.error
+      return actual.rm(...args)
     },
   }
 })
@@ -118,6 +127,7 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   renameHook.before = undefined
   renameHook.beforeSync = undefined
+  removeHook.refused = undefined
   await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true })
   await rm(binDir, { recursive: true, force: true })
@@ -126,7 +136,13 @@ afterEach(async () => {
 const signal = () => new AbortController().signal
 const cache = () => join(home, 'cache', 'dingtalk')
 const cached = async (): Promise<string[]> => (await readdir(cache())).toSorted()
-const warnings = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'warn').map((message): unknown => message.args[0])
+const logged = () => ctx.logger.buffer.filter(message => message.type === 'warn')
+  .map((message): { message: unknown; error: unknown } => ({ message: message.args[0], error: message.args[1] }))
+const warnings = (): unknown[] => logged().map(({ message }) => message)
+/** The warning of an installation that failed for another reason than an abort. */
+const NOT_INSTALLED = 'dingtalk: could not install dws and its skills'
+/** Entries an earlier plugin version published into a cache directory. */
+const EARLIER = [`dws-1.0.0-${PLATFORM}`, 'dws-skills-1.0.0', 'skill-0123456789abcdef']
 /** The logger level that exports warnings; the default level keeps only errors and information. */
 const WARN_LEVEL = 2
 const logger = () => ctx.intercept('logger', { level: WARN_LEVEL }).logger
@@ -272,7 +288,8 @@ describe('installing the pinned executable', () => {
     const failure = await managed.install(signal()).then(() => undefined, (reason: unknown) => reason as Error)
     expect(failure?.message).toBe(`dingtalk: could not download ${ASSET} of dws ${VERSION} from any release URL`)
     expect((failure?.cause as Error).message).toBe(`${base}${asset('empty')} returned HTTP 204 with no content length`)
-    expect(warnings()).toHaveLength(3)
+    expect(warnings()).toEqual([...Array.from({ length: 3 }, () => `dingtalk: downloading ${ASSET} from ${base} failed`), NOT_INSTALLED])
+    expect(logged().at(-1)?.error).toBe(failure)
     expect(managed.installed()).toBe(false)
     expect(await cached()).toEqual([basename(managed.skillRoot)])
   })
@@ -301,6 +318,19 @@ describe('installing the pinned executable', () => {
 
     expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('published')
     expect(await cached()).toEqual([`dws-${VERSION}-${PLATFORM}`, basename(managed.skillRoot)].toSorted())
+  })
+
+  it('deletes nothing from the shared cache directory, which no profile owns', async () => {
+    for (const name of EARLIER) await mkdir(join(cache(), name), { recursive: true })
+    const archive = await pack({ [DWS]: 'downloaded' })
+    routes[asset('mirror')] = serve(archive)
+    const managed = executableRelease(archive, [`${base}/mirror`])
+
+    await managed.install(signal())
+    await managed.prune()
+
+    expect(managed.installed()).toBe(true)
+    expect(await cached()).toEqual([...EARLIER, `dws-${VERSION}-${PLATFORM}`, basename(managed.skillRoot)].toSorted())
   })
 
   it('keeps the directory another process published while this one was renaming', async () => {
@@ -337,6 +367,8 @@ describe('installing the pinned executable', () => {
     renameHook.before = () => Promise.reject(new Error('rename failed'))
     await expect(managed.install(signal())).rejects.toThrow('rename failed')
     expect(await cached()).toEqual([basename(managed.skillRoot)])
+    expect(warnings()).toEqual([NOT_INSTALLED])
+    expect(logged()[0]?.error).toMatchObject({ message: 'rename failed' })
 
     const readme = await pack({ 'README.md': 'no binary' })
     routes[asset('readme')] = serve(readme)
@@ -410,4 +442,91 @@ describe('installing the pinned skills', () => {
       expect(await cached()).toEqual([])
     },
   )
+})
+
+describe("a profile's own cache directory", () => {
+  /** The Harness home of the profile, which differs from `$DSH_HOME` here. */
+  const harness = () => join(home, 'harness')
+  const owned = () => join(harness(), 'cache', 'dingtalk', 'web')
+  const profile = () => ({ home: harness(), name: 'web' })
+  const entries = async (directory: string): Promise<string[]> => (await readdir(directory)).toSorted()
+  const earlier = async (): Promise<void> => {
+    for (const name of EARLIER) await mkdir(join(owned(), name), { recursive: true })
+  }
+  /** A release whose dws and skills archives the `mirror` prefix serves. */
+  async function served(): Promise<DwsRelease> {
+    const archive = await pack({ [DWS]: 'downloaded' })
+    const skills = zip({ multi: { 'dingtalk-fixture': { 'SKILL.md': strToU8('# fixture') } }, LICENSE: strToU8('license') })
+    routes[asset('mirror')] = serve(archive)
+    routes[asset('mirror', SKILLS)] = serve(skills)
+    return new DwsRelease({ releaseUrls: [`${base}/mirror`], releaseTimeoutMs: TIMEOUT_MS, profile: profile() }, logger(), manifest(archive, skills))
+  }
+  /** The entries {@link served} publishes. */
+  const published = (managed: DwsRelease) => [`dws-${VERSION}-${PLATFORM}`, `dws-skills-${VERSION}`, basename(managed.skillRoot)]
+
+  it('receives dws, the skills, and the skill root, under the Harness home of the profile', async () => {
+    const managed = await served()
+    expect(managed.directory).toBe(join(owned(), `dws-${VERSION}-${PLATFORM}`))
+    expect(dirname(managed.skillRoot)).toBe(owned())
+
+    await managed.install(signal())
+
+    expect(managed.installed()).toBe(true)
+    expect(await entries(owned())).toEqual(published(managed).toSorted())
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('downloaded')
+    expect(await readlink(join(managed.skillRoot, 'dingtalk', 'guides'))).toBe(join(owned(), `dws-skills-${VERSION}`))
+    expect(await readdir(home)).toEqual(['harness'])
+  })
+
+  it('loses the earlier releases once this one is installed, and nothing else', async () => {
+    const staging = `.dws-${VERSION}-${PLATFORM}-of-a-running-installation`
+    const untouched = [join(owned(), staging), join(owned(), 'notes'), join(owned(), '..', 'desktop', EARLIER[0]!), join(cache(), EARLIER[0]!)]
+    await earlier()
+    for (const directory of untouched) await mkdir(directory, { recursive: true })
+    const managed = await served()
+
+    await managed.install(signal())
+
+    await vi.waitFor(async () => { expect(await entries(owned())).toEqual([staging, 'notes', ...published(managed)].toSorted()) })
+    for (const directory of untouched) expect(await readdir(directory)).toEqual([])
+    expect(warnings()).toEqual([])
+  })
+
+  it('loses at load what a release already in place does not use, a downloaded dws that binDir replaces included', async () => {
+    await earlier()
+    await mkdir(join(owned(), `dws-${DWS_RELEASE.version}-${PLATFORM}`))
+    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS, profile: profile() }, logger())
+    expect(managed.installed()).toBe(true)
+
+    await managed.prune()
+
+    expect(await readdir(owned())).toEqual([basename(managed.skillRoot)])
+    expect(await readdir(binDir)).toEqual([DWS])
+    expect(await readdir(skillsDir)).toEqual(['dingtalk-shared'])
+  })
+
+  it('keeps the earlier releases while this one is not installed', async () => {
+    await earlier()
+    const managed = await served()
+    routes = {}
+
+    await expect(managed.install(signal())).rejects.toThrow(`dingtalk: could not download ${ASSET} of dws ${VERSION} from any release URL`)
+    await managed.prune()
+
+    expect(managed.installed()).toBe(false)
+    expect(await entries(owned())).toEqual(EARLIER.toSorted())
+  })
+
+  it('logs an entry that cannot be deleted, keeps it, and stays installed', async () => {
+    await earlier()
+    const refused = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+    removeHook.refused = { path: join(owned(), EARLIER[0]!), error: refused }
+    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS, profile: profile() }, logger())
+
+    await managed.prune()
+
+    expect(logged()).toEqual([{ message: 'dingtalk: could not delete the dws files this release replaces', error: refused }])
+    expect(await entries(owned())).toContain(EARLIER[0])
+    expect(managed.installed()).toBe(true)
+  })
 })

@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-cli-account": "workspace:*",
     "@deepseek-ai/dsh-client-ui-connector-account": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",

@@ -1,8 +1,9 @@
 /**
  * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, registers dws and
  * its account with `ctx.cliAccounts`, which tells the model dws's absolute path once both are installed and shows the
- * account on the Plugins page, and registers the `dingtalk` skill once its root is published. The CLI's sign-in is
- * shared with the user's own terminal.
+ * account on the Plugins page, and registers the `dingtalk` skill once its root is published. In a profile, the
+ * release in place replaces the earlier ones in that profile's cache directory. The CLI's sign-in is shared with the
+ * user's own terminal.
  * @module @deepseek-ai/dsh-dingtalk
  */
 
@@ -12,6 +13,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+// Declares `Context.profileContext`, the launcher-provided profile that owns the downloads.
+import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import { performWith } from './account.ts'
@@ -39,11 +42,17 @@ export interface Config {
   releaseTimeoutMs: number
 }
 
+/** Refuse a download prefix that the pattern admits but that does not parse as a URL, such as `https://[`. */
+function parsedUrl(value: string): string {
+  if (!URL.canParse(value)) throw new Error(`releaseUrls: ${value} is not a URL`)
+  return value
+}
+
 /** Validates {@link Config}. */
 export const Config: z<Config> = z.object({
   binDir: z.string().min(1),
   skillsDir: z.string().min(1),
-  releaseUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default([
+  releaseUrls: z.array(z.transform(z.string().pattern(/^https:\/\/[^\s?#@]+$/), parsedUrl)).min(1).default([
     'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
     'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
   ]),
@@ -58,7 +67,8 @@ export const Config: z<Config> = z.object({
  *   this platform, or the skill root cannot be written.
  */
 export function apply(ctx: Context, config: Config): void {
-  const release = new DwsRelease(config, ctx.logger)
+  const { binDir, skillsDir, releaseUrls, releaseTimeoutMs } = config
+  const release = new DwsRelease({ binDir, skillsDir, releaseUrls, releaseTimeoutMs, profile: ctx.get('profileContext') }, ctx.logger)
   const account = ctx.cliAccounts.register<DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkCommand, DingtalkTextKey>({
     name,
     packageName: DINGTALK_PACKAGE,
@@ -85,4 +95,6 @@ export function apply(ctx: Context, config: Config): void {
   })
   // Prepare dws and its skills without waiting for the Plugins page, so a session without a browser finds them.
   account.refresh()
+  // A release already in place runs no installation, so the ones it replaces are deleted here.
+  void release.prune()
 }

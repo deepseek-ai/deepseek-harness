@@ -1,7 +1,11 @@
-/** The DingTalk Host row: one entry skill, the dws path in runtime context once installed, and disposal of both. */
-import { mkdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+/**
+ * The DingTalk Host row: one entry skill, the dws path in runtime context once installed, disposal of both, and the
+ * cache directory of the profile that loads it.
+ */
+import { mkdir, readdir, readFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
@@ -44,6 +48,24 @@ describe('DingTalk plugin', () => {
     expect(base).toMatch(/[\\/]cache[\\/]dingtalk[\\/]skill-[0-9a-f]{16}[\\/]dingtalk$/u)
     expect(await readFile(join(base, 'guides', 'dingtalk-shared', 'SKILL.md'), 'utf8')).toContain('# Fixture guide')
     expect(await ctx.skills.get('dingtalk-shared')).toBeUndefined()
+  })
+
+  it('uses the cache directory of the profile that loads it, and deletes the earlier releases there', async () => {
+    const owned = join(home, 'cache', 'dingtalk', 'web')
+    await mkdir(join(owned, 'dws-skills-0.0.1'), { recursive: true })
+    const dir = join(home, 'profiles', 'web')
+    const profile: ProfileContext = {
+      name: 'web', dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: dir, cwd: home, home,
+      startedBundles: [], overlayPaths: [], telemetryDisabledEnv: undefined,
+    }
+    ctx.provide('profileContext', profile)
+
+    await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
+
+    const entry = await ctx.skills.get('dingtalk')
+    const base = entry?.resourceBase?.kind === 'directory' ? entry.resourceBase.path : ''
+    expect(base).toMatch(/[\\/]cache[\\/]dingtalk[\\/]web[\\/]skill-[0-9a-f]{16}[\\/]dingtalk$/u)
+    await vi.waitFor(async () => { expect(await readdir(owned)).toEqual([basename(dirname(base))]) })
   })
 
   it('lists the skill and gives the dws path once a check publishes the skill root after the catalog was read', async () => {
@@ -90,7 +112,7 @@ describe('DingTalk plugin', () => {
     expect(host.withdrawn).toBe(1)
   })
 
-  it('defaults to the official release sources with a five-minute limit per source, and accepts only whole positive limits and named directories', () => {
+  it('defaults to the official release sources with a five-minute limit per source, and accepts only HTTPS URL prefixes, whole positive limits, and named directories', () => {
     expect(Dingtalk.Config()).toEqual({
       releaseUrls: [
         'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
@@ -99,6 +121,14 @@ describe('DingTalk plugin', () => {
       releaseTimeoutMs: 300_000,
     })
     expect(Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1 }).releaseTimeoutMs).toBe(1)
+    expect(Dingtalk.Config({ ...CONFIG, releaseUrls: ['https://mirror.example/dws/'] }).releaseUrls).toEqual(['https://mirror.example/dws/'])
+    for (const url of [
+      'http://releases.example/download', 'https://releases.example/?a=1', 'https://releases.example/#a', 'https://user@releases.example',
+      'https://releases.example:bad', 'https://[', 'https://:',
+    ]) {
+      expect(() => Dingtalk.Config({ ...CONFIG, releaseUrls: [url] })).toThrow()
+    }
+    expect(() => Dingtalk.Config({ ...CONFIG, releaseUrls: [] })).toThrow()
     expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 0 })).toThrow()
     expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1500.5 })).toThrow()
     expect(() => Dingtalk.Config({ ...CONFIG, binDir: '' })).toThrow()

@@ -1,8 +1,11 @@
-/** The pinned dws release the plugin installs into the DSH cache: the executable and the upstream skills. */
+/**
+ * The pinned dws release the plugin installs into the DSH cache: the executable and the upstream skills. In a profile
+ * they go to that profile's own cache directory, where the release in place replaces the earlier ones.
+ */
 
 import { createHash, randomUUID } from 'node:crypto'
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -17,6 +20,8 @@ export const PROGRAM = 'dws'
 const ENTRY = fileURLToPath(new URL('../skills/dingtalk/SKILL.md', import.meta.url))
 /** `dws-skills.zip` entries the upstream skills directory keeps: the multi-mode skills and the root license files. */
 const SKILL_FILES = /^(?:multi\/.+|LICENSE|NOTICE)$/u
+/** Names of the cache entries a release publishes: `dws-<version>-<platform>-<arch>`, `dws-skills-<version>`, and `skill-<digest>`. */
+const PUBLISHED = /^(?:dws|skill)-/u
 
 /**
  * Name the executable file as the release archives carry it.
@@ -76,20 +81,31 @@ export interface DwsReleaseOptions {
   readonly releaseUrls: readonly string[]
   /** How long one prefix may take to deliver an asset before the next one is tried. */
   readonly releaseTimeoutMs: number
+  /**
+   * The profile that loads the plugin: its Harness home and its name. Its downloads go to its own cache directory,
+   * `$DSH_HOME/cache/dingtalk/<profile>`. Without one they go to `$DSH_HOME/cache/dingtalk`, which several
+   * installations may share.
+   */
+  readonly profile?: { readonly home: string; readonly name: string } | undefined
 }
 
 /** Locates dws and the `dingtalk` skill, and installs from the pinned release whichever is missing. */
 export class DwsRelease {
-  /** The directory holding `dws` (`dws.exe` on Windows): `binDir`, or `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. */
+  /**
+   * The directory holding `dws` (`dws.exe` on Windows): `binDir`, or `dws-<version>-<platform>-<arch>` in the cache
+   * directory, which is `$DSH_HOME/cache/dingtalk/<profile>` in a profile and `$DSH_HOME/cache/dingtalk` without one.
+   */
   readonly directory: string
   /**
-   * The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>`: a copy of the packaged `dingtalk/SKILL.md` and a
+   * The skill root `skill-<digest>` in the cache directory: a copy of the packaged `dingtalk/SKILL.md` and a
    * `dingtalk/guides` link to the upstream skills. The digest covers the entry and the link target, so a published root
    * never changes.
    */
   readonly skillRoot: string
-  /** The upstream skills the guides link points to: `skillsDir`, or `$DSH_HOME/cache/dingtalk/dws-skills-<version>`. */
+  /** The upstream skills the guides link points to: `skillsDir`, or `dws-skills-<version>` in the cache directory. */
   private readonly guides: string
+  /** The profile's own cache directory, whose other releases {@link prune} deletes; undefined without a profile. */
+  private readonly owned: string | undefined
   private readonly entry: Buffer
   private readonly archive: DwsArchive | undefined
 
@@ -106,24 +122,28 @@ export class DwsRelease {
     private readonly logger: Context['logger'],
     private readonly release: DwsReleaseManifest = DWS_RELEASE,
   ) {
+    const { profile } = options
+    // A profile holds one version of the plugin, so no other installation reads its cache directory.
+    this.owned = profile === undefined ? undefined : dshCachePath({ dshHome: profile.home }, 'dingtalk', profile.name)
+    const cache = this.owned ?? dshCachePath('dingtalk')
     if (options.binDir === undefined) {
       const platform = `${process.platform}-${process.arch}`
       this.archive = release.archives[platform]
       if (this.archive === undefined) throw new Error(`dingtalk: dws ${release.version} has no release archive for ${platform}; set binDir`)
-      this.directory = dshCachePath('dingtalk', `dws-${release.version}-${platform}`)
+      this.directory = join(cache, `dws-${release.version}-${platform}`)
     } else {
       this.directory = options.binDir
       if (!this.executable()) throw notExecutable(options.binDir)
     }
     if (options.skillsDir === undefined) {
-      this.guides = dshCachePath('dingtalk', `dws-skills-${release.version}`)
+      this.guides = join(cache, `dws-skills-${release.version}`)
     } else {
       this.guides = resolve(options.skillsDir)
       if (statSync(this.guides, { throwIfNoEntry: false })?.isDirectory() !== true) throw notSkillsDir(options.skillsDir)
     }
     this.entry = readFileSync(ENTRY)
     const digest = createHash('sha256').update(this.entry).update('\0').update(this.guides).digest('hex')
-    this.skillRoot = dshCachePath('dingtalk', `skill-${digest.slice(0, 16)}`)
+    this.skillRoot = join(cache, `skill-${digest.slice(0, 16)}`)
     if (existsSync(this.guides)) this.assemble()
   }
 
@@ -139,13 +159,46 @@ export class DwsRelease {
    * Download whichever of the executable archive and the skills archive is missing, verify its size and digest, extract it
    * beside its cache directory, and publish it there by rename; then publish the skill root. A prefix that does not
    * deliver an asset within `releaseTimeoutMs` is skipped for the next one. A directory that another process published
-   * first is kept.
+   * first is kept. A failure other than an abort is logged as a warning before it is thrown, because the account
+   * operation that runs the installation discards what it throws. A finished installation starts {@link prune} without
+   * waiting for it.
    * @param signal - aborts the downloads and the publishes without trying another prefix.
    * @returns after `dws` is executable in `directory` and the skill root is published.
    * @throws when `binDir` or `skillsDir` lost its content, every source of an archive fails, or the executable archive holds
    *   no `dws`.
    */
   async install(signal: AbortSignal): Promise<void> {
+    try {
+      await this.prepare(signal)
+    } catch (error) {
+      if (!signal.aborted) this.logger.warn('dingtalk: could not install dws and its skills', error)
+      throw error
+    }
+    void this.prune()
+  }
+
+  /**
+   * Delete from the profile's own cache directory every published dws, skills directory, and skill root that this
+   * release does not use. It deletes nothing without a profile, or while {@link installed} is false, so an earlier
+   * release stays until this one is in place. An entry that cannot be deleted, such as a `dws.exe` that still runs on
+   * Windows, is logged as a warning and stays until the next load or installation.
+   * @returns after the deletion finishes or stops at an entry it cannot delete; it never rejects.
+   */
+  async prune(): Promise<void> {
+    const { owned } = this
+    if (owned === undefined || !this.installed()) return
+    const used = new Set([resolve(this.directory), this.guides, this.skillRoot])
+    try {
+      for (const name of await readdir(owned)) {
+        const path = join(owned, name)
+        if (PUBLISHED.test(name) && !used.has(path)) await rm(path, { recursive: true, force: true })
+      }
+    } catch (error) {
+      this.logger.warn('dingtalk: could not delete the dws files this release replaces', error)
+    }
+  }
+
+  private async prepare(signal: AbortSignal): Promise<void> {
     if (!this.executable()) {
       const archive = this.archive
       if (archive === undefined) throw notExecutable(this.directory)

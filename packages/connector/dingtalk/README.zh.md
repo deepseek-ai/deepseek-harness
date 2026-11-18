@@ -34,7 +34,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-dingtalk
 dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 ```
 
-本包没有需要批准的安装脚本。`dingtalk` 行加载时，会下载 dws release 1.0.64 的两个资产：当前平台的归档（16 到 20 MB）和 `dws-skills.zip`（3.3 MB）。每个资产都先从 GitHub Releases 下载，GitHub 失败或在 `releaseTimeoutMs` 内没有送达时改用官方 Gitee 镜像；该行校验大小和 SHA-256 后，保存在 `$DSH_HOME/cache/dingtalk/`。下载完成之前，运行时上下文不给出 `dws` 的路径，技能目录中也没有 `dingtalk` skill。当前平台没有对应的归档时，该行加载失败并给出平台；如需使用其他 `dws`，请设置 `binDir`。同时设置 `binDir` 和 `skillsDir` 时，该行不下载任何内容。
+本包没有需要批准的安装脚本。`dingtalk` 行加载时，会下载 dws release 1.0.64 的两个资产：当前平台的归档（16 到 20 MB）和 `dws-skills.zip`（3.3 MB）。每个资产都先从 GitHub Releases 下载，GitHub 失败或在 `releaseTimeoutMs` 内没有送达时改用官方 Gitee 镜像；该行校验大小和 SHA-256 后，保存在它的缓存目录中：由 `dsh` 启动的 profile 中是 `$DSH_HOME/cache/dingtalk/<profile>/`，其他情况是 `$DSH_HOME/cache/dingtalk/`。某个 release 在 profile 的目录中就位后，该行会删除其中更早的 release，因此插件更新换了固定的 release 之后只留下一份；release 没有变化时不会重新下载。下载完成之前，运行时上下文不给出 `dws` 的路径，技能目录中也没有 `dingtalk` skill。当前平台没有对应的归档时，该行加载失败并给出平台；如需使用其他 `dws`，请设置 `binDir`。同时设置 `binDir` 和 `skillsDir` 时，该行不下载任何内容。
 
 登录需要一个已加入组织的钉钉账号，并且组织管理员已在钉钉开发者后台开启 CLI 访问。未开启时，用户可以在授权页申请。
 
@@ -64,7 +64,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 |---|---|---|
 | `binDir` | 保存已下载可执行文件的缓存目录 | 包含可执行 `dws`（Windows 上为 `dws.exe`）的绝对目录；设置后不下载可执行文件 |
 | `skillsDir` | 保存已下载技能的缓存目录 | 布局与 release 的 `dws-skills.zip` 中 `multi/` 目录相同的目录；设置后不下载技能 |
-| `releaseUrls` | `DingTalk-Real-AI/dingtalk-workspace-cli` 在 GitHub Releases 和 Gitee 镜像的下载前缀 | 按顺序尝试的 HTTPS 前缀，用于下载 `binDir` 和 `skillsDir` 未提供的内容；每个都在 `v<版本>/<资产名>` 下提供资产，且 `Content-Length` 等于资产大小 |
+| `releaseUrls` | `DingTalk-Real-AI/dingtalk-workspace-cli` 在 GitHub Releases 和 Gitee 镜像的下载前缀 | 按顺序尝试的 HTTPS 前缀，用于下载 `binDir` 和 `skillsDir` 未提供的内容；每个都在 `v<版本>/<资产名>` 下提供资产，且 `Content-Length` 等于资产大小。前缀带有查询、片段或凭据，或者无法解析为 URL 时，加载失败 |
 | `releaseTimeoutMs` | `300000` | 一个前缀送达一个资产的时限，整数毫秒；超时后尝试下一个 |
 
 账号检查和退出登录使用 [`cli-account` 行](../cli-account/README.zh.md#use-this-package)的 `commandTimeoutMs`，默认 30 秒。登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 CLI 账号 Service 固定。dws 自身在 6 分钟后停止等待授权。
@@ -81,7 +81,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 [`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `dingtalk` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它把 `dws` 的路径和账号注册到 `ctx.cliAccounts`，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
 
-[`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压 `.tar.gz` 平台归档，用 `fflate` 只取出 Windows `.zip` 归档根目录下的 `dws.exe`，并用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。失败或在 `releaseTimeoutMs` 内没有送达的下载源各记录一条警告；取消操作会停止下载。skill 根目录 `$DSH_HOME/cache/dingtalk/skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`；在 Windows 上它是目录联接（junction），不需要创建符号链接的权限。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。
+[`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压 `.tar.gz` 平台归档，用 `fflate` 只取出 Windows `.zip` 归档根目录下的 `dws.exe`，并用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。失败或在 `releaseTimeoutMs` 内没有送达的下载源各记录一条警告；取消操作会停止下载。安装因为取消之外的原因失败时，例如归档无法解压或缓存目录无法写入，会记录一条带原因的警告，因为账号操作只报告下载没有完成。缓存目录中的 skill 根目录 `skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`；在 Windows 上它是目录联接（junction），不需要创建符号链接的权限。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。一个 profile 里这个插件只有一个版本，因此它的缓存目录只属于这一个安装：安装完成后，以及加载时 release 已经就位时，`prune` 删除其中这个 release 不使用的所有 `dws-…` 和 `skill-…` 条目，包括被配置的 `binDir` 取代的已下载 dws。release 尚未安装时它什么也不删；删不掉的条目（例如 Windows 上仍在运行的 `dws.exe`）记为警告，留到之后的加载或安装时再删。不是由 `dsh` 启动的组合没有 profile；它的缓存目录可能被多个安装共用，其中的内容都不会被删除。
 
 `dws` 和技能都已安装时，[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型；它按同一路径运行每条命令，一次执行一个账号操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用 dws 的命令完成每个操作，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
 
@@ -136,7 +136,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 #### 模型看到的内容
 
-该行加载、且 `dws` 和技能都已安装时，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `dws` 的路径；`binDir` 默认是 `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`。第二行针对按名称调用 `dws` 的子指南脚本。
+该行加载、且 `dws` 和技能都已安装时，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `dws` 的路径；`binDir` 默认是缓存目录中的 `dws-<version>-<platform>-<arch>`。第二行针对按名称调用 `dws` 的子指南脚本。
 
 ##### 运行时上下文条目
 
@@ -172,7 +172,7 @@ Scripts in the DingTalk skill call `dws` by name; start only the commands that r
 - 除非同时设置了 `binDir` 和 `skillsDir`，第一次检查需要能访问 GitHub 或 Gitee，成功之前没有 `dingtalk` skill；Gitee 镜像可能比 release 晚几天。下载源必须发送 `Content-Length`。
 - dws 保留其默认的遥测和更新检查；DSH 指引要求 Agent 不要升级它。
 - 在文件沙箱下，访问钉钉数据的 `dws` 命令都会在打开 `~/.dws` 下的锁文件时失败，每条命令都需要单条命令审批才能运行。不带 `--readonly` 的 `dws auth status` 在文件沙箱下以退出码 0 把已登录的账号报告成未登录，因此自己运行这项检查的子指南脚本（例如考勤签到报表）会以登录错误退出。
-- 移除插件或换到新版本后，已下载的资产和 skill 根目录仍会留在 Harness 缓存中。
+- 移除插件后，已下载的资产和 skill 根目录仍会留在 Harness 缓存中。每个加载该插件的 profile 都各自下载一份 dws 和技能。没有 profile 时，换到新的 release 后，更早的 release 也会留在那里。
 - 子指南对应 release `v1.0.64`；更新版本需要修改固定的大小和摘要，再对照新的子指南检查总入口的索引和 DSH 指引。
 
 <a id="dev-note"></a>
