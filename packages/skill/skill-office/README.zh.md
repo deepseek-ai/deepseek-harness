@@ -45,7 +45,7 @@ kind: "package-reference"
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，五个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件以 `%PDF-` 开头后即结束，不加载 `office-pdf`。输入为 PDF 时加载 `office-pdf`：用 pypdf 提取文字、拆分、合并、加密和填写表单，只在页面文字为空或乱码、版面或图表重要、或用户要求图片时用 `office_render` 渲染相关页。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，五个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件以 `%PDF-` 开头后即结束，不加载 `office-pdf`。输入为 PDF 时加载 `office-pdf`：它描述 pypdf 的十项能力，从文字提取、页面组织到批注、表单、书签、附件和元数据，由这些能力组合出水印、扁平化表单等任务；只在页面文字为空或乱码、版面或图表重要、修改后的页面需要视觉检查、或用户要求图片时用 `office_render` 渲染相关页。
 
 ```mermaid
 flowchart TD
@@ -57,7 +57,7 @@ flowchart TD
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|PDF input| G["skill(office-pdf): pypdf text, pages, and forms"]
+    B -->|PDF input| G["skill(office-pdf): pypdf capabilities combined per task"]
     G -->|Text and structure checks suffice| F
     G -->|Empty or garbled text, layout, or visual check| R
 
@@ -118,7 +118,7 @@ flowchart TD
 
 #### KV Cache 影响
 
-技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；每个创作正文最多为其记录的早期估算的 70%：`office-docx` 为 1,688 token，`office-pptx` 为 1,879 token，`office-xlsx` 为 2,330 token。`office-pdf` 没有早期估算，其正文最多 1,500 token，其摘要使每个目录增加约 23 token。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；每个创作正文最多为其记录的早期估算的 70%：`office-docx` 为 1,688 token，`office-pptx` 为 1,879 token，`office-xlsx` 为 2,330 token。`office-pdf` 没有早期估算，其正文覆盖十项能力，最多 3,000 token，其摘要使每个目录增加约 23 token。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 

@@ -24,7 +24,9 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.util import Inches
 from pypdf import PdfReader, PdfWriter
+from pypdf.annotations import Text
 from pypdf.errors import DependencyError
+from pypdf.xmp import XmpInformation
 from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject, NumberObject, TextStringObject
 
 
@@ -128,11 +130,21 @@ def main():
         pdf.add_blank_page(width=200, height=100)
         pdf.add_blank_page(width=100, height=200).rotate(90)
         pdf.add_metadata({"/Title": "Office PDF"})
+        xmp = XmpInformation.create()
+        xmp.dc_title = {"x-default": "Office PDF"}
+        pdf.xmp_metadata = xmp
+        pdf.add_attachment("data.csv", b"a,b")
+        pdf.add_attachment("data.csv", b"c,d")
+        pdf.set_page_label(0, 0, style="/r")
+        pdf.set_page_label(1, 1, style="/D", start=1)
         pdf.write(root / "document.pdf")
         reopened_pdf = PdfReader(root / "document.pdf")
         assert len(reopened_pdf.pages) == 2
         assert reopened_pdf.pages[1].rotation == 90
         assert reopened_pdf.metadata.title == "Office PDF"
+        assert reopened_pdf.xmp_metadata.dc_title == {"x-default": "Office PDF"}
+        assert dict(reopened_pdf.attachments) == {"data.csv": [b"a,b", b"c,d"]}
+        assert reopened_pdf.page_labels == ["i", "1"]
 
         form = PdfWriter()
         form.add_blank_page(width=300, height=200)
@@ -143,15 +155,26 @@ def main():
             NameObject("/DA"): TextStringObject("/Helv 12 Tf 0 g"),
         }))
         form.root_object[NameObject("/AcroForm")] = DictionaryObject({NameObject("/Fields"): ArrayObject([field.indirect_reference])})
+        form.add_annotation(0, Text(text="Review note", rect=(220, 150, 240, 170)))
         form.write(root / "form.pdf")
         filled = PdfWriter(clone_from=root / "form.pdf")
-        for page in filled.pages:
-            filled.update_page_form_field_values(page, {"name": "Ada Lovelace"}, auto_regenerate=False)
+        filled.update_page_form_field_values(None, {"name": "Ada Lovelace"}, auto_regenerate=False)
+        filled.remove_annotations(subtypes=["/Text"])
         filled.write(root / "filled.pdf")
         reopened_form = PdfReader(root / "filled.pdf")
         assert reopened_form.get_fields()["name"].value == "Ada Lovelace"
         assert reopened_form.trailer["/Root"]["/AcroForm"].get("/NeedAppearances") is not True
+        assert [annotation.get_object()["/Subtype"] for annotation in reopened_form.pages[0]["/Annots"]] == ["/Widget"]
         assert "/AP" in reopened_form.pages[0]["/Annots"][0].get_object()
+        flattened = PdfWriter(clone_from=root / "form.pdf")
+        flattened.update_page_form_field_values(None, {"name": "Ada Lovelace"}, flatten=True)
+        flattened.remove_annotations(subtypes="/Widget")
+        del flattened.root_object["/AcroForm"]
+        flattened.write(root / "flattened.pdf")
+        reopened_flattened = PdfReader(root / "flattened.pdf")
+        assert reopened_flattened.get_fields() is None
+        assert "/Widget" not in [annotation.get_object()["/Subtype"] for annotation in reopened_flattened.pages[0].get("/Annots", [])]
+        assert reopened_flattened.pages[0].extract_text() == "Ada Lovelace"
 
         # The payload omits cryptography, so only the RC4 algorithm named by the PDF skill is available.
         try:

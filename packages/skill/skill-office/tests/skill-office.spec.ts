@@ -42,7 +42,7 @@ describe('bundled Office skills', () => {
       const pdf = (await ctx.skills.get('office-pdf'))!
       expect(pdf.description).toBe('Read, extract, inspect, split, merge, protect, or fill an existing PDF; PDF to Word (.pdf).')
       // The budget includes the appended Python environment section.
-      expect(Math.ceil(pdf.content.length / 4)).toBeLessThanOrEqual(1500)
+      expect(Math.ceil(pdf.content.length / 4)).toBeLessThanOrEqual(3000)
       expect(pdf.content).toContain('`pypdf`')
       expect(pdf.content).toContain('`office_render` with `pages`')
       expect(pdf.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
