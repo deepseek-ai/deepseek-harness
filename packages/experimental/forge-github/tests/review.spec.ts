@@ -7,7 +7,8 @@ import { GhTimeoutError, GhUnavailableError, type GhRunner } from '../src/gh.ts'
 const ref = { repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 7 }
 const head = 'a'.repeat(40)
 const LIMITS = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, briefBatchSize: 50, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+  maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 const comment = { path: 'src/space name.ts', side: 'L' as const, startLine: 3, endLine: 5, body: 'Check `$(secret)`\n第二行' }
 const single: ForgeReviewRequest = { kind: 'comment', headSha: head, comment }

@@ -1,39 +1,20 @@
 /** The brief read of the GitHub provider: its query, its mapping, and its queries per `briefBatchSize`. */
-import { Context } from '@deepseek-ai/cordis'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestBrief, ChangeRequestRef, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { briefQuery, mapBriefResponse } from '../src/graphql.ts'
-import * as ForgeGitHub from '../src/index.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
-import { demo, pull } from './fixtures.ts'
+import { briefNode, demo, pull } from './fixtures.ts'
 
 const enterprise = { forge: 'github', host: 'ghe.corp.example', owner: 'team', name: 'svc' }
 const other = { ...demo, name: 'other' }
 const signal = new AbortController().signal
 const limits: GitHubLimits = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, briefBatchSize: 50, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
-}
-
-/** One pull request node as a brief query returns it. */
-function briefNode(number: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    url: `https://github.com/octo/demo/pull/${number}`,
-    title: `Change ${number}`,
-    state: 'OPEN',
-    isDraft: false,
-    mergeable: 'MERGEABLE',
-    reviewDecision: null,
-    commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] },
-    ...overrides,
-  }
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+  maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 
 /** The brief of `briefNode(number)`. */
@@ -245,58 +226,5 @@ describe('GitHub provider briefs', () => {
     expect(results.get(changeRequestKey(denied))).toEqual({ code: 'unavailable', message: 'forge-github: host "unconfigured.example" is not configured' })
     expect(results.get(changeRequestKey(pull(3)))).toEqual(brief(pull(3)))
     expect(results.size).toBe(4)
-  })
-})
-
-// The recording `gh` is a POSIX shell script, as in gh.spec.ts.
-describe.skipIf(process.platform === 'win32')('forge-github plugin briefs', () => {
-  const cleanups: (() => Promise<void>)[] = []
-
-  afterEach(async () => {
-    for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
-  })
-
-  /** A `gh` that appends the pull request numbers of each query to a log and answers a brief for each. */
-  async function recordingGh(): Promise<{ readonly command: string; readonly queries: () => Promise<number[][]> }> {
-    const root = await mkdtemp(join(tmpdir(), 'forge-github-briefs-'))
-    cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
-    const command = join(root, 'gh')
-    const log = join(root, 'queries.log')
-    const node = JSON.stringify(briefNode(0))
-    await writeFile(command, [
-      '#!/bin/sh',
-      'numbers=$(printf "%s" "$*" | grep -o "pullRequest(number: [0-9]*)" | grep -o "[0-9]*" | tr "\\n" " ")',
-      `printf "%s\\n" "$numbers" >> ${JSON.stringify(log)}`,
-      'fields=""; index=0',
-      `for number in $numbers; do fields="$fields\${fields:+,}\\"p$index\\":"${JSON.stringify(node)}; index=$((index + 1)); done`,
-      'printf "{\\"data\\":{\\"r0\\":{%s}}}" "$fields"',
-      '',
-    ].join('\n'))
-    await chmod(command, 0o755)
-    return {
-      command,
-      queries: async () => (await readFile(log, 'utf8')).trim().split('\n').map(line => line.trim().split(' ').map(Number)),
-    }
-  }
-
-  it.each([
-    [{}, 51, [50, 1]],
-    [{ briefBatchSize: 3 }, 4, [3, 1]],
-  ])('polls brief watches of the forge service in queries of the configured size: %j', async (config, count, sizes) => {
-    const gh = await recordingGh()
-    const ctx = new Context()
-    cleanups.push(async () => { await ctx.fiber.dispose() })
-    await ctx.plugin(ForgeService)
-    await ctx.plugin(ForgeGitHub, { ghCommand: gh.command, ...config })
-    const seen = new Set<number>()
-
-    for (const ref of pulls(count)) {
-      ctx.forge.watchBrief(ref, (update) => {
-        if ('brief' in update) seen.add(update.brief.ref.number)
-      })
-    }
-
-    await vi.waitFor(() => { expect(seen.size).toBe(count) }, { timeout: 10_000 })
-    expect((await gh.queries()).map(numbers => numbers.length)).toEqual(sizes)
   })
 })

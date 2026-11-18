@@ -6,13 +6,15 @@ Status: implemented
 
 ## Problem
 
-会话列表为每个已列出 Session 绑定的变更请求显示一个状态图标，此前为此读取每个变更请求的完整快照：最多 100 个检查 context、评审人、评审讨论、关联 issue 以及仓库的合并设置。注册表把同一个 forge 所有到期的变更请求合成一批，GitHub 提供方再把一个主机的整批放进同一个 GraphQL 文档。GitHub 在处理一个请求超过 10 秒后终止它：包含 20 个 deepseek-harness pull request 的文档耗时 10.2 s，30 个的返回 HTTP 504，61 个的返回 HTTP 502。列表每次新的运行会让所有监听同时到期，所以绑定了约 30 个 pull request 的用户，列表会整批失败、整批重试。打开一个 Session 时，如果列表已经在监听它的变更请求，就不会触发任何读取，面板最长要等一个空闲间隔才有更新的状态。
+会话列表为每个已列出 Session 绑定的变更请求显示一个状态图标，此前为此读取每个变更请求的完整快照：最多 100 个检查 context、评审人、评审讨论、关联 issue 以及仓库的合并设置。注册表把同一个 forge 所有到期的变更请求合成一批，GitHub 提供方此前把一个主机的整批放进同一个 GraphQL 查询。GitHub 在处理一个请求超过 10 秒后终止它：包含 20 个 deepseek-harness pull request 的快照查询耗时 10.2 s，30 个的返回 HTTP 504，61 个的返回 HTTP 502。列表每次新的运行会让所有监听同时到期，所以绑定了约 30 个 pull request 的用户，列表会整批失败、整批重试。打开一个 Session 时，如果列表已经在监听它的变更请求，就不会触发任何读取，面板最长要等一个空闲间隔才有更新的状态。
 
 ## Decision
 
 **两个层级的状态。** 简报包含列表显示的内容：标题、状态、草稿标记、可合并性、评审结论与检查汇总结果。`ctx.forge.watchBrief` 监听简报；`ctx.forge.watch` 监听快照。被监听的变更请求在有快照监听方时轮询快照，否则轮询简报。快照包含简报，所以简报监听方能收到每一次结果。提供方通过可选的 `fetchBriefs` 读取简报；提供方没有该方法时，注册表从它读取快照。
 
-**GitHub 简报查询。** forge-github 从 pull request 自身的标量字段和 head 提交的 `statusCheckRollup.state` 读出简报，每个查询 50 个 pull request（`briefBatchSize`）。通过 `gh` 在 deepseek-harness 的 pull request 上实测，一个查询读 8 个用 1.4 s，31 个用 2.3 至 2.8 s，61 个用 3.0 至 3.7 s，速率配额各消耗 1 点。快照文档里检查 context 占比最大：8 个 pull request 时占 186 KB 中的 174 KB、3.8 s 中的 1.4 s。
+**GitHub 简报查询。** forge-github 从 pull request 自身的标量字段和 head 提交的 `statusCheckRollup.state` 读出简报，每个查询 50 个 pull request（`briefBatchSize`）。通过 `gh` 在 deepseek-harness 的 pull request 上实测，一个查询读 8 个用 1.4 s，31 个用 2.3 至 2.8 s，61 个用 3.0 至 3.7 s，速率配额各消耗 1 点。快照查询里检查 context 占比最大：8 个 pull request 时占 186 KB 中的 174 KB、3.8 s 中的 1.4 s。
+
+**大小有上限的 GitHub 快照查询。** 一个 Session 可以绑定多个 pull request，它的面板监听其中每一个的快照。forge-github 在一个快照查询里最多放同一主机的 8 个 pull request（`snapshotBatchSize`）：用同样的方式实测，5 个的查询用 3.6 s，8 个的用 4.4 至 6.3 s，10 个的用 5.8 s。快照读取和简报读取都在第一次请求前构造好全部查询，再依次发送，因为 GitHub 要求同一账号串行发送请求。某个查询的 `gh` 运行失败或被 GitHub 拒绝时，只有该查询内的 pull request 失败。
 
 **每个 forge、每个层级同时只有一次读取。** 为打开的面板读取快照，不用排在长列表的简报读取后面；一个主机同时最多看到同一个注册表的两个状态请求。
 
@@ -22,9 +24,9 @@ Status: implemented
 
 ## Alternatives considered
 
-**只拆分快照文档**能限制单个文档的大小，但 61 个 pull request 的列表仍需要 8 个文档和 38 s，超过注册表 30 s 的读取时限，而读回的字段列表根本不显示。
+**只限制快照查询的大小**能让每个查询足够短，但 61 个 pull request 的列表仍需要 8 个查询和 38 s，超过注册表 30 s 的读取时限，而读回的字段列表根本不显示。
 
-**调大 `fetchTimeoutMs` 或并发读取快照文档**不改变 GitHub 处理每个文档的时间，而且 GitHub 只允许一个账号每 60 s 使用 60 s 的 GraphQL CPU 时间。
+**调大 `fetchTimeoutMs` 或并发发送快照查询**不改变 GitHub 处理每个查询的时间，而且 GitHub 只允许一个账号每 60 s 使用 60 s 的 GraphQL CPU 时间。
 
 **带条件请求的 REST** 经 `gh` 返回 HTTP 304 时不消耗速率配额，但每个 pull request 要启动一个 `gh` 进程，各约 1.2 s，而且没有检查汇总状态。
 
@@ -36,4 +38,4 @@ Status: implemented
 
 ## Consequences
 
-在实测的场景里（绑定了 14 个打开、17 个已合并的 pull request），列表的一次轮询是一个约 1.7 s 的请求，取代原来包含 31 个快照、被 GitHub 以 HTTP 504 拒绝的文档，已合并的不再读取。简报报告 GitHub 的检查汇总状态，检查列表完整的快照则根据每个检查的最新一次运行自行得出结果；实测的 61 个打开的 pull request 两者全部一致，不一致时没有机制去对齐。两个层级共用轮询间隔，间隔没有改变。提供方的快照读取仍然在一个时限内读完整批：GitLab 提供方在读取内部拆分批次，GitHub 提供方没有拆分。
+在实测的场景里（绑定了 14 个打开、17 个已合并的 pull request），列表的一次轮询是一个约 1.7 s 的请求，取代原来包含 31 个快照、被 GitHub 以 HTTP 504 拒绝的查询，已合并的不再读取。简报报告 GitHub 的检查汇总状态，检查列表完整的快照则根据每个检查的最新一次运行自行得出结果；实测的 61 个打开的 pull request 两者全部一致，不一致时没有机制去对齐。两个层级共用轮询间隔，间隔没有改变。一次读取的全部查询仍然在注册表的同一个读取时限内运行，而 forge-github 自己的 `gh` 超时默认与它相等：读取超过该时限时整体失败，已得到应答的查询中的 pull request 也不例外；某个查询的 `gh` 挂起时，读取会先于该查询自己的超时结束，隔离不会生效。要改变这一点，需要注册表能逐个查询地接收结果，而不是改提供方。

@@ -1374,6 +1374,11 @@ export interface Config {
    * one review read, which reports itself truncated past it.
    */
   maxReviewThreads?: number
+  /**
+   * Most pull requests one snapshot query reads; a snapshot read of more pull requests on one host sends several queries
+   * in turn.
+   */
+  snapshotBatchSize?: number
   /** Most pull requests one brief query reads; a brief read of more pull requests on one host sends several queries in turn. */
   briefBatchSize?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */

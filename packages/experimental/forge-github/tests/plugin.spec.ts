@@ -1,9 +1,14 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ForgeCommandRule } from '@deepseek-ai/dsh-experimental-forge-session'
-import { afterEach, describe, expect, it } from 'vitest'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GH_COMMANDS } from '../src/commands.ts'
 import * as ForgeGitHub from '../src/index.ts'
+import { briefNode, pull, pullRequestNode } from './fixtures.ts'
 
 let ctx: Context | undefined
 
@@ -96,6 +101,8 @@ describe('forge-github plugin', () => {
     [{ maxOutputBytes: 1.5 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
     [{ maxOutputBytes: 0 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
     [{ maxOutputBytes: Number.MAX_SAFE_INTEGER + 1 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
+    [{ snapshotBatchSize: 0 }, 'forge-github: snapshotBatchSize must be a positive safe integer'],
+    [{ snapshotBatchSize: 2.5 }, 'forge-github: snapshotBatchSize must be a positive safe integer'],
     [{ maxCommits: 0 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxCommits: 2.5 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxReviewThreads: 0 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
@@ -114,5 +121,60 @@ describe('forge-github plugin', () => {
     const context = await forge()
     await context.plugin(ForgeGitHub, { maxOutputBytes: 2_147_483_648 })
     expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toBeDefined()
+  })
+})
+
+// The recording `gh` is a POSIX shell script, as in gh.spec.ts.
+describe.skipIf(process.platform === 'win32')('forge-github plugin status queries', () => {
+  const cleanups: (() => Promise<void>)[] = []
+
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
+  })
+
+  /** A `gh` that appends the pull request numbers of each query to a log and answers `node` for each. */
+  async function recordingGh(
+    node: Record<string, unknown>,
+  ): Promise<{ readonly command: string; readonly queries: () => Promise<number[][]> }> {
+    const root = await mkdtemp(join(tmpdir(), 'forge-github-status-'))
+    cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
+    const command = join(root, 'gh')
+    const log = join(root, 'queries.log')
+    await writeFile(command, [
+      '#!/bin/sh',
+      'numbers=$(printf "%s" "$*" | grep -o "pullRequest(number: [0-9]*)" | grep -o "[0-9]*" | tr "\\n" " ")',
+      `printf "%s\\n" "$numbers" >> ${JSON.stringify(log)}`,
+      'fields=""; index=0',
+      `for number in $numbers; do fields="$fields\${fields:+,}\\"p$index\\":"${JSON.stringify(JSON.stringify(node))}; index=$((index + 1)); done`,
+      'printf "{\\"data\\":{\\"r0\\":{%s}}}" "$fields"',
+      '',
+    ].join('\n'))
+    await chmod(command, 0o755)
+    return {
+      command,
+      queries: async () => (await readFile(log, 'utf8')).trim().split('\n').map(line => line.trim().split(' ').map(Number)),
+    }
+  }
+
+  it.each([
+    ['brief', {}, 51, [50, 1]],
+    ['brief', { briefBatchSize: 3 }, 4, [3, 1]],
+    ['snapshot', {}, 9, [8, 1]],
+    ['snapshot', { snapshotBatchSize: 3 }, 4, [3, 1]],
+  ] as const)('polls %s watches of the forge service in queries of the configured size: %j', async (level, config, count, sizes) => {
+    const gh = await recordingGh(level === 'brief' ? briefNode(0) : pullRequestNode(0))
+    const context = new Context()
+    cleanups.push(async () => { await context.fiber.dispose() })
+    await context.plugin(ForgeService)
+    await context.plugin(ForgeGitHub, { ghCommand: gh.command, ...config })
+    const seen = new Set<ChangeRequestKey>()
+
+    for (const ref of Array.from({ length: count }, (_, index) => pull(index + 1))) {
+      if (level === 'brief') context.forge.watchBrief(ref, update => void ('brief' in update && seen.add(update.key)))
+      else context.forge.watch(ref, update => void ('snapshot' in update && seen.add(update.key)))
+    }
+
+    await vi.waitFor(() => { expect(seen.size).toBe(count) }, { timeout: 10_000 })
+    expect((await gh.queries()).map(numbers => numbers.length)).toEqual(sizes)
   })
 })
