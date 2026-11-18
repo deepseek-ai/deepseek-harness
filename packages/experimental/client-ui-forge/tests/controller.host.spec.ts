@@ -69,6 +69,12 @@ const UNAVAILABLE = {
   restoration: null, waiting: null,
 }
 
+/**
+ * The same facts once the Session works in its worktree: its root no longer contains the repository's Git
+ * directory, which another worktree would have to write. The option that shows the blocker is hidden by then.
+ */
+const IN_WORKTREE = { ...UNAVAILABLE, blocker: 'outside-writable-root' as const }
+
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
 /** Abbreviated commit object name Git prints for HEAD. */
@@ -948,6 +954,26 @@ describe('forgePanel worktree blockers', () => {
     expect(unblocked.worktree.blocker).toBeNull()
   })
 
+  it('offers a worktree from a linked checkout while the Session\'s policy grants its shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked)
+    const follower = reader(opened)
+    const blocked = await follower.until(ready)
+
+    const revoke = opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, join(repo, '.git'))
+    shellTurn(opened.session, 1, [{ callId: 'first', command: 'true', output: '' }])
+    const granted = await follower.next(state => state.worktree.blocker !== 'outside-writable-root')
+    revoke()
+    shellTurn(opened.session, 2, [{ callId: 'second', command: 'true', output: '' }])
+    const revoked = await follower.next(state => state.worktree.blocker !== null)
+
+    expect(blocked.worktree.blocker).toBe('outside-writable-root')
+    expect(granted.worktree.blocker).toBeNull()
+    expect(revoked.worktree.blocker).toBe('outside-writable-root')
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
@@ -1083,7 +1109,7 @@ describe('forgePanel worktree requests', () => {
       repository: demo,
       readiness: { state: 'ready', message: null, signIn: null },
       changeRequests: [],
-      worktree: { ...UNAVAILABLE, request: { from: null, name: null }, created },
+      worktree: { ...IN_WORKTREE, request: { from: null, name: null }, created },
       local: { base: created?.baseCommit.slice(0, 7), files: [] },
     })
     expect(opened.provider.probes).toEqual(['fake.test'])
@@ -1239,7 +1265,7 @@ describe('forgePanel worktree creation while a message waits', () => {
     const waiting = { ...UNAVAILABLE, editable: true, request: { from: null, name: null }, waiting: 'creation' }
     expect(prepare.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'prepare' } })
     expect(checkout.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'checkout' } })
-    expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created })
+    expect(moved.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created })
     expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: created?.path, branch, linked: true, commit: COMMIT } })
     expect(created).toEqual({
       path: join(repo, '.agents', 'worktrees', ...branch.split('/')),
@@ -1525,11 +1551,17 @@ describe('forgePanel removed worktrees', () => {
     const created = await startInWorktree(opened)
     const tip = await commitAt(created.path, 'later.txt', '2026-05-01T00:00:00Z')
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
+    const granted = await plain()
+    opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, granted)
     await rm(created.path, { recursive: true, force: true })
 
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
+    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
+    // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
+    const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [granted] })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -1545,11 +1577,11 @@ describe('forgePanel removed worktrees', () => {
     await opened.agent.whenIdle()
     const restored = await restoration
 
-    expect(missing.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created, missing: { branchExists: true }, waiting: 'restoration' })
+    expect(missing.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created, missing: { branchExists: true }, waiting: 'restoration' })
     expect(preparing.worktree).toMatchObject({ missing: { branchExists: true }, restoration: { phase: 'prepare' }, waiting: 'restoration' })
     expect(checkingOut.worktree.restoration).toEqual({ phase: 'checkout' })
     expect(restored).toMatchObject({ directory: created.path, checkout: { state: 'ready', checkout: { root: created.path, branch: created.branch } } })
-    expect(restored.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created })
+    expect(restored.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created })
     expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)
     expect(await readFile(join(created.path, 'later.txt'), 'utf8')).toBe('later.txt\n')
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created.path)

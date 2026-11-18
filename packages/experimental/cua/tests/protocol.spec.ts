@@ -80,12 +80,18 @@ it.each(['left', 'right', 'middle'])('admits explicit %s mouse-button events wit
   }
 })
 
+it.each([true, false])('admits the system button option only for capable providers (%s)', (useSystemPointer) => {
+  const request = { method: 'toggleMouse', params: { appHandle: 'a', windowId: '1', mouseButton: 'left', direction: 'down', useSystemPointer } }
+  expect(Request.safeParse(request).success).toBe(false)
+  expect(SystemPointerRequest.parse(request)).toEqual(request)
+})
+
 it.each([
   { mouseButton: undefined }, { mouseButton: 'back' },
   { direction: undefined }, { direction: 'press' },
   { appHandle: undefined }, { windowId: undefined },
   { x: 1 }, { y: 2 }, { relative: true }, { elementId: '0' }, { snapshotId: 'snapshot' },
-  { modifiers: [] }, { useSystemPointer: true },
+  { modifiers: [] }, { useSystemPointer: 'yes' },
 ])('rejects invalid mouse-button event parameters %j', (invalid) => {
   const params = { appHandle: 'app', windowId: '23', mouseButton: 'left', direction: 'down', ...invalid }
   for (const schema of [Request, SystemPointerRequest]) {

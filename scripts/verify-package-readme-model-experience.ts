@@ -246,6 +246,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/skill/skill': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-skill.' },
   'packages/experimental/skill-badge': { kind: 'indirect', reason: 'The bundled provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-office': { kind: 'indirect', reason: 'The bundled Office provider delegates model rendering to dsh-tool-skill.' },
+  'packages/connector/upstream-skills': { kind: 'indirect', reason: 'The entry-skill provider delegates model rendering to dsh-tool-skill.' },
   'packages/skill/skill-filesystem': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-skill.' },
   'packages/spill/spill': { kind: 'indirect', reason: 'The storage seam delegates model rendering to spill consumers.' },
   'packages/spill/spill-local': { kind: 'indirect', reason: 'The storage backend delegates model rendering to spill consumers.' },

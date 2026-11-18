@@ -263,8 +263,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Session working directory',
     mode: 'seam',
     implementations: ['working-directory'],
-    consumers: ['tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server'],
-    note: 'One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed.',
+    consumers: ['tool-fs', 'tool-bash', 'tool-pwsh', 'subagent', 'sdk-jsonrpc-server', 'sandbox-policy', 'api-workspace-files', 'api-terminal-controller', 'workspace-changes', 'file-reference-local', 'tool-skill', 'agent-instructions', 'tool-lsp'],
+    note: 'One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes and user context reports them; model tools resolve paths from the directory, the sandbox boundary, file views, and discovery follow it, and original metadata stays fixed.',
   },
   {
     key: 'mcpResources',
@@ -732,6 +732,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['sandbox-windows-acl', 'skill-badge', 'skill-filesystem', 'skill-office'],
     consumers: ['tool-skill'],
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
+  },
+  {
+    key: 'upstreamSkills',
+    pkg: 'upstream-skills',
+    title: 'Upstream skills of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: downloads the pinned upstream files its entry skill indexes from the vendor\'s GitHub repository, verifies and caches them, and lists the entry skill through `ctx.skills` once they are in place.',
   },
   {
     key: 'agents',

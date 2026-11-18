@@ -64,6 +64,14 @@ flowchart LR
   pkg_tool_pwsh["tool-pwsh"]
   pkg_subagent["subagent"]
   pkg_sdk_jsonrpc_server["sdk-jsonrpc-server"]
+  pkg_sandbox_policy["sandbox-policy"]
+  pkg_api_workspace_files["api-workspace-files"]
+  pkg_api_terminal_controller["api-terminal-controller"]
+  pkg_workspace_changes["workspace-changes"]
+  pkg_file_reference_local["file-reference-local"]
+  pkg_tool_skill["tool-skill"]
+  pkg_agent_instructions["agent-instructions"]
+  pkg_tool_lsp["tool-lsp"]
   pkg_mcp_resources["mcp-resources"]
   svc_mcpResources["ctx.mcpResources<br/>Scoped MCP resource access"]
   pkg_mcp_client["mcp-client"]
@@ -125,11 +133,8 @@ flowchart LR
   pkg_api_settings_controller["api-settings-controller"]
   svc_credentialsController["ctx.credentialsController<br/>Host credential-surface Remote controller"]
   svc_settingsController["ctx.settingsController<br/>Host settings-surface Remote controller"]
-  pkg_api_workspace_files["api-workspace-files"]
   svc_workspaceFiles["ctx.workspaceFiles<br/>Host workspace file Remote service"]
-  pkg_workspace_changes["workspace-changes"]
   svc_workspaceChanges["ctx.workspaceChanges<br/>Host per-turn changed-file summaries"]
-  pkg_api_terminal_controller["api-terminal-controller"]
   svc_terminalController["ctx.terminalController<br/>Session interactive terminal Remote controller"]
   pkg_api_workspace_controller["api-workspace-controller"]
   svc_workspaceController["ctx.workspaceController<br/>Host Workspace Remote controller"]
@@ -189,7 +194,6 @@ flowchart LR
   pkg_tool_session_query["tool-session-query"]
   pkg_file_reference["file-reference"]
   svc_fileReferences["ctx.fileReferences<br/>File reference discovery"]
-  pkg_file_reference_local["file-reference-local"]
   svc_sessionReferenceResolver["ctx.sessionReferenceResolver<br/>Cross-session snapshot preparation"]
   pkg_session_title["session-title"]
   svc_sessionTitle["ctx.sessionTitle<br/>Log-backed session titles"]
@@ -203,7 +207,6 @@ flowchart LR
   svc_tools["ctx.tools<br/>Scoped tool registry and executor selection"]
   pkg_tool_ask_user["tool-ask-user"]
   pkg_tool_cordis["tool-cordis"]
-  pkg_tool_skill["tool-skill"]
   pkg_tool_todo["tool-todo"]
   pkg_user_questions["user-questions"]
   svc_userQuestions["ctx.userQuestions<br/>Human question/answer seam"]
@@ -223,6 +226,8 @@ flowchart LR
   pkg_skill_badge["skill-badge"]
   pkg_skill_filesystem["skill-filesystem"]
   pkg_skill_office["skill-office"]
+  pkg_upstream_skills["upstream-skills"]
+  svc_upstreamSkills["ctx.upstreamSkills<br/>Upstream skills of CLI app plugins"]
   svc_agents["ctx.agents<br/>Agent service"]
   pkg_acp["acp"]
   svc_agentDefaultModel["ctx.agentDefaultModel<br/>Default Agent model selection"]
@@ -264,7 +269,6 @@ flowchart LR
   pkg_sandbox["sandbox"]
   svc_sandbox["ctx.sandbox<br/>Process-sandbox seam"]
   pkg_sandbox_local["sandbox-local"]
-  pkg_sandbox_policy["sandbox-policy"]
   svc_sandboxPolicy["ctx.sandboxPolicy<br/>Sandbox policy home"]
   pkg_fs_sandbox["fs-sandbox"]
   pkg_user_approval["user-approval"]
@@ -331,7 +335,6 @@ flowchart LR
   pkg_webhook_github["webhook-github"]
   pkg_lsp["lsp"]
   svc_lsp["ctx.lsp<br/>Language-server navigation seam"]
-  pkg_tool_lsp["tool-lsp"]
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
@@ -503,6 +506,7 @@ flowchart LR
   pkg_tool_subagent --> svc_subagentModelSelection
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
+  pkg_upstream_skills --> svc_upstreamSkills
   pkg_user_approval --> svc_approval
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
@@ -680,11 +684,19 @@ flowchart LR
   svc_webhookRuntime --> pkg_webhook_github
   svc_workflowEngine --> pkg_tool_ralph
   svc_workflowEngine --> pkg_tool_workflow
+  svc_workingDirectory --> pkg_agent_instructions
+  svc_workingDirectory --> pkg_api_terminal_controller
+  svc_workingDirectory --> pkg_api_workspace_files
+  svc_workingDirectory --> pkg_file_reference_local
+  svc_workingDirectory --> pkg_sandbox_policy
   svc_workingDirectory --> pkg_sdk_jsonrpc_server
   svc_workingDirectory --> pkg_subagent
   svc_workingDirectory --> pkg_tool_bash
   svc_workingDirectory --> pkg_tool_fs
+  svc_workingDirectory --> pkg_tool_lsp
   svc_workingDirectory --> pkg_tool_pwsh
+  svc_workingDirectory --> pkg_tool_skill
+  svc_workingDirectory --> pkg_workspace_changes
   svc_workspaceRegistry --> pkg_api_session_controller
   svc_workspaceRegistry --> pkg_api_workspace_controller
   svc_worktrees --> pkg_experimental_tool_worktree
@@ -712,7 +724,7 @@ flowchart LR
 | `ctx.forgeSession` | `service` | [`experimental-forge-session`](../packages/experimental/forge-session) | - | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | Session 投影从 shell 结果与绑定记录派生绑定，并把不含状态的 URL 发布给客户端；推送结果触发按 head 分支的发现，Session 监听方通过 forge 注册表轮询已绑定的变更请求。 |
 | `ctx.forgePanel` | `service` | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | - | - | 为每个被跟随的 Session 推送一份面板状态：使用 Session 权限进行的 Git 检查、识别出的代码托管平台及其登录状态，以及带轮询状态的已绑定变更请求。 |
 | `ctx.worktrees` | `seam` | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-tool-worktree`](../packages/experimental/tool-worktree) | - | 显式实验组合从固定的本地提交创建工作树。检出目录与共享 Git 元数据受现有写权限约束；工作目录服务拥有创建后的 Session 目录。 |
-| `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server) | - | 两个 Session 投影拥有有效执行目录与工作区根；Host 操作让两者一起移动。文件系统验证变更，用户上下文报告目录信息，原始元数据与写入授权保持不变。 |
+| `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`api-workspace-files`](../packages/api/workspace-files), [`api-terminal-controller`](../packages/api/terminal-controller), [`workspace-changes`](../packages/deliverables/workspace-changes), [`file-reference-local`](../packages/context/file-reference-local), [`tool-skill`](../packages/skill/tool-skill), [`agent-instructions`](../packages/context/agent-instructions), [`tool-lsp`](../packages/lsp/tool-lsp) | - | 两个 Session 投影拥有有效执行目录与工作区根；Host 操作让两者一起移动。文件系统验证变更，用户上下文报告目录信息；模型工具从目录解析路径，沙箱边界、文件视图与发现跟随根，原始元数据保持不变。 |
 | `ctx.mcpResources` | `seam` | [`mcp-resources`](../packages/mcp/mcp-resources) | [`mcp-client`](../packages/mcp/mcp-client) | [`mcp-resources`](../packages/mcp/mcp-resources) | - | 连接所有者提供的操作在调用 agent 的作用域内服务于共享资源工具。 |
 | `ctx.browserUse` | `seam` | [`browser-use`](../packages/browser-use/browser-use) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | - | 每个服务实例注册一个提供方拥有的名称。提供方按实时 Session 拥有自己的工具与浏览器资源；共享服务不提供浏览器操作 API。 |
 | `ctx.computerUse` | `seam` | [`computer-use`](../packages/computer-use/computer-use) | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp), [`experimental-computer-use-cua-driver-native`](../packages/experimental/computer-use-cua-driver-native) | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp), [`experimental-computer-use-cua-driver-native`](../packages/experimental/computer-use-cua-driver-native) | - | 每个服务实例只注册一个提供方自定的名称。各提供方也拥有自己的模型工具；服务不提供通用操作 API、运行时选择或 Session 流程锁。 |
@@ -773,6 +785,7 @@ flowchart LR
 | `ctx.sessionProjections` | `core` | [`session-projection`](../packages/session/session-projection) | - | [`api-session-controller`](../packages/api/session-controller), [`tool-todo`](../packages/todo/tool-todo), [`session-title`](../packages/session/session-title) | - | 各领域注册由状态驱动的折叠单元；主动驱动过程维护每个会话的水位状态，Session controller 提供 baseline 并推送发生变化的值。 |
 | `ctx.sessionProjectionCache` | `core` | [`session-projection-cache`](../packages/session/session-projection-cache) | - | [`api-session-controller`](../packages/api/session-controller), [`session-query`](../packages/session-query/session-query), [`session-reference`](../packages/context/session-reference) | - | 按会话持久保存投影单元状态的检查点（节流检查点，以及轮次／结束／分离时的必选检查点），提供缓存投影视图，并加速 prepared Session 的投影恢复。 |
 | `ctx.skills` | `seam` | [`skill`](../packages/skill/skill) | [`sandbox-windows-acl`](../packages/sandbox/sandbox-windows-acl), [`skill-badge`](../packages/experimental/skill-badge), [`skill-filesystem`](../packages/skill/skill-filesystem), [`skill-office`](../packages/skill/skill-office) | [`tool-skill`](../packages/skill/tool-skill) | - | 合并提供方的 skill（技能）目录；tool-skill 渲染会话前缀目录，并加载完整的 skill 正文。 |
+| `ctx.upstreamSkills` | `service` | [`upstream-skills`](../packages/connector/upstream-skills) | - | - | - | 保存每个 CLI 应用插件注册的内容：从厂商 GitHub 仓库下载其入口技能索引的固定上游文件，校验并缓存，文件就位后通过 `ctx.skills` 列出入口技能。 |
 | `ctx.agents` | `core` | [`agent`](../packages/core/agent) | - | [`agent-loop`](../packages/core/agent-loop), [`acp`](../packages/acp/acp), [`subagent`](../packages/subagent/subagent) | - | 拥有实时 Agent 句柄、创建／恢复工厂 seam，以及进程本地的发起方传播。 |
 | `ctx.agentDefaultModel` | `core` | [`agent-default-model`](../packages/core/agent-default-model) | - | [`api-session-controller`](../packages/api/session-controller), [`headless`](../packages/bundle/headless) | - | Reads the default ModelSelection from volatile Config and saves selections through the profile editor. |
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`base`](../packages/bundle/base), [`sdk-minimal`](../packages/bundle/sdk-minimal) | - | 唯一的具体循环插件；扩展包依赖 dsh-agent 的事件和服务，而不依赖此包。 |

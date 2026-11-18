@@ -195,9 +195,10 @@ export interface CuaWindow extends CuaSurface {
    * Does not send the opposite event; callers explicitly release a pressed button.
    * @param mouseButton - Mouse button to press or release.
    * @param direction - Explicit event direction.
+   * @param options - Request a system button on a provider reporting systemPointer.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up'): Promise<CuaActionResult>
+  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up', options?: { useSystemPointer?: boolean }): Promise<CuaActionResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.

@@ -32,6 +32,7 @@ import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import type {
   ComposerBarOwnerProps, ConversationContentInputProps, ConversationContentProps,
+  WorkspaceSelectedHandler, WorkspaceSessionAdopter,
   ConversationHeaderLineageOwnerProps, ConversationSessionHeaderSlotProps, ConversationSessionSlotProps, ConversationSlotProps,
   ConversationViewActionsOwnerProps, ConversationViewsProps, HeroFrameOwnerProps,
 } from '../src/client/contract/slots.ts'
@@ -124,7 +125,7 @@ function sessionSnapshotOf(overrides: Partial<SessionSnapshot> = {}): SessionSna
 function mount(
   snapshot: SessionSnapshot,
   workspaceRows: WorkspaceView[] = [{ ...workspace('one'), sessionIds: [SID] }],
-  retargetWorkspace = vi.fn(async (_workspaceId: WorkspaceId) => {}),
+  retargetWorkspace = vi.fn<WorkspaceSelectedHandler>(async () => {}),
   options: {
     /** Explicit undefined exercises the shell before a Session is selected. */
     sessionId?: SessionId | undefined
@@ -351,6 +352,7 @@ function mount(
       : (opts?.fallback ?? null)
   )) as ConversationContentProps['renderSlotChain']
   const SessionProvider: ConversationContentProps['SessionProvider'] = ({ children }) => children
+  const moveDraft = vi.fn<WorkspaceSessionAdopter>()
   const renderFactorySlot = ((_name: string, input: ConversationContentInputProps, factoryOptions?: {
     slots?: Record<string, (props: never) => ReactNode>
   }) => {
@@ -377,7 +379,7 @@ function mount(
       renderSlot,
       renderSlotChain,
       renderFactorySlot,
-      selectWorkspace: retargetWorkspace,
+      moveDraft,
       t,
     }
     const useFactorySlot = ((name: string, fallback: (props: never) => ReactNode) => (
@@ -393,6 +395,7 @@ function mount(
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId,
     SessionProvider,
+    openWorkspace: retargetWorkspace,
     useSession: sessionId === undefined ? () => undefined : useSession,
     useConversation: sessionId === undefined ? () => undefined : useConversation,
     useSessions: bindSnapshotSelector(sessions),
@@ -409,7 +412,8 @@ function mount(
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
-    view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners, open,
+    view, store, wiring, sink, retargetWorkspace, moveDraft, session, conversation, slotCalls, headerFactory, lineageOwners, seatOwners,
+    open,
     pickerOwner: () => pickerOwner,
     frameOwner: () => frameOwners.at(-1),
     setPinned,
@@ -436,6 +440,13 @@ describe('Hero chrome', () => {
     expect(brandMarkOwner.size).toBe(34)
     expect(brandMarkOwner.className).toBeTypeOf('string')
     expect(renderSlot.mock.calls[0]?.[2]?.fallback).toBeTruthy()
+  })
+
+  it('shows an owner headline instead of the default headline and preview badge', () => {
+    const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={(() => null) as never} headline="Review demo #42" />)
+    expect(view.getByText('Review demo #42')).toBeTruthy()
+    expect(view.queryByText('Into the Unknown')).toBeNull()
+    expect(view.queryByText('Preview')).toBeNull()
   })
 })
 
@@ -611,7 +622,7 @@ describe('ConversationRoot resident composer', () => {
     const owner = b.pickerOwner() as { open: boolean; onPick(id: WorkspaceId): void }
     expect(owner.open).toBe(true)
     act(() => { owner.onPick(wid('second')) })
-    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'))
+    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'), b.moveDraft)
     expect(b.view.getByText('Selected Folder')).toBeTruthy()
   })
 
@@ -892,7 +903,7 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('rolls the pending workspace label back when switching fails', async () => {
-    const selectWorkspace = vi.fn(async () => { throw new Error('connect failed') })
+    const selectWorkspace = vi.fn<WorkspaceSelectedHandler>(async () => { throw new Error('connect failed') })
     const b = mount(
       sessionSnapshotOf({ blank: true }),
       [
@@ -904,7 +915,7 @@ describe('ConversationRoot resident composer', () => {
     fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
     const owner = b.pickerOwner() as { onPick(id: WorkspaceId): void }
     await act(async () => { owner.onPick(wid('second')); await Promise.resolve() })
-    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'))
+    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'), b.moveDraft)
     expect(b.view.queryByText('Selected Folder')).toBeNull()
     expect(b.view.getByText('one')).toBeTruthy()
   })

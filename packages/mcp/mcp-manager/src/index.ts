@@ -69,6 +69,8 @@ export interface McpManagedServerEntry {
   closeTimeoutMs?: number
   /** Reconnect policy; the MCP client host validates it, and omission uses the mcp-client defaults. */
   reconnect?: ReconnectConfig
+  /** `on-demand` keeps the server's tools out of every tool list until an agent loads them; default `eager`. */
+  toolLoading: 'eager' | 'on-demand'
 }
 
 /** Manager configuration with live server entries. */
@@ -77,8 +79,8 @@ export interface Config {
   servers: Volatile<Record<string, McpManagedServerEntry>>
 }
 
-type EntryInput = Omit<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs'>
-  & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs'>>
+type EntryInput = Omit<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs' | 'toolLoading'>
+  & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs' | 'toolLoading'>>
 interface ConfigInput {
   servers?: Record<string, EntryInput>
 }
@@ -104,6 +106,7 @@ const ServerEntrySchema = z.object({
   startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
   closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
   reconnect: z.any(),
+  toolLoading: z.union(['eager', 'on-demand']).default('eager'),
 }) as z<EntryInput, McpManagedServerEntry>
 
 /** One server's child instance, probes, and any cleanup failure retained by the manager. */
@@ -673,6 +676,7 @@ export default class McpServerManager extends TypertRemoteService {
       ...entry.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: entry.toolCallTimeoutMs },
       startupTimeoutMs: entry.startupTimeoutMs,
       ...entry.reconnect === undefined ? {} : { reconnect: entry.reconnect },
+      toolLoading: entry.toolLoading,
     }
     const path = ['servers', name]
     if (entry.transport === 'stdio') {

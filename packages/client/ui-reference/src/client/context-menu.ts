@@ -1,5 +1,6 @@
 /** File references contributed to the shared file menu. */
 import type { Context } from '@deepseek-ai/cordis'
+import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -30,7 +31,7 @@ export function registerReferenceMenu(ctx: Context, t: (key: ReferenceKey) => st
     observe: () => [ctx.locale],
     resolve: (target) => {
       const current = targetInput(target)
-      const path = resolveWorkspacePath(ctx.sessions.list.getSnapshot().byId[target.sessionId]?.cwd, target.path)
+      const path = resolveWorkspacePath(sessionDirectory(ctx.sessions, target.sessionId), target.path)
       const mention = formatFileMention({ path, kind: 'file' }, false)
       return [{
         id: 'addToChat', label: t('menu.addToChat'), icon: { key: 'reference.addToChat' }, separatorBefore: true,

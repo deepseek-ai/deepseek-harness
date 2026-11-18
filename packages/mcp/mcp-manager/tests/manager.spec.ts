@@ -246,6 +246,17 @@ describe('mcp-manager', () => {
     expect(transportConfigs.at(-1)).toMatchObject({ command: 'echo', args: ['--fast'] })
   })
 
+  it('passes on-demand tool loading to the managed instance', async () => {
+    mockListTools.mockResolvedValue(listing('remote'))
+    const { ctx, manager } = await mountWorld({
+      settingsDoc: { mcp: { servers: { lazy: stdioEntry({ toolLoading: 'on-demand' }) } } },
+    })
+    await waitForState(manager, 'lazy', 'connected')
+
+    expect(ctx.tools.get('mcp__lazy__load_tools')).toBeDefined()
+    expect(ctx.tools.get('mcp__lazy__remote')).toBeUndefined()
+  })
+
   it('disable unmounts the instance and keeps the entry listed; re-enable remounts it', async () => {
     const { ctx, manager, settings, events } = await mountWorld({
       settingsDoc: { mcp: { servers: { toggled: stdioEntry() } } },

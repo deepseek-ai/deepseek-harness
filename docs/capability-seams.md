@@ -62,6 +62,14 @@ flowchart LR
   pkg_tool_pwsh["tool-pwsh"]
   pkg_subagent["subagent"]
   pkg_sdk_jsonrpc_server["sdk-jsonrpc-server"]
+  pkg_sandbox_policy["sandbox-policy"]
+  pkg_api_workspace_files["api-workspace-files"]
+  pkg_api_terminal_controller["api-terminal-controller"]
+  pkg_workspace_changes["workspace-changes"]
+  pkg_file_reference_local["file-reference-local"]
+  pkg_tool_skill["tool-skill"]
+  pkg_agent_instructions["agent-instructions"]
+  pkg_tool_lsp["tool-lsp"]
   pkg_mcp_resources["mcp-resources"]
   svc_mcpResources["ctx.mcpResources<br/>Scoped MCP resource access"]
   pkg_mcp_client["mcp-client"]
@@ -123,11 +131,8 @@ flowchart LR
   pkg_api_settings_controller["api-settings-controller"]
   svc_credentialsController["ctx.credentialsController<br/>Host credential-surface Remote controller"]
   svc_settingsController["ctx.settingsController<br/>Host settings-surface Remote controller"]
-  pkg_api_workspace_files["api-workspace-files"]
   svc_workspaceFiles["ctx.workspaceFiles<br/>Host workspace file Remote service"]
-  pkg_workspace_changes["workspace-changes"]
   svc_workspaceChanges["ctx.workspaceChanges<br/>Host per-turn changed-file summaries"]
-  pkg_api_terminal_controller["api-terminal-controller"]
   svc_terminalController["ctx.terminalController<br/>Session interactive terminal Remote controller"]
   pkg_api_workspace_controller["api-workspace-controller"]
   svc_workspaceController["ctx.workspaceController<br/>Host Workspace Remote controller"]
@@ -187,7 +192,6 @@ flowchart LR
   pkg_tool_session_query["tool-session-query"]
   pkg_file_reference["file-reference"]
   svc_fileReferences["ctx.fileReferences<br/>File reference discovery"]
-  pkg_file_reference_local["file-reference-local"]
   svc_sessionReferenceResolver["ctx.sessionReferenceResolver<br/>Cross-session snapshot preparation"]
   pkg_session_title["session-title"]
   svc_sessionTitle["ctx.sessionTitle<br/>Log-backed session titles"]
@@ -201,7 +205,6 @@ flowchart LR
   svc_tools["ctx.tools<br/>Scoped tool registry and executor selection"]
   pkg_tool_ask_user["tool-ask-user"]
   pkg_tool_cordis["tool-cordis"]
-  pkg_tool_skill["tool-skill"]
   pkg_tool_todo["tool-todo"]
   pkg_user_questions["user-questions"]
   svc_userQuestions["ctx.userQuestions<br/>Human question/answer seam"]
@@ -221,6 +224,8 @@ flowchart LR
   pkg_skill_badge["skill-badge"]
   pkg_skill_filesystem["skill-filesystem"]
   pkg_skill_office["skill-office"]
+  pkg_upstream_skills["upstream-skills"]
+  svc_upstreamSkills["ctx.upstreamSkills<br/>Upstream skills of CLI app plugins"]
   svc_agents["ctx.agents<br/>Agent service"]
   pkg_acp["acp"]
   svc_agentDefaultModel["ctx.agentDefaultModel<br/>Default Agent model selection"]
@@ -262,7 +267,6 @@ flowchart LR
   pkg_sandbox["sandbox"]
   svc_sandbox["ctx.sandbox<br/>Process-sandbox seam"]
   pkg_sandbox_local["sandbox-local"]
-  pkg_sandbox_policy["sandbox-policy"]
   svc_sandboxPolicy["ctx.sandboxPolicy<br/>Sandbox policy home"]
   pkg_fs_sandbox["fs-sandbox"]
   pkg_user_approval["user-approval"]
@@ -329,7 +333,6 @@ flowchart LR
   pkg_webhook_github["webhook-github"]
   pkg_lsp["lsp"]
   svc_lsp["ctx.lsp<br/>Language-server navigation seam"]
-  pkg_tool_lsp["tool-lsp"]
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
@@ -501,6 +504,7 @@ flowchart LR
   pkg_tool_subagent --> svc_subagentModelSelection
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
+  pkg_upstream_skills --> svc_upstreamSkills
   pkg_user_approval --> svc_approval
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
@@ -678,11 +682,19 @@ flowchart LR
   svc_webhookRuntime --> pkg_webhook_github
   svc_workflowEngine --> pkg_tool_ralph
   svc_workflowEngine --> pkg_tool_workflow
+  svc_workingDirectory --> pkg_agent_instructions
+  svc_workingDirectory --> pkg_api_terminal_controller
+  svc_workingDirectory --> pkg_api_workspace_files
+  svc_workingDirectory --> pkg_file_reference_local
+  svc_workingDirectory --> pkg_sandbox_policy
   svc_workingDirectory --> pkg_sdk_jsonrpc_server
   svc_workingDirectory --> pkg_subagent
   svc_workingDirectory --> pkg_tool_bash
   svc_workingDirectory --> pkg_tool_fs
+  svc_workingDirectory --> pkg_tool_lsp
   svc_workingDirectory --> pkg_tool_pwsh
+  svc_workingDirectory --> pkg_tool_skill
+  svc_workingDirectory --> pkg_workspace_changes
   svc_workspaceRegistry --> pkg_api_session_controller
   svc_workspaceRegistry --> pkg_api_workspace_controller
   svc_worktrees --> pkg_experimental_tool_worktree
@@ -710,7 +722,7 @@ flowchart LR
 | `ctx.forgeSession` | `service` | [`experimental-forge-session`](../packages/experimental/forge-session) | - | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | A Session projection derives bindings from shell results and binding records and publishes their URLs without status to clients; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry. |
 | `ctx.forgePanel` | `service` | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | - | - | Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status. |
 | `ctx.worktrees` | `seam` | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-tool-worktree`](../packages/experimental/tool-worktree) | - | Explicit experimental creation from a pinned local commit. Existing write permissions govern checkout and shared Git metadata; the working-directory service owns the resulting Session directory. |
-| `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server) | - | One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes; user context reports them while original metadata and write grants stay fixed. |
+| `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`api-workspace-files`](../packages/api/workspace-files), [`api-terminal-controller`](../packages/api/terminal-controller), [`workspace-changes`](../packages/deliverables/workspace-changes), [`file-reference-local`](../packages/context/file-reference-local), [`tool-skill`](../packages/skill/tool-skill), [`agent-instructions`](../packages/context/agent-instructions), [`tool-lsp`](../packages/lsp/tool-lsp) | - | One Session projection owns the effective execution directory, which only Host operations move. The filesystem validates changes and user context reports them; model tools resolve paths from the directory, the sandbox boundary, file views, and discovery follow it, and original metadata stays fixed. |
 | `ctx.mcpResources` | `seam` | [`mcp-resources`](../packages/mcp/mcp-resources) | [`mcp-client`](../packages/mcp/mcp-client) | [`mcp-resources`](../packages/mcp/mcp-resources) | - | Connection-owned providers serve shared resource tools in the calling agent scope. |
 | `ctx.browserUse` | `seam` | [`browser-use`](../packages/browser-use/browser-use) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | - | One provider-owned name per service instance. Providers own their tools and browser resources per live Session; the shared service has no browser operation API. |
 | `ctx.computerUse` | `seam` | [`computer-use`](../packages/computer-use/computer-use) | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp), [`experimental-computer-use-cua-driver-native`](../packages/experimental/computer-use-cua-driver-native) | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp), [`experimental-computer-use-cua-driver-native`](../packages/experimental/computer-use-cua-driver-native) | - | One provider-owned name per service instance. Each provider also owns its model tools; the service has no common action API, runtime selection, or Session workflow lock. |
@@ -771,6 +783,7 @@ flowchart LR
 | `ctx.sessionProjections` | `core` | [`session-projection`](../packages/session/session-projection) | - | [`api-session-controller`](../packages/api/session-controller), [`tool-todo`](../packages/todo/tool-todo), [`session-title`](../packages/session/session-title) | - | Domains register state-driven fold units; the eager drive keeps per-session watermark states and the Session controller serves baselines and pushes changed values. |
 | `ctx.sessionProjectionCache` | `core` | [`session-projection-cache`](../packages/session/session-projection-cache) | - | [`api-session-controller`](../packages/api/session-controller), [`session-query`](../packages/session-query/session-query), [`session-reference`](../packages/context/session-reference) | - | Durably checkpoints projection unit states per session (throttled + turn/end/detach mandatory points), serves cached projection views, and accelerates prepared-Session projection hydration. |
 | `ctx.skills` | `seam` | [`skill`](../packages/skill/skill) | [`sandbox-windows-acl`](../packages/sandbox/sandbox-windows-acl), [`skill-badge`](../packages/experimental/skill-badge), [`skill-filesystem`](../packages/skill/skill-filesystem), [`skill-office`](../packages/skill/skill-office) | [`tool-skill`](../packages/skill/tool-skill) | - | Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies. |
+| `ctx.upstreamSkills` | `service` | [`upstream-skills`](../packages/connector/upstream-skills) | - | - | - | Holds what each CLI app plugin registers: downloads the pinned upstream files its entry skill indexes from the vendor's GitHub repository, verifies and caches them, and lists the entry skill through `ctx.skills` once they are in place. |
 | `ctx.agents` | `core` | [`agent`](../packages/core/agent) | - | [`agent-loop`](../packages/core/agent-loop), [`acp`](../packages/acp/acp), [`subagent`](../packages/subagent/subagent) | - | Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation. |
 | `ctx.agentDefaultModel` | `core` | [`agent-default-model`](../packages/core/agent-default-model) | - | [`api-session-controller`](../packages/api/session-controller), [`headless`](../packages/bundle/headless) | - | Reads the default ModelSelection from volatile Config and saves selections through the profile editor. |
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`base`](../packages/bundle/base), [`sdk-minimal`](../packages/bundle/sdk-minimal) | - | The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package. |

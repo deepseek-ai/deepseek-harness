@@ -11,6 +11,7 @@
     { "path": "../../packages/host/authentication-desktop" },
     { "path": "../../vendor/cordis" },
     { "path": "../../packages/core/agent" },
+    { "path": "../../packages/api/workspace-files/tsconfig.host.json" },
     { "path": "../../packages/jobs/jobs" },
     { "path": "../../packages/schedule/schedule" },
     { "path": "../../packages/workspace/workspace" },

@@ -3030,10 +3030,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s working directory is its workspace-write boundary, so a Host move of the Session moves the boundary; the configured root is the fallback for agentless calls and, without the working-directory service, sessions without a header directory. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
-        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s recorded cwd is relative or contains a NUL byte.'],
+        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s directory is relative or contains a NUL byte.'],
       },
       {
         signature: 'registerWritableRoot(session: Session, directory: string): () => void',
@@ -4788,6 +4788,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'upstreamSkills',
+    summary: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    description: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    methods: [
+      {
+        signature: 'register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle',
+        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s provider name, entry, pinned files, and optional skills directory.' }],
+        returns: 'the handle the plugin\'s view observes and its check retries.',
+        throws: ['when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a skill provider named `name` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'userQuestions',
     summary: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
     description: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
@@ -5107,6 +5121,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     description: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     methods: [
+      {
+        signature: 'scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined>',
+        description: 'Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses: a live Session\'s sandbox workspace root, else a stored Session\'s cached directory, else its header directory.',
+        parameters: [{ name: 'sessionId', description: 'Session identity received on the wire.' }, { name: 'signal', description: 'cancellation for the persistence read of a stored Session.' }],
+        returns: 'the scope, or undefined when no live or stored Session has that identity.',
+      },
       {
         signature: '@Remote async read( workspaceFileScope: WorkspaceFileScope, path: string, range: WorkspaceFileRange, signal: AbortSignal, ): Promise<WorkspaceFileText>',
         description: 'Read one page of lines from a UTF-8 file readable by the filesystem backend.',
@@ -10375,7 +10395,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'StreamableHttpConfig',
-    declaration: 'export interface StreamableHttpConfig {\n    oauth?: McpOAuthConfig;\n    transport: \'streamable-http\';\n    serverName: string;\n    url: string;\n    headers: Record<string, string>;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n}',
+    declaration: 'export interface StreamableHttpConfig {\n    oauth?: McpOAuthConfig;\n    transport: \'streamable-http\';\n    serverName: string;\n    url: string;\n    headers: Record<string, string>;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n    toolLoading: \'eager\' | \'on-demand\';\n    catalogDescriptionMaxLength: number;\n}',
   },
   {
     name: 'StreamChunk',
@@ -11152,6 +11172,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateTeamTaskRequest',
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: SessionId;\n}',
+  },
+  {
+    name: 'UpstreamSkillSelection',
+    declaration: 'export interface UpstreamSkillSelection {\n    readonly repository: string;\n    readonly commit: string;\n    readonly directory: string;\n    readonly exclude: readonly string[];\n    readonly license: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillSet',
+    declaration: 'export interface UpstreamSkillSet extends UpstreamSkillSelection {\n    readonly bytes: number;\n    readonly sha256: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillsHandle',
+    declaration: 'export interface UpstreamSkillsHandle {\n    readonly directory: string;\n    readonly state: UpstreamSkillsState;\n    watch(listener: (state: UpstreamSkillsState) => void): () => void;\n    retry(): void;\n    dispose(): void;\n}',
+  },
+  {
+    name: 'UpstreamSkillsRegistration',
+    declaration: 'export interface UpstreamSkillsRegistration {\n    readonly name: string;\n    readonly entry: string;\n    readonly set: UpstreamSkillSet;\n    readonly skillsDir?: string | undefined;\n}',
+  },
+  {
+    name: 'UpstreamSkillsState',
+    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
   },
   {
     name: 'UserMessage',

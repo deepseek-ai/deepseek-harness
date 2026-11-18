@@ -23,6 +23,7 @@ enum NativeProtocol {
         "permissionStatus": [],
         "pressKey": ["appHandle", "key", "modifiers", "windowId"],
         "releaseHeldKeys": ["runId"],
+        "releaseSystemButton": [],
         "requestPermission": ["backLabel", "finderLabel", "instruction", "permission", "pollIntervalMs", "settingsMessage", "unavailableMessage"],
         "screenshot": ["appHandle", "windowId"],
         "scroll": ["appHandle", "deltaLinesX", "deltaLinesY", "snapshotId", "windowId", "x", "y"],
@@ -30,7 +31,7 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
-        "toggleMouse": ["appHandle", "direction", "mouseButton", "windowId"],
+        "toggleMouse": ["appHandle", "direction", "mouseButton", "useSystemPointer", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]
     static let stringEnums: [String: [String: Set<String>]] = [

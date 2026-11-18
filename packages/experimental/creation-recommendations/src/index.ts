@@ -242,7 +242,7 @@ class PersonalizedPages {
     if (verb !== 'create' || !location.success) return refused('unavailable')
     const id = randomUUID()
     const directory = join(this.ctx.profileContext.dir, 'created-plugins', id)
-    // Spawn preserves the parent's workspace-write boundary even with a different cwd.
+    // The child's start directory is its workspace, so its workspace-write boundary is this source directory.
     const sourceDirectory = join(agent.session.header.cwd ?? this.ctx.profileContext.cwd, '.dsh-created-plugins', id)
     const bundleName = RESERVED_PREFIX + id
     const card: PageCard = { cardId: proposal.cardId, phase: 'creating', bundleName, ...location.data }

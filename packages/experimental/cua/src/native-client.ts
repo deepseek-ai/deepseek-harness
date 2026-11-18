@@ -128,7 +128,8 @@ export class NativeClient {
   }
 
   /**
-   * Send one operation. Native refusals preserve this connection; transport failures invalidate its handles.
+   * Send one operation after any active native cleanup acknowledges completion.
+   * Native refusals preserve this connection; transport failures invalidate its handles.
    * @param method - Helper operation name.
    * @param params - JSON operation parameters.
    * @param signal - Cancellation stops this request; the connection survives when native cleanup acknowledges it.
@@ -136,6 +137,7 @@ export class NativeClient {
    * @returns The validated helper result, after failure cleanup when needed.
    */
   async request(method: string, params: Record<string, JsonValue>, signal: AbortSignal, callId?: ToolExecution['callId']): Promise<JsonValue> {
+    while (!signal.aborted && this.active?.kind === 'cleanup') await this.active.outcome
     if (signal.aborted) throw new NativeError('NATIVE_CANCELLED', 'Operation was cancelled before dispatch')
     if (this.disposed) {
       await this.dispose()

@@ -128,6 +128,21 @@ it('publishes values its own schema resolves for a plugin that has not activated
   expect(h.config('@fixture/waiting')).toEqual(initial)
 })
 
+it('publishes no values while a pending plugin\'s config expression reads an injection it awaits, then the activated values', async () => {
+  const Waiting = z.object({ size: z.natural().default(1).volatile(), hosts: z.array(String).default([]) })
+  const h = await harness({ '@fixture/pkg': { Config: Schema, apply: () => {} } }, { '@fixture/pkg': { size: 3 } })
+  const errors = vi.spyOn(h.ctx.logger, 'error')
+  writePackage('@fixture/waiting')
+  h.plugins['@fixture/waiting'] = { inject: ['absent'], Config: Waiting, apply: () => {} }
+  await h.ctx.loader.create({ name: '@fixture/waiting', config: { size: 3, hosts: { __jsExpr: 'ctx.absent.hosts' } } })
+  await vi.waitFor(() => { expect(h.service.graph().entries.some(row => row.id === '@fixture/waiting')).toBe(true) })
+  expect(h.config('@fixture/waiting')).toBeUndefined()
+  h.ctx.provide('absent', { hosts: ['a'] } as never)
+  await h.ctx.loader.await()
+  await vi.waitFor(() => { expect(h.config('@fixture/waiting')).toEqual({ size: 3 }) })
+  expect(errors).not.toHaveBeenCalled()
+})
+
 it('publishes values for an entry created after startup that has not activated yet', async () => {
   const h = await harness({ '@fixture/pkg': { Config: Schema, apply: () => {} } }, { '@fixture/pkg': { size: 3 } })
   writePackage('@fixture/late')

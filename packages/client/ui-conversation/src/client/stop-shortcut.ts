@@ -8,7 +8,7 @@ import { StopSequence } from './stop-sequence.ts'
 
 /**
  * Subscribe fixed input to the same Session cancellation used by the stop button.
- * @param shortcuts - window keyboard arbitration and validated sequence interval.
+ * @param shortcuts - window keyboard arbitration and the current validated sequence interval, read at each first press.
  * @param sessions - live Session identities and lifecycle sources.
  * @param openTurn - stable current-turn source for a live Session binding.
  * @param uiSession - effective pending interaction of each Session.
@@ -23,7 +23,7 @@ export function installStopShortcut(
   cancel: (sessionId: SessionId) => void,
 ): () => void {
   let unwatch = (): void => {}
-  const sequence = new StopSequence(shortcuts.stopSequenceMs, () => {
+  const sequence = new StopSequence(() => shortcuts.stopSequenceMs, () => {
     unwatch()
     unwatch = () => {}
   })

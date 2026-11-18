@@ -140,8 +140,12 @@ function harness(placement: Placement, controller: AbortController, book: Worksp
     openTab: vi.fn<SidebarRightTabActions['openTab']>(),
     close: vi.fn<SidebarRightTabActions['close']>(),
   }
-  const sessionsAt = (cwd: string | null): SessionListState =>
-    ({ byId: cwd === null ? {} : { [SESSION]: { cwd } } } as unknown as SessionListState)
+  const sessionsAt = (cwd: string | null): SessionListState => ({
+    ids: cwd === null ? [] : [SESSION],
+    byId: cwd === null ? {} : { [SESSION]: { id: SESSION, displayTitle: 'files', running: false, retainedBy: {}, blank: false, updatedAt: 0, cwd } },
+    phase: 'ready',
+    projectionsBySession: {},
+  })
   const useTabInfo = (): SidebarRightTabInfo => ({
     sidebar: { expanded: true, fullscreen: false },
     panel: { id: PANE, isFloating: placement.isFloating ?? false },
