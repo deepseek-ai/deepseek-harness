@@ -1289,7 +1289,8 @@ it.each([
   providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, requestImageMaxBytes: 333 } }
   expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({ height: 777, maxBytes: 333 })
   const messages = Array.from({ length: 22 }, () => createUserMessage({ content: [{ type: 'image', attachment: ref }], source: { kind: 'user' } }))
-  const chunks = await Array.fromAsync(prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages }))
+  const chunks: unknown[] = []
+  for await (const chunk of prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages })) chunks.push(chunk)
   expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
   expect(read).toHaveBeenCalledTimes(1)
   expect(read.mock.calls[0]?.[1]).toEqual(expected)
