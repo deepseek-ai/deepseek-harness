@@ -1666,7 +1666,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-feishu`
 
 - `inject`: `cliAccounts` · `skills`
-- `source`: [`packages/connector/feishu/src/index.ts:32`](../packages/connector/feishu/src/index.ts)
+- `source`: [`packages/connector/feishu/src/index.ts:30`](../packages/connector/feishu/src/index.ts)
 
 ```ts config-catalog
 /** Where lark-cli is. */
