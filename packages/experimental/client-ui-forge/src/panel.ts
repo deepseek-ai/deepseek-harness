@@ -334,7 +334,10 @@ export class SessionPanel {
     if (policy.mode === 'danger-full-access') return null
     if (policy.mode === 'read-only') return 'read-only'
     const root = this.ctx.fs.processPath(await this.ctx.fs.resolve(policy.workspaceRoot, { signal: this.lifetime.signal }))
-    return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
+    // The Git directory of a linked checkout lies outside its root; a grant the policy carries for it counts.
+    const writable = [root, ...policy.additionalWritableRoots ?? []]
+    const granted = writable.some(directory => within(directory, inspection.commonDir))
+    return within(root, inspection.checkout.root) && granted ? null : 'outside-writable-root'
   }
 
   /** Measure the `branch` scope; a failed measurement only hides the local changes row. */

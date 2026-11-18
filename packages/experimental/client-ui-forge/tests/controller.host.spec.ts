@@ -954,6 +954,26 @@ describe('forgePanel worktree blockers', () => {
     expect(unblocked.worktree.blocker).toBeNull()
   })
 
+  it('offers a worktree from a linked checkout while the Session\'s policy grants its shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked)
+    const follower = reader(opened)
+    const blocked = await follower.until(ready)
+
+    const revoke = opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, join(repo, '.git'))
+    shellTurn(opened.session, 1, [{ callId: 'first', command: 'true', output: '' }])
+    const granted = await follower.next(state => state.worktree.blocker !== 'outside-writable-root')
+    revoke()
+    shellTurn(opened.session, 2, [{ callId: 'second', command: 'true', output: '' }])
+    const revoked = await follower.next(state => state.worktree.blocker !== null)
+
+    expect(blocked.worktree.blocker).toBe('outside-writable-root')
+    expect(granted.worktree.blocker).toBeNull()
+    expect(revoked.worktree.blocker).toBe('outside-writable-root')
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
@@ -1531,14 +1551,17 @@ describe('forgePanel removed worktrees', () => {
     const created = await startInWorktree(opened)
     const tip = await commitAt(created.path, 'later.txt', '2026-05-01T00:00:00Z')
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
+    const granted = await plain()
+    opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, granted)
     await rm(created.path, { recursive: true, force: true })
 
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
-    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary.
-    const probe = opened.sandbox.calls.find(call => call.argv.includes('show-ref'))
-    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
+    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
+    // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
+    const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [granted] })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
