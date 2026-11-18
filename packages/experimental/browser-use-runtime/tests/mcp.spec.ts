@@ -151,6 +151,22 @@ async function events(root: string) {
   return (await readFile(join(root, 'events.ndjson'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; pid: number; name?: string; cwd?: string })
 }
 
+/**
+ * The fixture ends when its stdin closes, and Windows reports that exit after the close returns.
+ * Poll for the exit instead of asserting it immediately, so a slow exit is not read as a leak.
+ */
+async function expectProcessExited(pid: number): Promise<void> {
+  await expect.poll(() => {
+    try {
+      process.kill(pid, 0)
+      return 'alive'
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return 'exited'
+      throw error
+    }
+  }, { timeout: 2_000, interval: 50 }).toBe('exited')
+}
+
 it('requires a browser mode and validates launch and attachment settings', () => {
   expect(BrowserMcpConfig({ mode: 'launch' })).toEqual({ mode: 'launch', headless: true })
   expect(BrowserMcpConfig({ mode: 'launch', headless: false, executablePath: '/chromium', toolCallTimeoutMs: 12 })).toMatchObject({ headless: false, toolCallTimeoutMs: 12 })
@@ -218,7 +234,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.browserUse.providerName).toBeUndefined()
     const closed = await events(root)
     for (const { pid } of closed.filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
   })
 
@@ -306,7 +322,7 @@ describe('Session MCP Loader composition', () => {
     const failedEvents = await events(failed.root)
     expect(failedEvents.filter(event => event.event === 'initialize')).toHaveLength(1)
     for (const { pid } of failedEvents.filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
     const held = await load(false, 'hold')
     const pendingOwner = observeActivation(held.ctx.agents.create({ sessionId: brandString<SessionId>('pending') }))
@@ -315,7 +331,7 @@ describe('Session MCP Loader composition', () => {
     await expect(pendingOwner).rejects.toThrow()
     expect(held.ctx.agents.get(brandString<SessionId>('pending'))).toBeUndefined()
     for (const { pid } of (await events(held.root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
   })
 
@@ -493,7 +509,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.tools.schemas(initializing)).toEqual([])
     expect((await execute(ctx, initializing)).isError).toBe(true)
     for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
     await writeFile(join(root, 'release'), '')
     const successor = await ctx.agents.create({ sessionId: initializing.id })
@@ -520,7 +536,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.tools.schemas(initializing)).toEqual([])
     expect((await execute(ctx, initializing)).isError).toBe(true)
     for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
   })
 
@@ -600,7 +616,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.agents.get(sessionId)).toBeUndefined()
     expect(ctx.sessions.get(sessionId)).toBeUndefined()
     for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
+      await expectProcessExited(pid)
     }
 
     let resumed = false
