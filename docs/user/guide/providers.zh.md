@@ -80,7 +80,7 @@ Provider ID 是永久的，因为请求、已保存会话、模型默认值和�
 
 Pi-ai 的 `input` 接受 `text` 和 `image`，且只作用于该模型。显式的非空选择优先。省略或为空的 `input` 先继承已安装目录的输入类型，再回退到路由的 `defaultInput`，后者默认为 `[text]`。复选框会显示这些继承值，仅打开模型行不会保存覆盖值。
 
-DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。取消图片还会移除该模型的 `imagePixelBudget` 和 `imageMaxBytes`，因为 DeepSeek 拒绝纯文本模型上的图片限制。以后重新启用图片且需要自定义限制时，需再次设置这些限制。
+DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。取消图片还会移除该模型的 `imagePixelBudget` 和 `imageTargetBytes`，因为 DeepSeek 拒绝纯文本模型上的图片限制。以后重新启用图片且需要自定义限制时，需再次设置这些限制。
 
 修改复选框后如需恢复继承，可在 `cordis.patch.yml` 中移除模型的 `input` 或 `inputModalities` 字段。**恢复默认模型**会移除整个模型目录覆盖，包括其他模型编辑，因此仅在需要恢复整个目录时使用。
 
