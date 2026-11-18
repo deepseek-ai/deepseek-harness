@@ -274,7 +274,9 @@
     "tests/linear-connection.e2e.ts",
     "tests/linear-oauth-fixture.ts",
     "tests/notion-connection.e2e.ts",
-    "tests/notion-oauth-fixture.ts"
+    "tests/notion-oauth-fixture.ts",
+    "tests/tencent-docs-connection.e2e.ts",
+    "tests/tencent-docs-oauth-fixture.ts"
   ],
   "references": [
     { "path": "../../packages/experimental/auto-review" },

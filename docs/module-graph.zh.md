@@ -248,6 +248,7 @@ flowchart TD
     pkg_cli_account["cli-account"]
     pkg_linear["linear"]
     pkg_notion["notion"]
+    pkg_tencent_docs["tencent-docs"]
     pkg_upstream_skills["upstream-skills"]
   end
   subgraph group_context["packages/context"]
@@ -1725,6 +1726,7 @@ flowchart TD
 | [`computer-use`](../packages/computer-use/computer-use) | `computer-use` | — |
 | [`linear`](../packages/connector/linear) | `connector` | — |
 | [`notion`](../packages/connector/notion) | `connector` | — |
+| [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
 | [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | `experimental` | — |
 | [`client-ui-creation-recommendations`](../packages/experimental/client-ui-creation-recommendations) | `experimental` | — |
