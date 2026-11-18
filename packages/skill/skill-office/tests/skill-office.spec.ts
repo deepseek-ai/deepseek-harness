@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const userPython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise use the project\'s or user\'s existing Python, such as `python3` or `python` on PATH. Before the first script, check that this Python can import the libraries the workflow needs. If Python or a library is missing, tell the user which packages to install; do not install packages into a global environment without the user\'s agreement.'
 const workspacePython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise call `load_workspace_dependencies` and run scripts with its Python executable and bundled libraries. Do not install packages or search for a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.'
-const names = ['office', 'office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']
+const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
 
 describe('bundled Office skills', () => {
   it('keeps routing and authoring within the progressive context budgets', async () => {
@@ -39,13 +39,6 @@ describe('bundled Office skills', () => {
         expect(skill.content).toContain('`office_render`')
         expect(skill.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
       }
-      const pdf = (await ctx.skills.get('office-pdf'))!
-      expect(pdf.description).toBe('Read, extract, inspect, split, merge, protect, or fill an existing PDF; PDF to Word (.pdf).')
-      // The budget includes the appended Python environment section.
-      expect(Math.ceil(pdf.content.length / 4)).toBeLessThanOrEqual(3000)
-      expect(pdf.content).toContain('`pypdf`')
-      expect(pdf.content).toContain('`office_render` with `pages`')
-      expect(pdf.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -129,7 +122,7 @@ describe('bundled Office skills', () => {
     try {
       await ctx.plugin(SkillRegistry)
       await ctx.plugin(SkillOffice, pythonEnvironment === undefined ? {} : { pythonEnvironment })
-      for (const name of ['office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']) {
+      for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
         const content = (await ctx.skills.get(name))!.content
         expect(content).toContain(`\n\n## Python environment\n\n${section}`)
         expect(content).not.toContain(section === userPython ? workspacePython : userPython)

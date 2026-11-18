@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及面向 Word、PowerPoint、Excel 和 PDF 文件的四个格式技能，完整说明按需加载。格式技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
+目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 
@@ -35,31 +35,27 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `assetRoot` | 包内 `assets/` | 包含五个技能目录的绝对路径。 |
-| `pythonEnvironment` | `'workspace-dependencies'` | `office-docx`、`office-pdf`、`office-pptx` 和 `office-xlsx` 指引模型使用的 Python；见下文。 |
+| `assetRoot` | 包内 `assets/` | 包含四个技能目录的绝对路径。 |
+| `pythonEnvironment` | `'workspace-dependencies'` | `office-docx`、`office-pptx` 和 `office-xlsx` 指引模型使用的 Python；见下文。 |
 
-`pythonEnvironment` 选择追加到这四个技能末尾的一段固定说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。只挂载本包而不挂载 `dsh-tool-workspace-dependencies` 的自定义组合必须配置 `pythonEnvironment: user`。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
+`pythonEnvironment` 选择追加到这三个技能末尾的一段固定说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。只挂载本包而不挂载 `dsh-tool-workspace-dependencies` 的自定义组合必须配置 `pythonEnvironment: user`。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
 
 相对路径的 `assetRoot` 会阻止注册。目录发现时读取每个 `SKILL.md`。缺失或无效的技能会从目录中省略并记录警告；发现之后文件消失的技能加载失败，并从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。加载说明时不解析任何可执行文件，也不准备引擎；调用 Office 工具时才会报告 LibreOffice Kit 不可用。把转换后的文件复制进工作区时，由 Bash 或 PowerShell 负责审批、沙箱和取消。
 
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，五个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件以 `%PDF-` 开头后即结束，不加载 `office-pdf`。输入为 PDF 时加载 `office-pdf`：它描述 pypdf 的十项能力，从文字提取、页面组织到批注、表单、书签、附件和元数据，由这些能力组合出水印、扁平化表单等任务；只在页面文字为空或乱码、版面或图表重要、修改后的页面需要视觉检查、或用户要求图片时用 `office_render` 渲染相关页。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染，演示文稿中新增或修改的幻灯片内容同样需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
 
 ```mermaid
 flowchart TD
-    A["Initial catalog: five Office summaries"]
+    A["Initial catalog: four Office summaries"]
     A -->|Non-Office task| N["Continue without loading Office instructions"]
     A -->|Office task| B["skill(office): task routing"]
 
     B -->|Create or edit| C["skill(office-docx / office-pptx / office-xlsx)"]
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
-
-    B -->|PDF input| G["skill(office-pdf): pypdf capabilities combined per task"]
-    G -->|Text and structure checks suffice| F
-    G -->|Empty or garbled text, layout, or visual check| R
 
     B -->|Images, visual inspection, appearance or slide changes| R["office_render: images in the tool result"]
     D -->|Images, visual inspection, appearance or slide changes| R
@@ -95,7 +91,7 @@ flowchart TD
 |---|---|
 | [`src/index.ts`](src/index.ts) | 注册提供者、逐个读取技能资源，并追加 Python 环境说明。 |
 
-| [`assets/`](assets/) | 路由与四个格式技能。 |
+| [`assets/`](assets/) | 路由与三个创作技能。 |
 
 </details>
 
@@ -118,7 +114,7 @@ flowchart TD
 
 #### KV Cache 影响
 
-技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；每个创作正文最多为其记录的早期估算的 70%：`office-docx` 为 1,688 token，`office-pptx` 为 1,879 token，`office-xlsx` 为 2,330 token。`office-pdf` 没有早期估算，其正文覆盖十项能力，最多 3,000 token，其摘要使每个目录增加约 23 token。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；每个创作正文最多为其记录的早期估算的 70%：`office-docx` 为 1,688 token，`office-pptx` 为 1,879 token，`office-xlsx` 为 2,330 token。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 
@@ -127,8 +123,6 @@ flowchart TD
 - 提供者不安装创作库。
 - LibreOffice 输出可能不同于原生 Office 应用。
 - 旧格式、加密和启用宏的文件需要适用的独立工作流。
-- `office-pdf` 只依赖 pypdf，不含 `cryptography` 包，因此既打不开、也无法写出当前多数生成器使用的 AES 加密；只有用户接受时才使用不安全的 RC4-128 算法。
-- 未内置 OCR 引擎：扫描版 PDF 页面通过 `office_render` 图片转写阅读，不会获得可搜索文字层；PDF 转 Word 只重建文字，不保留版式、字体和图片。
 - 被省略的技能只通过 `ctx.logger` 报告；产品界面不会提示用户已安装资源缺失（跟踪 issue #7677）。
 - `office` 路由正文列出全部子技能，因此仍会指向因资源缺失而被省略的子技能；`skill` 工具会报告该子技能不可用。
 - 文件缺失或元数据无效的技能被判为持久失败，技能目录会在不含它的状态下被缓存；补回文件后，需要重启应用或重新加载插件，该技能才会出现。

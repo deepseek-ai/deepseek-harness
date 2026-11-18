@@ -8,8 +8,8 @@ import z from '@deepseek-ai/schemastery'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import { parse as parseYaml } from 'yaml'
 
-const SKILL_NAMES = ['office', 'office-docx', 'office-pdf', 'office-pptx', 'office-xlsx'] as const
-const PYTHON_SKILLS: readonly string[] = ['office-docx', 'office-pdf', 'office-pptx', 'office-xlsx']
+const SKILL_NAMES = ['office', 'office-docx', 'office-pptx', 'office-xlsx'] as const
+const PYTHON_SKILLS: readonly string[] = ['office-docx', 'office-pptx', 'office-xlsx']
 
 /**
  * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries

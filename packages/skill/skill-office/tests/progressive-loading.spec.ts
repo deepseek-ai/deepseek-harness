@@ -110,20 +110,6 @@ it('routes standalone operations to dedicated Office tools without authoring bod
   expect(loaded).not.toMatch(/# Word documents|# Excel workbooks|python-docx/)
 })
 
-it('returns the PDF skill body after it loads, without other format bodies', async () => {
-  const { agent, adapter } = await setup('native', ['office', 'office-pdf'])
-  await send(agent, 'Summarize report.pdf.')
-  expect(adapter.requests).toHaveLength(3)
-  const requests = adapter.requests.map(request => JSON.stringify(request))
-  expect(requests[0]).toContain('Read, extract, inspect, split, merge, protect, or fill an existing PDF')
-  expect(requests[1]).toContain('`office-pdf` for PDF inputs')
-  expect(requests[1]).not.toContain('pypdf')
-  expect(requests[2]).toContain('# PDF files')
-  expect(requests[2]).toContain('from pypdf import PdfReader')
-  expect(requests[2]).toContain('## Python environment')
-  expect(requests[2]).not.toMatch(/# Word documents|# Excel workbooks|# PowerPoint/)
-})
-
 it('loads an explicitly invoked authoring skill without the router', async () => {
   const { agent, adapter } = await setup('native', [])
   await send(agent, '/office-xlsx Change A1 to 42.')
