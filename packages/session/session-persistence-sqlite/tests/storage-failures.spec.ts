@@ -443,10 +443,13 @@ it('reports background failure once, pauses the timer and retries through the ex
   const { logs, path, report: warning } = await raw()
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
-  vi.useFakeTimers(); onTestFinished(() => { vi.useRealTimers() })
+  const reported = Promise.withResolvers<undefined>()
+  warning.mockImplementation(() => { reported.resolve(undefined) })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }); onTestFinished(() => { vi.useRealTimers() })
   try {
     db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
     await writer.receive(event(0)); await vi.advanceTimersByTimeAsync(200)
+    await reported.promise
     expect(warning).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
     db.exec('DROP TRIGGER fail_append')
@@ -531,7 +534,7 @@ it('aggregates drain and release failures on close', async () => {
   } finally { db.close() }
 })
 
-it('marks unknown when an operation failure and its rollback both fail', async () => {
+it('marks unknown when an operation, its savepoint rollback, and its transaction rollback fail', async () => {
   const { logs, path } = await raw()
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
@@ -540,12 +543,13 @@ it('marks unknown when an operation failure and its rollback both fail', async (
     // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
     const exec = DatabaseSync.prototype.exec
     const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+      if (sql === 'ROLLBACK TO batch; RELEASE batch') throw new Error('savepoint rollback unavailable')
       if (sql === 'ROLLBACK') throw new Error('rollback unavailable')
       exec.call(this, sql)
     })
     try {
       await expect(writer.append([event(0)])).rejects.toMatchObject({ code: 'SESSION_STORAGE_UNKNOWN',
-        cause: { errors: [{ message: 'operation failed' }, { message: 'rollback unavailable' }] } })
+        cause: { errors: [{ errors: [{ message: 'operation failed' }, { message: 'savepoint rollback unavailable' }] }, { message: 'rollback unavailable' }] } })
     } finally { spy.mockRestore() }
   } finally { db.close() }
 })

@@ -51,7 +51,9 @@ kind: "package-reference"
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-提供方声明支持系统指针时，`win.drag(from, to, { useSystemPointer: true })` 和 `win.mouseMove` 共用本次会话的鼠标授权。每次需要移动系统指针时都要显式传入该选项。
+支持系统指针的提供方在 `mouseMove`、`drag` 和 `toggleMouse` 之间共用会话鼠标授权。每次操作系统鼠标都要显式传 `{ useSystemPointer: true }`。
+
+要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 
 `click(target, { holdMs: 800 })` 按住鼠标按钮 800 毫秒后松开。`holdMs` 仅适用于 `click`；它接受非负整数，双击时应用于每次按下；0 表示按下后立即松开，不额外等待。提供方配置 `maxClickHoldMs` 限制显式按住时长，默认 5000 毫秒。指定时长后使用鼠标事件；省略时保留普通点击行为。按住时间计入操作超时，取消或超时会松开按钮。已接收的输入无法撤销；辅助进程被强制终止时无法保证松开。
 
@@ -80,7 +82,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方声明 `systemPointer: true` 后，`mouseMove` 和 `drag` 都必须支持显式传入 `useSystemPointer: true`。两种操作共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
+提供方声明 `systemPointer: true` 后，`mouseMove`、`drag` 和 `toggleMouse` 均支持显式传入 `useSystemPointer: true`，三者共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 
@@ -101,7 +103,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 提供方通过 `NativeClient.registerCleanup(cleanup)` 注册归连接所有的资源清理；返回的 disposer 用于注销回调。连接仍可发送请求时，回调收到 `canRequest: true`，通过 `requestCleanup()` 执行原生清理，并等待确认后返回。连接被强制关闭后，`canRequest: false` 只允许清理本地状态。程序结束和连接关闭都触发清理时，每项资源复用同一个已缓存的清理 Promise。
 
-正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
+原生清理期间到达的请求等待清理确认后再发送。等待期间取消的请求不会发给 helper。正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
 `agentPreset` 默认为 `ptc`：使用该 preset 的 Agent 获得原始 `cua` 工具和 PTC 指引，其他 Agent 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset、未组合 preset 的 Agent，以及没有 preset 注册表的组合中的全部 Agent，例如 SDK、headless 和 ACP profile。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件、可选 preset 注册表的加载与卸载和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。preset 选择或注册表变化后，某个 Agent 的更新失败时只记录警告，不影响其他 Agent 的更新。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。设置 `agentPreset: false` 可改为全局注册原始 `cua` 工具；没有 preset 的 Host 挂载 PTC 工具执行器时，需要这项设置才能提供 `tools.cua`。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
