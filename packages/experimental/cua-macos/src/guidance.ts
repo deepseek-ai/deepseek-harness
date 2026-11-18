@@ -19,13 +19,13 @@ function operationGuidance(treeAdvice: string): string {
   ])
   return `${PLATFORM_GUIDANCE}
 
-macOS reports recent Agent activity and external input after a tool or program finishes, without requiring inspect. Reports are advisory history: continue when appropriate; they do not reserve the application or imply another actor is still using it. appHandle identifies the application; windowId is null for application-wide activity. agent means an Agent attempted an action, including a prior connection of your own after reconnecting. external-input can come from a person or other automation. Repeated observations do not repeat the same event; new matching events remain reportable. Monitoring starts when an authorized application is accessed. Unavailable or secure-input monitoring and missing records cannot establish inactivity.
-
 ${catalog.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
   const detail = methodDetails.get(method)
   const signature = method === 'drag' ? entry.replace('relative?: boolean }', 'relative?: boolean, useSystemPointer?: boolean }') : entry
   return detail ? `${signature} ${detail}` : signature
-})}`
+})}
+
+Recent activity notices are advisory history, not reservations or instructions to stop. They arrive after a tool or program completes, even without inspect. Use the current UI and task to decide whether to continue. agent denotes a past action attempt; reconnecting may expose your own earlier activity. external-input may come from a person or other automation. Repeated events are suppressed, but later identical actions can produce new notices. Missing notices do not establish inactivity; external monitoring may be unavailable or limited.`
 }
 
 /** Native PTC operation instructions with registered file tools for large observations. */

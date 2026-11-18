@@ -17,7 +17,7 @@ vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: vi.fn() }
 it('forwards native limits to each channel', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  const config = Config({ helperPath: resolve('fixture-helper') })
+  const config = Config({ helperPath: resolve('fixture-helper'), recentActivityWindowMs: 1001 })
   const channel: NativeChannel = {
     stdin: new PassThrough(), stdout: new PassThrough(), done: Promise.resolve(),
     close() {}, waitForClose: async () => {},
@@ -32,5 +32,5 @@ it('forwards native limits to each channel', async () => {
   const owner = { subprocess: { spawn: vi.fn() } }
   const native = { ...config, helperPath: resolve('fixture-helper'), cwd: process.cwd() }
   expect(backend.createChannel(owner, native)).toBe(channel)
-  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native)
+  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native, 1001)
 })
