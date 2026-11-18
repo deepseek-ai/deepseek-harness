@@ -1399,7 +1399,7 @@ describe('headless recorded-session snapshots', () => {
       const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
       const fixturePath = join(scenario.dir, fixtureFiles[0] ?? sessionFixtureName(0, SESSION_FORMAT_VERSION))
       const locatorRoot = snapshotSpillRoot(fixturePath)
-      const mcpDemo = ['plugin-manager-mcp', 'mcp-template-error', 'mcp-oauth-error', 'mcp-tool-loading', 'linear-plugin'].includes(scenario.name)
+      const mcpDemo = ['plugin-manager-mcp', 'mcp-template-error', 'mcp-oauth-error', 'mcp-tool-loading', 'linear-plugin', 'notion-plugin'].includes(scenario.name)
         ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error', authorizationFailure: scenario.name === 'mcp-oauth-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
@@ -1520,6 +1520,12 @@ describe('headless recorded-session snapshots', () => {
               // sidecar pins the absent tools; the transcript check below only guards the recorded text.
               expect(mcpDemo.authorization).toEqual([])
               expect(actualLogs[0]!.content).not.toContain('mcp__linear__ping')
+            }
+            if (scenario.name === 'notion-plugin' && mcpDemo !== undefined) {
+              // Without a saved grant the Notion server is never contacted. The committed tool-schemas sidecar pins
+              // the absent tools; the transcript check below only guards the recorded text.
+              expect(mcpDemo.authorization).toEqual([])
+              expect(actualLogs[0]!.content).not.toContain('mcp__notion__ping')
             }
             if (scenario.name === 'toolcall-unused-args') {
               const events = parseSessionLog(actualLogs[0]!.content)

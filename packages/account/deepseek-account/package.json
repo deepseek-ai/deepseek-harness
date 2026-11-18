@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-deepseek-account",
   "description": "Sign in to DeepSeek and manage account credentials and notifications",
-  "version": "0.2.2-rc.4",
+  "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
   },

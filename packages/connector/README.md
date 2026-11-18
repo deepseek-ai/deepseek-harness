@@ -27,6 +27,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | [`cli-account/`](cli-account/README.md) | Holds the vendor CLIs and accounts CLI app plugins register: gives the model each CLI's absolute path in runtime context, runs each plugin's account operations one at a time, and shows the account on the Plugins page | `ctx.cliAccounts` |
 | [`upstream-skills/`](upstream-skills/README.md) | Holds the entry skills CLI app plugins register: downloads the upstream files each entry indexes from a pinned commit of the vendor's GitHub repository, verifies and caches them, and lists the entry skill over them | `ctx.upstreamSkills` |
 | [`linear/`](linear/README.md) | Registers Linear's hosted MCP server with OAuth through the shared MCP manager, adds the Linear plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
+| [`notion/`](notion/README.md) | Registers Notion's hosted MCP server with OAuth through the shared MCP manager, adds the Notion plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 
 -----
 

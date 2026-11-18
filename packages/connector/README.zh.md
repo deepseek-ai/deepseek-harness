@@ -27,6 +27,7 @@ kind: "package-group"
 | [`cli-account/`](cli-account/README.zh.md) | 保存 CLI 应用插件注册的厂商 CLI 和账号：在运行时上下文中把每个 CLI 的绝对路径告诉模型，让每个插件的账号操作一次只执行一个，并在插件页显示账号 | `ctx.cliAccounts` |
 | [`upstream-skills/`](upstream-skills/README.zh.md) | 保存 CLI 应用插件注册的入口技能：从厂商 GitHub 仓库的固定提交下载每个入口索引的上游文件，校验并缓存，再在这些文件之上列出入口技能 | `ctx.upstreamSkills` |
 | [`linear/`](linear/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Linear 托管的 MCP 服务器，添加 Linear 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
+| [`notion/`](notion/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Notion 托管的 MCP 服务器，添加 Notion 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
 
 -----
 

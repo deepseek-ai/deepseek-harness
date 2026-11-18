@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.2-rc.4",
+  "version": "0.2.2-rc.5",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -251,6 +251,7 @@
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
     "@deepseek-ai/dsh-mcp-manager": "workspace:*",
     "@deepseek-ai/dsh-linear": "workspace:*",
+    "@deepseek-ai/dsh-notion": "workspace:*",
     "@deepseek-ai/dsh-tool-session-query": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
