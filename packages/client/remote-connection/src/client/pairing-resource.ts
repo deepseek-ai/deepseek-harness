@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
-import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PairingRequestId, PairingRequestsValue } from '../types.ts'
 import type {} from '@deepseek-ai/dsh-client-remote-connection/remote'
 
@@ -21,12 +21,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 
 /**
- * Poll held request lists and publish confirmed decisions before their next read.
- * Failed reads retain their last list and wait for a confirmation or a newly opened retry.
- * A confirmation removes its request but preserves an earlier read failure until a fresh read succeeds.
+ * Poll held request lists and remove confirmed decisions from live lists before their next read.
+ * Failed reads wait for a confirmation or a newly opened retry and recover on a successful read.
  * @param remote - generated pairing Remote methods.
- * @returns the provider and a callback that waits for loaded lists to consume the removal or close.
- * Unopened and not-yet-loaded lists acknowledge immediately.
+ * @returns the provider and a callback that waits for live lists to consume the removal or close.
  */
 export function requestsResource(remote: Pick<Context['remote']['remoteConnection'], 'pairingRequests'>): {
   provider: ResourceProvider<'device-pairing'>
@@ -39,7 +37,6 @@ export function requestsResource(remote: Pick<Context['remote']['remoteConnectio
       const aborted = (): boolean => signal.aborted
       if (aborted()) return
       let current: PairingRequestsValue | undefined
-      let failure: RemoteFailure | undefined
       let request: AbortController | undefined
       let timer: ReturnType<typeof setTimeout> | undefined
       let wake = Promise.withResolvers<undefined>()
@@ -87,7 +84,6 @@ export function requestsResource(remote: Pick<Context['remote']['remoteConnectio
               const consumed = [...acknowledgements]
               yield { ok: true, value: current }
               if (aborted()) return
-              if (failure !== undefined) yield { ok: false, error: failure }
               acknowledge(consumed)
               continue
             }
@@ -101,10 +97,7 @@ export function requestsResource(remote: Pick<Context['remote']['remoteConnectio
           if (aborted()) return
           // A confirmed decision supersedes any read already in flight, even if its transport ignores abort.
           if (pending.size > 0 || result === undefined) continue
-          if (result.ok) {
-            current = result.value
-            failure = undefined
-          } else failure = result.error
+          current = result.ok ? result.value : undefined
           const consumed = [...acknowledgements]
           yield result
           acknowledge(consumed)

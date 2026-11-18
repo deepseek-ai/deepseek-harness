@@ -26,14 +26,15 @@ type Face = InjectFace<PairingInjected> & PropsLocale<'remoteConnection'>
 /**
  * Render pending request codes and connection source IP addresses within Remote connection settings.
  * @param props - standard resource hook, owner actions, mutation state and localized copy.
- * @returns the approval card with pairing instructions and any pending requests.
+ * @returns the approval card with live requests or feedback about the list read.
  */
 export function PairingRequests({ useResource, useApproval, decide, t }: Pick<RemoteConnectionContentProps, 'useResource'> & Face) {
   const title = useId()
   const [retry, setRetry] = useState(0)
   const requests = useResource<'device-pairing'>(`dsh-resource://device-pairing/requests?retry=${String(retry)}`)
   const busy = useApproval(value => value.busy)
-  const hasRequests = requests.value !== undefined && requests.value.requests.length > 0
+  const pendingRequests = requests.status === 'live' ? requests.value?.requests : undefined
+  const hasRequests = pendingRequests !== undefined && pendingRequests.length > 0
   return <section className={`${card.card} ${css.section}`} aria-labelledby={title}>
     <header className={card.cardHeader}>
       <h3 className={card.methodTitle} id={title}>{t('pairing.title')}</h3>
@@ -48,7 +49,7 @@ export function PairingRequests({ useResource, useApproval, decide, t }: Pick<Re
       <p className={css.error} role="alert">{t('pairing.readFailed')}</p>
       <Button variant="outline" size="sm" onClick={() => { setRetry(value => value + 1) }}>{t('pairing.retry')}</Button>
     </div>}
-    {requests.value?.requests.map(request => <div className={css.request} key={request.id}>
+    {pendingRequests?.map(request => <div className={css.request} key={request.id}>
       <div className={css.details}>
         <div className={css.identity}>
           <span className={css.label}>{t('pairing.code')}</span>
@@ -60,9 +61,9 @@ export function PairingRequests({ useResource, useApproval, decide, t }: Pick<Re
         </p>
       </div>
       <div className={`${card.cardActions} ${css.actions}`}>
-        <Button variant="primary" size="sm" disabled={busy || requests.status !== 'live'}
+        <Button variant="primary" size="sm" disabled={busy}
           onClick={() => { void decide(request.id, 'allow') }}>{t('pairing.approve')}</Button>
-        <Button variant="outline" size="sm" disabled={busy || requests.status !== 'live'}
+        <Button variant="outline" size="sm" disabled={busy}
           onClick={() => { void decide(request.id, 'deny') }}>{t('pairing.deny')}</Button>
       </div>
     </div>)}

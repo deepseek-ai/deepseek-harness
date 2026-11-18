@@ -75,7 +75,7 @@ it.each(['response', 'rejection'] as const)('ignores an in-flight %s after relea
   expect(requests).toHaveBeenCalledOnce()
 })
 
-it('publishes a confirmed removal before its next poll and keeps other rows when the fresh read fails', async () => {
+it('publishes confirmed removals from a live list and waits for a successful read after failure', async () => {
   vi.useFakeTimers()
   const refresh = Promise.withResolvers<RemoteResult<PairingRequestsValue>>()
   const recovery = Promise.withResolvers<RemoteResult<PairingRequestsValue>>()
@@ -89,9 +89,12 @@ it('publishes a confirmed removal before its next poll and keeps other rows when
   const source = resources.source(address)
   const ready = Promise.withResolvers<undefined>()
   const failed = Promise.withResolvers<undefined>()
+  const statuses: string[] = []
   const unsubscribe = source.subscribe(() => {
-    if (source.getSnapshot().status === 'live') ready.resolve(undefined)
-    if (source.getSnapshot().status === 'failed') failed.resolve(undefined)
+    const { status } = source.getSnapshot()
+    statuses.push(status)
+    if (status === 'live') ready.resolve(undefined)
+    if (status === 'failed') failed.resolve(undefined)
   })
   try {
     await ready.promise
@@ -107,8 +110,9 @@ it('publishes a confirmed removal before its next poll and keeps other rows when
     expect(vi.getTimerCount()).toBe(0)
     await owner.confirmed(secondId)
     expect(source.getSnapshot()).toMatchObject({
-      status: 'failed', value, failure: { code: 'pairing/read-failed' },
+      status: 'failed', failure: { code: 'pairing/read-failed' },
     })
+    expect(statuses).toEqual(['live', 'live', 'failed'])
     expect(requests).toHaveBeenCalledTimes(3)
     const recovered = Promise.withResolvers<undefined>()
     const stopWatching = source.subscribe(() => {
@@ -227,11 +231,14 @@ it.each(['abort', 'return'] as const)('waits for removal consumption and release
   } finally { controller.abort(); await stream.return?.() }
 })
 
-it('releases confirmation when aborted while restoring a read failure after removal', async () => {
+it('acknowledges confirmation on a failed list and aborts the fresh read when closed', async () => {
   vi.useFakeTimers()
   const error = new RemoteError('pairing/read-failed', 'Could not read pairing requests.', {})
-  const requests = vi.fn<() => Promise<RemoteResult<PairingRequestsValue>>>()
-    .mockResolvedValueOnce({ ok: true, value: listed }).mockResolvedValueOnce({ ok: false, error })
+  const fresh = Promise.withResolvers<RemoteResult<PairingRequestsValue>>()
+  const requests = vi.fn<(signal: AbortSignal) => Promise<RemoteResult<PairingRequestsValue>>>()
+    .mockResolvedValueOnce({ ok: true, value: listed })
+    .mockResolvedValueOnce({ ok: false, error })
+    .mockReturnValueOnce(fresh.promise)
   const owner = requestsResource({ pairingRequests: requests })
   const controller = new AbortController()
   const stream = owner.provider.open(address, { signal: controller.signal })[Symbol.asyncIterator]()
@@ -240,15 +247,12 @@ it('releases confirmation when aborted while restoring a read failure after remo
     const failure = stream.next()
     await vi.advanceTimersByTimeAsync(1000)
     expect(await failure).toEqual({ done: false, value: { ok: false, error } })
-    let acknowledged = false
-    const confirmed = owner.confirmed(firstId).then(() => { acknowledged = true })
-    expect(await stream.next()).toEqual({ done: false, value: { ok: true, value: remaining } })
-    expect(await stream.next()).toEqual({ done: false, value: { ok: false, error } })
-    expect(acknowledged).toBe(false)
+    const latest = stream.next()
+    await owner.confirmed(firstId)
+    expect(requests).toHaveBeenCalledTimes(3)
     controller.abort()
-    await confirmed
-    expect(await stream.next()).toEqual({ done: true, value: undefined })
-    expect(requests).toHaveBeenCalledTimes(2)
+    expect(requests.mock.calls[2]?.[0].aborted).toBe(true)
+    expect(await latest).toEqual({ done: true, value: undefined })
     expect(vi.getTimerCount()).toBe(0)
   } finally { controller.abort(); await stream.return?.() }
 })

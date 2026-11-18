@@ -372,6 +372,21 @@ it('keeps one Remote connection panel, its QR invitation, and login link while a
     const countdown = applicant.locator('#auth-pair-countdown')
     const initialCountdown = await countdown.innerText()
     await expect.poll(() => countdown.innerText()).not.toBe(initialCountdown)
+
+    const pairingListUrl = new URL('api/remoteConnection/pairingRequests', fixture.url).href
+    await owner.route(pairingListUrl, route => route.fulfill({ status: 503 }))
+    const readFailure = approvals.getByRole('alert')
+    await readFailure.waitFor()
+    expect(await approvals.getByText(previousCode, { exact: true }).count()).toBe(0)
+    expect(await approvals.getByRole('note').count()).toBe(0)
+    expect(await approvals.getByRole('status').count()).toBe(0)
+    const retry = approvals.getByRole('button', { name: '重试', exact: true })
+    expect(await retry.isEnabled()).toBe(true)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/device-pairing/approval-refresh-failed.expected.md', import.meta.url)),
+      await approvals.ariaSnapshot(), webSnapshotMode(),
+    )
+
     const [replacementResponse] = await Promise.all([
       applicant.waitForResponse(response => new URL(response.url()).pathname.endsWith('/pairing/request')),
       applicant.getByRole('button', { name: '重新申请', exact: true }).click(),
@@ -379,8 +394,12 @@ it('keeps one Remote connection panel, its QR invitation, and login link while a
     await applicant.locator('#auth-pair-panel[data-state="waiting"]').waitFor()
     await expect.poll(() => applicant.locator('#auth-pair-code').innerText()).not.toBe(previousCode)
     const code = await applicant.locator('#auth-pair-code').innerText()
-    await approvals.getByText(previousCode, { exact: true }).waitFor({ state: 'detached' })
+    await owner.unroute(pairingListUrl)
+    await retry.click()
     await approvals.getByText(code, { exact: true }).waitFor()
+    expect(await approvals.getByText(previousCode, { exact: true }).count()).toBe(0)
+    expect(await readFailure.count()).toBe(0)
+    await approvals.getByRole('note').waitFor()
     expect(await replacementResponse.request().allHeaders()).toMatchObject(spoofedSourceHeaders)
     const ticket: unknown = await replacementResponse.json()
     expect(ticket).toMatchObject({ code: code.replace(' ', ''), sourceIp: '127.0.0.1', authority: new URL(fixture.url).origin })

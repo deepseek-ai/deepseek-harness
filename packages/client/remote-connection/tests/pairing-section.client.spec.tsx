@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Owner decisions remain visible outside Settings; read failures preserve the last request list. */
+/** Owner decisions remain visible outside Settings; the approval card shows only live requests. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
@@ -98,17 +98,37 @@ it('keeps a failed operation row visible and serializes decisions', async () => 
   } finally { approval.dispose() }
 })
 
-it('retains loaded requests during a read failure and disables decisions until refresh', () => {
-  const { props, approval, snapshot, useResource } = fixture()
-  useResource.mockReturnValue({ ...snapshot, status: 'failed' })
+it('hides stalled requests during a read failure and shows the latest requests after retry', () => {
+  const { props, approval, snapshot, value, useResource } = fixture()
   try {
-    render(<PairingRequests {...props} />)
-    expect(screen.getByRole('alert').textContent).toBe(en['pairing.readFailed'])
+    const view = render(<PairingRequests {...props} />)
     expect(screen.getByText('ABCD 2345')).toBeTruthy()
     expect(screen.getByRole('note').textContent).toBe(en['pairing.permission'])
-    expect(screen.getByRole('button', { name: en['pairing.deny'] }).hasAttribute('disabled')).toBe(true)
+
+    useResource.mockReturnValue({ ...snapshot, status: 'failed' })
+    view.rerender(<PairingRequests {...props} />)
+    expect(screen.getByRole('alert').textContent).toBe(en['pairing.readFailed'])
+    expect(screen.queryByText('ABCD 2345')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('note')).toBeNull()
+    expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([en['pairing.retry']])
+
+    useResource.mockReturnValue({ status: 'loading', value: undefined, failure: undefined })
     fireEvent.click(screen.getByRole('button', { name: en['pairing.retry'] }))
     expect(useResource).toHaveBeenLastCalledWith('dsh-resource://device-pairing/requests?retry=1')
+    expect(screen.getByRole('status', { name: en['pairing.loading'] })).toBeTruthy()
+    expect(screen.queryByRole('note')).toBeNull()
+
+    useResource.mockReturnValue({
+      ...snapshot,
+      value: { ...value, requests: value.requests.map(row => ({ ...row, code: 'WXYZ6789' })) },
+    })
+    view.rerender(<PairingRequests {...props} />)
+    expect(screen.getByText('WXYZ 6789')).toBeTruthy()
+    expect(screen.queryByText('ABCD 2345')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('note').textContent).toBe(en['pairing.permission'])
+    expect(screen.getByRole('button', { name: en['pairing.approve'] }).hasAttribute('disabled')).toBe(false)
   } finally { approval.dispose() }
 })
 
