@@ -4,6 +4,10 @@ import CoreGraphics
 import Foundation
 
 let arguments = CommandLine.arguments
+if arguments.count == 2 && arguments[1] == "--can-post" {
+    print(CGPreflightPostEventAccess() ? "yes" : "no")
+    exit(0)
+}
 guard [2, 5].contains(arguments.count), let pid = Int32(arguments[1]) else { exit(1) }
 guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { exit(2) }
 let down: CGEvent

@@ -226,37 +226,41 @@ def main():
                 if after["recentActivity"]["externalInputMonitoring"] == "listening":
                     sender = root / "activity-input"
                     subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
-                    b.call("activate", {"appHandle": app_b})
-                    focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20, "details": True})
-                    before_keys = json.loads(state.read_text())["keyEventCount"]
-                    with external_input(sender, fixture.pid):
-                        deadline = time.monotonic() + 5
-                        reported = False
-                        while True:
-                            update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                            events = update.get("recentActivity", {}).get("events", [])
-                            reported |= any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)
-                            if reported and json.loads(state.read_text())["keyEventCount"] > before_keys:
-                                break
-                            assert time.monotonic() < deadline, ("External keyboard input was not received and reported", reported)
-                            time.sleep(0.025)
-                    button = next(element for element in focused["elements"]
-                                  if element["role"] == "AXButton" and element["title"] == "Increment primary")
-                    x, y, width, height = button["bounds"]
-                    before_count = json.loads(state.read_text())["count"]
-                    with external_input(sender, fixture.pid, x + width / 2, y + height / 2, window):
-                        deadline = time.monotonic() + 5
-                        reported = False
-                        while True:
-                            update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                            events = update.get("recentActivity", {}).get("events", [])
-                            reported |= any(event["source"] == "external-input" and event["operation"] == "click"
-                                            and event["windowId"] == window for event in events)
-                            if reported and json.loads(state.read_text())["count"] == before_count + 1:
-                                break
-                            assert time.monotonic() < deadline, ("External click was not received and reported", reported)
-                            time.sleep(0.025)
-                    print("PASS: external keyboard and window input notices")
+                    can_post = subprocess.check_output([str(sender), "--can-post"], text=True, timeout=5).strip() == "yes"
+                    if not can_post:
+                        print("SKIP external input delivery: sender lacks macOS event-posting access")
+                    else:
+                        b.call("activate", {"appHandle": app_b})
+                        focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20, "details": True})
+                        before_keys = json.loads(state.read_text())["keyEventCount"]
+                        with external_input(sender, fixture.pid):
+                            deadline = time.monotonic() + 5
+                            reported = False
+                            while True:
+                                update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                                events = update.get("recentActivity", {}).get("events", [])
+                                reported |= any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)
+                                if reported and json.loads(state.read_text())["keyEventCount"] > before_keys:
+                                    break
+                                assert time.monotonic() < deadline, ("External keyboard input was not received and reported", reported)
+                                time.sleep(0.025)
+                        button = next(element for element in focused["elements"]
+                                      if element["role"] == "AXButton" and element["title"] == "Increment primary")
+                        x, y, width, height = button["bounds"]
+                        before_count = json.loads(state.read_text())["count"]
+                        with external_input(sender, fixture.pid, x + width / 2, y + height / 2, window):
+                            deadline = time.monotonic() + 5
+                            reported = False
+                            while True:
+                                update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                                events = update.get("recentActivity", {}).get("events", [])
+                                reported |= any(event["source"] == "external-input" and event["operation"] == "click"
+                                                and event["windowId"] == window for event in events)
+                                if reported and json.loads(state.read_text())["count"] == before_count + 1:
+                                    break
+                                assert time.monotonic() < deadline, ("External click was not received and reported", reported)
+                                time.sleep(0.025)
+                        print("PASS: external keyboard and window input notices")
                 else:
                     print("SKIP external input delivery:", after["recentActivity"]["externalInputMonitoring"])
 
