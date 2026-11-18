@@ -19,7 +19,7 @@ import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import {
-  pastedUrl, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
+  mergeRepositories, pastedUrl, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
   type ReviewItem, type ReviewRepository, type ReviewSection,
 } from './review-lists.ts'
 import type { ReviewView } from './review-store.ts'
@@ -58,6 +58,8 @@ export interface ReviewListProps {
   readonly onSelect: (url: string) => void
   /** Change the search text. */
   readonly onSearch: (query: string) => void
+  /** Repositories the lists named while read in every repository, offered whatever repository the lists are read in now. */
+  readonly repositories: readonly ReviewRepository[]
   /** Read the lists in one repository, or in every repository. */
   readonly onScope: (repository: ReviewRepository | null) => void
   /** Toggle whether the review-requested list leaves out team requests. */
@@ -94,14 +96,15 @@ function chosenLabel(text: string, chosen: boolean): ReactNode {
 }
 
 /** The view menu, laid out like the Session list's: the list view, the repository the lists are read in, and whether team requests show. */
-function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
-  'frame' | 'repository' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
+function FilterMenu({ frame, repository, repositories, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
+  'frame' | 'repository' | 'repositories' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
   const [open, setOpen] = useState(false)
-  const repositories = reviewRepositories(frame)
   const chosen = repository === null ? null : `${repository.owner}/${repository.name}`
-  // A chosen repository stays offered while its own lists are empty.
-  const offered = repository !== null && !repositories.some(item => `${item.owner}/${item.name}` === chosen)
-    ? [repository, ...repositories] : repositories
+  // Lists read in one repository name only that one, so the menu offers the repositories remembered from the lists of
+  // every repository, with those the shown lists name and the chosen one, which stays offered while its lists are empty.
+  const offered = mergeRepositories(repositories, reviewRepositories(frame), repository === null ? [] : [repository])
+  // Before any list of every repository was read, the offer is still growing.
+  const reading = repositories.length === 0 && (frame === undefined || frame.reading)
   const items: MenuEntry[] = [
     { type: 'label', id: 'view', text: t('reviewPage.filter.view') },
     { id: 'view:detailed', label: t('reviewPage.filter.detailed'), icon: <IconLayersOutlineRegular /> },
@@ -121,6 +124,7 @@ function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDire
         { id: 'repo:', label: chosenLabel(t('reviewPage.filter.allRepositories'), chosen === null) },
         { type: 'separator', id: 'repo-separator' },
         ...offered.map(item => `${item.owner}/${item.name}`).map(name => ({ id: `repo:${name}`, label: chosenLabel(name, name === chosen) })),
+        ...reading ? [{ type: 'label' as const, id: 'repo-reading', text: t('reviewPage.loading') }] : [],
       ],
     },
     { type: 'separator', id: 'requests-separator' },

@@ -8,7 +8,8 @@ import type { ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/t
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import {
-  descriptionMarkdown, pastedUrl, REVIEW_FILTERS, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
+  descriptionMarkdown, mergeRepositories, pastedUrl, REVIEW_FILTERS, reviewHint, reviewListsComplete, reviewRepositories, reviewSearchKeys,
+  reviewSections, summaryTone,
 } from '../src/client/review-lists.ts'
 import { createReviewStore } from '../src/client/review-store.ts'
 import { ref } from './client-fixtures.client.ts'
@@ -99,6 +100,25 @@ describe('reviewSections', () => {
   })
 })
 
+describe('reviewListsComplete', () => {
+  it('holds once no read is in flight and no list is unread or failed', () => {
+    expect(reviewListsComplete(undefined)).toBe(false)
+    expect(reviewListsComplete(frame(host({ authored: list([summary(1)]), involved: list([]) })))).toBe(true)
+    expect(reviewListsComplete({ ...frame(host({ authored: list([summary(1)]) })), reading: true })).toBe(false)
+    expect(reviewListsComplete(frame(host({ authored: list([summary(1)]), involved: list(null) })))).toBe(false)
+    expect(reviewListsComplete(frame(host({ authored: list([summary(1)], { failure: { code: 'unavailable', message: 'down' } }) })))).toBe(false)
+  })
+})
+
+describe('mergeRepositories', () => {
+  it('merges lists without duplicates, whatever their case, by owner then name', () => {
+    expect(mergeRepositories()).toEqual([])
+    expect(mergeRepositories(
+      [{ owner: 'octo', name: 'demo' }, { owner: 'acme', name: 'widgets' }], [{ owner: 'Octo', name: 'Demo' }], [{ owner: 'acme', name: 'gears' }],
+    )).toEqual([{ owner: 'acme', name: 'gears' }, { owner: 'acme', name: 'widgets' }, { owner: 'Octo', name: 'Demo' }])
+  })
+})
+
 describe('reviewRepositories', () => {
   it('lists each repository the lists name once, by owner then name, skipping lists not read yet', () => {
     expect(reviewRepositories(undefined)).toEqual([])
@@ -181,8 +201,8 @@ describe('createReviewStore', () => {
     const store = createReviewStore().create()
     const { actions } = store
     expect(store.getSnapshot()).toEqual({
-      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, query: '', directOnly: false, conversations: {},
-      view: 'detailed', unseenQuotes: {}, byTab: {},
+      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, repositories: [], query: '', directOnly: false,
+      conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
     })
     actions.tabbed('chat')
     actions.select('https://github.com/octo/demo/pull/7')
@@ -213,6 +233,24 @@ describe('createReviewStore', () => {
     actions.navigated('review:https://github.com/octo/demo/pull/7', 1)
     actions.toggledSplit('review:https://github.com/octo/demo/pull/7')
     expect(store.getSnapshot().byTab['review:https://github.com/octo/demo/pull/7']).toMatchObject({ split: false, navigated: 1 })
+  })
+
+  it('records the repositories of every repository\'s lists: a read under way adds to the record, a complete read replaces it', () => {
+    const store = createReviewStore().create()
+    const { actions } = store
+    const demo = { owner: 'octo', name: 'demo' }
+    const widgets = { owner: 'acme', name: 'widgets' }
+    actions.listed([demo], false)
+    actions.listed([widgets], false)
+    expect(store.getSnapshot().repositories).toEqual([widgets, demo])
+    const recorded = store.getSnapshot().repositories
+    // The same repositories again leave the record as it is.
+    actions.listed([demo, widgets], true)
+    expect(store.getSnapshot().repositories).toBe(recorded)
+    actions.listed([demo], true)
+    expect(store.getSnapshot().repositories).toEqual([demo])
+    actions.listed([{ owner: 'octo', name: 'other' }], true)
+    expect(store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'other' }])
   })
 
   it('shows the list in the view the reader chose', () => {

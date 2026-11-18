@@ -33,7 +33,7 @@ import css from '../src/client/ReviewPage.module.css'
 import type {
   ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeReviewChangeRequest, ForgeReviewFrame,
 } from '../src/types.ts'
-import { entry, ready, snapshot } from './client-fixtures.client.ts'
+import { entry, ready, ref, snapshot } from './client-fixtures.client.ts'
 import { description, fed, frame, host, list, prUrl, reviewed, summary, type Fed } from './review-fixtures.client.ts'
 import { reviewThread } from './thread-fixtures.client.ts'
 
@@ -262,6 +262,43 @@ describe('ReviewPage lists', () => {
     await settle()
     fireEvent.click(b.view.getByRole('button', { name: /Review requested/ }))
     expect(b.store.getSnapshot().folded).toEqual({ 'review-requested': true })
+  })
+
+  it('keeps offering every repository after one is chosen, and refreshes the offer from the next complete read of all', async () => {
+    const other = summary(8, { ref: { ...ref(8), repository: { ...ref(8).repository, owner: 'acme', name: 'widgets' } } })
+    const offered = (): (string | null)[] => {
+      fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
+      const parent = within(document.body).getByRole('menuitem', { name: /^Repository/ })
+      fireEvent.click(parent)
+      const child = within(document.body).getAllByRole('menu').find(menu => !menu.contains(parent)) as HTMLElement
+      return within(child).getAllByRole('menuitem').map(row => row.textContent)
+    }
+    const b = renderPage()
+    // A read under way adds what it has read so far; the settled read is the record.
+    b.list().push({ ...frame(host({ 'review-requested': list([summary(7)]), 'authored': list(null) })), reading: true })
+    await settle()
+    expect(b.store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'demo' }])
+    b.list().push(frame(host({ 'review-requested': list([summary(7)]), 'authored': list([other]) })))
+    await settle()
+    expect(offered()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'acme/widgets' }))
+
+    // The chosen repository's lists name only it, before and after its first frame.
+    expect(b.list().key).toBe('acme/widgets')
+    expect(offered()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    b.list().push(frame(host({ authored: list([other]) })))
+    await settle()
+    expect(b.store.getSnapshot().repositories).toHaveLength(2)
+    expect(offered()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+
+    // Back in every repository, a complete read that no longer names one drops it.
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'All repositories' }))
+    expect(b.store.getSnapshot().repositories).toHaveLength(2)
+    b.list().push(frame(host({ 'review-requested': list([summary(7)]), 'authored': list([]) })))
+    await settle()
+    expect(b.store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'demo' }])
   })
 
   it('reads every list again once at a time, showing the refresh until it settles', async () => {

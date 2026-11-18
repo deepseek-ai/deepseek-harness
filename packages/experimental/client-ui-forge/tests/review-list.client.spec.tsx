@@ -31,7 +31,7 @@ const NOW = Date.parse('2026-10-09T00:05:00Z')
 /** Render the list column with every handler recorded and no choice made, unless `overrides` makes one. */
 function renderList(overrides: Partial<ReviewListProps> = {}) {
   const props: ReviewListProps = {
-    frame: undefined, stopped: null, selected: null, query: '', repository: null, directOnly: false, folded: {}, refreshing: false,
+    frame: undefined, stopped: null, selected: null, query: '', repository: null, repositories: [], directOnly: false, folded: {}, refreshing: false,
     now: NOW, view: 'detailed',
     onSelect: vi.fn(), onSearch: vi.fn(), onScope: vi.fn(), onToggleDirect: vi.fn(), onView: vi.fn(), onFold: vi.fn(), onRefresh: vi.fn(),
     onRetry: vi.fn(), copyText: vi.fn(), t, ...overrides,
@@ -401,13 +401,54 @@ describe('ReviewList filter menu', () => {
     const button = open(b)
     expect(button.matches(`.${css.iconButtonActive}`)).toBe(true)
     expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryzeta/empty')
-    expect(repositories()).toEqual(['All repositories', 'zeta/empty', 'acme/widgets', 'octo/demo'])
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/empty'])
     cleanup()
 
     const listed = renderList({ frame: lists, repository: { owner: 'acme', name: 'widgets' } })
     open(listed)
     expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryacme/widgets')
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+  })
+
+  it('keeps offering the repositories remembered from every repository while the lists are read in one, marking the chosen one', () => {
+    const remembered = [{ owner: 'acme', name: 'widgets' }, { owner: 'octo', name: 'demo' }, { owner: 'zeta', name: 'tools' }]
+    // Lists read in octo/demo name only that repository.
+    const scoped = frame(host({ authored: list([summary(1)]) }))
+    const b = renderList({ frame: scoped, repository: { owner: 'octo', name: 'demo' }, repositories: remembered })
+    open(b)
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/tools'])
+    const child = within(document.body).getAllByRole('menu').at(-1) as HTMLElement
+    expect(within(child).getAllByRole('menuitem').map(row => row.querySelector(CHECK) !== null)).toEqual([false, false, true, false])
+    // Another repository is one choice away, without returning to every repository first.
+    fireEvent.click(within(child).getByRole('menuitem', { name: 'zeta/tools' }))
+    expect(b.props.onScope).toHaveBeenCalledWith({ owner: 'zeta', name: 'tools' })
+    cleanup()
+
+    // The offer also survives the wait for the chosen repository's first frame.
+    const waiting = renderList({ repository: { owner: 'octo', name: 'demo' }, repositories: remembered })
+    open(waiting)
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/tools'])
+    expect(within(document.body).queryByText('Reading the lists', { selector: '[role="menu"] *' })).toBeNull()
+  })
+
+  it('says that the lists are still read while no repository was remembered and a read is under way', () => {
+    const reading = (): boolean => within(document.body).getAllByRole('menu').at(-1)?.textContent?.includes('Reading the lists') === true
+    const first = renderList()
+    open(first)
+    expect(repositories()).toEqual(['All repositories'])
+    expect(reading()).toBe(true)
+    cleanup()
+
+    const partial = renderList({ frame: { ...lists, reading: true } })
+    open(partial)
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+    expect(reading()).toBe(true)
+    cleanup()
+
+    const settled = renderList({ frame: lists })
+    open(settled)
+    repositories()
+    expect(reading()).toBe(false)
   })
 
   it('toggles requests made only of the user\'s teams only when the reader picks the other choice', () => {

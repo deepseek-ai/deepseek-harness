@@ -20,6 +20,7 @@ import { ReviewChat, useReviewConversation, type ReviewChatFace } from './Review
 import { ReviewDetail } from './ReviewDetail.tsx'
 import { ReviewList } from './ReviewList.tsx'
 import type { QuoteCopy, ReviewSelection } from './review.ts'
+import { reviewListsComplete, reviewRepositories } from './review-lists.ts'
 import type { createReviewStore, ReviewTab } from './review-store.ts'
 import type { HostStream, StreamSnapshot } from './source.ts'
 import type { ChangesPanelState } from './status.ts'
@@ -204,6 +205,7 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
   const listHidden = useStore(state => state.listHidden)
   const folded = useStore(state => state.folded)
   const repository = useStore(state => state.repository)
+  const repositories = useStore(state => state.repositories)
   const query = useStore(state => state.query)
   const directOnly = useStore(state => state.directOnly)
   const view = useStore(state => state.view)
@@ -214,6 +216,11 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
   }, [actions, selected])
   const scope = repository === null ? '' : `${repository.owner}/${repository.name}`
   const lists = useHostStream(openLists, scope, subscribeReset)
+  // Lists read in one repository name only that one, so the repository menu's offer is recorded while they are read in all.
+  const listsFrame = lists.frame
+  useEffect(() => {
+    if (repository === null && listsFrame !== undefined) actions.listed(reviewRepositories(listsFrame), reviewListsComplete(listsFrame))
+  }, [repository, listsFrame, actions])
   const detail = useHostStream(openChangeRequest, selected, subscribeReset)
   const [refreshing, setRefreshing] = useState(false)
   const startRefresh = (): void => {
@@ -232,6 +239,7 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
           selected={selected}
           query={query}
           repository={repository}
+          repositories={repositories}
           directOnly={directOnly}
           folded={folded}
           refreshing={refreshing}

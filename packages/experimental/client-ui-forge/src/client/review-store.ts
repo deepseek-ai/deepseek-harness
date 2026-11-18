@@ -8,6 +8,7 @@ import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-sto
 import type { ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { changesActions, type ChangesState } from './changes-store.ts'
+import { mergeRepositories, type ReviewRepository } from './review-lists.ts'
 
 /** A tab of the review page's detail. */
 export type ReviewTab = 'summary' | 'changes' | 'chat'
@@ -27,6 +28,11 @@ export interface ReviewPageState extends ChangesState {
   folded: Partial<Record<ForgeViewerFilter, boolean>>
   /** Repository the lists are read in, or null for every repository. */
   repository: { readonly owner: string; readonly name: string } | null
+  /**
+   * Repositories the lists named while they were read in every repository, which the repository menu keeps offering
+   * while the lists are read in one.
+   */
+  repositories: readonly ReviewRepository[]
   /** Text the lists are searched for. */
   query: string
   /** Whether the review-requested list leaves out requests that ask only one of the user's teams. */
@@ -57,6 +63,15 @@ const reviewActions = {
   toggledList: (state: ReviewPageState) => { state.listHidden = !state.listHidden },
   folded: (state: ReviewPageState, filter: ForgeViewerFilter) => { state.folded[filter] = state.folded[filter] !== true },
   scopedTo: (state: ReviewPageState, repository: ReviewPageState['repository']) => { state.repository = repository },
+  /**
+   * Record the repositories the lists read in every repository name: a complete read replaces the record, and a read
+   * still under way or failed in part adds to it.
+   */
+  listed: (state: ReviewPageState, repositories: ReviewPageState['repositories'], complete: boolean) => {
+    const next = complete ? mergeRepositories(repositories) : mergeRepositories(state.repositories, repositories)
+    const names = (list: ReviewPageState['repositories']): string => list.map(item => `${item.owner}/${item.name}`).join('\n')
+    if (names(next) !== names(state.repositories)) state.repositories = [...next]
+  },
   searched: (state: ReviewPageState, query: string) => { state.query = query },
   toggledDirect: (state: ReviewPageState) => { state.directOnly = !state.directOnly },
   conversed: (state: ReviewPageState, url: string, session: SessionId | null) => {
@@ -72,7 +87,7 @@ const reviewActions = {
 export function createReviewStore(): EngineStoreHandle<ReviewPageState, typeof reviewActions> {
   return defineStore({
     init: (): ReviewPageState => ({
-      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, query: '', directOnly: false, conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
+      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, repositories: [], query: '', directOnly: false, conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
     }),
     actions: reviewActions,
   })

@@ -97,14 +97,29 @@ export function reviewSearchKeys(item: ReviewItem): SearchKeys {
  * @returns distinct repositories.
  */
 export function reviewRepositories(frame: ForgeReviewFrame | undefined): readonly ReviewRepository[] {
+  return mergeRepositories((frame?.hosts ?? []).flatMap(host =>
+    Object.values(host.lists).flatMap(list => (list.items ?? []).map(item => item.ref.repository))))
+}
+
+/**
+ * Whether a frame holds every list of every host from a settled read, so the repositories it names are all the lists
+ * name.
+ * @param frame - the latest frame, or undefined before the first.
+ * @returns true once no read is in flight and no list is unread or failed.
+ */
+export function reviewListsComplete(frame: ForgeReviewFrame | undefined): boolean {
+  return frame !== undefined && !frame.reading
+    && frame.hosts.every(host => Object.values(host.lists).every(list => list.items !== null && list.failure === null))
+}
+
+/**
+ * Merge repositories into one list without duplicates, by owner then name.
+ * @param groups - lists of repositories.
+ * @returns the distinct repositories, sorted as {@link reviewRepositories} sorts.
+ */
+export function mergeRepositories(...groups: readonly (readonly ReviewRepository[])[]): readonly ReviewRepository[] {
   const seen = new Map<string, ReviewRepository>()
-  for (const host of frame?.hosts ?? []) {
-    for (const list of Object.values(host.lists)) {
-      for (const { ref: { repository: { owner, name } } } of list.items ?? []) {
-        seen.set(`${owner}/${name}`.toLowerCase(), { owner, name })
-      }
-    }
-  }
+  for (const { owner, name } of groups.flat()) seen.set(`${owner}/${name}`.toLowerCase(), { owner, name })
   return [...seen.values()].sort((left, right) => `${left.owner}/${left.name}`.localeCompare(`${right.owner}/${right.name}`))
 }
 
