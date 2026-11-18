@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
+import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { scheduleDomain, type ScheduleCatalogEntry, type ScheduleDeliveryReceipt } from '@deepseek-ai/dsh-schedule'
 import { descriptorOf } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
@@ -46,7 +47,7 @@ try {
     const history = await schedule.history({ id: task.id, limit: 10 })
     assert.ok('records' in history)
     assert.equal(history.records.length, 1)
-    const receipt = history.records[0]
+    const receipt: ScheduleDeliveryReceipt | undefined = history.records[0]
     assert.ok(receipt)
     assert.ok(Date.parse(receipt.scheduledAt) >= deliveryStartedAt, 'source receipt uses the current delivery sample')
     assert.ok(Date.parse(receipt.scheduledAt) <= deliveryFinishedAt, 'source receipt cannot use the future timed occurrence')
@@ -70,9 +71,9 @@ try {
       ? [event.data.id] : [])
     assert.deepEqual(payloadIds, receiptIds, 'each ordinary producer contributes exactly one durable input')
     assert.equal(world.adapter.requests.length, delivered.length)
-    const request = world.adapter.requests[delivered.length - 1]
+    const request: GenerateOptions | undefined = world.adapter.requests[delivered.length - 1]
     assert.ok(request)
-    const modelInputs = request.messages.filter(message => message.role === 'user'
+    const modelInputs: GenerateOptions['messages'] = request.messages.filter(message => message.role === 'user'
       && message.content.some(block => block.type === 'text' && block.text.includes('source_input_json:')))
     assert.deepEqual(modelInputs.map(message => message.id), receiptIds)
     assert.deepEqual(modelInputs.find(message => message.id === receipt.messageId)?.content, input.data.content,
@@ -81,7 +82,7 @@ try {
       .flatMap(event => event.data.inserted)
     assert.equal(inboxInsertions.filter(message => message.id === receipt.messageId).length, 1,
       'each receipt must name exactly one durable inbox insertion')
-    const view = await schedule.view({ id: task.id })
+    const view: Awaited<ReturnType<typeof schedule.view>> = await schedule.view({ id: task.id })
     assert.ok(!('code' in view))
     assert.equal(view.scheduledAt, task.scheduledAt)
     assert.equal(view.status, 'active')
