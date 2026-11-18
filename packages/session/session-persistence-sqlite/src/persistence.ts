@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { link, mkdir, open, readFile, readdir, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Config } from '@deepseek-ai/dsh-session-persistence-jsonl'
+import type { Config } from './index.ts'
 import pLimit, { type LimitFunction } from 'p-limit'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -39,6 +39,8 @@ export class SqliteSessionPersistence extends SessionPersistence {
     this.sqlite = new SqliteStore({
       path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
+      compression: config.compression ?? 'zstd',
+      frameEvents: config.frameEvents ?? 64,
       publish: id => this.publish(id),
       acquireCreationLease: header => this.acquireCreationLease(header),
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },

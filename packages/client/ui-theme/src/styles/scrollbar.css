@@ -5,13 +5,28 @@
  * The rules sit on `body`, not `html`: design-platform.css declares the
  * --dsw-alias-* tokens on `body` (and the dark overrides on
  * `body[data-ds-dark-theme]`), and custom properties only inherit downward,
- * so an `html` rule resolves them to the guaranteed-invalid value and
- * `scrollbar-color` falls back to `auto`.
+ * so an `html` rule resolves them to the guaranteed-invalid value and the
+ * registered indirection below to its `transparent` initial value, hiding
+ * every thumb.
  *
  * Surfaces pick their elevation by rebinding --dsh-scrollbar-thumb{,-hover}:
  * the l1 pair here is the base-surface default, and an elevated surface
  * (menu, popover, dialog) rebinds to the l2 pair on its own container. A
  * scroll container may also rebind the three geometry variables below. */
+
+/* Registered as inherited colours so a surface can transition its rebinding;
+   an unregistered custom property switches in one step. */
+@property --dsh-scrollbar-thumb {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --dsh-scrollbar-thumb-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
 
 body {
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);

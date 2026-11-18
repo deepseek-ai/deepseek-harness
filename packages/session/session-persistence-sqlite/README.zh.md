@@ -37,13 +37,16 @@ kind: "package-reference"
     root: './.sessions'
 ```
 
+fork 创建先排空本进程中的父写者，再在一个事务内引用已持久化的父前缀，并把 `endSeq` 之后的事件写入新的 Segment。读取打开与 fork 创建会等待本进程中正在关闭的父会话排空；排空或 flush 失败会停止创建。父会话后续写入仍属于父历史。前缀超过父会话已持久化事件数量时会拒绝创建；事务失败会回滚子会话并释放其写租约。若提交后路由发布失败，错误会说明历史仍已存储，可以重新打开 Session。
+
 数据库位于 `<root>/.segments/sessions.sqlite`。应用调用方继续使用 `ctx.sessionPersistence` 及其 Session 句柄。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `root` | 必填 | 包含数据库和现有 JSONL 历史的存储根目录。 |
-| `compression` | `zstd` | 现有 JSONL 的编码；SQLite 事件使用普通 JSON。 |
+| `compression` | `zstd` | 现有 JSONL 历史和新 SQLite 帧的编码：`zstd` 在压缩后更小时以压缩形式存储帧，`none` 存储 JSON 文本。已存帧按各自的 codec 解码。 |
 | `listConcurrency` | `3` | 旧历史元数据及路由记录的并发文件系统读取数。 |
+| `frameEvents` | `64` | 每个存储帧的最大事件数，即压缩和解码的单位。更大的帧压缩率略高，尾部读取的解码代价更大；已存帧保持写入时的大小。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-sqlite)记录了所有可用字段。
 
@@ -67,13 +70,14 @@ kind: "package-reference"
 
 插件提供原有持久化服务，并在隔离的服务上下文中使用 JSONL 提供者读取旧历史。导入取得 Session 的文件租约，在数据库事务中提交元数据和事件，然后记录 SQLite 路由。write open 在交接过程中保持租约。
 
-SQLite 保存 thread 元数据、前驱关联的 Segment 元数据及带索引的 JSON 事件行。发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
+SQLite 保存 thread 元数据、前驱关联的 Segment 元数据和帧：每次持久写入把其批次（每帧最多 `frameEvents` 条事件）以 JSON 行存入一行，以 Segment 和起始序号为键，`compression: zstd` 下在压缩后更小时以 Zstandard 压缩。Segment 的事件数取其最后一帧的结束序号。读取选出与请求范围重叠的帧，在线程池上每次并发解压八帧，只取覆盖的切片；帧缺失、帧短于记录范围、codec 未知或字节无法解码均以存储损坏拒绝读取。发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。日志模式的锁竞争会在五秒 busy 等待预算内重试，此时尚未写入 schema 或 Session；持续的锁竞争及其他失败仍会报告。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
 
 | 源码 | 职责 |
 |---|---|
 | [persistence.ts](src/persistence.ts) | 服务路由和 JSONL 的持久接管。 |
 | [migration.ts](src/migration.ts) | 导入排序、所有权交接和取消。 |
 | [sqlite.ts](src/sqlite.ts) | 数据库、Segment 访问、句柄和持久化。 |
+| [frame.ts](src/frame.ts) | 帧编码：JSON 行以文本或单个 Zstandard 帧存储。 |
 
 </details>
 

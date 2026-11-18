@@ -11,12 +11,13 @@ import { SessionAlreadyOwnedError, SessionPersistenceRevision } from '@deepseek-
 import { SqliteStore } from '../src/sqlite.ts'
 import { LegacySessionMigration } from '../src/migration.ts'
 import type { JsonlBackend } from '../src/migration.ts'
+import { FRAME_DEFAULTS } from './fixtures/store.ts'
 
 const id = SessionId('migration')
 const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sqlite-import-sequence-'))
-  const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root,
+  const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root, ...FRAME_DEFAULTS,
     acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {} })
   const jsonl: JsonlBackend = {
     hasStoredJsonl: async () => true, list: async () => [],

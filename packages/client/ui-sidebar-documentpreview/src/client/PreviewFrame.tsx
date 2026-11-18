@@ -70,7 +70,7 @@ export function PreviewFrame({
       <div className={css.header}>
         <PathLabel path={path} className={css.path} data-textpreview-path {...pathTrigger} />
         {tools}
-        {handoff}
+        <div className={css.externalActions}>{handoff}</div>
         <NavigatorToggleSeat useTabInfo={useTabInfo} renderFactorySlot={renderFactorySlot} />
       </div>
       <div className={css.content} data-textpreview-content data-files-navigator-row>

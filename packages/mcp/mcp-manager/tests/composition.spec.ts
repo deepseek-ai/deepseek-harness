@@ -108,4 +108,44 @@ describe('mcp-manager real composition', () => {
     expect(entry.fiber).toBe(fiber)
     expect(ctx.tools.get('mcp__base__remote')).toBeDefined()
   })
+
+  it('rejects OAuth on stdio, mixed Authorization headers, invalid keys, and keys shared with disabled entries before persistence', async () => {
+    const ctx = await registry()
+    const { profile } = await managerProfile(ctx, { base: { servers: {} } })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    const oauth = { credentialKey: 'mcp-client/shared' }
+    const http = { transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth, enabled: false }
+    for (const servers of [
+      { one: { transport: 'stdio', command: 'echo', oauth } },
+      { one: { ...http, headers: { AUTHORIZATION: 'private' } } },
+      { one: { ...http, oauth: { credentialKey: 'invalid' } } },
+      { one: { ...http, oauth: { credentialKey: 'deepseek-account-platform/default' } } },
+      { one: http, two: http },
+    ]) {
+      await expect(ctx.settings.update('mcp', { servers })).rejects.toThrow()
+      expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+      expect(ctx.mcpManager.list()).toEqual([])
+    }
+  })
+
+  it('names the OAuth credentialKey field when a settings write supplies an invalid mcp-client key', async () => {
+    const ctx = await registry()
+    const { profile } = await managerProfile(ctx, { base: { servers: {} } })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    await expect(ctx.settings.update('mcp', { servers: { one: {
+      transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: { credentialKey: 'mcp-client/Foo' }, enabled: false,
+    } } })).rejects.toThrow('servers.one.oauth.credentialKey: credential key segment "Foo" must match')
+    expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+    expect(ctx.mcpManager.list()).toEqual([])
+  })
+
+  it('names the oauth field when a settings write supplies an OAuth configuration without a credential key', async () => {
+    const ctx = await registry()
+    const { profile } = await managerProfile(ctx, { base: { servers: {} } })
+    const saved = await readFile(profile.patchPath, 'utf8')
+    await expect(ctx.settings.update('mcp', { servers: { one: {
+      transport: 'streamable-http', url: 'https://example.invalid/mcp', oauth: {}, enabled: false,
+    } } })).rejects.toThrow('servers.one.oauth expected')
+    expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+  })
 })

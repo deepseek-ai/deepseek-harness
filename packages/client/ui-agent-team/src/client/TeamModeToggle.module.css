@@ -39,16 +39,12 @@
 .state,
 .chevron {
   flex: none;
-}
-
-.state {
   color: var(--dsw-alias-label-tertiary);
 }
 
 .chevron {
   width: 12px;
   height: 12px;
-  color: var(--dsw-alias-menu-icon);
 }
 
 .pane {

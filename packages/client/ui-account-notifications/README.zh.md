@@ -22,7 +22,7 @@ kind: "package-reference"
 
 Web 组合将本插件与[账号设置](../ui-settings-account/README.zh.md)一同加载。本插件向 `settings.launcher.notifications` 注册内容；账号设置在设置外壳位于账号入口上方的行中渲染该插槽，并提供可见性和打开账号设置的操作。通知插件负责卡片、轮询、本地化内容和交互上报。
 
-带有已存账号的启动、登录及每次进入设置页都会启动新一轮轮询，并立即请求。`ui-account-notifications` 行中的 `notificationPollIntervalMs` 提供初始间隔，默认 600,000 ms。成功的列表响应通过 `next_poll_after` 秒替换间隔，空列表也相同。从请求结束时开始计时；失败沿用最近间隔，重启轮询恢复配置的初始值。轮询在后台继续。
+带有已存账号的启动、登录及每次进入设置页都会启动新一轮轮询，并立即请求。`ui-account-notifications` 行中的 `notificationPollIntervalMs` 提供初始间隔，默认 600,000 ms。它是 Host 条目 Config 中的 volatile 字段，因此在 `cordis.yml` 中修改后，已打开的页面无需重新挂载插件，从轮询在获得服务端间隔前安排的下一次请求起生效。成功的列表响应通过 `next_poll_after` 秒替换间隔，空列表也相同。从请求结束时开始计时；失败沿用最近间隔，重启轮询恢复配置的初始值。轮询在后台继续。
 
 账号设置拥有唯一的账号流，通过 `accountUi` 和 `account-ui/change` 提供当前状态及生命周期事件。登录进度更新沿用卡片和轮询。凭据替换、断连、权限撤销、退出登录和插件卸载会清空卡片、停止轮询并丢弃迟到响应。通知请求不等待资料或头像。通知状态不写入浏览器存储。
 

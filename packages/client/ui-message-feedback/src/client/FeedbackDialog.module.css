@@ -1,7 +1,7 @@
 /* The card width leaves four categories on the first row and three on the
    second. The doubled selector overrides the Modal card geometry. */
 .dialog.dialog {
-  gap: 38px;
+  gap: 24px;
   width: min(488px, 100%);
   border-radius: var(--dsw-radius-panel);
 }
@@ -10,7 +10,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: -14px;
 }
 
 .chip {

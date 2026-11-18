@@ -37,13 +37,16 @@ Replace the JSONL provider's package name in your composition, preserving its ro
     root: './.sessions'
 ```
 
+Fork creation drains a local parent writer, then references the persisted parent prefix and writes the events after `endSeq` into a new Segment in one transaction. Read opens and fork creation wait for a local parent's in-progress close to drain; a drain or flush failure stops creation. Later parent writes remain in the parent history. A prefix beyond the parent's persisted event count rejects creation; a failed transaction rolls back the child and releases its write lease. If routing publication fails after commit, the error reports that history remains stored and the Session can be reopened.
+
 The database lives at `<root>/.segments/sessions.sqlite`. Application callers continue to use `ctx.sessionPersistence` and its Session handles.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `root` | Required | Storage root containing the database and any existing JSONL histories. |
-| `compression` | `zstd` | Existing JSONL encoding; SQLite events use ordinary JSON. |
+| `compression` | `zstd` | Encoding of existing JSONL histories and of new SQLite frames: `zstd` stores a frame compressed when that is smaller, `none` stores JSON text. Stored frames decode by their own codec. |
 | `listConcurrency` | `3` | Concurrent filesystem reads for legacy metadata and routing records. |
+| `frameEvents` | `64` | Maximum events per stored frame, the unit of compression and of decoding. Larger frames compress slightly better and cost more to decode for a tail read; stored frames keep their written size. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-persistence-sqlite) documents all accepted fields.
 
@@ -67,13 +70,14 @@ Direct append, live Session events and durability checkpoints use the same handl
 
 The plugin supplies the existing persistence service and uses a JSONL provider in an isolated service context to read legacy histories. Import acquires the Session's artifact lease, commits its metadata and events in a database transaction, then records SQLite routing. A write open retains the lease through the handoff.
 
-SQLite keeps thread metadata, predecessor-linked Segment metadata and indexed JSON event rows. WAL is enabled before schema publication so a concurrent reader cannot prevent the first mode switch. The backend owns write queues, live-event buffering, transaction completion and handle cleanup; callers do not address Segments.
+SQLite keeps thread metadata, predecessor-linked Segment metadata and frames: each durable write stores its batch, at most `frameEvents` events per frame, as JSON lines in one row keyed by Segment and start sequence, Zstandard-compressed under `compression: zstd` when that is smaller. A Segment's event count is its last frame's end. Reads select the frames overlapping the requested range, decompress them on the thread pool eight at a time, and take only the covered slice; a missing frame, a frame shorter than its recorded range, an unknown codec, or undecodable bytes reject the read as storage corruption. WAL is enabled before schema publication so a concurrent reader cannot prevent the first mode switch. Journal-mode lock contention retries within the five-second busy budget before any schema or Session write; persistent contention and other failures are reported. The backend owns write queues, live-event buffering, transaction completion and handle cleanup; callers do not address Segments.
 
 | Source | Responsibility |
 |---|---|
 | [persistence.ts](src/persistence.ts) | Service routing and durable JSONL takeover. |
 | [migration.ts](src/migration.ts) | Import sequencing, ownership handoff and cancellation. |
 | [sqlite.ts](src/sqlite.ts) | Database, Segment access, handles and durability. |
+| [frame.ts](src/frame.ts) | Frame encoding: JSON lines stored as text or one Zstandard frame. |
 
 </details>
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Autenticação de solicitações DeepSeek",
+    "description": "Escolhe a chave de API ou o login da conta para cada solicitação ao DeepSeek e fornece os cabeçalhos da solicitação."
+  }
+}

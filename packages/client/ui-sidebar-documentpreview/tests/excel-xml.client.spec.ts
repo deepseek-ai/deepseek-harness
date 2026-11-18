@@ -3,14 +3,14 @@ import { createRequire } from 'node:module'
 import ExcelJS from 'exceljs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { XlsxPreviewArchive } from '../src/client/excel/xlsx-archive.ts'
 import { excelXmlCases, excelXmlFixture } from './excel-xml-fixture.ts'
 
 const require = createRequire(import.meta.url)
 const browserExcel = require('exceljs/dist/exceljs.js') as typeof ExcelJS
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 
 describe.each([['Node', ExcelJS], ['browser bundle', browserExcel]] as const)('%s XML reader', (_name, parser) => {
   it.each(excelXmlCases)('preserves comments and Tables in %s', async (name) => {

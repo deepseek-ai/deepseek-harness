@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, the account model listing, and model gating for `deepseek-account`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, the account catalog, and model admission.
 
-Authentication resolution returns the request credential the account service releases for the destination, carrying `x-dsh-auth-token`, with a failure callback that invalidates that same credential. HTTP 401 classification stays in this provider; a rejected older request cannot clear a replacement login. The route publishes the account credential through `ctx.llm.providerCredential('deepseek-account')` with its base URL, so the DeepSeek web providers send it to the same deployment.
+Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/README.md) for the account sign-in the account service releases for the destination, carrying `x-dsh-auth-token`, and adds a failure callback that invalidates that same credential. HTTP 401 classification stays in this provider; a rejected older request cannot clear a replacement login. The route connects its route id and base URL to that service, so the DeepSeek web providers send the account sign-in to the same deployment.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Authentication resolution returns the request credential the account service rel
 <a id="use-this-package"></a>
 ## Use this package
 
-Only `deepseekAccount.resolveRequestCredential(url)` supplies the credential; the account service validates the destination. Signed-out or ineligible requests fail with `ACCOUNT_SIGN_IN_REQUIRED` and discovery returns an empty catalog. The route never falls back to an API key. Other credential lookup errors propagate.
+Only the account sign-in supplies the credential: `ctx.deepseekAuth` asks `deepseekAccount.resolveRequestCredential(url)`, and the account service validates the destination. Signed-out or ineligible requests fail with `ACCOUNT_SIGN_IN_REQUIRED` and discovery returns an empty catalog. The route never falls back to an API key. Other credential lookup errors propagate. The plugin starts only in a composition that mounts `@deepseek-ai/dsh-deepseek-auth`; the `base` bundle mounts it.
 
 The route's catalog comes from the account's `GET /models` listing at the origin of the Messages `baseURL` (`https://api.deepseek.com/models` for the official endpoint); the listing endpoint is not configurable. Listing requests carry the account token in `x-dsh-auth-token` and the harness `User-Agent`, and reject redirects.
 
@@ -63,7 +63,7 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Account credential lookup and invalidation go through the account service's `resolveRequestCredential`; this plugin retains HTTP error classification and owns the sign-out policy over running Agents in [`account-tasks.ts`](src/account-tasks.ts). Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request; a model request in flight keeps its credential and failure callback until it ends, so both can run after disposal. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the credential headers.
+Account credential lookup and invalidation go through `ctx.deepseekAuth`, which asks the account service's `resolveRequestCredential`; this plugin retains HTTP error classification and owns the sign-out policy over running Agents in [`account-tasks.ts`](src/account-tasks.ts). Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request; a model request in flight keeps its credential and failure callback until it ends, so both can run after disposal. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the credential headers.
 
 A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
 

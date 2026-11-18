@@ -440,7 +440,8 @@ const FIXTURE_GLOBAL_READS = [
   'commands/list', 'llm/listConfigurableProviders', 'llm/listProviders',
   'productAnalytics/enabled', 'productAnalytics/report', 'productAnalytics/watchPolicy',
   'speech/cancelPreparation', 'speech/catalog', 'speech/follow', 'speech/prepare', 'speech/transcribe',
-  'session/canOpenWorkspacePath', 'session/control', 'session/list', 'session/modelCatalog', 'workspace/follow',
+  'session/canOpenWorkspacePath', 'session/control', 'session/list', 'session/modelCatalog', 'pluginEvents/follow',
+  'workspace/follow',
 ] as const
 
 type FixtureControlFrame =

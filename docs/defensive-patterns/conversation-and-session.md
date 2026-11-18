@@ -97,7 +97,7 @@ class SidebarSessionView implements Disposable {
   private readonly reference: SessionReference
 
   constructor(readonly id: SessionId, sessions: ISessions) {
-    this.reference = sessions.retain(id, { source: 'sidebarView' })
+    this.reference = sessions.retain(id, { source: 'sidebarView', facets: { conversation: true } })
     void this.reference.ready.catch((error: unknown) => { console.error('opening failed:', error) })
   }
 
@@ -124,6 +124,26 @@ export function reclaimIdle(): void {
 ```
 
 Nobody can count who still uses the Session, and the next state added to the Session escapes the enumeration and is never reclaimed.
+
+## Retained excerpts do not keep their source string alive
+
+Session events, tool result `meta`, and other values kept for a Session's lifetime copy any excerpt taken from a large transient string, such as decoded file text or command output. In V8, a `slice`, `substring`, `split` piece, or regular-expression capture of 13 or more characters can reference its whole parent string, a concatenation references its parts, and `Session.append` copies objects but not string storage. A 200-character line kept in `meta` can therefore keep a 16 MB file in memory until the Session closes.
+
+- Judged condition: can a retained string be an excerpt of a larger string that would otherwise be garbage? The excerpt is copied with `Buffer.from(text, 'utf16le').toString('utf16le')` before it is retained, and a test drops a heap-allocated source, forces garbage collection, and checks that heap usage does not grow with the source size.
+- Boundary: the rule applies to excerpts that outlive the operation. It does not apply when the source itself is retained or when the value comes from `JSON.parse`, `TextDecoder`, or `Buffer#toString`. `String()`, `slice(0)`, `trim()`, `'' + text`, and `join` can return the input string itself and are not copies.
+- Ownership: the code that takes the excerpt copies it; the Session does not copy strings on append.
+
+The `read` tool copies a returned line once when it was built from a slice:
+
+```ts ignore-check
+const line = lineHasSlice ? Buffer.from(lineBuffer, 'utf16le').toString('utf16le') : lineBuffer
+```
+
+Keeping the slice keeps the decoded file:
+
+```ts ignore-check
+const line = lineBuffer // may be a slice of the whole decoded file
+```
 
 ## Node computation is incremental and streaming publication is batched
 

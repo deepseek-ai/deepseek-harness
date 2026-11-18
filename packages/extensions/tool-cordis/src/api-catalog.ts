@@ -83,13 +83,13 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Card tool, kind registry, Session projection, user actions and status notices.',
-    description: 'Card tool, kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, Session projection, user actions and status notices.',
+    description: 'Kind registry, Session projection, user actions and status notices.',
     methods: [
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',
-        parameters: [{ name: 'kind', description: 'the kind\'s skill, details schema, verbs and handler.' }],
+        parameters: [{ name: 'kind', description: 'the kind\'s details schema, verbs and handler.' }],
         returns: 'disposer removing the kind; actions on its cards are then unavailable.',
         throws: ['when another kind already registered the same action.'],
       },
@@ -103,12 +103,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'view(session: Session): ActionCardView',
         description: 'Read the cards of one Session.',
         parameters: [{ name: 'session', description: 'a Session whose projections are prepared.' }],
-        returns: 'proposals and decisions by call id.',
+        returns: 'proposals and decisions by card id.',
       },
       {
-        signature: '@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
+        signature: '@Remote act(agent: Agent, cardId: ActionCardId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>',
         description: 'Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is recorded here and every other verb goes to the card\'s kind. `dismiss` also works on an unstarted card whose kind is no longer registered. Concurrent actions on one card share one operation.',
-        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'callId', description: 'the card\'s `propose_action` call id.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
+        parameters: [{ name: 'agent', description: 'live root resolved from the displayed Session.' }, { name: 'cardId', description: 'the card\'s id in the Session\'s card view.' }, { name: 'verb', description: '`dismiss` or one of the kind\'s verbs.' }, { name: 'payload', description: 'kind-defined fields such as a chosen location.' }],
         returns: 'acceptance of background work, the decision in effect, or a refusal.',
       },
     ],
@@ -593,15 +593,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cliAccounts',
+    summary: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    description: 'Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.',
+    methods: [
+      {
+        signature: 'register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>',
+        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s CLI, account operations, and Plugins page text.' }],
+        returns: 'the handle for the plugin\'s own reads and updates of the account.',
+        throws: ['when the runtime-context name `<name>:cli` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
     methods: [
       {
         signature: 'graph(): WebBootGraph',
-        description: 'Current composed entry graph (stable object between changes).',
+        description: 'Current composed entry graph (stable object between changes), carrying the configured synced values.',
         parameters: [],
-        returns: 'the graph served as `window.__DSH_BOOT__`.',
+        returns: 'the graph served as the owner\'s `window.__DSH_BOOT__`.',
+      },
+      {
+        signature: 'graphFor(principal: Principal | undefined): WebBootGraph',
+        description: 'The current graph as one Peer may see it: the owner receives the configured synced values, and every other Peer receives each row\'s schema defaults in their place.',
+        parameters: [{ name: 'principal', description: 'the Peer\'s principal; undefined for the owner or an in-process caller.' }],
+        returns: 'the graph served to that Peer at first render and in plugin-events frames.',
       },
       {
         signature: 'clientPath(id: string): string | undefined',
@@ -635,7 +655,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'onGraphChanged(listener: () => void): () => void',
-        description: 'Fires after any flush that recomposed the graph (row added/removed, or a rebuilt rev change). Pull model: listeners re-read graph.',
+        description: 'Fires after the graph\'s rows or rev change: a flush that recomposed the graph (row added/removed, or a rebuilt rev change), or a republication of synced configuration alone, which leaves the batch artifacts unchanged. Pull model: listeners re-read graph.',
         parameters: [{ name: 'listener', description: 'notified with no payload.' }],
         returns: 'the unsubscriber.',
       },
@@ -715,6 +735,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Reserve the sole provider slot until the contribution is disposed. A second registration fails even when it repeats the current name. Providers must stop their tools and await owned work before releasing this registration.',
         parameters: [{ name: 'name', description: 'provider-owned name used in registration diagnostics.' }],
         returns: 'the effect disposer for this exact registration.',
+      },
+    ],
+  },
+  {
+    key: 'config',
+    summary: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    description: 'Read-only access to other packages\' synced Config; a plugin receives its own through `apply`.',
+    methods: [
+      {
+        signature: 'resolveConfigByPackage<C>(packageName: string): SyncedConfig<C> | undefined',
+        description: 'The synced Config object of a package\'s current plugin activation, as that activation\'s `apply` received it. Each activation receives a new object, so the result changes when the plugin is replaced. The caller states the package\'s shared Config type.',
+        parameters: [{ name: 'packageName', description: 'package name of the graph row.' }],
+        returns: 'the object, or undefined while no activation of the package is running.',
       },
     ],
   },
@@ -1136,6 +1169,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream account state without the Host-only identity subscription option.',
         parameters: [{ name: 'signal', description: 'subscription lifetime.' }],
         returns: 'initial state, login progress, and credential-change updates.',
+      },
+    ],
+  },
+  {
+    key: 'deepseekAuth',
+    summary: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    description: '`ctx.deepseekAuth`: the two DeepSeek credential kinds behind one request-authorization operation.',
+    methods: [
+      {
+        signature: 'connect(kind: DeepSeekAuthKind, route: string, connection: () => DeepSeekAuthConnection): () => void',
+        description: 'Connect the deployment a model route plugin\'s settings name for one kind. Call it from within `ctx.effect()`.',
+        parameters: [{ name: 'kind', description: 'the kind the plugin\'s route bills.' }, { name: 'route', description: 'provider route the plugin registers; {@link routeKind} answers `kind` for it while connected.' }, { name: 'connection', description: 'reads the plugin\'s current settings; a throw marks the kind unresolved for that operation.' }],
+        returns: 'the disposer removing the connection.',
+        throws: ['{DeepSeekAuthError} code `DUPLICATE_CONNECTION` when the kind is already connected.'],
+      },
+      {
+        signature: 'routeKind(route: string | undefined): DeepSeekAuthKind | undefined',
+        description: 'The kind that bills a conversation on one model route.',
+        parameters: [{ name: 'route', description: 'provider route of a model request; undefined names none.' }],
+        returns: 'the kind connected under that route, or undefined for a route no plugin connected.',
+      },
+      {
+        signature: 'candidates(request: DeepSeekAuthRequest): (DeepSeekAuthCandidate | DeepSeekAuthUnresolved)[]',
+        description: 'The kinds one request can authenticate with, in the order its billing tries them, each bound to its destination. Nothing is read from a credential store.',
+        parameters: [{ name: 'request', description: 'the request.' }],
+        returns: 'candidates and unresolved kinds, first preferred; empty when the destination accepts no kind the billing allows or no allowed kind serves an absolute destination.',
+      },
+      {
+        signature: 'async authorize(request: DeepSeekAuthRequest, signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>',
+        description: 'Release the credential of the first candidate that has one. A later candidate is not read once an earlier one has a credential, fails to read, or does not resolve.',
+        parameters: [{ name: 'request', description: 'the request.' }, { name: 'signal', description: 'cancellation for the lookups.' }],
+        returns: 'the authorization, or undefined when no candidate has a credential.',
+        throws: ['{DeepSeekAuthError} code `UNRESOLVED_CONNECTION` at an unresolved kind, `INVALID_CREDENTIAL` for an unusable API key; store failures propagate.'],
       },
     ],
   },
@@ -2263,12 +2329,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'dimensions and byte target used by the adapter\'s request serializer.',
       },
       {
-        signature: 'providerCredential(provider: string): ProviderCredential | undefined',
-        description: 'Resolve the credential one registered route currently sends, through its owning adapter. An unregistered route answers `undefined` rather than throwing because callers ask about routes a conversation named earlier, which may no longer be mounted; a registered route whose configuration does not resolve propagates the adapter\'s failure.',
-        parameters: [{ name: 'provider', description: 'provider route whose credential is wanted.' }],
-        returns: 'the route\'s credential, or `undefined` when the route is unregistered or publishes none.',
-      },
-      {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
         description: 'Resolve the exact text one durable file occurrence contributes to every provider request in the current execution environment.',
         parameters: [{ name: 'ref', description: 'durable verbatim file reference from model history.' }],
@@ -2326,6 +2386,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'mcpAccounts',
+    summary: 'Shows each connector\'s MCP server account in the connector account registry.',
+    description: 'Shows each connector\'s MCP server account in the connector account registry.',
+    methods: [
+      {
+        signature: 'register(registration: McpAccountRegistration): () => void',
+        description: 'Show one connector\'s server account on its bundle page for as long as the returned disposer has not run. The account\'s key is `mcp:<server>`.',
+        parameters: [{ name: 'registration', description: 'the server name, the bundle package, and the connector\'s text.' }],
+        returns: 'the registry\'s idempotent disposer, which withdraws the account.',
+        throws: ['when another account already uses the server or the package.'],
+      },
+    ],
+  },
+  {
+    key: 'mcpClientHost',
+    summary: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    description: 'Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.',
+    methods: [
+      {
+        signature: 'validate(input: ConfigInput, path: readonly string[]): Config',
+        description: 'Resolve a server configuration and refuse what an instance would refuse when it starts.',
+        parameters: [{ name: 'input', description: 'server configuration before defaults.' }, { name: 'path', description: 'configuration path naming the server; every failure message starts with it.' }],
+        returns: 'the resolved configuration.',
+        throws: ['when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization header is invalid.'],
+      },
+      {
+        signature: 'mount(config: Config): McpServerInstance',
+        description: 'Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.',
+        parameters: [{ name: 'config', description: 'resolved server configuration, usually from {@link McpClientHost.validate}.' }],
+        returns: 'the instance\'s activation and disposal.',
+      },
+      {
+        signature: 'probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>',
+        description: 'Probe a server without mounting it: resolve its templates, connect, list its tools, and close.',
+        parameters: [{ name: 'config', description: 'resolved server configuration; its startup budget does not bound the probe.' }, { name: 'options', description: 'whole-probe budget, listing caps, and cancellation signal.' }],
+        returns: 'the connect and list outcome with the cleanup result.',
+        throws: ['for invalid options, malformed templates, or a missing required credentials provider.'],
+      },
+      {
+        signature: 'authorization(config: StreamableHttpConfig & { oauth: McpOAuthConfig }, changed: () => void): McpOAuthAuthorization',
+        description: 'Create the explicit OAuth authorization owner of one server.',
+        parameters: [{ name: 'config', description: 'resolved Streamable HTTP configuration with OAuth.' }, { name: 'changed', description: 'called after each change of the owner\'s attempt view.' }],
+        returns: 'the owner; its caller retires and disposes it.',
+      },
+    ],
+  },
+  {
     key: 'mcpManager',
     summary: 'The manager service.',
     description: 'The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.',
@@ -2367,6 +2474,22 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'name', description: 'the configured or registered server key.' }, { name: 'options', description: 'probe budget, listing caps, and abort signal.' }],
         returns: 'the stage-classified probe outcome and independent cleanup result.',
         throws: ['when the manager is disposed, the entry is absent or changing, cleanup is incomplete, options are invalid, or a required credentials provider is missing.'],
+      },
+      {
+        signature: 'async startAuthorization(name: string): Promise<McpOAuthAttemptView>',
+        description: 'Start explicit OAuth authorization, retaining the active grant until a successful commit.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry, including disabled entries.' }],
+        returns: 'current attempt progress; absent services, changing entries, or failed cleanup reject.',
+      },
+      {
+        signature: 'async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>',
+        description: 'Cancel the selected attempt and drain its work; an admitted credential commit completes.',
+        parameters: [{ name: 'name', description: 'managed entry.' }, { name: 'id', description: 'selected attempt; stale or absent attempts are ignored.' }],
+      },
+      {
+        signature: 'async signOut(name: string): Promise<void>',
+        description: 'Drain authorization, probes, and connections before deleting the local grant; retain client registration. A configuration change before deletion preserves the grant and rejects.',
+        parameters: [{ name: 'name', description: 'configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.' }],
       },
     ],
   },
@@ -2700,9 +2823,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
     methods: [
       {
-        signature: '@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>',
+        signature: '@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>',
         description: 'Read the current catalog text for a logged card.',
-        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'callId', description: 'The card\'s `propose_action` call id, never a package supplied by the browser.' }],
+        parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'cardId', description: 'The card\'s id, never a package supplied by the browser.' }],
         returns: 'the plugin\'s title, description and selection, or a refusal when the card names no available official plugin.',
       },
     ],
@@ -3228,10 +3351,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>',
-        description: 'Create a new stored session and take its write ownership.',
-        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'optional cancellation.' }],
+        description: 'Create a new stored session and take its write ownership. With `parentSource`, store the complete fork history before resolving; a backend may share the parent\'s stored prefix or copy it. A failed creation releases acquired write ownership; already committed history remains stored.',
+        parameters: [{ name: 'header', description: 'the immutable header (id, version, cwd, lineage) to store.' }, { name: 'options', description: 'cancellation, inherited-prefix count, and optional fork source.' }],
         returns: 'a `write` handle owned by the caller; close it to release ownership.',
-        throws: ['{SessionAlreadyExistsError} when the id already exists.'],
+        throws: ['{SessionAlreadyExistsError} when the id already exists.', '{SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.', '{HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.'],
       },
       {
         signature: 'abstract open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>',
@@ -4029,9 +4152,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentModelSelection',
-    summary: 'Host settings owner that records Session authorization before the first model request.',
-    description: 'Host settings owner that records Session authorization before the first model request.',
-    methods: [],
+    summary: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    description: 'Host settings owner whose current value authorizes explicit child routes in every Session.',
+    methods: [
+      {
+        signature: 'allowedRoutes(): AllowedModelRoute[] | undefined',
+        description: 'Read the routes the setting currently authorizes. Each call samples the live setting, so an edit applies to the next delegation in every Session.',
+        parameters: [],
+        returns: 'a detached route list, or undefined when the setting is disabled.',
+        throws: ['{SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route, or its routes are malformed or repeated. Disabled settings do not read or validate routes.'],
+      },
+    ],
   },
   {
     key: 'subagents',
@@ -4657,6 +4788,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'upstreamSkills',
+    summary: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    description: 'Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.',
+    methods: [
+      {
+        signature: 'register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle',
+        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
+        parameters: [{ name: 'registration', description: 'the plugin\'s provider name, entry, pinned files, and optional skills directory.' }],
+        returns: 'the handle the plugin\'s view observes and its check retries.',
+        throws: ['when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a skill provider named `name` is already registered.'],
+      },
+    ],
+  },
+  {
     key: 'userQuestions',
     summary: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
     description: '`ctx.userQuestions`: validation plus the scoped answerer waterfall.',
@@ -4848,8 +4993,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s effective directory and its model-visible changes.',
-    description: 'One owner for each Session\'s effective directory and its model-visible changes.',
+    summary: 'One owner for each Session\'s directory and its model-visible changes.',
+    description: 'One owner for each Session\'s directory and its model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure. The `working-directory/change` events of a log written while the model could move the directory do not move it.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4858,9 +5003,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'get(session: Session): string',
-        description: 'Read the committed directory without filesystem I/O.',
+        description: 'Read the committed directory without filesystem I/O: where relative paths resolve, and the workspace root of everything that follows the Session\'s checkout.',
         parameters: [{ name: 'session', description: 'Session whose directory is requested.' }],
-        returns: 'its effective absolute directory.',
+        returns: 'the directory of the last Host move, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
@@ -4871,7 +5016,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Change one Session\'s directory without changing existing processes or permissions.',
+        description: 'Move one Session\'s directory to `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],
@@ -5091,8 +5236,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -5107,6 +5252,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins, never `fetch`; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
+      },
+      {
+        signature: 'async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree>',
+        description: 'Move the calling Session into an existing worktree in the pool of the checkout it works in. The directory `name` selects must lie inside that pool and be a registered worktree of the repository; neither Git state nor files change. The Session\'s log records the entry, so exit returns it to the checkout it entered from. Archiving the Session never removes a checkout it only entered.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the checkout and its pool.' }, { name: 'request', description: 'name of the worktree inside the pool.' }, { name: 'signal', description: 'cancellation of lookup and of the working-directory change.' }],
+        returns: 'the entered checkout, its branch, and the checkout the Session entered from.',
+        throws: ['{WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool, `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service\'s error when the registered directory no longer exists.'],
+      },
+      {
+        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree>',
+        description: 'Return the calling Session from the worktree it works in to the checkout it entered that worktree from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The worktree is the recorded creation or entry, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory lies in a recorded worktree.' }, { name: 'signal', description: 'cancellation of directory validation and of the working-directory change.' }],
+        returns: 'the worktree the Session left; the Session now works in its `repositoryRoot`.',
+        throws: ['{WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service\'s error when the source checkout no longer exists.'],
       },
       {
         signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
@@ -5532,8 +5691,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'mcp-manager/status',
     mode: 'parallel',
     signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void | Promise<void>',
-    summary: 'One managed server\'s status transitioned.',
-    description: 'One managed server\'s status transitioned. Emitted for every published change while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
+    summary: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view.',
+    description: 'A managed server\'s connection status or authorization view changed; read `list()` for the current authorization view. Emitted while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.',
     parameters: [{ name: 'name', description: 'the configured `servers` key or registered name.' }, { name: 'status', description: 'the status now current for that server.' }],
   },
   {
@@ -5962,7 +6121,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AccountRequestCredential',
-    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
+    declaration: 'export interface AccountRequestCredential {\n    readonly headers: Readonly<Record<string, string>>;\n    reject(): Promise<void>;\n    readonly revoked: AbortSignal;\n}',
   },
   {
     name: 'AccountUpdate',
@@ -5982,19 +6141,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ActionCardDecision',
-    declaration: 'export interface ActionCardDecision {\n    readonly callId: ToolCallId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
+    declaration: 'export interface ActionCardDecision {\n    readonly cardId: ActionCardId;\n    readonly action: string;\n    readonly phase: string;\n    readonly data?: ActionCardFields | undefined;\n}',
   },
   {
     name: 'ActionCardFields',
     declaration: 'export type ActionCardFields = Readonly<Record<string, JsonValue>>;',
   },
   {
+    name: 'ActionCardId',
+    declaration: 'export type ActionCardId = Branded<\'ActionCardId\'>;',
+  },
+  {
     name: 'ActionCardKind',
-    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly skill: string;\n    readonly invitation: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
+    declaration: 'export interface ActionCardKind<Details> {\n    readonly action: string;\n    readonly details: ZodType<Details>;\n    readonly verbs: Readonly<Record<string, ActionCardVerb>>;\n    readonly openPhases?: readonly string[];\n    readonly statusGuidance?: string;\n    readonly statusFields?: readonly string[];\n    dismissal?(proposal: ActionCardProposalOf<Details>, payload: ActionCardFields | undefined): ActionCardFields | undefined;\n    reconcile?(agent: Agent, proposal: ActionCardProposalOf<Details>): Promise<void>;\n    act(agent: Agent, proposal: ActionCardProposalOf<Details>, verb: string, payload: ActionCardFields | undefined): Promise<ActionCardResult>;\n}',
   },
   {
     name: 'ActionCardProposal',
-    declaration: 'export interface ActionCardProposal {\n    readonly callId: ToolCallId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
+    declaration: 'export interface ActionCardProposal {\n    readonly cardId: ActionCardId;\n    readonly turn: number;\n    readonly action: string;\n    readonly title: string;\n    readonly brief: string;\n    readonly details: ActionCardFields;\n}',
   },
   {
     name: 'ActionCardProposalOf',
@@ -6095,6 +6258,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentTerminalRequest',
     declaration: 'export interface AgentTerminalRequest {\n    readonly title: string;\n    readonly cwd?: string;\n    readonly cols: number;\n    readonly rows: number;\n    readonly policy: SandboxExecutionPolicy;\n    readonly preferredShells: readonly string[];\n    readonly env?: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'AllowedModelRoute',
+    declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
     name: 'AnalyticsPreset',
@@ -6401,8 +6568,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
   },
   {
+    name: 'CliAccountDictionaries',
+    declaration: 'export type CliAccountDictionaries<Key extends string> = {\n    readonly en: Readonly<Record<Key, string>>;\n} & {\n    readonly [language: string]: Readonly<Record<Key, string>>;\n};',
+  },
+  {
+    name: 'CliAccountHandle',
+    declaration: 'export interface CliAccountHandle<Account, Kind extends string, Phase extends string, Command extends string> {\n    snapshot(): CliAccountView<Account, Kind, Phase, Command>;\n    publish(account: Account): void;\n    refresh(): void;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'CliAccountRegistration',
+    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
+  },
+  {
+    name: 'CliAccountText',
+    declaration: 'export type CliAccountText<Key extends string> = (key: Key, params?: Readonly<Record<string, string>>) => LocalizedText;',
+  },
+  {
+    name: 'CliAccountView',
+    declaration: 'export type CliAccountView<Account, Kind extends string, Phase extends string, Command extends string = string> = ConnectorAccountView<Account, Kind, Phase | \'checking\' | \'cancelling\', CliCommandFailure<Command>>;',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
+    name: 'CliCommandResult',
+    declaration: 'export interface CliCommandResult {\n    readonly exitCode: number | null;\n    readonly stdout: string;\n    readonly stderr: string;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperationControl',
+    declaration: 'export interface CliOperationControl<Account, Phase extends string, Command extends string> {\n    stage(phase: Phase | \'checking\'): void;\n    offer(url: string): boolean;\n    run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>;\n    publish(account: Account): void;\n}',
+  },
+  {
+    name: 'CliPathContext',
+    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n    readonly ready?: () => boolean;\n}',
+  },
+  {
+    name: 'CliRunOptions',
+    declaration: 'export interface CliRunOptions {\n    readonly awaitsUser?: boolean;\n    readonly onLine?: (stream: \'stdout\' | \'stderr\', line: string) => void;\n}',
   },
   {
     name: 'CollectedOutput',
@@ -6487,6 +6694,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ComputerUseProviderName',
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
+  },
+  {
+    name: 'ConfigInput',
+    declaration: 'export type ConfigInput = StdioConfigInput | StreamableHttpConfigInput;',
   },
   {
     name: 'ConfigureCall',
@@ -6718,7 +6929,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n    };\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreatedShare',
@@ -6819,6 +7030,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DailyScheduleRecord',
     declaration: 'export interface DailyScheduleRecord {\n    readonly id: ScheduleId;\n    readonly kind: \'daily\';\n    readonly title: string;\n    readonly prompt: string;\n    readonly time: string;\n    readonly timeZone: string;\n    readonly scheduledAt: string;\n}',
+  },
+  {
+    name: 'DeepSeekApiKeyHeader',
+    declaration: 'export type DeepSeekApiKeyHeader = \'authorization\' | \'x-api-key\';',
+  },
+  {
+    name: 'DeepSeekAuthBilling',
+    declaration: 'export type DeepSeekAuthBilling = \'auto\' | DeepSeekAuthKind;',
+  },
+  {
+    name: 'DeepSeekAuthCandidate',
+    declaration: 'export interface DeepSeekAuthCandidate {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly reference?: CredentialRef;\n    configured(): Promise<boolean>;\n    resolve(signal?: AbortSignal): Promise<DeepSeekAuthorization | undefined>;\n}',
+  },
+  {
+    name: 'DeepSeekAuthConnection',
+    declaration: 'export interface DeepSeekAuthConnection {\n    readonly baseURL: string;\n    readonly reference?: CredentialRef;\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'DeepSeekAuthDestination',
+    declaration: 'export type DeepSeekAuthDestination = {\n    readonly path: string;\n} | {\n    readonly url: string;\n};',
+  },
+  {
+    name: 'DeepSeekAuthKind',
+    declaration: 'export type DeepSeekAuthKind = \'api-key\' | \'account\';',
+  },
+  {
+    name: 'DeepSeekAuthorization',
+    declaration: 'export interface DeepSeekAuthorization {\n    readonly kind: DeepSeekAuthKind;\n    readonly endpoint: string;\n    readonly headers: Readonly<Record<string, string>>;\n    readonly reference?: CredentialRef;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
+  },
+  {
+    name: 'DeepSeekAuthRequest',
+    declaration: 'export interface DeepSeekAuthRequest {\n    readonly consumer: string;\n    readonly accepts: readonly DeepSeekAuthKind[];\n    readonly billing?: DeepSeekAuthBilling;\n    readonly route?: string | undefined;\n    readonly destination: DeepSeekAuthDestination;\n    readonly connections?: Readonly<Partial<Record<DeepSeekAuthKind, DeepSeekAuthConnection>>>;\n    readonly apiKeyHeaders?: readonly DeepSeekApiKeyHeader[];\n}',
+  },
+  {
+    name: 'DeepSeekAuthUnresolved',
+    declaration: 'export interface DeepSeekAuthUnresolved {\n    readonly kind: DeepSeekAuthKind;\n    readonly unresolved: \'connection\' | \'deployment\';\n    readonly error: unknown;\n}',
   },
   {
     name: 'DeepSeekLlmApiExtensionMap',
@@ -6963,6 +7210,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EnteredWorktree',
+    declaration: 'export interface EnteredWorktree {\n    path: string;\n    branch?: string;\n    repositoryRoot: string;\n}',
+  },
+  {
+    name: 'EnterWorktreeRequest',
+    declaration: 'export interface EnterWorktreeRequest {\n    name: string;\n}',
   },
   {
     name: 'EpochHeader',
@@ -7730,7 +7985,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(_provider: string): ProviderCredential | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -7751,14 +8006,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmConfigurableProvider',
     declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseURL?: string;\n    baseURLEnv?: readonly string[];\n    nativeAuth?: LlmNativeAuth;\n    error?: string;\n}',
-  },
-  {
-    name: 'LlmCredentialKind',
-    declaration: 'export type LlmCredentialKind = LlmCredentialKindMap[keyof LlmCredentialKindMap];',
-  },
-  {
-    name: 'LlmCredentialKindMap',
-    declaration: 'export interface LlmCredentialKindMap {\n    \'api-key\': \'api-key\';\n    account: \'account\';\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -7826,7 +8073,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    providerCredential(provider: string): ProviderCredential | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -7969,12 +8216,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type MatcherValue = string | number | boolean | null | RegExp | readonly (string | number | boolean | null)[];',
   },
   {
+    name: 'McpAccountCopy',
+    declaration: 'export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {\n    readonly title: Text;\n    readonly connect: Text;\n    readonly activation: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly detail: {\n        readonly disconnected: Text;\n        readonly waitingBrowser: Text;\n        readonly authorizing: Text;\n        readonly connecting: Text;\n        readonly connected: Text;\n        readonly rejected: Text;\n        readonly scope: Text;\n    };\n    readonly signOut: {\n        readonly title: Text;\n        readonly body: Text;\n    };\n    readonly notice: {\n        readonly connected: Text;\n        readonly signedOut: Text;\n    };\n}',
+  },
+  {
+    name: 'McpAccountRegistration',
+    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
+  },
+  {
+    name: 'McpAuthorizationReason',
+    declaration: 'export type McpAuthorizationReason = \'missing\' | \'expired\' | \'binding\' | \'rejected\' | \'scope\';',
+  },
+  {
     name: 'McpCloseResult',
     declaration: 'export interface McpCloseResult {\n    closeConfirmed: boolean;\n    cleanupError?: string;\n}',
   },
   {
     name: 'McpConnectionStatus',
-    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+    declaration: 'export type McpConnectionStatus = {\n    state: \'closed\';\n    result: McpCloseResult;\n} | {\n    state: \'waiting-credentials\';\n    lastError: string;\n} | {\n    state: \'waiting-authorization\';\n    reason: McpAuthorizationReason;\n    lastError: string;\n} | {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+  },
+  {
+    name: 'McpConnectionStatusHandle',
+    declaration: 'export interface McpConnectionStatusHandle {\n    current(): McpConnectionStatus;\n    closure(): McpCloseResult;\n    onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void;\n}',
   },
   {
     name: 'McpManagedServerStatus',
@@ -7982,7 +8245,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpManagedServerView',
-    declaration: 'export interface McpManagedServerView {\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+    declaration: 'export interface McpManagedServerView {\n    authorization?: McpOAuthAttemptView;\n    name: string;\n    configured: boolean;\n    status: McpManagedServerStatus;\n}',
+  },
+  {
+    name: 'McpOAuthAttemptId',
+    declaration: 'export type McpOAuthAttemptId = Branded<\'McpOAuthAttemptId\'>;',
+  },
+  {
+    name: 'McpOAuthAttemptView',
+    declaration: 'export interface McpOAuthAttemptView {\n    id: McpOAuthAttemptId;\n    phase: \'starting\' | \'waiting-browser\' | \'exchanging\' | \'committing\' | \'authorized\' | \'cancelled\' | \'failed\';\n    authorizationUrl?: string;\n    lastError?: string;\n}',
+  },
+  {
+    name: 'McpOAuthAuthorization',
+    declaration: 'export class McpOAuthAuthorization {\n    constructor(private readonly ctx: Context, private readonly config: StreamableHttpConfig & {\n        oauth: McpOAuthConfig;\n    }, private readonly changed: () => void);\n    current(): McpOAuthAttemptView | undefined;\n    async start(): Promise<McpOAuthAttemptView>;\n    retire(): void;\n    async cancel(id: McpOAuthAttemptId): Promise<void>;\n    async dispose(): Promise<McpCloseResult>;\n}',
+  },
+  {
+    name: 'McpOAuthConfig',
+    declaration: 'export interface McpOAuthConfig {\n    credentialKey: string;\n    clientId?: string;\n    scope?: string;\n    requestTimeoutMs: number;\n    authorizationTimeoutMs: number;\n}',
   },
   {
     name: 'McpProbeFailure',
@@ -8011,6 +8290,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'McpResourceRequest',
     declaration: 'export type McpResourceRequest = {\n    method: \'resources/list\' | \'resources/templates/list\';\n    cursor?: string;\n} | {\n    method: \'resources/read\';\n    uri: string;\n};',
+  },
+  {
+    name: 'McpServerInstance',
+    declaration: 'export interface McpServerInstance {\n    readonly ready: Promise<McpConnectionStatusHandle>;\n    dispose(): Promise<McpCloseResult | undefined>;\n}',
   },
   {
     name: 'McpServerRegistration',
@@ -8641,14 +8924,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PromptSubmitResult = {\n    text: string;\n    context?: readonly string[];\n    drop?: undefined;\n} | {\n    drop: string;\n    text?: undefined;\n    context?: undefined;\n};',
   },
   {
-    name: 'ProviderCredential',
-    declaration: 'export interface ProviderCredential {\n    readonly kind: LlmCredentialKind;\n    readonly baseURL: string;\n    readonly reference?: string;\n    configured(endpoint: string): Promise<boolean>;\n    resolve(endpoint: string, signal?: AbortSignal): Promise<ProviderCredentialGrant | undefined>;\n}',
-  },
-  {
-    name: 'ProviderCredentialGrant',
-    declaration: 'export interface ProviderCredentialGrant {\n    readonly headers: Readonly<Record<string, string>>;\n    readonly value: string;\n    reject?(): Promise<void>;\n    readonly revoked?: AbortSignal;\n}',
-  },
-  {
     name: 'ProviderRequestId',
     declaration: 'export type ProviderRequestId = Branded<\'ProviderRequestId\'>;',
   },
@@ -8731,6 +9006,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RecommendationDetails',
     declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
+  },
+  {
+    name: 'ReconnectConfig',
+    declaration: 'export interface ReconnectConfig {\n    enabled?: boolean;\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    maxAttempts?: number;\n}',
   },
   {
     name: 'RecurringScheduleRecord',
@@ -9454,7 +9733,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionObservation',
-    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
+    declaration: 'export interface SessionObservation extends Disposable {\n    readonly source: \'live\' | \'prepared\';\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffsetType;\n    readonly persistedEventCount?: SessionLogOffsetType;\n    readonly events: readonly SessionEvent[];\n    readonly cursor: SessionSeqCursor;\n    readonly revision?: SessionPersistenceRevision;\n    readonly projections?: ProjectionSnapshot;\n    retain(): SessionObservation;\n}',
   },
   {
     name: 'SessionObservationOptions',
@@ -9486,7 +9765,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceCreateOptions',
-    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n}',
+    declaration: 'export interface SessionPersistenceCreateOptions {\n    readonly signal?: AbortSignal;\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n        readonly events: readonly SessionEvent[];\n    };\n}',
   },
   {
     name: 'SessionPersistenceListOptions',
@@ -10109,6 +10388,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface StoredImageAttachment {\n    ref: ImageAttachmentRef;\n    data: Uint8Array;\n}',
   },
   {
+    name: 'StreamableHttpConfig',
+    declaration: 'export interface StreamableHttpConfig {\n    oauth?: McpOAuthConfig;\n    transport: \'streamable-http\';\n    serverName: string;\n    url: string;\n    headers: Record<string, string>;\n    toolCallTimeoutMs: number;\n    startupTimeoutMs?: number;\n    closeTimeoutMs: number;\n    expandTemplates: boolean;\n    failOnStartupError: boolean;\n    maxInstructionBytes?: number;\n    reconnect?: ReconnectConfig;\n    toolLoading: \'eager\' | \'on-demand\';\n    catalogDescriptionMaxLength: number;\n}',
+  },
+  {
     name: 'StreamChunk',
     declaration: 'export type StreamChunk = {\n    type: \'block-start\';\n    index: number;\n    blockType: ContentBlockType;\n} | {\n    type: \'text-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'reasoning-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'tool-call-delta\';\n    index: number;\n    id: ToolCallId;\n    name?: string;\n    argumentsDelta: string;\n} | {\n    type: \'block-end\';\n    index: number;\n    block: ContentBlock;\n} | {\n    type: \'usage\';\n    usage: TokenUsage;\n} | {\n    type: \'finish\';\n    reason: FinishReason;\n    replayState?: ReplayEnvelope;\n};',
   },
@@ -10291,6 +10574,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SurfaceSnapshot',
     declaration: 'export interface SurfaceSnapshot {\n    readonly generation: number;\n    readonly tree: readonly SerializedNode[] | null;\n}',
+  },
+  {
+    name: 'SyncedConfig',
+    declaration: 'export type SyncedConfig<C> = {\n    readonly [K in keyof C as NonNullable<C[K]> extends Volatile<unknown> ? K : never]-?: NonNullable<C[K]> extends Volatile<infer V> ? SyncedConfigRef<V | undefined> : never;\n};',
+  },
+  {
+    name: 'SyncedConfigRef',
+    declaration: 'export interface SyncedConfigRef<T> extends Volatile<T>, ObservableSnapshot<VolatileSnapshot<T>> {\n}',
+  },
+  {
+    name: 'SyncedConfigValues',
+    declaration: 'export type SyncedConfigValues = {\n    readonly [field: string]: JsonValue;\n};',
   },
   {
     name: 'SystemMessage',
@@ -10873,6 +11168,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: SessionId;\n}',
   },
   {
+    name: 'UpstreamSkillSelection',
+    declaration: 'export interface UpstreamSkillSelection {\n    readonly repository: string;\n    readonly commit: string;\n    readonly directory: string;\n    readonly exclude: readonly string[];\n    readonly license: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillSet',
+    declaration: 'export interface UpstreamSkillSet extends UpstreamSkillSelection {\n    readonly bytes: number;\n    readonly sha256: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillsHandle',
+    declaration: 'export interface UpstreamSkillsHandle {\n    readonly directory: string;\n    readonly state: UpstreamSkillsState;\n    watch(listener: (state: UpstreamSkillsState) => void): () => void;\n    retry(): void;\n    dispose(): void;\n}',
+  },
+  {
+    name: 'UpstreamSkillsRegistration',
+    declaration: 'export interface UpstreamSkillsRegistration {\n    readonly name: string;\n    readonly entry: string;\n    readonly set: UpstreamSkillSet;\n    readonly skillsDir?: string | undefined;\n}',
+  },
+  {
+    name: 'UpstreamSkillsState',
+    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
+  },
+  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends MessageBase {\n    readonly role: \'user\';\n}',
   },
@@ -10914,7 +11229,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootEntry',
-    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n}',
+    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n}',
   },
   {
     name: 'WebBootGraph',

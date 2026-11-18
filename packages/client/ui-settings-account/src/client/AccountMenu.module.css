@@ -28,11 +28,3 @@
   font-size: 14px;
   line-height: 22px;
 }
-
-.signedOutMenu [role='menuitem'] > span:first-child:not(:last-child) {
-  width: 16px;
-  height: 16px;
-  color: var(--dsw-alias-menu-icon);
-}
-
-.signedOutMenu [role='menuitem'] > span:first-child:not(:last-child) svg { width: 16px; height: 16px; }

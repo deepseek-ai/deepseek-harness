@@ -208,8 +208,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "initial"
@@ -303,8 +302,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "series"
@@ -1768,8 +1766,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -1893,8 +1890,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "series"
@@ -3255,8 +3251,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -4270,8 +4265,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
