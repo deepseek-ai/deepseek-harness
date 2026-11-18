@@ -975,6 +975,19 @@ describe('forgePanel worktree blockers', () => {
     expect(revoked.worktree.blocker).toBe('outside-writable-root')
   })
 
+  it('offers a worktree from a linked checkout when the worktree service is mounted, whose linked-worktree grant covers the shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked, {}, { worktrees: true })
+
+    const state = await reader(opened).until(ready)
+
+    // The grant is registered at Agent creation, before the panel's first inspection; Windows gets none.
+    expect(state.checkout).toMatchObject({ state: 'ready', checkout: { root: linked, branch: 'feat', linked: true } })
+    expect(state.worktree.blocker).toBe(process.platform === 'win32' ? 'outside-writable-root' : null)
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
