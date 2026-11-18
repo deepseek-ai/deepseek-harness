@@ -76,6 +76,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var count = 0
     var secondaryCount = 0
     var selectedFile = ""
+    var keyEventCount = 0
+    var keyMonitor: Any?
 
     init(statePath: String, rowCount: Int = 35, alternateHover: Bool = false) {
         self.statePath = statePath; self.rowCount = rowCount; self.alternateHover = alternateHover
@@ -158,9 +160,17 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             if position != self.lastCursor { self.cursorChanges += 1; self.lastCursor = position }
             self.persist()
         }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.keyEventCount += 1
+            self?.persist()
+            return event
+        }
         persist()
         print("READY")
         fflush(stdout)
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
     }
     @objc func increment() { count += 1; countLabel.stringValue = "Count: \(count)"; persist() }
     @objc func cycleOverlay() {
