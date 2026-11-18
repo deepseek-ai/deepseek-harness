@@ -48,6 +48,7 @@ describe('bundled Office skills', () => {
 
   it('links each format file once from SKILL.md and keeps every line within one read', async () => {
     const skill = await readReference('SKILL.md')
+    expect(skill).toContain('use the `read` tool, not shell commands, to read its format file')
     expect([...skill.matchAll(/`([a-z]+\.md)`/gu)].map(match => match[1])).toEqual(references)
     expect(await readdir(assets)).toEqual(names)
     expect((await readdir(join(assets, 'office'))).filter(file => file !== 'SKILL.md').sort()).toEqual(references)

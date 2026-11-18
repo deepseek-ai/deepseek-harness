@@ -5,7 +5,7 @@ description: Create, read, edit, and validate Word, PowerPoint, and Excel files;
 
 # Office tasks
 
-To create, read, or edit a file, first `read` its format file: `docx.md` for Word, `pptx.md` for PowerPoint, or `xlsx.md` for Excel. Rendering, conversion, or recalculation alone needs no format file.
+To create, read, or edit a file, first use the `read` tool, not shell commands, to read its format file: `docx.md` for Word, `pptx.md` for PowerPoint, or `xlsx.md` for Excel. Rendering, conversion, or recalculation alone needs no format file.
 
 Bundled Python includes `pypdf` for existing PDFs.
 
