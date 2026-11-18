@@ -39,7 +39,7 @@ export const CuaScreenshotTargetConfig: Schema<CuaScreenshotTargetConfig> = Sche
 
 /** Shared configuration fields extended by native platform providers. */
 export const CuaConfigFields = {
-  requireSystemPointerApproval: Schema.boolean().default(true),
+  requireSystemInputApproval: Schema.boolean().default(true),
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   standaloneRunCode: CuaStandaloneRunCodeConfig.default({}),
   screenshotTarget: Schema.union([CuaScreenshotTargetConfig, Schema.const(undefined)]),

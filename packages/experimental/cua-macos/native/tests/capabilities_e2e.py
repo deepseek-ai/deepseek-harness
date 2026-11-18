@@ -105,7 +105,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
         socket = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
         for index, (button, down, moved, up) in enumerate([("left", 1, 6, 2), ("right", 3, 7, 4), ("middle", 25, 27, 26)]):
             assert cursor(*inside) == inside
-            params = {**window, "mouseButton": button, "useSystemPointer": True}
+            params = {**window, "mouseButton": button, "useSystemInput": True}
             count = len(json.loads(state_file.read_text())["events"])
             call("toggleMouse", {**params, "direction": "down"})
             try:
@@ -113,7 +113,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
                 assert state["events"][-1]["pressedButtons"] & (1 << index), state
                 call("toggleMouse", {**params, "direction": "down"}, "INPUT_BUSY")
                 call("mouseMove", {**window, "x": inside[0] - bounds["x"] + 15, "y": inside[1] - bounds["y"],
-                                   "useSystemPointer": True})
+                                   "useSystemInput": True})
                 state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)
                 assert state["events"][-1]["type"] == moved, state
                 assert cursor() == [inside[0] + 15, inside[1]]
@@ -145,7 +145,7 @@ def check_system_drag(helper, owner, window, point, state_file):
     call("getState", {**window, "maxElements": 300, "maxDepth": 20})
     count = len(json.loads(state_file.read_text())["events"])
     params = {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
-              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemPointer": True}
+              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemInput": True}
     call("drag", params, "FOREGROUND_REQUIRED")
     assert len(json.loads(state_file.read_text())["events"]) == count
     call("activate", owner)
