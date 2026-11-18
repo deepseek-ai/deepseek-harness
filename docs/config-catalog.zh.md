@@ -1090,7 +1090,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-dingtalk`
 
 - `inject`: `cliAccounts` · `skills`
-- `source`: [`packages/connector/dingtalk/src/index.ts:33`](../packages/connector/dingtalk/src/index.ts)
+- `source`: [`packages/connector/dingtalk/src/index.ts:31`](../packages/connector/dingtalk/src/index.ts)
 
 ```ts config-catalog
 /** Where dws and its skills come from, and how long one download may take. */
