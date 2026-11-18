@@ -64,8 +64,25 @@ function inRepository(number: number, owner: string, name: string, overrides: Pa
 describe('ReviewList states', () => {
   it('shows a skeleton until the first frame, and a retry once the list stream stopped without one', () => {
     const loading = renderList()
-    expect(loading.view.getByLabelText('Reading the lists').getAttribute('aria-busy')).toBe('true')
+    const busy = loading.view.getByLabelText('Reading the lists')
+    expect(busy.getAttribute('aria-busy')).toBe('true')
     expect(loading.view.getByRole('heading', { name: 'Code review' })).toBeTruthy()
+    // The skeleton is a heading bar above rows laid out as detailed items: a glyph, one or two title lines, and a meta line.
+    expect(busy.textContent).toBe('')
+    const rows = busy.querySelectorAll(`[data-forge-review-skeleton="detailed"] > .${css.skeletonItem}`)
+    expect(rows).toHaveLength(6)
+    expect([...rows].map(row => row.querySelectorAll(`.${css.skeletonBar}`).length)).toEqual([3, 2, 3, 2, 3, 3])
+    expect(rows[0]?.querySelectorAll(`.${css.skeletonMeta}`)).toHaveLength(1)
+    expect(busy.querySelector('[data-forge-review-skeleton]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(busy.querySelector(`.${css.skeletonHeading}`)).not.toBeNull()
+    cleanup()
+
+    // The compact view reads as one-line rows: a glyph, a title bar, and a time bar.
+    const compact = renderList({ view: 'compact' })
+    const lines = compact.view.getByLabelText('Reading the lists').querySelectorAll(`[data-forge-review-skeleton="compact"] > .${css.skeletonCompact}`)
+    expect(lines).toHaveLength(6)
+    expect(lines[0]?.querySelectorAll(`.${css.skeletonBar}`)).toHaveLength(1)
+    expect(lines[0]?.querySelector(`.${css.skeletonTime}`)).not.toBeNull()
     cleanup()
 
     const stopped = renderList({ stopped: { code: 'ended', message: '' } })
@@ -141,9 +158,9 @@ describe('ReviewList sections', () => {
     expect(b.view.queryByText(/more not listed/)).toBeNull()
   })
 
-  it('shows a skeleton row for a list no host has read yet, and only the failure once a read failed', () => {
+  it('shows skeleton rows for a list no host has read yet, and only the failure once a read failed', () => {
     const b = renderList({ frame: frame(host({ authored: list(null), involved: failedList('unavailable', 'GitHub is down') })) })
-    expect(b.section('authored').querySelector('[aria-busy="true"]')).not.toBeNull()
+    expect(b.section('authored').querySelectorAll(`[aria-busy="true"] .${css.skeletonItem}`)).toHaveLength(3)
     expect(within(b.section('authored')).queryByRole('button', { name: /\d/ })).toBeNull()
     const involved = b.section('involved')
     expect(involved.querySelector('[aria-busy="true"]')).toBeNull()

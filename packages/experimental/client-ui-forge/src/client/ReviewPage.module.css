@@ -392,18 +392,67 @@
   overflow-wrap: anywhere;
 }
 
-.skeleton {
+/* Skeleton rows copy the boxes of `.sectionHeader`, `.item`, and `.compactItem`: each bar sits on the line of the
+   text it stands for, so the list does not move when the rows arrive. The fill and pulse are the changes view's. */
+.skeletonHeader {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+}
+
+.skeletonHeading {
+  width: 72px;
+  height: 10px;
+}
+
+.skeletonItem {
+  display: flex;
+  gap: 8px;
   padding: 8px;
 }
 
-.skeletonRow {
-  display: block;
-  height: 36px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-card-fill);
+.skeletonCompact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+}
+
+.skeletonGlyph {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.skeletonItem .skeletonGlyph {
+  margin-top: 2px;
+}
+
+.skeletonText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A 10px bar centered on a 20px title line. */
+.skeletonBar {
+  height: 10px;
+  margin: 5px 0;
+}
+
+/* An 8px bar centered on the 18px meta line, 2px below the title as in `.itemText`. */
+.skeletonMeta {
+  height: 8px;
+  margin-top: 7px;
+}
+
+.skeletonTime {
+  flex: none;
+  width: 28px;
+  height: 8px;
 }
 
 .empty,

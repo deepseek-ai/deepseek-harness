@@ -23,6 +23,7 @@ import {
   type ReviewItem, type ReviewRepository, type ReviewSection,
 } from './review-lists.ts'
 import type { ReviewView } from './review-store.ts'
+import loading from './ChangesLoading.module.css'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -312,6 +313,50 @@ function SectionFailure({ section, copyText, t }: {
 }
 
 /**
+ * Bar widths of the skeleton rows, in percent of a row's text column: the title's first line, its second line or 0
+ * for a one-line title, and the meta line.
+ */
+const SKELETON_ROWS = [
+  { title: 94, wrapped: 46, meta: 38 },
+  { title: 82, wrapped: 0, meta: 45 },
+  { title: 97, wrapped: 63, meta: 33 },
+  { title: 71, wrapped: 0, meta: 41 },
+  { title: 90, wrapped: 35, meta: 48 },
+  { title: 86, wrapped: 57, meta: 36 },
+] as const
+
+/**
+ * Listed change requests drawn as skeletons while a list is read, laid out as the rows of the reader's view. They
+ * carry no text and are hidden from assistive technology; the caller marks the busy region.
+ */
+function SkeletonItems({ view, count }: { readonly view: ReviewView; readonly count: number }): ReactNode {
+  return (
+    <div aria-hidden="true" data-forge-review-skeleton={view}>
+      {SKELETON_ROWS.slice(0, count).map((row, index) => view === 'compact'
+        ? (
+          <div key={index} className={css.skeletonCompact}>
+            <span className={clsx(loading.fill, css.skeletonGlyph)} />
+            <span className={css.skeletonText}>
+              <span className={clsx(loading.fill, css.skeletonBar)} style={{ width: `${row.title}%` }} />
+            </span>
+            <span className={clsx(loading.fill, css.skeletonTime)} />
+          </div>
+        )
+        : (
+          <div key={index} className={css.skeletonItem}>
+            <span className={clsx(loading.fill, css.skeletonGlyph)} />
+            <span className={css.skeletonText}>
+              <span className={clsx(loading.fill, css.skeletonBar)} style={{ width: `${row.title}%` }} />
+              {row.wrapped > 0 && <span className={clsx(loading.fill, css.skeletonBar)} style={{ width: `${row.wrapped}%` }} />}
+              <span className={clsx(loading.fill, css.skeletonBar, css.skeletonMeta)} style={{ width: `${row.meta}%` }} />
+            </span>
+          </div>
+        ))}
+    </div>
+  )
+}
+
+/**
  * Render the list column.
  * @param props - the latest frame, the reader's choices, and their handlers.
  * @returns the column.
@@ -335,8 +380,9 @@ export function ReviewList(props: ReviewListProps): ReactNode {
     )
   } else if (frame === undefined) {
     body = (
-      <div className={css.skeleton} aria-busy="true" aria-label={t('reviewPage.loading')}>
-        {[0, 1, 2, 3].map(index => <span key={index} className={css.skeletonRow} />)}
+      <div aria-busy="true" aria-label={t('reviewPage.loading')}>
+        <div className={css.skeletonHeader} aria-hidden="true"><span className={clsx(loading.fill, css.skeletonHeading)} /></div>
+        <SkeletonItems view={view} count={SKELETON_ROWS.length} />
       </div>
     )
   } else if (sections.length === 0) {
@@ -361,7 +407,7 @@ export function ReviewList(props: ReviewListProps): ReactNode {
           {open && <>
             <SectionFailure section={section} copyText={copyText} t={t} />
             {section.items === null
-              ? section.failure === null && <div className={css.skeleton} aria-busy="true"><span className={css.skeletonRow} /></div>
+              ? section.failure === null && <div aria-busy="true"><SkeletonItems view={view} count={3} /></div>
               : shown.length === 0
                 ? <p className={css.sectionEmpty}>{t(query.trim() === '' ? 'reviewPage.empty.section' : 'reviewPage.empty.search')}</p>
                 : (
