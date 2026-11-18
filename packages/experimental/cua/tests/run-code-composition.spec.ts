@@ -65,7 +65,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, turnInputLifecycle = false) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, turnInputLifecycle = false, timeoutMs = 30_000) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -121,7 +121,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
     ...name === 'sandboxPolicy' ? { config: { mode: 'danger-full-access', workspaceRoot: directory } } : {},
     ...name === 'sharedRuntime' ? { config: { executionMode: 'per-call' } } : {},
     ...name === 'attachments' ? { config: { dshHome: directory } } : {},
-    ...name === 'cua' ? { config: { allowedApps: [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }] } } : {},
+    ...name === 'cua' ? { config: { timeoutMs, allowedApps: [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }] } } : {},
   }))
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(entries, null, 2) + '\n')
@@ -422,7 +422,7 @@ it('stops an in-flight down before cleanup and does not release input from the n
   expect(f.native.events.filter(event => event === 'w:up')).toHaveLength(2)
 })
 
-it.each(['refusal', 'disconnect'] as const)('reports cleanup %s and prevents this task from dispatching more input', async (failure) => {
+it.each(['refusal', 'disconnect', 'timeout'] as const)('reports cleanup %s and prevents this task from dispatching more input', async (failure) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const errors: unknown[] = []
   f.ctx.on('agent/error', (event) => { errors.push(event.error) })
@@ -430,7 +430,7 @@ it.each(['refusal', 'disconnect'] as const)('reports cleanup %s and prevents thi
   const running = f.run()
   await release.entered
   if (failure === 'refusal') release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Fixture release rejected' })
-  else release.disconnect()
+  else if (failure === 'disconnect') release.disconnect()
   await running
   expect(errors).toHaveLength(1)
   expect(f.agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'error' } } })
@@ -480,4 +480,44 @@ it('does not send turn input parameters or cleanup to a provider that has not op
     expect(call.params).not.toHaveProperty('taskId')
   }
   expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+})
+
+it('cleans one task without releasing another connection and prevents a queued turn from overtaking cleanup', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const peerModel = new ProgramModel([holdProgram.replace('"w"', '"d"')])
+  f.ctx.llm.registerAdapter(['peer-fixture'], peerModel)
+  const peer = await f.ctx.agents.create({ sessionId: brandString<SessionId>('peer-input-owner'), meta: { cwd: process.cwd() },
+    agentOptions: { provider: 'peer-fixture', model: 'vision' } })
+  const ready: Array<PromiseWithResolvers<void>> = [Promise.withResolvers(), Promise.withResolvers()]
+  for (const [index, model] of [f.model, peerModel].entries()) {
+    model.beforeStream = async (step, options) => {
+      if (step !== 1) return
+      ready[index]!.resolve()
+      await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
+    }
+  }
+  const running = f.run()
+  peer.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hold D' }], source: { kind: 'user' } }))
+  await Promise.all(ready.map(value => value.promise))
+  expect(f.native.held.map(press => press.key).sort()).toEqual(['d', 'w'])
+  const cleanup = f.native.controlNext('releaseHeldInputs')
+  f.agent.cancel({ kind: 'user' })
+  await cleanup.entered
+  const count = f.native.calls.length
+  f.model.requests.length = 0
+  f.model.beforeStream = undefined
+  f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hold W again' }], source: { kind: 'user' } }))
+  expect(f.native.calls).toHaveLength(count)
+  const nextCleanup = f.native.controlNext('releaseHeldInputs')
+  cleanup.reply()
+  await nextCleanup.entered
+  try {
+    expect(f.native.held.map(press => [press.taskId, press.turn, press.key]).sort())
+      .toEqual([[f.agent.id, 2, 'w'], [peer.agent.id, 1, 'd']].sort())
+  } finally {
+    nextCleanup.reply()
+    peer.agent.cancel({ kind: 'user' })
+    await Promise.all([running, f.agent.whenIdle(), peer.agent.whenIdle()])
+  }
+  expect(f.native.held).toEqual([])
 })
