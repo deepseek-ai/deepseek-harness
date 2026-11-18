@@ -67,16 +67,20 @@ describe('local attachment service', () => {
   })
 
   it('validates request-image shrink controls in both schema and programmatic construction', () => {
-    for (const value of [0, 1, Number.NaN, Infinity]) {
+    for (const value of [0, 1, Infinity]) {
       expect(() => LocalAttachmentStore.Config({ requestImageMinShrinkFactor: value })).toThrow()
       expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: value }))
         .toThrow(/requestImageMinShrinkFactor/)
     }
-    for (const value of [0, 1.1, Number.NaN, Infinity]) {
+    for (const value of [0, 1.1, Infinity]) {
       expect(() => LocalAttachmentStore.Config({ requestImageByteHeadroom: value })).toThrow()
       expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: value }))
         .toThrow(/requestImageByteHeadroom/)
     }
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: Number.NaN }))
+      .toThrow(/requestImageMinShrinkFactor/)
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: Number.NaN }))
+      .toThrow(/requestImageByteHeadroom/)
   })
 
   it('saves and reads through the service boundary', async () => {

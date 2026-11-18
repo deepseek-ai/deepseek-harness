@@ -130,7 +130,11 @@ async function createRequestImage(
       height: attachment.ref.height,
     }
   }
-  let dimensions = requestImageDimensions(attachment.ref.width, attachment.ref.height, Infinity, target.width, target.height)
+  const source = attachment.ref
+  let dimensions = longEdgeDimensions(source.width, source.height, source.width >= source.height ? target.width : target.height)
+  if (dimensions.width > target.width || dimensions.height > target.height) {
+    dimensions = requestImageDimensions(source.width, source.height, Infinity, target.width, target.height)
+  }
   for (;;) {
     signal?.throwIfAborted()
     const encoded = await encodeFirstWithinLimit(

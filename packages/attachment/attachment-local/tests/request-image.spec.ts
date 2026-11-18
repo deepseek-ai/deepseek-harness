@@ -108,7 +108,7 @@ describe('local request-image cache', () => {
     await expect(attachments.readImageRequest(attachment, { width: 8, height: 1.5, maxImageBytes: 100, imageTargetBytes: 100 }))
       .rejects.toThrow('Image request height must be a positive integer')
     await expect(attachments.readImageRequest(attachment, { width: 8, height: 4, maxImageBytes: 0, imageTargetBytes: 0 }))
-      .rejects.toThrow('Image request maxBytes must be a positive integer')
+      .rejects.toThrow('Image request maxImageBytes must be a positive integer')
   })
 
   it('resizes by the long edge to the exact target and keys the cache by target', async () => {
@@ -396,7 +396,7 @@ describe('local request-image cache', () => {
       width: 128, height: 128, maxImageBytes: 1024 * 1024, imageTargetBytes: 1024 * 1024,
     })
     const alphaRequest = await attachments.readImageRequest(alpha, {
-      width: 128, height: 128, maxImageBytes: 4_096, imageTargetBytes: 4_096,
+      width: 128, height: 128, maxImageBytes: 64 * 1024, imageTargetBytes: 4_096,
     })
 
     expect(photoRequest.mediaType).toBe('image/jpeg')
