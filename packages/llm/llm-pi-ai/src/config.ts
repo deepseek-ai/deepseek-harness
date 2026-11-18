@@ -47,13 +47,10 @@ import { buildProvider, supportedProtocols } from './provider.ts'
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 
 /**
- * Default request-level bound on base64-encoded image payload. Every image in
- * history is re-encoded into every request body, so an unbounded conversation
- * eventually exceeds a provider or gateway request-size cap and the session
- * can never complete another request. The 20MiB default admits fifteen 1MiB
- * request versions after base64 expansion and reserves request capacity for
- * system prompts, history, tools, and JSON.
- * Deployments behind stricter gateways lower it per route.
+ * Default cap on aggregate base64 image payload, excluding text, tools, and
+ * JSON overhead. Retained image count depends on actual encoded sizes;
+ * per-image catalog targets do not raise this cap. Deployments keep it below
+ * the gateway's complete request-size limit to leave room for other content.
  */
 export const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024
 /**

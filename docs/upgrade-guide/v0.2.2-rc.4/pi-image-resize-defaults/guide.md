@@ -12,6 +12,8 @@ English | [中文](guide.zh.md)
 
 The route's `requestImageMaxBytes` remains a raw encoded-byte override. The new `requestImageMaxDimension` overrides both catalog dimensions. Models without resize metadata retain the existing defaults. Both request serialization and screenshot coordinate targets use these resolved limits.
 
+The aggregate `maxRequestImageBytes` budget stays at 20 MiB. Larger encoded images can cause earlier history-image offloading and reduce prefix-cache reuse; see the [retained-image example](../../../../packages/llm/llm-pi-ai/README.md#model-experience). The per-image byte target can be lowered independently of the aggregate budget.
+
 ## Migration
 
 1. Leave both overrides unset to follow the installed pi-ai catalog. Review long-image resolution and request sizes after upgrading pi-ai.

@@ -12,6 +12,8 @@ description: "pi-ai 请求图片继承目录中的尺寸和字节预算，路由
 
 路由的 `requestImageMaxBytes` 仍用于覆盖原始编码字节目标。新增的 `requestImageMaxDimension` 同时覆盖目录中的宽度和高度限制。没有缩放元数据的模型保留现有默认值。请求序列化和截图坐标目标使用同一组解析后的限制。
 
+总预算 `maxRequestImageBytes` 仍为 20 MiB。编码后的图片变大时，历史图片可能更早被省略，前缀缓存的复用范围也会减小，详见[图片保留数量示例](../../../../packages/llm/llm-pi-ai/README.zh.md#model-experience)。单图字节目标可以独立于总预算调低。
+
 ## 迁移
 
 1. 不配置这两个覆盖字段，即可跟随已安装的 pi-ai 目录。升级 pi-ai 后，检查长图分辨率和请求大小。
