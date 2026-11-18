@@ -17,6 +17,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { formatAgo } from './format.ts'
 import { anchorRange, hunkExcerpt, type ThreadPlace } from './review-threads.ts'
 import { SplitAction } from './ReviewComposer.tsx'
+import { INPUT_QUOTE_COPY, settleQuote, type QuoteCopy } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewThreads.module.css'
 import composerCss from './ReviewComposer.module.css'
@@ -43,8 +44,10 @@ export interface ThreadWrites {
 export interface ThreadActions {
   /** Login of the change request's author, or null when the host hides it. */
   readonly author: string | null
-  /** Quote the whole thread in the main input without sending it; false when the input refused it. */
-  readonly addToInput: (thread: ForgeReviewThread, range: string | null) => boolean
+  /** Quote the whole thread without sending it; resolves to false when the quote was refused. */
+  readonly addToInput: (thread: ForgeReviewThread, range: string | null) => boolean | Promise<boolean>
+  /** Copy of the quote button; the input's copy by default. */
+  readonly quoteCopy?: QuoteCopy | undefined
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Read a file of the change request's repository at a commit. */
@@ -386,8 +389,8 @@ export function ThreadCard({ thread, place, actions, t }: PropsLocale<typeof NS>
     </div>
     {writes !== null && thread.viewerCanReply && <Reply thread={thread} writes={writes} drafting={drafting} t={t} />}
     <div className={css.actions}>
-      <Button size="sm" onClick={() => { if (!actions.addToInput(thread, range)) actions.inputFailed() }}>
-        {t('review.addToInput')}
+      <Button size="sm" onClick={() => { settleQuote(actions.addToInput(thread, range), (accepted) => { if (!accepted) actions.inputFailed() }) }}>
+        {t((actions.quoteCopy ?? INPUT_QUOTE_COPY).add)}
       </Button>
       {url !== null && <Button size="sm" onClick={() => { actions.openLink(url) }}>
         <IconRightUpOutlineRegular size={14} />{t('thread.openOnHost')}
