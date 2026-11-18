@@ -17,8 +17,6 @@ import { copy, FEISHU_PACKAGE, operations, presentAccount } from './presentation
 import { FeishuSkillProvider } from './skills.ts'
 import type { FeishuAccountState, FeishuCommand, FeishuOperationKind, FeishuPhase } from './types.ts'
 
-export type * from './types.ts'
-
 /** Plugin name. */
 export const name = 'feishu'
 
