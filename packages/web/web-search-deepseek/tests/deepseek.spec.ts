@@ -101,6 +101,33 @@ describe('mapAnthropicResponse', () => {
     })
   })
 
+  it('takes the snippet an item carries, and the citation excerpt only for an item without one', () => {
+    const result = mapAnthropicResponse({
+      content: [
+        { type: 'text', citations: [
+          { url: 'https://own.test', cited_text: 'answer text citing own' },
+          { url: 'https://empty.test', cited_text: 'excerpt for empty' },
+          { url: 'https://null.test', cited_text: 'excerpt for null' },
+        ] },
+        {
+          type: 'web_search_tool_result',
+          content: [
+            { type: 'web_search_result', url: 'https://own.test', snippet: 'page excerpt' },
+            { type: 'web_search_result', url: 'https://uncited.test', snippet: 'uncited page excerpt' },
+            { type: 'web_search_result', url: 'https://empty.test', snippet: '' },
+            { type: 'web_search_result', url: 'https://null.test', snippet: null },
+          ],
+        },
+      ],
+    })
+    expect(result.sources).toEqual([
+      { url: 'https://own.test', snippet: 'page excerpt' },
+      { url: 'https://uncited.test', snippet: 'uncited page excerpt' },
+      { url: 'https://empty.test', snippet: 'excerpt for empty' },
+      { url: 'https://null.test', snippet: 'excerpt for null' },
+    ])
+  })
+
   it('dedupes repeated urls across result blocks (first wins)', () => {
     const result = mapAnthropicResponse({
       content: [
@@ -528,7 +555,7 @@ describe('DeepSeekSearchProvider error handling', () => {
         message: 'DeepSeek API error (HTTP 429): rate limited\n\n'
           + 'The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
           + 'Search endpoint configuration is separate from chat. If that endpoint is not intended, '
-          + 'guide the user to Plugins > Built-in plugin settings > Web search and fetch, select DeepSeek (legacy) under Search, '
+          + 'guide the user to Plugins > Built-in plugin settings > Web search and fetch, select DeepSeek server-side search under Search, '
           + 'and change and save its Base URL. If that settings page is unavailable, the user can set '
           + 'web-search-deepseek.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
       }))

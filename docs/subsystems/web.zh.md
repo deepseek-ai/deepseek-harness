@@ -12,7 +12,7 @@ Web 访问 seam 是一个[能力 seam](../../.agents/notes/implemented/architect
 
 ## 搜索请求与结果
 
-每个 seam 请求只携带一个 `query`。消费方 `dsh-tool-web` 接受必填的 `queries` 数组，并把它扇出为多个独立 seam 请求；单元素数组执行一次搜索。`maxResults` 是消费方自有的上限（`dsh-tool-web` 的 `searchMaxResults` 配置，默认 `10`），通过 seam 传递并在返回时强制执行——如果提供方返回超量，seam 截断 `sources[]` 并设置 `truncated`。
+每个 seam 请求只携带一个 `query`。消费方 `dsh-tool-web` 接受必填的 `queries` 数组，并把它扇出为多个独立 seam 请求；单元素数组执行一次搜索。`maxResults` 是消费方自有的上限（`dsh-tool-web` 的 `searchMaxResults` 配置，默认 `10`），通过 seam 传递并在返回时强制执行——如果提供方返回超量，seam 截断 `sources[]` 并设置 `truncated`。`llmProvider` 指明搜索所服务的模型请求的提供方路由；`dsh-tool-web` 把它设为发起调用的 Session 最近一次模型请求的路由。
 
 ```ts type-equiv
 /**
@@ -31,6 +31,12 @@ interface WebSearchRequest {
    * bound regardless.
    */
   readonly maxResults?: number
+  /**
+   * Provider route id of the model request this search serves. While no search
+   * provider is configured, the seam selects with it, as `searchReady()` selects
+   * with its argument. Omitted = the search serves no model request.
+   */
+  readonly llmProvider?: string
 }
 ```
 
@@ -127,7 +133,7 @@ type WebFetchBody =
 
 搜索或抓取提供方还可以实现 `ready(llmProvider): Promise<boolean>`，这是只检查配置、禁止发起网络调用的判断：它回答为该对话路由上的模型请求发起的操作是否有可发送的凭据。`searchReady(llmProvider?)` 与 `fetchReady(llmProvider?)` 只询问 `search()` 或 `fetch()` 会选中的提供方，把没有 `ready()` 的提供方视为就绪，并在选择失败时回答 true，因为对应操作会把该失败报告为 `WebError`。就绪判断不是选择输入；`dsh-tool-web` 把它作为 `web_search` 与 `web_fetch` 的激活条件，因此路由回答 false 的模型步骤既不声明也不派发该工具。DeepSeek Search 与 Fetch API 提供方依据该路由在账号令牌与 API 密钥之间选择，见 [web-deepseek-api 鉴权](../../packages/web/web-deepseek-api/README.zh.md#authentication)一节。
 
-选择从不依赖注册顺序、配置顺序或 HMR（热模块替换）顺序：一项能力要么有显式的提供方 id（配置 `searchProvider`／`fetchProvider`，或填充同一字段的对应环境变量），要么在恰好只有一个可用提供方注册时自动选择；如果存在多个可用提供方却未配置 id，则抛出 `WEB_PROVIDER_AMBIGUOUS`，而不会选用最先注册的提供方。每次操作在执行时读取配置的 id，因此保存的设置变更无需重新挂载 `ctx.web` 即对下一次搜索或抓取生效。
+选择从不依赖注册顺序、配置顺序或 HMR（热模块替换）顺序：一项能力要么有显式的提供方 id（配置 `searchProvider`／`fetchProvider`，或填充同一字段的对应环境变量），要么在恰好只有一个可用提供方注册时自动选择；如果存在多个可用提供方却未配置 id，则抛出 `WEB_PROVIDER_AMBIGUOUS`，而不会选用最先注册的提供方。搜索在这条规则之前有一条固定的优先规则：没有配置 id 时，为 `deepseek-official` 或 `deepseek-account` 路由上的模型请求发起的搜索运行 `deepseek-official`（不按次收费的 DeepSeek Messages 搜索），其他路由上以及不服务于模型请求的搜索运行 `deepseek-search-api`，前提是该提供方已注册且可用。`searchReady(llmProvider)` 选中的提供方与请求携带该 `llmProvider` 的搜索相同。每次操作在执行时读取配置的 id，因此保存的设置变更无需重新挂载 `ctx.web` 即对下一次搜索或抓取生效。
 
 ## 抓取网络策略
 
@@ -162,6 +168,7 @@ Selection semantics (resolved at execution time, never order-dependent):
 - A configured id that is registered and `available()` → that provider.
 - A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.
 - A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.
+- No search id configured, and the provider assigned to the route of the model request the search serves is usable → that provider: `deepseek-official` (Messages search) on the `deepseek-official` and `deepseek-account` routes, `deepseek-search-api` on every other route and outside a model request.
 - No id configured, exactly one registered usable provider → that provider.
 - No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.
 - No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.
@@ -199,7 +206,7 @@ registerFetchProvider(provider: WebFetchProvider): () => void
  * time with the selection rules above; throws {@link WebError} when the
  * capability cannot run. The seam enforces `request.maxResults` on the result:
  * if the provider over-returns, `sources[]` is truncated and `truncated` set.
- * @param request - the query and optional result limit.
+ * @param request - the query, the optional result limit, and the route of the model request the search serves.
  * @param signal - optional cancellation signal forwarded to the provider.
  * @returns the provider's results, capped to `request.maxResults`.
  */

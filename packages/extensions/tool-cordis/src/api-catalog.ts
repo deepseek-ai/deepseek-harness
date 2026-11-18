@@ -4551,7 +4551,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'web',
     summary: 'The web access service.',
-    description: 'The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
+    description: 'The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No search id configured, and the provider assigned to the route of the model request the search serves is usable → that provider: `deepseek-official` (Messages search) on the `deepseek-official` and `deepseek-account` routes, `deepseek-search-api` on every other route and outside a model request.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
     methods: [
       {
         signature: 'registerSearchProvider(provider: WebSearchProvider): () => void',
@@ -4574,7 +4574,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>',
         description: 'Run one search through the selected provider. Resolves the provider at call time with the selection rules above; throws WebError when the capability cannot run. The seam enforces `request.maxResults` on the result: if the provider over-returns, `sources[]` is truncated and `truncated` set.',
-        parameters: [{ name: 'request', description: 'the query and optional result limit.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
+        parameters: [{ name: 'request', description: 'the query, the optional result limit, and the route of the model request the search serves.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
         returns: 'the provider\'s results, capped to `request.maxResults`.',
       },
       {
@@ -10602,7 +10602,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchRequest',
-    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n}',
+    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n    readonly llmProvider?: string;\n}',
   },
   {
     name: 'WebSearchResult',

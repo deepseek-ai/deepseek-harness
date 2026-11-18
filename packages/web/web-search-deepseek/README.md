@@ -25,11 +25,11 @@ With `dsh-web-search-deepseek`, the harness searches the web through DeepSeek's 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the provider in a composition that already loads the web service; it registers as the `deepseek-official` search provider, so `ctx.web.search()` resolves it automatically when it is the only usable search backend — or pin it with `searchProvider: deepseek-official`.
+Mount the provider in a composition that already loads the web service; it registers as the `deepseek-official` search provider, so `ctx.web.search()` resolves it automatically when it is the only usable search backend, and while no search provider is configured also for a model request on the `deepseek-official` or `deepseek-account` model route ([provider selection](../web/README.md#provider-selection)) — or pin it with `searchProvider: deepseek-official`.
 
 ### When to choose it
 
-Choose this backend when a deployment wants DeepSeek's native server-side web search and its users either sign in to a DeepSeek account or hold a `DEEPSEEK_API_KEY` — the provider reuses those credentials as [Authentication](#authentication) describes. One search is heavier than a dedicated retrieval endpoint: DeepSeek runs the search inside a full model turn, so expect one Messages call's latency and generated tokens per search, with up to `maxUses` server-side searches per request. Avoid it when per-search cost or latency dominates.
+Choose this backend when a deployment wants DeepSeek's native server-side web search and its users either sign in to a DeepSeek account or hold a `DEEPSEEK_API_KEY` — the provider reuses those credentials as [Authentication](#authentication) describes. One search is heavier than a dedicated retrieval endpoint: DeepSeek runs the search inside a full model turn, so expect one Messages call's latency and generated tokens per search, with up to `maxUses` server-side searches per request. DeepSeek makes no per-search charge for it, so its cost is that model turn's tokens. Avoid it when latency dominates.
 
 ### Minimal configuration
 
@@ -66,7 +66,7 @@ Referenced keys use the [shared DeepSeek credential helpers](../../llm/llm-deeps
 
 ### What a search returns
 
-`content` is always omitted: DeepSeek's provider prose is not trusted as an answer. `sources[]` comes from `web_search_result` items inside `web_search_tool_result` blocks — `url` and `title` directly, and `publishedAt` from `page_age` — with snippets joined from URL-keyed `cited_text` entries where an excerpt exists. Results are deduplicated by URL, and because DeepSeek exposes no result-count knob, the service enforces `maxResults` by truncating and flagging.
+`content` is always omitted: DeepSeek's provider prose is not trusted as an answer. `sources[]` comes from `web_search_result` items inside `web_search_tool_result` blocks — `url` and `title` directly, and `publishedAt` from `page_age` — and `snippet` from the item's own `snippet`, or for an item without one from the URL-keyed `cited_text` entry where an excerpt exists. Results are deduplicated by URL, and because DeepSeek exposes no result-count knob, the service enforces `maxResults` by truncating and flagging.
 
 ### Request logging
 
@@ -74,7 +74,7 @@ A search running under an initiating agent appends the log-only `web/deepseek-se
 
 ### Failures and recovery
 
-Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model to guide the user to Plugins > Built-in plugin settings > Web search and fetch, select DeepSeek (legacy) under Search, and save its Base URL. When that page is unavailable, it names `web-search-deepseek.baseURL` as the deployment configuration alternative. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
+Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model to guide the user to Plugins > Built-in plugin settings > Web search and fetch, select DeepSeek server-side search under Search, and save its Base URL. When that page is unavailable, it names `web-search-deepseek.baseURL` as the deployment configuration alternative. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
 
 -----
 
@@ -103,7 +103,7 @@ The provider is built on two commitments:
 
 ### Request flow
 
-Each search captures the current Config values into provider options — endpoint, model, key reference, limits — then asks `ctx.deepseekAccount` for a token when the initiating Session uses the account route, otherwise resolves the credential reference through `ctx.credentials` (or the environment), appends the log-only session event, and dispatches the Messages request with the native `web_search` server tool. The response's `web_search_tool_result` blocks become `sources[]`; `cited_text` entries from text blocks are joined to their URLs as snippets; results are deduplicated by URL; and the service enforces the requested source bound on the way back.
+Each search captures the current Config values into provider options — endpoint, model, key reference, limits — then asks `ctx.deepseekAccount` for a token when the initiating Session uses the account route, otherwise resolves the credential reference through `ctx.credentials` (or the environment), appends the log-only session event, and dispatches the Messages request with the native `web_search` server tool. The response's `web_search_tool_result` blocks become `sources[]`, each with its item's own snippet; `cited_text` entries from text blocks are joined by URL as the snippets of items without one; results are deduplicated by URL; and the service enforces the requested source bound on the way back.
 
 Readiness captures the same options but reads no API key value: on the account route it first asks `ctx.deepseekAccount` for a token, then checks the literal key or asks `ctx.credentials.describe()` (or the environment) whether the key reference is configured.
 
@@ -147,7 +147,7 @@ Independent of the conversation request cache. The auxiliary instruction and nat
 
 #### What the model sees
 
-Through `dsh-tool-web`, the conversation model sees deduplicated URLs, titles, dates, and citation snippets from structured search blocks; provider prose is not trusted as an answer. This provider's exact failures include the actionable missing-credential message, which also names DeepSeek Account sign-in, `DeepSeek search credential resolution failed: <error>`, and `DeepSeek search aborted`. An HTTP 401 to an account-authenticated search appends an instruction to guide the user to sign in to DeepSeek again. Other request, HTTP, native-search, and response-body failures append the resolved endpoint and the conditional configuration instruction described above. The consumer owns the error wrapper.
+Through `dsh-tool-web`, the conversation model sees deduplicated URLs, titles, dates, and snippets from structured search blocks; provider prose is not trusted as an answer. This provider's exact failures include the actionable missing-credential message, which also names DeepSeek Account sign-in, `DeepSeek search credential resolution failed: <error>`, and `DeepSeek search aborted`. An HTTP 401 to an account-authenticated search appends an instruction to guide the user to sign in to DeepSeek again. Other request, HTTP, native-search, and response-body failures append the resolved endpoint and the conditional configuration instruction described above. The consumer owns the error wrapper.
 
 #### Token effect
 
@@ -183,7 +183,7 @@ These limits define when the provider is expensive or incomplete. They are curre
 - **Readiness checks presence, not validity** — a wrong key, or an endpoint without the native `web_search_20250305` server tool, counts as ready, so `web_search` stays offered and each call fails with a structured error.
 - **Search does not follow the chat endpoint** — when the official route chats through a gateway, search still sends its key to the configured search endpoint, the official one by default, and fails unless that endpoint accepts the key.
 - **Over-returned sources still cost tokens** — with no result-count knob on the wire, `maxResults` is enforced only post-hoc by service truncation.
-- **Sources usually carry no `snippet`** — a source gains one only when a text-block citation (`cited_text`) matches its URL, and DeepSeek's Anthropic-compatible endpoint returns text blocks without `citations`.
+- **A source's `snippet` depends on the endpoint** — it is the excerpt the endpoint returns with the result item, or else a text-block citation (`cited_text`) matching its URL; an Anthropic-compatible endpoint that returns neither yields sources without snippets.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -195,6 +195,6 @@ This Dev Note is working context for maintainers: open questions and undecided d
 
 #### Dedicated retrieval endpoint
 
-DeepSeek's Search and Fetch APIs, which avoid the full model turn, live in [dsh-web-deepseek-api](../web-deepseek-api/README.md) and are selected with the Search and Fetch menus on the Web search and fetch settings page. Shipped profiles select the Search API, so this provider runs only when `searchProvider: deepseek-official` is selected (for example, on gateways without Search API routes).
+DeepSeek's Search and Fetch APIs, which avoid the full model turn, live in [dsh-web-deepseek-api](../web-deepseek-api/README.md) and are selected with the Search and Fetch menus on the Web search and fetch settings page. Shipped profiles fix no search provider, so this provider runs for model requests on the DeepSeek model routes and the Search API runs on other routes; `searchProvider: deepseek-official` selects this provider for every route (for example, on gateways without Search API routes).
 
 </details>
