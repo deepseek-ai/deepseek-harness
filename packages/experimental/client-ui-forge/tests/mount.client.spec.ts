@@ -812,6 +812,10 @@ describe('mountForgePanel Session panel actions', () => {
 
   it('refreshes each Session automatically at most once every 10 seconds', async () => {
     const f = await fixture()
+    for (const id of [S1, S2]) f.section(id).hooks.panel.subscribe(() => {})
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
+    for (const handle of f.streams) handle.push(ready())
+    await vi.waitFor(() => { expect(f.section(S2).hooks.panel.getSnapshot().state).not.toBeNull() })
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     const refreshIfStale = f.checkout(S1).refreshIfStale
     expect(f.checkout(S1).refreshIfStale).toBe(refreshIfStale)
@@ -830,6 +834,27 @@ describe('mountForgePanel Session panel actions', () => {
     refreshIfStale()
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
+    await f.dispose()
+  })
+
+  it('defers an automatic refresh asked for before the panel state arrives until the Host follows the panel', async () => {
+    const f = await fixture()
+    const unsubscribe = f.section(S1).hooks.panel.subscribe(() => {})
+    f.checkout(S1).refreshIfStale()
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledOnce() })
+    expect(f.forgePanel.refresh).not.toHaveBeenCalled()
+    f.streams[0]?.push(ready())
+    await vi.waitFor(() => { expect(f.forgePanel.refresh).toHaveBeenCalledWith(S1) })
+    f.streams[0]?.push(ready({ local: null }))
+    await settle()
+    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
+    // A later stream refreshes nothing on its own: only a refresh that was asked for waits for the first state.
+    f.ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
+    f.streams[1]?.push(ready())
+    await settle()
+    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
+    unsubscribe()
     await f.dispose()
   })
 

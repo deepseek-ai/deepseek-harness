@@ -500,6 +500,13 @@ describe('forgePanel.reviewStage', () => {
     sendPrompt(opened.agent, 'Review that change')
     expect(bound()).toEqual([])
   })
+  it('forgets a choice staged for a Session that leaves the store before its next message', async () => {
+    const opened = await page()
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, pullUrl(7), signal)
+    opened.ctx.emit('session/disposed', opened.session)
+    sendPrompt(opened.agent, 'Review this change')
+    expect(opened.ctx.forgeSession.changeRequests(opened.session)).toEqual([])
+  })
 })
 
 describe('forgePanel review lists', () => {

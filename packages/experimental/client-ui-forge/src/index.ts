@@ -223,6 +223,8 @@ export class ForgePanelController extends TypertRemoteService {
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
+    // A change request staged for a Session that is disposed before its next message is never bound.
+    const disposed = ctx.on('session/disposed', (session: Session) => { this.staged.delete(session.id) })
     const reviewChanges = ctx.on('forge/review-changed', (ref: ChangeRequestRef) => { this.reviewChanged(ref) })
     const services = ctx.on('internal/service', (name: string) => {
       if (name !== 'worktrees') return
@@ -233,6 +235,7 @@ export class ForgePanelController extends TypertRemoteService {
       yield stateOwner.dispose
       yield inbox
       yield events
+      yield disposed
       yield reviewChanges
       yield providers
       yield services
