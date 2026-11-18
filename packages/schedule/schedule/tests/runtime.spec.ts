@@ -799,27 +799,29 @@ describe('Schedule dispatch failures and concurrent changes', () => {
       },
     }
     const transaction = vi.spyOn(serial, 'transact')
-    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS,
-      test.resolveAgent, () => test.ctx.get('sessionController'))
+    const owner = await test.ctx.plugin({ name: 'schedule-time-owner', inject: ['agents'], apply() {} })
+    const ctx = owner.ctx
+    const runtime = new ScheduleRuntime(ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS,
+      test.resolveAgent, () => ctx.get('sessionController'))
     runtimes.push(runtime)
-    test.ctx.effect(function* () {
+    ctx.effect(function* () {
       yield () => runtime.dispose()
       yield async () => { unloadingEntered.resolve(undefined); await allowStop.promise }
     })
-    const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
-    const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => { reported.resolve(undefined) })
+    const admission = vi.spyOn(ctx.agents, 'withoutInitiator')
+    const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => { reported.resolve(undefined) })
     let unloading: Promise<void> | undefined
     const cleanup = async () => {
       release.resolve(undefined)
       allowStop.resolve(undefined)
-      await Promise.allSettled([unloading, runtime.dispose()])
+      await Promise.allSettled([unloading, owner.dispose(), runtime.dispose()])
     }
     beforeDispose.push(cleanup)
     try {
       runtime.requestDrive()
       await entered.promise
       runtime.requestDrive()
-      unloading = test.ctx.fiber.dispose()
+      unloading = owner.dispose()
       await unloadingEntered.promise
       release.resolve(undefined)
       await reported.promise
