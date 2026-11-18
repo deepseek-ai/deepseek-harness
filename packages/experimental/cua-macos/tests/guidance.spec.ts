@@ -6,10 +6,11 @@ import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.t
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
-  'getAccessibilityTree', 'listActions', 'invoke', 'performAction', 'setValue', 'selectText',
+  'getAccessibilityTree', 'listActions', 'getActionSchema', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
 const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'toggleMouse', 'click', 'scroll', 'drag']
+const getActionSchemaLine = '- getActionSchema(action: string) -> JSON Schema — query the parameter schema for an action.'
 
 it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
   for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
@@ -98,10 +99,24 @@ it('enumerates every public method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(26)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(25)
+  expect(signatures).toHaveLength(27)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(26)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
+})
+
+it('documents getActionSchema beside listActions with only an action argument', () => {
+  const lines = COMMON_GUIDANCE.split('\n')
+  const listActions = lines.findIndex(line => line.startsWith('- listActions('))
+  expect(lines[listActions + 1]).toBe(getActionSchemaLine)
+  expect(getActionSchemaLine.split(' — ')[0]).toBe('- getActionSchema(action: string) -> JSON Schema')
+  expect(COMMON_GUIDANCE).not.toMatch(/\bAX\b/)
+})
+
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('keeps action schema guidance focused on its purpose', (catalog) => {
+  const entry = catalog.split('\n').find(line => line.startsWith('- getActionSchema('))
+  expect(entry).toBe(getActionSchemaLine)
+  expect(COMMON_GUIDANCE).not.toContain('Role.Attribute.Set')
 })
 
 it('documents option fields and return fields', () => {
@@ -124,7 +139,7 @@ it('inlines discovery, restoration, and mouse-move return records', () => {
 it('documents shared types while leaving Modifier members platform-defined', () => {
   const signatures = COMMON_GUIDANCE.split('\n').filter(line => line.startsWith('- ')).map(line => line.split(' — ')[0]).join('\n')
   const names = signatures.replace(/'[^']*'/g, '').match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? []
-  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JsonValue', 'Modifier', 'Window'])
+  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JSON', 'JsonValue', 'Modifier', 'Schema', 'Window'])
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
