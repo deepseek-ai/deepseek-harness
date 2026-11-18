@@ -7,7 +7,7 @@ class InputTurn {
   readonly controller = new AbortController()
   readonly signal: AbortSignal
   private client?: NativeClient
-  private removeCleanup?: () => void
+  private removeCleanup: (() => void) | undefined
   private closing?: Promise<void>
 
   constructor(readonly agent: Agent, readonly turn: number, signal: AbortSignal,

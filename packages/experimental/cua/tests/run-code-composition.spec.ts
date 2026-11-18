@@ -606,3 +606,24 @@ it('does not resume retained inbox work when stopped during post-turn cleanup', 
   expect(f.agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
   expect(f.agent.inbox.hasPending).toBe(true)
 })
+
+it('ignores an unattached Session ending while another task holds input', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.model.beforeStream = async (index) => {
+    if (index !== 1) return
+    thinking.resolve()
+    await finish.promise
+  }
+  const running = f.run()
+  await thinking.promise
+  try {
+    const session = f.ctx.sessions.create(brandString<SessionId>('without-agent'))
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    expect(f.native.held.map(press => press.key)).toEqual(['w'])
+    expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+  } finally { finish.resolve(); await running }
+  expect(f.native.held).toEqual([])
+})
