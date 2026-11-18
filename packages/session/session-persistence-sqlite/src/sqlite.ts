@@ -42,10 +42,24 @@ const READ_DECODE_GROUP_FRAMES = 8
 const BUSY_TIMEOUT_MS = 5000
 /** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
 const LIVE_WRITE_BATCH_MAX_DELAY_MS = 200
-/** Admitted live events that start a write before the delay elapses, bounding one transaction's size. */
+/** Admitted live events that start a write before the delay elapses, bounding one handle's batch. */
 const LIVE_WRITE_BATCH_MAX_EVENTS = 256
+/**
+ * Internal scheduling constant, not deployment configuration: events one group
+ * commit holds before later batches wait for the next group, bounding the
+ * synchronous transaction that every writer's checkpoint shares.
+ */
+const COMMIT_GROUP_MAX_EVENTS = 1024
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
+/** One appended batch, encoded before it queued, with the settlement of its caller's append. */
+interface PendingAppend {
+  readonly header: SessionHeader
+  readonly batch: readonly SessionEvent[]
+  readonly frames: readonly EncodedFrame[]
+  readonly resolve: () => void
+  readonly reject: (error: unknown) => void
+}
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
   tail_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
 const traceIdentity = z.object({ trace_uuid: z.string().transform(sessionIdentity) })
@@ -129,6 +143,9 @@ export class SqliteStore {
   private readonly chains = new Map<SessionId, { head: SegmentId; nodes: Map<SegmentId, Segment> }>()
   private readonly handles = new Set<SqliteSessionHandle>()
   private readonly writers = new Map<SessionId, SqliteSessionHandle>()
+  /** Appended batches awaiting the next group commit, in arrival order. */
+  private readonly commitQueue: PendingAppend[] = []
+  private commitDrain: Promise<void> | undefined
   constructor(options: SqliteStoreOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
@@ -769,13 +786,72 @@ export class SqliteStore {
   async append(header: SessionHeader, batch: readonly SessionEvent[]): Promise<void> {
     const db = await this.database()
     const frames = await this.encodeBatch(batch)
-    this.transaction(db, () => {
-      const row = this.ensureRow(db, header)
-      assertContiguous(header.id, batch, row.event_count)
-      this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, frames)
+    await new Promise<void>((resolve, reject) => {
+      this.commitQueue.push({ header, batch, frames, resolve, reject })
+      this.scheduleCommits(db)
     })
-    this.pendingCreates.delete(header.id)
-    await this.route(header.id)
+  }
+
+  /** Start draining queued batches unless a drain is running; a finished drain restarts for batches queued meanwhile. */
+  private scheduleCommits(db: DatabaseSync): void {
+    if (this.commitDrain !== undefined) return
+    this.commitDrain = this.drainCommits(db).finally(() => {
+      this.commitDrain = undefined
+      if (this.commitQueue.length > 0) this.scheduleCommits(db)
+    })
+  }
+
+  /**
+   * Commit queued batches a group at a time. The yield before each group lets batches that other writers
+   * append in the same turn share one transaction, so a checkpoint costs one commit and one fsync per group
+   * rather than per writer, and it returns the process to its I/O phase between commits; a lone writer pays
+   * the same single yield per commit. A batch that fails on its own terms rolls back to its savepoint and
+   * rejects alone; an error that ends the whole transaction rejects every batch of the group, and each
+   * handle retains its batch for retry.
+   */
+  private async drainCommits(db: DatabaseSync): Promise<void> {
+    while (this.commitQueue.length > 0) {
+      await setImmediate()
+      const group = this.takeCommitGroup()
+      const failures = new Map<PendingAppend, unknown>()
+      try {
+        this.transaction(db, () => {
+          for (const entry of group) {
+            db.exec('SAVEPOINT batch')
+            try {
+              const row = this.ensureRow(db, entry.header)
+              assertContiguous(entry.header.id, entry.batch, row.event_count)
+              this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, entry.frames)
+              db.exec('RELEASE batch')
+            } catch (error: unknown) {
+              if (!db.isTransaction) throw error
+              try { db.exec('ROLLBACK TO batch; RELEASE batch') }
+              catch (rollbackError: unknown) { throw new AggregateError([error, rollbackError], 'SQLite batch and its savepoint rollback failed') }
+              failures.set(entry, error)
+            }
+          }
+        })
+      } catch (error: unknown) {
+        for (const entry of group) entry.reject(error)
+        continue
+      }
+      for (const entry of group) {
+        if (failures.has(entry)) { entry.reject(failures.get(entry)); continue }
+        this.pendingCreates.delete(entry.header.id)
+        this.route(entry.header.id).then(entry.resolve, entry.reject)
+      }
+    }
+  }
+
+  /** Dequeue the next group: consecutive batches up to the event cap, always at least one. */
+  private takeCommitGroup(): PendingAppend[] {
+    let events = 0, count = 0
+    for (const entry of this.commitQueue) {
+      if (count > 0 && events + entry.batch.length > COMMIT_GROUP_MAX_EVENTS) break
+      events += entry.batch.length
+      count++
+    }
+    return this.commitQueue.splice(0, count)
   }
 
   private ensureRow(db: DatabaseSync, header: SessionHeader): Metadata {

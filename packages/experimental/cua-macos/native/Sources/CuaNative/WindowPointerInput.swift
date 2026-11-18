@@ -28,41 +28,43 @@ final class WindowPointerInput {
         Double(durationMs) / Double(steps) / 1000
     }
 
-    /// Move the visible cursor without restoring the prior point or reserving the application.
-    @MainActor static func mouseMove(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
-        try checkCancellation()
-        try Self.validate(point, in: route)
-        try validateSystemWindow(route)
-        let screen = screenPoint(point, in: route)
-        try checkSystemHit(route, at: screen)
-        guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
-                                  mouseCursorPosition: screen, mouseButton: .left) else {
-            throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
-        }
-        event.flags = []
-        try checkCancellation()
-        event.post(tap: .cghidEventTap)
-        try checkCancellation()
-    }
-
-    private static func validateSystemWindow(_ route: WindowRoute) throws {
+    static func validateWindow(_ route: WindowRoute) throws {
         try NativePlatform.verify(route.owner)
         try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
         let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
         guard current.bounds == route.bounds else {
-            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before system-pointer input; read fresh state")
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before pointer input; read fresh state")
         }
     }
 
-    @MainActor private static func checkSystemHit(_ route: WindowRoute, at screen: CGPoint) throws {
+    @MainActor static func checkSystemHit(_ route: WindowRoute, at screen: CGPoint) throws {
         try requireSystemPointerTarget(route, frontPID: NativePlatform.frontPID(), hitWindowID: NativePlatform.mouseWindow(at: screen))
     }
 
     /// Input-transparent windows do not obscure a target; AppKit owns mouse hit testing.
     static func requireSystemPointerTarget(_ route: WindowRoute, frontPID: Int32?, hitWindowID: Int) throws {
         guard frontPID == route.owner.pid, hitWindowID == Int(route.windowID) else {
-            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer input requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
+            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Pointer input requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
         }
+    }
+
+    /// Send one window-directed transition at the current cursor. A release can be outside the window.
+    func toggleMouse(in route: WindowRoute, button: String, isDown: Bool,
+                     isolation: isolated (any Actor)? = #isolation) async throws {
+        let selected = try Self.button(button)
+        try Self.validateWindow(route)
+        guard let screen = CGEvent(source: nil)?.location else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Could not read the current pointer position")
+        }
+        let point = WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y)
+        if isDown {
+            try await Self.checkSystemHit(route, at: screen)
+        }
+        let event = try mouseEvent(source: Self.source(), route: route, screen: screen, local: point,
+                                   type: isDown ? Self.down(selected) : Self.up(selected),
+                                   button: selected, clickState: 1, subtype: 3, group: nil)
+        try checkCancellation()
+        poster.post(event, to: route.owner.pid)
     }
 
     /// Post balanced mouse presses; holdMs replaces each press-to-release interval and remains cancellable.
@@ -169,18 +171,11 @@ final class WindowPointerInput {
                 return try mouseEvent(source: source, route: route, screen: screen, local: point, type: type,
                                       button: selected, clickState: 1, subtype: 0, group: group, flags: flags)
             }
-            guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: selected) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system drag event")
-            }
-            event.flags = flags
-            event.setIntegerValueField(.mouseEventNumber, value: group)
-            event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : 1)
-            return event
+            return try SystemPointerInput.event(type, source: source, at: screen, button: selected, group: group, flags: flags)
         }
         func post(_ event: CGEvent) {
             if useSystemPointer {
-                event.timestamp = DispatchTime.now().uptimeNanoseconds
-                event.post(tap: .cghidEventTap)
+                SystemPointerInput.post(event)
             } else {
                 poster.post(event, to: route.owner.pid)
             }
@@ -201,7 +196,7 @@ final class WindowPointerInput {
             previous = local
         }
         if useSystemPointer {
-            try Self.validateSystemWindow(route)
+            try Self.validateWindow(route)
             try await Self.checkSystemHit(route, at: down.location)
             try Self.requireReleasedButtons()
             try checkCancellation()
@@ -224,7 +219,7 @@ final class WindowPointerInput {
         CGEventSource.buttonState(.combinedSessionState, button: $0)
     }) throws {
         if [CGMouseButton.left, .right, .center].contains(where: isPressed) {
-            throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting a system drag")
+            throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting system mouse input")
         }
     }
 
@@ -285,7 +280,7 @@ final class WindowPointerInput {
     private func mouseEvent(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         type: CGEventType, button: CGMouseButton, clickState: Int64, subtype: Int64,
-        group: Int64, number: Int64? = nil, flags: CGEventFlags = []
+        group: Int64?, number: Int64? = nil, flags: CGEventFlags = []
     ) throws -> CGEvent {
         guard let event = CGEvent(
             mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: button
@@ -294,8 +289,9 @@ final class WindowPointerInput {
         }
         event.flags = flags
         try poster.stampWindow(event, pid: route.owner.pid, windowID: route.windowID, point: local)
-        let fields: [(UInt32, Int64)] = [(1, clickState), (3, Int64(button.rawValue)), (7, subtype), (58, group)]
+        let fields: [(UInt32, Int64)] = [(1, clickState), (3, Int64(button.rawValue)), (7, subtype)]
         for (field, value) in fields { try poster.stamp(event, field: field, value: value) }
+        if let group { try poster.stamp(event, field: 58, value: group) }
         if let number { try poster.stamp(event, field: 0, value: number) }
         return event
     }
@@ -326,7 +322,7 @@ final class WindowPointerInput {
         }
     }
 
-    private static func screenPoint(_ point: WindowPoint, in route: WindowRoute) -> CGPoint {
+    static func screenPoint(_ point: WindowPoint, in route: WindowRoute) -> CGPoint {
         CGPoint(x: CGFloat(route.bounds.x + point.x), y: CGFloat(route.bounds.y + point.y))
     }
 

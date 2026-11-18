@@ -135,7 +135,7 @@ export interface SessionWorkingDirectoryParams {
   sessionId: string
 }
 
-/** Change one Session's effective directory without changing its origin or permissions. */
+/** Change one Session's effective directory without changing its origin; the workspace-write boundary follows it. */
 export interface SessionWorkingDirectorySetParams extends SessionWorkingDirectoryParams {
   /** Directory to enter; relative paths resolve against the Session's current directory. */
   path: string

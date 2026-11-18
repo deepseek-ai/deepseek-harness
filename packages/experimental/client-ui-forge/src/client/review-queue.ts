@@ -37,6 +37,13 @@ export type ReviewRecord =
 /** One inline record; its numeric key belongs only to the retained browser store. */
 export type ReviewThread = { readonly key: number } & (ReviewRecord | { readonly kind: 'pending'; readonly selection: ReviewSelection })
 
+/** A record taken out of the store, with the position that puts it back. */
+export interface RemovedRecord {
+  readonly record: ReviewRecord
+  /** Position among the stored records before the removal. */
+  readonly index: number
+}
+
 /** File-scoped snapshot that does not change while unrelated comments or the summary are edited. */
 export interface FileReviewState {
   readonly threads: readonly ReviewThread[]
@@ -145,6 +152,29 @@ export class ReviewQueue {
    */
   published(selection: ReviewSelection, url: string): boolean {
     return this.save({ ...this.state, uncertain: null, records: [...this.state.records, { kind: 'published', selection, url }] })
+  }
+
+  /**
+   * Remove the reference or publication receipt behind an inline record. A comment draft is deleted through `editThread`;
+   * a published comment stays on the code host.
+   * @param key - browser-store identity from fileComments.
+   * @returns the removed record and its position, or null when no record has the key or the removal was not saved.
+   */
+  removeRecord(key: number): RemovedRecord | null {
+    const index = this.state.records.findIndex(item => this.keyOf(item.selection) === key)
+    const record = this.state.records[index]
+    if (record === undefined) return null
+    return this.save({ ...this.state, records: this.state.records.filter(item => item !== record) }) ? { record, index } : null
+  }
+
+  /**
+   * Put a removed record back at its earlier position, or after the remaining records when fewer are left.
+   * @param removed - result of removeRecord.
+   * @returns whether the record was saved.
+   */
+  restoreRecord(removed: RemovedRecord): boolean {
+    const records = this.state.records
+    return this.save({ ...this.state, records: [...records.slice(0, removed.index), removed.record, ...records.slice(removed.index)] })
   }
 
   /**

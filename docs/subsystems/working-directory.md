@@ -10,7 +10,7 @@ A Session's active directory is owned by [`dsh-working-directory`](../../package
 
 `get` is the one read of a Session's directory: relative paths resolve from it, and it is the workspace root for everything that follows the Session's checkout. Every change the service records is a `workspace-root/change`. A log written while the model could move the directory holds `working-directory/change` events, which have no writer now. The service ignores them: such a Session resumes in its original project, or in the directory of its last `workspace-root/change`, and the next request's context reports the directory.
 
-Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. Existing terminals and persistent shells retain their own directories. Sandbox writable roots and project membership remain anchored to the original project.
+Changes are local to one Session. Relative filesystem operations, newly started processes, instruction discovery, skills, and file completion use the active directory. The sandbox `workspace-write` boundary, the Files tree and directory listings, and the change summaries follow it too. Existing terminals and persistent shells retain their own directories. Project membership remains anchored to the original project.
 
 ## Model context
 

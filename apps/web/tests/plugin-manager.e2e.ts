@@ -23,6 +23,7 @@ import {
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
 const MANAGER_EXPECTED = join(SNAPSHOT_DIR, 'manager.expected.md')
+const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal.expected.md')
 const LIVE_EXPECTED = join(SNAPSHOT_DIR, 'live-enabled.expected.md')
 const EXPORTS_EXPECTED = join(SNAPSHOT_DIR, 'exports.expected.md')
 const EXPORTS_EN_EXPECTED = join(SNAPSHOT_DIR, 'exports-en.expected.md')
@@ -849,7 +850,10 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.getByText(experimentalBundleDescription('inspector-profile', 'zh'), { exact: true }).count()).toBe(1)
     const bundles = await scaffold.ctx.pluginManager.listBundles()
     expect(bundles.some(bundle => bundle.name === '@deepseek-ai/dsh-experimental-terminal-bundle')).toBe(true)
-    expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).count()).toBe(0)
+    expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).getAttribute('aria-checked')).toBe('false')
+    await compareOrRefreshGolden(TERMINAL_EXPECTED, await captureStableAria(
+      page, '[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-terminal-bundle"]', scaffold.workspaceCwd,
+    ), MODE)
     // The More list also omits LiveShare until its rows run, so the offered count is one lower than
     // the eligible installed optional-bundle list.
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-liveshare"]').count()).toBe(0)
@@ -881,6 +885,7 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
       ['@deepseek-ai/dsh-timeline', 1],
+      ['@deepseek-ai/dsh-experimental-terminal-bundle', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
@@ -1665,7 +1670,7 @@ describe('web e2e: plugin manager', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
+      'manager.expected.md', 'terminal.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
       'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
       'touch-tooltips.expected.md', 'forge-preview.expected.md', 'timeline-tracking.expected.md',
     ])

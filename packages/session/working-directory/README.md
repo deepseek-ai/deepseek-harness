@@ -81,7 +81,6 @@ Directory transitions append context without replacing the stable system-prompt 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Header readers** — the sandbox write boundary, the workspace file service, the change recorder, and the client file views still read the Session header, so they stay on the original project after a Host move. Connecting them to `get` is the deferred work the [workspace-root note](../../../.agents/notes/implemented/architecture/2026-11-03-session-workspace-root.md#deferred) lists.
 - **Stored directory changes** — a Session stored by an earlier release resumes in its original project, even when it had entered a worktree or its model had changed directory. `enter_worktree` or another Host move returns it to the worktree.
 - **Missing original project** — when the current directory and the original project are both unavailable, prompt assembly rejects every model turn, including chat-only turns. The service does not choose or recreate a repository. Restore the original directory, or use SDK `setWorkingDirectory` (`set_working_directory` in Python) or `ctx.workingDirectory.set` to select an existing absolute directory before retrying. Existing shells retain their process-local directories.
 

@@ -151,4 +151,4 @@ The selected home stores profiles, plugins, and every profile-owned durable reso
 
 See the [Python tutorial](../../docs/user/guide/python-sdk.md), [runnable example](examples/README.md), and [runtime wheel reference](../sdk-runtime/README.md).
 
-`Session.get_working_directory()` reads the effective working directory; `set_working_directory(path)` changes it and returns the validated absolute path. Both create an unknown Session without running a model turn. Relative paths use that Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. The low-level client provides the same methods with a leading `session_id` argument.
+`Session.get_working_directory()` reads the effective working directory; `set_working_directory(path)` changes it and returns the validated absolute path. Both create an unknown Session without running a model turn. Relative paths use that Session's current directory. Origin metadata and existing processes remain unchanged; the `workspace-write` boundary moves to the new directory. The low-level client provides the same methods with a leading `session_id` argument.

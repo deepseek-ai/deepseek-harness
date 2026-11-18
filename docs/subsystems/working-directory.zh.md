@@ -10,7 +10,7 @@ Session 的当前目录由 [`dsh-working-directory`](../../packages/session/work
 
 `get` 是读取 Session 目录的唯一接口：相对路径从它解析，跟随 Session 检出的一切也以它为工作区根。服务记录的每次变更都是 `workspace-root/change`。写于模型还能移动目录时期的日志含有 `working-directory/change` 事件，现在没有写入方。服务忽略它们：这样的 Session 在原始项目中恢复，或在最近一条 `workspace-root/change` 的目录中恢复，下一次请求的上下文会报告该目录。
 
-变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。已有终端和持久 shell 保留自己的目录。沙箱可写根目录与项目归属继续绑定原始项目。
+变更仅影响一个 Session。相对路径文件系统操作、新启动的进程、指令发现、技能和文件补全使用当前目录。沙箱 `workspace-write` 边界、文件树与目录列举以及变更摘要也跟随它。已有终端和持久 shell 保留自己的目录。项目归属继续绑定原始项目。
 
 ## 模型上下文
 

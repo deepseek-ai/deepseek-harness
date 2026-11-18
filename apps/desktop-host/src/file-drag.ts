@@ -1,10 +1,8 @@
 /** Resolve desktop-only file references through the active Host filesystem and Session. */
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-persistence'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 
@@ -17,6 +15,7 @@ export interface LocalDragResource {
 
 /**
  * Authorize an unmodified local file through the composed filesystem's actual read operations.
+ * Relative paths resolve from the same workspace root the workspace file service uses for the Session.
  * @param ctx - booted Desktop Host.
  * @param address - Session-scoped resource reference.
  * @param cancellation - caller cancellation, combined with the read deadline.
@@ -25,17 +24,14 @@ export interface LocalDragResource {
 export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<LocalDragResource | null> {
   const resource = parseFileAddress(address)
   if (resource?.scope !== 'session') throw new Error('File drag requires a Session resource')
-  const sessions = ctx.get('sessions')
-  const persistence = ctx.get('sessionPersistence')
   const fs = ctx.get('fs')
-  const policy = ctx.get('sandboxPolicy')
-  if (fs === undefined || sessions === undefined || policy === undefined) throw new Error('File access unavailable')
-  const sessionId = resource.sessionId as SessionId
-  const header = sessions.get(sessionId)?.header ?? (await persistence?.stat(sessionId))?.header
-  if (header === undefined) throw new Error('File drag Session unavailable')
+  const workspaceFiles = ctx.get('workspaceFiles')
+  if (fs === undefined || workspaceFiles === undefined) throw new Error('File access unavailable')
   const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
   signal.throwIfAborted()
-  const cwd = header.cwd ?? policy.workspaceRoot
+  const scope = await workspaceFiles.scopeOf(resource.sessionId as SessionId, signal)
+  if (scope === undefined) throw new Error('File drag Session unavailable')
+  const cwd = scope.workspaceRoot
   const entry = await fs.lstat(resource.path, { cwd }, signal)
   if (entry?.type !== 'file') return null
   const target = await fs.resolve(resource.path, { cwd, signal })

@@ -241,7 +241,7 @@ export class HarnessSession {
   }
 
   /**
-   * Change the effective directory without moving existing processes or changing permissions.
+   * Change the effective directory without moving existing processes; the workspace-write boundary follows it.
    * @param path - absolute or Session-current-directory-relative directory.
    * @returns the validated absolute directory.
    */
