@@ -25,7 +25,7 @@ Create an isolated checkout from a local commit and continue the same Session in
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the service alongside `workingDirectory`, `fs`, `subprocess`, `sandbox`, `sandboxPolicy`, and `sessionProjections` providers. Archive cleanup additionally needs `workspaceRegistry` and `sessionQuery`, and uses `sessionProjectionCache` when it is mounted; without the first two the service only creates and restores. Add the tool package when models need the operation.
+Mount the service alongside `workingDirectory`, `fs`, `subprocess`, `sandbox`, `sandboxPolicy`, and `sessionProjections` providers. Archive cleanup additionally needs `workspaceRegistry` and `sessionQuery`, and uses `sessionProjectionCache` when it is mounted; without the first two the service only creates and restores. The service mounts the [linked-worktree grant](../sandbox-policy-git/README.md), which on macOS and Linux lets a Session that works in a linked worktree write its repository's Git directory under `workspace-write`. Add the tool package when models need the operation.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -54,7 +54,7 @@ The default checkout directory is `<current checkout root>/.agents/worktrees/<na
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy. Creation does not widen write access to the destination or shared Git administration directory. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
+Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy. Creation itself does not widen write access to the destination or shared Git administration directory; a Session that works in a linked worktree holds the latter through the linked-worktree grant. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
 
 | Source | Responsibility |
 |---|---|

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。模型需要此操作时，再添加工具包。
+将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。服务会挂载[链接工作树授权](../sandbox-policy-git/README.zh.md)，它在 macOS 和 Linux 上让在链接工作树中工作的 Session 能在 `workspace-write` 下写入其仓库的 Git 目录。模型需要此操作时，再添加工具包。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -54,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
+Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略。创建操作本身不会扩大目标目录或共享 Git 管理目录的写权限；在链接工作树中工作的 Session 通过链接工作树授权持有后者的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|

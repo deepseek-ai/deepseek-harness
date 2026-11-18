@@ -32,6 +32,7 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
   'packages/experimental/forge-gitlab': '@deepseek-ai/dsh-forge-gitlab',
   'packages/experimental/deepseek-chat-import': '@deepseek-ai/dsh-deepseek-chat-import',
+  'packages/experimental/sandbox-policy-git': '@deepseek-ai/dsh-sandbox-policy-git',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */

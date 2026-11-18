@@ -541,6 +541,7 @@
       "@deepseek-ai/dsh-sandbox": ["./packages/sandbox/sandbox/src"],
       "@deepseek-ai/dsh-sandbox-local": ["./packages/sandbox/sandbox-local/src"],
       "@deepseek-ai/dsh-sandbox-policy": ["./packages/sandbox/sandbox-policy/src"],
+      "@deepseek-ai/dsh-sandbox-policy-git": ["./packages/experimental/sandbox-policy-git/src"],
       "@deepseek-ai/dsh-sandbox-ssh": ["./packages/ssh/sandbox-ssh/src"],
       "@deepseek-ai/dsh-sandbox-windows-acl": ["./packages/sandbox/sandbox-windows-acl/src"],
       "@deepseek-ai/dsh-schedule": ["./packages/schedule/schedule/src"],

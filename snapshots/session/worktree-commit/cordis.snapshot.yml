@@ -1,0 +1,34 @@
+- id: llm-deepseek
+  disabled: true
+
+# Replay does not depend on a kernel sandbox runner; the Session's policy and its model-visible context are under test.
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+  config:
+    runnerCommand:
+      - bash
+      - -c
+      - while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
+      - passthrough-runner
+    runnerFailureSignatures:
+      - 'passthrough-runner: profile rejected'
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                contextWindow: 1000000
+                defaultMaxTokens: 256000
+                reasoningEfforts: [off, low, high, max]
+                defaultReasoningEffort: max
+
+- insert:
+    - id: worktree
+      name: '@deepseek-ai/dsh-experimental-worktree'
+    - id: tool-worktree
+      name: '@deepseek-ai/dsh-experimental-tool-worktree'
