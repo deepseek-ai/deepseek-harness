@@ -1,7 +1,7 @@
 /**
  * The review page's detail of one change request: its header with state, repository, labels, title, author, times, and
  * branches; the ready-or-merge and more actions; and the summary, changes, and chat tabs. The summary shows the
- * description beside the rows a change request card shows.
+ * description beside the status column.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -14,7 +14,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestDescription, ChangeRequestSnapshot, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeReviewChangeRequest } from '../types.ts'
-import { ChangeRequestDetails, ChangeRequestPrimary, type ChangeRequestActions } from './ChangeRequestCard.tsx'
+import { ChangeRequestPrimary, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import { formatAgo } from './format.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { StreamRead } from './host-stream.ts'
@@ -22,6 +22,7 @@ import type { ForgePanelKey, NS } from './locales.ts'
 import { descriptionMarkdown } from './review-lists.ts'
 import type { ReviewTab } from './review-store.ts'
 import { ReviewLabels } from './ReviewLabels.tsx'
+import { ReviewStatus } from './ReviewStatus.tsx'
 import { TONE_LABEL, toneOf } from './status.ts'
 import css from './ReviewPage.module.css'
 
@@ -208,7 +209,7 @@ function Summary({ frame, snapshot, description, now, locale, actions, t }: {
             : <MarkdownText text={markdown} labels={labels} omitHtml />}
       </section>
       <aside className={css.facts} aria-label={t('reviewPage.status')}>
-        <ChangeRequestDetails entry={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
+        <ReviewStatus frame={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       </aside>
     </div>
   )

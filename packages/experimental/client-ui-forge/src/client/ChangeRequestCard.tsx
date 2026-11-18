@@ -123,10 +123,12 @@ function DiffSize({ snapshot, locale }: { readonly snapshot: ChangeRequestSnapsh
 }
 
 /**
- * The changed lines with the unresolved review thread count, as a row that opens the changes view when the provider
- * serves the change request.
+ * Render the changed lines with the unresolved review thread count, as a row that opens the changes view when the
+ * provider serves the change request.
+ * @param props - the change request, its snapshot, how the row names it, the actions, the number locale, and copy.
+ * @returns the row.
  */
-function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
+export function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
@@ -406,18 +408,64 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
 }
 
 /**
- * Render the facts of a change request one row each: the merged or closed state, or the checks, review, and merge
- * state; the changed lines; and the linked issues.
- * @param props.entry - the change request.
- * @param props.snapshot - its latest snapshot.
- * @param props.name - how rows name it.
- * @param props.now - current epoch milliseconds for relative times.
- * @param props.actions - the actions the surface offers.
- * @param props.locale - active UI language for numeric formatting.
- * @param props.t - forge panel copy.
- * @returns the rows.
+ * Render the merged or closed fact of a finished change request with its time.
+ * @param props - the snapshot, current epoch milliseconds for the relative time, and copy.
+ * @returns the row.
  */
-export function ChangeRequestDetails({ entry, snapshot, name, now, actions, locale, t }: {
+export function FinishedRow({ snapshot, now, t }: {
+  readonly snapshot: ChangeRequestSnapshot
+  readonly now: number
+  readonly t: Translate
+}): ReactNode {
+  return (
+    <div className={css.row}>
+      <RowParts label={undefined} icon={<ChangeRequestGlyph tone={snapshot.state} tinted={false} size={16} />}
+        value={finished(snapshot, now, t)} tone={snapshot.state} opens={false} />
+    </div>
+  )
+}
+
+/**
+ * The aggregate review outcome of an open change request in words, with its tone.
+ * @param snapshot - the snapshot.
+ * @param t - forge panel copy.
+ * @returns the outcome and its tone.
+ */
+export function reviewOutcome(
+  snapshot: ChangeRequestSnapshot, t: Translate,
+): { readonly value: string; readonly tone: string | undefined } {
+  return {
+    value: t(REVIEW[snapshot.reviewDecision]),
+    tone: snapshot.reviewDecision === 'changes-requested' ? 'error' : snapshot.reviewDecision === 'approved' ? 'success' : undefined,
+  }
+}
+
+/**
+ * Render the merge state of an open change request: whether it conflicts with its base, and the branch update.
+ * @param props - the change request, its snapshot, the update action, and copy.
+ * @returns the row.
+ */
+export function MergeStateRow({ entry, snapshot, updateBranch, t }: {
+  readonly entry: ChangeRequestEntry
+  readonly snapshot: ChangeRequestSnapshot
+  readonly updateBranch: ChangeRequestActions['updateBranch']
+  readonly t: Translate
+}): ReactNode {
+  const merge = snapshot.mergeability === 'mergeable'
+    ? t('change.merge.mergeable')
+    : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
+  return (
+    <MergeRow entry={entry} snapshot={snapshot} value={merge} updateBranch={updateBranch}
+      icon={<ChangeRequestGlyph tone="merged" tinted={false} size={16} />}
+      tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined} t={t} />
+  )
+}
+
+/**
+ * The facts of a change request one row each: the merged or closed state, or the checks, review, and merge state;
+ * the changed lines; and the linked issues.
+ */
+function Details({ entry, snapshot, name, now, actions, locale, t }: {
   readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
@@ -430,28 +478,19 @@ export function ChangeRequestDetails({ entry, snapshot, name, now, actions, loca
   if (snapshot.state !== 'open') {
     return (
       <div className={css.rows}>
-        <div className={css.row}>
-          <RowParts label={undefined} icon={<ChangeRequestGlyph tone={snapshot.state} tinted={false} size={16} />}
-            value={finished(snapshot, now, t)} tone={snapshot.state} opens={false} />
-        </div>
+        <FinishedRow snapshot={snapshot} now={now} t={t} />
         {changes}
       </div>
     )
   }
-  const review = t(REVIEW[snapshot.reviewDecision])
-  const reviewTone = snapshot.reviewDecision === 'changes-requested' ? 'error' : snapshot.reviewDecision === 'approved' ? 'success' : undefined
-  const merge = snapshot.mergeability === 'mergeable'
-    ? t('change.merge.mergeable')
-    : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
+  const review = reviewOutcome(snapshot, t)
   return (
     <div className={css.rows}>
       <ChecksRow key={snapshot.headSha} entry={entry} snapshot={snapshot} openLink={actions.openLink} readChecks={actions.readChecks}
         rerunChecks={actions.rerunChecks} t={t} />
-      <ReviewRow entry={entry} snapshot={snapshot} tone={reviewTone} openLink={actions.openLink} value={review}
+      <ReviewRow entry={entry} snapshot={snapshot} tone={review.tone} openLink={actions.openLink} value={review.value}
         requestReviews={actions.requestReviews} reviewerCandidates={actions.reviewerCandidates} t={t} />
-      <MergeRow entry={entry} snapshot={snapshot} value={merge} updateBranch={actions.updateBranch}
-        icon={<ChangeRequestGlyph tone="merged" tinted={false} size={16} />}
-        tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined} t={t} />
+      <MergeStateRow entry={entry} snapshot={snapshot} updateBranch={actions.updateBranch} t={t} />
       {changes}
       <IssuesRow snapshot={snapshot} openLink={actions.openLink} t={t} />
     </div>
@@ -537,7 +576,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
         </div>
       )}
       {expanded && snapshot !== null && (
-        <ChangeRequestDetails entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
+        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       )}
       {expanded && snapshot !== null && <ChangeRequestPrimary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>
