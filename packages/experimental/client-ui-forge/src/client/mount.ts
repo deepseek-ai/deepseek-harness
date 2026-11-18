@@ -19,7 +19,7 @@ import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/type
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState,
+  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgePanelState,
 } from '../types.ts'
 import { actionReporter } from './action-notices.ts'
 import { AnnotationView } from './annotations.ts'
@@ -48,7 +48,7 @@ import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
 import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource,
+  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource, type PanelStream,
 } from './source.ts'
 import { numberOf, type ChangeRequestEntry } from './status.ts'
 import type { WorktreeRequestResult } from './WorktreeNameDialog.tsx'
@@ -115,6 +115,26 @@ function registerUi(ctx: Context): void {
     })
     return { text: t('toast.archiveCleanupScheduled'), tone: 'success' }
   })
+  /**
+   * Follow a Session's panel only after its own history connection opened: the Host resolves the `follow` argument
+   * by resuming the Session's Agent, which would otherwise read the Session log a second time beside that opening.
+   * The stream holds a Session reference until it ends.
+   */
+  const followOpened = (sessionId: SessionId, signal: AbortSignal): PanelStream => {
+    let inner: PanelStream | undefined
+    async function* frames(): AsyncGenerator<ForgePanelState> {
+      const reference = ctx.sessions.retain(sessionId, { source: 'forgePanel', signal })
+      try {
+        const state = (await reference.ready).session.getSnapshot()
+        if (state.openState !== 'open') throw state.openError ?? new Error(`forge-panel: Session ${sessionId} is not open`)
+        inner = ctx.remote.forgePanel.follow(sessionId, signal)
+        yield* inner
+      } finally {
+        reference.release()
+      }
+    }
+    return Object.assign(frames(), { dispose: () => { inner?.dispose() } })
+  }
   const stores = new Map<SessionId, SessionStores>()
   ctx.effect(() => () => {
     for (const store of [...stores.values()]) store.release()
@@ -126,7 +146,7 @@ function registerUi(ctx: Context): void {
       const scope = ctx.sessions.scope(sessionId)
       if (scope === undefined) throw new Error(`forge-panel: Session ${sessionId} is not retained`)
       const panel = createPanelSource({
-        open: signal => ctx.remote.forgePanel.follow(sessionId, signal),
+        open: signal => followOpened(sessionId, signal),
         subscribeReset: listener => ctx.on('connection/reset', listener),
       })
       const dispose = scope.effect(() => () => {

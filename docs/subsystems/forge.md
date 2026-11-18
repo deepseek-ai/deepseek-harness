@@ -2228,20 +2228,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * Remember the change request a review conversation's draft quotes, or forget it with null. When the Session's next
  * message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts;
  * a Session that already started is bound at its next message. The choice lives in memory until then.
- * @param session - the Session whose draft quotes the change request.
+ * @param sessionId - the Session whose draft quotes the change request; staging neither loads nor resumes it.
  * @param url - web URL of the change request, or null.
  * @param signal - request cancellation.
  * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
  */
-@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(session: Session, url: string | null, signal: AbortSignal): Promise<void>
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(sessionId: SessionId, url: string | null, signal: AbortSignal): Promise<void>
 
 /**
  * Read or await the worktree service's archive cleanup of the Session's checkout.
- * @param session - Session whose cleanup is visible to the caller.
+ * @param sessionId - Session whose cleanup is visible to the caller; reading neither loads nor resumes it.
  * @param revision - null reads now; a matching revision waits for completion.
  * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
  */
-@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
+@Remote async worktreeCleanup(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null>
 
 /**
  * List the branches that can start a worktree of the Session's current checkout: the checked-out branch, each
@@ -2286,11 +2286,11 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Reinspect a followed Session's checkout, probe sign-in again, and poll its
  * change requests at once; an unfollowed Session is unchanged.
- * @param session - Session whose panel refreshes.
+ * @param sessionId - Session whose panel refreshes; refreshing neither loads nor resumes it.
  * @param signal - request cancellation.
  * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
  */
-@Remote async refresh(session: Session, signal: AbortSignal): Promise<void>
+@Remote async refresh(sessionId: SessionId, signal: AbortSignal): Promise<void>
 
 /**
  * Read the changes one scope covers in the checkout of the Session's
@@ -2665,7 +2665,7 @@ registerLens(lens: ForgeLens): () => Promise<void>
 @Remote async continueInProject(session: Session, signal: AbortSignal): Promise<void>
 ```
 
-Types: [Session](session.md) · [WorktreeCleanup](worktrees.md)
+Types: [Session](session.md) · [SessionId](core.md) · [WorktreeCleanup](worktrees.md)
 
 Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/experimental/client-ui-forge/src/index.ts)
 
