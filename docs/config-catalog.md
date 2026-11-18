@@ -5031,7 +5031,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-upstream-skills`
 
 - `inject`: `skills`
-- `source`: [`packages/connector/upstream-skills/src/index.ts:32`](../packages/connector/upstream-skills/src/index.ts)
+- `source`: [`packages/connector/upstream-skills/src/index.ts:35`](../packages/connector/upstream-skills/src/index.ts)
 
 ```ts config-catalog
 /** Where every registered plugin's upstream files are downloaded from. */

@@ -1,14 +1,20 @@
-/** `ctx.upstreamSkills` lists a plugin's entry skill over its upstream files: a configured directory, downloads, retries, withdrawal. */
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+/**
+ * `ctx.upstreamSkills` lists a plugin's entry skill over its upstream files: a configured directory, downloads, retries,
+ * withdrawal, and a profile's own directory, where the pin in place replaces the earlier ones.
+ */
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import UpstreamSkills, { type Config, type UpstreamSkillsHandle, type UpstreamSkillSet, type UpstreamSkillsState } from '../src/index.ts'
 import { KEPT, archivePath, pin, repository, serve, startHost, type ArchiveHost } from './harness.ts'
 
 const renameHook = vi.hoisted(() => ({ before: undefined as ((from: string, to: string) => Promise<void>) | undefined }))
+/** The one path whose removal fails with the given error, as a directory in use does on Windows. */
+const removeHook = vi.hoisted(() => ({ refused: undefined as { readonly path: string; readonly error: Error } | undefined }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return {
@@ -18,6 +24,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       renameHook.before = undefined
       await before?.(from, to)
       return actual.rename(from, to)
+    },
+    rm: async (...args: Parameters<typeof actual.rm>) => {
+      if (removeHook.refused?.path === args[0]) throw removeHook.refused.error
+      return actual.rm(...args)
     },
   }
 })
@@ -67,13 +77,17 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   renameHook.before = undefined
+  removeHook.refused = undefined
   await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true })
 })
 
 const set = pin()
+/** The directory name the pin is published under, and the name of a pin an earlier plugin version published. */
+const CURRENT = `skills-${set.sha256.slice(0, 16)}`
+const EARLIER = 'skills-0123456789abcdef'
 const cache = () => join(home, 'cache', 'vendor')
-const published = () => join(cache(), `skills-${set.sha256.slice(0, 16)}`)
+const published = () => join(cache(), CURRENT)
 const warning = (message: unknown, error: unknown) => ({ message, error })
 const logged = () => ctx.logger.buffer.filter(entry => entry.type === 'warn').map(entry => warning(entry.args[0], entry.args[1]))
 const warnings = (): unknown[] => logged().map(({ message }) => message)
@@ -184,8 +198,17 @@ describe('register', () => {
     expect(await ctx.skills.list()).toEqual(listed(published()))
     for (const [path, content] of Object.entries(KEPT)) expect(await readFile(join(published(), path), 'utf8')).toBe(content)
     expect((await readdir(join(published(), 'skills', 'alpha'))).toSorted()).toEqual(['SKILL.md', 'references'])
-    expect(await readdir(cache())).toEqual([`skills-${set.sha256.slice(0, 16)}`])
+    expect(await readdir(cache())).toEqual([CURRENT])
     expect(host.requests).toEqual([archivePath(set)])
+  })
+
+  it('keeps every pin of the shared directory, which no profile owns', async () => {
+    await mkdir(join(cache(), EARLIER), { recursive: true })
+    host.routes[archivePath(set)] = serve(repository())
+    const skills = register()
+    expect(await settled(skills)).toBe('installed')
+    expect(await ctx.skills.list()).toEqual(listed(published()))
+    expect((await readdir(cache())).toSorted()).toEqual([EARLIER, CURRENT].toSorted())
   })
 
   it('tries the next skills URL after one fails and logs the failed prefix', async () => {
@@ -265,7 +288,7 @@ describe('register', () => {
     const skills = register()
     expect(await settled(skills)).toBe('installed')
     expect(await readdir(published())).toEqual(['other'])
-    expect(await readdir(cache())).toEqual([`skills-${set.sha256.slice(0, 16)}`])
+    expect(await readdir(cache())).toEqual([CURRENT])
   })
 
   it('lists the entry when another process publishes the directory while this download fails', async () => {
@@ -344,5 +367,87 @@ describe('register', () => {
     expect(warnings()).toEqual([])
     await mkdir(published(), { recursive: true })
     expect(await ctx.skills.list()).toEqual([])
+  })
+})
+
+describe('register in a profile', () => {
+  /** The Harness home of the profile, which differs from `$DSH_HOME` here. */
+  const harness = () => join(home, 'harness')
+  /** The directory of the `web` profile for the plugin. */
+  const pins = () => join(harness(), 'cache', 'vendor', 'web')
+  const entries = async (directory: string) => (await readdir(directory)).toSorted()
+
+  beforeEach(() => {
+    const dir = join(harness(), 'profiles', 'web')
+    const profile: ProfileContext = {
+      name: 'web', dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: dir, cwd: home, home: harness(),
+      startedBundles: [], overlayPaths: [], telemetryDisabledEnv: undefined,
+    }
+    ctx.provide('profileContext', profile)
+  })
+
+  it('publishes into the directory of the profile for the plugin, under the Harness home of the profile', async () => {
+    host.routes[archivePath(set)] = serve(repository())
+    const skills = register()
+    expect(skills.directory).toBe(join(pins(), CURRENT))
+    expect(await settled(skills)).toBe('installed')
+    expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
+    for (const [path, content] of Object.entries(KEPT)) expect(await readFile(join(pins(), CURRENT, path), 'utf8')).toBe(content)
+    expect(await readdir(pins())).toEqual([CURRENT])
+    expect(await readdir(home)).toEqual(['harness'])
+  })
+
+  it('replaces the earlier pins of that directory once the new pin is published, and deletes nothing else', async () => {
+    const staging = `.${CURRENT}-of-a-running-download`
+    const untouched = [join(pins(), staging), join(pins(), '..', 'desktop', EARLIER), join(cache(), EARLIER)]
+    for (const directory of [join(pins(), EARLIER), ...untouched]) await mkdir(directory, { recursive: true })
+    host.routes[archivePath(set)] = gated(repository())
+    const skills = register()
+    expect(skills.state).toBe('downloading')
+    expect(await entries(pins())).toEqual([staging, EARLIER].toSorted())
+    release()
+    expect(await settled(skills)).toBe('installed')
+    await vi.waitFor(async () => { expect(await entries(pins())).toEqual([staging, CURRENT].toSorted()) })
+    for (const directory of untouched) expect((await stat(directory)).isDirectory()).toBe(true)
+    expect(warnings()).toEqual([])
+  })
+
+  it('replaces the earlier pins at load when the pin is already in place, without a download', async () => {
+    for (const name of [CURRENT, EARLIER]) await mkdir(join(pins(), name), { recursive: true })
+    const skills = register()
+    expect(skills.state).toBe('installed')
+    await vi.waitFor(async () => { expect(await readdir(pins())).toEqual([CURRENT]) })
+    expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
+    expect(host.requests).toEqual([])
+  })
+
+  it('keeps the earlier pin while the new one cannot be downloaded', async () => {
+    await mkdir(join(pins(), EARLIER), { recursive: true })
+    host.routes[archivePath(set)] = (response) => { response.writeHead(500).end() }
+    const skills = register()
+    expect(await settled(skills)).toBe('failed')
+    expect(await readdir(pins())).toEqual([EARLIER])
+  })
+
+  it('logs an earlier pin that cannot be deleted, keeps it, and still lists the entry', async () => {
+    for (const name of [CURRENT, EARLIER]) await mkdir(join(pins(), name), { recursive: true })
+    const refused = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+    removeHook.refused = { path: join(pins(), EARLIER), error: refused }
+    register()
+    await vi.waitFor(() => {
+      expect(logged()).toEqual([warning('vendor: could not delete the upstream skills this pin replaces', refused)])
+    })
+    expect(await entries(pins())).toEqual([EARLIER, CURRENT].toSorted())
+    expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
+  })
+
+  it('leaves a configured skills directory and its siblings as they are', async () => {
+    const configured = join(pins(), CURRENT)
+    for (const name of [CURRENT, EARLIER]) await mkdir(join(pins(), name), { recursive: true })
+    const skills = register(configured)
+    expect(skills.directory).toBe(configured)
+    expect(await ctx.skills.list()).toEqual(listed(configured))
+    expect(await entries(pins())).toEqual([EARLIER, CURRENT].toSorted())
+    expect(host.requests).toEqual([])
   })
 })
