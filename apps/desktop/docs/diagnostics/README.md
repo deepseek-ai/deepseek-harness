@@ -67,7 +67,7 @@ The Host announces its run ID before profile loading; reported Host errors carry
 
 Collection reads only two owned files under `userData/plugin-operations`, at most 64 KiB and 100 records; the complete appended section is limited to 64 KiB.
 
-Only a predecessor whose handle reports the exact bigint file identity of the segment already read is deduplicated as already collected, so records appended before a rotation stay in that one segment instead of being collected twice. On Windows, opening a segment retries `EACCES`, `EBUSY` and `EPERM` up to four times with a 10→40 ms backoff before the segment counts as unavailable, cancellation ends those retries, and `filesRead` counts owned segments that yielded bytes.
+Only a predecessor whose handle reports the exact bigint file identity of the segment already read is deduplicated as already collected: the predecessor is skipped, so its records are not collected twice, and records appended to it after it was read are not collected. On Windows, opening a segment retries `EACCES`, `EBUSY` and `EPERM` up to four times with a 10→40 ms backoff before the segment counts as unavailable, cancellation ends those retries, and `filesRead` counts owned segments that yielded bytes.
 
 The 500 ms collection budget reserves its final 100 ms for cooperative cancellation before requesting forced Worker termination; completion waits for its exit. Application exit, recovery exit or restart, and confirmed update installation also cancel collection and wait at most 500 ms for Worker exit. A rejected shutdown cleanup is logged without skipping the remaining cleanup waits. Shutdown prevents late basic-report saves from starting another collector. An update installation failure permits future collection again.
 

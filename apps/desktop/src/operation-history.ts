@@ -75,7 +75,8 @@ async function openSegment(filename: string, signal: AbortSignal): Promise<FileH
  * Read only the bounded tails of the two owned history files, newest segment first.
  * Cancellation is observed between bounded records after yielding to Worker messages and stops subsequent I/O and parsing.
  * A segment is deduplicated as already read when its handle reports the exact bigint identity of
- * the segment already read, so records appended before a rotation stay in that one segment.
+ * the segment already read; the predecessor is skipped, so its records are not collected twice and
+ * records appended to it after the read are not collected.
  * An already-issued OS read must settle before its handle closes.
  * @param directory - Desktop's operation history directory; unrelated files are never enumerated.
  * @param limits - Positive byte, record-size and record-count budgets.
