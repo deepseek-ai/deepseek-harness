@@ -5272,7 +5272,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-wecom`
 
 - `inject`: `cliAccounts` · `upstreamSkills`
-- `source`: [`packages/connector/wecom/src/index.ts:30`](../packages/connector/wecom/src/index.ts)
+- `source`: [`packages/connector/wecom/src/index.ts:28`](../packages/connector/wecom/src/index.ts)
 
 ```ts config-catalog
 /** Where wecom-cli and the upstream guides are. */
