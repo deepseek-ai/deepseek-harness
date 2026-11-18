@@ -91,6 +91,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
                     call("activate", {"appHandle": other_app["appHandle"]})
                     wait_for_state(state_file, lambda s: not s["active"])
             finally:
+                assert cursor(*outside) == outside
                 toggle(button, "up")
             state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)
             events = state["events"][count:]

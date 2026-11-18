@@ -49,7 +49,10 @@ export class CuaInputTurns {
   /** @param ctx - Provider scope owning the lifecycle listeners. */
   constructor(private readonly ctx: Context) {}
 
-  /** @returns Exact listener disposers for the runtime effect to retain through native cleanup. */
+  /**
+   * Install turn admission and finalization listeners.
+   * @returns Exact disposers for the runtime effect to retain through native cleanup.
+   */
   *install(): Generator<() => void> {
     const ctx = this.ctx
     yield ctx.on('agent/pre-step', (event, next) => {
