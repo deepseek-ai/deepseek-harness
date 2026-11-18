@@ -433,7 +433,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewRequestReviews(UNSERVED, [{ kind: 'user', login: 'mona' }], signal),
       () => panel.reviewReviewerCandidates(UNSERVED, '', signal),
       () => panel.reviewUpdateBranch(UNSERVED, 'merge', HEAD, signal),
-      () => panel.reviewStage(opened.session, UNSERVED, signal),
+      () => panel.reviewStage(opened.session.id, UNSERVED, signal),
     ]
 
     for (const request of requests) {
@@ -462,7 +462,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewText(url, HEAD, 'src/a.ts', aborted),
       () => panel.reviewViewed(url, HEAD, aborted),
       () => panel.reviewMarkReady(url, aborted),
-      () => panel.reviewStage(opened.session, url, aborted),
+      () => panel.reviewStage(opened.session.id, url, aborted),
     ]
 
     for (const request of requests) await expect(request()).rejects.toThrow('closed')
@@ -475,7 +475,7 @@ describe('forgePanel.reviewStage', () => {
     const opened = await page()
     const bound = (): readonly unknown[] => opened.ctx.forgeSession.changeRequests(opened.session).map(entry => [entry.url, entry.origin])
 
-    await opened.ctx.forgePanel.reviewStage(opened.session, pullUrl(7), signal)
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, pullUrl(7), signal)
     expect(bound()).toEqual([])
     sendPrompt(opened.agent, 'Review this change')
     expect(bound()).toEqual([[pullUrl(7), 'tracked']])
@@ -489,16 +489,23 @@ describe('forgePanel.reviewStage', () => {
     const opened = await page()
     const bound = (): readonly string[] => opened.ctx.forgeSession.changeRequests(opened.session).map(entry => entry.url)
 
-    await opened.ctx.forgePanel.reviewStage(opened.session, pullUrl(7), signal)
-    await opened.ctx.forgePanel.reviewStage(opened.session, null, signal)
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, pullUrl(7), signal)
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, null, signal)
     sendPrompt(opened.agent, 'Review this change')
     expect(bound()).toEqual([])
 
     const { registration } = await registerViewer(opened)
-    await opened.ctx.forgePanel.reviewStage(opened.session, 'https://view.test/octo/demo/pull/3', signal)
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, 'https://view.test/octo/demo/pull/3', signal)
     await registration.dispose()
     sendPrompt(opened.agent, 'Review that change')
     expect(bound()).toEqual([])
+  })
+  it('forgets a choice staged for a Session that leaves the store before its next message', async () => {
+    const opened = await page()
+    await opened.ctx.forgePanel.reviewStage(opened.session.id, pullUrl(7), signal)
+    opened.ctx.emit('session/disposed', opened.session)
+    sendPrompt(opened.agent, 'Review this change')
+    expect(opened.ctx.forgeSession.changeRequests(opened.session)).toEqual([])
   })
 })
 
