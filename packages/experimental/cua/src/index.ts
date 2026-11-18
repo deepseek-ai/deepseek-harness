@@ -266,7 +266,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   ctx.effect(function* () {
     if (inputTurns) yield* inputTurns.install()
     yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
-    const closeNative = ctx.effect(() => async () => {
+    yield async () => {
       lifetime.abort()
       const permissions = Promise.allSettled([access.dispose()])
       await Promise.allSettled(pending.keys())
@@ -276,7 +276,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const errors: unknown[] = []
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) ctx.logger.error(new AggregateError(errors, 'dsh-cua helper cleanup failed'))
-    }, 'dsh-cua.native-cleanup')
+    }
     const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemPointer?: boolean) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
@@ -446,7 +446,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       },
     }
     yield installCuaTools(ctx, config, tool, guidance, programGuidance)
-    yield closeNative
   }, 'dsh-cua.runtime')
 }
 
