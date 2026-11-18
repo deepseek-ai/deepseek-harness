@@ -3,7 +3,7 @@
 import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import type { ChangeRequestKey, ChangeRequestRef, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestKey, ChangeRequestRef, ChangeRequestWatchOptions, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -33,6 +33,8 @@ declare module '@deepseek-ai/cordis' {
 interface SessionWatch {
   readonly session: Session
   readonly listeners: Set<SessionChangeRequestsListener>
+  /** How fresh a status the Session's first watcher asked for, which every forge watch of the Session asks for. */
+  readonly options: ChangeRequestWatchOptions
   /** Projection bindings that `forgeWatches` and the last notification reflect. */
   bindings: readonly BindingState[]
   readonly forgeWatches: Map<ChangeRequestKey, () => void>
@@ -184,19 +186,21 @@ export class ForgeSessionService extends Service {
   /**
    * Watch a Session's visible change requests as an effect on the calling
    * fiber. Every visible change request that a provider recognizes is polled
-   * through `ctx.forge` while the Session has a watcher. Listeners receive the
+   * for its snapshot through `ctx.forge` while the Session has a watcher. Listeners receive the
    * complete list after each later binding or provider change, or polling result; read the
    * current list with {@link changeRequests}. Listeners must not throw; a
    * thrown error is logged and skipped.
    * @param session - Session to watch.
    * @param listener - receives the complete visible list.
+   * @param options - when the Session's first watcher needs a status newer than the latest one; a later watcher's
+   * options change nothing.
    * @returns the disposer that stops this watch.
    */
-  watch(session: Session, listener: SessionChangeRequestsListener): () => void {
+  watch(session: Session, listener: SessionChangeRequestsListener, options: ChangeRequestWatchOptions = {}): () => void {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(session)
       if (watch === undefined) {
-        watch = { session, listeners: new Set(), bindings: this.state(session).bindings, forgeWatches: new Map() }
+        watch = { session, listeners: new Set(), options, bindings: this.state(session).bindings, forgeWatches: new Map() }
         this.watches.set(session, watch)
         this.sync(watch)
       }
@@ -336,7 +340,7 @@ export class ForgeSessionService extends Service {
       watch.forgeWatches.delete(key)
     }
     for (const [key, ref] of wanted) {
-      if (!watch.forgeWatches.has(key)) watch.forgeWatches.set(key, this.home.forge.watch(ref, () => { this.notify(watch) }))
+      if (!watch.forgeWatches.has(key)) watch.forgeWatches.set(key, this.home.forge.watch(ref, () => { this.notify(watch) }, watch.options))
     }
   }
 

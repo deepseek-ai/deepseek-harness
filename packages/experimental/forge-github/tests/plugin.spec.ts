@@ -100,6 +100,8 @@ describe('forge-github plugin', () => {
     [{ maxCommits: 2.5 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxReviewThreads: 0 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
     [{ maxReviewThreads: 2.5 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
+    [{ briefBatchSize: 0 }, 'forge-github: briefBatchSize must be a positive safe integer'],
+    [{ briefBatchSize: 2.5 }, 'forge-github: briefBatchSize must be a positive safe integer'],
     [{ maxViewerItems: 0 }, 'forge-github: maxViewerItems must be a positive safe integer'],
     [{ maxViewerItems: 101 }, 'forge-github: maxViewerItems must be no greater than 100'],
   ])('rejects %j at load', async (config, message) => {

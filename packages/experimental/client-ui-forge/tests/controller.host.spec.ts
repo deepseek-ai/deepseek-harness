@@ -189,6 +189,25 @@ describe('forgePanel.follow', () => {
     expect(opened.provider.probes).toEqual(['fake.test'])
   })
 
+  it.each([
+    ['at once when its latest status is older than statusMaxAgeMs', { statusMaxAgeMs: 1 }, [[7], [7]]],
+    ['with the regular poll when its latest status is younger', {}, [[7]]],
+  ])('reads a bound change request that another watcher already read %s, when the panel starts', async (_, config, fetches) => {
+    const { repo } = await project()
+    const opened = await open(repo, config)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    // Another watcher, as the review page is, read the status before the panel starts; it ends with the context.
+    opened.ctx.forge.watch({ repository: demo, number: 7 }, () => {})
+    await vi.waitFor(() => { expect(opened.provider.fetches).toEqual([[7]]) })
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    const follower = reader(opened)
+    await follower.until(state => polled(state, pullUrl(7)))
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    expect(opened.provider.fetches).toEqual(fetches)
+  })
+
   it('binds the open change requests of the upstream branch once per remote and branch, and looks again on refresh', async () => {
     const { repo } = await project()
     await git(repo, 'checkout', '-b', 'feat')
@@ -2253,6 +2272,8 @@ describe('forgePanel configuration', () => {
     [{ graceMs: 1.5 }, 'forge-panel: graceMs must be a positive integer no greater than 2147483647'],
     [{ maxOutputBytes: -1 }, 'forge-panel: maxOutputBytes must be a positive integer no greater than 2147483647'],
     [{ readinessTimeoutMs: 2_147_483_648 }, 'forge-panel: readinessTimeoutMs must be a positive integer no greater than 2147483647'],
+    [{ statusMaxAgeMs: 0 }, 'forge-panel: statusMaxAgeMs must be a positive integer no greater than 2147483647'],
+    [{ statusMaxAgeMs: 1.5 }, 'forge-panel: statusMaxAgeMs must be a positive integer no greater than 2147483647'],
     [{ maxBranches: 0 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],

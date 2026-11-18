@@ -1279,6 +1279,11 @@ export interface Config {
    * request's update time does not change when a thread is resolved.
    */
   reviewRefreshMs?: number
+  /**
+   * Age in milliseconds past which the status of a change request is read at once when a Session's panel or the
+   * review page starts to show it.
+   */
+  statusMaxAgeMs?: number
   /** Deadline in milliseconds for one lens `classify` call. */
   lensTimeoutMs?: number
   /** Most UTF-8 bytes of file text one lens `classify` call may read. */
@@ -1328,7 +1333,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:767`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:821`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1369,6 +1374,8 @@ export interface Config {
    * one review read, which reports itself truncated past it.
    */
   maxReviewThreads?: number
+  /** Most pull requests one brief query reads; a brief read of more pull requests on one host sends several queries in turn. */
+  briefBatchSize?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number
   /** Most files whose viewed marks one read lists; GitHub lists at most 3,000 files of a pull request. */

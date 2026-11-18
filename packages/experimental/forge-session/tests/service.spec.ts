@@ -321,6 +321,25 @@ describe('forgeSession watch', () => {
     return listener.mock.lastCall?.[0] ?? []
   }
 
+  it('asks for a status no older than its first watcher accepts, for each change request it polls', async () => {
+    const { ctx, provider, session } = await open()
+    create(session, 'create', pullUrl(1))
+    const other = ctx.sessions.create()
+    create(other, 'other', pullUrl(1))
+    // Another watcher read the status before the Sessions are watched.
+    const stop = ctx.forge.watch(pull(1), () => {})
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1]]) })
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    ctx.forgeSession.watch(other, () => {})
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(provider.fetches).toEqual([[1]])
+
+    ctx.forgeSession.watch(session, () => {}, { maxAgeMs: 1 })
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1], [1]]) })
+    stop()
+  })
+
   it('polls visible change requests and notifies after results and binding changes', async () => {
     const { ctx, provider, session } = await open()
     create(session, 'create', pullUrl(1))

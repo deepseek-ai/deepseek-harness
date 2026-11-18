@@ -1340,7 +1340,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forge',
     summary: 'Registry of forge providers.',
-    description: 'Registry of forge providers. Watchers of one change request share a single polling loop; each forge has at most one fetch in flight, which batches every due change request of that forge.',
+    description: 'Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level.',
     methods: [
       {
         signature: 'register(provider: ForgeProvider): () => Promise<void>',
@@ -1541,9 +1541,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge.'],
       },
       {
-        signature: 'watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void',
-        description: 'Watch one change request as an effect on the calling fiber. The first watcher starts polling at once; listeners receive every later result, and `latest` returns the current one. Polling stops when the last watcher leaves. Listeners must not throw; a thrown error is logged and skipped.',
-        parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives each polling result.' }],
+        signature: 'watch(ref: ChangeRequestRef, listener: ChangeRequestListener, options: ChangeRequestWatchOptions = {}): () => void',
+        description: 'Watch the snapshot of one change request as an effect on the calling fiber. Its first snapshot watcher polls it at once, and a later one does when `options.maxAgeMs` is given and the latest result is older. Listeners receive every later snapshot poll result, and `latest` returns the current one. While a snapshot watcher remains, polls read the snapshot; polling stops when the last watcher of the snapshot and the brief leaves. Listeners must not throw; a thrown error is logged and skipped.',
+        parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives each snapshot poll result.' }, { name: 'options', description: 'when the watcher needs a status newer than the latest one.' }],
+        returns: 'the disposer that stops this watch.',
+      },
+      {
+        signature: 'watchBrief(ref: ChangeRequestRef, listener: ChangeRequestBriefListener, known?: ChangeRequestKnownState): () => void',
+        description: 'Watch the brief of one change request as an effect on the calling fiber. Listeners receive the brief of every later poll result: of a brief read while only brief watchers remain, and of a snapshot read otherwise. The first watcher of a change request polls it at once, or as `known` times it. Polling stops when the last watcher of the snapshot and the brief leaves. Listeners must not throw; a thrown error is logged and skipped.',
+        parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'listener', description: 'receives the brief of each poll result.' }, { name: 'known', description: 'the state the caller last saw, which times the first poll of a change request without a watcher.' }],
         returns: 'the disposer that stops this watch.',
       },
       {
@@ -1553,9 +1559,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined',
-        description: 'Read the latest polling result of a watched change request.',
+        description: 'Read the latest snapshot poll result of a watched change request.',
         parameters: [{ name: 'ref', description: 'change request to read.' }],
-        returns: 'the latest result, or undefined before the first result or without a watch.',
+        returns: 'the latest result, or undefined before the first snapshot poll settled or without a watch.',
       },
     ],
   },
@@ -1968,9 +1974,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }],
       },
       {
-        signature: 'watch(session: Session, listener: SessionChangeRequestsListener): () => void',
-        description: 'Watch a Session\'s visible change requests as an effect on the calling fiber. Every visible change request that a provider recognizes is polled through `ctx.forge` while the Session has a watcher. Listeners receive the complete list after each later binding or provider change, or polling result; read the current list with changeRequests. Listeners must not throw; a thrown error is logged and skipped.',
-        parameters: [{ name: 'session', description: 'Session to watch.' }, { name: 'listener', description: 'receives the complete visible list.' }],
+        signature: 'watch(session: Session, listener: SessionChangeRequestsListener, options: ChangeRequestWatchOptions = {}): () => void',
+        description: 'Watch a Session\'s visible change requests as an effect on the calling fiber. Every visible change request that a provider recognizes is polled for its snapshot through `ctx.forge` while the Session has a watcher. Listeners receive the complete list after each later binding or provider change, or polling result; read the current list with changeRequests. Listeners must not throw; a thrown error is logged and skipped.',
+        parameters: [{ name: 'session', description: 'Session to watch.' }, { name: 'listener', description: 'receives the complete visible list.' }, { name: 'options', description: 'when the Session\'s first watcher needs a status newer than the latest one; a later watcher\'s options change nothing.' }],
         returns: 'the disposer that stops this watch.',
       },
     ],
@@ -6687,6 +6693,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ButtonProps {\n    readonly label: string;\n    readonly hotkey?: string | undefined;\n    readonly disabled?: boolean | undefined;\n    readonly onPress?: (() => unknown) | undefined;\n}',
   },
   {
+    name: 'ChangeRequestBrief',
+    declaration: 'export type ChangeRequestBrief = Pick<ChangeRequestSnapshot, \'ref\' | \'url\' | \'title\' | \'state\' | \'draft\' | \'mergeability\' | \'reviewDecision\' | \'checksRollup\'>;',
+  },
+  {
+    name: 'ChangeRequestBriefListener',
+    declaration: 'export type ChangeRequestBriefListener = (update: ChangeRequestBriefUpdate) => void;',
+  },
+  {
+    name: 'ChangeRequestBriefUpdate',
+    declaration: 'export type ChangeRequestBriefUpdate = {\n    readonly key: ChangeRequestKey;\n    readonly fetchedAt: number;\n} & ({\n    readonly brief: ChangeRequestBrief;\n} | {\n    readonly failure: ForgeFailure;\n});',
+  },
+  {
     name: 'ChangeRequestCheck',
     declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n    readonly startedAt: string | null;\n    readonly completedAt: string | null;\n    readonly rerun: ForgeCheckId | null;\n}',
   },
@@ -6701,6 +6719,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ChangeRequestKey',
     declaration: 'export type ChangeRequestKey = Branded<\'ChangeRequestKey\'>;',
+  },
+  {
+    name: 'ChangeRequestKnownState',
+    declaration: 'export interface ChangeRequestKnownState extends Pick<ChangeRequestBrief, \'state\' | \'mergeability\' | \'checksRollup\'> {\n    readonly fetchedAt: number;\n}',
   },
   {
     name: 'ChangeRequestLabel',
@@ -6741,6 +6763,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ChangeRequestViewerReview',
     declaration: 'export interface ChangeRequestViewerReview {\n    readonly verdict: ReviewVerdict;\n    readonly reviewedSha: string | null;\n}',
+  },
+  {
+    name: 'ChangeRequestWatchOptions',
+    declaration: 'export interface ChangeRequestWatchOptions {\n    readonly maxAgeMs?: number;\n}',
   },
   {
     name: 'ChangeResult',
@@ -7664,7 +7690,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readin /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapsho /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',

@@ -627,6 +627,11 @@ export interface Config {
    * request's update time does not change when a thread is resolved.
    */
   reviewRefreshMs?: number
+  /**
+   * Age in milliseconds past which the status of a change request is read at once when a Session's panel or the
+   * review page starts to show it.
+   */
+  statusMaxAgeMs?: number
   /** Deadline in milliseconds for one lens `classify` call. */
   lensTimeoutMs?: number
   /** Most UTF-8 bytes of file text one lens `classify` call may read. */

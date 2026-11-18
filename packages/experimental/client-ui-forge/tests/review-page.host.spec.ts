@@ -217,6 +217,20 @@ describe('forgePanel.reviewChangeRequest', () => {
     expect(opened.ctx.forge.latest(ref(7))).toBeUndefined()
   })
 
+  it('reads a change request at once for a stream that starts once its latest status is older than statusMaxAgeMs', async () => {
+    const opened = await page({ statusMaxAgeMs: 1 })
+    const first = changeRequest(opened, pullUrl(7))
+    await first.until(polled)
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    // The stream watches the change request once its first frame is pulled.
+    const joined = changeRequest(opened, pullUrl(7))
+    await joined.pull()
+
+    await vi.waitFor(() => { expect(opened.provider.fetches).toEqual([[7], [7]]) })
+    await Promise.all([first.stop(), joined.stop()])
+  })
+
   it('names how the change request\'s provider calls itself, and nothing once that provider left', async () => {
     const opened = await page()
     const { registration } = await registerViewer(opened)

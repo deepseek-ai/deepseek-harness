@@ -2,7 +2,8 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
+  BranchUpdateRequest, ChangeRequestBrief, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot,
+  ForgeActionFailure,
   ForgeCommitList, ForgeFailure, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery,
   ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
@@ -14,10 +15,10 @@ import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
 import { readComparison } from './compare.ts'
 import {
-  actionsRunOf, CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
-  mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
+  actionsRunOf, briefQuery, CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapBriefResponse, mapCheckPageResponse, mapHeadResponse,
+  mapPullRequestCommitsResponse, mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
 } from './graphql.ts'
-import type { PageResult, SnapshotPages } from './graphql.ts'
+import type { PageResult, SnapshotPages, StatusQuery } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 import { readViewed, writeViewed } from './viewed.ts'
@@ -53,6 +54,8 @@ export interface GitHubLimits {
   readonly maxOutputBytes: number
   /** Most review threads counted per pull request in one status read, and read in one review read. */
   readonly maxReviewThreads: number
+  /** Most pull requests one brief query reads. */
+  readonly briefBatchSize: number
   /** Most commits one commit listing returns. */
   readonly maxCommits: number
   /** Most files whose viewed marks one read lists. */
@@ -101,8 +104,8 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check and review bytes, counted and read review threads, listed commits, listed
-   * viewed files, and listed viewer pull requests.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, pull requests per brief
+   * query, listed commits, listed viewed files, and listed viewer pull requests.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
@@ -179,6 +182,45 @@ export class GitHubProvider implements ForgeProvider {
     }
     for (const [host, group] of byHost) {
       for (const [key, result] of await this.fetchHost(host, group, signal)) results.set(key, result)
+    }
+    return results
+  }
+
+  /**
+   * Read briefs through GraphQL, at most `briefBatchSize` pull requests of one host per query, one query after
+   * another. Every query is built before the first request. A query whose `gh` run cannot start, times out, or prints
+   * over its limit, and one GitHub refuses, fails only its own pull requests.
+   * @param refs - pull requests to read.
+   * @param signal - cancellation of the whole read.
+   * @returns one result for each pull request in `refs`.
+   * @throws with `signal.reason` once cancelled, without another request, and before any request when a reference
+   * cannot be inlined.
+   */
+  async fetchBriefs(
+    refs: readonly ChangeRequestRef[],
+    signal: AbortSignal,
+  ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>> {
+    const byHost = new Map<string, ChangeRequestRef[]>()
+    const results = new Map<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>()
+    for (const ref of refs) {
+      const failure = this.hostFailure(ref.repository.host)
+      if (failure !== undefined) results.set(changeRequestKey(ref), failure)
+      else byHost.set(ref.repository.host, [...byHost.get(ref.repository.host) ?? [], ref])
+    }
+    const queries: { readonly host: string; readonly query: StatusQuery }[] = []
+    for (const [host, group] of byHost) {
+      for (let start = 0; start < group.length; start += this.limits.briefBatchSize) {
+        queries.push({ host, query: briefQuery(group.slice(start, start + this.limits.briefBatchSize)) })
+      }
+    }
+    for (const { host, query } of queries) {
+      const output = await this.statusOutput(host, ['-f', `query=${query.document}`], signal)
+      let briefs: ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>
+      if ('stdout' in output) {
+        const body = parseJson(output.stdout)
+        briefs = hasGraphqlFields(body) ? mapBriefResponse(body, query) : failAll(query, responseFailure(output, body))
+      } else briefs = failAll(query, output)
+      for (const [key, result] of briefs) results.set(key, result)
     }
     return results
   }
@@ -516,7 +558,7 @@ export class GitHubProvider implements ForgeProvider {
     const continuation = async <T>(
       variables: readonly string[], map: (value: unknown) => PageResult<T>,
     ): Promise<PageResult<T>> => {
-      const page = await this.continuation(host, variables, signal)
+      const page = await this.statusOutput(host, variables, signal)
       if (!('stdout' in page)) return { ok: false, failure: page }
       if (overBudget(page)) return { ok: false, failure: tooLarge }
       const value = parseJson(page.stdout)
@@ -525,24 +567,23 @@ export class GitHubProvider implements ForgeProvider {
     const threads: SnapshotPages['threads'] = async (id, cursor, first) => await continuation(
       ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], mapThreadPageResponse)
     if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
-    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (bytes > this.limits.maxOutputBytes) return failAll(query, tooLarge)
     if (hasGraphqlFields(body)) {
       return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => await continuation(
         ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], mapCheckPageResponse) })
     }
-    const failure = responseFailure(output, body)
-    return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
+    return failAll(query, responseFailure(output, body))
   }
 
   /**
-   * Run one continuation query of a snapshot read.
-   * @param host - host the snapshot was read from.
+   * Run one brief query, or one continuation query of a snapshot read.
+   * @param host - host the status is read from.
    * @param variables - `gh api graphql` field flags, the query first.
-   * @param signal - cancellation of the snapshot read.
+   * @param signal - cancellation of the status read.
    * @returns the output, or the failure of a `gh` that cannot start, times out, or prints over its limit.
    * @throws with `signal.reason` when the read is cancelled.
    */
-  private async continuation(host: string, variables: readonly string[], signal: AbortSignal): Promise<GhOutput | ForgeFailure> {
+  private async statusOutput(host: string, variables: readonly string[], signal: AbortSignal): Promise<GhOutput | ForgeFailure> {
     signal.throwIfAborted()
     try {
       return await this.gh(['api', 'graphql', '--hostname', host, ...variables], signal)
@@ -551,6 +592,11 @@ export class GitHubProvider implements ForgeProvider {
       return processFailure(error)
     }
   }
+}
+
+/** The same failure for every pull request of a status query. */
+function failAll(query: StatusQuery, failure: ForgeFailure): Map<ChangeRequestKey, ForgeFailure> {
+  return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
 }
 
 /**

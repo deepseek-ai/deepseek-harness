@@ -3,11 +3,12 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ChangeRequestBrief, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider,
+  ForgeReadiness, ForgeRepository, MergeRequest,
 } from '../src/types.ts'
 
 type FetchResult = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
+type BriefResult = ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>
 
 /** Repository served by the default fake provider. */
 export const demo: ForgeRepository = { forge: 'fake', host: 'fake.test', owner: 'Octo', name: 'Demo' }
@@ -139,6 +140,28 @@ export class FakeProvider implements ForgeProvider {
 
   fileUrl(target: ChangeRequestRef, commit: string, path: string): string {
     return `https://${target.repository.host}/${target.repository.owner}/${target.repository.name}/file/${commit}/${path}`
+  }
+}
+
+/** The brief a snapshot holds, without its other fields. */
+export function brief(value: ChangeRequestSnapshot): ChangeRequestBrief {
+  const { ref: target, url, title, state, draft, mergeability, reviewDecision, checksRollup } = value
+  return { ref: target, url, title, state, draft, mergeability, reviewDecision, checksRollup }
+}
+
+/** A {@link FakeProvider} that also reads briefs: those of `results`, unless `briefImpl` answers. */
+export class BriefProvider extends FakeProvider {
+  readonly briefFetches: (readonly ChangeRequestRef[])[] = []
+  briefImpl: ((refs: readonly ChangeRequestRef[], signal: AbortSignal) => Promise<BriefResult>) | undefined
+
+  async fetchBriefs(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<BriefResult> {
+    this.briefFetches.push(refs)
+    if (this.briefImpl !== undefined) return await this.briefImpl(refs, signal)
+    return new Map(refs.map((target) => {
+      const key = changeRequestKey(target)
+      const result = this.results.get(key) ?? { code: 'not-found', message: 'missing' }
+      return [key, 'code' in result ? result : brief(result)] as const
+    }))
   }
 }
 

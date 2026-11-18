@@ -1,6 +1,6 @@
 /** Poll cadence for watched change requests. */
 
-import type { ChangeRequestSnapshot, ForgeFailure } from './types.ts'
+import type { ChangeRequestBrief, ForgeFailure } from './types.ts'
 
 /** Resolved intervals that pace polling. */
 export interface PollIntervals {
@@ -16,13 +16,13 @@ export interface PollIntervals {
  * Choose the delay before the next poll of one change request. Failures back
  * off exponentially from the active interval; merged change requests stop
  * polling, while closed ones use the idle cadence to detect reopening.
- * @param result - latest snapshot or failure.
+ * @param result - state of the latest snapshot or brief, or the latest failure.
  * @param failures - consecutive failures, counting `result` when it is one.
  * @param intervals - configured cadence.
  * @returns the delay in milliseconds, or undefined after a terminal state.
  */
 export function nextPollDelay(
-  result: ChangeRequestSnapshot | ForgeFailure,
+  result: Pick<ChangeRequestBrief, 'state' | 'mergeability' | 'checksRollup'> | ForgeFailure,
   failures: number,
   intervals: PollIntervals,
 ): number | undefined {

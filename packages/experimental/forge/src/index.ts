@@ -6,8 +6,9 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
-  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot,
-  ChangeRequestUpdate, Config,
+  BranchUpdateRequest, ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestBriefUpdate, ChangeRequestDescription, ChangeRequestKey,
+  ChangeRequestKnownState, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ChangeRequestWatchOptions,
+  Config,
   ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest,
   ForgeReviewData,
   ForgeReviewChange, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
@@ -42,7 +43,19 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-type FetchResults = ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
+/** What a poll reads: the brief of a change request, or the snapshot that holds it. */
+type StatusLevel = 'brief' | 'snapshot'
+
+/** The results of one provider read, by what the provider returned. */
+type Reading =
+  | { readonly kind: 'snapshot'; readonly results: ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure> }
+  | { readonly kind: 'brief'; readonly results: ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure> }
+
+/** The settled result of one poll of a watch; a failure names the level the poll read at. */
+type Outcome =
+  | { readonly snapshot: ChangeRequestSnapshot }
+  | { readonly brief: ChangeRequestBrief }
+  | { readonly failure: ForgeFailure; readonly level: StatusLevel }
 
 interface Registration {
   readonly provider: ForgeProvider
@@ -53,7 +66,11 @@ interface Registration {
 interface Watch {
   readonly key: ChangeRequestKey
   readonly ref: ChangeRequestRef
+  /** Watchers of the snapshot; polls read the snapshot while there is one, and the brief otherwise. */
   readonly listeners: Set<ChangeRequestListener>
+  /** Watchers of the brief, which every poll result reaches. */
+  readonly briefListeners: Set<ChangeRequestBriefListener>
+  /** Result of the latest snapshot poll; it stays while only brief watchers remain. */
   latest: ChangeRequestUpdate | undefined
   /** Epoch milliseconds of the next poll; undefined while in flight or after a terminal state. */
   dueAt: number | undefined
@@ -64,8 +81,9 @@ interface Watch {
 
 /**
  * Registry of forge providers. Watchers of one change request share a single
- * polling loop; each forge has at most one fetch in flight, which batches
- * every due change request of that forge.
+ * polling loop, which reads its snapshot while a snapshot watcher remains and
+ * its brief otherwise. Each forge has at most one snapshot fetch and one brief
+ * fetch in flight; each batches every due change request of that forge at its level.
  */
 export class ForgeService extends Service {
   static Config: z<Config> = z.object({
@@ -78,6 +96,7 @@ export class ForgeService extends Service {
   private readonly config: Required<Config>
   private readonly providers = new Map<string, Registration>()
   private readonly watches = new Map<ChangeRequestKey, Watch>()
+  /** Lanes with a fetch in flight, as {@link laneOf} names them. */
   private readonly fetching = new Set<string>()
   private readonly pending = new Set<Promise<void>>()
   private readonly lifetime = new AbortController()
@@ -141,7 +160,8 @@ export class ForgeService extends Service {
         this.providers.delete(provider.forge)
         registration.lifetime.abort(new Error(`forge: provider "${provider.forge}" was unregistered`))
         for (const watch of [...this.watches.values()]) {
-          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge), undefined)
+          if (watch.ref.repository.forge !== provider.forge) continue
+          this.settle(watch, { failure: this.missing(provider.forge), level: levelOf(watch) }, undefined)
         }
         this.providersChanged(provider.forge)
         this.schedule()
@@ -575,33 +595,59 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Watch one change request as an effect on the calling fiber. The first
-   * watcher starts polling at once; listeners receive every later result,
-   * and `latest` returns the current one. Polling stops when the last watcher
-   * leaves. Listeners must not throw; a thrown error is logged and skipped.
+   * Watch the snapshot of one change request as an effect on the calling fiber. Its first snapshot watcher polls it at
+   * once, and a later one does when `options.maxAgeMs` is given and the latest result is older. Listeners receive every
+   * later snapshot poll result, and `latest` returns the current one. While a snapshot watcher remains, polls read the
+   * snapshot; polling stops when the last watcher of the snapshot and the brief leaves. Listeners must not throw; a
+   * thrown error is logged and skipped.
    * @param ref - change request to poll.
-   * @param listener - receives each polling result.
+   * @param listener - receives each snapshot poll result.
+   * @param options - when the watcher needs a status newer than the latest one.
    * @returns the disposer that stops this watch.
    */
-  watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void {
-    const key = changeRequestKey(ref)
+  watch(ref: ChangeRequestRef, listener: ChangeRequestListener, options: ChangeRequestWatchOptions = {}): () => void {
     const dispose = this.ctx.effect(() => {
-      let watch = this.watches.get(key)
-      if (watch === undefined) {
-        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0, staleHead: undefined }
-        this.watches.set(key, watch)
-        this.schedule()
-      }
-      const owned = watch
-      owned.listeners.add(listener)
+      const now = Date.now()
+      const watch = this.open(ref, now)
+      const { latest } = watch
+      const outdated = latest === undefined ? watch.listeners.size === 0
+        : options.maxAgeMs !== undefined && now - latest.fetchedAt > options.maxAgeMs
+      watch.listeners.add(listener)
+      if (outdated) watch.dueAt = now
+      this.schedule()
       return () => {
-        owned.listeners.delete(listener)
-        if (owned.listeners.size === 0 && this.watches.get(key) === owned) {
-          this.watches.delete(key)
-          this.schedule()
-        }
+        watch.listeners.delete(listener)
+        this.close(watch)
       }
     }, 'forge.watch()')
+    return () => void dispose()
+  }
+
+  /**
+   * Watch the brief of one change request as an effect on the calling fiber. Listeners receive the brief of every
+   * later poll result: of a brief read while only brief watchers remain, and of a snapshot read otherwise. The first
+   * watcher of a change request polls it at once, or as `known` times it. Polling stops when the last watcher of the
+   * snapshot and the brief leaves. Listeners must not throw; a thrown error is logged and skipped.
+   * @param ref - change request to poll.
+   * @param listener - receives the brief of each poll result.
+   * @param known - the state the caller last saw, which times the first poll of a change request without a watcher.
+   * @returns the disposer that stops this watch.
+   */
+  watchBrief(ref: ChangeRequestRef, listener: ChangeRequestBriefListener, known?: ChangeRequestKnownState): () => void {
+    const dispose = this.ctx.effect(() => {
+      let first: number | undefined = Date.now()
+      if (known !== undefined) {
+        const delay = nextPollDelay(known, 0, this.config)
+        first = delay === undefined ? undefined : known.fetchedAt + delay
+      }
+      const watch = this.open(ref, first)
+      watch.briefListeners.add(listener)
+      this.schedule()
+      return () => {
+        watch.briefListeners.delete(listener)
+        this.close(watch)
+      }
+    }, 'forge.watchBrief()')
     return () => void dispose()
   }
 
@@ -619,12 +665,30 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Read the latest polling result of a watched change request.
+   * Read the latest snapshot poll result of a watched change request.
    * @param ref - change request to read.
-   * @returns the latest result, or undefined before the first result or without a watch.
+   * @returns the latest result, or undefined before the first snapshot poll settled or without a watch.
    */
   latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined {
     return this.watches.get(changeRequestKey(ref))?.latest
+  }
+
+  /** The watch of a change request, created with its first poll at `dueAt` when it has none. */
+  private open(ref: ChangeRequestRef, dueAt: number | undefined): Watch {
+    const key = changeRequestKey(ref)
+    let watch = this.watches.get(key)
+    if (watch === undefined) {
+      watch = { key, ref, listeners: new Set(), briefListeners: new Set(), latest: undefined, dueAt, failures: 0, staleHead: undefined }
+      this.watches.set(key, watch)
+    }
+    return watch
+  }
+
+  /** Stop polling a change request once its last watcher left. */
+  private close(watch: Watch): void {
+    if (watch.listeners.size > 0 || watch.briefListeners.size > 0) return
+    this.watches.delete(watch.key)
+    this.schedule()
   }
 
   /** Poll a watched change request at once after the first `stale` read or write at `headSha`; later ones wait for the regular poll. */
@@ -724,7 +788,7 @@ export class ForgeService extends Service {
     if (this.lifetime.signal.aborted) return
     let next: number | undefined
     for (const watch of this.watches.values()) {
-      if (watch.dueAt === undefined || this.fetching.has(watch.ref.repository.forge)) continue
+      if (watch.dueAt === undefined || this.fetching.has(laneOf(watch.ref.repository.forge, levelOf(watch)))) continue
       next = next === undefined ? watch.dueAt : Math.min(next, watch.dueAt)
     }
     if (next === undefined) return
@@ -733,41 +797,46 @@ export class ForgeService extends Service {
 
   private poll(): void {
     const now = Date.now()
-    const due = new Map<string, Watch[]>()
+    const due = new Map<string, { readonly forge: string; readonly level: StatusLevel; readonly batch: Watch[] }>()
     for (const watch of this.watches.values()) {
       const forge = watch.ref.repository.forge
-      if (watch.dueAt === undefined || watch.dueAt > now || this.fetching.has(forge)) continue
-      const batch = due.get(forge)
-      if (batch === undefined) due.set(forge, [watch])
-      else batch.push(watch)
+      const level = levelOf(watch)
+      const lane = laneOf(forge, level)
+      if (watch.dueAt === undefined || watch.dueAt > now || this.fetching.has(lane)) continue
+      const entry = due.get(lane)
+      if (entry === undefined) due.set(lane, { forge, level, batch: [watch] })
+      else entry.batch.push(watch)
     }
-    for (const [forge, batch] of due) {
-      const task = this.fetch(forge, batch)
+    for (const { forge, level, batch } of due.values()) {
+      const task = this.fetch(forge, level, batch)
       this.pending.add(task)
       void task.then(() => this.pending.delete(task))
     }
     this.schedule()
   }
 
-  /** Fetch one forge's batch; never rejects. */
-  private async fetch(forge: string, batch: readonly Watch[]): Promise<void> {
-    this.fetching.add(forge)
+  /** Fetch one forge's batch at one level, as briefs when the level is `brief` and the provider reads them; never rejects. */
+  private async fetch(forge: string, level: StatusLevel, batch: readonly Watch[]): Promise<void> {
+    const lane = laneOf(forge, level)
+    this.fetching.add(lane)
     for (const watch of batch) watch.dueAt = undefined
-    let results: FetchResults | undefined
-    let failure: ForgeFailure | undefined
+    let read: Reading | ForgeFailure
     const registration = this.providers.get(forge)
     try {
       if (registration === undefined) {
-        failure = this.missing(forge)
+        read = this.missing(forge)
       } else {
         using timeout = deadline(this.lifetime.signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
-        results = await this.invoke(registration, timeout.signal,
-          (provider, operation) => provider.fetch(batch.map(watch => watch.ref), operation))
+        const refs = batch.map(watch => watch.ref)
+        read = await this.invoke(registration, timeout.signal, async (provider, operation): Promise<Reading> =>
+          level === 'brief' && provider.fetchBriefs !== undefined
+            ? { kind: 'brief', results: await provider.fetchBriefs(refs, operation) }
+            : { kind: 'snapshot', results: await provider.fetch(refs, operation) })
       }
     } catch (error) {
-      failure = { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
+      read = { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
     } finally {
-      this.fetching.delete(forge)
+      this.fetching.delete(lane)
     }
     if (this.lifetime.signal.aborted) return
     if (registration !== this.providers.get(forge)) {
@@ -776,27 +845,42 @@ export class ForgeService extends Service {
     }
     for (const watch of batch) {
       if (this.watches.get(watch.key) !== watch) continue
-      const result = failure ?? results?.get(watch.key) ?? { code: 'unavailable', message: `provider returned no result for ${watch.key}` }
-      this.settle(watch, result, watch.dueAt)
+      this.settle(watch, 'code' in read ? { failure: read, level } : outcomeOf(watch.key, level, read), watch.dueAt)
     }
     this.schedule()
   }
 
-  private settle(watch: Watch, result: ChangeRequestSnapshot | ForgeFailure, refreshAt: number | undefined): void {
+  /**
+   * Record one poll result of a watch, time its next poll, and deliver the result: a snapshot or a snapshot-level
+   * failure to both kinds of watchers, a brief or a brief-level failure to brief watchers only.
+   */
+  private settle(watch: Watch, outcome: Outcome, refreshAt: number | undefined): void {
     const fetchedAt = Date.now()
-    let update: ChangeRequestUpdate
-    if ('code' in result) {
+    const { key } = watch
+    let update: ChangeRequestUpdate | undefined
+    let brief: ChangeRequestBriefUpdate
+    let delay: number | undefined
+    if ('failure' in outcome) {
       watch.failures++
-      update = { key: watch.key, fetchedAt, failure: result }
+      brief = { key, fetchedAt, failure: outcome.failure }
+      if (outcome.level === 'snapshot') update = brief
+      delay = nextPollDelay(outcome.failure, watch.failures, this.config)
     } else {
       watch.failures = 0
-      update = { key: watch.key, fetchedAt, snapshot: result }
+      if ('snapshot' in outcome) update = { key, fetchedAt, snapshot: outcome.snapshot }
+      const state = 'snapshot' in outcome ? outcome.snapshot : outcome.brief
+      brief = { key, fetchedAt, brief: state }
+      delay = nextPollDelay(state, 0, this.config)
     }
-    watch.latest = update
-    const delay = nextPollDelay(result, watch.failures, this.config)
+    if (update !== undefined) watch.latest = update
     // A refresh requested after this fetch started needs a subsequent fetch, even for a terminal result.
     watch.dueAt = refreshAt ?? (delay === undefined ? undefined : fetchedAt + delay)
-    for (const listener of [...watch.listeners]) {
+    if (update !== undefined) this.deliver(watch.listeners, update)
+    this.deliver(watch.briefListeners, brief)
+  }
+
+  private deliver<U>(listeners: ReadonlySet<(update: U) => void>, update: U): void {
+    for (const listener of [...listeners]) {
       try {
         listener(update)
       } catch (error) {
@@ -804,6 +888,27 @@ export class ForgeService extends Service {
       }
     }
   }
+}
+
+/** The level polls of a watch read at: the snapshot while a snapshot watcher remains. */
+function levelOf(watch: Watch): StatusLevel {
+  return watch.listeners.size > 0 ? 'snapshot' : 'brief'
+}
+
+/** Name the fetch lane of one forge at one level; a level holds no colon, so no two lanes share a name. */
+function laneOf(forge: string, level: StatusLevel): string {
+  return `${level}:${forge}`
+}
+
+/** The outcome of one provider read for one of its change requests, read at `level`. */
+function outcomeOf(key: ChangeRequestKey, level: StatusLevel, reading: Reading): Outcome {
+  const missing: Outcome = { failure: { code: 'unavailable', message: `provider returned no result for ${key}` }, level }
+  if (reading.kind === 'snapshot') {
+    const result = reading.results.get(key)
+    return result === undefined ? missing : 'code' in result ? { failure: result, level } : { snapshot: result }
+  }
+  const result = reading.results.get(key)
+  return result === undefined ? missing : 'code' in result ? { failure: result, level } : { brief: result }
 }
 
 const UNSUPPORTED_VIEWER: ForgeFailure = { code: 'unsupported', message: 'This provider does not read viewer lists' }

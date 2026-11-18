@@ -113,6 +113,7 @@ export class ForgePanelController extends TypertRemoteService {
     interfacePaths: z.array(z.string()).default([]),
     maxCachedReviewBytes: z.number().default(16_777_216),
     reviewRefreshMs: z.number().default(60_000),
+    statusMaxAgeMs: z.number().default(10_000),
     lensTimeoutMs: z.number().default(60_000),
     maxLensReadBytes: z.number().default(33_554_432),
     maxCachedLensBytes: z.number().default(4_194_304),
@@ -149,8 +150,8 @@ export class ForgePanelController extends TypertRemoteService {
     const resolved = config as Required<Config>
     if (resolved.gitCommand.trim().length === 0) throw new Error('forge-panel: gitCommand must not be empty')
     for (const key of [
-      'gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs', 'reviewRefreshMs', 'lensTimeoutMs', 'reviewListIntervalMs',
-      'reviewCountIntervalMs', 'reviewMaxBackoffMs',
+      'gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs', 'reviewRefreshMs', 'statusMaxAgeMs', 'lensTimeoutMs',
+      'reviewListIntervalMs', 'reviewCountIntervalMs', 'reviewMaxBackoffMs',
     ] as const) {
       const value = resolved[key]
       if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
@@ -353,7 +354,7 @@ export class ForgePanelController extends TypertRemoteService {
       update = next
       if ('snapshot' in next) snapshot = next.snapshot
       emit()
-    })
+    }, { maxAgeMs: this.config.statusMaxAgeMs })
     emit()
     try {
       yield* reader.frames()
@@ -1627,7 +1628,7 @@ export class ForgePanelController extends TypertRemoteService {
         if (key === 'forgeChangeRequests') listener(session.id, visibleUrls(session))
       }),
       refOf: url => ctx.forge.changeRequestFromUrl(url),
-      watch: (ref, listener) => ctx.forge.watch(ref, listener),
+      watch: (ref, listener, known) => ctx.forge.watchBrief(ref, listener, known),
       open: async () => {
         const domain = await storage.open(changeRequestStatesDomain)
         return { table: domain.table('states'), close: () => domain.close() }

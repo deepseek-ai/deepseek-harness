@@ -28,7 +28,7 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
 }
 
 const limits: GitHubLimits = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, briefBatchSize: 50, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 
 function provider(run: GhRunner): GitHubProvider {

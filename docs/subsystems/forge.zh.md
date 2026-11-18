@@ -93,6 +93,14 @@ interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /**
+   * Read the briefs of several change requests, returning one result per requested key. Omission declares that the
+   * provider reads briefs as snapshots through {@link ForgeProvider.fetch}.
+   */
+  fetchBriefs?(
+    refs: readonly ChangeRequestRef[],
+    signal: AbortSignal,
+  ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>
   /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
   fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
@@ -230,7 +238,7 @@ interface ForgeDescription {
 
 ## 状态轮询
 
-`ctx.forge.watch` 让同一变更请求的所有监听方共享一个轮询循环，并把每次结果作为更新送达。每个 forge 同时最多只有一次读取在进行。轮询节奏、退避与超时规则见[注册表 README](../../packages/experimental/forge/README.zh.md#use-this-package)。
+`ctx.forge.watch` 与 `ctx.forge.watchBrief` 让同一变更请求的所有监听方共享一个轮询循环。变更请求有快照监听方时轮询读取快照，否则读取简报，并把结果作为更新送达它所服务的各类监听方。每个 forge 同时最多有一次快照读取和一次简报读取在进行。轮询节奏、退避与超时规则见[注册表 README](../../packages/experimental/forge/README.zh.md#use-this-package)。
 
 ```ts type-equiv
 /** Lifecycle state of a change request. */
@@ -395,6 +403,62 @@ type ChangeRequestUpdate = {
  * @param update - the settled result.
  */
 type ChangeRequestListener = (update: ChangeRequestUpdate) => void
+```
+
+```ts type-equiv
+/**
+ * The fields of a {@link ChangeRequestSnapshot} that name a change request and its state in a list. A provider can
+ * read them for many change requests in one request, without the checks, reviewers, and merge rules of a snapshot.
+ */
+type ChangeRequestBrief = Pick<
+  ChangeRequestSnapshot, 'ref' | 'url' | 'title' | 'state' | 'draft' | 'mergeability' | 'reviewDecision' | 'checksRollup'
+>
+```
+
+```ts type-equiv
+/** Latest brief delivered to brief watchers of one change request, from a brief read or from a snapshot read. */
+type ChangeRequestBriefUpdate = {
+  /** Canonical identity of the watched change request. */
+  readonly key: ChangeRequestKey
+  /** Epoch milliseconds when the result settled. */
+  readonly fetchedAt: number
+} & ({
+  /** Brief read from the host. */
+  readonly brief: ChangeRequestBrief
+} | {
+  /** Reason the brief could not be read. */
+  readonly failure: ForgeFailure
+})
+```
+
+```ts type-equiv
+/**
+ * Receives every polling result for one change request watched for its brief.
+ * @param update - the settled result.
+ */
+type ChangeRequestBriefListener = (update: ChangeRequestBriefUpdate) => void
+```
+
+```ts type-equiv
+/** When a watcher that joins a watched change request needs a status newer than the latest one. */
+interface ChangeRequestWatchOptions {
+  /**
+   * Poll at once when the latest snapshot or failure is older than this many milliseconds. Without it, a watcher
+   * that joins a change request whose snapshot was already read waits for the regular poll.
+   */
+  readonly maxAgeMs?: number
+}
+```
+
+```ts type-equiv
+/**
+ * The state a brief watcher last saw for a change request it starts to watch, which times the first poll as a brief
+ * read at `fetchedAt` would: a merged change request is not polled, and any other one once its interval has passed.
+ */
+interface ChangeRequestKnownState extends Pick<ChangeRequestBrief, 'state' | 'mergeability' | 'checksRollup'> {
+  /** Epoch milliseconds when the state was read. */
+  readonly fetchedAt: number
+}
 ```
 
 ## 变更请求操作
@@ -1656,7 +1720,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.forge` — `ForgeService`
 
-Registry of forge providers. Watchers of one change request share a single polling loop; each forge has at most one fetch in flight, which batches every due change request of that forge.
+Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level.
 
 ```ts cordis-catalog
 /**
@@ -1954,15 +2018,29 @@ async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: Abor
 fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
 
 /**
- * Watch one change request as an effect on the calling fiber. The first
- * watcher starts polling at once; listeners receive every later result,
- * and `latest` returns the current one. Polling stops when the last watcher
- * leaves. Listeners must not throw; a thrown error is logged and skipped.
+ * Watch the snapshot of one change request as an effect on the calling fiber. Its first snapshot watcher polls it at
+ * once, and a later one does when `options.maxAgeMs` is given and the latest result is older. Listeners receive every
+ * later snapshot poll result, and `latest` returns the current one. While a snapshot watcher remains, polls read the
+ * snapshot; polling stops when the last watcher of the snapshot and the brief leaves. Listeners must not throw; a
+ * thrown error is logged and skipped.
  * @param ref - change request to poll.
- * @param listener - receives each polling result.
+ * @param listener - receives each snapshot poll result.
+ * @param options - when the watcher needs a status newer than the latest one.
  * @returns the disposer that stops this watch.
  */
-watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void
+watch(ref: ChangeRequestRef, listener: ChangeRequestListener, options: ChangeRequestWatchOptions = {}): () => void
+
+/**
+ * Watch the brief of one change request as an effect on the calling fiber. Listeners receive the brief of every
+ * later poll result: of a brief read while only brief watchers remain, and of a snapshot read otherwise. The first
+ * watcher of a change request polls it at once, or as `known` times it. Polling stops when the last watcher of the
+ * snapshot and the brief leaves. Listeners must not throw; a thrown error is logged and skipped.
+ * @param ref - change request to poll.
+ * @param listener - receives the brief of each poll result.
+ * @param known - the state the caller last saw, which times the first poll of a change request without a watcher.
+ * @returns the disposer that stops this watch.
+ */
+watchBrief(ref: ChangeRequestRef, listener: ChangeRequestBriefListener, known?: ChangeRequestKnownState): () => void
 
 /**
  * Poll a watched change request at once, including after a terminal state.
@@ -1973,9 +2051,9 @@ watch(ref: ChangeRequestRef, listener: ChangeRequestListener): () => void
 refresh(ref: ChangeRequestRef): void
 
 /**
- * Read the latest polling result of a watched change request.
+ * Read the latest snapshot poll result of a watched change request.
  * @param ref - change request to read.
- * @returns the latest result, or undefined before the first result or without a watch.
+ * @returns the latest result, or undefined before the first snapshot poll settled or without a watch.
  */
 latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined
 ```
@@ -2740,15 +2818,17 @@ dismiss(session: Session, url: string): void
 /**
  * Watch a Session's visible change requests as an effect on the calling
  * fiber. Every visible change request that a provider recognizes is polled
- * through `ctx.forge` while the Session has a watcher. Listeners receive the
+ * for its snapshot through `ctx.forge` while the Session has a watcher. Listeners receive the
  * complete list after each later binding or provider change, or polling result; read the
  * current list with {@link changeRequests}. Listeners must not throw; a
  * thrown error is logged and skipped.
  * @param session - Session to watch.
  * @param listener - receives the complete visible list.
+ * @param options - when the Session's first watcher needs a status newer than the latest one; a later watcher's
+ * options change nothing.
  * @returns the disposer that stops this watch.
  */
-watch(session: Session, listener: SessionChangeRequestsListener): () => void
+watch(session: Session, listener: SessionChangeRequestsListener, options: ChangeRequestWatchOptions = {}): () => void
 ```
 
 Types: [Session](session.zh.md)

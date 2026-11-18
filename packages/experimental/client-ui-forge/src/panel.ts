@@ -27,6 +27,8 @@ import type { WorktreeCreations } from './worktree.ts'
 export interface PanelConfig extends DiffConfig {
   /** Deadline in milliseconds for one provider sign-in probe. */
   readonly readinessTimeoutMs: number
+  /** Age in milliseconds past which the status of the Session's change requests is read at once when the panel starts. */
+  readonly statusMaxAgeMs: number
   /** Prefix of generated worktree branch names, which a name the user types starts from. */
   readonly worktreePrefix: string
 }
@@ -100,7 +102,7 @@ export class SessionPanel {
     }
     this.stopWatching = ctx.forgeSession.watch(session, (changeRequests) => {
       this.publish({ ...this.current, changeRequests: this.entries(changeRequests) })
-    })
+    }, { maxAgeMs: config.statusMaxAgeMs })
     void this.inspect()
   }
 

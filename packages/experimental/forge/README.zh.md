@@ -50,7 +50,7 @@ kind: "package-reference"
 
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
-`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次轮询读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
+`ctx.forge.watch(ref, listener, options)` 同样是 effect。它监听变更请求的快照：第一个快照监听方会立即触发轮询；之后加入的监听方传入 `maxAgeMs` 且最近一次结果比它更旧时，也会立即触发。`latest(ref)` 返回最近一次快照结果；只剩简报监听方时，这个结果仍然保留。`ctx.forge.watchBrief(ref, listener, known)` 监听变更请求的简报：标题、状态、草稿标记、可合并性、评审结论与检查汇总结果。变更请求有快照监听方时，轮询读取快照，简报监听方收到快照里的简报。否则轮询通过提供方的 `fetchBriefs` 读取简报；提供方没有该方法时读取快照。尚无监听方的变更请求迎来第一个简报监听方时会立即轮询，除非它用 `known` 传入自己已知的状态；这时首次轮询按“在 `known.fetchedAt` 读过一次”来安排，已合并的变更请求不轮询。每个 forge 同时最多有一次快照读取和一次简报读取在进行，每次读取包含该 forge 在对应层级上所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 在同一层级已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。简报读取失败只通知简报监听方，`latest(ref)` 不变；快照读取失败会通知两类监听方。注销提供方会让其被监听的变更请求以 `unavailable` 结束。两类监听方都离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
 
 达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
@@ -70,7 +70,7 @@ provider 可以实现 `submitReview`，在指定的 head 提交上发布行内�
 <details>
 <summary>实现细节——点击展开</summary>
 
-一个定时器覆盖所有被监听的变更请求。定时器触发时，服务按 forge 对到期的变更请求分组，并为每个空闲的 forge 发起一次批量读取。抛错的监听方会被记录日志并跳过。销毁服务会中止进行中的读取，并等待它们结束。
+一个定时器覆盖所有被监听的变更请求。定时器触发时，服务按 forge 和轮询读取的内容对到期的变更请求分组，并为上一次读取已结束的每个分组发起一次批量读取。抛错的监听方会被记录日志并跳过。销毁服务会中止进行中的读取，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|
