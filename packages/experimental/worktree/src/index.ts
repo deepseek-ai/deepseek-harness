@@ -12,7 +12,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-settings'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { HarnessError } from '@deepseek-ai/dsh-error'
@@ -283,12 +283,12 @@ export class WorktreeService extends Service {
   /**
    * Read the archive cleanup of a Session's created checkout; waiting never
    * starts one. Absent without the Workspace and query providers.
-   * @param session - archived Session whose cleanup is read.
+   * @param sessionId - archived Session whose cleanup is read; reading neither loads nor resumes it.
    * @param revision - null reads at once; a matching revision waits for that attempt to settle.
    * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    return await this.reclamation?.cleanupOf(session, revision) ?? null
+  async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.reclamation?.cleanupOf(sessionId, revision) ?? null
   }
 
   /**

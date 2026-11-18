@@ -212,8 +212,11 @@ describe('forgePanel.follow', () => {
     await follower.next(on('feat'))
     expect(opened.provider.lookups).toEqual(['octo/demo feat'])
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await vi.waitFor(() => { expect(opened.provider.lookups).toEqual(['octo/demo feat', 'octo/demo feat']) })
+    // A refresh names its Session by id and leaves the panels of other Sessions alone.
+    await opened.ctx.forgePanel.refresh(brandString<SessionId>('session-unfollowed'), signal)
+    expect(opened.provider.lookups).toEqual(['octo/demo feat', 'octo/demo feat'])
   })
 
   it('looks up nothing for an upstream on a remote that no provider recognizes', async () => {
@@ -239,7 +242,7 @@ describe('forgePanel.follow', () => {
 
     const first = await follower.until(state => polled(state, pullUrl(7)) && failing(state, pullUrl(8)))
     opened.provider.failures.set(7, { code: 'unavailable', message: 'offline' })
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const later = await follower.until(state => failing(state, pullUrl(7)))
 
     expect(first.changeRequests).toMatchObject([
@@ -475,7 +478,7 @@ describe('forgePanel local changes', () => {
       .rejects.toMatchObject({ code: 'forgePanel/filter-config-failed' })
 
     await git(repo, 'config', '--unset', key)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await expect(follower.until(state => state.local !== null)).resolves.toMatchObject({ local: { files: [{ path: 'tracked.txt' }] } })
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal))
       .resolves.toMatchObject({ files: [{ path: 'tracked.txt' }] })
@@ -694,7 +697,7 @@ describe('forgePanel change request diffs', () => {
       (await opened.ctx.forgePanel.changeRequestDiff(session, pullUrl(7), null, signal)).files.map(file => file.path)
     const moved = async (snapshot: { headSha: string; baseBranch: string }): Promise<void> => {
       opened.provider.overrides.set(7, snapshot)
-      await opened.ctx.forgePanel.refresh(opened.session, signal)
+      await opened.ctx.forgePanel.refresh(opened.session.id, signal)
       await follower.until(state => state.changeRequests[0]?.snapshot?.baseBranch === snapshot.baseBranch
         && state.changeRequests[0].snapshot.headSha === snapshot.headSha)
     }
@@ -980,7 +983,7 @@ describe('forgePanel worktree blockers', () => {
     await follower.until(state => state.worktree.blocker === 'not-git')
 
     opened.sandbox.failure = new Error('sandbox unavailable')
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
 
     await expect(follower.next(state => state.checkout.state === 'failed')).resolves.toMatchObject({ worktree: { blocker: null } })
   })
@@ -1050,11 +1053,11 @@ describe('forgePanel worktree requests', () => {
   it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
     const { repo } = await project()
     const without = await open(repo)
-    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session.id, null)).toBeNull()
     const opened = await open(repo, {}, { worktrees: true })
-    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session.id, null)).toBeNull()
     vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
-    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session.id, 3)).toEqual({ revision: 3, status: 'removed' })
   })
 
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
@@ -1603,7 +1606,7 @@ describe('forgePanel removed worktrees', () => {
     await git(repo, 'worktree', 'prune')
     await git(repo, 'branch', '-D', created.branch)
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const gone = await follower.until(state => state.worktree.missing?.branchExists === false)
     const restoration = follower.next(state => state.worktree.missing === null && state.checkout.state === 'ready')
     await opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -1650,13 +1653,13 @@ describe('forgePanel removed worktrees', () => {
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const inspected = await follower.next(state => state.worktree.missing !== null)
     opened.sandbox.failure = new Error('sandbox unavailable')
     sendPrompt(opened.agent, 'next')
     await opened.agent.whenIdle()
     const answer = follower.next(state => state.worktree.missing === null)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const unanswered = await answer
 
     expect(inspected).toMatchObject({ directory: created.path, checkout: { state: 'failed' }, worktree: { missing: { branchExists: true } } })
@@ -1922,13 +1925,13 @@ describe('forgePanel actions', () => {
   it('refreshes the checkout, sign-in state, and change requests of a followed Session only', async () => {
     const { repo } = await project()
     const opened = await open(repo)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     const follower = reader(opened)
     await follower.until(state => ready(state) && polled(state, pullUrl(7)))
     const inspections = opened.sandbox.calls.length
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await follower.until(() => opened.provider.fetches.length === 2
       && opened.sandbox.calls.length > inspections && opened.provider.probes.length === 2)
 
@@ -1943,7 +1946,7 @@ describe('forgePanel actions', () => {
     let settled = false
 
     const inspection = hold(opened.sandbox, '--show-toplevel')
-    const inspected = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
+    const inspected = opened.ctx.forgePanel.refresh(opened.session.id, signal).then(() => { settled = true })
     await inspection.reached
     await settle()
     expect(settled).toBe(false)
@@ -1953,7 +1956,7 @@ describe('forgePanel actions', () => {
     const probe = Promise.withResolvers<ForgeReadiness>()
     opened.provider.readinessImpl = () => probe.promise
     settled = false
-    const probed = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
+    const probed = opened.ctx.forgePanel.refresh(opened.session.id, signal).then(() => { settled = true })
     await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
@@ -1972,7 +1975,7 @@ describe('forgePanel actions', () => {
     const inspections = opened.sandbox.calls.length
 
     shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await settle()
 
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
@@ -2000,7 +2003,7 @@ describe('forgePanel actions', () => {
     await follower.until(state => state.checkout.state === 'none')
     const inspections = opened.sandbox.calls.length
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
 
     // The refresh found the same state, which the panel already published.
     const refreshed = follower.states.at(-1)
@@ -2201,7 +2204,7 @@ describe('forgePanel actions', () => {
 
     await expect(opened.ctx.forgePanel.track(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.dismiss(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
-    await expect(opened.ctx.forgePanel.refresh(opened.session, controller.signal)).rejects.toThrow('closed')
+    await expect(opened.ctx.forgePanel.refresh(opened.session.id, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(1), null, controller.signal)).rejects.toThrow('closed')
