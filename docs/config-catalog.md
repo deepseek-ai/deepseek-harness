@@ -4142,7 +4142,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tencent-meeting`
 
 - `inject`: `cliAccounts` · `upstreamSkills`
-- `source`: [`packages/connector/tencent-meeting/src/index.ts:30`](../packages/connector/tencent-meeting/src/index.ts)
+- `source`: [`packages/connector/tencent-meeting/src/index.ts:28`](../packages/connector/tencent-meeting/src/index.ts)
 
 ```ts config-catalog
 /** Where tmeet and the upstream guide are. */
