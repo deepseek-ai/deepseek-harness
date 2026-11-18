@@ -984,7 +984,7 @@
         "item": {
           "messageId": "{{message:1}}",
           "rating": "positive",
-          "note": "Turn resources released.",
+          "note": "The explanation is clear now.",
           "version": "{{feedback-version:2}}",
           "createdAt": 0,
           "updatedAt": 0
@@ -2258,7 +2258,7 @@
             "item": {
               "messageId": "{{message:1}}",
               "rating": "positive",
-              "note": "Turn resources released.",
+              "note": "The explanation is clear now.",
               "version": "{{feedback-version:2}}",
               "createdAt": 0,
               "updatedAt": 0

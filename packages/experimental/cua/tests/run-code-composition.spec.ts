@@ -604,7 +604,7 @@ it('does not resume retained inbox work when stopped during post-turn cleanup', 
   await running
   expect(f.native.held).toEqual([])
   expect(f.agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
-  expect(f.agent.inbox.hasPending).toBe(true)
+  expect(f.agent.inbox.nextStep).toHaveLength(1)
 })
 
 it('ignores an unattached Session ending while another task holds input', async () => {
