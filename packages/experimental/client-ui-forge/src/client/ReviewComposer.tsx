@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Button, IconChevronDownOutlineRegular, Menu, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ReviewQueue } from './review-queue.ts'
+import type { RemovedRecord, ReviewQueue } from './review-queue.ts'
 import { reviewRange, type ReviewSelection, type ReviewSource } from './review.ts'
 import type { NS } from './locales.ts'
 import type { ForgeCommentActionsProps } from './slots.ts'
@@ -26,6 +26,8 @@ export interface ReviewActions {
   readonly addToInput: (selection: ReviewSelection) => boolean
   /** Retain a new comment after its quote was accepted. */
   readonly onQuoted?: (selection: ReviewSelection) => void
+  /** Report a reference or publication receipt the reader removed from the view, so the report can offer to put it back. */
+  readonly onRemoved?: (removed: RemovedRecord) => void
   /** Publish one comment; an error string preserves the editor. */
   readonly publish?: (selection: ReviewSelection) => Promise<string | undefined>
   /** Add one comment to the pending review on the code host, starting one when needed; an error string preserves the editor. */

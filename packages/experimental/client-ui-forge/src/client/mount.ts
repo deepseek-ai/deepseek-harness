@@ -383,10 +383,7 @@ function registerUi(ctx: Context): void {
       openLink,
       copyPath,
       createChangeRequest: () => { createChangeRequest(sessionId) },
-      report: (key, params) => {
-        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' || key === 'review.discarded' ? 'success' : 'failure',
-          ...params === undefined ? {} : { params } })
-      },
+      report: notices.report,
     }
   }
   /** Request a worktree; a refused branch name goes back to the naming dialog, any other failure to a toast. */

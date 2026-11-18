@@ -81,7 +81,7 @@ async function bench(access: ClientAccessState, options: { ungroupedSession?: Se
     SidebarFrame as never,
   )
   await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
-  await runtime.mount({ inject: [...inject], apply })
+  await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
   return runtime
 }
 

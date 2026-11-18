@@ -85,6 +85,7 @@ describe('Sidebar chat registration', () => {
     let provider: ResourceProvider<'subagentchat'> | undefined
     let definition: SidebarRightTabDefinition | undefined
     const registrations: { options: Record<string, unknown>; component: unknown }[] = []
+    const openWorkspace = vi.fn(() => Promise.resolve())
     const ctx = {
       sessions: { retain, refreshProjections, list } as unknown as ISessions,
       resources: { register: (value: ResourceProvider<'subagentchat'>) => { provider = value; return () => {} } },
@@ -99,7 +100,7 @@ describe('Sidebar chat registration', () => {
       effect: (install: () => unknown) => { install(); return () => {} },
     } as unknown as Context
 
-    registerSidebarChat(ctx, (key: string) => key === 'sidebar.chat' ? 'Chat' : key)
+    registerSidebarChat(Object.assign(ctx, { uiWorkspace: { openWorkspace } }), (key: string) => key === 'sidebar.chat' ? 'Chat' : key)
 
     expect(definition?.id).toBe(SUBAGENT_CHAT_ID)
     expect(definition?.kind).toBe('subagentchat')
@@ -112,12 +113,19 @@ describe('Sidebar chat registration', () => {
       'sidebar.right.pane.tab',
       'sidebar.chat.conversation',
     ])
+    // A Workspace picked in the child's Hero opens as the main Session, as it does in the main Conversation.
+    const children = registrations[0]?.options.children as {
+      'sidebar.chat.conversation': { inject: { openWorkspace: (workspaceId: string, adopt: () => void) => Promise<void> } }
+    }
+    const adopt = vi.fn()
+    await children['sidebar.chat.conversation'].inject.openWorkspace('workspace-1', adopt)
+    expect(openWorkspace).toHaveBeenCalledWith('workspace-1', adopt)
 
     const controller = new AbortController()
     const stream = provider!.open(subagentChatAddress(ADDRESS), { signal: controller.signal })[Symbol.asyncIterator]()
     expect(await stream.next()).toEqual({ done: false, value: { ok: true, value: { address: ADDRESS, reference } } })
     expect(refreshProjections).not.toHaveBeenCalled()
-    expect(retain).toHaveBeenCalledWith(ADDRESS, { source: 'sidebarChat', signal: controller.signal })
+    expect(retain).toHaveBeenCalledWith(ADDRESS, { source: 'sidebarChat', facets: { conversation: true }, signal: controller.signal })
     const completion = stream.next()
     await Promise.resolve()
     controller.abort()
@@ -204,6 +212,7 @@ describe('Sidebar chat components', () => {
   ])('derives the $name embedded phase and fixes the local view to Chat', ({ session: patch, summaryBlank, expected }) => {
     const snapshot = { ...sessionSnapshot(CHILD), ...patch } as SessionSnapshot
     const renderFactorySlot = vi.fn(() => null)
+    const openWorkspace = vi.fn()
     render(<ConversationSlotPanel {...({
       sessionId: CHILD,
       useSession: (select: (value: SessionSnapshot) => unknown) => select(snapshot),
@@ -212,10 +221,10 @@ describe('Sidebar chat components', () => {
         ids: [], byId: { [CHILD]: { blank: summaryBlank } }, phase: 'ready', projectionsBySession: {}, jobsBySession: {},
       } as unknown as SessionListState),
       renderFactorySlot,
-    } as unknown as Parameters<typeof ConversationSlotPanel>[0])} />)
+    } as unknown as Parameters<typeof ConversationSlotPanel>[0])} openWorkspace={openWorkspace} />)
     expect(renderFactorySlot).toHaveBeenCalledWith(
       'conversation.content',
-      { variant: 'embedded', ...expected },
+      { variant: 'embedded', ...expected, onWorkspaceSelected: openWorkspace },
       { slots: { views: FixedChatConversationView } },
     )
   })

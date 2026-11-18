@@ -728,7 +728,7 @@ describe('reference preview', () => {
     const file = factory(session.sessionId)
     await sessions.updateSummary(session.sessionId, { cwd: '/workspace' })
     await sessions.setProjection(session.sessionId, 'workingDirectory', '/workspace/elsewhere')
-    expect(file.resolveFilePath('docs/a b.md')).toBe('/workspace/docs/a b.md')
+    expect(file.resolveFilePath('docs/a b.md')).toBe('/workspace/elsewhere/docs/a b.md')
     expect(factory(sid('other')).resolveFilePath('/absolute.md')).toBe('/absolute.md')
     expect(openResource.mock.calls).toEqual([
       ['dsh-resource://file/session/target/docs/a%20b.md'],

@@ -164,7 +164,7 @@ export async function hasBranch(
   branch: string,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const git = gitIn(ctx, config, session, repositoryRoot, signal)
+  const git = gitIn(ctx, config, session, repositoryRoot, signal, repositoryRoot)
   const ref = await git('show-ref', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
   return ref.exitCode === 0
 }
@@ -178,10 +178,13 @@ export async function hasBranch(
  * @param session - Session whose sandbox policy and execution world apply.
  * @param directory - working directory of every command.
  * @param signal - cancellation of every command.
+ * @param root - checkout that bounds the commands in place of the Session's workspace root: the source
+ * repository of the Session's worktree, which is read while the worktree directory may be gone.
  * @returns the runner.
  */
-export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal): Git {
-  const policy = ctx.sandboxPolicy.resolve({ session })
+export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal, root?: string): Git {
+  const resolved = ctx.sandboxPolicy.resolve({ session })
+  const policy = root === undefined ? resolved : { ...resolved, workspaceRoot: root }
   return (name, args, allowedExitCodes = [0], configOverrides = {}) =>
     runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes, configOverrides)
 }

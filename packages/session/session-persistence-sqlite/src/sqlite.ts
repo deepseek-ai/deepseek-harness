@@ -775,6 +775,9 @@ export class SqliteStore {
       this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, frames)
     })
     this.pendingCreates.delete(header.id)
+    // The commit ran synchronously on settled promises, so a writer checkpointing step after step never leaves
+    // the microtask queue; yield once per commit so I/O callbacks, timers, and other writers run in between.
+    await setImmediate()
     await this.route(header.id)
   }
 

@@ -194,4 +194,21 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
   })
+
+  it('lays panel trailing content out after the title like a Session row, reserving no room without content', () => {
+    const trailing = declarations('.panelTrailing')
+    expect(trailing?.get('flex')).toBe('none')
+    expect(trailing?.get('margin-left')).toBe('auto')
+    expect(trailing?.has('position')).toBe(false)
+    expect(declarations('.panelEntryWide .panelRow')?.get('padding-right')).toBe('38px')
+    expect(css).not.toMatch(/\.panelTrailing:(?:not\()?:?empty/)
+    expect(css).not.toMatch(/\.panelRow\s*\{[^}]*padding-right:\s*72px/)
+  })
+
+  it('pins panel trailing content over the collapsed rail icon\'s top trailing corner', () => {
+    const collapsed = declarations('.collapsed .panelTrailing')
+    expect(collapsed?.get('position')).toBe('absolute')
+    expect(collapsed?.get('right')).toBe('5px')
+    expect(collapsed?.get('top')).toBe('5px')
+  })
 })

@@ -55,7 +55,7 @@ Host 与桌面适配器共用 `dsh-commands/builtin` 的定义身份及中英文
 
 创建和编辑接受图片，作为下一轮前的参考材料；查看、暂停、恢复和清除拒绝附件，不修改目标状态。压缩和权限命令也拒绝附件。处理器拒绝后绝不回退为普通提示词；与 Desktop 相同，图片可能在处理器拒绝前已被存储。这些 SDK 输入接受栅格图片，不接受一般文件上传或客户端提供的附件引用。
 
-`session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据与权限，并通过已记录的用户上下文告知模型。
+`session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据，把 `workspace-write` 边界移到新目录，并通过已记录的用户上下文告知模型。
 
 ### 组装
 

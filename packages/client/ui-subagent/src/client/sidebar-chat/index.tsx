@@ -4,7 +4,7 @@ import type {
   ISessions, SessionReference,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
-import type { ConversationViewsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
   PropsRenderFactories, PropsRenderSlots, PropsRuntime, TranslateNS,
@@ -39,7 +39,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
   interface SlotMap {
     /** Session-scoped Conversation occurrence hosted by one Sidebar chat tab. */
-    'sidebar.chat.conversation': { kind: 'single'; scope: 'session' }
+    'sidebar.chat.conversation': { kind: 'single'; scope: 'session'; inject: SidebarChatInjected }
   }
 }
 
@@ -106,7 +106,7 @@ function subagentChatResourceProvider(sessions: ISessions): ResourceProvider<'su
       const address = parseSubagentChatAddress(resourceAddress)
       if (address === undefined) throw new Error(`ui-subagent: invalid chat resource address "${resourceAddress}"`)
       if (isAbortRequested(signal)) return
-      const reference = sessions.retain(address, { source: 'sidebarChat', signal })
+      const reference = sessions.retain(address, { source: 'sidebarChat', facets: { conversation: true }, signal })
       try {
         yield { ok: true, value: { address, reference } }
         await waitForAbort(signal)
@@ -115,6 +115,12 @@ function subagentChatResourceProvider(sessions: ISessions): ResourceProvider<'su
       }
     },
   }
+}
+
+/** Navigation injected into the child-Session Conversation host. */
+export interface SidebarChatInjected {
+  /** Open the Workspace's blank Session as the main Session. */
+  readonly openWorkspace: WorkspaceSelectedHandler
 }
 
 /** Fixed Chat selection used by an embedded Conversation occurrence. */
@@ -127,7 +133,7 @@ export type ConversationSlotPanelProps = PropsRuntime<'sidebar.chat.conversation
 
 /** Render the shared Conversation content for one explicitly provided child Session. */
 export function ConversationSlotPanel({
-  sessionId, useSession, useConversation, useSessions, renderFactorySlot,
+  sessionId, useSession, useConversation, useSessions, renderFactorySlot, openWorkspace,
 }: ConversationSlotPanelProps) {
   const session = useSession(value => value)
   const conversation = useConversation(value => value)
@@ -139,7 +145,7 @@ export function ConversationSlotPanel({
   const settling = (shellPhase === 'blank' && session.openState === 'loading' && summaryBlank !== true)
   const hero = shellPhase === 'blank' && (session.openState === 'open' || summaryBlank === true)
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
-  return renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero }, {
+  return renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero, onWorkspaceSelected: openWorkspace }, {
     slots: { views: FixedChatConversationView },
   })
 }
@@ -188,10 +194,13 @@ export function registerSidebarChat(ctx: Context, t: TranslateNS<typeof NS>): vo
         : ctx.sessions.list.getSnapshot().byId[child]?.projectionValues?.subagent?.label ?? child
     },
   } satisfies SidebarRightTabDefinition), 'ui-subagent: Sidebar chat type')
+  const chatInjected: SidebarChatInjected = {
+    openWorkspace: (workspaceId, adopt) => ctx.uiWorkspace.openWorkspace(workspaceId, adopt),
+  }
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab',
     key: SUBAGENT_CHAT_ID,
-    children: { 'sidebar.chat.conversation': { kind: 'single', scope: 'session' } },
+    children: { 'sidebar.chat.conversation': { kind: 'single', scope: 'session', inject: chatInjected } },
   }, SidebarChatTab)), 'ui-subagent: Sidebar chat body')
   ctx.effect(() => ctx.slots.inject('sidebar.chat.conversation', () => ctx.slots.register({
     name: 'sidebar.chat.conversation',

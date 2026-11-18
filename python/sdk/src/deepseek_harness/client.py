@@ -259,7 +259,7 @@ class HarnessClient:
         return response.cwd
 
     def set_working_directory(self, session_id: str, path: str) -> str:
-        """Enter an absolute or Session-relative directory without changing origin or permissions."""
+        """Enter an absolute or Session-relative directory; the origin is unchanged and the write boundary follows."""
         response = self.request(
             "session/working-directory/set",
             {"sessionId": session_id, "path": path},

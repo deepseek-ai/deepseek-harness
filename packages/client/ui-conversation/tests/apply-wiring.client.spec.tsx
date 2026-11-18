@@ -8,7 +8,7 @@ import {
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { apply, inject, type ViewTab } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { apply, inject, type ConversationShellInjected, type ViewTab } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -103,8 +103,9 @@ describe('target-neutral Conversation apply wiring', () => {
     b.runtime.renderRoot()
     expect(b.runtime.slots.entries('main').map(row => row.options.key)).toEqual(['conversation'])
     expect(b.runtime.slots.entries('main.conversation')).toHaveLength(1)
-    expect(b.runtime.slots.spec('main.conversation'))
-      .toEqual({ kind: 'single', scope: 'session-maybe' })
+    const shell = b.runtime.slots.spec('main.conversation') as { inject: ConversationShellInjected }
+    expect(shell.inject.openWorkspace).toBeTypeOf('function')
+    expect(shell).toEqual({ kind: 'single', scope: 'session-maybe', inject: shell.inject })
     expect(b.runtime.factoryOf('conversation.content').slots)
       .toMatchObject({ views: { scope: 'session' } })
     expect(b.runtime.slots.entries('conversation.session')).toHaveLength(1)

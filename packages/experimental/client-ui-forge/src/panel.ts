@@ -10,7 +10,6 @@ import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type {} from '@deepseek-ai/dsh-working-directory'
 import { gitIn, hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
 import { localChanges } from './local-diff.ts'
@@ -20,6 +19,7 @@ import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { within, WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
@@ -143,7 +143,7 @@ export class SessionPanel {
    * @param event - committed Session event.
    */
   observe(event: SessionEvent): void {
-    if (event.type === 'working-directory/change') {
+    if (event.type === 'workspace-root/change') {
       this.publish({ ...this.current, directory: event.data.cwd, checkout: { state: 'pending' }, local: null })
       void this.inspect()
     } else if (event.type === 'tool/result' || event.type === 'sandbox/mode') {
@@ -334,7 +334,10 @@ export class SessionPanel {
     if (policy.mode === 'danger-full-access') return null
     if (policy.mode === 'read-only') return 'read-only'
     const root = this.ctx.fs.processPath(await this.ctx.fs.resolve(policy.workspaceRoot, { signal: this.lifetime.signal }))
-    return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
+    // The Git directory of a linked checkout lies outside its root; a grant the policy carries for it counts.
+    const writable = [root, ...policy.additionalWritableRoots ?? []]
+    const granted = writable.some(directory => within(directory, inspection.commonDir))
+    return within(root, inspection.checkout.root) && granted ? null : 'outside-writable-root'
   }
 
   /** Measure the `branch` scope; a failed measurement only hides the local changes row. */
@@ -411,7 +414,7 @@ export async function missingWorktree(
       const root = await ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })
       if (root.targetKey === target.targetKey) {
         const common = await git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'])
-        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal)(
+        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal, created.repositoryRoot)(
           'common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
         )
         const actual = await ctx.fs.resolve(common.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })

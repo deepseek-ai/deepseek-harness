@@ -55,9 +55,6 @@
     - id: working-directory
       name: '@deepseek-ai/dsh-working-directory'
 
-    - id: tool-working-directory
-      name: '@deepseek-ai/dsh-tool-working-directory'
-
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'
 

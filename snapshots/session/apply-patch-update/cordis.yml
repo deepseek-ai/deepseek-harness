@@ -61,6 +61,10 @@
   name: '@deepseek-ai/dsh-tool-skill'
   disabled: true
 
+- id: upstream-skills
+  name: '@deepseek-ai/dsh-upstream-skills'
+  disabled: true
+
 - id: tool-fs
 
 - id: spill-local

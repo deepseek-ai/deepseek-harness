@@ -9,7 +9,8 @@ import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/office/index.ts'
 import { officeFace } from '../src/client/office/face.ts'
-import { Config } from '../src/config.ts'
+import { OFFICE_DEFAULTS } from '../src/defaults.ts'
+import type { OfficeLimits } from '../src/types.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -53,7 +54,7 @@ it('retains Office view state across remounts and releases it on tab close or pl
   } finally { closed.abort(); retained.abort(); await h.close() }
 })
 
-async function harness(config: Partial<Config['office']> = {}, missing?: 'remote' | 'render' | 'files') {
+async function harness(config: Partial<OfficeLimits> = {}, missing?: 'remote' | 'render' | 'files') {
   const ctx = new Context()
   const registry = new DocumentPreviewRegistry()
   const removeLocale = vi.fn()
@@ -74,7 +75,7 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
     if (missing !== 'render') ctx.provide('remote.officeKit', { render, generation: rendererGeneration } as never)
   }
   const fiber = ctx.plugin({ apply: (scope: Context) => {
-    apply(scope, Config({ office: config }).office)
+    apply(scope, { ...OFFICE_DEFAULTS, ...config })
   } })
   await fiber.await()
   const entry = recorded.find(entry => entry.component === OfficeBody)!.options

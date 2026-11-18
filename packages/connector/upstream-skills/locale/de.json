@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Upstream-Fähigkeiten von CLI-Apps",
+    "description": "Lädt die Upstream-Fähigkeitsdateien, die jedes CLI-App-Plugin festlegt, aus dem GitHub-Repository des Anbieters herunter und listet die Einstiegsfähigkeit des Plugins auf, sobald sie vorliegen."
+  }
+}

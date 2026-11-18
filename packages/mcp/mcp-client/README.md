@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-client` lets the model use tools and resources from external Model Context Protocol (MCP) servers. Configure one server per entry; its tools use names such as `mcp__github__create_issue`. No server is enabled by default. Shipped profiles already provide [shared resource discovery and reading](../mcp-resources/README.md). An empty caller scope adds no MCP tools or prompt text. Server instructions join the logged system prompt as literal text; MCP prompt templates are unsupported. Slow or crashed servers can delay startup or fail calls until recovery.
+`dsh-mcp-client` lets the model use tools and resources from external Model Context Protocol (MCP) servers. Configure one server per entry; its tools use names such as `mcp__github__create_issue`. No server is enabled by default. Shipped profiles already provide [shared resource discovery and reading](../mcp-resources/README.md). An empty caller scope adds no MCP tools or prompt text. Server instructions join the logged system prompt as literal text; MCP prompt templates are unsupported. With `toolLoading: on-demand`, the system prompt lists the tools and each agent loads the ones it needs. Slow or crashed servers can delay startup or fail calls until recovery.
 
 ## Table of Contents
 
@@ -68,6 +68,8 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `reconnect.initialDelayMs` | `500` | First reconnect delay; doubles per consecutive failed attempt |
 | `reconnect.maxDelayMs` | `30,000` | Backoff ceiling; also the uptime after which the attempt budget resets |
 | `reconnect.maxAttempts` | `10` | Consecutive failed attempts per outage before giving up |
+| `toolLoading` | `eager` | `on-demand` keeps the server's tools out of every tool list until an agent loads them with `mcp__<serverName>__load_tools` |
+| `catalogDescriptionMaxLength` | `160` | Maximum characters of each tool summary in an on-demand server's prompt catalog |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-client) is the exhaustive source for every accepted field.
 
@@ -100,6 +102,11 @@ Images are supported when the current model accepts image input and the harness 
 The server's tools appear before the harness starts its first turn. Set `startupTimeoutMs` to bound each connection attempt, including template resolution and initial tool discovery; an omitted value adds no whole-attempt deadline. Tool-list notifications refresh the registered tools; discovery failures preserve the previous set, while registration conflicts close the connection and apply the reconnect policy.
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
+
+<a id="on-demand-tool-loading"></a>
+### On-demand tool loading
+
+Set `toolLoading: on-demand` for a server whose tool definitions are too large to send with every request. Its tools then stay out of the tool list: the system prompt lists each tool's raw name with the first line of its description, and the model loads the tools it needs with `mcp__<serverName>__load_tools`. A loaded tool joins only the calling agent's tool list; subagents, forks, and resumed sessions start without loaded tools. Each later sync, including one after a reconnect, re-registers the loaded tools the server still offers and removes the rest. A server tool named `load_tools` is left out of the catalog with a logged warning. Any agent that sees the loader can load every listed tool; see [Known Limitations](#known-limitations-and-deferred-work) for tool restrictions.
 
 <a id="runtime-templates-and-credentials"></a>
 ### Runtime templates and credentials
@@ -146,8 +153,9 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/generation.ts`](src/generation.ts) | Transport ownership, cancellation, pending work, and confirmed closure |
 | [`src/credentials.ts`](src/credentials.ts) | Runtime template binding and redaction of every resolved value |
 | [`src/templates.ts`](src/templates.ts) | Credential template syntax, substitution, and reference discovery |
-| [`src/server-context.ts`](src/server-context.ts) | Resource-provider registration and literal server instructions |
+| [`src/server-context.ts`](src/server-context.ts) | Resource-provider registration, literal server instructions, and the on-demand tool catalog |
 | [`src/tools.ts`](src/tools.ts) | Tool bridge: discovery, naming, registration swap, execution, image projection |
+| [`src/tool-loading.ts`](src/tool-loading.ts) | On-demand loading: loader tool, prompt catalog, and each agent's loaded tools |
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | Status cell keyed by Fiber, retaining its final cleanup result |
 | [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
@@ -226,6 +234,20 @@ Arguments, mapped text, and durable image references are retained until compacti
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
+### On-demand tools
+
+#### What the model sees
+
+An on-demand server contributes one tool, `mcp__<serverName>__load_tools`, and a system prompt section titled `On-demand tools from MCP server <serverName>` that lists each tool's raw name and summary. The section appears only for an agent that sees the loader. A load returns the public names it added or found already loaded; the next request carries their definitions, and the session log records the tool addition.
+
+#### Token effect
+
+Until an agent loads a tool, the server costs the loader definition and one catalog line per tool, each summary capped by `catalogDescriptionMaxLength`, instead of every tool definition. Each loaded tool adds its full definition to that agent's requests.
+
+#### KV Cache effect
+
+A load changes the agent's tool list. Routes that declare tool updates append the addition and keep the prefix; other routes start a new request series. A changed server tool list rewrites the catalog section, as changed server instructions do.
+
 ### Server instructions
 
 #### What the model sees
@@ -253,6 +275,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Invalid protocol results or output schemas fail through the SDK** — the bridge does not accept legacy `toolResult` substitutes or bypass advertised schema validation.
 - **OAuth authorization needs a browser that reaches the Host web server directly** — the callback is that server's own origin: its bind address and port, over HTTPS when it serves TLS. A browser that reaches DSH only through a proxy or the Web app's `publicUrl` cannot finish authorization. A dynamic client registration is keyed by that callback, so a changed bind address or port, or a random port, registers a new client at the next explicit authorization; sign-out keeps the previous registration record.
+- **On-demand loading is outside tool restrictions** — loaded tools live in the calling agent's own scope, which `tools.restrict()` allow and deny masks do not filter, and those masks reject names absent from the inherited tool list. Deny a loadable tool by name with an execution guard (`tools.guard`). In PTC mode a program binds its tools when it starts, so a tool loaded inside `run_code` becomes callable from the next program.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.
 
 <a id="dev-note"></a>

@@ -7,10 +7,14 @@
   },
   "include": [
     "src/client",
-    "src/config.ts",
+    "src/defaults.ts",
+    "src/types.ts",
     "src/css-modules.d.ts"
   ],
   "references": [
+    {
+      "path": "../config"
+    },
     {
       "path": "../../api/gateway/tsconfig.client.json"
     },
@@ -61,9 +65,6 @@
     },
     {
       "path": "../connection/tsconfig.client.json"
-    },
-    {
-      "path": "../../../vendor/schemastery"
     },
     {
       "path": "../../document/office-kit"

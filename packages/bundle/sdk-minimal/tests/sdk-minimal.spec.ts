@@ -34,7 +34,6 @@ describe('dsh-sdk-minimal bundle', () => {
       ['attachment-local', '@deepseek-ai/dsh-attachment-local'],
       ['tool-fs', '@deepseek-ai/dsh-tool-fs'],
       ['working-directory', '@deepseek-ai/dsh-working-directory'],
-      ['tool-working-directory', '@deepseek-ai/dsh-tool-working-directory'],
       ['session-projection', '@deepseek-ai/dsh-session-projection'],
       ['token-meter', '@deepseek-ai/dsh-token-meter'],
       ['compaction-basic', '@deepseek-ai/dsh-compaction-basic'],
