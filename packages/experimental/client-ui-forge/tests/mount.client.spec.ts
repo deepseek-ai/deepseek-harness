@@ -1150,15 +1150,12 @@ describe('mountForgePanel changes view', () => {
     expect(open).toHaveBeenCalledWith('https://github.com/octo/demo/blob/main/a.ts', '_blank', 'noopener,noreferrer')
     f.changes(S1).report('toast.expandStale')
     expect(f.notice()).toMatchObject({ key: 'toast.expandStale', tone: 'failure', params: {} })
-    f.changes(S1).report('toast.expandFailed', { message: 'gone' })
-    expect(f.notice()).toMatchObject({ key: 'toast.expandFailed', tone: 'failure', params: { message: 'gone' } })
-
-    f.changes(S1).report('review.submitted')
-    expect(f.notice()).toMatchObject({ key: 'review.submitted', tone: 'success' })
-    f.changes(S1).report('review.published')
-    expect(f.notice()).toMatchObject({ key: 'review.published', tone: 'success' })
-    f.changes(S1).report('review.discarded')
-    expect(f.notice()).toMatchObject({ key: 'review.discarded', tone: 'success' })
+    f.changes(S1).report('toast.expandFailed', { params: { message: 'gone' } })
+    expect(f.notice()).toMatchObject({ key: 'toast.expandFailed', tone: 'failure', params: { message: 'gone' }, undo: undefined })
+    // The view names the tone and the undo action of each notice; the notice store shows them as given.
+    const undo = vi.fn()
+    f.changes(S1).report('review.recordRemoved', { tone: 'success', undo })
+    expect(f.notice()).toMatchObject({ key: 'review.recordRemoved', tone: 'success', params: {}, undo })
 
     const writeText = vi.fn(async (_text: string) => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
@@ -1673,11 +1670,9 @@ describe('mountForgePanel review page changes view', () => {
     f.view.copyPath('src/a.ts')
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.pathCopied', tone: 'success' })
-    for (const key of ['review.submitted', 'review.published', 'review.discarded'] as const) {
-      f.view.report(key)
-      expect(f.notice()).toMatchObject({ key, tone: 'success', params: {} })
-    }
-    f.view.report('toast.expandFailed', { message: 'gone' })
+    f.view.report('review.submitted', { tone: 'success' })
+    expect(f.notice()).toMatchObject({ key: 'review.submitted', tone: 'success', params: {} })
+    f.view.report('toast.expandFailed', { params: { message: 'gone' } })
     expect(f.notice()).toMatchObject({ key: 'toast.expandFailed', tone: 'failure', params: { message: 'gone' } })
     await f.dispose()
   })

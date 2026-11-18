@@ -145,10 +145,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
     copyPath: deps.copyPath,
     createChangeRequest: () => {},
     changesLens: () => { throw new Error('forge-panel: the review page runs no lenses') },
-    report: (key, params) => {
-      notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' || key === 'review.discarded' ? 'success' : 'failure',
-        ...params === undefined ? {} : { params } })
-    },
+    report: notices.report,
   }
   const chat: ReviewChatFace = {
     connect: async (frame) => {

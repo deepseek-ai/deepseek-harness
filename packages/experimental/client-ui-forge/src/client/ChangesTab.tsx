@@ -36,7 +36,7 @@ import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
   ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
+import { sameReviewSource, type RemovedRecord, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { SubmitReview } from './SubmitReview.tsx'
@@ -70,7 +70,7 @@ import type { FileThreads, ThreadActions, ThreadFocus, ThreadWrite } from './Rev
 import { inFileOrder, type ThreadFilter } from './review-threads.ts'
 import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
 import { ThreadList } from './ThreadList.tsx'
-import type { HostStream, PanelSnapshot, StreamSnapshot } from './source.ts'
+import type { HostStream, NoticeOptions, PanelSnapshot, StreamSnapshot } from './source.ts'
 import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf, type ChangeRequestEntry, type ChangesPanelState } from './status.ts'
 import css from './ChangesTab.module.css'
 
@@ -149,8 +149,8 @@ export interface ChangesTabInjected {
   readonly copyPath: (path: string) => void
   /** Ask the Session's Agent to create a change request for its changes, reporting the outcome. */
   readonly createChangeRequest: () => void
-  /** Show a failure notice. */
-  readonly report: (key: ForgePanelKey, params?: Readonly<Record<string, string>>) => void
+  /** Show a notice: a failure unless the options name another tone, with the undo action they carry. */
+  readonly report: (key: ForgePanelKey, options?: NoticeOptions) => void
 }
 
 /** Full props of the changes tab body. */
@@ -603,8 +603,8 @@ export function ChangesView({
         return message
       }
       if (!complete(result.url)) return t('review.unknown')
-      if (request.kind === 'review') report('review.submitted')
-      else report('review.published', hostCopy)
+      if (request.kind === 'review') report('review.submitted', { tone: 'success' })
+      else report('review.published', { tone: 'success', params: hostCopy })
       if (request.kind === 'review') setReviewOpen(false)
       return undefined
     } catch (_error) {
@@ -809,7 +809,7 @@ export function ChangesView({
   useEffect(() => {
     if (withdrawn === null) return
     actions.filtered(tab.id, null)
-    report('filterLens.removed', { lens: live.current.lensTitle(withdrawn) })
+    report('filterLens.removed', { params: { lens: live.current.lensTitle(withdrawn) } })
   }, [withdrawn, actions, tab.id, report])
   const chooseLens = (next: string | null): void => { actions.filtered(tab.id, next) }
   // The hunks each kept file folds stay folded until the reader shows them for that file; a new result folds again.
@@ -837,9 +837,9 @@ export function ChangesView({
   const hostOwner = useMemo(() => data?.kind === 'change' && data.viewed !== null
     ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
   const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
-    if (failure.kind === 'stale') report('viewed.syncStale', hostCopy)
-    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
-    else report('viewed.syncFailed', { ...hostCopy, message: failure.message })
+    if (failure.kind === 'stale') report('viewed.syncStale', { params: hostCopy })
+    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { params: { message: failure.message } })
+    else report('viewed.syncFailed', { params: { ...hostCopy, message: failure.message } })
   })
   const marks = host?.marks ?? localMarks
   // Files marked viewed at their current change, which the file tree draws subdued.
@@ -941,7 +941,7 @@ export function ChangesView({
         return
       }
       if (result.ok) report('toast.expandStale')
-      else report('toast.expandFailed', { message: result.error.message })
+      else report('toast.expandFailed', { params: { message: result.error.message } })
       update((value) => {
         const { [path]: _text, ...texts } = value.texts
         const { [path]: _open, ...open } = value.open
@@ -995,7 +995,7 @@ export function ChangesView({
         setReviewError(failure)
         return
       }
-      report(done)
+      report(done, { tone: 'success' })
       setReviewOpen(false)
     } finally {
       reviewRunning.current = false
@@ -1041,11 +1041,15 @@ export function ChangesView({
     return writeReview(selection.source.url, { kind: 'add-pending', headSha: selection.source.headSha, comment: { path, side, startLine, endLine, body } })
   }
 
+  /** Report a reference or receipt removed from the view and offer to put it back where it was. */
+  const reportRemoved = (removed: RemovedRecord): void => {
+    report('review.recordRemoved', { tone: 'success', undo: () => { if (!queue.restoreRecord(removed)) report('toast.undoFailed') } })
+  }
   const recordActions: ReviewActions = {
     source: shownSource ?? (source.kind === 'local'
       ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope), commits: commitsOf(localScope) }
       : { kind: 'change', url: source.url, headSha: '', commits: changeCommits }),
-    records: queue, addToInput: addReviewToInput, openLink, quoteCopy,
+    records: queue, addToInput: addReviewToInput, openLink, quoteCopy, onRemoved: reportRemoved,
   }
   const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]
     .filter(item => sameReviewSource(item.source, recordActions.source)).map(item => item.comment.path))]
@@ -1183,7 +1187,7 @@ export function ChangesView({
   // props and state, which the retried render assigns again.
   const callbacks = {
     data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
-    lensTitle, renderSlot, kept, t,
+    lensTitle, renderSlot, kept, reportRemoved, t,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1242,6 +1246,7 @@ export function ChangesView({
     renderActions: owner => target === null ? null : live.current.renderSlot('forge.diff.comment.actions', { target, ...owner }),
     records: queue, openLink, reviewStarted,
     onQuoted: (selection) => { if (!queue.recordAgent(selection)) live.current.report('review.saveFailed') },
+    onRemoved: (removed) => { live.current.reportRemoved(removed) },
     publishingBlocked,
     ...queueable ? { queue: (selection: ReviewSelection) => live.current.addPending(selection) } : {},
     ...single ? {
