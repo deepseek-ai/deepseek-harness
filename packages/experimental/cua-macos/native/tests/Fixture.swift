@@ -221,7 +221,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             ? CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(overlayID)) as? [[String: Any]] : nil
         let overlayOnScreen = overlayRows?.contains { ($0[kCGWindowIsOnscreen as String] as? Bool) == true } ?? false
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
-            "rowCount": rowCount, "primaryWindowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
+            "keyEventCount": keyEventCount, "rowCount": rowCount, "primaryWindowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "defaultUIRequests": (dragPad as? AlternateHoverPad)?.defaultUIRequests ?? 0,
