@@ -65,6 +65,18 @@ describe('a Session created in a linked worktree', () => {
 
     expect(extraRoots(ctx, agent)).toBeUndefined()
   })
+
+  it.each(['resume', 'clear', 'compact'] as const)('grants again for an Agent announced as a %s, since no grant is stored', async (source) => {
+    const { ctx, repo, linked } = await mounted()
+    const { agent } = agentIn(ctx, linked, `announced-${source}`)
+    const leave = ctx.agents.enter(agent)
+    await ctx.agents.announce(agent, source)
+    expect(extraRoots(ctx, agent)).toEqual([join(repo, '.git')])
+
+    leave()
+
+    expect(extraRoots(ctx, agent)).toBeUndefined()
+  })
 })
 
 describe('a Host move of the Session directory', () => {
