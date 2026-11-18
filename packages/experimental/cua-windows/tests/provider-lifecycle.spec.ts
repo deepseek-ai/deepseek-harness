@@ -50,7 +50,7 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
-  expect(backend.sendKeyEvent).toBeUndefined()
+  expect(backend.turnInputLifecycle).toBeUndefined()
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
   const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }

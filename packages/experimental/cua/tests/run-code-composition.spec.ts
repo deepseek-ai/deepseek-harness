@@ -423,7 +423,7 @@ it('stops an in-flight down before cleanup and does not release input from the n
 })
 
 it.each(['refusal', 'disconnect', 'timeout'] as const)('reports cleanup %s and prevents this task from dispatching more input', async (failure) => {
-  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const f = await setup([holdProgram], 'macos', undefined, true, true, failure === 'timeout' ? 200 : 30_000)
   const errors: unknown[] = []
   f.ctx.on('agent/error', (event) => { errors.push(event.error) })
   const release = f.native.controlNext('releaseHeldInputs')
@@ -505,7 +505,7 @@ it('cleans one task without releasing another connection and prevents a queued t
   await cleanup.entered
   const count = f.native.calls.length
   f.model.requests.length = 0
-  f.model.beforeStream = undefined
+  delete f.model.beforeStream
   f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hold W again' }], source: { kind: 'user' } }))
   expect(f.native.calls).toHaveLength(count)
   const nextCleanup = f.native.controlNext('releaseHeldInputs')

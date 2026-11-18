@@ -182,7 +182,7 @@ async function thinkingTurn(f: Awaited<ReturnType<typeof setup>>) {
         if (options.signal?.aborted) resolve()
         else options.signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })
-      yield { type: 'finish', reason: { kind: 'aborted' } }
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Fixture cancelled' } } }
     }
   }
   const provider = `thinking-${randomUUID()}`
@@ -1323,7 +1323,7 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   const physical = await f.execute('mouseMove', physicalHover)
   expect(physical.isError).toBe(!systemPointer)
   expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
-  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id, turn: 1 }, expect.any(AbortSignal), expect.any(String))
+  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   else expect(native.request).not.toHaveBeenCalled()
   expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,

@@ -137,6 +137,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
+    if (method === 'releaseHeldInputs') return { dispatched: true }
     if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
     if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true }]
     if (method === 'getApp') {
