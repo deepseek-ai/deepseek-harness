@@ -32,6 +32,7 @@ const State = z.object({
 // These cases share the real desktop and deliberately run in order. Run this opt-in file alone.
 it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['completed', 'error', 'thinking-stop', 'tool-stop'] as const)(
   'receives mixed releases after %s through cua_run_code', async (ending) => {
+    if (helperPath === undefined) throw new Error('Set DSH_CUA_TEST_HELPER to a signed helper application executable')
     const directory = await mkdtemp(join(tmpdir(), 'dsh-turn-input-desktop-'))
     const appDirectory = join(directory, 'Input Receiver.app')
     const executable = join(appDirectory, 'Contents/MacOS/InputReceiver')
