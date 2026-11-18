@@ -249,7 +249,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
-        systemPointerMoved = params.useSystemPointer === true
+        systemPointerMoved = params.useSystemInput === true
         if (!systemPointerMoved && !alternate && !application.hovering) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
         application.hovering = !systemPointerMoved && alternate
       }
