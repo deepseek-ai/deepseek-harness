@@ -354,7 +354,7 @@ actor AXWorker {
                 return try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
         case "typeText", "pressKey":
-            let system = method == "pressKey" && (try params.optionalBoolean("useSystemInput") ?? false)
+            let system = try method == "pressKey" && (params.optionalBoolean("useSystemInput") ?? false)
             let recipient = system ? identity : try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }

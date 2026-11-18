@@ -1453,7 +1453,7 @@ it.each([true, false])('uses the declared systemInput capability for a non-macOS
   const sections = (await f.ctx.systemPrompt.assemble({ scope: f.handle.agent })).sections
   const guidance = sections.find(section => section.name === 'computer-use:dsh-cua')!.text
   expect(guidance.includes('relative?: boolean, useSystemInput?: boolean')).toBe(systemInput)
-  expect(guidance.includes('The question interrupts the user')).toBe(systemInput)
+  expect(guidance.includes('The first explicit system input requests permission;')).toBe(systemInput)
   expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemInput')).toBe(systemInput)
   await selectApplication(f)
   native.request.mockClear()
