@@ -20,6 +20,7 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as DeepSeekPluginPackageInventory from '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { sourceModuleLoader } from './helpers.ts'
@@ -100,6 +101,7 @@ async function loadComposition(
         '    debounceMs: 10',
       ]
       : [],
+    "- name: '@deepseek-ai/dsh-deepseek-auth'",
     '- id: llm-deepseek',
     "  name: '@deepseek-ai/dsh-llm-deepseek-api-key'",
     '  config:',
@@ -123,6 +125,7 @@ async function loadComposition(
     ['@deepseek-ai/dsh-session-log-deepseek', SessionLogDeepSeek],
     ['@deepseek-ai/dsh-plugin-package-inventory-deepseek', DeepSeekPluginPackageInventory],
     ['@deepseek-ai/dsh-credentials-local', LocalCredentialProvider],
+    ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
     ['@deepseek-ai/dsh-llm-deepseek-api-key', LlmDeepSeek],
   ])
   // The custom importer bypasses Node resolution; mirror the package manifests
@@ -312,6 +315,18 @@ describe('llm-deepseek real dynamic composition', () => {
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(serverA.requests).toHaveLength(1)
     expect(serverB.headers[0]?.['x-api-key']).toBe('rotated-key')
+  })
+
+  it('reports a provider refusal for a request without a safety check flag', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    const refusal = textEvents.map(event => event.replace('"end_turn"', '"refusal"'))
+    const server = await mockServer([{ kind: 'sse', events: refusal }])
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: server.url })
+
+    const refused = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.requests).toHaveLength(1)
+    expect(server.requests[0]).not.toHaveProperty('safety_check')
+    expect(refused.finish).toMatchObject({ kind: 'error', failure: { code: 'CONTENT_REFUSED' } })
   })
 
   it('keeps a stored key writable and rotatable across a real restart', async () => {

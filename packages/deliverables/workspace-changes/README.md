@@ -93,7 +93,7 @@ Nothing here enters a model request, so provider cache reuse is unaffected.
 - A working directory outside any git repository lists file-tool edits only, so shell edits are missing from its card; a shadow repository under the Harness home is deferred until its exclude rules can replace a missing `.gitignore` reliably.
 - Outside snapshot coverage only paths a file tool names are captured: a file only a shell command changes there is absent, and a file both changed before its first file-tool call is compared from that call onward.
 - Every file-tool edit copies its whole file once per turn, up to `maxFileBytes`, even for paths the snapshots also cover; the copies go with the Session's temporary directory.
-- A comparison serves the listed file's complete text to the client, including ignored files, repository files above the working directory, and files outside the workspace; the summary route serves only paths and counts. A deployment that must keep such content on the Host composes this plugin out.
+- A comparison serves the listed file's complete text to the client, including ignored files, repository files above the working directory, and files outside the workspace; the summary route serves only paths, counts, and the directory the turn started in. A deployment that must keep such content on the Host composes this plugin out.
 - A comparison that degrades to whole-file replacement carries every line of both sides, up to twice `maxFileBytes`.
 - Windows paths keep native separators in `path`; `display` is always slash-separated.
 

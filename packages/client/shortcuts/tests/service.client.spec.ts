@@ -2,6 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import ShortcutsService from '../src/client/index.ts'
 import { initialShortcutConfig } from '../src/protocol.ts'
 import type { DesktopKeyboardApi, DesktopShortcutsApi, ShortcutConfigSnapshot, ShortcutCommandId } from '../src/protocol.ts'
@@ -43,7 +44,7 @@ function mount() {
   ctx.provide('locale', new LocaleRuntime(ctx))
   const dispose = async () => { await ctx.fiber.dispose() }
   disposers.push(dispose)
-  const service = new ShortcutsService(ctx)
+  const service = new ShortcutsService(ctx, syncedConfig({ stopSequenceMs: 500 }))
   return { ctx, service, dispose }
 }
 

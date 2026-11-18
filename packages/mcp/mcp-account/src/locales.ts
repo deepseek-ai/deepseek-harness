@@ -1,0 +1,238 @@
+/** The copy every connector's account section shares; each connector's own text comes with its registration. */
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+
+/** Chinese dictionary and key source. */
+const zh = {
+  'status.checking': '正在检查连接',
+  'status.disconnected': '未连接',
+  'status.waiting-browser': '等待你在浏览器中确认',
+  'status.authorizing': '正在连接',
+  'status.connecting': '正在连接',
+  'status.connected': '已连接',
+  'status.reconnect': '需要重新连接',
+  'status.unavailable': '暂时无法连接',
+  'detail.reconnect.expired': '授权已过期，请重新连接。',
+  'detail.reconnect.binding': '授权与当前设置不再匹配，请重新连接。',
+  'detail.unavailable': '已保留现有授权，可以稍后重试。',
+  hostBrowser: '授权需要在运行 DSH 的这台电脑上的浏览器中完成。',
+  failed: '授权未完成，请重试',
+  'action.reconnect': '重新连接',
+  'action.open': '打开授权页面',
+  'action.cancel': '取消',
+  'action.signOut': '退出登录',
+  'action.reauthorize': '重新授权',
+  'action.retry': '重试',
+  'badge.connected': '已连接',
+  'badge.disconnected': '未连接',
+  'badge.reconnect': '需要重新连接',
+  'badge.unavailable': '暂时无法连接',
+  'badge.connecting': '连接中',
+}
+
+/** Every key of the shared copy. */
+export type McpAccountKey = keyof typeof zh
+
+/** English dictionary. */
+const en: Record<McpAccountKey, string> = {
+  'status.checking': 'Checking connection',
+  'status.disconnected': 'Not connected',
+  'status.waiting-browser': 'Waiting for you to confirm in the browser',
+  'status.authorizing': 'Connecting',
+  'status.connecting': 'Connecting',
+  'status.connected': 'Connected',
+  'status.reconnect': 'Reconnection needed',
+  'status.unavailable': 'Cannot connect right now',
+  'detail.reconnect.expired': 'The authorization has expired. Connect again.',
+  'detail.reconnect.binding': 'The authorization no longer matches the current settings. Connect again.',
+  'detail.unavailable': 'The existing authorization is kept. Try again later.',
+  hostBrowser: 'Authorization must be completed in a browser on the computer running DSH.',
+  failed: 'Authorization was not completed. Try again.',
+  'action.reconnect': 'Connect again',
+  'action.open': 'Open authorization page',
+  'action.cancel': 'Cancel',
+  'action.signOut': 'Sign out',
+  'action.reauthorize': 'Authorize again',
+  'action.retry': 'Retry',
+  'badge.connected': 'Connected',
+  'badge.disconnected': 'Not connected',
+  'badge.reconnect': 'Reconnect',
+  'badge.unavailable': 'Unavailable',
+  'badge.connecting': 'Connecting',
+}
+
+/** Japanese dictionary. */
+const ja: Record<McpAccountKey, string> = {
+  'status.checking': '接続を確認中',
+  'status.disconnected': '未接続',
+  'status.waiting-browser': 'ブラウザーでの確認を待っています',
+  'status.authorizing': '接続中',
+  'status.connecting': '接続中',
+  'status.connected': '接続済み',
+  'status.reconnect': '再接続が必要です',
+  'status.unavailable': '現在接続できません',
+  'detail.reconnect.expired': '認可の有効期限が切れました。再度接続してください。',
+  'detail.reconnect.binding': '認可が現在の設定と一致しなくなりました。再度接続してください。',
+  'detail.unavailable': '現在の認可は保持されています。しばらくしてから再試行してください。',
+  hostBrowser: '認可は、DSH を実行しているコンピューターのブラウザーで完了する必要があります。',
+  failed: '認可が完了しませんでした。もう一度お試しください。',
+  'action.reconnect': '再接続',
+  'action.open': '認可ページを開く',
+  'action.cancel': 'キャンセル',
+  'action.signOut': 'サインアウト',
+  'action.reauthorize': '再認可',
+  'action.retry': '再試行',
+  'badge.connected': '接続済み',
+  'badge.disconnected': '未接続',
+  'badge.reconnect': '要再接続',
+  'badge.unavailable': '利用不可',
+  'badge.connecting': '接続中',
+}
+
+/** Spanish dictionary. */
+const es: Record<McpAccountKey, string> = {
+  'status.checking': 'Comprobando la conexión',
+  'status.disconnected': 'No conectado',
+  'status.waiting-browser': 'Esperando su confirmación en el navegador',
+  'status.authorizing': 'Conectando',
+  'status.connecting': 'Conectando',
+  'status.connected': 'Conectado',
+  'status.reconnect': 'Se necesita volver a conectar',
+  'status.unavailable': 'No se puede conectar en este momento',
+  'detail.reconnect.expired': 'La autorización ha caducado. Vuelva a conectar.',
+  'detail.reconnect.binding': 'La autorización ya no coincide con la configuración actual. Vuelva a conectar.',
+  'detail.unavailable': 'Se conserva la autorización actual. Inténtelo de nuevo más tarde.',
+  hostBrowser: 'La autorización debe completarse en un navegador de la computadora donde se ejecuta DSH.',
+  failed: 'La autorización no se completó. Inténtelo de nuevo.',
+  'action.reconnect': 'Volver a conectar',
+  'action.open': 'Abrir página de autorización',
+  'action.cancel': 'Cancelar',
+  'action.signOut': 'Cerrar sesión',
+  'action.reauthorize': 'Volver a autorizar',
+  'action.retry': 'Reintentar',
+  'badge.connected': 'Conectado',
+  'badge.disconnected': 'No conectado',
+  'badge.reconnect': 'Reconectar',
+  'badge.unavailable': 'No disponible',
+  'badge.connecting': 'Conectando',
+}
+
+/** French dictionary. */
+const fr: Record<McpAccountKey, string> = {
+  'status.checking': 'Vérification de la connexion',
+  'status.disconnected': 'Non connecté',
+  'status.waiting-browser': 'En attente de votre confirmation dans le navigateur',
+  'status.authorizing': 'Connexion en cours',
+  'status.connecting': 'Connexion en cours',
+  'status.connected': 'Connecté',
+  'status.reconnect': 'Reconnexion nécessaire',
+  'status.unavailable': 'Connexion impossible pour le moment',
+  'detail.reconnect.expired': 'L’autorisation a expiré. Reconnectez-vous.',
+  'detail.reconnect.binding': 'L’autorisation ne correspond plus aux paramètres actuels. Reconnectez-vous.',
+  'detail.unavailable': 'L’autorisation existante est conservée. Réessayez plus tard.',
+  hostBrowser: 'L’autorisation doit être effectuée dans un navigateur de l’ordinateur qui exécute DSH.',
+  failed: 'L’autorisation n’a pas abouti. Réessayez.',
+  'action.reconnect': 'Se reconnecter',
+  'action.open': 'Ouvrir la page d’autorisation',
+  'action.cancel': 'Annuler',
+  'action.signOut': 'Se déconnecter',
+  'action.reauthorize': 'Autoriser à nouveau',
+  'action.retry': 'Réessayer',
+  'badge.connected': 'Connecté',
+  'badge.disconnected': 'Non connecté',
+  'badge.reconnect': 'À reconnecter',
+  'badge.unavailable': 'Indisponible',
+  'badge.connecting': 'Connexion en cours',
+}
+
+/** German dictionary. */
+const de: Record<McpAccountKey, string> = {
+  'status.checking': 'Verbindung wird geprüft',
+  'status.disconnected': 'Nicht verbunden',
+  'status.waiting-browser': 'Warten auf Ihre Bestätigung im Browser',
+  'status.authorizing': 'Wird verbunden',
+  'status.connecting': 'Wird verbunden',
+  'status.connected': 'Verbunden',
+  'status.reconnect': 'Erneute Verbindung erforderlich',
+  'status.unavailable': 'Verbindung gerade nicht möglich',
+  'detail.reconnect.expired': 'Die Autorisierung ist abgelaufen. Verbinden Sie erneut.',
+  'detail.reconnect.binding': 'Die Autorisierung passt nicht mehr zu den aktuellen Einstellungen. Verbinden Sie erneut.',
+  'detail.unavailable': 'Die bestehende Autorisierung bleibt erhalten. Versuchen Sie es später erneut.',
+  hostBrowser: 'Die Autorisierung muss in einem Browser auf dem Computer abgeschlossen werden, auf dem DSH läuft.',
+  failed: 'Die Autorisierung wurde nicht abgeschlossen. Versuchen Sie es erneut.',
+  'action.reconnect': 'Erneut verbinden',
+  'action.open': 'Autorisierungsseite öffnen',
+  'action.cancel': 'Abbrechen',
+  'action.signOut': 'Abmelden',
+  'action.reauthorize': 'Erneut autorisieren',
+  'action.retry': 'Erneut versuchen',
+  'badge.connected': 'Verbunden',
+  'badge.disconnected': 'Nicht verbunden',
+  'badge.reconnect': 'Neu verbinden',
+  'badge.unavailable': 'Nicht verfügbar',
+  'badge.connecting': 'Wird verbunden',
+}
+
+/** Russian dictionary. */
+const ru: Record<McpAccountKey, string> = {
+  'status.checking': 'Проверка подключения',
+  'status.disconnected': 'Не подключено',
+  'status.waiting-browser': 'Ожидание вашего подтверждения в браузере',
+  'status.authorizing': 'Подключение',
+  'status.connecting': 'Подключение',
+  'status.connected': 'Подключено',
+  'status.reconnect': 'Требуется повторное подключение',
+  'status.unavailable': 'Сейчас не удаётся подключиться',
+  'detail.reconnect.expired': 'Срок действия авторизации истёк. Подключитесь снова.',
+  'detail.reconnect.binding': 'Авторизация больше не соответствует текущим настройкам. Подключитесь снова.',
+  'detail.unavailable': 'Текущая авторизация сохранена. Повторите попытку позже.',
+  hostBrowser: 'Авторизацию нужно завершить в браузере на компьютере, где запущен DSH.',
+  failed: 'Авторизация не завершена. Повторите попытку.',
+  'action.reconnect': 'Подключить снова',
+  'action.open': 'Открыть страницу авторизации',
+  'action.cancel': 'Отмена',
+  'action.signOut': 'Выйти',
+  'action.reauthorize': 'Авторизовать заново',
+  'action.retry': 'Повторить',
+  'badge.connected': 'Подключено',
+  'badge.disconnected': 'Не подключено',
+  'badge.reconnect': 'Переподключить',
+  'badge.unavailable': 'Недоступно',
+  'badge.connecting': 'Подключение',
+}
+
+/** Portuguese dictionary. */
+const pt: Record<McpAccountKey, string> = {
+  'status.checking': 'Verificando a conexão',
+  'status.disconnected': 'Não conectado',
+  'status.waiting-browser': 'Aguardando sua confirmação no navegador',
+  'status.authorizing': 'Conectando',
+  'status.connecting': 'Conectando',
+  'status.connected': 'Conectado',
+  'status.reconnect': 'É necessário reconectar',
+  'status.unavailable': 'Não é possível conectar no momento',
+  'detail.reconnect.expired': 'A autorização expirou. Conecte novamente.',
+  'detail.reconnect.binding': 'A autorização não corresponde mais às configurações atuais. Conecte novamente.',
+  'detail.unavailable': 'A autorização atual foi mantida. Tente novamente mais tarde.',
+  hostBrowser: 'A autorização deve ser concluída em um navegador no computador que executa o DSH.',
+  failed: 'A autorização não foi concluída. Tente novamente.',
+  'action.reconnect': 'Conectar novamente',
+  'action.open': 'Abrir página de autorização',
+  'action.cancel': 'Cancelar',
+  'action.signOut': 'Sair',
+  'action.reauthorize': 'Autorizar novamente',
+  'action.retry': 'Tentar novamente',
+  'badge.connected': 'Conectado',
+  'badge.disconnected': 'Não conectado',
+  'badge.reconnect': 'Reconectar',
+  'badge.unavailable': 'Indisponível',
+  'badge.connecting': 'Conectando',
+}
+
+/**
+ * The shared copy of one key in every shipped language.
+ * @param key - the dictionary key.
+ * @returns the text each browser resolves in its active language.
+ */
+export function text(key: McpAccountKey): LocalizedText {
+  return { en: en[key], zh: zh[key], ja: ja[key], es: es[key], fr: fr[key], de: de[key], ru: ru[key], pt: pt[key] }
+}

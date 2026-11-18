@@ -504,7 +504,7 @@ describe('agent tools in the production loop', () => {
     }
   })
   it('updates the fixed language rule in the next prompt assembly', async () => {
-    const f = await setup()
+    const f = await setup({ language: 'en' })
     try {
       const prompt = () => f.ctx.systemPrompt.assemble({ scope: f.agent })
       expect(

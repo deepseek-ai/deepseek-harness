@@ -21,10 +21,12 @@ import type {
   SessionPageRequest,
   SessionProjectionBaseline,
 } from '../types.ts'
+import { tailPageStart } from './sessions/buffered-pages.ts'
 import {
   historyEntries,
   historyRecordFirstSeq,
   historyRecordLastSeq,
+  historyRecords,
 } from './sessions/history-records.ts'
 import type { SessionEventLikeEntry, SessionLiveEventEntry } from './contract/events.ts'
 import type { SessionRemotes } from './sessions/remotes.ts'
@@ -134,7 +136,18 @@ export function createSessionControlStream(
   })
 }
 
-/** Gateway-owned event journal bound to one ordinary or direct-subagent Session address. */
+/** Older records the published window released into memory, served to page reads before the Host. */
+interface BufferedRecords {
+  /** Contiguous records before the published window, oldest first. */
+  records: readonly SessionHistoryRecord[]
+  /** Whether the Host has history before `records`. */
+  hostHasMore: boolean
+}
+
+/**
+ * Gateway-owned event journal bound to one ordinary or direct-subagent Session address. Pages before the published
+ * window come from buffered records first and from the Host after they run out; a replaced window drops the buffer.
+ */
 export class SessionEventStream extends RemoteJournalStream<
   SessionJournalPage,
   SessionHistoryRecord,
@@ -152,6 +165,7 @@ export class SessionEventStream extends RemoteJournalStream<
     private readonly address: SessionAddress,
     options: SessionEventStreamOptions,
   ) {
+    const buffered: BufferedRecords = { records: [], hostHasMore: false }
     super(remote, {
       name: 'session event stream',
       emptyCursor: -1,
@@ -161,12 +175,31 @@ export class SessionEventStream extends RemoteJournalStream<
       last: historyRecordLastSeq,
       compare: (left, right) => left - right,
       follows: (left, right) => right === left + 1,
-      publish: (change) => { options.publish(toSessionJournalChange(change)) },
+      publish: (change) => {
+        if (change.type === 'replace') buffered.records = []
+        options.publish(toSessionJournalChange(change))
+      },
       ...(options.carrierFailed === undefined
         ? {}
         : { carrierFailed: options.carrierFailed }),
       failed: options.failed,
     })
+    this.buffered = buffered
+  }
+
+  private readonly buffered: BufferedRecords
+
+  /**
+   * Release the start of the published window into memory; later pages before the window return it without a
+   * request.
+   * @param entries - durable entries at the window's start, oldest first, that the window no longer shows.
+   * @param firstSeq - seq of the first entry the window still shows.
+   * @param hostHasMore - whether the Host has history before `entries`; ignored while older entries are buffered.
+   */
+  bufferOlder(entries: readonly SessionLiveEventEntry[], firstSeq: number, hostHasMore: boolean): void {
+    if (this.buffered.records.length === 0) this.buffered.hostHasMore = hostHasMore
+    this.buffered.records = [...this.buffered.records, ...historyRecords(entries)]
+    this.releaseBefore(firstSeq)
   }
 
   /** @inheritdoc */
@@ -227,6 +260,13 @@ export class SessionEventStream extends RemoteJournalStream<
     throughSeq: number,
     signal: AbortSignal,
   ): Promise<SessionJournalPage> {
+    const buffered = this.buffered.records
+    // Only a page before the window reads the buffer; a gap repair without beforeSeq reads the Host.
+    if (request.beforeSeq !== undefined && buffered.length > 0) {
+      const start = tailPageStart(buffered, request.turnWindow)
+      this.buffered.records = buffered.slice(0, start)
+      return { records: buffered.slice(start), hasMore: start > 0 || this.buffered.hostHasMore }
+    }
     const result = await this.remote.session.page(
       { address: this.address, throughSeq, ...request },
       signal,

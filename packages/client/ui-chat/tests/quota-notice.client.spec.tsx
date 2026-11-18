@@ -3,6 +3,7 @@
  * that outlives the Chat panel, and history scrollback never does.
  */
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -70,12 +71,12 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.declare({
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.approval.detail': { kind: 'single', scope: 'session' },
   })
-  const conversation = await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  const conversation = await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   let descriptor: Parameters<typeof runtime.ctx.uiSession.provide>[0] | undefined
   const provide = runtime.ctx.uiSession.provide.bind(runtime.ctx.uiSession)
   runtime.ctx.uiSession.provide = (next) => { descriptor ??= next; return provide(next) }
@@ -123,6 +124,35 @@ describe('frame-wide quota notices', () => {
     expect(notice.getSnapshot()).toMatchObject({ code: 'QUOTA' })
     // An unretained later notice rekeys the surface so its display restarts.
     expect(notice.getSnapshot()?.seq).not.toBe(first)
+  })
+
+  it('publishes only while a reference retains the Session Conversation', async () => {
+    const b = await bench()
+    await b.runtime.sessions.add({ id: SID })
+    const background = b.runtime.sessions.retain(SID, { source: 'testFixture' })
+    references.push(background)
+    b.sourceDescriptor.resolve(background.binding)
+    const notice = noticeFace(b.runtime).hooks.notice
+    await b.runtime.sessions.appendEvent(SID, quotaEntry(0, 'QUOTA'))
+    expect(notice.getSnapshot()).toBeNull()
+    const rendered = b.runtime.sessions.retain(SID)
+    references.push(rendered)
+    await b.runtime.sessions.appendEvent(SID, quotaEntry(1, 'ACCOUNT_QUOTA'))
+    expect(notice.getSnapshot()).toMatchObject({ code: 'ACCOUNT_QUOTA' })
+  })
+
+  it('stops publishing within the dispatch that released the Session Conversation', async () => {
+    const b = await bench()
+    await b.runtime.sessions.add({ id: SID })
+    const background = b.runtime.sessions.retain(SID, { source: 'testFixture' })
+    references.push(background)
+    const rendered = b.runtime.sessions.retain(SID)
+    const stopReleaser = background.binding.eventSource.subscribe(() => { rendered.release() })
+    b.sourceDescriptor.resolve(background.binding)
+    const notice = noticeFace(b.runtime).hooks.notice
+    await b.runtime.sessions.appendEvent(SID, quotaEntry(0, 'QUOTA'))
+    expect(notice.getSnapshot()).toBeNull()
+    stopReleaser()
   })
 
   it('never publishes for history replacement or paging, or for other failures', async () => {

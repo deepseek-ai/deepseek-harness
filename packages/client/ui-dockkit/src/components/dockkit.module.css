@@ -293,16 +293,14 @@
   min-width: 0;
 }
 
-/* Embedder controls at the strip's end, spaced from the kit's own split
-   control as they are from each other: the strip's 4px gap plus this 4px
-   margin equals the 8px between the controls. */
+/* Embedder controls continue the strip's 4px control spacing. */
 .stripChrome {
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
   height: 28px;
-  margin-left: 4px;
+  margin-left: 0;
 }
 
 /* macOS desktop: an embedder may pin this surface at the window's top edge.

@@ -5,7 +5,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 import { productionOwnership, LOGIN } from './blame-ownership.mjs'
-import { authorCreditPoints, countMergedAuthorPulls } from './author-weight.mjs'
+import { FIXED_AUTHOR_POINTS, authorCreditPoints, countMergedAuthorPulls } from './author-weight.mjs'
 
 const API_VERSION = '2026-03-10'
 const MAX_PULL_REQUEST_RECORDS = 3_000
@@ -211,7 +211,7 @@ function timestamp(value, subject) {
 /**
  * Evaluate approval points from current reviews and repository permissions.
  * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs.
- * @returns {Promise<{pull: {repository: string, number: number, headSha: string}, state: 'pending' | 'success', description: string, points: number, authorCredit: {mergedCount: number, points: number} | null, requiredPoints: number, approvals: Array<{login: string, points: number, delegatedTo?: string, ownership?: {ownedLines: number, totalLines: number}}>, delegations: Array<{login: string, delegatedTo: string, commentId: number, reviewIds: number[], approved: boolean}>, blockers: string[], ignoredReviewers: string[]}>} Approval decision and status payload fields; approval login owns the points, delegatedTo supplies its decision, delegations contains eligible active commands and their superseded decision review IDs, and null author credit means history was not evaluated.
+ * @returns {Promise<{pull: {repository: string, number: number, headSha: string}, state: 'pending' | 'success', description: string, points: number, authorCredit: {mergedCount: number | null, points: number} | null, requiredPoints: number, approvals: Array<{login: string, points: number, delegatedTo?: string, ownership?: {ownedLines: number, totalLines: number}}>, delegations: Array<{login: string, delegatedTo: string, commentId: number, reviewIds: number[], approved: boolean}>, blockers: string[], ignoredReviewers: string[]}>} Approval decision and status payload fields; approval login owns the points, delegatedTo supplies its decision, delegations contains eligible active commands and their superseded decision review IDs, null author credit means credit was not evaluated, and null mergedCount means fixed author points.
  */
 export async function evaluateApproval({ event, policySource, api, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls }) {
   const pull = pullRequestFromEvent(event)
@@ -264,8 +264,9 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
   let authorCredit = null
   const reviewerPoints = approvals.reduce((sum, approval) => sum + approval.points, 0)
   if (blockers.length === 0 && reviewerPoints < policy.requiredPoints) {
-    const mergedCount = await getMergedCount(pull, api)
-    authorCredit = { mergedCount, points: authorCreditPoints(mergedCount) }
+    const fixedPoints = FIXED_AUTHOR_POINTS.get(pull.author.toLowerCase())
+    const mergedCount = fixedPoints === undefined ? await getMergedCount(pull, api) : null
+    authorCredit = { mergedCount, points: fixedPoints ?? authorCreditPoints(mergedCount) }
   }
   const pointsBeforeOwnership = reviewerPoints + (authorCredit?.points ?? 0)
   if (blockers.length === 0 && pointsBeforeOwnership < policy.requiredPoints
@@ -338,7 +339,7 @@ export async function runApprovalCheck({ event, policySource, api, checkApi = ap
     throw error
   }
   write(result.authorCredit
-    ? `Author credit: ${result.authorCredit.points} (${result.authorCredit.mergedCount} merged PRs).`
+    ? `Author credit: ${result.authorCredit.points} (${result.authorCredit.mergedCount === null ? `fixed for @${pull.author}` : `${result.authorCredit.mergedCount} merged PRs`}).`
     : `Author credit: not evaluated (${pull.draft ? 'draft' : result.blockers.length ? 'blocking review' : 'reviewer points suffice'}).`)
   write(`Approval score: ${result.points}/${result.requiredPoints}.`)
   writeList(write, 'Counted approvals', result.approvals.map(({ login, points, ownership, delegatedTo }) =>

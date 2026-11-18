@@ -30,10 +30,10 @@ kind: "package-reference"
 命令 `workspace.files` 在焦点分栏内显示停靠预览旁的导航栏，或展开已有停靠文件页的搜索栏，并把键盘焦点移到其搜索框，保留该 tab；从聊天区触发时使用当前会话的活动停靠分栏。其他情况下（不带导航栏的 tab、没有工作目录的会话、浮动 tab）打开或聚焦文件页，文件页的目录树始终显示。文件页替换开始页，同一分栏内重复打开仍保留一个文件页。桌面默认键为 Mod+P。开始页入口显示有效快捷键；Windows 和 macOS Web 使用[快捷键服务的平台默认值](../shortcuts/README.zh.md)；Linux Web 默认不绑定此命令。
 
 - **类型**：`ctx.sidebarRightTabs.register(...)`，kind 为 `files`，id 为 `@deepseek-ai/dsh-client-ui-sidebar-files`，档位 `builtin`，没有 patterns，另有一个打开该类型的引导页入口（order 10，标题与描述取自 `sidebarFiles` 命名空间，图标为黄色文件夹）。
-- **文件页正文**：以该 id 为键的 `sidebar.right.pane.tab` slot。其标题行横跨页面，通过共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 显示根路径，目录使用弱化颜色，最后一段使用主色；路径过长时保留尾部字符并在左侧渐隐，悬停显示完整路径。目录树的重新读取控件和搜索栏开关位于由文件页注册声明的 Session 作用域 `sidebar.right.tab.files.actions` 列表之前（通过 `absolutePath` 传入当前显示的根目录）；[`ui-open-in-app`](../ui-open-in-app/README.zh.md) 在此提供工作区目录打开按钮。标题行下方由该分栏的导航栏铺满整页，停靠与浮动时都一样，这里没有导航栏开关。
+- **文件页正文**：以该 id 为键的 `sidebar.right.pane.tab` slot。其标题行横跨页面，通过共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 显示根路径，目录使用弱化颜色，最后一段使用主色；路径过长时保留尾部字符并在左侧渐隐，悬停显示完整路径。目录树的重新读取控件和搜索栏开关位于由文件页注册声明的 Session 作用域 `sidebar.right.tab.files.actions` 列表之前（通过 `absolutePath` 传入当前显示的根目录）；[`ui-open-in-app`](../ui-open-in-app/README.zh.md) 在此提供工作区目录打开按钮。末端打开控件的边框与上排折叠图标的可见右边缘对齐，位于其热区内侧。双按钮打开控件使搜索与上排分屏图标中心对齐。单应用控件按实际宽度自然靠右，保留普通的 4px 间距，不预留对齐列。目录操作没有渲染内容时，该列及其间距消失，搜索与上排折叠图标对齐。标题行下方由该分栏的导航栏铺满整页，停靠与浮动时都一样，这里没有导航栏开关。
 - **各行**：root 作用域的 Component Factory `sidebar.files.tree`，接收调用方的条目和局部 `accessory` slot；见[复用目录树 Factory](#tree-factory)。
 - **导航栏**：Session 作用域的 Component Factory `sidebar.files.navigator`。文件页正文和 [`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 直接渲染它，显示在每个预览旁，无论停靠还是浮动。它绘制[搜索栏](#search)、目录树及其调整宽度的边缘，没有自己的标题行：预览旁只有预览自己的标题行，目录树的重新读取与目录操作留在 `files` 页上。
-- **开关**：Session 作用域的 Factory `sidebar.files.navigator.toggle`，在预览头部末端直接渲染，传入 `useTabInfo`。两个 Factory 共用文件页的 store handle 和 inject face，每个分栏保留一份开关状态；文件页正文没有导航栏开关。
+- **开关**：Session 作用域的 Factory `sidebar.files.navigator.toggle`，在预览头部末端直接渲染，传入 `useTabInfo`。文件夹图形使用 16px，在共用的 28px 热区内补足横向轮廓的视觉尺寸，与相邻工具栏图标保持平衡。两个 Factory 共用文件页的 store handle 和 inject face，每个分栏保留一份开关状态；文件页正文没有导航栏开关。
 - **标签页标题**：以该 id 为键的 `sidebar.right.pane.tab.title` slot：类型标签前的一枚 16px 共享 `FileTypeIcon` 文件夹图标。树本身的行不画这枚图标。
 
 [注册入口](src/client/index.ts) 在共享 [files face](src/client/face.ts) 与[分栏 store](src/client/store.ts) 上组装文件页、导航栏、开关和目录树 Factory。
@@ -123,6 +123,8 @@ kind: "package-reference"
 
 <details>
 <summary>维护者工作上下文——点击展开</summary>
+
+每层子级图标框承接父级文字列；缩进包含父级图标框及图文间距，并保留图标内部留白。
 
 无。
 

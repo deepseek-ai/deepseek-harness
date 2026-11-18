@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-client` 让模型使用外部 MCP（Model Context Protocol）服务器的工具与资源。每台服务器配置一条记录；其工具使用 `mcp__github__create_issue` 这样的名称。默认不启用任何服务器。随附 profile 已提供[共享资源发现与读取](../mcp-resources/README.zh.md)。调用方作用域为空时，不添加 MCP 工具或提示词文本。服务器指令作为字面文本加入已记录的系统提示词；MCP 提示词模板不受支持。缓慢或崩溃的服务器可能延迟启动，或让调用失败直至恢复。
+`dsh-mcp-client` 让模型使用外部 MCP（Model Context Protocol）服务器的工具与资源。每台服务器配置一条记录；其工具使用 `mcp__github__create_issue` 这样的名称。默认不启用任何服务器。随附 profile 已提供[共享资源发现与读取](../mcp-resources/README.zh.md)。调用方作用域为空时，不添加 MCP 工具或提示词文本。服务器指令作为字面文本加入已记录的系统提示词；MCP 提示词模板不受支持。配置 `toolLoading: on-demand` 时，系统提示词列出这些工具，由各 agent 加载所需的工具。缓慢或崩溃的服务器可能延迟启动，或让调用失败直至恢复。
 
 ## 目录
 
@@ -68,10 +68,18 @@ kind: "package-reference"
 | `reconnect.initialDelayMs` | `500` | 首次重连延迟；每次连续失败尝试翻倍 |
 | `reconnect.maxDelayMs` | `30,000` | 退避上限；同时是重置尝试预算所需的正常运行时长 |
 | `reconnect.maxAttempts` | `10` | 每次中断内连续失败尝试次数上限，超出后放弃 |
+| `toolLoading` | `eager` | `on-demand` 让服务器的工具不进入任何工具列表，直到 agent 用 `mcp__<serverName>__load_tools` 加载 |
+| `catalogDescriptionMaxLength` | `160` | 按需服务器提示词目录中每个工具摘要的最大字符数 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-client)是每个受支持字段的穷尽式真源。
 
 启动后，服务器的工具会以 `mcp__<serverName>__<tool>` 形式出现——试着用一条提示词调用其中一个。如果初始连接失败，harness 仍会启动，但该服务器的工具不会出现，并会记录一条错误。设置 `failOnStartupError: true` 会拒绝插件激活；[app-boot 的启动策略](../../boot/app-boot/README.zh.md)仍允许可选 MCP 配置项失败，而不中止 harness。
+
+### 为服务器管理器提供宿主
+
+在运行时管理服务器的插件（例如 [MCP 管理器](../mcp-manager/README.zh.md)）用 `new McpClientHost(ctx)` 创建自己的 `McpClientHost`。宿主提供 `ctx.mcpClientHost`，这是此类插件使用本包的唯一途径：它校验服务器配置、挂载服务器实例、探测服务器，并创建显式 OAuth 授权所有者。宿主挂载的实例运行在该插件的 Fiber 下，随它结束。
+
+`validate` 用各传输自己的 schema 解析服务器配置，并拒绝无效的模板 token、重连策略，以及与 `Authorization` 请求头同时配置的 OAuth，因此每条拒绝都会在调用方传入的配置路径后点名字段。
 
 ### 工具命名与共存
 
@@ -95,6 +103,11 @@ kind: "package-reference"
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
 
+<a id="on-demand-tool-loading"></a>
+### 按需加载工具
+
+工具定义太大、不适合随每次请求发送的服务器，可以设置 `toolLoading: on-demand`。这样它的工具不进入工具列表：系统提示词列出每个工具的原始名称及其描述的第一行，模型用 `mcp__<serverName>__load_tools` 加载需要的工具。加载的工具只加入调用方 agent 的工具列表；子 agent、fork 和恢复的会话开始时都没有已加载的工具。之后的每次同步（包括重连后的同步）会重新注册服务器仍提供的已加载工具，并移除其余工具。服务器自己名为 `load_tools` 的工具不列入目录，并记录一条警告。能看到加载器的 agent 都能加载目录中的任何工具；工具限制见[已知限制](#known-limitations-and-deferred-work)。
+
 <a id="runtime-templates-and-credentials"></a>
 ### 运行时模板与凭据
 
@@ -103,6 +116,13 @@ kind: "package-reference"
 凭据通知只有在解析值变化时才重建连接；值相同的通知保留连接及其重连预算。替代连接启动前，旧连接必须关闭并完成本地清理。清理未完成会阻止替换，直到宿主重启。
 
 启用模板展开时，失败诊断、工具调用失败与 MCP `isError` 工具结果文本保留上游消息，但会把本实例解析过的每个值（包括此前轮换的值及其 URL 编码形式）替换为 `[redacted]`，失败的 `name` 与 `code` 保持不变。成功工具结果保留原始内容。
+
+<a id="oauth"></a>
+### OAuth
+
+为 Streamable HTTP 条目设置稳定的 `mcp-client/<id>` 凭据记录地址 `oauth.credentialKey`，并加载凭据提供方。在所属插件条目上声明 `inject: [credentials]`，使启动等待该提供方就绪。OAuth 不能与 `Authorization` 请求头同时配置。连接和探测只使用已提交的授权，不会打开浏览器或注册客户端。缺失凭据、令牌被拒绝或明确的权限不足响应会使连接进入 `waiting-authorization`；探测返回失败结果。其原因为：没有已保存授权时为 `missing`，access token 过期且没有 refresh token 时为 `expired`，授权与解析后的 `url` 或 OAuth 选项不再匹配时为 `binding`，服务器拒绝令牌时为 `rejected`，服务器要求更多权限范围时为 `scope`。授权失效时正在进行的工具调用会以该原因失败，例如 `MCP OAuth requires authorization: scope`。探测可能刷新并持久化过期授权。普通 HTTP 403 错误不改变授权状态。诊断、工具调用失败与 `isError` 结果会把连接发送过的每个 access token 替换为 `[redacted]`。
+
+显式授权通过[管理器](../mcp-manager/README.zh.md#oauth-authorization)使用 Authorization 与 WebServer 服务。`oauth.clientId` 指定预注册的公开客户端；省略时允许在显式授权中动态注册。`oauth.scope` 覆盖挑战中的权限范围；仅在配置的权限范围一致时复用动态注册。修改解析后的 `url`、`oauth.clientId` 或 `oauth.scope` 会使已保存授权以 `binding` 原因失效，条目需要重新显式授权。`oauth.requestTimeoutMs` 默认为 10,000 毫秒，`oauth.authorizationTimeoutMs` 默认为 600,000 毫秒。取消和重试等待未完成授权清理的时间由 `closeTimeoutMs` 限制。授权服务器请求和 OAuth 条目的 MCP 请求都要求 HTTPS（回环 HTTP 除外）并拒绝重定向，因此 `url` 必须是最终端点。浏览器回调是一个只在授权尝试期间存在的 `webserver/request` 监听器，在路由准入之前应答：授权服务器的跳转是跨站导航，[Connection](../../client/connection/README.zh.md) 对所有路由都拒绝这类请求。监听器只处理 authority 和路径都与重定向 URI 相同的请求，其余请求交给后续处理。回调返回一个中英双语的静态页面，说明 DSH 是否已收到授权，或提示回到 DSH 重试；页面不回显任何回调参数。授权服务器请求不携带资源请求头。失败尝试的 `lastError` 是固定或本地消息，例如 `MCP OAuth request failed`；该消息未包含上游原因时，宿主会以警告日志记录该原因，并把解析后的模板值、授权码、PKCE verifier、客户端密钥和签发的令牌替换为 `[redacted]`。刷新通过凭据提供方串行执行，保留授权身份及注册时的令牌端点认证方式；重新授权成功后会替换授权身份和连接，替换期间不会进入 `waiting-authorization`。
 
 -----
 
@@ -126,19 +146,25 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待 |
+| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待、宿主启动 |
+| [`src/config.ts`](src/config.ts) | stdio、Streamable HTTP 与宿主三种配置形态的 schema，以及 OAuth 请求头规则 |
+| [`src/host.ts`](src/host.ts) | MCP 客户端宿主：配置校验、挂在宿主之下的实例、探测与授权所有者 |
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose（资源释放） |
 | [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
 | [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定，并替换每个已解析的值 |
 | [`src/templates.ts`](src/templates.ts) | 凭据模板语法、替换与引用发现 |
-| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册与字面服务器指令 |
+| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册、字面服务器指令与按需工具目录 |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
+| [`src/tool-loading.ts`](src/tool-loading.ts) | 按需加载：加载器工具、提示词目录与各 agent 已加载的工具 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
-| [`src/deadline.ts`](src/deadline.ts) | 启动与探测预算共用的结算截止器 |
-| [`src/diagnostic.ts`](src/diagnostic.ts) | 原因链诊断与密钥值替换 |
-| [`src/types.ts`](src/types.ts) | 客户端可用的连接状态与探测结果类型（`./types`） |
+| [`src/deadline.ts`](src/deadline.ts) | 启动、探测、操作与清理预算共用的结算截止器 |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | 原因链诊断、OAuth 失败分类与密钥值替换 |
+| [`src/oauth-options.ts`](src/oauth-options.ts) | OAuth 配置 schema |
+| [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | 持久化的授权与客户端记录，刷新经凭据提供方串行执行 |
+| [`src/oauth.ts`](src/oauth.ts) | 显式浏览器授权：回调、流程与进行中的工作共用一个所有者 |
+| [`src/types.ts`](src/types.ts) | 客户端可用的连接状态、探测结果与 OAuth 尝试类型（`./types`） |
 
 导出的 `createMcpToolDefinition(ctx, options)` 将上游工具 schema 和原始结果回调适配到相同的规范值、错误和持久化图像投影。每次回调都收到原样的 `ToolExecution`，包括其 Agent 和取消信号；SDK 的规范类型校验会在投影前检查返回结果。调用方负责注册、取消截止时间和提供方卸载。原生 Cua Driver 提供方使用此适配函数，无需打开 MCP 传输。
 
@@ -146,11 +172,11 @@ kind: "package-reference"
 
 `apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 agent（智能体）作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭协商中的传输或已绑定的客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。
 
-组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(fiber)` 观察单个实例。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。`probeServer(ctx, config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
+宿主的 `mount` 在实例激活完成后给出其状态句柄。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。宿主的 `probe(config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
 
 SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试并关闭连接，再按重连策略处理。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
 
-启用 `expandTemplates` 时，失败诊断标明操作名称并保留原因链，其中每个已解析的值都替换为 `[redacted]`。未启用模板展开的配置保留完整错误诊断。
+启用 `expandTemplates` 或 OAuth 时，失败诊断标明操作名称并保留原因链，其中每个已解析的值和 OAuth access token 都替换为 `[redacted]`。两者均未启用的配置保留完整错误诊断。
 
 ### 工具执行内部细节
 
@@ -208,6 +234,20 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV-cache 条目失效。
 
+### 按需工具
+
+#### 模型看到什么
+
+按需服务器提供一个工具 `mcp__<serverName>__load_tools`，以及一个标题为 `On-demand tools from MCP server <serverName>` 的系统提示词段落，列出每个工具的原始名称和摘要。只有能看到加载器的 agent 才会看到该段落。一次加载返回它新增或已经加载的公开名称；下一次请求带上这些工具的定义，会话日志记录这次工具添加。
+
+#### Token 影响
+
+在 agent 加载工具之前，服务器的开销是加载器定义加每个工具一行目录，每条摘要以 `catalogDescriptionMaxLength` 为上限，而不是全部工具定义。每个已加载的工具会把完整定义加入该 agent 的请求。
+
+#### KV Cache 影响
+
+一次加载会改变该 agent 的工具列表。声明了工具更新的路由会追加这次添加并保留前缀；其他路由开始新的请求序列。服务器工具列表变化时目录段落随之改写，与服务器指令变化的情况相同。
+
 ### 服务器指令
 
 #### 模型看到什么
@@ -234,6 +274,8 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 - **重连处理协商失败与传输关闭**——初始连接失败或 stdio 子进程崩溃都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
+- **OAuth 授权需要浏览器能直接访问 Host Web 服务器**——回调地址是该服务器自身的源地址：监听地址加端口，启用 TLS 时使用 HTTPS。只能通过代理或 Web 应用的 `publicUrl` 访问 DSH 的浏览器无法完成授权。动态客户端注册以该回调地址区分，监听地址或端口改变、或端口随机分配时，下一次显式授权会注册新的客户端；退出登录会保留之前的注册记录。
+- **按需加载不受工具限制约束**——已加载的工具位于调用方 agent 自己的作用域，`tools.restrict()` 的 allow 与 deny 掩码不过滤它们，而且这些掩码会拒绝继承工具列表中不存在的名称。要按名称禁止可加载的工具，使用执行 guard（`tools.guard`）。PTC 模式下程序在开始时绑定工具，`run_code` 内加载的工具要到下一个程序才能调用。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
 
 <a id="dev-note"></a>

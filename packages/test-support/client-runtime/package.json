@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-test-runtime",
   "description": "Browser test runtimes: a jsdom slot bench with test-owned Session and Workspace doubles, and a whole-client tier that boots the web roster through the production bootClient over an endpoint-named Remote mock",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },
@@ -90,7 +90,8 @@
     "@deepseek-ai/dsh-web-app": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
+    "@deepseek-ai/dsh-client-config": "workspace:*"
   },
   "files": [
     "lib/index.js",

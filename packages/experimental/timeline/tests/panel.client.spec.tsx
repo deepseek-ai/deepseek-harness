@@ -632,10 +632,13 @@ describe('the Task Tree and Timeline tabs', () => {
     const titles = [...container.querySelectorAll('.timeline-annotation-target')].map(
       node => node.textContent,
     )
+    // The panel renders dates with the locale the fixture supplies; format the expected text with
+    // the same locale instead of the host ICU locale, which differs across CI runners.
+    const shown = (at: number) => new Date(at).toLocaleString('en')
     expect(titles).toEqual([
       'Task Tree: Review release',
       'Review release · Verify behavior',
-      `Level 1 · 1m: ${new Date(report.start).toLocaleString()} – ${new Date(report.end).toLocaleString()}`,
+      `Level 1 · 1m: ${shown(report.start)} – ${shown(report.end)}`,
     ])
     expect(screen.getByText(en.controlWaiting)).toBeTruthy()
     expect(screen.getByText('The saved result is verified.')).toBeTruthy()

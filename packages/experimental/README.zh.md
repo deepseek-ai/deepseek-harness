@@ -36,8 +36,8 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
-| [`action-cards`](action-cards/README.zh.md) | 回答下方的可选操作卡片：提议工具、卡片状态、用户操作与状态通知 | `ctx.actionCards` |
-| [`client-ui-action-cards`](client-ui-action-cards/README.zh.md) | 已完成回答下方的卡片框架、种类正文与提议过程行 | — |
+| [`action-cards`](action-cards/README.zh.md) | 回答下方的可选操作卡片：`action-card` 代码块、卡片状态、用户操作与状态通知 | `ctx.actionCards` |
+| [`client-ui-action-cards`](client-ui-action-cards/README.zh.md) | 已完成回答下方的卡片框架、种类正文，以及隐藏卡片代码块的层 | — |
 | [`creation-recommendations`](creation-recommendations/README.zh.md) | 针对明确需求创建持续可用、可移除的界面插件 | — |
 | [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.zh.md) | 个性化页面卡片正文、位置选择和撤销 | — |
 | [`plugin-recommendations`](plugin-recommendations/README.zh.md) | 在对话中针对明确需求推荐官方插件 | `ctx.pluginRecommendations` |

@@ -765,7 +765,7 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(dispatches).toEqual([expect.objectContaining({ name: 'cordis_inspect', isError: false })])
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-  expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
+  expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Runtime', 'Tool'])
   expect(textOf(2)).toBe('started subagent agent-1')
   expect(events.filter(event => event.type === 'subagent/catalog').map(event => event.data))
     .toContainEqual(expect.objectContaining({ childId: logs[1]!.header.id, name: 'agent-1' }))
@@ -820,7 +820,7 @@ function verifyMcpResources(log: string, ptc: boolean): void {
     .toContain('server argument: ["catalog"]')
 }
 
-function verifyMcpTemplateError(log: string, secret: string): void {
+function verifyMcpError(log: string, secret: string, oauth: boolean): void {
   const events = parseSessionLog(log)
   const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
   expect(calls).toEqual(['mcp__protected__ping'])
@@ -828,7 +828,9 @@ function verifyMcpTemplateError(log: string, secret: string): void {
   expect(results).toHaveLength(1)
   expect(results[0]).toMatchObject({ isError: true })
   const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-  expect(diagnostic).toBe('Error: MCP fixture rejected Bearer [redacted]')
+  expect(diagnostic).toBe(oauth
+    ? 'Error: MCP OAuth requires authorization: scope'
+    : 'Error: MCP fixture rejected Bearer [redacted]')
   expect(log).not.toContain(secret)
   const resultIndex = events.findIndex(event => event.type === 'tool/result')
   const nextRequest = events.findIndex((event, index) => index > resultIndex && event.type === 'assistant/message')
@@ -838,6 +840,14 @@ function verifyMcpTemplateError(log: string, secret: string): void {
   const messages = surface.nodes.map(seq => deriveEventMessage(prefix[seq]!, surface.projectedMessages))
   expect(messages).toContainEqual(results[0])
   expect(JSON.stringify(messages)).not.toContain(secret)
+  if (oauth) {
+    const headers = prefix.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
+    expect(headers[0]?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(true)
+    expect(headers.at(-1)?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(false)
+    expect(log).toContain('MCP_AUTHORIZED_INSTRUCTION')
+    const system = messages.filter(message => message?.role === 'system')
+    expect(JSON.stringify(system)).not.toContain('MCP_AUTHORIZED_INSTRUCTION')
+  }
 }
 
 function verifyNoMcpServers(log: string, ptc: boolean): void {
@@ -1400,8 +1410,8 @@ describe('headless recorded-session snapshots', () => {
       const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
       const fixturePath = join(scenario.dir, fixtureFiles[0] ?? sessionFixtureName(0, SESSION_FORMAT_VERSION))
       const locatorRoot = snapshotSpillRoot(fixturePath)
-      const mcpDemo = scenario.name === 'plugin-manager-mcp' || scenario.name === 'mcp-template-error'
-        ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error' }) : undefined
+      const mcpDemo = ['plugin-manager-mcp', 'mcp-template-error', 'mcp-oauth-error', 'mcp-tool-loading'].includes(scenario.name)
+        ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error', authorizationFailure: scenario.name === 'mcp-oauth-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
         result = await runLoaderSmoke({
@@ -1461,6 +1471,17 @@ describe('headless recorded-session snapshots', () => {
               await mkdir(profileDir, { recursive: true })
               await copyFile(join(scenario.dir, 'profile.patch.yml'), join(profileDir, 'cordis.patch.yml'))
             }
+            if (scenario.name === 'mcp-oauth-error' && mcpDemo !== undefined) {
+              await mkdir(join(cwd, '.dsh'), { recursive: true })
+              await writeFile(join(cwd, '.dsh/.credentials.yaml'), JSON.stringify({ version: 1, records: {
+                'mcp-client/snapshot': { kind: 'grant', payload: {
+                  version: 1, type: 'mcp-oauth-grant', id: '00000000-0000-4000-8000-000000000001',
+                  serverUrl: mcpDemo.url, issuer: new URL(mcpDemo.url).origin,
+                  clientKey: 'mcp-client/snapshot-client', clientId: 'snapshot-client',
+                  tokens: { access_token: scenario.manifest.environment?.DSH_MCP_OAUTH_TOKEN, token_type: 'Bearer' },
+                } },
+              } }) + '\n', { mode: 0o600 })
+            }
             await seedWorkspace(scenario, cwd)
             initialWorkspace = await captureWorkspaceSnapshot(cwd, {
               ignoredRootEntries: ignoredWorkspaceEntries,
@@ -1488,13 +1509,21 @@ describe('headless recorded-session snapshots', () => {
               expect(saved).toContain('id: demo')
               expect(saved).toContain('disabled: false')
             }
-            if (scenario.name === 'mcp-template-error' && mcpDemo !== undefined) {
-              const secret = scenario.manifest.environment?.DSH_MCP_TEMPLATE_TOKEN
+            if ((scenario.name === 'mcp-template-error' || scenario.name === 'mcp-oauth-error') && mcpDemo !== undefined) {
+              const oauth = scenario.name === 'mcp-oauth-error'
+              const secret = scenario.manifest.environment?.[oauth ? 'DSH_MCP_OAUTH_TOKEN' : 'DSH_MCP_TEMPLATE_TOKEN']
               expect(secret).toBeDefined()
-              verifyMcpTemplateError(actualLogs[0]!.content, secret!)
+              verifyMcpError(actualLogs[0]!.content, secret!, oauth)
               expect(mcpDemo.calls).toEqual(['ping'])
               expect(mcpDemo.authorization.length).toBeGreaterThan(1)
               expect(mcpDemo.authorization.every(value => value === `Bearer ${secret!}`)).toBe(true)
+            }
+            if (scenario.name === 'mcp-tool-loading' && mcpDemo !== undefined) {
+              // The on-demand tool joins the request only after the agent loads it.
+              const headers = parseSessionLog(actualLogs[0]!.content).flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
+              expect(headers[0]?.tools?.some(tool => tool.name === 'mcp__demo__ping')).toBe(false)
+              expect(headers.at(-1)?.tools?.some(tool => tool.name === 'mcp__demo__ping')).toBe(true)
+              expect(mcpDemo.calls).toEqual(['ping'])
             }
             if (scenario.name === 'toolcall-unused-args') {
               const events = parseSessionLog(actualLogs[0]!.content)

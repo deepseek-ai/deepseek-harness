@@ -89,6 +89,8 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 `ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；新会话与重新打开工作区打开同一个空白会话，因此会回到该空白会话中未发送的草稿。`forkSession(id, onCreated?, options?)` 创建子会话，不导航，也不替代尚未完成的导航；`allowMigration` 携带调用方的迁移许可。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。
 
+`mainView` 引用保留 `conversation` 子要素。主视图离开一个非空白、未归档的 Session 时，导航先以不带子要素的 `recentViews` 引用保留它，因此其历史仍已加载，切回时无需再请求历史，而 Conversation 组装在重新显示前停止。运行中、等待用户或完成未读的最近访问会话始终保留且不计数；其余最近访问会话最多保留 `recentViewLimit` 个（默认 10），不含主视图 Session。`recentViewLimit` 是插件 Host `Config` 的 volatile 字段，在其 `cordis.yml` 行中设置，并经 [Client Modules](../modules/README.zh.md#synced-plugin-configuration) 同步到浏览器；修改后无需刷新页面即生效，按新上限释放或保留最近访问会话，已释放的 Session 不会回来。浏览器收到值之前，所有计数的最近访问会话都会保留。超出时先释放最早离开的未置顶会话，再释放最早离开的置顶会话；被释放的最近访问会话只有在主视图再次离开该 Session 时才会回来。Session 回到主视图、被移除或归档，或插件卸载时，会释放其最近访问引用。
+
 Session 行与 Workspace 行的可用操作来自浏览器根的访问 Hook：`useWorkspaceAccess` 门控 Workspace 的新建、重命名、删除与排序动作，`useSessionAccess` 门控 Session 行的重命名、分叉、拖拽、置顶、归档与取消归档动作，以及搜索结果的恢复控件。被拒绝的动作不渲染，但每个发往 Host 的请求仍以其授权为准。Ungrouped 标题行不提供新建会话，因为它没有可在其中新建会话的后备 Workspace。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
 
 导航和启动恢复通过所选 Session 的 `follow` 获取投影，不会另行刷新该 Session 或其父会话的投影；例外是恢复已保存的空白会话时先重新加载该 Session 的投影，因为列表中的值是缓存提示，Host 非正常退出后可能落后于其日志。
@@ -235,7 +237,7 @@ export function apply(ctx: Context): void {
 
 ### 视图状态
 
-Workspace 与 Session 行高均为 32px，共用 16px 前置单元和 6px 标签间距，行尾内边距为 8px。分组内 Session 行、平铺列表和搜索结果的行间距为 2px，Workspace 分组间距保持 4px。操作中心相距 29px，24px 热区之间保留 5px 间隔。内置更多操作的图标为 16px，其他内置行操作图标为 14px。时间标签的尾部外边距为 -1px，工作区区头标签的左偏移为 -1px。展开侧栏的工具栏为收起的搜索、视图和添加控件单独保留 1px 尾部内边距；区头标签与展开搜索框保留各自的对齐方式。Session 插入标记补偿两侧透明边框，不移动行内容。
+Workspace 与 Session 行高均为 32px，共用 16px 前置单元和 6px 标签间距，行尾内边距为 8px。分组内 Session 行、平铺列表和搜索结果的行间距为 2px，Workspace 分组间距保持 4px。操作中心相距 28px，24px 热区之间保留 4px 间隔。内置行操作图标统一为 14px，SVG 外框之间保留 14px。时间标签的尾部外边距为 -1px，工作区区头标签的左偏移为 -1px。展开侧栏的工具栏为收起的搜索、视图和添加控件单独保留 1px 尾部内边距；区头标签与展开搜索框保留各自的对齐方式。Session 插入标记补偿两侧透明边框，不移动行内容。Session 标题与静止态时间标签之间保留 12px 间距，标题区域与第一个操作 SVG 外框之间保留 14px。
 
 Workspace 基线就绪后，浏览器持久化的展开状态和 Session 顺序记录只保留当前 Workspace id、Ungrouped 和单列表记账。`WorkspaceView.sessionIds` 提供真实 Workspace 的成员关系，而不提供 Session 显示顺序。视图操作接收完整记账顺序，而不是筛选后的行。尚无 Session 摘要的新成员会等待摘要，已保存的位置则在摘要暂时缺失时保留。归档显隐仅在派生行时应用。置顶和拖拽写入完整顺序，普通派生不执行写入。当前选中的空白 Session 仍是一次显式位置写入；Workspace 重连时同样如此，此时保留其他已保存成员，直到基线确定成员关系。侧边栏收成窄栏或搜索替代列表主体时，排序仍保持挂载。最近更新从当前摘要派生，不读取已保存位置；时间相同时按 Session id 稳定排序。
 

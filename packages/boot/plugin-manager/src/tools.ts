@@ -15,7 +15,7 @@ const ERROR_STEPS: Record<ManagementError['code'], string> = {
   'unaddressable': 'This entry has no unique profile patch target; tell the user to edit the profile patch file directly.',
   'unknown-plugin': 'Call list_plugins and retry with an exact entryId.',
   'invalid-spec': 'Retry with an npm package name, a git URL, a tarball URL, or an absolute local directory.',
-  'already-installed': 'The package is already installed; to install another version, call remove_bundle first, then install_bundle again.',
+  'already-installed': 'The package is already installed. To reload its files after an in-place change, call set_plugin with enabled true on its entry from list_plugins; to install another version, call remove_bundle first, then install_bundle again.',
   'ambiguous-install': 'The dependency change named no single package; call list_bundles to see what was installed.',
   'not-bundle': 'The package declares no dsh.bundle and cannot be managed as a plugin; install a DSH plugin bundle instead.',
   'not-removable': 'Call list_bundles; only bundles marked removable can be removed.',
@@ -86,7 +86,7 @@ export const inject = ['tools', 'pluginManager', 'sandboxPolicy']
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'plugin_manager',
-    description: 'List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.',
+    description: 'List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. The application field of a change result is authoritative: applied means the change is in effect and needs no restart; any other value carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.',
     parameters: {
       action: { type: 'string', required: true, enum: ['list_plugins', 'list_bundles', 'set_plugin', 'set_bundle', 'install_bundle', 'remove_bundle', 'list_version_exemptions', 'set_version_exemption'], description: 'Management operation.' },
       target: { type: 'string', description: 'Plugin entry id, bundle package name, or installation spec, according to action. For an Official catalog entry, pass list_bundles installTarget.spec to install_bundle.' },

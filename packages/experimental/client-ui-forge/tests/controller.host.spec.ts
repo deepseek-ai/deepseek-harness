@@ -60,6 +60,9 @@ function reader(opened: Bench): Follower {
 
 const ready = (state: ForgePanelState): boolean => state.checkout.state === 'ready' && state.readiness !== null
 
+/** Text of a notice a plugin queues for the next step, as the approval service does after a policy change. */
+const POLICY_NOTICE = 'The user changed the approval policy from "ask the user for approval" to "never ask the user for approval".'
+
 /** Worktree facts of a Session without a worktree service, request, or creation, whose checkout can host a worktree. */
 const UNAVAILABLE = {
   editable: false, blocker: null, namePrefix: 'dsh-', request: null, created: null, creation: null, failure: null, missing: null,
@@ -67,10 +70,11 @@ const UNAVAILABLE = {
 }
 
 /**
- * The same facts once the Session works in its worktree: its root no longer contains the repository's Git
- * directory, which another worktree would have to write. The option that shows the blocker is hidden by then.
+ * The same facts once the Session works in its worktree. Its root no longer contains the repository's Git
+ * directory, which another worktree would have to write; the worktree service's linked-worktree grant covers that
+ * directory except on Windows. The option that shows the blocker is hidden by then.
  */
-const IN_WORKTREE = { ...UNAVAILABLE, blocker: 'outside-writable-root' as const }
+const IN_WORKTREE = { ...UNAVAILABLE, blocker: process.platform === 'win32' ? 'outside-writable-root' as const : null }
 
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
@@ -951,6 +955,26 @@ describe('forgePanel worktree blockers', () => {
     expect(unblocked.worktree.blocker).toBeNull()
   })
 
+  it('offers a worktree from a linked checkout while the Session\'s policy grants its shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked)
+    const follower = reader(opened)
+    const blocked = await follower.until(ready)
+
+    const revoke = opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, join(repo, '.git'))
+    shellTurn(opened.session, 1, [{ callId: 'first', command: 'true', output: '' }])
+    const granted = await follower.next(state => state.worktree.blocker !== 'outside-writable-root')
+    revoke()
+    shellTurn(opened.session, 2, [{ callId: 'second', command: 'true', output: '' }])
+    const revoked = await follower.next(state => state.worktree.blocker !== null)
+
+    expect(blocked.worktree.blocker).toBe('outside-writable-root')
+    expect(granted.worktree.blocker).toBeNull()
+    expect(revoked.worktree.blocker).toBe('outside-writable-root')
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
@@ -1261,6 +1285,31 @@ describe('forgePanel worktree creation while a message waits', () => {
     ])
   })
 
+  it('creates no worktree for a notice queued for the next step, and creates it when the first message arrives', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const follower = reader(opened)
+    await follower.until(ready)
+    await opened.ctx.forgePanel.requestWorktree(opened.session, null, null, signal)
+    const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+    const policy = prompt(POLICY_NOTICE)
+
+    opened.agent.inject(policy)
+    const afterNotice = maintenance.mock.calls.length
+    const untouched = worktreeState(opened).created
+    sendPrompt(opened.agent, 'first')
+    await opened.agent.whenIdle()
+
+    const created = worktreeState(opened)?.created ?? null
+    expect(afterNotice).toBe(0)
+    expect(untouched).toBeNull()
+    expect(maintenance).toHaveBeenCalledTimes(1)
+    expect(created?.repositoryRoot).toBe(repo)
+    expect(opened.agent.wakes).toBe(1)
+    expect(opened.agent.inbox.nextStep).toEqual([policy, notice(created?.path ?? '')])
+    expect(queued(opened)).toEqual(['first'])
+  })
+
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
     const { repo } = await project()
     const opened = await open(repo, {}, { worktrees: true })
@@ -1503,14 +1552,19 @@ describe('forgePanel removed worktrees', () => {
     const created = await startInWorktree(opened)
     const tip = await commitAt(created.path, 'later.txt', '2026-05-01T00:00:00Z')
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
+    const granted = await plain()
+    opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, granted)
     await rm(created.path, { recursive: true, force: true })
 
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
-    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary.
-    const probe = opened.sandbox.calls.find(call => call.argv.includes('show-ref'))
-    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
+    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
+    // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
+    const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
+    // The worktree service's linked-worktree grant registered the repository's Git directory when the Session entered the worktree.
+    const grants = process.platform === 'win32' ? [granted] : [join(repo, '.git'), granted]
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: grants })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -1659,6 +1713,23 @@ describe('forgePanel removed worktrees', () => {
     expect(opened.agent.wakes).toBe(5)
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(queued(opened)).toEqual(['before', 'first', 'inside', 'removed', 'outside'])
+  })
+
+  it('starts no check of a removed worktree for a notice queued for the next step', async () => {
+    const { repo } = await project()
+    const opened = await open(repo, {}, { worktrees: true })
+    const created = await startInWorktree(opened)
+    await rm(created.path, { recursive: true, force: true })
+    const maintenance = vi.spyOn(opened.agent, 'runMaintenance')
+
+    opened.agent.inject(prompt(POLICY_NOTICE))
+    const afterNotice = maintenance.mock.calls.length
+    sendPrompt(opened.agent, 'removed')
+    await vi.waitFor(async () => { await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal)).resolves.toBeUndefined() })
+    await opened.agent.whenIdle()
+
+    expect(afterNotice).toBe(0)
+    expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
   it('leaves a worktree whose directory exists unchanged', async () => {

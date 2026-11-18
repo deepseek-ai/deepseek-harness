@@ -38,6 +38,6 @@ A Session that works in a linked worktree can write its repository's `hooks` and
 
 A Session whose directory is a subdirectory of a worktree, or a submodule checkout, receives no grant. A command that resolved its policy before a move finished keeps the permissions it resolved, so a Git command issued in the same step as `enter_worktree` can be denied once.
 
-The forge panel's New worktree option reads only the workspace root and stays disabled in a linked checkout, while `enter_worktree` creates a worktree there.
+The forge panel's New worktree option counts the policy's additional writable directories. In a linked checkout the grant therefore makes the option available at the panel's next inspection, and `enter_worktree` creates a worktree there.
 
 Required verification: the real-sandbox suites of the plugin and of the worktree service commit from a worktree without a manual registration and show that a `.git` file naming another worktree's administration directory gains no write access.
