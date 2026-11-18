@@ -117,9 +117,10 @@ export function apply(ctx: Context): void {
       }
       exec.signal.throwIfAborted()
       assertUnarchived(id)
-      // The subagent-owned agent-message source and prefix match send_message, naming the sender by Session id.
+      // The source is the agent-message kind dsh-subagent declares. The prefix differs from send_message,
+      // whose `Agent <name>` senders resolve only inside the recipient's subagent tree.
       const message = createUserMessage({
-        content: [{ type: 'text', text: `Agent ${caller.id} sent a message: ` }, { type: 'text', text: args.message }],
+        content: [{ type: 'text', text: `Session ${caller.id} sent a message: ` }, { type: 'text', text: args.message }],
         source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
       })
       found.agent.steer(message)

@@ -63,7 +63,7 @@ Call `session_send_message({ session_id: "target-id", message: "Please review th
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The tool takes the sender from the runtime's calling Agent, so the model cannot choose a sender identity. It checks the Workspace registry's archive list, waits for the Session controller's activation while racing the caller's signal, then rechecks cancellation and the archive list. It builds the message with the `agent-message` source that `@deepseek-ai/dsh-subagent` declares, records the caller's `senderSessionId`, uses the same `Agent <sender> sent a message: ` prefix as `send_message` with the caller's Session id, and calls `steer()` on the target. Inbox failures propagate unchanged. The [tool pipeline](../../core/tools/README.md) applies its ordinary cancellation behavior. The Host presenter shows the target id and message text; the [Web tool card](../../client/ui-tool/README.md) derives the accepted state and message ID from the recorded result.
+The tool takes the sender from the runtime's calling Agent, so the model cannot choose a sender identity. It checks the Workspace registry's archive list, waits for the Session controller's activation while racing the caller's signal, then rechecks cancellation and the archive list. It builds the message with the `agent-message` source that `@deepseek-ai/dsh-subagent` declares, records the caller's `senderSessionId`, prefixes the text with `Session <caller session id> sent a message: `, and calls `steer()` on the target. The prefix differs from the `Agent <name> sent a message: ` prefix of `send_message`, whose names resolve only inside one subagent tree. Inbox failures propagate unchanged. The [tool pipeline](../../core/tools/README.md) applies its ordinary cancellation behavior. The Host presenter shows the target id and message text; the [Web tool card](../../client/ui-tool/README.md) derives the accepted state and message ID from the recorded result.
 
 ### Source map
 
@@ -106,7 +106,7 @@ Enabling or disabling the row changes the tool schema list and may invalidate re
 
 #### What the model sees
 
-The recipient receives one steering user message: a text block `Agent <caller session id> sent a message: ` followed by the message text unchanged.
+The recipient receives one steering user message: a text block `Session <caller session id> sent a message: ` followed by the message text unchanged.
 
 #### Token effect
 

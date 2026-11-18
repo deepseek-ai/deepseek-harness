@@ -76,7 +76,7 @@ describe('Session message tool', () => {
     expect(message).toMatchObject({
       source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
       content: [
-        { type: 'text', text: `Agent ${caller.id} sent a message: ` },
+        { type: 'text', text: `Session ${caller.id} sent a message: ` },
         { type: 'text', text: '  Please review.\nKeep the context.  ' },
       ],
     })
@@ -183,7 +183,7 @@ describe('Session message tool', () => {
     const [message] = agentMessages(target)
     expect(message).toMatchObject({
       source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
-      content: [{ type: 'text', text: `Agent ${caller.id} sent a message: ` }, { type: 'text', text: 'Hello' }],
+      content: [{ type: 'text', text: `Session ${caller.id} sent a message: ` }, { type: 'text', text: 'Hello' }],
     })
     expect(agentMessages(target)).toHaveLength(1)
     expect(result).toMatchObject({

@@ -63,7 +63,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-工具从运行时的调用智能体获取发送者，因此模型无法选择发送者身份。它先检查 Workspace 注册表的归档列表，在与调用方取消信号竞争的同时等待 Session 控制器完成激活，随后再次检查取消状态和归档列表。它使用 `@deepseek-ai/dsh-subagent` 声明的 `agent-message` 来源构造消息，记录调用方的 `senderSessionId`，沿用 `send_message` 的 `Agent <sender> sent a message: ` 前缀并以调用方的 Session id 作为发送者名称，然后对目标调用 `steer()`。收件箱失败原样传播。[工具流水线](../../core/tools/README.zh.md)沿用普通取消行为。Host 展示器显示目标 id 和消息正文；[Web 工具卡片](../../client/ui-tool/README.zh.md)从已记录的结果中推导接收状态和消息 ID。
+工具从运行时的调用智能体获取发送者，因此模型无法选择发送者身份。它先检查 Workspace 注册表的归档列表，在与调用方取消信号竞争的同时等待 Session 控制器完成激活，随后再次检查取消状态和归档列表。它使用 `@deepseek-ai/dsh-subagent` 声明的 `agent-message` 来源构造消息，记录调用方的 `senderSessionId`，在正文前加上 `Session <caller session id> sent a message: ` 前缀，然后对目标调用 `steer()`。该前缀不同于 `send_message` 的 `Agent <name> sent a message: `：后者的名称只能在同一棵 subagent 树内解析。收件箱失败原样传播。[工具流水线](../../core/tools/README.zh.md)沿用普通取消行为。Host 展示器显示目标 id 和消息正文；[Web 工具卡片](../../client/ui-tool/README.zh.md)从已记录的结果中推导接收状态和消息 ID。
 
 ### 源码地图
 
@@ -106,7 +106,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接收方收到一条 steer 用户消息：文本块 `Agent <caller session id> sent a message: `，后接原样保留的消息正文。
+接收方收到一条 steer 用户消息：文本块 `Session <caller session id> sent a message: `，后接原样保留的消息正文。
 
 #### Token 影响
 
