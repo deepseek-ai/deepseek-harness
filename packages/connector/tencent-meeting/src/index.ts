@@ -17,8 +17,6 @@ import { copy, operations, presentAccount, TENCENT_MEETING_PACKAGE } from './pre
 import { ENTRY, TMEET_SKILLS } from './skills.ts'
 import type { TencentMeetingAccountState, TencentMeetingCommand, TencentMeetingOperationKind, TencentMeetingPhase } from './types.ts'
 
-export type * from './types.ts'
-
 /** Plugin name. */
 export const name = 'tencent-meeting'
 
