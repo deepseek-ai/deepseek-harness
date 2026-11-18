@@ -13,7 +13,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
-import RemoteAccessService, { type RemoteAccessBinding, type RemoteAccessRole } from '@deepseek-ai/dsh-api-remote-access'
+import type { RemoteAccessBinding, RemoteAccessRole } from '@deepseek-ai/dsh-api-remote-access'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { remoteMethods, type PeerId, type PeerScope, type Principal, type RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
@@ -90,8 +90,6 @@ async function harness(): Promise<{
   const loop = await mountAgentLoopTestHarness(ctx)
   const shared = await loop.create(SHARED, {}, { cwd: '/tmp' })
   const hidden = await loop.create(PRIVATE, {}, { cwd: '/tmp' })
-  await ctx.plugin(RemoteAccessService)
-  await ctx.plugin(TypertGatewayService)
   const controller = await createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
   const as = (principal: Principal, method: string): Context => {
     const invocation: RemoteInvocation = {
@@ -155,6 +153,7 @@ describe('Session Controller access', () => {
     const { ctx, shared, hidden } = await harness()
     shared.inbox.append('next-turn', message('shared history'))
     hidden.inbox.append('next-turn', message('private history'))
+    await ctx.plugin(TypertGatewayService)
     guestPolicy(ctx, {
       role: { name: 'test:history-reader', resource: 'session', actions: ['session/page', 'session/follow'] },
       resource: { kind: 'session', id: SHARED },
@@ -186,6 +185,7 @@ describe('Session Controller access', () => {
 
   it('lets a global role call session/list and lists only the Sessions a Session role admits', async () => {
     const { ctx, as } = await harness()
+    await ctx.plugin(TypertGatewayService)
     const held = guestPolicy(ctx, LIST_CALLS, READS_SHARED)
     const rows = async (): Promise<SessionId[]> => {
       const value = await guestCall(ctx, 'list', { _request: {} }) as { readonly items: readonly { readonly sessionId: SessionId }[] }
@@ -206,6 +206,7 @@ describe('Session Controller access', () => {
 
   it('returns a non-owner only the session/search hits whose Session a Session role admits', async () => {
     const { ctx, as } = await harness()
+    await ctx.plugin(TypertGatewayService)
     guestPolicy(ctx, SEARCH_CALLS, SEARCHES_SHARED)
     const hits: SessionSearchValue = {
       items: [{ sessionId: PRIVATE, snippet: 'private hit' }, { sessionId: SHARED, snippet: 'shared hit' }],
@@ -271,6 +272,7 @@ describe('Session Controller access', () => {
 
   it('keeps gateway permission checks while allowing an image referenced only by another Session', async () => {
     const { ctx, hidden } = await harness()
+    await ctx.plugin(TypertGatewayService)
     const bindings = guestPolicy(ctx)
     const ref = {
       attachmentId: brandString<AttachmentId>(`sha256:${'ab'.repeat(32)}`),
@@ -298,6 +300,7 @@ describe('Session Controller access', () => {
 
   it('lets a non-owner read projections only in a Session its Session role names', async () => {
     const { ctx } = await harness()
+    await ctx.plugin(TypertGatewayService)
     guestPolicy(ctx, READS_SHARED)
     const projections = (sessionId: SessionId): Promise<unknown> => guestCall(ctx, 'projections', { request: { sessionId } })
     await expect(projections(SHARED)).resolves.toMatchObject({ kind: 'sequenced' })

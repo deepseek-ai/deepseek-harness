@@ -1,8 +1,4 @@
-/**
- * Test-only direct Remote interface over the Session Controller's internal controllers.
- * Install scenario-specific filesystem, Workspace, and Gateway providers before creating controllers;
- * missing services receive fixture defaults.
- */
+/** Test-only direct Remote face over the Session Controller's internal controllers. */
 import type { SessionControllerInternals } from '../src/index.ts'
 
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
@@ -37,7 +33,6 @@ import {
   type RemoteResult,
 } from '@deepseek-ai/dsh-typert-protocol'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
-import FsLocal from '@deepseek-ai/dsh-fs-local'
 import SessionController from '../src/index.ts'
 import type {
   ModelCatalog,
@@ -310,50 +305,32 @@ async function installControllers(
   }
   await installSessionReadTestServices(ctx)
   if (ctx.get('remoteAccess') === undefined) new RemoteAccessService(ctx)
-  if (ctx.get('fs') === undefined) await ctx.plugin(FsLocal)
-  // Fixtures without Workspace or transport owners expose no entities or pending events.
-  if (ctx.get('workspaceRegistry') === undefined) {
-    const registry: Pick<Context['workspaceRegistry'], 'list' | 'get' | 'archivedSessionIds'> = {
-      list: () => [], get: () => undefined, archivedSessionIds: [],
-    }
-    ctx.provide('workspaceRegistry', registry as Context['workspaceRegistry'])
-  }
-  if (ctx.get('typertGateway') === undefined) {
-    const gateway: Pick<Context['typertGateway'], 'getPendingRemoteEvents'> = { getPendingRemoteEvents: () => [] }
-    ctx.provide('typertGateway', gateway as Context['typertGateway'])
-  }
   const cwd = vi.spyOn(process, 'cwd').mockReturnValue(defaults.cwd)
   class TestController extends SessionController {
     initialize(): Promise<void> {
       return this[Service.init]()
     }
   }
-  let controller: TestController | undefined
+  let controller: TestController
   try {
-    await ctx.plugin({
-      inject: SessionController.inject,
-      apply: async (owner: Context) => {
-        controller = new TestController(
-          owner,
-          {
-            ...defaults.nativeOpen === undefined ? {} : { nativeOpen: defaults.nativeOpen },
-            ...defaults.listWorkSliceMs === undefined ? {} : { listWorkSliceMs: defaults.listWorkSliceMs },
-          },
-          {
-            ...defaults.openPath === undefined ? {} : { openPath: defaults.openPath },
-            ...defaults.fileApplications === undefined ? {} : { fileApplications: defaults.fileApplications },
-            ...defaults.openFileApplication === undefined ? {} : { openFileApplication: defaults.openFileApplication },
-            ...defaults.revealPath === undefined ? {} : { revealPath: defaults.revealPath },
-            ...defaults.canOpenPath === undefined ? {} : { canOpenPath: defaults.canOpenPath },
-          },
-        )
-        await controller.initialize()
+    controller = new TestController(
+      ctx,
+      {
+        ...defaults.nativeOpen === undefined ? {} : { nativeOpen: defaults.nativeOpen },
+        ...defaults.listWorkSliceMs === undefined ? {} : { listWorkSliceMs: defaults.listWorkSliceMs },
       },
-    })
+      {
+        ...defaults.openPath === undefined ? {} : { openPath: defaults.openPath },
+        ...defaults.fileApplications === undefined ? {} : { fileApplications: defaults.fileApplications },
+        ...defaults.openFileApplication === undefined ? {} : { openFileApplication: defaults.openFileApplication },
+        ...defaults.revealPath === undefined ? {} : { revealPath: defaults.revealPath },
+        ...defaults.canOpenPath === undefined ? {} : { canOpenPath: defaults.canOpenPath },
+      },
+    )
+    await controller.initialize()
   } finally {
     cwd.mockRestore()
   }
-  if (controller === undefined) throw new Error('Session Controller fixture dependencies did not activate')
   installed.set(ctx, controller)
   return controller
 }

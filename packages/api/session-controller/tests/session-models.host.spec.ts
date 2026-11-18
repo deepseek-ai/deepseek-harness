@@ -635,10 +635,11 @@ describe('Web session model selection', () => {
     })
 
     for (const model of ['deepseek-reasoner', 'deepseek-chat']) {
+      let returned = false
       const operation = remote.selectModel({ sessionId, provider: 'deepseek-official', model })
-        .then((result) => { expectValue(result) })
+        .then((result) => { expectValue(result); returned = true })
       operations.push(operation)
-      await operation
+      await expect.poll(() => returned).toBe(true)
       expect(currentSelection(ctx, sessionId)).toMatchObject({ provider: 'deepseek-official', model })
     }
     expect(saves).toHaveLength(2)

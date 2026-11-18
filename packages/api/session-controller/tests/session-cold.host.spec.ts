@@ -7,7 +7,7 @@ import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -129,10 +129,7 @@ describe('sessions.list cold merge', () => {
 
   it('uses a predecessor title hint with zero cold stat or body reads', async () => {
     const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
     const metas = [header('legacy-title', 100), header('uncached', 200)]
     const stat = vi.fn(async (id: SessionId) => statSnapshot(
       metas.find(meta => meta.id === id)!,
@@ -182,10 +179,7 @@ describe('sessions.list cold merge', () => {
 
   it('serves cold rows from current cached projections without body access', async () => {
     const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
     const metas: SessionHeader[] = [
       header('cached-blank', 100),
       header('cached-conversation', 200),
@@ -309,10 +303,7 @@ describe('cold history recovery view', () => {
     // closers durably through its write handle); a cold history read shows the
     // stored prefix exactly as persisted.
     const ctx = new Context()
-    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-interrupted')
     const meta = header(sessionId, 1000)
     const events = [{ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }] as SessionEvent[]
@@ -342,6 +333,7 @@ describe('cold history recovery view', () => {
       ]
     `)
     expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    await ctx.fiber.dispose()
   })
 })
 
