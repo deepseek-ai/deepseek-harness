@@ -1,6 +1,7 @@
 /** Execute one controlled Source creation through real Loader-owned services and inspect durable state. */
 import assert from 'node:assert/strict'
 import { glob, writeFile } from 'node:fs/promises'
+import { Fiber } from '@deepseek-ai/cordis'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
 import { LlmAdapter, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import ScheduleService, { scheduleDomain, type AutomationCandidate } from '@deepseek-ai/dsh-schedule'
@@ -70,6 +71,43 @@ try {
   const controller = [...ctx.loader.entries()].find(entry => entry.options.id === 'controller')
   assert.ok(controller?.fiber, 'real SessionController Loader entry must be active')
   assert.ok(ctx.get('sessionController'), 'SessionController dependencies must be satisfied')
+  let controllerChild: Fiber | undefined
+  let diagnosticSetupError: string | undefined
+  try {
+    const value: unknown = Reflect.get(schedule, 'controllerChild')
+    if (value instanceof Fiber) controllerChild = value.ctx.fiber
+    else diagnosticSetupError = 'Schedule controllerChild is not a Fiber'
+  } catch (error: unknown) {
+    diagnosticSetupError = String(error)
+  }
+  const bindingSnapshot = (changed?: Fiber) => {
+    try {
+      const inspect = (fiber: Fiber | undefined) => fiber === undefined ? null : {
+        uid: fiber.uid, state: fiber.state, transitionPending: fiber.inertia !== undefined,
+        registered: [...ctx.registry.values()].some(runtime => [...runtime.fibers].includes(fiber)),
+      }
+      const webController: unknown = Reflect.get(schedule, 'webController')
+      return {
+        diagnosticSetupError, changed: inspect(changed), child: inspect(controllerChild),
+        providerRoot: inspect(controller.fiber?.ctx.fiber),
+        webControllerPresent: webController !== undefined,
+        globalControllerPresent: ctx.get('sessionController') !== undefined,
+      }
+    } catch (error: unknown) {
+      return { diagnosticSetupError, observationError: String(error) }
+    }
+  }
+  const bindingEvents: { role: string; previousState: number; binding: ReturnType<typeof bindingSnapshot> }[] = []
+  let omittedBindingEvents = 0
+  ctx.on('internal/status', (fiber, previousState) => {
+    if (fiber !== controllerChild && fiber !== controller.fiber?.ctx.fiber) return
+    if (bindingEvents.length >= 32) {
+      omittedBindingEvents++
+      return
+    }
+    const role = fiber === controllerChild ? 'schedule-controller-child' : 'provider-root'
+    bindingEvents.push({ role, previousState, binding: bindingSnapshot(fiber) })
+  })
   ctx.effect(() => ctx.llm.registerAdapter(['lifecycle-fixture'], new DeterministicAdapter()))
   const originalFiber = controller.fiber
   const originalProviderUid = originalFiber.uid
@@ -204,12 +242,16 @@ try {
     assert.deepEqual(readTask(), saved)
     assert.deepEqual(gate.attempts.map(attempt => attempt.id), [header.id])
 
+    const bindingBeforeRecovery = bindingSnapshot()
     work = source.publish(RECOVERY_INPUT).then(
       () => ({ status: 'fulfilled' }),
       (error: unknown) => ({ status: 'rejected', error: errorDetails(error) }),
     )
     const recoveredOutcome = await work
-    assert.deepEqual(recoveredOutcome, { status: 'fulfilled' })
+    const bindingAfterRecovery = bindingSnapshot()
+    assert.deepEqual(recoveredOutcome, { status: 'fulfilled' }, JSON.stringify({
+      bindingBeforeRecovery, bindingAfterRecovery, bindingEvents, omittedBindingEvents,
+    }))
     const destination = await inspectDestination()
     const recoveredTask = readTask()
     assert.equal(destination.persisted, true)
