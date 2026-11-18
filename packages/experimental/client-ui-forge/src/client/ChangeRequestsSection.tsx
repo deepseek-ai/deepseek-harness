@@ -9,14 +9,14 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
+import type { ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import type { NS } from './locales.ts'
 import { ReasonButton } from './ReasonButton.tsx'
 import type {} from './slots.ts'
 import type { PanelSnapshot } from './source.ts'
-import { defaultExpanded } from './status.ts'
+import { defaultExpanded, type ChangeRequestEntry } from './status.ts'
 import css from './Forge.module.css'
 
 /** Business face of the change requests section. */
@@ -32,11 +32,11 @@ export interface ChangeRequestsSectionInjected {
    */
   readonly refresh: () => Promise<void>
   /** Remove a change request from the Session, offering to undo it. */
-  readonly remove: (entry: ForgePanelChangeRequest) => void
+  readonly remove: (entry: ChangeRequestEntry) => void
   /** Mark a draft ready for review; settles once the outcome is reported. */
-  readonly markReady: (entry: ForgePanelChangeRequest) => Promise<void>
+  readonly markReady: (entry: ChangeRequestEntry) => Promise<void>
   /** Merge a change request as `request` describes; settles once the outcome is reported. */
-  readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
+  readonly merge: (entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
   /** Rerun the failed checks or one check; settles once the outcome is reported. */
@@ -52,7 +52,7 @@ export interface ChangeRequestsSectionInjected {
   /** Copy text to the clipboard and report the outcome. */
   readonly copyText: (text: string) => void
   /** Open the changes view of a bound change request in the right sidebar. */
-  readonly viewChanges: (entry: ForgePanelChangeRequest) => void
+  readonly viewChanges: (entry: ChangeRequestEntry) => void
 }
 
 /** Full props of the change requests section. */

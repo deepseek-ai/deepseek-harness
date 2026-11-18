@@ -185,9 +185,11 @@ export interface ForgeFailure {
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
    * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
-   * a later status can succeed; `unsupported`: the provider does not offer the read; `unavailable`: any other failure.
+   * a later status can succeed; `rate-limited`: the host refused the read under its rate limit, so reading again
+   * succeeds only after the limit resets; `unsupported`: the provider does not offer the read; `unavailable`: any other
+   * failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unsupported' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'rate-limited' | 'unsupported' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -491,6 +493,119 @@ export interface ForgeViewedRequest {
   readonly headSha: string
 }
 
+/**
+ * A list of open change requests that involve the signed-in user: `review-requested` asks the user or one of the user's
+ * teams for a review; `authored` names the user as author; `involved` names the user in any other way, as an assignee,
+ * a commenter, a reviewer, or a mention, and holds none of the other two lists' change requests.
+ */
+export type ForgeViewerFilter = 'review-requested' | 'authored' | 'involved'
+
+/** Hosts a provider lists change requests on for the signed-in user, and the lists it offers there. */
+export interface ForgeViewerCapability {
+  /** Lowercase host names, each one this provider serves. */
+  readonly hosts: readonly string[]
+  /** The lists the provider reads on each of `hosts`. */
+  readonly filters: ReadonlySet<ForgeViewerFilter>
+  /** Most change requests one read returns, a positive integer. */
+  readonly maxItems: number
+}
+
+/** A registered provider's viewer lists, as {@link ForgeViewerCapability} with the forge family that offers them. */
+export interface ForgeViewerSource extends ForgeViewerCapability {
+  /** Forge family of the provider. */
+  readonly forge: string
+}
+
+/** One read of a list of open change requests that involve the signed-in user on one host. */
+export interface ForgeViewerQuery {
+  /** Lowercase host name from the provider's {@link ForgeViewerCapability.hosts}. */
+  readonly host: string
+  /** The list to read, from the provider's {@link ForgeViewerCapability.filters}. */
+  readonly filter: ForgeViewerFilter
+  /** One repository to read in, or null for every repository the user can read on `host`. */
+  readonly repository: Pick<ForgeRepository, 'owner' | 'name'> | null
+  /** Most change requests returned, a positive integer no greater than {@link ForgeViewerCapability.maxItems}. */
+  readonly limit: number
+}
+
+/** The signed-in user's latest submitted review of a change request. */
+export interface ChangeRequestViewerReview {
+  /** Outcome of the review. */
+  readonly verdict: ReviewVerdict
+  /** Commit the review was on, or null when the host reports none. */
+  readonly reviewedSha: string | null
+}
+
+/** Status of one change request as a viewer list reports it, without the checks, reviewers, and merge state of a snapshot. */
+export interface ChangeRequestSummary {
+  /** The change request. */
+  readonly ref: ChangeRequestRef
+  /** Web page of the change request. */
+  readonly url: string
+  /** Title as the author wrote it. */
+  readonly title: string
+  /** Whether the author marked the change request as a draft. */
+  readonly draft: boolean
+  /** Author, or null when the host hides the account. */
+  readonly author: ForgeCommentAuthor | null
+  /** Commit object name at the head of the change request. */
+  readonly headSha: string
+  /** Combined check outcome on the head commit. */
+  readonly checksRollup: ChecksRollup
+  /** Aggregate review outcome. */
+  readonly reviewDecision: ReviewDecision
+  /** The signed-in user's latest submitted review, or null before the first. */
+  readonly viewerReview: ChangeRequestViewerReview | null
+  /**
+   * The review request that asks the signed-in user, or null when none does: `team` names the team, as
+   * `organization/slug`, when the request asks a team the user belongs to rather than the user.
+   */
+  readonly viewerRequest: { readonly team: string | null } | null
+  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
+  readonly closingIssues: readonly ChangeRequestIssue[]
+  /** Whether the host reported more closing issues than `closingIssues` holds. */
+  readonly closingIssuesTruncated: boolean
+  /** ISO 8601 time of the host's last update to the change request. */
+  readonly updatedAt: string
+}
+
+/** One page of a viewer list, most recently updated first. */
+export interface ForgeViewerList {
+  /** Login of the signed-in user the provider read as. */
+  readonly viewer: string
+  /** Change requests most recently updated first, at most the query's limit. */
+  readonly items: readonly ChangeRequestSummary[]
+  /** Number of change requests the host reports in the whole list; more than `items` holds when the list was cut. */
+  readonly total: number
+}
+
+/** The description of a change request as its author wrote it. */
+export interface ChangeRequestDescription {
+  /** Markdown source; it may contain raw HTML, which readers must not render as HTML. Empty without a description. */
+  readonly body: string
+  /** Labels in host order, at most the provider's limit. */
+  readonly labels: readonly ChangeRequestLabel[]
+  /** Whether the change request has more labels than `labels` holds. */
+  readonly labelsTruncated: boolean
+  /**
+   * Image addresses that a browser cannot load without the user's host session, each mapped to an address the host
+   * issued for loading that image without one. Addresses not listed load as written.
+   */
+  readonly images: Readonly<Record<string, string>>
+  /** ISO 8601 time after which the addresses in `images` stop loading, or null when there are none or the host names no time. */
+  readonly imagesExpireAt: string | null
+  /** ISO 8601 time the change request was created. */
+  readonly createdAt: string
+}
+
+/** One label of a change request. */
+export interface ChangeRequestLabel {
+  /** Name as the host spells it. */
+  readonly name: string
+  /** Six-digit hexadecimal color without `#`, or null when the host reports none. */
+  readonly color: string | null
+}
+
 /** Whether a provider can reach one host with the current credentials. */
 export interface ForgeReadiness {
   /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
@@ -530,6 +645,20 @@ export interface ForgeProvider {
   readonly label: string
   /** What this provider's hosts call a change request. */
   readonly changeRequestNoun: ChangeRequestNoun
+  /**
+   * Where and which lists of the signed-in user's change requests this provider reads. A provider declares `viewer` and
+   * implements `listForViewer` and `countForViewer` together; omitting any declares that it reads no viewer lists.
+   */
+  readonly viewer?: ForgeViewerCapability
+  /**
+   * Read one viewer list, most recently updated first. A query outside {@link ForgeProvider.viewer} resolves to an
+   * `unsupported` failure.
+   */
+  listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>
+  /** Count the change requests in every list of {@link ForgeViewerCapability.filters} on one of its hosts. */
+  countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+  /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
+  readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**

@@ -6,7 +6,9 @@ import { act, cleanup, fireEvent, render, within, type RenderResult } from '@tes
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeReviewId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeDiffFile } from '../src/types.ts'
-import { formatReviewComment, reviewQuoteSummary, selectReviewLines, reviewMatches, type ReviewSelection } from '../src/client/review.ts'
+import {
+  formatReviewComment, reviewQuoteSummary, selectReviewLines, reviewMatches, settleQuote, type QuoteCopy, type ReviewSelection,
+} from '../src/client/review.ts'
 import { ReviewQueue } from '../src/client/review-queue.ts'
 import { ReviewThread } from '../src/client/ReviewThread.tsx'
 import { SubmitReview } from '../src/client/SubmitReview.tsx'
@@ -352,6 +354,74 @@ describe('pending reviews', () => {
     setter.mockRestore()
     expect(queue.recordAgent(selection)).toBe(true)
     expect(queue.getSnapshot().error).toBeNull()
+  })
+})
+
+/** The quote copy of a destination other than the Session's input. */
+const CHAT: QuoteCopy = { add: 'reviewPage.addToChat', added: 'reviewPage.addedToChat', failed: 'reviewPage.addToChatFailed' }
+
+/** Let a quote that settles later settle. */
+async function settled(): Promise<void> {
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+}
+
+describe('settleQuote', () => {
+  it('reports a quote taken or refused at once, once it settles, and a rejected one as refused', async () => {
+    const done = vi.fn<(accepted: boolean) => void>()
+    settleQuote(true, done)
+    settleQuote(false, done)
+    expect(done.mock.calls).toEqual([[true], [false]])
+    settleQuote(Promise.resolve(true), done)
+    settleQuote(Promise.reject(new Error('closed')), done)
+    expect(done).toHaveBeenCalledTimes(2)
+    await settled()
+    expect(done.mock.calls.slice(2)).toEqual([[true], [false]])
+  })
+})
+
+describe('quotes elsewhere than the input', () => {
+  it('names the destination on the composer, closes it once the quote settles as taken, and keeps it open with the refusal', async () => {
+    let answer: (accepted: boolean) => void = () => {}
+    const addToInput = vi.fn((_selection: ReviewSelection) => new Promise<boolean>((resolve) => { answer = resolve }))
+    const close = vi.fn(), onQuoted = vi.fn()
+    const view = render(<ReviewComposer selection={selection} actions={{ source: selection.source, addToInput, quoteCopy: CHAT, onQuoted }}
+      close={close} t={t} />)
+    expect(view.queryByRole('button', { name: 'Add to input' })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Add to chat' }))
+    expect(addToInput).toHaveBeenCalledWith(selection)
+    expect(close).not.toHaveBeenCalled()
+    answer(false)
+    await settled()
+    expect(view.getByRole('alert').textContent).toBe('Couldn\'t add to chat')
+    expect(close).not.toHaveBeenCalled()
+    addToInput.mockRejectedValueOnce(new Error('closed'))
+    fireEvent.click(view.getByRole('button', { name: 'Add to chat' }))
+    await settled()
+    expect(view.getByRole('alert').textContent).toBe('Couldn\'t add to chat')
+    fireEvent.click(view.getByRole('button', { name: 'Add to chat' }))
+    answer(true)
+    await settled()
+    expect(onQuoted).toHaveBeenCalledWith(selection)
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('tags a quoted comment with its destination and reports a refused quote of it once the quote settles', async () => {
+    const records = new ReviewQueue('review-test')
+    expect(records.recordAgent(selection)).toBe(true)
+    const thread = records.fileComments('a.ts', selection.source).threads[0]!
+    const addToInput = vi.fn(async (_selection: ReviewSelection) => false)
+    const view = render(<ReviewThread thread={thread} actions={{ records, source: selection.source, addToInput, quoteCopy: CHAT }}
+      locked={false} outdated={false} t={t} />)
+    expect(view.getByText('Added to chat')).toBeTruthy()
+    fireEvent.click(view.getByRole('button', { name: 'Add to chat' }))
+    expect(view.queryByRole('alert')).toBeNull()
+    await settled()
+    expect(view.getByRole('alert').textContent).toBe('Couldn\'t add to chat')
+    cleanup()
+
+    const input = render(<ReviewThread thread={thread} actions={{ records, source: selection.source, addToInput: () => true }}
+      locked={false} outdated={false} t={t} />)
+    expect(input.getByText(en['review.quoted'])).toBeTruthy()
   })
 })
 
