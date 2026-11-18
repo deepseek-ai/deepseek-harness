@@ -527,3 +527,26 @@ it('cleans one task without releasing another connection and prevents a queued t
   }
   expect(f.native.held).toEqual([])
 })
+
+it('reports disconnect after a dispatched down and blocks a later program in the same turn', async () => {
+  const f = await setup([holdProgram, 'await cua.getApp("test.fixture")'], 'macos', undefined, true, true)
+  const down = f.native.controlNext('sendKeyEvent', { afterDispatch: true })
+  const running = f.run()
+  await down.entered
+  down.disconnect()
+  await running
+  const results = f.agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError)).toEqual([true, true])
+  expect(JSON.stringify(results[1])).toContain('INPUT_CLEANUP_UNCONFIRMED')
+  expect(f.native.calls.filter(call => call.method === 'getApp')).toHaveLength(1)
+  expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+  expect(f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason.kind).toBe('error')
+})
+
+it('finalizes without native cleanup when prompt assembly fails before input admission', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  f.ctx.on('system-prompt/assemble', async () => { throw new Error('Fixture assembly failed') })
+  await f.run()
+  expect(f.native.calls).toEqual([])
+  expect(f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason.kind).toBe('error')
+})

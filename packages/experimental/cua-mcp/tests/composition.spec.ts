@@ -185,6 +185,8 @@ describe('Computer Use MCP composition', () => {
   it('refuses persistent downs outside a turn and still completes clicks through MCP', async () => {
     const { client, native, run } = await setup()
     expect(client.getInstructions()).toContain('MCP programs cannot hold keys or mouse buttons')
+    const capabilities = await run('inspect(JSON.stringify((await cua.getCapabilities()).methods))')
+    expect(texts(capabilities).join('')).not.toMatch(/sendKeyEvent|toggleMouse/)
     const selected = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree()')
     expect(selected.isError).not.toBe(true)
     for (const code of ['await app.sendKeyEvent("w", "down")', 'await win.toggleMouse("left", "down")']) {
