@@ -1,4 +1,4 @@
-﻿param([string]$Worker, [string]$Root)
+﻿param([string]$Worker, [string]$Root, [Parameter(Mandatory)][string]$Electron)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 . $Worker
@@ -109,8 +109,16 @@ try {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command')
     try { Require ($key.GetValue('') -eq $foreignCommand) 'uninstall removed foreign protocol' } finally { $key.Dispose() }
     [void](Apply 'install' $bin)
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command', $true)
-    try { $key.SetValue('', '"' + (Join-Path $app 'DeepSeek Harness.exe') + '" "%1"') } finally { $key.Dispose() }
+    $scheme = 'dsh-command-test-' + $identity
+    $protocolKey = 'Software\Classes\' + $scheme
+    $launcher = Join-Path $PSScriptRoot 'register-test-protocol.cjs'
+    $exe = Join-Path $app 'DeepSeek Harness.exe'
+    $registration = Start-Process $Electron -ArgumentList @(('"' + $launcher + '"'), ('"--user-data-dir=' + $Root + '\profile"'), $scheme, ('"' + $exe + '"')) -PassThru -WindowStyle Hidden
+    try {
+        if (-not $registration.WaitForExit(20000)) { $registration.Kill(); $registration.WaitForExit(); throw 'Electron protocol registration timed out' }
+        Require ($registration.ExitCode -eq 0) 'Electron could not register the test protocol'
+    } finally { $registration.Dispose() }
+    Require (Test-Path -LiteralPath ('HKCU:\' + $protocolKey + '\shell\open\command')) 'Electron did not write the protocol command'
     & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath (Join-Path $Root 'uninstall-report.txt') -MutexName $options.MutexName
     Require ($LASTEXITCODE -eq 0) 'owned integration cleanup failed'
     Require (-not (State $bin).managed) 'uninstall retained command ownership'
@@ -139,5 +147,6 @@ try {
     Require ($LASTEXITCODE -eq 0 -and (State $other).fingerprint -eq $foreignState.fingerprint) 'unowned cleanup changed a new owner'
     'WINDOWS_COMMAND_PATH_OK'
 } finally {
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree(('Software\Classes\dsh-command-test-' + $identity), $false)
     [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($keyRoot, $false)
 }

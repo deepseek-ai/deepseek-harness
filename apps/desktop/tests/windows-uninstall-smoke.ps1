@@ -71,7 +71,11 @@ try {
         [IO.File]::WriteAllText((Join-Path $userDataPath 'Local State'), 'chromium profile')
         [IO.File]::WriteAllText((Join-Path $cachePath 'download.txt'), 'update')
         Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
-        $commandDirectory = Join-Path $installPath 'resources\runtime\cli\bin'
+        $missingLocation = $mode -in @('missing-location', 'missing-location-foreign')
+        $foreign = $mode -eq 'missing-location-foreign'
+        if ($missingLocation) { Remove-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation }
+        $integrationRoot = if ($foreign) { $externalPath } else { $installPath }
+        $commandDirectory = Join-Path $integrationRoot 'resources\runtime\cli\bin'
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($environmentKey)
         try { $key.SetValue('Path', $commandDirectory + ';C:\Windows', [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
@@ -85,10 +89,10 @@ try {
             Set-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey) -Name Path -Value ($commandDirectory + ';' + $commandDirectory + ';C:\Windows')
         }
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
-        try { $key.SetValue('', '"' + (Join-Path $installPath ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
+        try { $key.SetValue('', '"' + (Join-Path $integrationRoot ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
         $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'missing-location', 'missing-location-foreign', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
         if ($mode -eq 'upgrade') {
             Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')
@@ -189,7 +193,7 @@ try {
             [IO.Directory]::Delete($installPath)
         }
         Wait-Exit
-        $retained = $mode -in @('upgrade', 'replaced', 'self-copy')
+        $retained = $missingLocation -or $mode -in @('upgrade', 'replaced', 'self-copy')
         # A DSH_HOME inside the Electron directory protects that directory (and its scope) but not the other roots.
         $userDataRetained = $retained -or $mode -eq 'home-inside'
         if ([IO.File]::ReadAllText((Join-Path $externalPath 'keep.txt')) -ne 'outside data root') { throw 'Cleanup followed a junction into a project' }
@@ -198,14 +202,14 @@ try {
         if ((Test-Path (Join-Path $userDataPath 'Local State')) -ne $userDataRetained) { throw "Electron user data retention failed: $mode" }
         if ((Test-Path -LiteralPath $scopePath) -ne $userDataRetained) { throw "Package scope directory retention failed: $mode" }
         if ((Test-Path (Join-Path $cachePath 'download.txt')) -ne $retained) { throw "Update cache retention failed: $mode" }
-        $integrationsRetained = $mode -in @('upgrade', 'registration-error', 'save-report')
+        $integrationsRetained = $foreign -or $mode -in @('upgrade', 'registration-error', 'save-report')
         $owner = Get-ItemProperty -LiteralPath ('HKCU:\' + $ownerKey)
         if ([bool]$owner.Directory -ne $integrationsRetained) { throw "Command ownership cleanup failed: $mode" }
         $path = (Get-ItemProperty -LiteralPath ('HKCU:\' + $environmentKey)).Path
         $pathRetained = $integrationsRetained -or $mode -eq 'owned-retained'
         if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $pathRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
         if ($mode -eq 'owned-retained' -and $path -ne ($commandDirectory + ';C:\Windows')) { throw 'Owned cleanup removed a pre-existing manual PATH entry' }
-        if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
+        if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($foreign -or $mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
         Write-Output "passed: $mode"
     }
     # Real replacement publishes B after the old A uninstaller has been retained.

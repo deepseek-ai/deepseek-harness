@@ -30,6 +30,7 @@ it('keeps data cleanup out of the upstream template while retaining application 
   expect(adapted).toContain('UninstallNote')
   expect(adapted).not.toContain('RMDir /r "$APPDATA')
   expect(adapted).toContain('!insertmacro customUnInstall')
+  expect(adapted.indexOf('!insertmacro customUnInstall')).toBeLessThan(adapted.indexOf('DeleteRegKey SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}"'))
   expect(adapted).toContain('DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}"')
   expect(adapted).toContain('DeleteRegKey SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}"')
   expect(directoryUninstaller(source.replaceAll('\n', '\r\n'))).toBe(adapted)

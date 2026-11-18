@@ -3,6 +3,8 @@
     "interactive",
     "silent",
     "unowned",
+    "missing-location",
+    "missing-location-foreign",
     "owned-retained",
     "upgrade",
     "replaced",

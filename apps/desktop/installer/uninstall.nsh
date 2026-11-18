@@ -144,30 +144,22 @@ FunctionEnd
 !define /ifndef DSH_COMMAND_OWNER_KEY "Software\DeepSeekHarness\Command"
 !define /ifndef DSH_PROTOCOL_KEY "Software\Classes\dsh"
 !define /ifndef DSH_COMMAND_MUTEX "default"
-Function un.RefreshOwnership
-  ${If} ${isUpdated}
-    Return
-  ${EndIf}
-  ReadRegStr $0 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
-  ${If} $0 == ""
-    StrCpy $UnDirectoryOnly 1
-    Return
-  ${EndIf}
-  GetFullPathName $0 "$0\."
-  GetFullPathName $1 "$INSTDIR\."
-  ${If} $0 != $1
-    StrCpy $UnDirectoryOnly 1
-  ${EndIf}
-FunctionEnd
-
 Function un.CleanRegistration
   ${If} ${isUpdated}
   ${OrIf} $UnDirectoryOnly == 1
     Return
   ${EndIf}
-  Call un.RefreshOwnership
-  ${If} $UnDirectoryOnly == 1
-    Return
+  ReadRegStr $0 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ${If} $0 == ""
+    ; Only the command owner and protocol target can identify this installation.
+    StrCpy $UnDirectoryOnly 1
+  ${Else}
+    GetFullPathName $0 "$0\."
+    GetFullPathName $1 "$INSTDIR\."
+    ${If} $0 != $1
+      StrCpy $UnDirectoryOnly 1
+      Return
+    ${EndIf}
   ${EndIf}
   Delete "$PLUGINSDIR\unowned-path"
   StrCpy $UnRegistrationArguments ""
