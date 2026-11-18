@@ -301,7 +301,7 @@ export class WorktreeService extends Service {
   ): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const policy = this.ctx.sandboxPolicy.resolve({ session })
+    const policy = this.sourcePolicy(session, request.repositoryRoot)
     const git = { read: this.gitRunner(policy, control), scan: this.gitScanner(policy, control) }
     const operation = removeCheckout(this.ctx, this.config.directory, request, git, control, admit)
     this.pending.add(operation)
@@ -401,7 +401,7 @@ export class WorktreeService extends Service {
     onPhase: ((phase: Exclude<CreateWorktreePhase, 'fetch'>) => void) | undefined,
   ): Promise<RestoredWorktree> {
     onPhase?.('prepare')
-    const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
+    const policy = this.sourcePolicy(agent.session, repositoryRoot)
     const run = this.gitRunner(policy, signal)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
     if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree branch must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
@@ -435,6 +435,15 @@ export class WorktreeService extends Service {
     } catch (error) {
       throw retainedFailure(`Could not restore worktree ${branch} at ${path}. Any created checkout and branch are retained.`, error, signal)
     }
+  }
+
+  /**
+   * The policy removal and restoration run under: the Session's mode and grants, bounded by the source
+   * checkout of the recorded worktree instead of the Session's own root, which may be the worktree
+   * directory, removed or being removed.
+   */
+  private sourcePolicy(session: Session, repositoryRoot: string): SandboxExecutionPolicy {
+    return { ...this.ctx.sandboxPolicy.resolve({ session }), workspaceRoot: repositoryRoot }
   }
 
   /** Confine Git commands to the caller's sandbox policy, collecting bounded stdout. */

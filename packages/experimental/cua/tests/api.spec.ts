@@ -959,14 +959,15 @@ describe('input actions', () => {
     const window = await app.getWindow('23')
     expect(app).not.toHaveProperty('toggleMouse')
     expectTypeOf<CuaApp>().not.toHaveProperty('toggleMouse')
-    expectTypeOf<CuaWindow['toggleMouse']>().parameters.toEqualTypeOf<[
-      mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up',
-    ]>()
     for (const direction of ['down', 'up'] as const) {
       f.dispatch.mockClear()
       await expect(window.toggleMouse(mouseButton, direction)).resolves.toEqual(delivered)
       expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'toggleMouse', params: {
         appHandle: 'app-17', windowId: '23', mouseButton, direction,
+      } })
+      await window.toggleMouse(mouseButton, direction, { useSystemPointer: true })
+      expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'toggleMouse', params: {
+        appHandle: 'app-17', windowId: '23', mouseButton, direction, useSystemPointer: true,
       } })
     }
   })
@@ -1087,6 +1088,7 @@ it('keeps ordinary Windows drags portable and rejects explicit system-pointer op
   await win.getAccessibilityTree()
   f.dispatch.mockClear()
   for (const useSystemPointer of [true, false]) {
+    await expect(win.toggleMouse('left', 'down', { useSystemPointer })).rejects.toThrow('toggleMouse useSystemPointer: not accepted')
     await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
   }
   expect(f.dispatch).not.toHaveBeenCalled()

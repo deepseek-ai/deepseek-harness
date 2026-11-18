@@ -138,6 +138,8 @@ describe('archive-triggered worktree cleanup', () => {
     await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
+    // The creator's root is the checkout being removed; `sandbox.spec.ts` covers the source-checkout boundary of its commands.
+    expect(f.ctx.workingDirectory.get(f.session)).toBe(f.worktree.path)
   })
 
   it('removes a clean checkout whose file listing exceeds maxOutputBytes', async () => {

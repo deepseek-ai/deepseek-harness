@@ -4,11 +4,11 @@
  * filesystem-observation change feed, exposed as `workspaceFiles`.
  *
  * File reads follow the composed filesystem's read access, including paths
- * outside the workspace. The selected Session header supplies the base for
- * relative paths, with the sandbox policy root as its no-cwd fallback, not a
- * read-containment restriction. Directory listings, searches, and change
- * observations remain workspace-scoped; a search reports workspace-relative
- * paths. File-kind checks and configured read caps apply to
+ * outside the workspace. The selected Session's workspace root supplies the
+ * base for relative paths, with the header directory and then the sandbox
+ * policy root as fallbacks, not a read-containment restriction. Directory
+ * listings, searches, and change observations remain workspace-scoped; a
+ * search reports workspace-relative paths. File-kind checks and configured read caps apply to
  * every preview; this service exposes no mutations.
  *
  * A page is cut from `streamText`, which decodes and rejects non-UTF-8 as it
@@ -28,8 +28,10 @@ import type { FsDirEntry, FsInfo, FsPathInfo, FsTarget } from '@deepseek-ai/dsh-
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Remote, RemoteError, TypertRemoteService, type TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { WorkspaceChangeFeed } from './changes.ts'
 import { searchWorkspace, type SearchLimits } from './search.ts'
 import type {
@@ -59,8 +61,32 @@ declare module '@deepseek-ai/cordis' {
 export interface WorkspaceFileScope {
   /** Session identity received on the wire. */
   readonly sessionId: SessionId
-  /** Session workspace root, or the deployment fallback when its header has no cwd. */
+  /**
+   * Session workspace root: for a live Session the root the sandbox policy
+   * bounds it by; for a stored one its directory in the projection cache, else
+   * its header directory, else the deployment fallback.
+   */
   readonly workspaceRoot: string
+}
+
+/**
+ * Resolve the workspace root a Session's file views and directory listings
+ * use, without loading its event body or activating an Agent.
+ * @param ctx - Host context carrying the Session store and the sandbox policy, and optionally persistence
+ *   and the projection cache.
+ * @param sessionId - Session identity received on the wire.
+ * @param signal - cancellation for the persistence read of a stored Session.
+ * @returns the scope, or undefined when no live or stored Session has that identity.
+ */
+async function workspaceFileScopeOf(
+  ctx: Context, sessionId: SessionId, signal?: AbortSignal,
+): Promise<WorkspaceFileScope | undefined> {
+  const live = ctx.get('sessions')?.get(sessionId)
+  if (live !== undefined) return { sessionId, workspaceRoot: ctx.sandboxPolicy.resolve({ session: live }).workspaceRoot }
+  const stored = await ctx.get('sessionPersistence')?.stat(sessionId, signal === undefined ? undefined : { signal })
+  if (stored === undefined) return undefined
+  const cached = ctx.get('sessionProjectionCache')?.cachedSnapshot(stored.header, ['workingDirectory'])?.values.workingDirectory
+  return { sessionId, workspaceRoot: cached ?? stored.header.cwd ?? ctx.sandboxPolicy.workspaceRoot }
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -219,20 +245,20 @@ export class WorkspaceFiles extends TypertRemoteService {
         resource: 'session',
         hostTypeSymbol: '@deepseek-ai/dsh-api-workspace-files#WorkspaceFileScope',
         wireTypeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
-        resolve: async (sessionId) => {
-          const live = scope.sessions.get(sessionId)?.header
-          const stored = live === undefined
-            ? await scope.get('sessionPersistence')?.stat(sessionId)
-            : undefined
-          const header = live ?? stored?.header
-          if (header === undefined) return undefined
-          return {
-            sessionId,
-            workspaceRoot: header.cwd ?? scope.sandboxPolicy.workspaceRoot,
-          }
-        },
+        resolve: sessionId => workspaceFileScopeOf(scope, sessionId),
       })
     })
+  }
+
+  /**
+   * Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses:
+   * a live Session's sandbox workspace root, else a stored Session's cached directory, else its header directory.
+   * @param sessionId - Session identity received on the wire.
+   * @param signal - cancellation for the persistence read of a stored Session.
+   * @returns the scope, or undefined when no live or stored Session has that identity.
+   */
+  scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined> {
+    return workspaceFileScopeOf(this.ctx, sessionId, signal)
   }
 
   /**

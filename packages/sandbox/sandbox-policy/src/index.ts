@@ -32,6 +32,7 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-working-directory'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
@@ -96,8 +97,9 @@ export interface Config {
   /** File-sandbox mode a session starts from (default: `read-only`). */
   mode?: SandboxMode
   /**
-   * Absolute fallback root for agentless calls and sessions without a cwd (default:
-   * `process.cwd()`). Normal agent calls use their session cwd instead.
+   * Absolute fallback root for agentless calls and, without the working-directory
+   * service, sessions without a header directory (default: `process.cwd()`).
+   * Normal agent calls use their session's working directory instead.
    */
   workspaceRoot?: string
   /**
@@ -196,13 +198,15 @@ export class SandboxPolicyService extends Service {
   /**
    * Resolve the complete policy for one capability call. An approved explicit
    * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session cwd is its workspace-write boundary; the
-   * configured root is the fallback for agentless calls and sessions without a
-   * cwd. Configured extra roots and this Session's active registrations are
-   * snapshotted together; existing operations and processes keep their policy.
+   * deployment default. A session's working directory is its workspace-write
+   * boundary, so a Host move of the Session moves the boundary; the configured
+   * root is the fallback for agentless calls and, without the working-directory
+   * service, sessions without a header directory. Configured extra roots and
+   * this Session's active registrations are snapshotted together; existing
+   * operations and processes keep their policy.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode and absolute workspace root.
-   * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's recorded cwd is
+   * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's directory is
    *   relative or contains a NUL byte.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
@@ -219,9 +223,13 @@ export class SandboxPolicyService extends Service {
     }
   }
 
-  /** The session's recorded cwd, or the configured root, as the workspace-write boundary. */
+  /**
+   * The workspace-write boundary: the session's directory from the working-directory service; without
+   * that service its header directory, else the configured root.
+   */
   private sessionWorkspaceRoot(session: Session | undefined): string {
-    const cwd = session?.header.cwd
+    if (session === undefined) return this.workspaceRoot
+    const cwd = this.ctx.get('workingDirectory')?.get(session) ?? session.header.cwd
     if (cwd === undefined) return this.workspaceRoot
     if (!isExecutionWorldPath(cwd)) {
       throw new SandboxInvalidRootError(cwd, 'the Session working directory must be an absolute execution-world path without NUL bytes', 'sandbox workspace root')

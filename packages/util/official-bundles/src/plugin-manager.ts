@@ -18,7 +18,7 @@ export const PROTECTED_PLUGINS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Built-in profile bundles, persistent terminals, the standalone worktree tool, and the Computer Use MCP profile
+ * Built-in profile bundles, the standalone worktree tool, and the Computer Use MCP profile
  * bundle, which have no plugin manager page.
  * Their Host availability and activation stay intact.
  */
@@ -29,7 +29,6 @@ export const HIDDEN_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-sdk-app',
   '@deepseek-ai/dsh-acp-app',
   '@deepseek-ai/dsh-sdk-minimal',
-  '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-cua-mcp',
 ])
@@ -53,6 +52,7 @@ export const MORE_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-timeline',
+  '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
@@ -69,6 +69,7 @@ export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-cua-mcp',
   '@deepseek-ai/dsh-timeline',
+  '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
   '@deepseek-ai/dsh-experimental-inspector-profile',

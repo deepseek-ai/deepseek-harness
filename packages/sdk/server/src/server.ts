@@ -443,7 +443,7 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Change a Session's directory and queue its model-visible transition.
    * @param params - target Session and absolute or current-directory-relative path.
-   * @returns the validated absolute directory; origin and permissions are unchanged.
+   * @returns the validated absolute directory; the origin is unchanged and the workspace-write boundary follows the directory.
    */
   async setWorkingDirectory(params: SessionWorkingDirectorySetParams): Promise<SessionWorkingDirectoryResult> {
     const agent = await this.workingDirectoryAgent(params.sessionId)

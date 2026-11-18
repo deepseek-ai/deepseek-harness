@@ -38,7 +38,7 @@ const ADDRESS = changesReviewAddress(COORDINATES)
 const SUMMARY_URL = changesSummaryUrl(SESSION, 5)
 
 const summary: ChangesSummary = {
-  turn: 2, total: 4, added: 4, deleted: 2,
+  turn: 2, cwd: '/work/app', total: 4, added: 4, deleted: 2,
   files: [
     { path: 'src/app/main.ts', display: 'src/app/main.ts', added: 3, deleted: 1 },
     { path: '/tmp/out/big.bin', display: '~/out/big.bin', added: 0, deleted: 0, oversized: true },
@@ -329,6 +329,23 @@ describe('ReviewTab', () => {
     expect(view.container.querySelector('[data-diff-code]')).toBeNull()
     expect(view.getByText('before')).toBeTruthy()
     expect(view.getByText('after')).toBeTruthy()
+  })
+
+  it('opens a file against the directory its turn started in after the Session moved', () => {
+    const summaries = new ChangesSummaryStore()
+    summaries.state.set({ [SUMMARY_URL]: { ...summary, files: [
+      { path: 'notes.txt', display: 'notes.txt', added: 1, deleted: 1 },
+      { path: '.agents/worktrees/topic/src/a.ts', display: '.agents/worktrees/topic/src/a.ts', added: 1, deleted: 0 },
+    ] } })
+    const moved = '/work/app/.agents/worktrees/topic'
+    const outside = mount({ summaries, cwd: moved, params: { index: 0 } })
+    fireEvent.click(outside.view.getByRole('button', { name: 'Open notes.txt in sidebar' }))
+    // The Session's directory no longer contains the file, so its address carries the absolute path.
+    expect(outside.tabActions.openResource).toHaveBeenCalledWith(fileAddressFor(SESSION, moved, '/work/app/notes.txt'))
+    outside.view.unmount()
+    const inside = mount({ summaries, cwd: moved, params: { index: 1 } })
+    fireEvent.click(inside.view.getByRole('button', { name: 'Open .agents/worktrees/topic/src/a.ts in sidebar' }))
+    expect(inside.tabActions.openResource).toHaveBeenCalledWith(fileAddressFor(SESSION, moved, 'src/a.ts'))
   })
 
   it('opens the whole file in the sidebar and the native open only with a desktop', () => {
