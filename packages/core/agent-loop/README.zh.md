@@ -127,8 +127,6 @@ loop 在发布工厂前等待必需的注册完成。它对模型选择和 inbox
 
 ### 失败与取消
 
-`agent/turn-finalizing` 在回合停止接纳步骤后执行，覆盖正常完成、错误和取消。所有监听器结束后才提交 `turn/end`、发布空闲状态、开始后续回合或完成 Agent 销毁。一个监听器失败不会跳过其他清理监听器；失败会产生 `agent/error` 和错误结束记录。清理监听器自行设置超时，不得复用已取消的操作 signal，也不得等待本 Agent 变为空闲。
-
 `turn/end` 声明的类型是 `TurnEndCancelCause`；取消时，循环在其中记录一份新的 `AgentCancelCause`，保留调用方的 `kind` 和 hook 的 `reason` 文本。实时 `AbortSignal.reason` 仍是调用方的那个对象，传输层可能向其添加属性——Node 的 fetch 会给它赋一个 `stack`——因此这份拷贝既让该调用栈不进入日志，也让结束事件保持可追加。
 
 最终适配器选择、分发与迭代失败以终止结束的形式到达并进入 `agent/request-error`；处理该失败的监听器返回 `{ kind: 'retry' }` 且不调用 `next()`，未被处理的失败则是终态。Middleware、结果处理、工具及其他扩展失败仍会抛出并直接关闭轮次——插件失败结束的是轮次，不是循环。取消后未分发的模型工具调用会收到合成的 `tool/call` 加 `ABORTED_BEFORE_DISPATCH` 结果对。

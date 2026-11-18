@@ -345,7 +345,6 @@ export class ReactLoopAgent implements Agent {
     }
     phase.turn = turn
     let turnEnds: TurnEndReason | null = null
-    let turnFailure: { error: unknown } | undefined
     let target: InboxTarget = 'next-turn'
     try {
       while (true) {
@@ -407,7 +406,6 @@ export class ReactLoopAgent implements Agent {
         target = 'next-step'
       }
     } catch (error: unknown) {
-      turnFailure = { error }
       // A cause is present exactly while the signal is aborted.
       const cause = abortedCancelCause(signal)
       if (cause !== undefined) {
@@ -426,25 +424,12 @@ export class ReactLoopAgent implements Agent {
       this.throwError(error)
     } finally {
       try {
-        try {
-          await this.dispatch.parallel('agent/turn-finalizing', { turn })
-          const cause = abortedCancelCause(signal)
-          if (cause !== undefined && turnEnds?.kind !== 'error') turnEnds = { kind: 'aborted', reason: cause }
-        } catch (cleanupError: unknown) {
-          const error = turnFailure === undefined ? cleanupError : new AggregateError(
-            [turnFailure.error, cleanupError], 'Turn execution and finalization failed', { cause: turnFailure.error },
-          )
-          turnEnds = { kind: 'error', error: { code: 'UNKNOWN', message: errorChain(error) } }
-          throw error
-        } finally {
-          // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
-          this.session.append('turn/end', { turn, reason: turnEnds! })
-        }
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
+        this.session.append('turn/end', { turn, reason: turnEnds! })
       } catch (error: unknown) {
         this.throwError(error)
       }
     }
-    signal.throwIfAborted()
     if (!this.inbox.hasPending) return false
     phase.abort = new AbortController()
     // A fresh controller makes a latch set on the old one stale: the live driver claims the queue itself.

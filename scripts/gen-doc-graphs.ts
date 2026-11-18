@@ -1777,7 +1777,6 @@ function renderLifecycle(): string {
     '  end',
     '  end',
     '  end',
-    `  Driver->>Hooks: ${mermaidCode('agent/turn-finalizing')} await all resource finalizers`,
     `  Driver->>Session: ${mermaidCode('turn/end')}`,
     `  Driver-->>SDK: ${mermaidCode('agent/status')} idle`,
     '```',

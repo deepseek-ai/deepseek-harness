@@ -1,6 +1,6 @@
 /** Turn-owned admission and acknowledged cleanup for providers implementing held input. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
 import { NativeError, type NativeClient } from './native-client.ts'
 
 class InputTurn {
@@ -24,6 +24,14 @@ class InputTurn {
     }
   }
 
+  get pending(): boolean { return this.removeCleanup !== undefined }
+
+  /** Close reports and disables the failed owner; background and maintenance waits must still settle. */
+  async settle(): Promise<void> {
+    try { await this.close() }
+    catch (_error) { /* close has reported the failure and disabled this task's CUA operations. */ }
+  }
+
   close(canRequest = true): Promise<void> {
     this.controller.abort()
     return this.closing ??= Promise.resolve().then(async () => {
@@ -36,6 +44,7 @@ class InputTurn {
         throw error
       } finally {
         this.removeCleanup?.()
+        this.removeCleanup = undefined
       }
     })
   }
@@ -50,24 +59,49 @@ export class CuaInputTurns {
   constructor(private readonly ctx: Context) {}
 
   /**
-   * Install turn admission and finalization listeners.
+   * Install turn admission, post-turn cleanup and whole-agent maintenance waits.
    * @returns Exact disposers for the runtime effect to retain through native cleanup.
    */
   *install(): Generator<() => void> {
     const ctx = this.ctx
-    yield ctx.on('agent/pre-step', (event, next) => {
-      if (this.turns.get(event.agent)?.turn !== event.turn) {
+    yield ctx.on('agent/pre-step', async (event, next) => {
+      const previous = this.turns.get(event.agent)
+      if (previous?.turn !== event.turn) {
+        await previous?.settle()
         this.turns.set(event.agent, new InputTurn(event.agent, event.turn, event.signal, (error) => {
           this.failures.set(event.agent, error)
           ctx.logger.error('CUA cleanup was not confirmed; all CUA operations are disabled for task %s: %s', event.agent.id, error)
+          emitAgentEvent(ctx, event.agent, 'agent/error', { turn: event.turn, step: 0, error })
         }))
       }
       return next()
     })
-    yield ctx.on('agent/turn-finalizing', ({ agent, turn }) => {
+    yield ctx.on('session/event', (session, event) => {
+      if (event.type !== 'turn/end') return
+      const agent = ctx.agents.get(session.id)
+      if (agent?.session !== session) return
       const owner = this.turns.get(agent)
-      if (owner?.turn === turn) return owner.close()
+      if (owner?.turn === event.data.turn) void owner.settle()
     })
+    yield ctx.on('agent/status', ({ agent, status }) => {
+      if (status !== 'idle') return
+      const owner = this.turns.get(agent)
+      if (!owner?.pending) return
+      // Claim the idle phase before notification consumers submit more work. whenIdle follows maintenance.
+      void agent.runMaintenance(() => owner.settle())
+    }, { prepend: true })
+  }
+
+  /**
+   * Wait for an ended turn before a direct CUA operation can acquire the connection.
+   * @param agent - Task issuing the operation.
+   * @returns Completion after cleanup has settled and any failure has been reported.
+   */
+  async ready(agent: Agent): Promise<void> {
+    const owner = this.turns.get(agent)
+    if (owner?.controller.signal.aborted) {
+      await owner.settle()
+    }
   }
 
   /**

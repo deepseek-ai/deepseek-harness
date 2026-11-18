@@ -21,6 +21,6 @@
 {"type":"command/done","data":{"commandId":"{{command:1}}","kind":"success","text":"Feedback recorded for session {{session:1}}\nAnonymous user: {{id:1}}."}}
 {"type":"feedback/record","data":{"category":"other"}}
 {"type":"feedback/message-put","data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"negative","note":"Explain the result.","category":"task-result","version":"{{id:2}}","createdAt":0,"updatedAt":0}}}
-{"type":"feedback/message-put","data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"positive","note":"Turn resources released.","version":"{{id:3}}","createdAt":0,"updatedAt":0}}}
+{"type":"feedback/message-put","data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"positive","note":"The explanation is clear now.","version":"{{id:3}}","createdAt":0,"updatedAt":0}}}
 {"type":"feedback/message-delete","data":{"sessionId":"{{session:1}}","messageId":"{{message:5}}"}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}

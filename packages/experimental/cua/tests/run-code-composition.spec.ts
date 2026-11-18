@@ -372,9 +372,11 @@ it('keeps held keys across programs and a failed program until explicit up or tu
   expect(f.native.held).toEqual([])
 })
 
-it.each(['normal', 'model failure', 'thinking stop'] as const)('awaits native release before idle on %s', async (ending) => {
+it.each(['normal', 'model failure', 'thinking stop'] as const)('records turn/end before cleanup and makes whenIdle await native release on %s', async (ending) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  const idle: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('agent/status', ({ agent, status }) => { if (agent === f.agent && status === 'idle') idle.resolve() })
   f.model.beforeStream = async (index, options) => {
     if (index !== 1) return
     if (ending === 'model failure') throw new Error('Model request failed')
@@ -384,12 +386,14 @@ it.each(['normal', 'model failure', 'thinking stop'] as const)('awaits native re
     }
   }
   const release = f.native.controlNext('releaseHeldInputs')
-  const running = f.run()
+  let settled = false
+  const running = f.run().then(() => { settled = true })
   if (ending === 'thinking stop') { await thinking.promise; f.agent.cancel({ kind: 'user' }) }
-  await release.entered
+  await Promise.all([release.entered, idle.promise])
   try {
-    expect(f.agent.status).toBe('running')
-    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(false)
+    expect(f.agent.status).toBe('idle')
+    expect(settled).toBe(false)
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(true)
     expect(f.native.held.map(press => press.key)).toEqual(['w'])
   } finally { release.reply(); await running }
   expect(f.native.held).toEqual([])
@@ -432,7 +436,7 @@ it.each(['refusal', 'disconnect', 'timeout'] as const)('reports cleanup %s and p
   else if (failure === 'disconnect') release.disconnect()
   await running
   expect(errors).toHaveLength(1)
-  expect(f.agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'error' } } })
+  expect(f.agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
   const count = f.native.calls.length
   f.model.requests.length = 0
   f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Try again' }], source: { kind: 'user' } }))
@@ -460,10 +464,9 @@ it.each(['agent', 'provider', 'context'] as const)('awaits held input cleanup wh
     expect(disposed).toBe(false)
     expect(f.native.state.closedChannels).toBe(0)
     f.agent.cancel({ kind: 'user' })
-    // The model's abort and loop finalization are in-process; the native reply remains behind its explicit barrier.
+    // Turn completion is observable while native acknowledgement remains behind its explicit barrier.
     await setImmediate()
-    expect(f.agent.status).toBe('running')
-    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(false)
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(true)
   } finally {
     release.reply()
     f.agent.cancel({ kind: 'user' })
@@ -539,13 +542,67 @@ it('reports disconnect after a dispatched down and blocks a later program in the
   expect(JSON.stringify(results[1])).toContain('INPUT_CLEANUP_UNCONFIRMED')
   expect(f.native.calls.filter(call => call.method === 'getApp')).toHaveLength(1)
   expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
-  expect(f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason.kind).toBe('error')
+  expect(f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason.kind).toBe('completed')
 })
 
-it('finalizes without native cleanup when prompt assembly fails before input admission', async () => {
+it('ends without native cleanup when prompt assembly fails before input admission', async () => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   f.ctx.on('system-prompt/assemble', async () => { throw new Error('Fixture assembly failed') })
   await f.run()
   expect(f.native.calls).toEqual([])
   expect(f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason.kind).toBe('error')
+})
+
+it('keeps held input while turn-stopping steering continues the same turn', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  let stops = 0
+  f.ctx.on('agent/turn-stopping', ({ agent }) => {
+    if (agent !== f.agent || ++stops !== 1) return
+    agent.steer(createUserMessage({ content: [{ type: 'text', text: 'Continue this turn' }], source: { kind: 'user' } }))
+  })
+  f.model.beforeStream = async (index) => {
+    if (index === 2) expect(f.native.held.map(press => press.key)).toEqual(['w'])
+  }
+  await f.run()
+  expect(stops).toBe(2)
+  expect(f.native.events).toEqual(['w:down', 'w:up'])
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs').map(call => call.params.turn)).toEqual([1])
+})
+
+it('blocks a queued turn at pre-step until the previous native cleanup settles', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const nextStep: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('agent/pre-step', (event, next) => {
+    if (event.agent === f.agent && event.turn === 2) nextStep.resolve()
+    return next()
+  }, { prepend: true })
+  f.model.beforeStream = async (index) => {
+    if (index === 1) f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Queued turn' }], source: { kind: 'user' } }))
+  }
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  await Promise.all([release.entered, nextStep.promise])
+  try {
+    expect(f.model.requests).toHaveLength(2)
+    expect(f.native.held.map(press => press.turn)).toEqual([1])
+    expect(f.agent.session.snapshotEvents().filter(event => event.type === 'turn/end')).toHaveLength(1)
+  } finally { release.reply(); await running }
+  expect(f.model.requests).toHaveLength(3)
+  expect(f.native.held).toEqual([])
+})
+
+it('does not resume retained inbox work when stopped during post-turn cleanup', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const idle: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('agent/status', ({ status }) => { if (status === 'idle') idle.resolve() })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  await Promise.all([release.entered, idle.promise])
+  f.agent.inject(createUserMessage({ content: [{ type: 'text', text: 'Retained input' }], source: { kind: 'user' } }))
+  f.agent.cancel({ kind: 'user' }, { keepInbox: true })
+  release.reply()
+  await running
+  expect(f.native.held).toEqual([])
+  expect(f.agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+  expect(f.agent.inbox.hasPending).toBe(true)
 })

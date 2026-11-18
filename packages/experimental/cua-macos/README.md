@@ -148,7 +148,7 @@ Element clicks use opaque element IDs from the current snapshot. Left clicks sup
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The shared helper's `HeldInputs` records task, turn, connection, process generation, application/window and actual input route before each explicit down is posted. One lock orders keyboard and pointer posts and releases. `agent/turn-finalizing` closes host admission, cancels in-flight native work and awaits `releaseHeldInputs` with an independent bounded request. `whenIdle()` and Agent disposal include this wait. Connection shutdown cancels and joins native work before fallback release; a killed host relies on that disconnect path. Repeated cleanup cannot release a later turn's inputs.
+The shared helper's `HeldInputs` records task, turn, connection, process generation, application/window and actual input route before each explicit down is posted. One lock orders keyboard and pointer posts and releases. `turn/end` starts CUA cleanup: it closes host admission, cancels in-flight native work and awaits `releaseHeldInputs` with an independent bounded request. CUA uses the existing `runMaintenance()` and pre-step hooks to make `whenIdle()`, subsequent input and Agent disposal wait for cleanup. The turn record and idle notification can precede release acknowledgement; cleanup failure is reported separately through `agent/error` and disables CUA for the task. Connection shutdown cancels and joins native work before fallback release; a killed host relies on that disconnect path. Repeated cleanup cannot release a later turn's inputs.
 
 <details>
 <summary>Dispatch and resource ownership</summary>

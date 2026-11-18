@@ -69,13 +69,6 @@ export interface AgentEventDispatch {
    */
   serial<K extends AgentSubjectEvent>(name: K, payload: PayloadRest<K>): Promise<Awaited<Return<Events[K]>>>
   /**
-   * Await every listener, including after another listener fails; reject with all failures.
-   * @param name - the agent-subject event to dispatch.
-   * @param payload - the event's payload fields; `agent` is injected.
-   * @returns completion after all listeners settle.
-   */
-  parallel<K extends AgentSubjectEvent>(name: K, payload: PayloadRest<K>): Promise<void>
-  /**
    * Around-middleware dispatch (Cordis `waterfall`) in the agent's scope. The
    * declared event parameters already end with the `next` callback, so `rest`
    * is exactly the event's arguments after the payload — the final element
@@ -141,11 +134,6 @@ export function agentEvents(ctx: Context, agent: Agent, carrier: Scoped<Agent> =
           ctx.logger.warn(`agent event "${name}" listener threw: ${String(error)}`)
         }
       }
-    },
-    async parallel(name, payload) {
-      // oxlint-disable-next-line typescript/unbound-method -- the events mixin accessor returns a pre-bound function
-      const parallel = ctx.parallel as (thisArg: Scoped<Agent>, name: string, ...args: unknown[]) => Promise<void>
-      await parallel(carrier, name, fused(payload))
     },
     async serial(name, payload) {
       // oxlint-disable-next-line typescript/unbound-method -- the events mixin accessor returns a pre-bound function

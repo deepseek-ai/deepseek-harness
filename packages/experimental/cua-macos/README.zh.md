@@ -148,7 +148,7 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-共享 helper 的 `HeldInputs` 在每次显式按下派发前记录任务、回合、连接、进程代次、应用或窗口和实际输入方式。同一把锁维护键盘与鼠标的派发和释放顺序。`agent/turn-finalizing` 关闭宿主输入准入、取消在途原生操作，并通过独立且有超时限制的请求等待 `releaseHeldInputs` 确认。`whenIdle()` 和 Agent 销毁都包含这段等待。连接关闭会先取消并等待原生操作停止，再做兜底释放；宿主被强杀时依靠这条断连路径。重复清理不会释放后续回合的输入。
+共享 helper 的 `HeldInputs` 在每次显式按下派发前记录任务、回合、连接、进程代次、应用或窗口和实际输入方式。同一把锁维护键盘与鼠标的派发和释放顺序。`turn/end` 触发 CUA 清理：关闭宿主输入准入、取消在途原生操作，并通过独立且有超时限制的请求等待 `releaseHeldInputs` 确认。CUA 利用现有 `runMaintenance()` 和 pre-step 入口，使 `whenIdle()`、后续输入和 Agent 销毁等待清理完成。回合结束记录和空闲通知可以早于释放确认；清理失败单独通过 `agent/error` 报告，并禁用该任务的 CUA。连接关闭会先取消并等待原生操作停止，再做兜底释放；宿主被强杀时依靠这条断连路径。重复清理不会释放后续回合的输入。
 
 <details>
 <summary>操作分派与资源归属</summary>
