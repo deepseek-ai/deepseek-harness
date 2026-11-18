@@ -76,9 +76,16 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
   const browserAvailable = createSnapshotStore(true)
+  const compactionTabs = createSnapshotStore(false)
   const sidebarRightTabs = {
     get: vi.fn<(kind: string) => object | undefined>(() => browserAvailable.getSnapshot() ? {} : undefined),
-    subscribe: (listener: () => void) => browserAvailable.subscribe(listener),
+    candidates: vi.fn<(address: string) => readonly object[]>(address =>
+      compactionTabs.getSnapshot() && address.startsWith('dsh-resource://compaction/') ? [{ kind: 'compaction' }] : []),
+    subscribe: (listener: () => void) => {
+      const stopBrowser = browserAvailable.subscribe(listener)
+      const stopCompaction = compactionTabs.subscribe(listener)
+      return () => { stopBrowser(); stopCompaction() }
+    },
     register: vi.fn(() => () => {}),
   }
   if (withBrowserRegistry) runtime.ctx.provide('sidebarRightTabs', sidebarRightTabs as never)
@@ -141,7 +148,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable,
+    runtime, chat, chatSettings, browserAvailable, compactionTabs,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
@@ -448,6 +455,43 @@ describe('Chat inject API', () => {
     } finally {
       await b.runtime.dispose()
     }
+  })
+
+  it('opens ordinary and subagent checkpoints through the optional preview service', async () => {
+    const b = await bench()
+    const open = vi.fn(async () => null)
+    try {
+      const { injected } = b.chatViewApi(b.rootReference)
+      const signal = new AbortController().signal
+      expect(await injected.openCompaction(42, signal)).toBeNull()
+      const service = await b.runtime.mount({ apply(ctx) { ctx.provide('compactionPreviews', { open }) } })
+      await vi.waitFor(() => { expect(injected.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      await injected.openCompaction(42, signal)
+      expect(open).toHaveBeenLastCalledWith(ROOT, { kind: 'session', sessionId: ROOT }, 42, signal)
+      const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
+      vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
+      await injected.openCompaction(7, signal)
+      expect(open).toHaveBeenLastCalledWith(ROOT, { kind: 'subagent', ...child }, 7, signal)
+      await service.dispose()
+      expect(injected.hooks.compactionPreview.getSnapshot()).toBe(false)
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('tracks preview service availability independently of sidebar tab registration', async () => {
+    const b = await bench(undefined, false)
+    try {
+      const preview = b.chatViewApi(b.rootReference).injected.hooks.compactionPreview
+      expect(preview.getSnapshot()).toBe(false)
+      const changed = vi.fn()
+      const unsubscribe = preview.subscribe(changed)
+      const service = await b.runtime.mount({ apply(ctx) { ctx.provide('compactionPreviews', { open: async () => null }) } })
+      await vi.waitFor(() => { expect(preview.getSnapshot()).toBe(true) })
+      expect(changed).toHaveBeenCalledOnce()
+      await service.dispose()
+      expect(preview.getSnapshot()).toBe(false)
+      expect(changed).toHaveBeenCalledTimes(2)
+      unsubscribe()
+    } finally { await b.runtime.dispose() }
   })
 
   it('keeps local link choices usable when settings cannot persist', async () => {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compacted context preview",
+    "description": "Shows the context the model reads after a compaction in the right sidebar."
+  }
+}

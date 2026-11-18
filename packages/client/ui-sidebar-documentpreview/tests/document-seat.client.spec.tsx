@@ -71,7 +71,7 @@ async function boot() {
     },
   }))
   await rt.mount({ inject: [...sidebarInject], apply: sidebarApply })
-  await rt.mount({ inject: [...inject], apply }, syncedConfig({}))
+  const plugin = await rt.mount({ inject: [...inject], apply }, syncedConfig({}))
   const view = rt.renderSlot('rightbar', { width: 600, viewportWidth: 1440, canShow: true })
   const open = (name: string): void => {
     act(() => { rt.ctx.sidebarRight.openResource('dsh-resource://file/session/documents/' + name) })
@@ -98,7 +98,7 @@ async function boot() {
     ))
     return () => { removeBody(); removeDefinition() }
   })
-  return { rt, view, open, register, read, bytes }
+  return { rt, view, open, register, read, bytes, plugin }
 }
 
 describe('document extension seat', () => {
@@ -164,6 +164,25 @@ describe('document extension seat', () => {
     expect(h.view.container.querySelector('[data-renderer-tab]')?.getAttribute('data-renderer-tab')).toBe(tab)
     await act(async () => { h.register('later-reader', 'text-pages', 'extension') })
     expect(h.view.container.querySelector('[data-renderer="builtin-reader"]')).not.toBeNull()
+  })
+
+  it('names a selected implementation without a registered body in place of the document', async () => {
+    const h = await boot()
+    act(() => {
+      h.rt.ctx.effect(() => h.rt.ctx.documentPreviews.register({ id: 'orphan', extensions: ['md'], title: () => 'Orphan viewer', loading: 'text-pages' }))
+    })
+    h.open('notes.md')
+    await waitFor(() => { expect(h.view.container.querySelector('[data-document-preview="orphan"]')?.textContent).toContain('Orphan viewer') })
+    expect(h.view.container.querySelector('[data-textpreview-line]')).toBeNull()
+  })
+
+  it('registers the document body Factory and every renderer body for the plugin lifetime', async () => {
+    const h = await boot()
+    expect(Object.keys(h.rt.factoryOf('sidebar.right.document.body').children ?? {})).toEqual(['sidebar.right.tab.document'])
+    expect(h.rt.slots.entries('sidebar.right.tab.document').map(entry => entry.options.key)).toContain(PLAIN_BODY_ID)
+    await h.plugin.dispose()
+    expect(() => h.rt.factoryOf('sidebar.right.document.body')).toThrow(/no definition/u)
+    expect(h.rt.slots.entries('sidebar.right.tab.document')).toEqual([])
   })
 
   it('returns to the matching builtin when the selected implementation is unregistered', async () => {

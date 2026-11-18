@@ -137,6 +137,7 @@
     { "path": "./packages/client/ui-sidebar-right" },
     { "path": "./packages/client/ui-entry-customization" },
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.client.json" },
+    { "path": "./packages/client/ui-compaction" },
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.client.json" },
     { "path": "./packages/client/ui-sidebar-files" },
     { "path": "./packages/client/ui-jobs" },

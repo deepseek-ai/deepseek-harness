@@ -323,10 +323,16 @@
       config:
         pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' && process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
 
-    # The right Sidebar's document tab: bounded file reads with selectable
+    # The right Sidebar's document and content tabs: bounded file reads and
+    # in-memory content such as compact summaries and plans, with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
     - id: ui-sidebar-documentpreview
       name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
+
+    # Compaction checkpoints in the content tab: the replacement message the
+    # model reads after a compact, opened from Chat's compact rows.
+    - id: ui-compaction
+      name: '@deepseek-ai/dsh-client-ui-compaction'
 
     # Web profiles opt in; Desktop retains sandboxed HTTP(S) Browser tabs.
     - id: ui-sidebar-browser

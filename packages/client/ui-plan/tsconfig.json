@@ -48,6 +48,9 @@
       "path": "../ui-sidebar-right"
     },
     {
+      "path": "../ui-sidebar-documentpreview/tsconfig.client.json"
+    },
+    {
       "path": "../ui-user-questions"
     },
     {
@@ -58,9 +61,6 @@
     },
     {
       "path": "../../llm/llm"
-    },
-    {
-      "path": "../../util/crypto"
     },
     {
       "path": "../../core/tool-executor-ptc"

@@ -60,6 +60,7 @@ async function bench() {
   runtime.ctx.provide('sidebarRightTabs', {
     register: vi.fn(() => () => {}),
     get: vi.fn(() => ({})),
+    candidates: vi.fn(() => []),
     subscribe: vi.fn(() => () => {}),
   } as never)
   runtime.ctx.provide('resources', { register: vi.fn(() => () => {}) } as never)

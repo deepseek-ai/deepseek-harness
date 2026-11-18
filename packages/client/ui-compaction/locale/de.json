@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Vorschau des komprimierten Kontexts",
+    "description": "Zeigt in der rechten Seitenleiste den Kontext, den das Modell nach einer Komprimierung liest."
+  }
+}

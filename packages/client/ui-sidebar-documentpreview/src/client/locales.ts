@@ -3,7 +3,8 @@
  *
  * The failure lines are the point of this file: a preview that cannot show a
  * page has to say which of several different things went wrong, and each one
- * suggests a different next step for the reader.
+ * suggests a different next step for the reader. `content.*` keys belong to
+ * the `content` tab type.
  */
 
 /** Simplified Chinese dictionary and key-set source of truth. */
@@ -30,9 +31,15 @@ export const zh = {
   'error.notRegularFile': '该路径不是普通文件，没有可显示的内容',
   'error.unavailable': '读取失败：{message}',
   retry: '重试',
+  'content.loading': '正在加载内容...',
+  'content.unavailable': '无法读取此类内容',
+  'content.expired': '此预览已失效，重新加载页面后不再保留之前窗口打开的内容',
+  'content.failed': '加载失败：{message}',
+  'content.noRenderer': '暂时无法预览 {mediaType} 类型的内容',
+  'content.title': '内容预览',
 } satisfies Record<string, string>
 
-/** Text-preview dictionary key union. */
+/** Document-preview dictionary key union. */
 export type SidebarDocumentPreviewKey = keyof typeof zh
 
 /** English dictionary, checked against the Chinese key set. */
@@ -59,6 +66,12 @@ export const en = {
   'error.notRegularFile': 'Not a regular file, nothing to display.',
   'error.unavailable': 'Read failed: {message}',
   retry: 'Retry',
+  'content.loading': 'Loading content...',
+  'content.unavailable': 'Nothing can read this content.',
+  'content.expired': 'This preview is no longer available. Content from a previous window is not kept after reload.',
+  'content.failed': 'Load failed: {message}',
+  'content.noRenderer': 'Preview is not available for {mediaType} content.',
+  'content.title': 'Content preview',
 } satisfies Record<SidebarDocumentPreviewKey, string>
 
 /** Japanese copy, checked against the English keys. */
@@ -85,6 +98,12 @@ export const ja = {
   'error.notRegularFile': '通常のファイルではないため、表示する内容がありません。',
   'error.unavailable': '読み込みに失敗しました: {message}',
   'retry': '再試行',
+  'content.loading': 'コンテンツを読み込んでいます...',
+  'content.unavailable': 'この種類のコンテンツを読み込めるものがありません。',
+  'content.expired': 'このプレビューは利用できなくなりました。以前のウィンドウで開いた内容は再読み込み後に保持されません。',
+  'content.failed': '読み込みに失敗しました：{message}',
+  'content.noRenderer': '{mediaType} のコンテンツはまだプレビューできません。',
+  'content.title': 'コンテンツプレビュー',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -111,6 +130,12 @@ export const es = {
   'error.notRegularFile': 'No es un archivo normal, no hay nada que mostrar.',
   'error.unavailable': 'Error de lectura: {message}',
   retry: 'Reintentar',
+  'content.loading': 'Cargando contenido...',
+  'content.unavailable': 'No hay nada que pueda leer este contenido.',
+  'content.expired': 'Esta vista previa ya no está disponible. El contenido de una ventana anterior no se conserva al recargar.',
+  'content.failed': 'Error al cargar: {message}',
+  'content.noRenderer': 'La vista previa no está disponible para contenido {mediaType}.',
+  'content.title': 'Vista previa de contenido',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -137,6 +162,12 @@ export const fr = {
   'error.notRegularFile': "Ce n'est pas un fichier normal, rien à afficher.",
   'error.unavailable': 'Échec de lecture : {message}',
   retry: 'Réessayer',
+  'content.loading': 'Chargement du contenu...',
+  'content.unavailable': 'Rien ne permet de lire ce contenu.',
+  'content.expired': 'Cet aperçu n’est plus disponible. Le contenu d’une fenêtre précédente n’est pas conservé après un rechargement.',
+  'content.failed': 'Échec du chargement : {message}',
+  'content.noRenderer': 'L’aperçu n’est pas disponible pour le contenu {mediaType}.',
+  'content.title': 'Aperçu du contenu',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -163,6 +194,12 @@ export const de = {
   'error.notRegularFile': 'Keine normale Datei, nichts zum Anzeigen.',
   'error.unavailable': 'Lesen fehlgeschlagen: {message}',
   retry: 'Erneut versuchen',
+  'content.loading': 'Inhalt wird geladen...',
+  'content.unavailable': 'Dieser Inhalt kann von nichts gelesen werden.',
+  'content.expired': 'Diese Vorschau ist nicht mehr verfügbar. Inhalte aus einem früheren Fenster bleiben nach dem Neuladen nicht erhalten.',
+  'content.failed': 'Laden fehlgeschlagen: {message}',
+  'content.noRenderer': 'Für {mediaType}-Inhalte ist keine Vorschau verfügbar.',
+  'content.title': 'Inhaltsvorschau',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -189,6 +226,12 @@ export const ru = {
   'error.notRegularFile': 'Не обычный файл, отображать нечего.',
   'error.unavailable': 'Не удалось прочитать: {message}.',
   retry: 'Повторить',
+  'content.loading': 'Загрузка содержимого...',
+  'content.unavailable': 'Это содержимое нечем прочитать.',
+  'content.expired': 'Этот просмотр больше недоступен. Содержимое из предыдущего окна не сохраняется после перезагрузки.',
+  'content.failed': 'Не удалось загрузить: {message}',
+  'content.noRenderer': 'Предварительный просмотр содержимого {mediaType} недоступен.',
+  'content.title': 'Просмотр содержимого',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -215,4 +258,10 @@ export const pt = {
   'error.notRegularFile': 'Não é um arquivo normal, nada para exibir.',
   'error.unavailable': 'Falha na leitura: {message}',
   retry: 'Tentar novamente',
+  'content.loading': 'Carregando conteúdo...',
+  'content.unavailable': 'Não há nada que possa ler este conteúdo.',
+  'content.expired': 'Esta visualização não está mais disponível. O conteúdo de uma janela anterior não é mantido após recarregar.',
+  'content.failed': 'Falha ao carregar: {message}',
+  'content.noRenderer': 'A visualização não está disponível para conteúdo {mediaType}.',
+  'content.title': 'Visualização de conteúdo',
 } satisfies Record<keyof typeof en, string>

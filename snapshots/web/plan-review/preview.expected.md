@@ -1,4 +1,5 @@
 - 'region "Add `--greeting` flag to CLI"':
+  - text: "Add `--greeting` flag to CLI"
   - heading "Add --greeting flag to CLI" [level=1]:
     - text: Add
     - code: "--greeting"

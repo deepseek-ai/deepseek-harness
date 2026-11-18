@@ -229,8 +229,6 @@ const command = (over: Partial<CommandNode> = {}): CommandNode => ({
 })
 const compaction = (over: Partial<CompactionSummaryNode> = {}): CompactionSummaryNode => ({
   kind: 'compaction', seq: 8, time: 8_000,
-  summary: '## 压缩摘要\n\n保留的事实。',
-  summaryEventSeq: 7,
   shadowedItemCount: 16,
   shadowedTokenCount: 11_309,
   ...over,
@@ -454,6 +452,8 @@ function makeHarness(
     read: () => savedScroll,
   }
   const forkAt = vi.fn()
+  const openCompaction = vi.fn<(seq: number, signal: AbortSignal) => Promise<string | null>>(async () => null)
+  const compactionPreview = createSnapshotStore(true)
   // Rows and the harness must observe the same chat-store instance.
   const chat = createChatStore().create()
   const transcriptView = createSnapshotStore<TranscriptViewMode>('compact')
@@ -571,6 +571,7 @@ function makeHarness(
     useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
     dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
+    useCompactionPreview: bindSnapshotSelector(compactionPreview),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
@@ -586,6 +587,7 @@ function makeHarness(
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     chatScroll,
     forkAt,
+    openCompaction,
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     t,
@@ -613,7 +615,8 @@ function makeHarness(
     setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, consumeOlder, prepareOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
-    chatScroll, forkAt, toolOwners, fenceCalls, asideRenders,
+    chatScroll, forkAt, openCompaction, toolOwners, fenceCalls, asideRenders,
+    setCompactionPreview: (available: boolean) => { compactionPreview.set(available) },
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
@@ -4835,7 +4838,7 @@ describe('ChatView', () => {
     expect(ov.getByText('已完成')).toBeTruthy()
   })
 
-  it('renders /compact as one stateful disclosure from running through completion', () => {
+  it('renders /compact as one row from running through a completed checkpoint that opens in the Sidebar', () => {
     const running = command({
       commandId: 'cmd-compact' as CommandNode['commandId'],
       name: 'compact',
@@ -4862,15 +4865,29 @@ describe('ChatView', () => {
     expect(view.queryByText('正在压缩…')).toBeNull()
     expect(view.queryByText('上下文已压缩')).toBeNull()
     expect(view.getByText('已压缩 16 条历史记录（约 11309 tokens）')).toBeTruthy()
-    const row = view.getByRole('button', { name: /compact/ })
-    expect(row.getAttribute('aria-expanded')).toBe('false')
+    const row = view.getByRole('button', { name: /compact.*在侧栏查看压缩后的内容/ })
+    expect(row.getAttribute('aria-expanded')).toBeNull()
+    expect(row.getAttribute('data-compaction-seq')).toBe('8')
     expect(row.querySelector('[data-compaction-icon="context"]')).not.toBeNull()
-    expect(row.querySelector('[data-compaction-disclosure="collapsed"]')).not.toBeNull()
-    expect(view.queryByText('保留的事实。')).toBeNull()
+    expect(row.querySelector('[data-compaction-icon="open"]')).not.toBeNull()
     fireEvent.click(row)
-    expect(row.getAttribute('aria-expanded')).toBe('true')
-    expect(row.querySelector('[data-compaction-disclosure="expanded"]')).not.toBeNull()
-    expect(view.getByRole('heading', { name: '压缩摘要' })).toBeTruthy()
+    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(8, expect.any(AbortSignal))
+    expect(view.container.querySelector('[class*="compactionBody"]')).toBeNull()
+  })
+
+  it('disables compaction rows while no Sidebar tab type opens checkpoints and enables them live', () => {
+    const h = makeHarness({ nodes: [compaction({ seq: 12 })] })
+    h.setCompactionPreview(false)
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByRole('button', { name: /上下文已压缩/ })
+    expect(row).toHaveProperty('disabled', true)
+    expect(row.textContent).not.toContain('在侧栏查看压缩后的内容')
+    fireEvent.click(row)
+    expect(h.openCompaction).not.toHaveBeenCalled()
+    act(() => { h.setCompactionPreview(true) })
+    expect(row).toHaveProperty('disabled', false)
+    fireEvent.click(row)
+    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(12, expect.any(AbortSignal))
   })
 
   it('keeps /compact no-history and error settlements on the generic command row', () => {

@@ -375,8 +375,10 @@ export const ContextMessageNodeView = memo(function ContextMessageNodeView({ nod
 })
 
 /** Automatic compaction keyed Chat renderer. */
-export const CompactionNodeView = memo(function CompactionNodeView({ node, t }: ChatNodeViewProps<'compaction'>) {
-  return <CompactionItem node={node.data} t={t} />
+export const CompactionNodeView = memo(function CompactionNodeView({
+  node, openCompaction, t,
+}: ChatNodeViewProps<'compaction'>) {
+  return <CompactionItem node={node.data} openCompaction={openCompaction} t={t} />
 })
 
 /** Divider between a forked Session's inherited history and its own messages. */

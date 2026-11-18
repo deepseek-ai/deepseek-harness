@@ -25,7 +25,7 @@ export const CommandNodeView = memo(function CommandNodeView({ node, renderSlot,
 
 /** One integrated `/compact` command and compaction transaction renderer. */
 export const ManualCompactionNodeView = memo(function ManualCompactionNodeView({
-  node, t,
+  node, openCompaction, t,
 }: ChatNodeViewProps<'manual-compaction'>) {
   const data = node.data
   return (
@@ -33,6 +33,7 @@ export const ManualCompactionNodeView = memo(function ManualCompactionNodeView({
       <CompactionCommandCard
         node={data.command}
         {...data.compaction === null ? {} : { compaction: data.compaction }}
+        openCompaction={openCompaction}
         t={t}
       />
     </div>

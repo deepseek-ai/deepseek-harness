@@ -1563,8 +1563,6 @@ describe('TrajectoryView state', () => {
       kind: 'compaction' as const,
       seq: index + 4,
       time: index + 4,
-      summary: null,
-      summaryEventSeq: null,
       shadowedItemCount: null,
       shadowedTokenCount: null,
     })), ...visibleNodes]

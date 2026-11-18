@@ -1,0 +1,4 @@
+- region "Compacted context":
+  - text: Compacted context
+  - paragraph: This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.
+  - paragraph: <compacted-summary>Implement minimal image reading through the existing filesystem tool, preserving permissions, model capability checks, and standard mode. Enable automatic and manual compaction.</compacted-summary>

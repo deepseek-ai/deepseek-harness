@@ -1,0 +1,31 @@
+/* The content tab's own rules; the layout, header, body, controls, and empty
+   states come from TextPreview.module.css. */
+
+/* The header's title, in the size and ink of the file preview's path. */
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 12px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The whole pane before any content shows, so the line centres. */
+.status {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 12px 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.6;
+  text-align: center;
+}

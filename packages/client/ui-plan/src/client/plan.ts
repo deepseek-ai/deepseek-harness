@@ -1,10 +1,8 @@
 /** Plan text and resource identities derived from logged native or PTC calls. */
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionAddress } from '@deepseek-ai/dsh-api-session-controller/types'
 
-/** Complete Markdown and the heading displayed by a plan preview. */
+/** Complete Markdown and the heading displayed by a plan card. */
 export interface PlanDocument {
   readonly markdown: string
   readonly title: string
@@ -15,14 +13,17 @@ export interface SubmittedPlan extends PlanDocument {
   readonly callId: ToolCallId
 }
 
-/** A saved sidebar resource names one invocation in one Session. */
-export interface PlanAddress {
-  readonly session: SessionAddress
-  readonly callId: ToolCallId
-}
-
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Read the level-one heading that opens a plan.
+ * @param markdown - Plan Markdown.
+ * @returns the heading text, or undefined when the trimmed Markdown does not start with `# `.
+ */
+export function planTitle(markdown: string): string | undefined {
+  return /^#\s+(\S[^\r\n]*)/.exec(markdown.trim())?.[1]
 }
 
 /**
@@ -44,44 +45,6 @@ export function submittedPlan(event: { readonly type: string; readonly data: unk
   }
   if (!record(args) || typeof args.plan !== 'string') return undefined
   const markdown = args.plan
-  const title = /^#\s+(\S[^\r\n]*)/.exec(markdown.trim())?.[1]
+  const title = planTitle(markdown)
   return title === undefined ? undefined : { callId: callId as ToolCallId, markdown, title }
-}
-
-/**
- * Encode the durable identity of a plan without retaining its text in layout storage.
- * @param target - Session and tool-call identity.
- * @returns the plan resource address.
- */
-export function planAddress(target: PlanAddress): string {
-  const { session, callId } = target
-  const parts = session.kind === 'session'
-    ? [session.sessionId, callId]
-    : ['subagent', session.parentSessionId, session.childSessionId, session.mode, callId]
-  return `dsh-resource://plan/${parts.map(encodeURIComponent).join('/')}`
-}
-
-/**
- * Validate a saved or caller-supplied plan resource address.
- * @param address - Address submitted to the sidebar or resource provider.
- * @returns the decoded identity, or undefined for an unsupported address.
- */
-export function parsePlanAddress(address: string): PlanAddress | undefined {
-  const match = /^dsh-resource:\/\/plan\/([^?#]+)$/.exec(address)
-  if (match === null) return undefined
-  try {
-    const parts = (match[1] as string).split('/').map(decodeURIComponent)
-    if (parts.some(part => part === '')) return undefined
-    if (parts.length === 2) return {
-      session: { kind: 'session', sessionId: parts[0] as SessionId }, callId: parts[1] as ToolCallId,
-    }
-    if (parts.length === 5 && parts[0] === 'subagent' && (parts[3] === 'one-shot' || parts[3] === 'continuable' || parts[3] === 'unknown')) return {
-      session: { kind: 'subagent', parentSessionId: parts[1] as SessionId, childSessionId: parts[2] as SessionId, mode: parts[3] },
-      callId: parts[4] as ToolCallId,
-    }
-    return undefined
-  } catch (_error) {
-    // Invalid saved percent encoding cannot identify a Session or invocation.
-    return undefined
-  }
 }

@@ -35,6 +35,16 @@ const APPROVED_EXPECTED = join(SNAPSHOT_DIR, 'approved.expected.md')
 const APPROVED_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'approved-expanded.expected.md')
 const TEMPORARY_EXPECTED = fileURLToPath(new URL('./expected/plan-review/temporary.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
+// Content-preview tabs by address: logged plans keep their `plan` resource,
+// while a review without a tool invocation previews an in-memory blob.
+const PLAN_PREVIEW = '[data-contentpreview-url^="dsh-resource://content-preview/plan%3A"]'
+const TEMPORARY_PREVIEW = '[data-contentpreview-url^="dsh-resource://content-preview/review%3A"]'
+const RENDERED = '[data-contentpreview-state="content"]'
+// Copy of the English `content.expired` text in
+// packages/client/ui-sidebar-documentpreview/src/client/locales.ts. apps/web
+// does not declare that feature plugin as a dependency, so this spec cannot
+// import its source values.
+const EXPIRED_PREVIEW = 'This preview is no longer available. Content from a previous window is not kept after reload.'
 
 // One command line: /plan enters plan mode and submits the rest as the turn's
 // message. The task is deliberately self-contained (nothing to explore in a
@@ -117,14 +127,14 @@ describe('web e2e: plan review takeover round trip', () => {
 
     const planCard = page.locator('[data-plan-card]')
     expect(await planCard.count()).toBe(0)
-    const preview = page.locator('[data-plan-preview]')
+    const preview = page.locator(`${PLAN_PREVIEW}${RENDERED}`)
     await preview.waitFor({ state: 'visible' })
     expect(await card.getByRole('button', { name: 'Approve' }).isVisible()).toBe(true)
     expect(await preview.getByRole('heading', { level: 1 }).textContent()).toContain('--greeting')
     await card.getByRole('button', { name: 'Open plan in sidebar' }).click()
-    expect(await page.locator('[data-plan-preview]').count()).toBe(1)
+    expect(await page.locator(PLAN_PREVIEW).count()).toBe(1)
     if (MODE !== 'record') {
-      await compareOrRefreshGolden(PREVIEW_EXPECTED, await captureStableAria(page, '[data-plan-preview]', scaffold.workspaceCwd), MODE)
+      await compareOrRefreshGolden(PREVIEW_EXPECTED, await captureStableAria(page, `${PLAN_PREVIEW}${RENDERED}`, scaffold.workspaceCwd), MODE)
     }
     await page.locator('[data-sidebar-right-toggle]').click()
     await preview.waitFor({ state: 'hidden' })
@@ -159,8 +169,11 @@ describe('web e2e: plan review takeover round trip', () => {
     await preview.waitFor({ state: 'visible' })
     await page.reload({ waitUntil: 'load' })
     await page.locator('[data-plan-card]').waitFor({ state: 'visible' })
-    await page.locator('[data-plan-preview]').waitFor({ state: 'visible' })
-    expect(await page.locator('[data-plan-preview]').getByRole('heading', { level: 1 }).textContent()).toContain('--greeting')
+    await page.locator(`${PLAN_PREVIEW}[data-contentpreview-state="expired"]`).waitFor()
+    await page.locator('[data-sidebar-right-toggle]').click()
+    await page.locator('[data-plan-card]').click()
+    await page.locator(`${PLAN_PREVIEW}${RENDERED}`).waitFor({ state: 'visible' })
+    expect(await page.locator(PLAN_PREVIEW).getByRole('heading', { level: 1 }).textContent()).toContain('--greeting')
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(APPROVED_EXPECTED, snapshot, MODE)
     const expanded = await captureExpandedTurnProcessAria(
@@ -190,10 +203,10 @@ describe('web e2e: plan review takeover round trip', () => {
     const outcome = asked.then((value) => { answered = true; return value }, (error: unknown) => ({ error }))
     try {
       const card = page.locator('[data-plan-review-key]')
-      const preview = page.locator('[data-plan-preview^="dsh-resource://plan-review/"]')
+      const preview = page.locator(`${TEMPORARY_PREVIEW}${RENDERED}`)
       await preview.waitFor({ state: 'visible' })
       expect(await preview.getByText('Ask before implementation.').isVisible()).toBe(true)
-      await compareOrRefreshGolden(TEMPORARY_EXPECTED, await captureStableAria(page, '[data-plan-preview^="dsh-resource://plan-review/"]', scaffold.workspaceCwd), MODE)
+      await compareOrRefreshGolden(TEMPORARY_EXPECTED, await captureStableAria(page, `${TEMPORARY_PREVIEW}${RENDERED}`, scaffold.workspaceCwd), MODE)
       const tab = page.locator('[data-dockkit-tab]').filter({ hasText: 'Temporary review' })
       await card.getByRole('button', { name: 'Open plan in sidebar' }).click()
       expect(await tab.count()).toBe(1)
@@ -204,14 +217,15 @@ describe('web e2e: plan review takeover round trip', () => {
       expect(answered).toBe(false)
       const saved = await page.evaluate(() => Object.keys(localStorage)
         .filter(key => key.startsWith('dsh.sidebar-right.v1.')).map(key => localStorage.getItem(key)).join('\n'))
-      expect(saved).toContain('dsh-resource://plan-review/')
+      expect(saved).toContain('dsh-resource://content-preview/review%3A')
       expect(saved).not.toContain('Ask before implementation.')
       await card.getByRole('button', { name: 'Approve', exact: true }).click()
       expect(await outcome).toEqual({ answers: [{ id: 'temporary', selected: ['Approve'] }] })
       await card.waitFor({ state: 'detached' })
       expect(await preview.getByText('Ask before implementation.').isVisible()).toBe(true)
       await page.reload({ waitUntil: 'load' })
-      await page.getByText('This temporary plan preview has expired. Reopen it from the pending review card.', { exact: true }).waitFor()
+      const expired = page.locator(`${TEMPORARY_PREVIEW}[data-contentpreview-state="expired"]`)
+      await expired.locator('[data-contentpreview-status="expired"]').getByText(EXPIRED_PREVIEW, { exact: true }).waitFor()
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally {
@@ -250,7 +264,7 @@ describe('web e2e: plan review takeover round trip', () => {
       await row.click()
       const card = page.locator('[data-plan-review-key]')
       await card.waitFor({ timeout: 10_000 })
-      const preview = page.locator('[data-plan-preview^="dsh-resource://plan-review/"]')
+      const preview = page.locator(`${TEMPORARY_PREVIEW}${RENDERED}`)
       await preview.waitFor({ state: 'visible', timeout: 10_000 })
       expect(await preview.getByText('Submitted while the Plugins panel was open.').isVisible()).toBe(true)
       expect(await card.getByRole('button', { name: 'Open plan in sidebar' }).count()).toBe(1)
@@ -337,7 +351,7 @@ describe.skipIf(MODE === 'record')('web e2e: pending plan review across Sidebar 
   async function expectOpened(text: string): Promise<void> {
     const card = page.locator('[data-plan-review-key]')
     await card.waitFor({ timeout: 10_000 })
-    const preview = page.locator('[data-plan-preview^="dsh-resource://plan-review/"]')
+    const preview = page.locator(`${TEMPORARY_PREVIEW}${RENDERED}`)
     await preview.waitFor({ state: 'visible', timeout: 10_000 })
     expect(await preview.getByText(text).isVisible()).toBe(true)
     expect(await card.getByRole('button', { name: 'Open plan in sidebar' }).count()).toBe(1)
@@ -421,7 +435,7 @@ describe('web e2e: dismissed plan history', () => {
       await input.press('Enter')
       const review = page.locator('[data-plan-review-key]')
       await review.waitFor({ state: 'visible' })
-      await page.locator('[data-plan-preview]').waitFor({ state: 'visible' })
+      await page.locator(`${PLAN_PREVIEW}${RENDERED}`).waitFor({ state: 'visible' })
       await page.locator('[data-sidebar-right-toggle]').click()
       await review.getByRole('button', { name: 'Request changes', exact: true }).click()
       await settled
@@ -441,17 +455,20 @@ describe('web e2e: dismissed plan history', () => {
       const card = page.locator('[data-plan-card]')
       await card.waitFor({ state: 'visible' })
       await card.click()
-      await page.locator('[data-plan-preview]').waitFor({ state: 'visible' })
+      await page.locator(`${PLAN_PREVIEW}${RENDERED}`).waitFor({ state: 'visible' })
       await page.locator('[data-sidebar-right-toggle]').click()
       await card.click()
       await page.reload({ waitUntil: 'load' })
       await page.locator('[data-plan-card]').waitFor({ state: 'visible' })
-      await page.locator('[data-plan-preview]').waitFor({ state: 'visible' })
-      expect(await page.locator('[data-plan-preview]').getByRole('heading', { level: 1 }).textContent()).toContain('--greeting')
+      await page.locator(`${PLAN_PREVIEW}[data-contentpreview-state="expired"]`).waitFor()
+      await page.locator('[data-sidebar-right-toggle]').click()
+      await page.locator('[data-plan-card]').click()
+      await page.locator(`${PLAN_PREVIEW}${RENDERED}`).waitFor({ state: 'visible' })
+      expect(await page.locator(PLAN_PREVIEW).getByRole('heading', { level: 1 }).textContent()).toContain('--greeting')
       await page.locator('[data-sidebar-right-toggle]').click()
       await page.reload({ waitUntil: 'load' })
       await page.locator('[data-plan-card]').waitFor({ state: 'visible' })
-      expect(await page.locator('[data-plan-preview]').isVisible()).toBe(false)
+      expect(await page.locator(PLAN_PREVIEW).isVisible()).toBe(false)
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally {

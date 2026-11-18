@@ -28,14 +28,47 @@ export type MarkdownBodyProps = DocumentPreviewProps & PropsLocale<'documentMark
  * Render one accumulated document; EOF completes the primitive's full parse.
  * A leading YAML frontmatter block renders as a field list instead of Markdown; its
  * verbatim source stands in while the field-list chunk loads or when it fails.
- * @param props - owner-loaded contents and localized primitive labels.
+ * Relative image destinations resolve beside the file at `baseAddress`; without
+ * one they stay unresolved, while absolute paths and URLs render as usual.
+ * @param props - owner-loaded contents, the optional base address, and localized primitive labels.
  * @returns Markdown content, or nothing for a non-text delivery.
  */
-export function MarkdownBody({ content, resourceAddress, useResource, t }: MarkdownBodyProps): ReactNode {
-  const absolutePath = useResource<'file'>(resourceAddress).value?.absolutePath
+export function MarkdownBody({ content, baseAddress, useResource, t }: MarkdownBodyProps): ReactNode {
+  if (content.kind !== 'text') return null
+  return baseAddress === undefined
+    ? <MarkdownDocument text={content.text} eof={content.eof} documentPath={undefined} t={t} />
+    : <BasedMarkdownDocument text={content.text} eof={content.eof} baseAddress={baseAddress} useResource={useResource} t={t} />
+}
+
+/** One text delivery with the source path its relative images resolve beside. */
+interface MarkdownDocumentProps {
+  readonly text: string
+  readonly eof: boolean
+  /** Absolute source path; `undefined` leaves relative image destinations unresolved. */
+  readonly documentPath: string | undefined
+  readonly t: MarkdownBodyProps['t']
+}
+
+/**
+ * Read the base file's absolute path, then render the document beside it.
+ * @param props - the text delivery, the base file address, the resource hook, and copy.
+ * @returns the Markdown document.
+ */
+function BasedMarkdownDocument({ baseAddress, useResource, ...delivery }: Omit<MarkdownDocumentProps, 'documentPath'>
+  & { readonly baseAddress: string; readonly useResource: MarkdownBodyProps['useResource'] }): ReactNode {
+  const documentPath = useResource<'file'>(baseAddress).value?.absolutePath
+  return <MarkdownDocument {...delivery} documentPath={documentPath} />
+}
+
+/**
+ * Render one text delivery with its optional frontmatter box.
+ * @param props - the text, its completion, the image base path, and copy.
+ * @returns the Markdown document.
+ */
+function MarkdownDocument({ text, eof, documentPath, t }: MarkdownDocumentProps): ReactNode {
   const pathImages = useMemo<MarkdownPathImages>(() => ({
-    resolve: value => markdownImageUrl(document.baseURI, absolutePath, value),
-  }), [absolutePath])
+    resolve: value => markdownImageUrl(document.baseURI, documentPath, value),
+  }), [documentPath])
   const copyLabel = t('code.copy')
   const copiedLabel = t('code.copied')
   const footnotes = t('footnotes')
@@ -45,13 +78,11 @@ export function MarkdownBody({ content, resourceAddress, useResource, t }: Markd
   const labels = useMemo<MarkdownLabels>(() => ({
     code: { copyLabel, copiedLabel, toolbarLabels: { codeLabel, wrapLabel, unwrapLabel } }, footnotes,
   }), [copyLabel, copiedLabel, footnotes, codeLabel, wrapLabel, unwrapLabel])
-  const text = content.kind === 'text' ? content.text : ''
   const split = useMemo(() => splitFrontmatter(text), [text])
-  if (content.kind !== 'text') return null
   return (
     <div className={css.document} data-document-markdown>
       {split === undefined ? null : <FrontmatterBox source={split.source} />}
-      <MarkdownText text={split?.body ?? text} streaming={!content.eof} labels={labels} pathImages={pathImages} />
+      <MarkdownText text={split?.body ?? text} streaming={!eof} labels={labels} pathImages={pathImages} />
     </div>
   )
 }

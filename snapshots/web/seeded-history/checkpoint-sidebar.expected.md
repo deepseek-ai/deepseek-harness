@@ -1,0 +1,3 @@
+- region "Compacted context":
+  - text: Compacted context
+  - paragraph: <context_checkpoint>Model-only compact checkpoint.</context_checkpoint>

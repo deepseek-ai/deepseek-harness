@@ -242,6 +242,11 @@ export interface ChatNodeOwnerProps {
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
   forkAt: (seq: number) => void
+  /**
+   * Open one compaction checkpoint, named by the seq of its replacement message, in the right Sidebar;
+   * undefined while no Sidebar tab type opens compaction checkpoints.
+   */
+  openCompaction: ((seq: number, signal: AbortSignal) => Promise<string | null>) | undefined
   /** Session-authorized image loader supplied by the Chat view. */
   loadImage: MessageImageLoader
   /** Turn-process state when this Node belongs to a projected Turn. */
@@ -333,6 +338,8 @@ export interface ChatViewInjected {
     interactionIds: ObservableSnapshot<readonly string[]>
     /** Live presentation policy derived from the accepted work-details mode. */
     presentation: ObservableSnapshot<ChatPresentationPolicy>
+    /** Whether a registered right-Sidebar tab type opens this Session's compaction checkpoints; false without a tab registry. */
+    compactionPreview: ObservableSnapshot<boolean>
   }
   keyedHooks: {
     /** Resolve the stable source for one Chat Node key. */
@@ -359,6 +366,11 @@ export interface ChatViewInjected {
     read: () => ChatScrollPosition | null
   }
   forkAt: (seq: number) => void
+  /**
+   * Open one compaction checkpoint in the right Sidebar.
+   * @param seq - seq of the checkpoint's replacement `user/message`.
+   */
+  openCompaction: (seq: number, signal: AbortSignal) => Promise<string | null>
 }
 
 /** Session-owned node sources shared with the view, plus the flow's connection state. */
@@ -371,7 +383,7 @@ export type ChatFlowDataInjected = Pick<ChatViewInjected, 'keyedHooks'> & {
 
 /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
 export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
-  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage'> {
+  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'openCompaction' | 'loadImage'> {
   readonly entries: readonly RenderEntry[]
   readonly pendingInputs: readonly (PendingSubmission | InboxState['next-step'][number])[]
   readonly lastInputTurn: number | undefined
