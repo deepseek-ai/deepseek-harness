@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { chmod, mkdir, mkdtemp, readdir, readFile, readlink, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -503,6 +503,24 @@ describe("a profile's own cache directory", () => {
     expect(await readdir(owned())).toEqual([basename(managed.skillRoot)])
     expect(await readdir(binDir)).toEqual([DWS])
     expect(await readdir(skillsDir)).toEqual(['dingtalk-shared'])
+  })
+
+  it('keeps the skills that an earlier skill root links to when it deletes that root', async () => {
+    const linked = await createSkillsDir()
+    onTestFinished(() => rm(linked, { recursive: true, force: true }))
+    const root = join(owned(), EARLIER[2]!, 'dingtalk')
+    await mkdir(root, { recursive: true })
+    await symlink(linked, join(root, 'guides'), 'junction')
+    const options = { binDir, skillsDir: linked, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS, profile: profile() }
+    const managed = new DwsRelease(options, logger())
+
+    await managed.prune()
+
+    expect(await readdir(owned())).toEqual([basename(managed.skillRoot)])
+    expect(await readFile(join(linked, 'dingtalk-shared', 'SKILL.md'), 'utf8')).toContain('# Fixture guide')
+    const guide = join(managed.skillRoot, 'dingtalk', 'guides', 'dingtalk-shared', 'SKILL.md')
+    expect(await readFile(guide, 'utf8')).toContain('# Fixture guide')
+    expect(warnings()).toEqual([])
   })
 
   it('keeps the earlier releases while this one is not installed', async () => {
