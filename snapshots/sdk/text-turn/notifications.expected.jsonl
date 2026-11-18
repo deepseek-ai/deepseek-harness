@@ -18,7 +18,7 @@
 {"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"command/done","seq":19,"time":0,"data":{"commandId":"{{command:1}}","kind":"success","text":"Feedback recorded for session {{session:1}}\nAnonymous user: {{id:1}}."}}}}
 {"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"feedback/record","seq":20,"time":0,"data":{"category":"other"}}}}
 {"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"feedback/message-put","seq":21,"time":0,"data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"negative","note":"Explain the result.","category":"task-result","version":"{{id:2}}","createdAt":0,"updatedAt":0}}}}}
-{"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"feedback/message-put","seq":22,"time":0,"data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"positive","note":"The explanation is clear now.","version":"{{id:3}}","createdAt":0,"updatedAt":0}}}}}
+{"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"feedback/message-put","seq":22,"time":0,"data":{"sessionId":"{{session:1}}","item":{"messageId":"{{message:5}}","rating":"positive","note":"Turn resources released.","version":"{{id:3}}","createdAt":0,"updatedAt":0}}}}}
 {"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"feedback/message-delete","seq":23,"time":0,"data":{"sessionId":"{{session:1}}","messageId":"{{message:5}}"}}}}
 {"method":"session.event","params":{"sessionId":"{{session:1}}","event":{"type":"turn/end","seq":24,"time":0,"data":{"turn":1,"reason":{"kind":"completed"}}}}}
 {"method":"session.status","params":{"sessionId":"{{session:1}}","status":"idle"}}

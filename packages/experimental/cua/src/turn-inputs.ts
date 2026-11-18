@@ -17,9 +17,6 @@ class InputTurn {
 
   track(client: NativeClient): void {
     this.signal.throwIfAborted()
-    if (this.client && this.client !== client) {
-      throw new NativeError('INPUT_CONNECTION_CHANGED', 'Held input belongs to the original connection; finish this turn before selecting another connection')
-    }
     if (!this.client) {
       this.removeCleanup = client.registerCleanup(canRequest => this.close(canRequest))
       this.client = client
@@ -31,7 +28,7 @@ class InputTurn {
     return this.closing ??= Promise.resolve().then(async () => {
       try {
         if (!this.client) return
-        if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before turn input cleanup was confirmed. Input is disabled for this task; start a new task after checking the desktop')
+        if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before turn cleanup was confirmed. All CUA operations are disabled for this task; inspect the desktop manually before starting a new task')
         await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id, turn: this.turn })
       } catch (error) {
         this.failed(error)
@@ -49,17 +46,21 @@ export class CuaInputTurns {
   private readonly failures = new WeakMap<Agent, unknown>()
 
   /** @param ctx - Provider scope owning the lifecycle listeners. */
-  constructor(private readonly ctx: Context) {
-    ctx.on('agent/pre-step', (event, next) => {
+  constructor(private readonly ctx: Context) {}
+
+  /** @returns Exact listener disposers for the runtime effect to retain through native cleanup. */
+  *install(): Generator<() => void> {
+    const ctx = this.ctx
+    yield ctx.on('agent/pre-step', (event, next) => {
       if (this.turns.get(event.agent)?.turn !== event.turn) {
         this.turns.set(event.agent, new InputTurn(event.agent, event.turn, event.signal, (error) => {
           this.failures.set(event.agent, error)
-          ctx.logger.error('CUA input cleanup was not confirmed; input is disabled for task %s: %s', event.agent.id, error)
+          ctx.logger.error('CUA cleanup was not confirmed; all CUA operations are disabled for task %s: %s', event.agent.id, error)
         }))
       }
       return next()
     })
-    ctx.on('agent/turn-finalizing', ({ agent, turn }) => {
+    yield ctx.on('agent/turn-finalizing', ({ agent, turn }) => {
       const owner = this.turns.get(agent)
       if (owner?.turn === turn) return owner.close()
     })
@@ -72,7 +73,7 @@ export class CuaInputTurns {
    */
   scope(agent: Agent): InputTurn | undefined {
     if (this.failures.has(agent)) {
-      throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'CUA input cleanup was not confirmed. Input is disabled for this task; start a new task after checking the desktop', { cause: this.failures.get(agent) })
+      throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'CUA cleanup was not confirmed. All CUA operations are disabled for this task; inspect the desktop manually before starting a new task', { cause: this.failures.get(agent) })
     }
     const boundary = this.ctx.agents.turnBoundaryOf(agent.session)
     if (boundary.openTurnStartSeq === null) return undefined

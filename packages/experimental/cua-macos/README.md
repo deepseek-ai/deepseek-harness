@@ -267,7 +267,7 @@ The queue orders individual native requests. Holding an app object does not rese
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The native acknowledgement confirms event dispatch, not application processing. If turn cleanup is refused, times out, or loses its connection, CUA reports the uncertainty and blocks further input in that task. Check the desktop before starting a new task.
+- The native acknowledgement confirms event dispatch, not application processing. If turn cleanup is refused, times out, or loses its connection, CUA reports the uncertainty and blocks all CUA operations in that task. Inspect the desktop manually before starting a new task.
 - macOS 14 is the minimum supported version; settings navigation, drag acceptance, and permission refresh require qualification on each supported release. If macOS requires quitting and reopening the helper after a Screen Recording change, its preflight check can remain denied until that restart. The guide can be dismissed without terminating other connections.
 - The guide closes when its selected settings window leaves the visible-window list, including when a Space switch or minimization removes it. Request permission again after returning to reopen the guide.
 - This provider supports macOS. For Windows, see the [Windows provider](../cua-windows/README.md#setup). Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.

@@ -264,6 +264,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     return owner
   }
   ctx.effect(function* () {
+    if (inputTurns) yield* inputTurns.install()
     yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
     yield async () => {
       lifetime.abort()
@@ -274,7 +275,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const releases = await Promise.allSettled(owners.map(owner => owner.release()))
       const errors: unknown[] = []
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
-      if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
+      if (errors.length > 0) ctx.logger.error(new AggregateError(errors, 'dsh-cua helper cleanup failed'))
     }
     const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemPointer?: boolean) => {
       const { method, params: parsedParams } = request

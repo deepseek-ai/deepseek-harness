@@ -487,6 +487,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
     expect(native.dispose).toHaveBeenCalledTimes(2)
     const aggregate = reported.find(error => error instanceof AggregateError)
     expect(aggregate?.errors).toContain(failure)
+    expect(f.ctx.computerUse.providerName).toBeUndefined()
     const errorsBeforeAgentDisposal = errors.mock.calls.length
     await Promise.all([f.handle.dispose(), other.dispose()])
     expect(native.dispose).toHaveBeenCalledTimes(2)

@@ -43,7 +43,7 @@ const FIXTURE: Record<string, string> = {
     '',
   ].join('\n'),
   'packages/core/agent/src/dispatch.ts':
-    'export interface AgentEventDispatch { emit(...args: unknown[]): void; settled(...args: unknown[]): Promise<void> }\n',
+    'export interface AgentEventDispatch { emit(...args: unknown[]): void }\n',
   // fireLocal: every same-file reference is a direct callee, so the locality
   // proof holds and only this file is indexed. fireAliased: the exported
   // const is a value-position reference, so the proof fails and the global
@@ -55,10 +55,6 @@ const FIXTURE: Record<string, string> = {
     "fireLocal(['pkga/local-event'])",
     "function fireAliased(args: [string]): void { void events.dispatch('emit', args) }",
     'export const aliased = fireAliased',
-    "declare const agent: import('../../../core/agent/src/dispatch.ts').AgentEventDispatch",
-    "void agent.settled('agent/turn-finalizing')",
-    'const unrelated = { settled(_event: string): void {} }',
-    "unrelated.settled('agent/unrelated')",
     '',
   ].join('\n'),
   'packages/fix/pkgb/src/index.ts': [
@@ -224,9 +220,4 @@ describe('memoized filesystem probes', () => {
     expect(memoized.sourceFiles().map(sourceFile => sourceFile.fileName))
       .toEqual(project.sourceFiles().map(sourceFile => sourceFile.fileName))
   })
-})
-
-it('discovers awaited agent finalizers without treating unrelated settled methods as events', () => {
-  expect(dispatchersOf(['pkga'], 'agent/turn-finalizing')).toEqual(['pkga'])
-  expect(dispatchersOf(['pkga'], 'agent/unrelated')).toEqual([])
 })

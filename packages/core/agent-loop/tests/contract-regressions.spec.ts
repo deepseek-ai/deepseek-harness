@@ -1581,3 +1581,42 @@ it('retains the turn failure alongside a failed resource finalizer', async () =>
     expect(JSON.stringify(ending)).toContain('resource release failed')
   } finally { await ctx.fiber.dispose() }
 })
+
+it('parks queued input when cancellation arrives during resource finalization', async () => {
+  const adapter = new MockAdapter([textResponse('done'), textResponse('must stay queued')])
+  const ctx = await harness(adapter)
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('cancel-finalization'), { provider: 'mock', model: 'mock' })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const release: PromiseWithResolvers<void> = Promise.withResolvers()
+  ctx.on('agent/turn-finalizing', async () => { entered.resolve(); await release.promise })
+  try {
+    send(agent, 'first')
+    await entered.promise
+    send(agent, 'queued')
+    agent.cancel({ kind: 'user' }, { keepInbox: true })
+    release.resolve()
+    await agent.whenIdle()
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+    expect(agent.inbox.nextTurn).toHaveLength(1)
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason)
+      .toEqual({ kind: 'aborted', reason: { kind: 'user' } })
+  } finally { release.resolve(); await ctx.fiber.dispose() }
+})
+
+it('keeps an execution error when disposal cancels its finalizer wait', async () => {
+  const ctx = await harness(new MockAdapter([]))
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('error-finalization'), { provider: 'mock', model: 'mock' })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const release: PromiseWithResolvers<void> = Promise.withResolvers()
+  ctx.on('agent/pre-step', () => { throw new Error('preparation failed') })
+  ctx.on('agent/turn-finalizing', async () => { entered.resolve(); await release.promise })
+  try {
+    send(agent, 'first')
+    await entered.promise
+    agent.cancel({ kind: 'disposed' }, { keepInbox: true })
+    release.resolve()
+    await agent.whenIdle()
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason)
+      .toMatchObject({ kind: 'error', error: { message: 'preparation failed' } })
+  } finally { release.resolve(); await ctx.fiber.dispose() }
+})

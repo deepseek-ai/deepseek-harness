@@ -1,4 +1,5 @@
 /** Standard-mode CUA through Loader, the native executor, and real persistent Node programs. */
+import { setImmediate } from 'node:timers/promises'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -459,6 +460,11 @@ it.each(['agent', 'provider'] as const)('awaits held input cleanup when the %s i
   try {
     expect(disposed).toBe(false)
     expect(f.native.state.closedChannels).toBe(0)
+    f.agent.cancel({ kind: 'user' })
+    // The model's abort and loop finalization are in-process; the native reply remains behind its explicit barrier.
+    await setImmediate()
+    expect(f.agent.status).toBe('running')
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(false)
   } finally {
     release.reply()
     f.agent.cancel({ kind: 'user' })

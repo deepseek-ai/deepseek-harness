@@ -427,7 +427,7 @@ export class ReactLoopAgent implements Agent {
     } finally {
       try {
         try {
-          await this.dispatch.settled('agent/turn-finalizing', { turn })
+          await this.dispatch.parallel('agent/turn-finalizing', { turn })
           const cause = abortedCancelCause(signal)
           if (cause !== undefined && turnEnds?.kind !== 'error') turnEnds = { kind: 'aborted', reason: cause }
         } catch (cleanupError: unknown) {
@@ -444,6 +444,7 @@ export class ReactLoopAgent implements Agent {
         this.throwError(error)
       }
     }
+    signal.throwIfAborted()
     if (!this.inbox.hasPending) return false
     phase.abort = new AbortController()
     // A fresh controller makes a latch set on the old one stale: the live driver claims the queue itself.
