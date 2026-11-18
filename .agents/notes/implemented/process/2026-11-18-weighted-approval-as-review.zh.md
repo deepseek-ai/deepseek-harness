@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-必填的 `weighted approval` commit status 把审批决定放在 CI 检查组里。它在策略满足前一直是 `pending`，而 [issue #6719](https://github.com/deepseek-harness/deepseek-harness/issues/6719) 记录了后续 `pull_request_target` 运行会让 merge box 停在 `Expected`、同时 API 报告 `success`，导致本可通过的拉取请求继续被阻塞。该 status 还让读者把等待审批当成 CI 正在运行，并用自定义 status 重复了仓库原生的 review 要求。此前加入的 `weighted approval decision` check run 只是给同一状态加了标签，并没有移除 status 门禁或 check suite 关联的竞态。
+必填的 `weighted approval` commit status 把审批决定放在 CI 检查组里。它在策略满足前一直是 `pending`，而 issue #6719 记录了后续 `pull_request_target` 运行会让 merge box 停在 `Expected`、同时 API 报告 `success`，导致本可通过的拉取请求继续被阻塞。该 status 还让读者把等待审批当成 CI 正在运行，并用自定义 status 重复了仓库原生的 review 要求。此前加入的 `weighted approval decision` check run 只是给同一状态加了标签，并没有移除 status 门禁或 check suite 关联的竞态。
 
 ## Decision
 
@@ -31,7 +31,7 @@ Approval App token 承担所有读写：review、评论、review dismissal、rev
 
 ## Alternatives considered
 
-**保留 commit status 并加上评论。** 否决，因为该 status 正是要移除的故障：它仍然是阻塞合并的 CI 条目，而且 [issue #6719](https://github.com/deepseek-harness/deepseek-harness/issues/6719) 表明后续 `pull_request_target` 运行仍可能把它渲染为 expected。[归档的 status 门禁决定](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md)记录了实测的 check run 关联结果。
+**保留 commit status 并加上评论。** 否决，因为该 status 正是要移除的故障：它仍然是阻塞合并的 CI 条目，而且 issue #6719 表明后续 `pull_request_target` 运行仍可能把它渲染为 expected。[归档的 status 门禁决定](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md)记录了实测的 check run 关联结果。
 
 **改为要求 App 发布的 check run，而不是 review。** 2026-10-20 和 2026-10-21 的实测结果：用 workflow token 创建的 check run 会挂到 head 上最早的 Actions check suite；当该 suite 属于 `pull_request_target` 发布器时，merge box 不会列出它；用 job token 发布的必填 check run 一直显示 `Expected`，而 REST API 和 `gh pr checks` 已列出它完成，两个拉取请求因此需要管理员绕过。由 approval App 发布 run 只修正了标签，没有修正要求：审批仍然留在检查组里。
 

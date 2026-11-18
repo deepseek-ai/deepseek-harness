@@ -6,7 +6,7 @@ English | [中文](2026-11-18-weighted-approval-as-review.zh.md)
 
 ## Problem
 
-The required `weighted approval` commit status carries an approval decision inside the CI check group. It stays `pending` until the policy holds, and [issue #6719](https://github.com/deepseek-harness/deepseek-harness/issues/6719) recorded that a later `pull_request_target` run can leave the merge box at `Expected` while the API reports `success`, so a passing pull request stays blocked. The status also makes readers treat an approval wait as running CI, and it duplicates the repository's native review requirement with a custom status. The `weighted approval decision` check run added earlier only labels the same state; it does not remove the status gate or the suite-association race.
+The required `weighted approval` commit status carries an approval decision inside the CI check group. It stays `pending` until the policy holds, and issue #6719 recorded that a later `pull_request_target` run can leave the merge box at `Expected` while the API reports `success`, so a passing pull request stays blocked. The status also makes readers treat an approval wait as running CI, and it duplicates the repository's native review requirement with a custom status. The `weighted approval decision` check run added earlier only labels the same state; it does not remove the status gate or the suite-association race.
 
 ## Decision
 
@@ -31,7 +31,7 @@ The live acceptance path requires the App installation to grant Contents, Issues
 
 ## Alternatives considered
 
-**Keep the commit status and add the comment.** Rejected because the status was the failure being removed: it remains a CI entry that blocks merges, and [issue #6719](https://github.com/deepseek-harness/deepseek-harness/issues/6719) shows that a later `pull_request_target` run can still render it as expected. The [archived status-gate decision](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the measured check-run association.
+**Keep the commit status and add the comment.** Rejected because the status was the failure being removed: it remains a CI entry that blocks merges, and issue #6719 shows that a later `pull_request_target` run can still render it as expected. The [archived status-gate decision](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the measured check-run association.
 
 **Require an App-published check run instead of a review.** Measured on 2026-10-20 and 2026-10-21: a check run created with the workflow token attaches to the earliest Actions suite on the head, and when that suite belongs to the `pull_request_target` publisher the merge box omits it; a required check run published with the job token stayed `Expected` while the REST API and `gh pr checks` listed it complete, and two pull requests needed an administrator bypass. A run published by the approval App fixed the label, not the requirement: the approval would still sit in the checks group.
 
