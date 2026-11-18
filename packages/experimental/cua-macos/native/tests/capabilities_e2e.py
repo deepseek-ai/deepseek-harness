@@ -257,6 +257,29 @@ def check_clicks(helper, window, point, state_file):
     return state
 
 
+def check_mixed_input(call, owner, state_file, executable):
+    def cursor(*position):
+        return json.loads(subprocess.check_output([executable, "--cursor", *map(str, position)], text=True))
+    call("activate", owner)
+    state = wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+    window = {**owner, "windowId": state["windowId"]}
+    bounds = next(w["bounds"] for w in call("listWindows", owner) if w["windowId"] == window["windowId"])
+    original = cursor()
+    try:
+        cursor(bounds["x"] + state["pad"][0] + 80, bounds["y"] + state["pad"][1] + 70)
+        for system in (False, True):
+            count = len(json.loads(state_file.read_text())["events"])
+            call("sendKeyEvent", {**owner, "key": "a", "direction": "down"})
+            call("toggleMouse", {**window, "mouseButton": "left", "direction": "down", "useSystemPointer": system})
+            call("sendKeyEvent", {**owner, "key": "w", "direction": "down"})
+            call("releaseHeldInputs", {})
+            state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 6)
+            events = [(e["type"], e.get("keyCode")) for e in state["events"][count:]]
+            assert events == [(10, 0), (1, None), (10, 13), (11, 13), (2, None), (11, 0)], events
+    finally:
+        run_cleanup(lambda: call("releaseHeldInputs", {}), lambda: cursor(*original))
+
+
 def check_keyboard(call, owner, state_file, state):
     count = len(state["events"])
     call("pressKey", {**owner, "key": ["w", "d"]}, "INVALID_ARGUMENT")
@@ -308,6 +331,7 @@ def main():
     only.add_argument("--keyboard-only", action="store_true")
     only.add_argument("--drag-only", action="store_true")
     only.add_argument("--toggle-only", action="store_true")
+    only.add_argument("--mixed-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -321,8 +345,8 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only or args.toggle_only,
-                "DSHFixtureKeyboard": args.keyboard_only}
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only or args.toggle_only or args.mixed_only,
+                "DSHFixtureKeyboard": args.keyboard_only or args.mixed_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
         try:
@@ -339,6 +363,10 @@ def main():
             app = call("launchApp", owner)
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
+            if args.mixed_only:
+                check_mixed_input(call, owner, state_file, executable)
+                print("PASS: receiver observes mixed keyboard/window and keyboard/system input in reverse release order")
+                return
             if args.toggle_only:
                 check_toggle_mouse(helper, owner, state_file, executable)
                 print("PASS: window-directed and HID events for three buttons, held moves, explicit release, cleanup and disconnect")

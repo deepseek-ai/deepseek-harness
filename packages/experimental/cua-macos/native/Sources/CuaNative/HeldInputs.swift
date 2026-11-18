@@ -24,6 +24,7 @@ final class HeldInputs: @unchecked Sendable {
         let mode: Mode
         let up: CGEvent
         let post: (CGEvent) -> Void
+        let prepareRelease: ((CGEvent) throws -> Void)?
     }
     private let lock = NSLock()
     private var pressed: [Press] = []
@@ -76,7 +77,7 @@ final class HeldInputs: @unchecked Sendable {
                 throw conflict(name, holder: key.owner, caller: owner)
             }
             pressed.append(Press(owner: owner, recipient: recipient, mode: .keyboard(code, flag), up: up,
-                                 post: { post($0, recipient.pid) }))
+                                 post: { post($0, recipient.pid) }, prepareRelease: nil))
             down.flags = flags(for: recipient)
             post(down, recipient.pid)
         }
@@ -100,6 +101,7 @@ final class HeldInputs: @unchecked Sendable {
                 return false
             }
         }
+        try press.prepareRelease?(press.up)
         pressed.remove(at: index)
         if case .keyboard = press.mode { press.up.flags = flags(for: press.recipient) }
         press.post(press.up)
@@ -122,12 +124,13 @@ final class HeldInputs: @unchecked Sendable {
     }
 
     func pointerDown(owner: Owner, route: WindowRoute, button: CGMouseButton, system: Bool,
-                     down: CGEvent, up: CGEvent, post: @escaping (CGEvent) -> Void) throws {
+                     down: CGEvent, up: CGEvent, post: @escaping (CGEvent) -> Void,
+                     prepareRelease: ((CGEvent) throws -> Void)? = nil) throws {
         try lock.withLock {
             try admit(owner)
             try checkPointerAvailable(route: route, button: button, system: system)
             pressed.append(Press(owner: owner, recipient: route.owner,
-                mode: system ? .systemPointer(button, route.windowID) : .windowPointer(button, route.windowID), up: up, post: post))
+                mode: system ? .systemPointer(button, route.windowID) : .windowPointer(button, route.windowID), up: up, post: post, prepareRelease: prepareRelease))
             post(down)
         }
     }

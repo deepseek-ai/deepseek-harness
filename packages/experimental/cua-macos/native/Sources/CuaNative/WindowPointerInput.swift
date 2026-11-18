@@ -65,7 +65,12 @@ final class WindowPointerInput {
         try checkCancellation()
         let poster = self.poster
         try held.pointerDown(owner: owner, route: route, button: selected, system: false, down: pair.down, up: pair.up,
-                             post: { poster.post($0, to: route.owner.pid) })
+                             post: { poster.post($0, to: route.owner.pid) }, prepareRelease: { event in
+            guard let screen = CGEvent(source: nil)?.location else { return }
+            event.location = screen
+            try poster.stampWindow(event, pid: route.owner.pid, windowID: route.windowID,
+                                   point: WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y))
+        })
     }
 
     /// Post balanced mouse presses; holdMs replaces each press-to-release interval and remains cancellable.
