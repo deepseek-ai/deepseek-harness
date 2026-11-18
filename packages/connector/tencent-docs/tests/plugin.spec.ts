@@ -15,7 +15,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { callback, oauthWorld, phase } from '../../../mcp/mcp-client/tests/oauth-fixture.ts'
 import { managerProfile } from '../../../mcp/mcp-manager/tests/profile-fixture.ts'
-import { COPY } from '../src/copy.ts'
+import { COPY } from '../src/locales.ts'
 import * as TencentDocs from '../src/index.ts'
 
 // Verbatim pin of the model-visible guidance in src/index.ts.
