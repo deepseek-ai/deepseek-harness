@@ -96,7 +96,7 @@ The Service downloads `<prefix>/<owner>/<repository>/tar.gz/<commit>` from each 
 
 ### Replaced pins
 
-A profile that `dsh` launches holds one version of a plugin, so each profile has a directory of its own for a plugin's files: `$DSH_HOME/cache/<name>/<profile>`. Once a pin is in place there, already at load or after its download, the Service deletes the other pins of that directory, so a plugin update that changes the pin leaves one copy. The earlier pin stays until the new one is published. The deletion runs in the background, and neither `register` nor the end of a download waits for it; a pin that cannot be deleted is logged as a warning and deleted at a later load or download. A composition that `dsh` did not launch has no profile: its pins stay in `$DSH_HOME/cache/<name>`, which several installations may share, and none is deleted. A configured `skillsDir` and its sibling directories are never deleted.
+Each profile that `dsh` launches has a directory of its own for a plugin's files, `$DSH_HOME/cache/<name>/<profile>`, which the processes of that profile share. A registration deletes the other pins of that directory once, the first time its own pin is in place there: already at load, or after its download. A plugin update that changes the pin therefore leaves one copy, and the earlier pin stays until the new one is published. The deletion runs in the background, and neither `register` nor the end of a download waits for it; a pin that cannot be deleted is logged as a warning and deleted at a later load. Because a registration deletes the other pins only once, a process whose pin another process of the profile deleted downloads it again at its next check and leaves that process's pin in place; [Known Limitations](#known-limitations-and-deferred-work) describes that case. A composition that `dsh` did not launch has no profile: its pins stay in `$DSH_HOME/cache/<name>`, which several installations may share, and none is deleted. A configured `skillsDir` and its sibling directories are never deleted.
 
 ### Pinning a commit
 
@@ -148,6 +148,7 @@ A load that finds the files in place lists the entry in the session's first cata
 
 - The first load after a new pin needs GitHub or a configured mirror; until a download succeeds, the entry skill is not listed and the plugin shows the `failed` state.
 - Each profile that loads a plugin downloads its own copy of the pin.
+- Processes of one profile can run different versions of a plugin at the same time, such as one started before a plugin update and one started after it. The later one deletes the pin the earlier one reads: the earlier process lists no entry skill, and its agents cannot open the guides, until its next check has downloaded the pin again. Both pins then stay until a process of the profile loads the plugin again.
 - Removing a plugin leaves its pin in the cache. A process that exits while it writes a download leaves its `.skills-<digest>-<uuid>` staging directory there too. Nothing deletes either.
 - Without a profile, every pin stays in `$DSH_HOME/cache/<name>` after the plugin pins another commit.
 - Only the published directory's existence is checked. When files inside it are deleted or changed, the entry skill stays listed over them; deleting the directory makes the next check or load download the pin again.

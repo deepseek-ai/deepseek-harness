@@ -15,6 +15,8 @@ import { KEPT, archivePath, pin, repository, serve, startHost, type ArchiveHost 
 const renameHook = vi.hoisted(() => ({ before: undefined as ((from: string, to: string) => Promise<void>) | undefined }))
 /** The one path whose removal fails with the given error, as a directory in use does on Windows. */
 const removeHook = vi.hoisted(() => ({ refused: undefined as { readonly path: string; readonly error: Error } | undefined }))
+/** Every directory listed through `readdir`, by the Service or by a test, in call order. */
+const listHook = vi.hoisted(() => ({ listed: [] as string[] }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return {
@@ -28,6 +30,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     rm: async (...args: Parameters<typeof actual.rm>) => {
       if (removeHook.refused?.path === args[0]) throw removeHook.refused.error
       return actual.rm(...args)
+    },
+    readdir: (path: string) => {
+      listHook.listed.push(path)
+      return actual.readdir(path)
     },
   }
 })
@@ -78,6 +84,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   renameHook.before = undefined
   removeHook.refused = undefined
+  listHook.listed.length = 0
   await ctx.fiber.dispose()
   await rm(home, { recursive: true, force: true })
 })
@@ -419,6 +426,29 @@ describe('register in a profile', () => {
     await vi.waitFor(async () => { expect(await readdir(pins())).toEqual([CURRENT]) })
     expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
     expect(host.requests).toEqual([])
+  })
+
+  it('deletes the other pins once: it downloads a pin another process deleted again and keeps that process\'s pin', async () => {
+    const other = 'skills-fedcba9876543210'
+    await mkdir(join(pins(), EARLIER), { recursive: true })
+    host.routes[archivePath(set)] = serve(repository())
+    const skills = register()
+    expect(await settled(skills)).toBe('installed')
+    await vi.waitFor(async () => { expect(await readdir(pins())).toEqual([CURRENT]) })
+
+    // Another process of the profile, running another plugin version, publishes its pin and deletes this one.
+    await mkdir(join(pins(), other))
+    await rm(join(pins(), CURRENT), { recursive: true })
+    expect(skills.state).toBe('failed')
+    const before = listHook.listed.length
+    skills.retry()
+    expect(await settled(skills)).toBe('installed')
+
+    // The deletion starts by listing the directory, in the same turn in which the download settles.
+    expect(listHook.listed.slice(before)).not.toContain(pins())
+    expect(await entries(pins())).toEqual([CURRENT, other].toSorted())
+    expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
+    expect(host.requests).toEqual([archivePath(set), archivePath(set)])
   })
 
   it('keeps the earlier pin while the new one cannot be downloaded', async () => {
