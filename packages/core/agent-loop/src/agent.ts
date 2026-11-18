@@ -345,6 +345,7 @@ export class ReactLoopAgent implements Agent {
     }
     phase.turn = turn
     let turnEnds: TurnEndReason | null = null
+    let turnFailure: { error: unknown } | undefined
     let target: InboxTarget = 'next-turn'
     try {
       while (true) {
@@ -406,6 +407,7 @@ export class ReactLoopAgent implements Agent {
         target = 'next-step'
       }
     } catch (error: unknown) {
+      turnFailure = { error }
       // A cause is present exactly while the signal is aborted.
       const cause = abortedCancelCause(signal)
       if (cause !== undefined) {
@@ -427,8 +429,11 @@ export class ReactLoopAgent implements Agent {
         try {
           await this.dispatch.settled('agent/turn-finalizing', { turn })
           const cause = abortedCancelCause(signal)
-          if (cause !== undefined) turnEnds = { kind: 'aborted', reason: cause }
-        } catch (error: unknown) {
+          if (cause !== undefined && turnEnds?.kind !== 'error') turnEnds = { kind: 'aborted', reason: cause }
+        } catch (cleanupError: unknown) {
+          const error = turnFailure === undefined ? cleanupError : new AggregateError(
+            [turnFailure.error, cleanupError], 'Turn execution and finalization failed', { cause: turnFailure.error },
+          )
           turnEnds = { kind: 'error', error: { code: 'UNKNOWN', message: errorChain(error) } }
           throw error
         } finally {

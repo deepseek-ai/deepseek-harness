@@ -1248,7 +1248,7 @@ type CallSiteIndex = Map<ts.SignatureDeclaration | ts.JSDocSignature, ts.CallExp
  * must appear here — the prefilter drops non-members before any branch runs,
  * so a branch for an unlisted name is silently dead.
  */
-const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'bail', 'waterfall', 'dispatch'])
+const EVENT_API_METHODS = new Set(['on', 'once', 'emit', 'parallel', 'serial', 'bail', 'waterfall', 'dispatch', 'settled'])
 
 /**
  * Collect event dispatch/listener relations from real cross-file receiver types.
@@ -1406,7 +1406,8 @@ export class EventRelationCollector {
             const eventNames = this.eventNamesFromCall(node, receiverKind)
             if (method === 'on' || method === 'once') {
               for (const event of eventNames) this.ensure(event).listeners.add(source.pkg)
-            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'bail' || method === 'waterfall') {
+            } else if (method === 'emit' || method === 'parallel' || method === 'serial' || method === 'bail' || method === 'waterfall'
+              || (receiverKind === 'agent-dispatch' && method === 'settled')) {
               for (const event of eventNames) this.addDispatcher(event, source.pkg, method)
             }
           }
@@ -1777,6 +1778,7 @@ function renderLifecycle(): string {
     '  end',
     '  end',
     '  end',
+    `  Driver->>Hooks: ${mermaidCode('agent/turn-finalizing')} await all resource finalizers`,
     `  Driver->>Session: ${mermaidCode('turn/end')}`,
     `  Driver-->>SDK: ${mermaidCode('agent/status')} idle`,
     '```',

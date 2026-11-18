@@ -1566,3 +1566,18 @@ describe('turn finalization', () => {
     } finally { await ctx.fiber.dispose() }
   })
 })
+
+it('retains the turn failure alongside a failed resource finalizer', async () => {
+  const ctx = await harness(new MockAdapter([]))
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('failed-finalization'), { provider: 'mock', model: 'mock' })
+  ctx.on('agent/pre-step', () => { throw new Error('turn preparation failed') })
+  ctx.on('agent/turn-finalizing', () => { throw new Error('resource release failed') })
+  try {
+    send(agent, 'go')
+    await agent.whenIdle()
+    const ending = agent.session.snapshotEvents().find(event => event.type === 'turn/end')
+    expect(ending?.data.reason.kind).toBe('error')
+    expect(JSON.stringify(ending)).toContain('turn preparation failed')
+    expect(JSON.stringify(ending)).toContain('resource release failed')
+  } finally { await ctx.fiber.dispose() }
+})
