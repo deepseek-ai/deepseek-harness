@@ -161,6 +161,11 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
       await expect.poll(() => key.inputValue()).toBe('')
       await key.fill('fixture-new-key')
       await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      // The editor closes before the save's reload lands, and an Edit press
+      // while the settings snapshot is loading is dropped. The saved notice is
+      // published by that reload's completion, so waiting for it also makes the
+      // reopen below deterministic.
+      await dialog.getByText('已保存 DeepSeek (deepseek-official)。', { exact: true }).waitFor()
       await expect.poll(() => key.count(), { timeout: 10_000 }).toBe(0)
       await edit.click()
       expect(await key.getAttribute('placeholder')).toBe('•'.repeat('fixture-new-key'.length))
