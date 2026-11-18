@@ -85,8 +85,4 @@
     flex-direction: column;
     align-items: stretch;
   }
-
-  .actions > button {
-    min-height: 40px;
-  }
 }

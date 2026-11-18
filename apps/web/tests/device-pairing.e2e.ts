@@ -397,6 +397,8 @@ it('keeps one Remote connection panel, its QR invitation, and login link while a
       const sourceIp = (await approvals.getByText('127.0.0.1', { exact: true }).boundingBox())!
       const approve = (await approvals.getByRole('button', { name: '批准', exact: true }).boundingBox())!
       const deny = (await approvals.getByRole('button', { name: '拒绝', exact: true }).boundingBox())!
+      expect(approve.height).toBe(28)
+      expect(deny.height).toBe(28)
       if (width === 1440) {
         expect(approve.x).toBeGreaterThan(codeBounds.x + codeBounds.width)
         expect(deny.x).toBeGreaterThan(approve.x + approve.width)

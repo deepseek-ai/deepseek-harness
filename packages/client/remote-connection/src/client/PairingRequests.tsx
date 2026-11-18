@@ -48,7 +48,7 @@ export function PairingRequests({ useResource, useApproval, decide, t }: Pick<Re
     {requests.status === 'loading' && <div className={css.empty} role="status" aria-label={t('pairing.loading')}><StateDot state="ongoing" /></div>}
     {(requests.status === 'failed' || requests.status === 'none') && <div className={css.notice}>
       <p className={css.error} role="alert">{t('pairing.readFailed')}</p>
-      <Button variant="outline" onClick={() => { setRetry(value => value + 1) }}>{t('pairing.retry')}</Button>
+      <Button variant="outline" size="sm" onClick={() => { setRetry(value => value + 1) }}>{t('pairing.retry')}</Button>
     </div>}
     {requests.value?.requests.map(request => <div className={css.request} key={request.id}>
       <div className={css.details}>
