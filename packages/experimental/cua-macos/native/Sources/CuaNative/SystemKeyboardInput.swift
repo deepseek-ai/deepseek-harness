@@ -32,7 +32,7 @@ final class SystemKeyboardInput {
 
     /// Prepare all events before pressing; the returned release only covers keys pressed by this call.
     func pressModifiers(_ names: [String], check: () throws -> Void) throws -> () -> Void {
-        let source = try KeyboardInput.source()
+        let source = try KeyboardInput.source(system: true)
         var seen = Set<CGKeyCode>()
         var flags = currentFlags()
         var pairs: [(down: CGEvent, up: CGEvent)] = []

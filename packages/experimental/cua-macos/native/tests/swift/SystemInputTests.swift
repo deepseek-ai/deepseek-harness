@@ -48,6 +48,8 @@ import Testing
     try keyboard.pressKey("s", modifiers: ["command"], to: 42)
     #expect(processEvents.map { $0.getIntegerValueField(.keyboardEventKeycode) } == [55, 1, 1, 55])
     #expect(systemEvents.count == 6)
+    #expect(systemEvents.allSatisfy { CGEventSource(event: $0)?.sourceStateID == .combinedSessionState })
+    #expect(processEvents.allSatisfy { CGEventSource(event: $0)?.sourceStateID == .hidSystemState })
 }
 
 @Test func systemShortcutReleasesAfterForegroundChanges() throws {

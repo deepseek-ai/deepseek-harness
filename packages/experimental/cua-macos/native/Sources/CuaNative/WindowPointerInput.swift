@@ -77,7 +77,7 @@ final class WindowPointerInput {
         guard (button == "left" && (count == 1 || count == 2)) || (["right", "middle"].contains(button) && count == 1) else {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported mouse button or click count")
         }
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         let selectedButton = try Self.button(button)
         var flags = try KeyboardInput.modifierFlags(modifiers)
         if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
@@ -168,7 +168,7 @@ final class WindowPointerInput {
         guard (1...5000).contains(durationMs), (1...240).contains(steps) else {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Drag durationMs must be 1...5000 and steps 1...240")
         }
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         let selected = try Self.button(button)
         var flags = try KeyboardInput.modifierFlags(modifiers)
         if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
@@ -341,8 +341,8 @@ final class WindowPointerInput {
         CGPoint(x: CGFloat(route.bounds.x + point.x), y: CGFloat(route.bounds.y + point.y))
     }
 
-    private static func source() throws -> CGEventSource {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+    private static func source(system: Bool = false) throws -> CGEventSource {
+        guard let source = CGEventSource(stateID: system ? .combinedSessionState : .hidSystemState) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create pointer event source")
         }
         return source

@@ -32,7 +32,7 @@ final class KeyboardInput {
     func keyDown(_ name: String, app: String, run: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
         let owner = HeldKeys.Owner(connection: connection, run: run, app: app)
         let code = try Self.keyCode(name)
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
         try checkCancellation()
         if useSystemInput { try system.validateTarget(recipient().pid) }
@@ -70,7 +70,7 @@ final class KeyboardInput {
         var selected = Set(alreadyHeld.keys)
         var flags = alreadyHeld.values.reduce(useSystemInput ? system.currentFlags() : CGEventFlags()) { $0.union($1) }
         var events: [(down: CGEvent, up: CGEvent)] = []
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         for key in chord {
             guard selected.insert(key.keyCode).inserted else { continue }
             let releasedFlags = flags
@@ -151,8 +151,8 @@ final class KeyboardInput {
         try checkCancellation()
     }
 
-    static func source() throws -> CGEventSource {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+    static func source(system: Bool = false) throws -> CGEventSource {
+        guard let source = CGEventSource(stateID: system ? .combinedSessionState : .hidSystemState) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create keyboard event source")
         }
         return source
