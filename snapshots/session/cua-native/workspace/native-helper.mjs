@@ -131,6 +131,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
+    if (method === 'releaseHeldKeys') return { dispatched: true }
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
