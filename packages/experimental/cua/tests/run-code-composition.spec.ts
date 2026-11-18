@@ -443,7 +443,7 @@ it.each(['refusal', 'disconnect', 'timeout'] as const)('reports cleanup %s and p
   expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('INPUT_CLEANUP_UNCONFIRMED')
 })
 
-it.each(['agent', 'provider'] as const)('awaits held input cleanup when the %s is disposed', async (owner) => {
+it.each(['agent', 'provider', 'context'] as const)('awaits held input cleanup when the %s is disposed', async (owner) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
   f.model.beforeStream = async (index, options) => {
@@ -455,7 +455,7 @@ it.each(['agent', 'provider'] as const)('awaits held input cleanup when the %s i
   await thinking.promise
   const release = f.native.controlNext('releaseHeldInputs')
   let disposed = false
-  const closing = (owner === 'agent' ? f.handle.dispose() : f.provider.dispose()).then(() => { disposed = true })
+  const closing = (owner === 'agent' ? f.handle.dispose() : owner === 'provider' ? f.provider.dispose() : f.ctx.fiber.dispose()).then(() => { disposed = true })
   await release.entered
   try {
     expect(disposed).toBe(false)
