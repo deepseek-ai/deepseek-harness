@@ -86,9 +86,29 @@ describe('modality schema boundary', () => {
 })
 
 describe('request image policy bounds', () => {
+  it('preserves omitted catalog defaults and explicit route overrides through the schema', () => {
+    const omitted = routeWith({})() as Options
+    const profile = resolveProfiles(omitted.providers).get('acme-gateway')!
+    expect(profile.requestImageMaxDimension).toBeUndefined()
+    expect(profile.requestImageMaxBytes).toBeUndefined()
+    const explicit = routeWith({ requestImageMaxDimension: 3000, requestImageMaxBytes: 2000000 })() as Options
+    expect(resolveProfiles(explicit.providers).get('acme-gateway')).toMatchObject({
+      requestImageMaxDimension: 3000, requestImageMaxBytes: 2000000,
+    })
+  })
+
+  it.each(['requestImageMaxDimension', 'requestImageMaxBytes'])('rejects invalid %s at the configuration parser', (field) => {
+    for (const value of [0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(routeWith({ [field]: value })).toThrow()
+    }
+  })
+
   it.each([
     ['requestImagePixelBudget', 0, /requestImagePixelBudget must be a positive safe integer/],
     ['requestImagePixelBudget', Number.MAX_SAFE_INTEGER + 1, /requestImagePixelBudget must be a positive safe integer/],
+    ['requestImageMaxDimension', 0, /requestImageMaxDimension must be a positive safe integer/],
+    ['requestImageMaxDimension', 1.5, /requestImageMaxDimension must be a positive safe integer/],
+    ['requestImageMaxDimension', Number.MAX_SAFE_INTEGER + 1, /requestImageMaxDimension must be a positive safe integer/],
     ['requestImageMaxBytes', 0, /requestImageMaxBytes must be a positive safe integer/],
     ['requestImageMaxBytes', 1.5, /requestImageMaxBytes must be a positive safe integer/],
   ] as const)('rejects %s=%s at service resolution', (field, value, message) => {

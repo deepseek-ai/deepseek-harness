@@ -46,7 +46,8 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
         baseURL: https://proxy.example.com:8443
         reasoning: high
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
-        requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
+        requestImageMaxDimension: 3000  # override catalog width and height limits
+        requestImageMaxBytes: 1048576    # override raw bytes before base64 expansion
         maxRequestImageBytes: 20971520   # accumulated base64 payload
         maxRequestImages: 50             # retained image occurrences
         imageOffloadCountQuantum: 10     # oldest images offloaded per count overflow
@@ -86,11 +87,14 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 | `defaultContextWindow` | `1,000,000` | Capacity fallback for undescribed models |
 | `defaultMaxTokens` | `128,000` | Output-cap fallback for undescribed models |
 | `requestImagePixelBudget` | `4,194,304` | Total-pixel budget for each deterministic request image |
-| `requestImageMaxBytes` | `1 MiB` | Encoded-byte target for each request image before base64 expansion |
+| `requestImageMaxDimension` | catalog width/height limits | Maximum width and height for each request image; an explicit value overrides both catalog limits |
+| `requestImageMaxBytes` | catalog base64 budget converted to raw bytes; otherwise `1 MiB` | Encoded-byte target before base64 expansion; an explicit value overrides the catalog budget |
 | `maxRequestImageBytes` | `20 MiB` | Aggregate base64 image-payload bound; a request whose retained images exceed it fails with `IMAGE_OFFLOAD_REQUIRED` |
 | `maxRequestImages` | `50` | Retained request-image count bound; a request whose retained images exceed it fails with `IMAGE_OFFLOAD_REQUIRED`. The default follows Azure OpenAI's 50-image limit; raise it on routes whose provider accepts more images |
 | `imageOffloadCountQuantum` | `10`, capped at `maxRequestImages` | Oldest images offloaded per count overflow |
 | `retryPolicy` | normal, 5 retries | Provider-owned retry policy executed by `dsh-llm-retry` |
+
+Request images inherit `inputLimits.images.resize.maxWidth`, `maxHeight`, and `maxBytes` from the selected pi-ai catalog model. The catalog byte budget counts base64 payload, so its raw target is `3 × floor(maxBytes / 4)`. Route overrides take precedence, including on custom gateways. Missing catalog dimensions leave that axis uncapped by the route; missing bytes retain the 1 MiB target. Total pixels remain governed by `requestImagePixelBudget`. These limits apply to retained history images on every request and to screenshot coordinate targets; stored attachments are unchanged. The encoding quality ladder can still exceed the byte target when no quality fits. Request counts, aggregate payload bounds, and encoding quality remain governed by DSH's existing policies.
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
 

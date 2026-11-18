@@ -46,7 +46,8 @@ kind: "package-reference"
         baseURL: https://proxy.example.com:8443
         reasoning: high
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
-        requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
+        requestImageMaxDimension: 3000  # override catalog width and height limits
+        requestImageMaxBytes: 1048576    # override raw bytes before base64 expansion
         maxRequestImageBytes: 20971520   # accumulated base64 payload
         maxRequestImages: 50             # retained image occurrences
         imageOffloadCountQuantum: 10     # oldest images offloaded per count overflow
@@ -86,11 +87,14 @@ kind: "package-reference"
 | `defaultContextWindow` | `1,000,000` | 未描述模型的容量回退 |
 | `defaultMaxTokens` | `128,000` | 未描述模型的输出上限回退 |
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
-| `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
+| `requestImageMaxDimension` | 目录中的宽高限制 | 每张请求图片的最大宽度和高度；显式配置会覆盖目录中的两个限制 |
+| `requestImageMaxBytes` | 目录的 base64 预算换算为原始字节；否则为 `1 MiB` | base64 扩展前的编码字节目标；显式配置会覆盖目录预算 |
 | `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
 | `maxRequestImages` | `50` | 保留请求图片数量上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败。默认值取 Azure OpenAI 的 50 张上限；提供方接受更多图片的路由应调高 |
 | `imageOffloadCountQuantum` | `10`，不超过 `maxRequestImages` | 每次数量超限时省略的最老图片数 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
+
+请求图片继承所选 pi-ai 目录模型的 `inputLimits.images.resize.maxWidth`、`maxHeight` 和 `maxBytes`。目录字节预算按 base64 载荷计算，因此原始字节目标为 `3 × floor(maxBytes / 4)`。路由显式配置优先，自定义网关也可使用。目录缺少某个尺寸时，路由不限制该轴；缺少字节预算时，保留 1 MiB 目标。总像素仍由 `requestImagePixelBudget` 控制。这些限制每次请求都会应用于保留的历史图片和截图坐标目标，已存附件保持不变。编码质量阶梯中没有结果满足字节目标时，结果仍可能超过目标。请求图片数量、总载荷限制和编码质量继续使用 DSH 的现有策略。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 

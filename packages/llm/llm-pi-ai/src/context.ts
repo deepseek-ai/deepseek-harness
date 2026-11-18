@@ -284,6 +284,10 @@ export interface PiImageRequestContext {
 export interface PiImageRequestBudget {
   /** Total-pixel budget; larger sources are downscaled proportionally. */
   maxPixels: number
+  /** Maximum width inherited from the model or explicitly overridden by the route. */
+  maxWidth?: number
+  /** Maximum height inherited from the model or explicitly overridden by the route. */
+  maxHeight?: number
   /** Encoded-byte target for one request image. */
   maxBytes: number
 }
@@ -295,7 +299,10 @@ export interface PiImageRequestBudget {
  * @returns dimensions and byte target shared by serialization and screenshot coordinate mapping.
  */
 export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageRequestBudget): ImageRequestTarget {
-  return { ...requestImageDimensions(ref.width, ref.height, budget.maxPixels), maxBytes: budget.maxBytes }
+  return {
+    ...requestImageDimensions(ref.width, ref.height, budget.maxPixels, budget.maxWidth, budget.maxHeight),
+    maxBytes: budget.maxBytes,
+  }
 }
 
 /**
