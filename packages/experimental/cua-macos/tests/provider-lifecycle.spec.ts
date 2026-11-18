@@ -246,8 +246,10 @@ it('holds a key from run_code until a later cua_run_code explicitly releases it 
   native.request.mockClear().mockImplementation(async (method, params) => {
     expect(method).toBe('sendKeyEvent')
     expect(params).toMatchObject({ taskId: f.handle.agent.id, turn: 1 })
-    if (params.direction === 'down') held.add(String(params.key))
-    else { expect(held.has(String(params.key))).toBe(true); held.delete(String(params.key)) }
+    const key = params.key
+    if (typeof key !== 'string') throw new Error('The native fixture requires a key name')
+    if (params.direction === 'down') held.add(key)
+    else { expect(held.has(key)).toBe(true); held.delete(key) }
     return { dispatched: true }
   })
   expect((await executeProgram(f, 'run_code',
