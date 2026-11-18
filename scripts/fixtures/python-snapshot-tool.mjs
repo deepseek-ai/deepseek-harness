@@ -1,16 +1,9 @@
 /** Deterministic job-backed tool and denial fixture for the packaged SDK snapshot. */
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-
 export const name = 'python-snapshot-tool'
 export const inject = ['tools', 'jobs']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx - Scenario-owned tool registration. */
 export function apply(ctx) {
-  ctx.on('agent/turn-finalizing', async ({ agent }) => {
-    if (agent.id !== 'advanced-executable') return
-    await Promise.resolve()
-    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'Turn resources released.' }], source: { kind: 'user' } }))
-  })
   ctx.on('tools/pre-execute', (exec, next) => {
     if (exec.name !== 'snapshot_double' || exec.arguments.value !== -1) return next()
     return {

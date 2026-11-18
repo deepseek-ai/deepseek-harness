@@ -289,7 +289,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (inputTurns && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
         const turn = inputTurns.scope(agent)
         if (!turn) throw new ToolContextUnavailableError('Directional CUA input requires an active agent turn')
-        turn.track(client)
+        if (method !== 'mouseMove' && params.direction === 'down') turn.track(client)
         params.taskId = agent.id
         params.turn = turn.turn
       }
