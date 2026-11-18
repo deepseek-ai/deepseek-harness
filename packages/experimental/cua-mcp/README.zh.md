@@ -167,6 +167,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- macOS 的 `sendKeyEvent` 和 `toggleMouse` 显式持有要求活动的 DSH 回合。MCP 程序以维护活动执行，因此这些操作在 MCP 中不可用。请使用完整的 `pressKey`、`typeText`、`click` 或 `drag` 动作；系统鼠标移动仍可使用。服务器无法推断客户端的回合边界。
 - macOS 与原生 Windows Host 有提供方。其他 Host（包括 WSL）列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
 - 在 Windows 上，[提供方的限制](../cua-windows/README.zh.md#known-limitations-and-deferred-work)经 MCP 同样适用：它不启动应用，不提供 `Always allow` 授权，npm 安装需要配置 `helperPath`。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。

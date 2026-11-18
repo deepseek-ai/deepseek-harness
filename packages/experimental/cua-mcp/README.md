@@ -167,6 +167,7 @@ The tool catalog and instructions are stable for one installation. The reference
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- macOS explicit `sendKeyEvent` and `toggleMouse` holds require an active DSH turn. MCP programs run as maintenance activities, so these operations are unavailable through MCP. Use complete `pressKey`, `typeText`, `click`, or `drag` actions; system pointer movement remains available. The server cannot infer the client's turn boundaries.
 - macOS and native Windows Hosts have a provider. Other Hosts, WSL included, list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
 - On Windows the [provider's limits](../cua-windows/README.md#known-limitations-and-deferred-work) apply through MCP: it does not launch applications, grants no `Always allow`, and an npm installation needs `helperPath`.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.

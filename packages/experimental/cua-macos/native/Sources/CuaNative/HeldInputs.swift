@@ -161,9 +161,9 @@ final class HeldInputs: @unchecked Sendable {
     }
 
     /// Create and post movement under the same lock as ownership and the saved release point.
-    func moveSystem(owner: Owner, route: WindowRoute, screen: CGPoint, checkCancellation: () throws -> Void) throws {
+    func moveSystem(owner: Owner?, route: WindowRoute, screen: CGPoint, checkCancellation: () throws -> Void) throws {
         try lock.withLock {
-            try admit(owner)
+            if let owner { try admit(owner) }
             let press = pressed.first { if case .systemPointer = $0.mode { return true }; return false }
             let event: CGEvent
             if let press {

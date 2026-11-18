@@ -108,12 +108,12 @@ async function setup(options: SetupOptions = {}) {
     cua: {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
-        installCua(owner, config, { helperPath: process.execPath,
+        installCua(owner, config, { helperPath: process.execPath, turnInputLifecycle: true,
           createChannel: options.cancellationAcknowledgementMs === undefined
             ? native.createChannel
             : delayCancellation(native.createChannel, options.cancellationAcknowledgementMs, () => { native.events.push('cancellation-acknowledged') }),
           getGuidance: () => 'Fixture CUA guidance: select test.fixture and operate window 7.',
-          capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
+          capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -182,6 +182,21 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('Computer Use MCP composition', () => {
+  it('refuses persistent downs outside a turn and still completes clicks through MCP', async () => {
+    const { client, native, run } = await setup()
+    expect(client.getInstructions()).toContain('MCP programs cannot hold keys or mouse buttons')
+    const selected = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree()')
+    expect(selected.isError).not.toBe(true)
+    for (const code of ['await app.sendKeyEvent("w", "down")', 'await win.toggleMouse("left", "down")']) {
+      const result = await run(code)
+      expect(result.isError).toBe(true)
+      expect(texts(result).join('\n')).toContain('active agent turn')
+    }
+    expect(native.calls.some(call => call.method === 'sendKeyEvent' || call.method === 'toggleMouse')).toBe(false)
+    expect((await run('await win.click("0")')).isError).not.toBe(true)
+    expect(native.state.count).toBe(1)
+  })
+
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {
     const { ctx, native, client, run, adapter, directory } = await setup()
     expect(client.getInstructions()).toContain('Start every conversation by calling cua_get_api_reference')

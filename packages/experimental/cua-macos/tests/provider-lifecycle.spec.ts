@@ -1329,3 +1329,13 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,
     expect.any(AbortSignal), expect.any(String))
 })
+
+it('keeps complete system moves available outside a turn without registering a persistent hold', async () => {
+  const f = await setup(undefined, false, { requireSystemPointerApproval: false })
+  await selectApplication(f)
+  native.request.mockClear()
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  await f.handle.dispose()
+  expect(native.cleanup).not.toHaveBeenCalled()
+})

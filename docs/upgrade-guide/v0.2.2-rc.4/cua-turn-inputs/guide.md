@@ -12,6 +12,8 @@ macOS `sendKeyEvent('down')` holds a key across `run_code` and `cua_run_code` ca
 
 ## Migration
 
+MCP does not supply DSH turn boundaries. Explicit macOS holds through `sendKeyEvent` or `toggleMouse` are unavailable there; replace them with complete `pressKey`, `click`, or `drag` actions. System pointer movement remains available.
+
 1. If a program requires release before it returns, send an explicit `up` in its `finally` block. Otherwise a later program in the same turn can release the held input.
 2. Upgrade the macOS package and helper together. A custom `helperPath` must point to a rebuilt helper implementing the new private turn input protocol.
 3. Verify a down in one program remains held until an up in a later program, or until the turn ends. If cleanup cannot be confirmed, CUA disables input for that task. Check the desktop before starting a new task.

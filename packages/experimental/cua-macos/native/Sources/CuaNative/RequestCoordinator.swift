@@ -223,7 +223,9 @@ import Darwin
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
             case .mouseMove(let route, let point):
                 let latch = cancellation
-                try scheduler.systemPointer.move(owner: .init(connection: connectionID, scope: params.inputScope(), app: params.string("appHandle")), in: route, at: point, checkCancellation: { try latch.check() })
+                let owner: HeldInputs.Owner? = try params.contains("taskId") || params.contains("turn")
+                    ? .init(connection: connectionID, scope: params.inputScope(), app: params.string("appHandle")) : nil
+                try scheduler.systemPointer.move(owner: owner, in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
             case .systemButtonDown(let route, let button):
                 try scheduler.systemPointer.down(owner: .init(connection: connectionID, scope: params.inputScope(), app: params.string("appHandle")), in: route, button: button,

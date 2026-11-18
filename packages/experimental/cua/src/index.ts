@@ -288,10 +288,12 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (inputTurns && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
         const turn = inputTurns.scope(agent)
-        if (!turn) throw new ToolContextUnavailableError('Directional CUA input requires an active agent turn')
-        if (method !== 'mouseMove' && params.direction === 'down') turn.track(client)
-        params.taskId = agent.id
-        params.turn = turn.turn
+        if (!turn && method !== 'mouseMove') throw new ToolContextUnavailableError('Directional CUA input requires an active agent turn; external MCP programs can use pressKey, click, and drag')
+        if (turn) {
+          if (method !== 'mouseMove' && params.direction === 'down') turn.track(client)
+          params.taskId = agent.id
+          params.turn = turn.turn
+        }
       }
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
