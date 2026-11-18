@@ -275,8 +275,4 @@
   .linkPreview {
     flex: auto;
   }
-
-  .linkRow > button {
-    align-self: flex-start;
-  }
 }

@@ -61,7 +61,7 @@ async function assertAddressLayout(section: Locator, available: boolean): Promis
   expect(copyBox).not.toBeNull()
   if (copyBox!.y > fieldBox!.y + fieldBox!.height) {
     expect(copyBox!.x).toBe(fieldBox!.x)
-    expect(copyBox!.width).toBeLessThan(fieldBox!.width)
+    expect(copyBox!.width).toBe(fieldBox!.width)
   } else {
     expect(copyBox!.y).toBe(fieldBox!.y)
   }
@@ -549,6 +549,8 @@ describe('web e2e: one-use QR browser login', () => {
       const mobileLinkField = await linkSection.locator('code').locator('..').boundingBox()
       expect(mobileLinkField).not.toBeNull()
       expect(mobileLinkField!.height).toBe(copyBox!.height)
+      expect(await qrSection.getByRole('button', { name: '生成二维码', exact: true }).boundingBox())
+        .toMatchObject({ x: copyBox!.x, width: copyBox!.width })
       expect(mobileLinkField!.y + mobileLinkField!.height).toBeLessThan(copyBox!.y)
       if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'link-mobile-light.png') })
       await page.emulateMedia({ colorScheme: 'dark' })
