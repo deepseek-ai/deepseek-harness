@@ -389,7 +389,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(readImageRequest).toHaveBeenCalledWith(ref, {
       width: 1,
       height: 1,
-      maxBytes: 1024 * 1024,
+      maxBytes: 3_538_944,
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
@@ -1276,13 +1276,18 @@ it.each([
     data: Uint8Array.of(1), mediaType: ref.mediaType, bytes: 1,
     width: target.width, height: target.height, depth: 'uchar', space: 'srgb', hasAlpha: false,
   }))
+  let providers: Record<string, LlmPiAi.PiAiProviderProfile> = {
+    anthropic: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url, ...overrides },
+  }
   const adapter = new PiAiAdapter({
-    profiles: () => resolveProfiles({ anthropic: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url, ...overrides } }),
+    profiles: () => resolveProfiles(providers),
     resolveApiKey: () => Promise.resolve('test-key'), resolveAttachments: () => store, auth: memoryAuth(),
   })
   const ref = { ...IMAGE_REF, width: 1146, height: 3657 }
   expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toEqual(expected)
   const prepared = await adapter.prepareCall('anthropic', 'claude-sonnet-4-5')
+  providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, requestImageMaxBytes: 333 } }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({ height: 777, maxBytes: 333 })
   const messages = Array.from({ length: 22 }, () => createUserMessage({ content: [{ type: 'image', attachment: ref }], source: { kind: 'user' } }))
   const chunks = await Array.fromAsync(prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages }))
   expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
