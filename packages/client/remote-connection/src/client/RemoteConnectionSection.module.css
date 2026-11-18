@@ -10,7 +10,6 @@
 }
 
 .section {
-  --remote-connection-control-height: 32px;
   container-type: inline-size;
   gap: 12px;
 }
@@ -137,12 +136,6 @@
   white-space: nowrap;
 }
 
-.cardHeader > .qrActions > button,
-.linkRow > button,
-.actions > button {
-  height: var(--remote-connection-control-height);
-}
-
 .linkRow {
   display: flex;
   align-items: center;
@@ -155,7 +148,7 @@
   align-items: center;
   flex: 1;
   box-sizing: border-box;
-  height: var(--remote-connection-control-height);
+  height: 28px;
   min-width: 0;
   overflow: hidden;
   padding: 0 10px;

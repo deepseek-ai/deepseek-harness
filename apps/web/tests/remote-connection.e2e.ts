@@ -55,7 +55,7 @@ async function assertAddressLayout(section: Locator, available: boolean): Promis
   const codeBox = await code.boundingBox()
   expect(fieldBox).not.toBeNull()
   expect(codeBox).not.toBeNull()
-  expect(fieldBox!.height).toBe(32)
+  expect(fieldBox!.height).toBe(28)
   expect(Math.abs(codeBox!.y + codeBox!.height / 2 - fieldBox!.y - fieldBox!.height / 2)).toBeLessThanOrEqual(1)
   const copyBox = await address.getByRole('button', { name: '复制链接', exact: true }).boundingBox()
   expect(copyBox).not.toBeNull()
@@ -75,7 +75,7 @@ async function assertAddressLayout(section: Locator, available: boolean): Promis
       const text = range.getBoundingClientRect()
       return { height: box.height, textOffset: Math.abs(text.y + text.height / 2 - box.y - box.height / 2) }
     })
-    expect(geometry.height).toBe(32)
+    expect(geometry.height).toBe(28)
     expect(geometry.textOffset).toBeLessThanOrEqual(1)
   }
 }
@@ -383,7 +383,7 @@ describe('web e2e: one-use QR browser login', () => {
           expect(await failure.textContent()).toBe('无法加载远程连接设置，请重试')
           const retry = address.getByRole('button', { name: '重试', exact: true })
           expect(await retry.isEnabled()).toBe(true)
-          expect((await retry.boundingBox())!.height).toBe(32)
+          expect((await retry.boundingBox())!.height).toBe(28)
           expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
           await compareOrRefreshGolden(join(EXPECTED, 'unreachable-load-failed.expected.md'),
             await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd), MODE)
