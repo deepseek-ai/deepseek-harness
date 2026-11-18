@@ -204,7 +204,7 @@ async function executeProgram(
     }))
   }
   const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
-  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>('keyboard-run'), name,
+  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>(`keyboard-${name}`), name,
     arguments: { code, description }, signal })
 }
 
@@ -236,6 +236,31 @@ it.each(['run_code', 'cua_run_code'] as const)('finishes a shortcut-only %s with
   expect(result.isError).toBe(false)
   expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
   expect(native.cleanup).not.toHaveBeenCalled()
+})
+
+it('holds a key from run_code until a later cua_run_code explicitly releases it in the same turn', async () => {
+  const f = await setup(undefined, true)
+  await thinkingTurn(f)
+  await selectApplication(f)
+  const held = new Set<string>()
+  native.request.mockClear().mockImplementation(async (method, params) => {
+    expect(method).toBe('sendKeyEvent')
+    expect(params).toMatchObject({ taskId: f.handle.agent.id, turn: 1 })
+    if (params.direction === 'down') held.add(String(params.key))
+    else { expect(held.has(String(params.key))).toBe(true); held.delete(String(params.key)) }
+    return { dispatched: true }
+  })
+  expect((await executeProgram(f, 'run_code',
+    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } });", 'Hold W')).isError).toBe(false)
+  expect(held).toEqual(new Set(['w']))
+  expect(native.cleanup).not.toHaveBeenCalled()
+  expect((await executeProgram(f, 'cua_run_code',
+    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'up' } });", 'Release W')).isError).toBe(false)
+  expect(held.size).toBe(0)
+  expect(native.cleanup).not.toHaveBeenCalled()
+  f.handle.agent.cancel({ kind: 'user' })
+  await f.handle.agent.whenIdle()
+  expect(native.cleanup).toHaveBeenCalledExactlyOnceWith('releaseHeldInputs', { taskId: f.handle.agent.id, turn: 1 })
 })
 
 it('rejects a relative helper path before publishing computer-use operations', async () => {

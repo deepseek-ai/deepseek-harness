@@ -139,14 +139,12 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
     ...presetFree ? {} : { setup: async (owner: Context) => { await ctx.agentPresets.mount(owner, 'standard') } },
   })
   const agent = handle.agent
-  const idle: PromiseWithResolvers<void> = Promise.withResolvers()
-  ctx.on('agent/status', ({ agent: subject, status }) => { if (subject === agent && status === 'idle') idle.resolve() })
   const provider = [...ctx.loader.entries()].find(entry => entry.options.id === 'cua')
   if (provider?.fiber === undefined) throw new Error('Loader did not activate the CUA fixture provider')
   return { ctx, native, guarded, model, agent, handle, provider: provider.fiber,
     run: () => {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect and increment the fixture counter.' }], source: { kind: 'user' } }))
-      return idle.promise
+      return agent.whenIdle()
     },
   }
 }
