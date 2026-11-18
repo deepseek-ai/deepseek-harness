@@ -89,6 +89,8 @@ Client 的首次 `follow`、重连首屏与 `loadOlder()` 至少请求 50 条以
 
 引用保活本地会话数据、作用域 Context 和历史流，不保活 Host Agent。普通 Session 不因保留引用而添加目录行。已保留且具有明确直接父子地址的 subagent 即使尚未收到父目录，也会保留兜底行并通知列表读取方；这些行不加入 Host 列表成员集合。Fork 标题设置直接发送 rename 并应用返回的标题投影，不 retain 子会话，也不打开其历史。最后一个引用释放时，generation 先退出可访问映射，再执行清理；后续获取可以为同一 id 创建新 generation。`binding(id)` 和 `scope(id)` 只借用已有 generation。`retainInfo(id)` 独立于目录成员关系观察稳定的只读来源计数，不执行历史 I/O。消费方来源键可通过声明合并扩展；导航和完成确认属于 UI 消费方，不属于本控制器。每个引用都保活 Session 对象及其作用域。`connection` 默认为 `true`，同时保活 Session 自己的事件连接及其维持最新的事件窗口；没有引用保留连接时，Session 断开连接、清空窗口并保留发送回显等本地状态，下一个保留连接的引用按首次打开的流程重新连接。`connection: false` 的引用在 binding 建好时即就绪。`facets` 指明由 owner 声明、基于这些数据的计算，例如 `conversation`。连接仍在而最后一个子要素被释放时，Session 只让按 Turn 对齐的最后一页可见，更早的条目由其事件流留在内存里，读页时先从本地返回、不发请求，用完后再走 Host 分页。owner 通过声明合并扩展 `SessionRetainFacetMap`；只有值为 `true` 的键才被保留，该集合在引用生命周期内固定，`retainInfo(id)` 在 `retainedFacets` 中报告各子要素的正计数，在 `connectionCount` 中报告保留连接的引用数，为零时字段不存在。控制器只计数，不解释子要素含义或其依赖。所有权与清理规则见 [Client 会话引用](../../../.agents/notes/implemented/architecture/2026-09-15-client-session-references.zh.md)。 模式未知的子代理地址允许读取历史，但仍校验直接父级的一致性；访问权单独按子 Session 检查。成功恢复 descriptor 后确定展示模式；失败只影响该子会话。控制请求仅携带目标 id，由 Host 检查是否支持继续执行。Client 快照仅保留子代理地址；是否能接收续接输入由运行时校验。
 
+`@deepseek-ai/dsh-api-session-controller/client/directories` 导出无运行时导入的目录读取函数，客户端插件内联它们而不是导入本插件的 bundle：`selectSessionDirectory(state, sessionId)` 从列表快照选出 Session 的目录（投影的 `workingDirectory`，否则为该行的 header 目录），供 `useSessions` 选择器使用；`sessionDirectory(sessions, sessionId)` 在手势发生时先读已连接 Session 的投影面、再读列表快照。文件视图、地址基准、在应用中打开操作和相对路径都使用这个目录。
+
 <a id="session-media-references"></a>
 ## 会话媒体引用
 

@@ -382,7 +382,7 @@ export class HarnessClient {
   }
 
   /**
-   * Change a Session's effective directory without changing origin or permissions.
+   * Change a Session's effective directory without changing its origin; the workspace-write boundary follows it.
    * @param sessionId - target Session; an unknown id creates it.
    * @param path - absolute or Session-current-directory-relative path.
    * @returns the validated absolute directory.

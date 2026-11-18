@@ -3030,10 +3030,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s working directory is its workspace-write boundary, so a Host move of the Session moves the boundary; the configured root is the fallback for agentless calls and, without the working-directory service, sessions without a header directory. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
-        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s recorded cwd is relative or contains a NUL byte.'],
+        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s directory is relative or contains a NUL byte.'],
       },
       {
         signature: 'registerWritableRoot(session: Session, directory: string): () => void',
@@ -5121,6 +5121,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     description: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     methods: [
+      {
+        signature: 'scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined>',
+        description: 'Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses: a live Session\'s sandbox workspace root, else a stored Session\'s cached directory, else its header directory.',
+        parameters: [{ name: 'sessionId', description: 'Session identity received on the wire.' }, { name: 'signal', description: 'cancellation for the persistence read of a stored Session.' }],
+        returns: 'the scope, or undefined when no live or stored Session has that identity.',
+      },
       {
         signature: '@Remote async read( workspaceFileScope: WorkspaceFileScope, path: string, range: WorkspaceFileRange, signal: AbortSignal, ): Promise<WorkspaceFileText>',
         description: 'Read one page of lines from a UTF-8 file readable by the filesystem backend.',

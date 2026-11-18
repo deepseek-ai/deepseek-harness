@@ -27,9 +27,9 @@ export interface RecorderEnvironment {
   warn: (message: string) => void
 }
 
-/** Canonical paths every comparison and display uses, resolved once per Session. */
+/** Canonical paths every comparison and display uses, resolved when a turn opens. */
 interface Paths {
-  /** Canonical original project directory for repository discovery and display paths. */
+  /** Canonical Session directory for repository discovery and display paths. */
   cwd: string
   /** Canonical home directory abbreviated as `~` in display paths. */
   home: string
@@ -69,6 +69,10 @@ interface TurnRecord {
 /** Everything one turn accumulates; a new turn gets a new object so queued work for an older turn keeps its own. */
 interface TurnState {
   readonly turn: number
+  /** The Session directory the turn started in, as the directory service spells it. */
+  readonly cwd: string
+  /** Canonical paths of that directory, resolved by the turn's baseline; undefined until then. */
+  paths: Paths | undefined
   /**
    * The turn-start snapshot once it exists. `null` means no repository or no git, so the turn summarizes file-tool
    * captures only; `'failed'` means the repository exists but its snapshot failed, so the turn records nothing.
@@ -83,8 +87,10 @@ interface TurnState {
   recordedAfterSeq: number
 }
 
-function freshState(turn: number): TurnState {
-  return { turn, baseline: null, captures: new Map(), lastToolResultSeq: -1, attemptedAfterSeq: -1, recordedAfterSeq: -1 }
+function freshState(turn: number, cwd: string): TurnState {
+  return {
+    turn, cwd, paths: undefined, baseline: null, captures: new Map(), lastToolResultSeq: -1, attemptedAfterSeq: -1, recordedAfterSeq: -1,
+  }
 }
 
 /** A listed file with the sources of its two sides. */
@@ -102,16 +108,19 @@ const OVERSIZED = Symbol('oversized')
  * with the summaries. Tool execution waits for pending work so a snapshot or
  * capture never races a mutation. A working directory outside any repository,
  * or a Host without git, gets no snapshot; its summary lists the files the file
- * tools changed.
+ * tools changed. {@link moveTo} tells the recorder that the Session works in
+ * another directory: turns that start afterwards are snapshotted there and
+ * list paths relative to it, while the open turn keeps the directory it
+ * started in.
  */
 export class TurnRecorder {
   private chain: Promise<void> = Promise.resolve()
   /** The open turn; before the first `turn/start` it is an empty placeholder no event can match. */
-  private state = freshState(0)
-  /** Canonical paths, resolved by the first turn. */
-  private paths: Paths | undefined
-  /** The located repository, reused across turns once found; null keeps retrying each turn. */
-  private repository: Repository | null = null
+  private state = freshState(0, '')
+  /** Host facts shared by every turn, resolved by the first. */
+  private host: Pick<Paths, 'home' | 'temporaryRoots'> | undefined
+  /** Located repositories by canonical Session directory, reused across turns; an absent entry keeps retrying each turn. */
+  private readonly repositories = new Map<string, Repository>()
   /** Temporary directory holding this Session's snapshot objects, scratch indexes, and captured copies. */
   private scratch: Promise<string> | undefined
   /** Records by the sequence of the event that announced them. */
@@ -120,21 +129,33 @@ export class TurnRecorder {
 
   constructor(
     private readonly session: Session,
-    private readonly cwd: string,
+    private cwd: string,
     private readonly env: RecorderEnvironment,
   ) {}
+
+  /**
+   * Record that the Session works in another directory from now on. Turns that
+   * start afterwards use it; the open turn keeps the directory it started in,
+   * where its baseline snapshot was taken.
+   * @param cwd - the Session's directory after the move.
+   */
+  moveTo(cwd: string): void {
+    this.cwd = cwd
+  }
 
   /**
    * Open a turn with fresh per-turn state and queue its baseline snapshot.
    * @param turn - the turn number from `turn/start`.
    */
   start(turn: number): void {
-    const state = freshState(turn)
+    const cwd = this.cwd
+    const state = freshState(turn, cwd)
     this.state = state
     void this.enqueue(async (signal) => {
       try {
-        this.paths ??= { cwd: await realpath(this.cwd), home: await canonicalPath(homedir()), temporaryRoots: await temporaryRoots() }
-        const repository = await this.locate(this.paths.cwd, signal)
+        this.host ??= { home: await canonicalPath(homedir()), temporaryRoots: await temporaryRoots() }
+        state.paths = { cwd: await realpath(cwd), ...this.host }
+        const repository = await this.locate(state.paths.cwd, signal)
         if (repository === null) return
         const tree = await snapshotTree(repository.git, repository.workspace, signal)
         state.baseline = { ...repository, tree }
@@ -155,8 +176,7 @@ export class TurnRecorder {
   capture(path: string): void {
     const state = this.state
     void this.enqueue(async () => {
-      const paths = this.paths
-      if (paths === undefined) return
+      if (state.paths === undefined) return
       const absolute = await canonicalPath(path)
       if (state.captures.has(absolute)) return
       const capture = await captureFile(absolute, join(await this.scratchDir(), 'captures'), this.env.maxFileBytes)
@@ -271,15 +291,17 @@ export class TurnRecorder {
     return this.scratch
   }
 
-  /** The repository enclosing the working directory, located once; null keeps retrying each turn. */
+  /** The repository enclosing one Session directory, located once per directory; null keeps retrying each turn. */
   private async locate(cwd: string, signal: AbortSignal): Promise<Repository | null> {
-    if (this.repository !== null) return this.repository
+    const located = this.repositories.get(cwd)
+    if (located !== undefined) return located
     const git = await this.env.git
     if (git === null) return null
     const workspace = await locateGitWorkspace(git, cwd, () => this.scratchDir(), signal)
     if (workspace === null) return null
-    this.repository = { git, workspace }
-    return this.repository
+    const repository = { git, workspace }
+    this.repositories.set(cwd, repository)
+    return repository
   }
 
   /** One side's text, null for an absent file, or {@link OVERSIZED} for a snapshot side beyond the byte cap. */
@@ -298,7 +320,7 @@ export class TurnRecorder {
   }
 
   private async record(state: TurnState, signal: AbortSignal): Promise<void> {
-    const paths = this.paths
+    const { paths } = state
     const { baseline } = state
     if (paths === undefined || baseline === 'failed' || state.lastToolResultSeq < 0) return
     state.attemptedAfterSeq = state.lastToolResultSeq
@@ -353,7 +375,7 @@ export class TurnRecorder {
     this.records.set(event.seq, {
       summary: {
         turn: state.turn,
-        cwd: this.cwd,
+        cwd: state.cwd,
         files: kept.map(entry => entry.file),
         total: sorted.length,
         added: sorted.reduce((sum, entry) => sum + entry.file.added, 0),
