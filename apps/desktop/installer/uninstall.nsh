@@ -144,17 +144,6 @@ FunctionEnd
 !define /ifndef DSH_COMMAND_OWNER_KEY "Software\DeepSeekHarness\Command"
 !define /ifndef DSH_PROTOCOL_KEY "Software\Classes\dsh"
 !define /ifndef DSH_COMMAND_MUTEX "default"
-!macro unRemoveOwnedUninstallEntry KEY
-  ReadRegStr $0 SHELL_CONTEXT "${KEY}" UninstallString
-  ${If} $0 == '"$INSTDIR\${UNINSTALL_FILENAME}" /currentuser'
-    ClearErrors
-    DeleteRegKey SHELL_CONTEXT "${KEY}"
-    ${If} ${Errors}
-      System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "[unverified] Delete uninstall entry: ${KEY}") ?c'
-    ${EndIf}
-  ${EndIf}
-!macroend
-
 Function un.CleanRegistration
   ${If} ${isUpdated}
     Return
@@ -173,11 +162,10 @@ Function un.CleanRegistration
   Delete "$PLUGINSDIR\unowned-path"
   StrCpy $UnRegistrationArguments ""
   ${If} $UnDirectoryOnly == 1
-    !insertmacro unRemoveOwnedUninstallEntry "${UNINSTALL_REGISTRY_KEY}"
+    StrCpy $UnRegistrationArguments '-DesktopLink "$oldDesktopLink" -StartMenuLink "$oldStartMenuLink" -UninstallKey "${UNINSTALL_REGISTRY_KEY}" -UninstallerName "${UNINSTALL_FILENAME}"'
     !ifdef UNINSTALL_REGISTRY_KEY_2
-      !insertmacro unRemoveOwnedUninstallEntry "${UNINSTALL_REGISTRY_KEY_2}"
+      StrCpy $UnRegistrationArguments '$UnRegistrationArguments -LegacyUninstallKey "${UNINSTALL_REGISTRY_KEY_2}"'
     !endif
-    StrCpy $UnRegistrationArguments '-DesktopLink "$oldDesktopLink" -StartMenuLink "$oldStartMenuLink"'
   ${EndIf}
   Call un.RunRegistrationCleanup
   IfFileExists "$PLUGINSDIR\unowned-path" 0 +2

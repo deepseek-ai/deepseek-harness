@@ -75,8 +75,15 @@ try {
         $foreign = $mode -eq 'missing-location-foreign'
         if ($missingLocation) { Remove-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation }
         $arpKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey
+        if ($mode -eq 'missing-location') {
+            $originalCommand = (Get-ItemProperty $arpKey).UninstallString
+            $alternateCommand = $originalCommand.Replace($installPath + '\', $installPath + '\.\')
+            Set-ItemProperty $arpKey UninstallString $alternateCommand
+        }
         $desktopLink = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) ($ProductName + '.lnk')
+        $startLink = Join-Path ([Environment]::GetFolderPath('Programs')) ($ProductName + '.lnk')
         if ($missingLocation) {
+            if (-not (Test-Path -LiteralPath $startLink) -or (New-Object -ComObject WScript.Shell).CreateShortcut($startLink).TargetPath -ne (Join-Path $installPath ($ProductName + '.exe'))) { throw 'Missing A Start menu fixture' }
             $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($desktopLink)
             $shortcut.TargetPath = Join-Path $installPath ($ProductName + '.exe')
             $shortcut.Save()
@@ -218,7 +225,7 @@ try {
         if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $pathRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
         if ($mode -eq 'owned-retained' -and $path -ne ($commandDirectory + ';C:\Windows')) { throw 'Owned cleanup removed a pre-existing manual PATH entry' }
         if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($foreign -or $mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
-        if ($missingLocation -and ((Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $arpKey))) { throw 'Missing location left an A shortcut or uninstall entry' }
+        if ($missingLocation -and ((Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $startLink) -or (Test-Path -LiteralPath $arpKey))) { throw 'Missing location left an A shortcut or uninstall entry' }
         Write-Output "passed: $mode"
     }
     # Real replacement publishes B after the old A uninstaller has been retained.
@@ -303,6 +310,12 @@ try {
     if ($registeredExe -ne (Join-Path $newPath ('Uninstall ' + $ProductName + '.exe'))) { throw 'B uninstall entry targets another installation' }
     $process = Start-Process $registeredExe -ArgumentList ($registeredArgs + ' /S') -PassThru -WindowStyle Hidden
     Wait-Exit
+    foreach ($key in @($arpKey, ('HKCU:\Software\' + $RegistryKey), ('HKCU:\' + $protocolKey))) {
+        if (Test-Path -LiteralPath $key) { throw "B uninstall retained registration: $key" }
+    }
+    foreach ($link in $replacementLinks.Keys) {
+        if (Test-Path -LiteralPath $link) { throw "B uninstall retained shortcut: $link" }
+    }
     Write-Output 'passed: installation takeover'
 } finally {
     if ($held) { $held.Dispose() }

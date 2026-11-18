@@ -9,7 +9,10 @@ param([Parameter(Mandatory)][string]$Directory,
     [switch]$UnownedOnly,
     [string]$UnownedMarker,
     [string]$DesktopLink,
-    [string]$StartMenuLink)
+    [string]$StartMenuLink,
+    [string]$UninstallKey,
+    [string]$LegacyUninstallKey,
+    [string]$UninstallerName)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'command-path.ps1')
 $failures = [Collections.Generic.List[string]]::new()
@@ -46,6 +49,26 @@ if (-not $UnownedOnly) { try {
 } catch {
     $failures.Add("[unverified] Remove protocol registration`r`nHKCU\$ProtocolKey`r`nCode: $($_.Exception.HResult)`r`nReason: $($_.Exception.Message)")
 } }
+foreach ($uninstallEntry in @($UninstallKey, $LegacyUninstallKey)) {
+    if (-not $uninstallEntry) { continue }
+    try {
+        $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($uninstallEntry)
+        try { $registered = if ($key) { $key.GetValue('UninstallString') } else { $null } }
+        finally { if ($key) { $key.Dispose() } }
+        if ($null -eq $registered) { continue }
+        if ($registered -isnot [string]) { throw 'UninstallString is not a string' }
+        # Only the command emitted by the per-user installer is eligible for removal.
+        if ($registered -match '^\s*"([^"]+)"\s+/currentuser\s*$') {
+            $target = [IO.Path]::GetFullPath($Matches[1])
+            $expected = [IO.Path]::GetFullPath((Join-Path $Directory $UninstallerName))
+            if ($target -eq $expected) {
+                [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($uninstallEntry, $false)
+            }
+        }
+    } catch {
+        $failures.Add("[unverified] Inspect or remove uninstall entry`r`nHKCU\$uninstallEntry [UninstallString]`r`nCode: $($_.Exception.HResult)`r`nReason: $($_.Exception.Message)")
+    }
+}
 foreach ($link in @($DesktopLink, $StartMenuLink)) {
     if (-not $link) { continue }
     try {
