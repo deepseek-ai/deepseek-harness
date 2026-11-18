@@ -211,6 +211,14 @@ export abstract class RemoteJournalStream<
     })
   }
 
+  /**
+   * Record that the domain no longer publishes entries before `cursor`, so a later page may return them again.
+   * @param cursor - first cursor of an entry the open, published window still holds.
+   */
+  protected releaseBefore(cursor: Cursor): void {
+    this.firstCursor = cursor
+  }
+
   /** Replace the active physical generation while retaining the published window. */
   restart(): void {
     this.stream.restart()

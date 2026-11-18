@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import ExcelJS from 'exceljs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { XlsxPreviewArchive } from '../src/client/excel/xlsx-archive.ts'
 import { excelOpeningCases, excelOpeningFixture } from './excel-opening-fixture.ts'
@@ -12,7 +12,7 @@ import { excelOpcFixture } from './excel-opc-fixture.ts'
 
 const require = createRequire(import.meta.url)
 const browserExcel = require('exceljs/dist/exceljs.js') as typeof ExcelJS
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 
 describe.each([['Node', ExcelJS], ['browser bundle', browserExcel]] as const)('%s opening regressions', (_name, parser) => {
   it.each(excelOpeningCases)('opens %s with cells, styles, comments, Tables and hyperlinks', async (name) => {

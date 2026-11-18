@@ -85,6 +85,7 @@ export class TunnelWorker {
       env: {
         NODE_ENV: process.env.NODE_ENV,
         LIVESHARE_TUNNEL_MODE: 'gateway',
+        ...workerNodeModeEnv(process.env),
         ...workerTransportEnv(process.env),
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -362,6 +363,19 @@ const WORKER_TRANSPORT_ENV = [
   'https_proxy',
   'no_proxy',
 ] as const
+
+/**
+ * Electron reads its Node mode from the environment, not from the executable, and the worker runs
+ * `process.execPath`. Under the Desktop shell that binary is Electron itself: a worker started
+ * without the mode is a GUI application, which the shell's single-instance lock ends before any
+ * worker code runs.
+ * @param source - Environment of the Host process that starts the worker.
+ * @returns The Host's own Node mode, or no entry when a plain Node Host starts the worker.
+ */
+function workerNodeModeEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const mode = source.ELECTRON_RUN_AS_NODE
+  return mode === undefined ? {} : { ELECTRON_RUN_AS_NODE: mode }
+}
 
 /**
  * Select the worker's inherited transport settings.

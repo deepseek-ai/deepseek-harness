@@ -3,6 +3,7 @@
  * selected file's turn-start and turn-end comparison drawn unified or side by
  * side, wrapped or scrolling, and controls to open the file itself.
  */
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
@@ -11,7 +12,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
+import { fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceChangedFile } from '@deepseek-ai/dsh-workspace-changes/types'
 import { changedFileUrl, changesDiffUrl, changesSummaryUrl, parseChangesReviewAddress } from '../changes.ts'
 import type { ChangesDiffStore } from './changes-diff.ts'
@@ -74,7 +75,7 @@ export function ReviewTab({
   const coordinates = useMemo(() => parseChangesReviewAddress(tab.contentId), [tab.contentId])
   if (coordinates === undefined) throw new Error(`ui-deliverables: not a review address "${tab.contentId}"`)
   const { seq } = coordinates
-  const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   const summary = useChangesSummary(value => value[changesSummaryUrl(sessionId, seq)])
   const state = useStore(store => store.byTab[tab.id])
   const host = usePresentedHost(value => value)
@@ -95,6 +96,8 @@ export function ReviewTab({
     if (host === null) void reloadPresentedHost()
   }, [host, reloadPresentedHost])
   const files = typeof summary === 'object' ? summary.files : []
+  // Listed paths are relative to the directory the turn started in, which the Session may have left since.
+  const turnCwd = typeof summary === 'object' ? summary.cwd : undefined
   // A navigated index the summary does not list falls back to the first file.
   const index = state !== undefined && files[state.index] !== undefined ? state.index : 0
   const file = files[index]
@@ -142,7 +145,9 @@ export function ReviewTab({
           </Tooltip>
           {file !== undefined && <Tooltip label={t('review.openFile')} side="bottom" delayMs={500}>
             <button type="button" className={css.tool} aria-label={t('review.openFileAria', { name: file.display })} data-review-tool="open-file"
-              onClick={() => { tab.actions.openResource(fileAddressFor(sessionId, cwd, file.path)) }}><IconInspectOutlineRegular /></button>
+              onClick={() => { tab.actions.openResource(fileAddressFor(sessionId, cwd, resolveWorkspacePath(turnCwd, file.path))) }}>
+              <IconInspectOutlineRegular />
+            </button>
           </Tooltip>}
           {file !== undefined && renderSlot('deliverables.review.file.actions', {
             actionUrl: changedFileUrl(sessionId, seq, index), available: native,

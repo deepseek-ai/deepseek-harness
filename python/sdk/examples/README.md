@@ -23,7 +23,6 @@ The shipped [`@deepseek-ai/dsh-sdk-minimal` bundle](../../../packages/bundle/sdk
 
 - owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows
 - `read_image` for PNG/JPEG/WebP/GIF files, with an image-capable model
-- `working_directory` to inspect or change the Session directory
 
 The bundle does not include `dsh-base`, so every additional row is an explicit profile change. Runtime context, text file tools, local instruction discovery, settings, managed credentials, telemetry, Web tools, subagents, and the full default tool roster are absent. The tree retains SDK startup and JSON-RPC serving, one environment-configured DeepSeek adapter, local execution, and JSONL persistence. [Automatic context compaction](../../../packages/bundle/sdk-minimal/README.md#model-experience) summarizes older history through an additional model request while preserving the complete log. This minimal composition leaves unsupported slash input on the ordinary prompt path.
 

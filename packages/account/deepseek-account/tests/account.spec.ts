@@ -369,7 +369,8 @@ it('allows real account credentials only on the exact official HTTPS origin', as
   await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
     kind: 'grant', payload: { version: 1, issuer: 'https://platform.deepseek.com', token: 'test-account-token' },
   }))
-  expect((await f.account.resolveRequestCredential('https://api.deepseek.com/v1'))?.value).toBe('test-account-token')
+  expect((await f.account.resolveRequestCredential('https://api.deepseek.com/v1'))?.headers)
+    .toEqual({ 'x-dsh-auth-token': 'test-account-token' })
   for (const url of ['http://api.deepseek.com', 'https://api.deepseek.com.evil.test', 'https://api.deepseek.com:8443', 'https://user@api.deepseek.com']) {
     expect(await f.account.resolveRequestCredential(url)).toBeUndefined()
   }
@@ -385,7 +386,7 @@ it('releases the request credential for an allowed destination and removes the r
   const endpoint = 'http://inference.example.test:8094/v1/tools/search'
   expect(await f.account.resolveRequestCredential('https://api.deepseek.com/v1/tools/search')).toBeUndefined()
   const credential = await f.account.resolveRequestCredential(endpoint)
-  expect(credential).toMatchObject({ headers: { 'x-dsh-auth-token': 'test-account-token' }, value: 'test-account-token' })
+  expect(credential).toMatchObject({ headers: { 'x-dsh-auth-token': 'test-account-token' } })
   await credential!.reject()
   expect((await f.account.getState()).status).toBe('signed-out')
   expect(await f.account.resolveRequestCredential(endpoint)).toBeUndefined()
@@ -609,7 +610,7 @@ it('releases a withdrawn credential when sign-out completes while its token is b
     await f.account.signOut(clientMetadata())
     release.resolve(undefined)
     // The token was read before the sign-out removed it, so the credential must not authenticate a request.
-    expect(await pending).toMatchObject({ value: 'test-platform-grant', revoked: { aborted: true } })
+    expect(await pending).toMatchObject({ headers: { 'x-dsh-auth-token': 'test-platform-grant' }, revoked: { aborted: true } })
   } finally { read.mockRestore() }
 })
 
@@ -1020,7 +1021,8 @@ it('sends a development grant only to its configured inference origin', async ()
   await f.wait('waiting-browser')
   await fetch(f.callback(), { redirect: 'manual' })
   await f.wait('succeeded')
-  expect((await f.account.resolveRequestCredential('http://inference.example.test:8094/api'))?.value).toBe('test-account-token')
+  expect((await f.account.resolveRequestCredential('http://inference.example.test:8094/api'))?.headers)
+    .toEqual({ 'x-dsh-auth-token': 'test-account-token' })
   for (const url of ['https://api.deepseek.com', 'http://inference.example.test:8095/api',
     'https://inference.example.test:8094/api', 'http://user@inference.example.test:8094/api']) {
     expect(await f.account.resolveRequestCredential(url)).toBeUndefined()

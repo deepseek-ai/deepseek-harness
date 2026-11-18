@@ -10,6 +10,9 @@
   ],
   "references": [
     {
+      "path": "../config"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

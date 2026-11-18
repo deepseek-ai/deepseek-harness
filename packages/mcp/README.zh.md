@@ -26,6 +26,7 @@ kind: "package-group"
 
 | 包 | 提供的能力 |
 |---|---|
+| [`mcp-account/`](mcp-account/README.zh.md) | 通过连接器账号注册表，在插件页显示每个 MCP 连接器的 OAuth 服务器账号 |
 | [`mcp-client/`](mcp-client/README.zh.md) | 连接一台 MCP 服务器，暴露其工具与指令，并提供其资源操作 |
 | [`mcp-manager/`](mcp-manager/README.zh.md) | 管理设置驱动的 mcp-client 实例编队：运行时增改启停删、状态、重启、探测 |
 | [`mcp-resources/`](mcp-resources/README.zh.md) | 通过显式选择服务器的共享工具发现和读取资源 |

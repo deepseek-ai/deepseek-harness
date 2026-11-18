@@ -9,7 +9,10 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembly.ts'
-import { FileReference, FolderReference, type FileReferenceInjected } from '../src/client/FileReference.tsx'
+import {
+  FileReference, FolderReference, type FileReferenceInjected, type PathPresenceInjected,
+} from '../src/client/FileReference.tsx'
+import type { PathStat } from '../src/client/path-presence.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionFixture } from '@deepseek-ai/dsh-client-test-runtime'
@@ -99,6 +102,7 @@ async function bench(
     projectionValues?: { title?: string | null }
   }> = {},
   opening: Pick<SessionFixture, 'initialOpen' | 'snapshot'> = {},
+  stat: PathStat = vi.fn<PathStat>(() => new Promise(() => {})),
 ) {
   const ctx = new Context()
   ctx.provide('sidebarRight', { openResource: vi.fn() })
@@ -119,6 +123,7 @@ async function bench(
   new RemoteService(ctx)
   ctx.provide('remote.fileReferences', { list: files })
   ctx.provide('remote.sessionReferenceResolver', { candidates: sessions })
+  ctx.provide('remote.workspaceFiles', { stat })
   ctx.provide('locale', new LocaleRuntime(ctx))
   const sessionStore = new TestSessions(async (action) => { await action() }, ctx)
   onTestFinished(async () => {
@@ -139,11 +144,17 @@ async function bench(
   return { ctx, fiber, source, sessions: sessionStore, owner }
 }
 
+/** The Session-bound presence face a file or folder text node entry injects. */
+function injectedPresence(ctx: Context, key: 'file' | 'folder'): (id: SessionId) => PathPresenceInjected {
+  const entry = ctx.slots.entries('conversation.user.text.node').find(candidate => candidate.options.key === key)!
+  return entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => PathPresenceInjected)
+}
+
 describe('apply', () => {
   it('declares its services and releases the @ reference registration on disposal', async () => {
     expect(inject).toEqual([
       'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
-      'remote.sessionReferenceResolver', 'sidebarRight', 'slots', 'uiConversation',
+      'remote.sessionReferenceResolver', 'remote.workspaceFiles', 'sidebarRight', 'slots', 'uiConversation',
     ])
     const { fiber } = await bench()
     let registered: InputTriggerSource | undefined
@@ -166,6 +177,7 @@ describe('apply', () => {
     new RemoteService(ctx)
     ctx.provide('remote.fileReferences', { list: () => Promise.resolve({ ok: true, value: [] }) })
     ctx.provide('remote.sessionReferenceResolver', { candidates: () => Promise.resolve({ ok: true, value: [] }) })
+    ctx.provide('remote.workspaceFiles', { stat: vi.fn() })
     ctx.provide('locale', new LocaleRuntime(ctx))
     const sessions = new TestSessions(async (action) => { await action() }, ctx)
     onTestFinished(() => sessions.disposeScopes())
@@ -671,6 +683,23 @@ describe('pick and codec', () => {
     await expect(source.codec?.serialize(mention, new AbortController().signal)).resolves.toBe(mention)
   })
 
+  it('confirms settled file and folder picks for the picking Session; a drill confirms nothing', async () => {
+    const stat = vi.fn<PathStat>(() => new Promise(() => {}))
+    const { ctx, source } = await bench(undefined, undefined, {}, {}, stat)
+    const [directory, file] = await source.candidates(session, request(''))
+    const folderFace = injectedPresence(ctx, 'folder')
+    const fileFace = injectedPresence(ctx, 'file')
+    drill(source, directory!)
+    expect(folderFace(session.sessionId).keyedHooks.pathPresence('src/').getSnapshot()).toBeUndefined()
+    pick(source, directory!)
+    pick(source, file!)
+    expect(folderFace(session.sessionId).keyedHooks.pathPresence('src/').getSnapshot()).toBe('present')
+    expect(fileFace(session.sessionId).keyedHooks.pathPresence('docs/a b.md').getSnapshot()).toBe('present')
+    expect(folderFace(sid('other')).keyedHooks.pathPresence('src/').getSnapshot()).toBeUndefined()
+    folderFace(session.sessionId).keyedHooks.pathPresence('src/').subscribe(vi.fn())
+    expect(stat).not.toHaveBeenCalled()
+  })
+
   it('ignores candidates that do not carry a source-owned value', async () => {
     const { source } = await bench()
     expect(pick(source, { name: 'foreign candidate' })).toBeUndefined()
@@ -678,6 +707,17 @@ describe('pick and codec', () => {
 })
 
 describe('reference preview', () => {
+  it('stats each mention through its rendering Session and aborts outstanding stats on disposal', async () => {
+    const stat = vi.fn<PathStat>(() => new Promise(() => {}))
+    const { ctx, fiber } = await bench(undefined, undefined, {}, {}, stat)
+    injectedPresence(ctx, 'file')(session.sessionId).keyedHooks.pathPresence('LICENSE').subscribe(vi.fn())
+    injectedPresence(ctx, 'folder')(sid('other')).keyedHooks.pathPresence('docs/').subscribe(vi.fn())
+    expect(stat.mock.calls.map(([id, path]) => [id, path])).toEqual([['target', 'LICENSE'], ['other', 'docs/']])
+    expect(stat.mock.calls.some(([, , signal]) => signal.aborted)).toBe(false)
+    await fiber.dispose()
+    expect(stat.mock.calls.every(([, , signal]) => signal.aborted)).toBe(true)
+  })
+
   it('binds each inline file action to its originating Session', async () => {
     const { ctx, sessions } = await bench()
     const entry = ctx.slots.entries('conversation.user.text.node').find(candidate => candidate.options.key === 'file')!
@@ -688,7 +728,7 @@ describe('reference preview', () => {
     const file = factory(session.sessionId)
     await sessions.updateSummary(session.sessionId, { cwd: '/workspace' })
     await sessions.setProjection(session.sessionId, 'workingDirectory', '/workspace/elsewhere')
-    expect(file.resolveFilePath('docs/a b.md')).toBe('/workspace/docs/a b.md')
+    expect(file.resolveFilePath('docs/a b.md')).toBe('/workspace/elsewhere/docs/a b.md')
     expect(factory(sid('other')).resolveFilePath('/absolute.md')).toBe('/absolute.md')
     expect(openResource.mock.calls).toEqual([
       ['dsh-resource://file/session/target/docs/a%20b.md'],

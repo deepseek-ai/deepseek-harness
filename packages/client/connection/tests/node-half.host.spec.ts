@@ -12,6 +12,7 @@ import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import {
   API_PATH,
+  Config,
   type RpcId,
   apply,
   inject,
@@ -360,21 +361,16 @@ describe('connection node half', () => {
     }
   })
 
-  it('injects validated browser recovery timing and withdraws it on disposal', async () => {
-    const { ctx, dispose } = await mounted({ recovery: { generationReadyTimeoutMs: 25_000 } })
+  it('declares browser recovery timing as a synced field and injects nothing into served pages', async () => {
+    expect(Config({ recovery: { generationReadyTimeoutMs: 25_000 } }).recovery?.get()).toEqual({
+      backoffBaseMs: 500, backoffFactor: 2, backoffMaxMs: 10_000,
+      generationReadyWarnMs: 3_000, generationReadyTimeoutMs: 25_000,
+    })
+    const { ctx, dispose } = await mounted(Config({ recovery: { generationReadyTimeoutMs: 25_000 } }))
     try {
       const rows: IndexInjection[] = []
       ctx.emit('webserver/index-inject', rows, PAGE_PEER)
-      expect(rows).toEqual([{
-        kind: 'global', name: '__DSH_CONNECTION_RECOVERY__', value: {
-          backoffBaseMs: 500, backoffFactor: 2, backoffMaxMs: 10_000,
-          generationReadyWarnMs: 3_000, generationReadyTimeoutMs: 25_000,
-        },
-      }])
-      await dispose()
-      const after: IndexInjection[] = []
-      ctx.emit('webserver/index-inject', after, PAGE_PEER)
-      expect(after).toEqual([])
+      expect(rows).toEqual([])
     } finally {
       await dispose()
     }
@@ -385,7 +381,7 @@ describe('connection node half', () => {
     { recovery: { backoffFactor: NaN }, error: /backoffFactor.*finite/ },
   ])('rejects invalid recovery timing before acquiring Host resources: $recovery', ({ recovery, error }) => {
     const ctx = new Context()
-    expect(() => { apply(ctx, { recovery }) }).toThrow(error)
+    expect(() => { apply(ctx, Config({ recovery })) }).toThrow(error)
     expect(ctx.get('connection')).toBeUndefined()
   })
 

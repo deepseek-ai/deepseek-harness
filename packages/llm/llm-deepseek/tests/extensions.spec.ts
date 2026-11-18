@@ -9,6 +9,7 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import type { DeepSeekLlmApiExtensionRequest } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { adapter, assemble, options, sse, textEvents } from './helpers.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -35,6 +36,7 @@ async function boot() {
   cleanup.push(() => ctx.fiber.dispose())
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(DeepSeek, { baseURL: 'https://messages.example.test/root' })
   return ctx
 }

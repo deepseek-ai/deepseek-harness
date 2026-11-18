@@ -2,7 +2,7 @@
 
 [English](worktrees.md) | 中文
 
-实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)选中它。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
+实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`enter_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 通过[工作目录服务](working-directory.zh.md)选中池中的检出目录，没有同名检出目录时创建新的 Git 分支与检出目录；`exit_worktree` 回到 Session 来自的检出目录。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
 
 ## 创建与保留
 
@@ -10,11 +10,13 @@
 
 默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
 
-通过 `working_directory({ cd: path })` 离开时，会保留检出目录与分支。取消或失败也可能留下部分产物；错误会指出它们的位置。worktree 失败抛出带 `WORKTREE_*` code 的 `WorktreeError`；分配开始后的失败保留被包装错误的 `name` 与 `code`，调用方取消仍为 `AbortError`。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
+`ctx.worktrees.enter(agent, { name })` 把 Session 移入它所在检出的池中已有的工作树。`enter_worktree` 工具对带名称且不带起始修订的请求先调用它，只有它报告 `WORKTREE_NOT_FOUND` 时才调用 `create`。该目录必须位于池内，并且是仓库已登记的工作树：名称不存在、目录未登记、链接指向池外都以 `WORKTREE_NOT_FOUND` 失败。进入不改变 Git 状态和文件，并在 Session 日志中记录这次进入。
+
+`exit_worktree` 工具调用的 `ctx.worktrees.exit(agent)` 找到包含 Session 当前目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出；检出目录与分支保留。嵌套的工作树每次退出一层。取消或失败也可能留下部分产物；错误会指出它们的位置。worktree 失败抛出带 `WORKTREE_*` code 的 `WorktreeError`；分配开始后的失败保留被包装错误的 `name` 与 `code`，调用方取消仍为 `AbortError`。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
 
 ## 请求与结果
 
-请求只选择新名称与本地版本。结果标识创建的检出目录与确切提交；它不会改变 Session 的原始项目或写权限。可选的回调会在创建的每个阶段开始之前收到该阶段。恢复会在记录的目录重新检出已删除的检出目录：从它的分支检出；分支也已删除时，从它的基准提交检出。
+创建请求只选择新名称与本地版本。结果标识创建的检出目录与确切提交；它不会改变 Session 的原始项目或写权限。进入请求给出池内工作树的名称；结果标识检出目录、其中检出的分支，以及 Session 进入前所在的检出。可选的回调会在创建的每个阶段开始之前收到该阶段。恢复会在记录的目录重新检出已删除的检出目录：从它的分支检出；分支也已删除时，从它的基准提交检出。
 
 ```ts type-equiv
 /** A new checkout from a locally available Git commit, branch, or tag, or from a remote branch fetched first. */
@@ -41,6 +43,26 @@ interface CreatedWorktree {
   /** Resolved commit object name; repository-local replacement refs can change its checked-out content. */
   baseCommit: string
   /** Canonical root of the source checkout. */
+  repositoryRoot: string
+}
+```
+
+```ts type-equiv
+/** An existing checkout in the worktree pool of the checkout the calling Session works in. */
+interface EnterWorktreeRequest {
+  /** Checkout directory relative to the pool: the name `create` gave the worktree. */
+  name: string
+}
+```
+
+```ts type-equiv
+/** An existing checkout the calling Session entered. */
+interface EnteredWorktree {
+  /** Canonical absolute checkout directory in the filesystem provider's execution world. */
+  path: string
+  /** Branch checked out there at entry; absent on a detached HEAD. */
+  branch?: string
+  /** Canonical root of the checkout whose pool holds the worktree; `exit` returns the Session there. */
   repositoryRoot: string
 }
 ```
@@ -115,7 +137,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.worktrees` — `WorktreeService`
 
-Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.
+Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.
 
 ```ts cordis-catalog
 /**
@@ -154,6 +176,36 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  *   or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: Exclude<CreateWorktreePhase, 'fetch'>) => void, ): Promise<RestoredWorktree>
+
+/**
+ * Move the calling Session into an existing worktree in the pool of the checkout it works in. The
+ * directory `name` selects must lie inside that pool and be a registered worktree of the repository;
+ * neither Git state nor files change. The Session's log records the entry, so {@link exit} returns it to
+ * the checkout it entered from. Archiving the Session never removes a checkout it only entered.
+ * @param agent - caller whose current directory selects the checkout and its pool.
+ * @param request - name of the worktree inside the pool.
+ * @param signal - cancellation of lookup and of the working-directory change.
+ * @returns the entered checkout, its branch, and the checkout the Session entered from.
+ * @throws {WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool,
+ *   `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and
+ *   `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service's error when the
+ *   registered directory no longer exists.
+ */
+async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree>
+
+/**
+ * Return the calling Session from the worktree it works in to the checkout it entered that worktree
+ * from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The
+ * worktree is the recorded creation or entry, the Session's own or fork-inherited, with the longest
+ * directory containing the Session's current directory. Its checkout and branch remain.
+ * @param agent - caller whose current directory lies in a recorded worktree.
+ * @param signal - cancellation of directory validation and of the working-directory change.
+ * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
+ * @throws {WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and
+ *   `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service's error when the source
+ *   checkout no longer exists.
+ */
+async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree>
 
 /**
  * Read the archive cleanup of a Session's created checkout; waiting never

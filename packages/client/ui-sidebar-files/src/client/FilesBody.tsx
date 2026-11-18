@@ -7,6 +7,7 @@
  * it is and opens the file where the right Sidebar places it by default
  * (`FileNavigator`).
  */
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -51,7 +52,7 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
     () => tab.actions.bindCommands({ refresh: () => { refresh(panel.id) } }),
     [tab.actions, panel.id, refresh],
   )
-  const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   // The setting belongs to a listed tree, so there is nothing to set before one.
   const autoRefresh = useStore((store) => {
     const tree = store.byPane[panel.id]?.tree
@@ -111,7 +112,9 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
             <IconSearchOutlineRegular />
           </button>
         </Tooltip>
-        {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
+        <div className={css.externalActions}>
+          {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
+        </div>
       </div>
       <div className={css.content} data-files-content data-files-navigator-row>{navigator}</div>
     </div>

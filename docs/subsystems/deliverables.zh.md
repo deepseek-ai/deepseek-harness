@@ -51,7 +51,7 @@ interface WorkspaceChangedFile {
 interface WorkspaceChangesSummary {
   /** The turn whose file changes this summary describes. */
   turn: number
-  /** The Session working directory `path` values are relative to. */
+  /** The Session working directory `path` values are relative to, as it stood when the turn started. */
   cwd: string
   /** Changed files in `display` order, capped at the plugin's `maxFiles`. */
   files: WorkspaceChangedFile[]

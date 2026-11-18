@@ -116,6 +116,8 @@ The service registers the `sessionListMetadata` projection for Session blankness
 
 `observeSession` builds point observations without a listing preflight. A live observation fixes its cut as the current log length and materializes `events` on first read, so header-, cursor-, or projection-only consumers never copy the log; the log only appends, so a late first read still yields exactly that prefix. The cold path stats the stored session first and consults its own bounded cache keyed by the persistence instance and the `stat` revision: an unchanged revision reuses the restored unpublished Session without re-reading the log; a changed revision, or a replaced persistence instance, reloads through the handle seam and replaces the entry. The cache holds `preparedSessionCacheSize` entries with least-recently-used eviction, entries pinned by active observation leases are never evicted, and a session that goes live mid-read retries the live path.
 
+A cold `SessionObservation` reports `persistedEventCount` to separate the stored prefix from the in-memory interrupted-turn repairs in `events`. Fork callers keep those repairs in the child's suffix. A live observation omits the field, since a live log carries no read-time repairs.
+
 `inspectSession(id, read, signal?)` prepares a cold Session without publishing or resuming it and calls a synchronous domain getter at a fresh live or prepared cut. The getter may read its owned projection or resolve policy; it must not mutate or retain the Session. The observation is released after the getter returns or throws; callers retain only the returned data. Preparation uses the observation cache and validates persisted history.
 
 ### Reads and traces

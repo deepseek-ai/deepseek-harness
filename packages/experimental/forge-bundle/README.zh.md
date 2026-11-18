@@ -27,7 +27,7 @@ kind: "package-bundle"
 
 打开插件页面，在官方分组中启用“变更请求与工作树”。在 Git 工作区中，发出第一条消息之前在输入框中勾选“工作树”，Session 就会在新的 worktree 中开始。Session 的目录位于 Git 检出中时，标题栏中的会话面板开关会显示检出及其变更请求。Session 用 `gh pr create` 创建、用 `gh pr view`、`gh pr edit` 或 `gh pr checkout` 打开的 GitHub pull request，以及 Session 所在分支上或之后 `git push` 更新的 pull request，无需额外操作即会作为变更请求出现。在终端运行 `gh auth login --hostname <host>` 登录；缺少登录时，面板会显示这条命令。[面板包](../client-ui-forge/README.zh.md#use-this-package)说明了每个控件。
 
-同一个开关也启用模型的 [`create_worktree`](../tool-worktree/README.zh.md) 工具。关闭后面板和工具一起移除，已有检出目录与分支仍然保留。已选中独立工作树组合包的 profile，请在启用本组合包前按[升级指南](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.zh.md)调整配置。
+同一个开关也启用模型的[工作树工具](../tool-worktree/README.zh.md)：`enter_worktree` 与 `exit_worktree`。关闭后面板和工具一起移除，已有检出目录与分支仍然保留。已选中独立工作树组合包的 profile，请在启用本组合包前按[升级指南](../../../docs/upgrade-guide/v0.2.2-alpha.2/forge-worktree-entry/guide.zh.md)调整配置。
 
 -----
 
@@ -53,7 +53,7 @@ kind: "package-bundle"
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响：通过 [`create_worktree`](../tool-worktree/README.zh.md#model-experience) 工具，以及以工作树开始的 Session 的[面板目录通知](../client-ui-forge/README.zh.md#model-experience)。
+间接影响：通过[工作树工具](../tool-worktree/README.zh.md#model-experience)，以及以工作树开始的 Session 的[面板目录通知](../client-ui-forge/README.zh.md#model-experience)。
 
 #### KV Cache 影响
 

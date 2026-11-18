@@ -1,0 +1,12 @@
+version: 1
+scenario: mcp-oauth-error
+profile: headless
+composition: mcp-oauth-error
+recording: authored
+environment:
+  DSH_MCP_OAUTH_TOKEN: snapshot-mcp-oauth-secret-do-not-log
+header:
+  class: mcp-oauth-error
+  pin: true
+  changes: 1
+  promptChanges: 1

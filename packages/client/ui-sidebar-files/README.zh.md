@@ -30,10 +30,10 @@ kind: "package-reference"
 命令 `workspace.files` 在焦点分栏内显示停靠预览旁的导航栏，或展开已有停靠文件页的搜索栏，并把键盘焦点移到其搜索框，保留该 tab；从聊天区触发时使用当前会话的活动停靠分栏。其他情况下（不带导航栏的 tab、没有工作目录的会话、浮动 tab）打开或聚焦文件页，文件页的目录树始终显示。文件页替换开始页，同一分栏内重复打开仍保留一个文件页。桌面默认键为 Mod+P。开始页入口显示有效快捷键；Windows 和 macOS Web 使用[快捷键服务的平台默认值](../shortcuts/README.zh.md)；Linux Web 默认不绑定此命令。
 
 - **类型**：`ctx.sidebarRightTabs.register(...)`，kind 为 `files`，id 为 `@deepseek-ai/dsh-client-ui-sidebar-files`，档位 `builtin`，没有 patterns，另有一个打开该类型的引导页入口（order 10，标题与描述取自 `sidebarFiles` 命名空间，图标为黄色文件夹）。
-- **文件页正文**：以该 id 为键的 `sidebar.right.pane.tab` slot。其标题行横跨页面，通过共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 显示根路径，目录使用弱化颜色，最后一段使用主色；路径过长时保留尾部字符并在左侧渐隐，悬停显示完整路径。目录树的重新读取控件和搜索栏开关位于由文件页注册声明的 Session 作用域 `sidebar.right.tab.files.actions` 列表之前（通过 `absolutePath` 传入当前显示的根目录）；[`ui-open-in-app`](../ui-open-in-app/README.zh.md) 在此提供工作区目录打开按钮。标题行下方由该分栏的导航栏铺满整页，停靠与浮动时都一样，这里没有导航栏开关。
+- **文件页正文**：以该 id 为键的 `sidebar.right.pane.tab` slot。其标题行横跨页面，通过共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 显示根路径，目录使用弱化颜色，最后一段使用主色；路径过长时保留尾部字符并在左侧渐隐，悬停显示完整路径。目录树的重新读取控件和搜索栏开关位于由文件页注册声明的 Session 作用域 `sidebar.right.tab.files.actions` 列表之前（通过 `absolutePath` 传入当前显示的根目录）；[`ui-open-in-app`](../ui-open-in-app/README.zh.md) 在此提供工作区目录打开按钮。末端打开控件的边框与上排折叠图标的可见右边缘对齐，位于其热区内侧。双按钮打开控件使搜索与上排分屏图标中心对齐。单应用控件按实际宽度自然靠右，保留普通的 4px 间距，不预留对齐列。目录操作没有渲染内容时，该列及其间距消失，搜索与上排折叠图标对齐。标题行下方由该分栏的导航栏铺满整页，停靠与浮动时都一样，这里没有导航栏开关。
 - **各行**：root 作用域的 Component Factory `sidebar.files.tree`，接收调用方的条目和局部 `accessory` slot；见[复用目录树 Factory](#tree-factory)。
 - **导航栏**：Session 作用域的 Component Factory `sidebar.files.navigator`。文件页正文和 [`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 直接渲染它，显示在每个预览旁，无论停靠还是浮动。它绘制[搜索栏](#search)、目录树及其调整宽度的边缘，没有自己的标题行：预览旁只有预览自己的标题行，目录树的重新读取与目录操作留在 `files` 页上。
-- **开关**：Session 作用域的 Factory `sidebar.files.navigator.toggle`，在预览头部末端直接渲染，传入 `useTabInfo`。两个 Factory 共用文件页的 store handle 和 inject face，每个分栏保留一份开关状态；文件页正文没有导航栏开关。
+- **开关**：Session 作用域的 Factory `sidebar.files.navigator.toggle`，在预览头部末端直接渲染，传入 `useTabInfo`。文件夹图形使用 16px，在共用的 28px 热区内补足横向轮廓的视觉尺寸，与相邻工具栏图标保持平衡。两个 Factory 共用文件页的 store handle 和 inject face，每个分栏保留一份开关状态；文件页正文没有导航栏开关。
 - **标签页标题**：以该 id 为键的 `sidebar.right.pane.tab.title` slot：类型标签前的一枚 16px 共享 `FileTypeIcon` 文件夹图标。树本身的行不画这枚图标。
 
 [注册入口](src/client/index.ts) 在共享 [files face](src/client/face.ts) 与[分栏 store](src/client/store.ts) 上组装文件页、导航栏、开关和目录树 Factory。
@@ -56,7 +56,7 @@ kind: "package-reference"
 <a id="the-tree"></a>
 ## 树
 
-根是会话的工作目录，读自 `useSessions().byId[sessionId].cwd`。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。名称以 `.` 开头的条目，在读者[显示隐藏条目](#search)之前不显示。
+根是会话的工作目录，用 `selectSessionDirectory` 从列表快照选出：投影的 `workingDirectory`，否则为 header 目录。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。名称以 `.` 开头的条目，在读者[显示隐藏条目](#search)之前不显示。
 
 | 条目类型 | 行 |
 |---|---|
@@ -83,7 +83,7 @@ kind: "package-reference"
 
 设置面板浮在导航栏中搜索栏的下方，列出排除的文件和目录，最新的在最前：每条规则有开关它的复选框、路径和删除按钮。不含 `/` 的规则指任意深度上所有同名的文件或目录，含 `/` 的规则指一个相对于工作区的路径；排除一个目录时其内容也一并排除。添加规则的输入框固定在列表上方，只有列表本身滚动；Enter 把输入的名称或路径添加到最上方，或在输入框下方说明拒绝的原因。默认列表先是版本控制、包管理器和构建输出目录（`.git`、`.hg`、`.next`、`.pnpm-store`、`.svn`、`.turbo`、`.yarn`、`build`、`coverage`、`dist`、`node_modules`），然后是 macOS 和 Windows 写入的元数据（`.DS_Store`、`.Spotlight-V100`、`.Trashes`、`.fseventsd`、`Thumbs.db`、`desktop.ini`、`$RECYCLE.BIN`、`System Volume Information`）。标题行末端是还原按钮和关闭按钮；列表与默认列表有任何不同（包括顺序不同）时显示还原按钮，点击后把列表重置为默认列表。列表上方的「尊重忽略文件（.gitignore 等）」（Respect ignore files (.gitignore, etc.)）复选框默认勾选，此时略过 ripgrep 忽略规则忽略的条目：git 仓库内的 `.gitignore`（包括工作区根以上的）、`.ignore` 文件和全局 Git excludes；不在 git 仓库内时 `.gitignore` 不生效；它和眼睛一样，一改变就保存。规则的编辑留在面板内，直到面板通过放大镜、关闭按钮、Escape 或键盘焦点离开它（在面板外按下也是如此）而关闭；关闭即保存。排除规则只缩小搜索范围，从不影响目录树。
 
-规则、眼睛与 `.gitignore` 选择按工作区根保存，即去掉尾随分隔符的 Session 工作目录（文件系统根需要的那一个除外），因此根在同一目录的每个 Session 与分栏共享它们，其他根互不影响。它们保存在浏览器存储的 `dsh.sidebar-files.workspace-search.v1` 下，读者改过的每个根各占一项，只保存与默认值不同的字段，因此读者没改过规则的根能用上后续版本的默认列表；改回默认值的根删除其条目，缺失或格式不对的字段按默认值读取。分栏的搜索文字非空时发生的变化会立即重新搜索。
+规则、眼睛与 `.gitignore` 选择按工作区根保存，即去掉尾随分隔符的工作区根（文件系统根需要的那一个除外），因此根在同一目录的每个 Session 与分栏共享它们，其他根互不影响。它们保存在浏览器存储的 `dsh.sidebar-files.workspace-search.v1` 下，读者改过的每个根各占一项，只保存与默认值不同的字段，因此读者没改过规则的根能用上后续版本的默认列表；改回默认值的根删除其条目，缺失或格式不对的字段按默认值读取。分栏的搜索文字非空时发生的变化会立即重新搜索；Session 在搜索文字非空时进入另一个检出目录，会用该检出目录自己的偏好在那里重新搜索。
 
 在搜索框中按 ↓ 把键盘焦点移到第一行，↑ 与 ↓ 在目录树或搜索结果的行之间移动，搜索栏显示时在第一行按 ↑ 回到搜索框；在行上按 Enter 与单击效果相同。Escape 先关闭设置面板，再清空搜索文字（搜索栏收起时也一样），之后才交给覆盖式导航栏的关闭行为；清空隐藏的查询时，焦点留在目录树内。在已有停靠文件页或停靠预览旁，`workspace.files` 显示搜索框并把键盘焦点移给它；其他位置遵循[命令的文件页打开行为](#what-it-registers)。
 
@@ -116,13 +116,15 @@ kind: "package-reference"
 - **含 `/` 的查询不会跨名称高亮。**每个名称单独高亮，因此跨越 `/` 的查询不会在任何行上标出。
 - **含通配符的名称无法排除。**规则不能包含 `* ? [ ] { } !`，因此无法写出 Next.js `app/[slug]` 这类字面路径。
 - **偏好不会同步到其他浏览器标签页。**每个标签页只在插件加载时读取一次浏览器存储，并把所有根的偏好作为一个整体写回，因此一个标签页写入时，会覆盖其他标签页在它加载之后对任何工作区偏好所做的修改，直到它重新加载。
-- **只有一个根。**树以会话工作目录为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
+- **只有一个根。**树以会话工作区根为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
 
 <a id="dev-note"></a>
 ### 开发备注
 
 <details>
 <summary>维护者工作上下文——点击展开</summary>
+
+每层子级图标框承接父级文字列；缩进包含父级图标框及图文间距，并保留图标内部留白。
 
 无。
 

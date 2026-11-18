@@ -3,7 +3,7 @@
 import type {
   SessionHistoryRecord,
 } from '../../types.ts'
-import type { SessionEventLikeEntry } from '../contract/events.ts'
+import type { SessionEventLikeEntry, SessionLiveEventEntry } from '../contract/events.ts'
 
 /**
  * Narrow aligned wire records to their Client event types without allocation.
@@ -13,7 +13,21 @@ import type { SessionEventLikeEntry } from '../contract/events.ts'
 export function historyEntries(
   records: readonly SessionHistoryRecord[],
 ): readonly SessionEventLikeEntry[] {
-  return records as unknown as readonly SessionEventLikeEntry[]
+  // Both views share the same validated objects.
+  const aligned: readonly unknown[] = records
+  return aligned as readonly SessionEventLikeEntry[]
+}
+
+/**
+ * View durable window entries, which the Client received as validated wire records, as those records again.
+ * @param entries - durable entries taken from the event window.
+ * @returns the same array typed as history transport records.
+ */
+export function historyRecords(
+  entries: readonly SessionLiveEventEntry[],
+): readonly SessionHistoryRecord[] {
+  const aligned: readonly unknown[] = entries
+  return aligned as readonly SessionHistoryRecord[]
 }
 
 /**

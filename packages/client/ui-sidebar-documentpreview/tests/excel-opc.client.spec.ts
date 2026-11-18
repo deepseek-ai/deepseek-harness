@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import ExcelJS from 'exceljs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { XlsxPreviewArchive } from '../src/client/excel/xlsx-archive.ts'
 import { excelOpcCases, excelOpcFixture } from './excel-opc-fixture.ts'
@@ -11,7 +11,7 @@ import { excelFixture, excelHtmlFixture } from './excel-fixture.ts'
 
 const require = createRequire(import.meta.url)
 const browserExcel = require('exceljs/dist/exceljs.js') as typeof ExcelJS
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 const relsPath = 'xl/worksheets/_rels/budget.xml.rels'
 
 describe.each([['Node', ExcelJS], ['browser bundle', browserExcel]] as const)('%s ExcelJS entry', (_name, parser) => {

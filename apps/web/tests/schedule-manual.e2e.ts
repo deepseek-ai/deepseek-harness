@@ -256,8 +256,8 @@ it('creates from a paused empty state, selects the task, and saves an inline edi
         topRight: style.borderTopRightRadius, bottomRight: style.borderBottomRightRadius }
     }))
     expect(createStyles).toEqual([
-      { height: '32px', topLeft: '16px', bottomLeft: '16px', topRight: '0px', bottomRight: '0px' },
-      { height: '32px', topLeft: '0px', bottomLeft: '0px', topRight: '16px', bottomRight: '16px' },
+      { height: '32px', topLeft: '12px', bottomLeft: '12px', topRight: '0px', bottomRight: '0px' },
+      { height: '32px', topLeft: '0px', bottomLeft: '0px', topRight: '12px', bottomRight: '12px' },
     ])
     await manager.getByRole('button', { name: '已暂停', exact: true }).click()
     await manager.getByRole('heading', { name: '没有已暂停的自动化任务', exact: true }).waitFor()
