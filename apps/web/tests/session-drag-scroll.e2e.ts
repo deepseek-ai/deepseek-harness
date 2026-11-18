@@ -86,13 +86,35 @@ describe('web e2e: session drag scrolling', () => {
     expect((await scrollTops()).viewport).toBeGreaterThan(0)
     await rest((await listEdges()).top + 4, async () => (await scrollTops()).list === 0)
     await rest((await listEdges()).bottom - 4, async () => (await scrollTops()).list > 300)
-    // Drop onto a row that was out of view when the drag started.
-    const middle = (await listEdges()).top + 200
-    await page.mouse.move(x, middle, { steps: 3 })
-    await page.mouse.move(x + 1, middle)
-    await page.mouse.move(x, middle)
-    const target = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)!
-      .closest('[role="treeitem"]')!.querySelector('[class*="title"]')!.textContent, { x, y: middle })
+    // Stop edge scrolling, then use a row centre rather than a fixed offset that can fall in a gap.
+    const edges = await listEdges()
+    await page.mouse.move(x, (edges.top + edges.bottom) / 2, { steps: 3 })
+    const target = await page.evaluate(() => {
+      const list = document.querySelector('[data-sidebar-list-area]')!
+      const viewport = document.querySelector('[data-sidebar-scrollport]')!.getBoundingClientRect()
+      const bounds = list.getBoundingClientRect()
+      const visibleTop = Math.max(bounds.top, viewport.top)
+      const visibleBottom = Math.min(bounds.bottom, viewport.bottom)
+      const middle = (visibleTop + visibleBottom) / 2
+      const candidates = [...list.querySelectorAll('[role="treeitem"]:not([aria-expanded])')].map((row) => {
+        const box = row.getBoundingClientRect()
+        return { title: row.querySelector('[class*="title"]')?.textContent ?? '', box, centre: box.top + box.height / 2 }
+      }).filter(row => row.box.top >= visibleTop && row.box.bottom <= visibleBottom
+        && /^Conversation (\d{2}|[89])$/.test(row.title))
+        .sort((a, b) => Math.abs(a.centre - middle) - Math.abs(b.centre - middle))
+      const row = candidates[0]
+      if (!row) throw new Error('No fully visible destination Session row after autoscroll')
+      return row.title
+    })
+    const destination = rows.filter({ hasText: target })
+    await destination.hover({ trial: true })
+    const destinationBox = (await destination.boundingBox())!
+    const drop = { x: destinationBox.x + 30, y: destinationBox.y + destinationBox.height / 2 }
+    await page.mouse.move(drop.x, drop.y, { steps: 3 })
+    await page.mouse.move(drop.x + 1, drop.y)
+    await page.mouse.move(drop.x, drop.y)
+    await expect.poll(() => page.evaluate(({ x, y }) => document.elementFromPoint(x, y)
+      ?.closest('[role="treeitem"]')?.querySelector('[class*="title"]')?.textContent, drop)).toBe(target)
     expect(target).toMatch(/^Conversation (\d{2}|[89])$/)
     await page.mouse.up()
     const titles = () => rows.locator('[class*="title"]').allTextContents()
