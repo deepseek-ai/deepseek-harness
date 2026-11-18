@@ -1,7 +1,7 @@
 /** Product-window preference IPC and native menu interception during physical-key dispatch/recording. */
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type Input, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import { bindingKey, effectiveShortcuts, presentBinding, parseShortcutDefinitions, parseShortcutEdit } from '@deepseek-ai/dsh-client-shortcuts/protocol'
-import type { NormalizedBinding, ShortcutCommandId, ShortcutConfigSnapshot, ShortcutDefinition, ShortcutPlatform, ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import type { NormalizedBinding, ShortcutConfigSnapshot, ShortcutDefinition, ShortcutPlatform, ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { DesktopBrowserLeaseId } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
 import { desktopKeybindings } from './keybindings.ts'
 import { DESKTOP_IPC, assertDesktopSender } from './ipc.ts'
@@ -168,7 +168,7 @@ export function installDesktopShortcuts(
           ? input.key.toUpperCase() === acceleratorKey.toUpperCase()
           : input.code === binding.code
       }
-      const menuMatch = matchesMenuKey(closeBinding) || (platform !== 'windows' && matchesMenuKey(settingsBinding))
+      const menuMatch = matchesMenuKey(closeBinding) || matchesMenuKey(settingsBinding)
       contents.setIgnoreMenuShortcuts(recording || match || menuMatch)
       const frame = contents.focusedFrame
       const composing = input.isComposing || input.key === 'Dead' || deadKey || input.modifiers.includes('altgr')
@@ -284,7 +284,7 @@ export function installDesktopShortcuts(
           if (window === undefined || window.isDestroyed() || (focusWindow === undefined && !window.isFocused()) || !window.isEnabled()
             || overlayInput(window).blocked) return
           window.webContents.send(DESKTOP_IPC.shortcutsInput, {
-            kind: 'menu', commandId: 'settings.open' as ShortcutCommandId, revision,
+            kind: 'menu', commandId: 'settings.open', revision,
           })
         },
       }

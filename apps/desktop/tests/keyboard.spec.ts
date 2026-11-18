@@ -852,13 +852,12 @@ it.each([
     id: 'dsh-settings-open', label: 'Settings…', enabled: true, accelerator: expectedAccelerator,
   })
 
-  if (platform === 'macos') {
-    f.contents.emit('before-input-event', { preventDefault: vi.fn() }, {
-      type: 'keyDown', code: 'KeyW', key: ',', modifiers: ['meta'],
-      meta: true, control: false, alt: false, shift: false, isAutoRepeat: false, isComposing: false,
-    })
-    expect(f.contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(true)
-  }
+  const meta = platform === 'macos'
+  f.contents.emit('before-input-event', { preventDefault: vi.fn() }, {
+    type: 'keyDown', code: 'KeyW', key: ',', modifiers: [meta ? 'meta' : 'control'],
+    meta, control: !meta, alt: false, shift: false, isAutoRepeat: false, isComposing: false,
+  })
+  expect(f.contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(true)
 
   let currentRevision = initial.revision
   if (platform === 'windows') {
