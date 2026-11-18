@@ -21,8 +21,6 @@ import { DwsRelease, executableFileName, PROGRAM } from './release.ts'
 import type { DingtalkAccountState, DingtalkCommand, DingtalkOperationKind, DingtalkPhase } from './types.ts'
 /* jscpd:ignore-end */
 
-export type * from './types.ts'
-
 /** Plugin name. */
 export const name = 'dingtalk'
 
