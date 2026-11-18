@@ -74,6 +74,14 @@ try {
         $missingLocation = $mode -in @('missing-location', 'missing-location-foreign')
         $foreign = $mode -eq 'missing-location-foreign'
         if ($missingLocation) { Remove-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation }
+        $arpKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey
+        $desktopLink = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) ($ProductName + '.lnk')
+        if ($missingLocation) {
+            $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($desktopLink)
+            $shortcut.TargetPath = Join-Path $installPath ($ProductName + '.exe')
+            $shortcut.Save()
+            if (-not (Test-Path -LiteralPath $desktopLink) -or (Get-ItemProperty $arpKey).UninstallString -notlike ('*' + $installPath + '*')) { throw 'Missing A uninstall fixtures' }
+        }
         $integrationRoot = if ($foreign) { $externalPath } else { $installPath }
         $commandDirectory = Join-Path $integrationRoot 'resources\runtime\cli\bin'
         $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($environmentKey)
@@ -210,6 +218,7 @@ try {
         if ($mode -notin @('registration-error', 'save-report') -and ($path.Contains($commandDirectory) -ne $pathRetained -or -not $path.Contains('C:\Windows'))) { throw "PATH cleanup failed: $mode" }
         if ($mode -eq 'owned-retained' -and $path -ne ($commandDirectory + ';C:\Windows')) { throw 'Owned cleanup removed a pre-existing manual PATH entry' }
         if ((Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) -ne ($foreign -or $mode -eq 'upgrade')) { throw "Protocol cleanup failed: $mode" }
+        if ($missingLocation -and ((Test-Path -LiteralPath $desktopLink) -or (Test-Path -LiteralPath $arpKey))) { throw 'Missing location left an A shortcut or uninstall entry' }
         Write-Output "passed: $mode"
     }
     # Real replacement publishes B after the old A uninstaller has been retained.
@@ -258,6 +267,14 @@ try {
         $link = Join-Path $folder ($ProductName + '.lnk')
         if (Test-Path -LiteralPath $link) { $replacementLinks[$link] = [Convert]::ToBase64String([IO.File]::ReadAllBytes($link)) }
     }
+    # Keep B's uninstall entry and protocol while the desktop shortcut and CLI still belong to A.
+    $replacementLinks.Remove($desktopLink)
+    $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($desktopLink)
+    $shortcut.TargetPath = Join-Path $installPath ($ProductName + '.exe')
+    $shortcut.Save()
+    Set-ItemProperty ('HKCU:\' + $ownerKey) Directory $oldCommand
+    Set-ItemProperty ('HKCU:\' + $environmentKey) Path ($oldCommand + ';C:\Windows')
+    $bUninstall = $entry.UninstallString
     Copy-Item -LiteralPath $newPath -Destination $installPath -Recurse
     $process = Start-Process $uninstaller -ArgumentList ('/currentuser _?=' + $installPath) -PassThru
     $welcome = Wait-Text $copy.welcome
@@ -272,16 +289,19 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $newPath ($ProductName + '.exe')))) { throw 'Directory-only removal deleted B' }
     $entry = Get-ItemProperty ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey)
     if ($entry.InstallLocation.TrimEnd('\') -ne $newPath) { throw 'Directory-only removal deleted B registration' }
-    if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Directory-only removal changed B PATH' }
+    if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne 'C:\Windows') { throw 'A PATH entry survived partial takeover' }
     if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Directory-only removal changed B protocol' }
     if ([IO.File]::ReadAllText($replacementData) -ne 'replacement installation data') { throw 'Directory-only removal changed shared user data' }
     foreach ($link in $replacementLinks.Keys) {
         if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($link)) -ne $replacementLinks[$link]) { throw 'Directory-only removal changed replacement shortcut' }
     }
-    if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -ne $newCommand) { throw 'Directory-only removal changed B command owner' }
+    if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -or (Test-Path -LiteralPath $desktopLink)) { throw 'A owner or shortcut survived partial takeover' }
+    if ($entry.UninstallString -ne $bUninstall -or $bUninstall -notmatch '^"([^"]+)" (/currentuser)$') { throw 'B uninstall command changed' }
+    $registeredExe = $Matches[1]
+    $registeredArgs = $Matches[2]
     $installPath = $newPath
-    Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
-    $process = Start-Process $uninstaller -ArgumentList ('/S _?=' + $installPath) -PassThru -WindowStyle Hidden
+    if ($registeredExe -ne (Join-Path $newPath ('Uninstall ' + $ProductName + '.exe'))) { throw 'B uninstall entry targets another installation' }
+    $process = Start-Process $registeredExe -ArgumentList ($registeredArgs + ' /S') -PassThru -WindowStyle Hidden
     Wait-Exit
     Write-Output 'passed: installation takeover'
 } finally {

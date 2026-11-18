@@ -144,25 +144,41 @@ FunctionEnd
 !define /ifndef DSH_COMMAND_OWNER_KEY "Software\DeepSeekHarness\Command"
 !define /ifndef DSH_PROTOCOL_KEY "Software\Classes\dsh"
 !define /ifndef DSH_COMMAND_MUTEX "default"
+!macro unRemoveOwnedUninstallEntry KEY
+  ReadRegStr $0 SHELL_CONTEXT "${KEY}" UninstallString
+  ${If} $0 == '"$INSTDIR\${UNINSTALL_FILENAME}" /currentuser'
+    ClearErrors
+    DeleteRegKey SHELL_CONTEXT "${KEY}"
+    ${If} ${Errors}
+      System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "[unverified] Delete uninstall entry: ${KEY}") ?c'
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 Function un.CleanRegistration
   ${If} ${isUpdated}
-  ${OrIf} $UnDirectoryOnly == 1
     Return
   ${EndIf}
   ReadRegStr $0 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
   ${If} $0 == ""
-    ; Only the command owner and protocol target can identify this installation.
+    ; Preserve shared state and check each Windows entry against its own target.
     StrCpy $UnDirectoryOnly 1
   ${Else}
     GetFullPathName $0 "$0\."
     GetFullPathName $1 "$INSTDIR\."
     ${If} $0 != $1
       StrCpy $UnDirectoryOnly 1
-      Return
     ${EndIf}
   ${EndIf}
   Delete "$PLUGINSDIR\unowned-path"
   StrCpy $UnRegistrationArguments ""
+  ${If} $UnDirectoryOnly == 1
+    !insertmacro unRemoveOwnedUninstallEntry "${UNINSTALL_REGISTRY_KEY}"
+    !ifdef UNINSTALL_REGISTRY_KEY_2
+      !insertmacro unRemoveOwnedUninstallEntry "${UNINSTALL_REGISTRY_KEY_2}"
+    !endif
+    StrCpy $UnRegistrationArguments '-DesktopLink "$oldDesktopLink" -StartMenuLink "$oldStartMenuLink"'
+  ${EndIf}
   Call un.RunRegistrationCleanup
   IfFileExists "$PLUGINSDIR\unowned-path" 0 +2
     StrCpy $UnRegistrationEligible 1

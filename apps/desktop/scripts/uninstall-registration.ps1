@@ -7,7 +7,9 @@ param([Parameter(Mandatory)][string]$Directory,
     [Parameter(Mandatory)][string]$ReportPath,
     [string]$MutexName,
     [switch]$UnownedOnly,
-    [string]$UnownedMarker)
+    [string]$UnownedMarker,
+    [string]$DesktopLink,
+    [string]$StartMenuLink)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'command-path.ps1')
 $failures = [Collections.Generic.List[string]]::new()
@@ -44,6 +46,18 @@ if (-not $UnownedOnly) { try {
 } catch {
     $failures.Add("[unverified] Remove protocol registration`r`nHKCU\$ProtocolKey`r`nCode: $($_.Exception.HResult)`r`nReason: $($_.Exception.Message)")
 } }
+foreach ($link in @($DesktopLink, $StartMenuLink)) {
+    if (-not $link) { continue }
+    try {
+        if ([IO.Path]::GetExtension($link) -ne '.lnk' -or -not (Test-Path -LiteralPath $link -PathType Leaf)) { continue }
+        $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
+        if ($shortcut.TargetPath -eq (Join-Path $Directory $ExecutableName)) {
+            [IO.File]::Delete($link)
+        }
+    } catch {
+        $failures.Add("[unverified] Remove shortcut: $link`r`nReason: $($_.Exception.Message)")
+    }
+}
 if ($failures.Count) {
     [IO.File]::WriteAllText($ReportPath, ($failures -join "`r`n`r`n"), [Text.UTF8Encoding]::new($true))
     exit 1

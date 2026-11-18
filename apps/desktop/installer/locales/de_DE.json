@@ -36,7 +36,7 @@
     "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness ist an mehreren Orten installiert",
     "INSTALLER_UNINSTALL_REGISTRATION": "Einige Elemente konnten nicht bereinigt werden. Speichern Sie den Bericht für weitere Informationen.",
     "INSTALLER_UNINSTALL_REGISTERED": "Registrierter Installationsort:",
-    "INSTALLER_UNINSTALL_SCOPE": "Wenn Sie fortfahren, wird das folgende Verzeichnis bereinigt:",
+    "INSTALLER_UNINSTALL_SCOPE": "Auch Befehle, Verknüpfungen und Einträge, die auf dieses Verzeichnis zeigen, werden entfernt:",
     "INSTALLER_UNINSTALL_CONTINUE": "Deinstallationsordner weiter bereinigen",
     "INSTALLER_UNINSTALL_SAVE": "Bereinigungsbericht speichern…",
     "INSTALLER_UNINSTALL_SAVE_FAILED": "Der Bericht konnte nicht gespeichert werden. Wählen Sie einen anderen Speicherort.",

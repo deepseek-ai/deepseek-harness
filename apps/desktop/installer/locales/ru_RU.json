@@ -36,7 +36,7 @@
     "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness установлен в нескольких местах",
     "INSTALLER_UNINSTALL_REGISTRATION": "Некоторые элементы не удалось очистить. Сохраните отчёт для просмотра подробностей.",
     "INSTALLER_UNINSTALL_REGISTERED": "Зарегистрированное расположение:",
-    "INSTALLER_UNINSTALL_SCOPE": "При продолжении будет очищен следующий каталог:",
+    "INSTALLER_UNINSTALL_SCOPE": "Будут удалены этот каталог и указывающие на него команды, ярлыки и записи:",
     "INSTALLER_UNINSTALL_CONTINUE": "Продолжить очистку каталога удаления",
     "INSTALLER_UNINSTALL_SAVE": "Сохранить отчёт об очистке…",
     "INSTALLER_UNINSTALL_SAVE_FAILED": "Не удалось сохранить отчёт. Выберите другое расположение.",
