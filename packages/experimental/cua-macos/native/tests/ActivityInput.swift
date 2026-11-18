@@ -19,8 +19,9 @@ if arguments.count == 5 {
                                 belowWindowWithWindowNumber: 0) == expectedWindow else { exit(3) }
     down = press; up = release
 } else {
-    guard let press = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-          let release = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else { exit(1) }
+    // Escape exercises delivery without starting input-method composition.
+    guard let press = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: true),
+          let release = CGEvent(keyboardEventSource: nil, virtualKey: 53, keyDown: false) else { exit(1) }
     down = press; up = release
 }
 down.post(tap: .cgSessionEventTap)

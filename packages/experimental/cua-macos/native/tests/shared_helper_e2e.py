@@ -228,8 +228,6 @@ def main():
                     subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
                     b.call("activate", {"appHandle": app_b})
                     focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20, "details": True})
-                    field = next(element for element in focused["elements"] if element["role"] == "AXTextField")
-                    b.call("click", {"appHandle": app_b, "windowId": window, "snapshotId": focused["snapshotId"], "elementId": field["elementId"]})
                     before_keys = json.loads(state.read_text())["keyEventCount"]
                     with external_input(sender, fixture.pid):
                         deadline = time.monotonic() + 5
