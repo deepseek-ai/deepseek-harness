@@ -93,6 +93,7 @@ The browser entry mounts the Remote, then the UI. One stream per Session feeds t
 | [`src/diff.ts`](src/diff.ts) | Patch parsing, untracked files as additions, and numstat records |
 | [`src/local-diff.ts`](src/local-diff.ts) | Fork point, local scopes, branch commits, new-side text, and the `branch` scope summary |
 | [`src/layers.ts`](src/layers.ts) | Review layers from path globs and `linguist-generated` attributes |
+| [`src/viewer-lists.ts`](src/viewer-lists.ts) | The review page's lists and count, read per repository scope while a reader shows them |
 | [`src/client/mount.ts`](src/client/mount.ts) | Remote mount, slot entries, and action outcome mapping |
 | [`src/client/ChangeRequestCard.tsx`](src/client/ChangeRequestCard.tsx) | Reusable change request card |
 | [`src/client/ChangeRequestsSection.tsx`](src/client/ChangeRequestsSection.tsx) | Change requests section, its sign-in row, and its title control |
@@ -102,6 +103,7 @@ The browser entry mounts the Remote, then the UI. One stream per Session feeds t
 | [`src/client/AttentionIndicator.tsx`](src/client/AttentionIndicator.tsx) | Attention mark on the Session panel toggle |
 | [`src/client/ChangeRequestOverview.tsx`](src/client/ChangeRequestOverview.tsx) | Checks, review, merge, and linked issue rows with their menus |
 | [`src/client/ChangesTab.tsx`](src/client/ChangesTab.tsx) | Changes view |
+| [`src/client/review-page/`](src/client/review-page/) | Code review page: its registration, navigation count, lists, detail with the status column, and chat |
 | [`src/client/BaseMenu.tsx`](src/client/BaseMenu.tsx) | Base branch menu of the Branch scope |
 | [`src/client/DiffFile.tsx`](src/client/DiffFile.tsx) | One file of the changes view |
 | [`src/client/section-reach.ts`](src/client/section-reach.ts) | When file sections draw their lines |

@@ -20,7 +20,7 @@ import { en } from '../src/client/locales.ts'
 import {
   ReviewChat, ReviewChatView, ReviewConversation, useReviewConversation, type ReviewChatFace, type ReviewChatProps,
   type ReviewConversationProps,
-} from '../src/client/ReviewChat.tsx'
+} from '../src/client/review-page/ReviewChat.tsx'
 import type { ForgeReviewConversationProps } from '../src/client/slots.ts'
 import type { ForgeReviewChangeRequest } from '../src/types.ts'
 import { snapshot } from './client-fixtures.client.ts'

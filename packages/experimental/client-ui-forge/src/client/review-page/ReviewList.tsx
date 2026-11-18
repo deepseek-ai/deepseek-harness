@@ -13,17 +13,17 @@ import {
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { ChecksRollup, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgeReviewFrame } from '../types.ts'
-import { formatAgo, formatShortAgo } from './format.ts'
-import { ChangeRequestGlyph } from './glyphs.tsx'
-import type { ForgePanelKey, NS } from './locales.ts'
-import { RefreshGlyph } from './RefreshGlyph.tsx'
+import type { ForgeReviewFrame } from '../../types.ts'
+import { formatAgo, formatShortAgo } from '../format.ts'
+import { ChangeRequestGlyph } from '../glyphs.tsx'
+import type { ForgePanelKey, NS } from '../locales.ts'
+import { RefreshGlyph } from '../RefreshGlyph.tsx'
 import {
   mergeRepositories, pastedUrl, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
   type ReviewItem, type ReviewRepository, type ReviewSection,
 } from './review-lists.ts'
 import type { ReviewView } from './review-store.ts'
-import loading from './ChangesLoading.module.css'
+import loading from '../ChangesLoading.module.css'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']

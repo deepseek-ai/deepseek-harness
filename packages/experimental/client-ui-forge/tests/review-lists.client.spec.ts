@@ -10,8 +10,8 @@ import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import {
   descriptionMarkdown, mergeRepositories, pastedUrl, REVIEW_FILTERS, reviewHint, reviewListsComplete, reviewRepositories, reviewSearchKeys,
   reviewSections, summaryTone,
-} from '../src/client/review-lists.ts'
-import { createReviewStore } from '../src/client/review-store.ts'
+} from '../src/client/review-page/review-lists.ts'
+import { createReviewStore } from '../src/client/review-page/review-store.ts'
 import { ref } from './client-fixtures.client.ts'
 import { failedList, frame, host, list, summary } from './review-fixtures.client.ts'
 

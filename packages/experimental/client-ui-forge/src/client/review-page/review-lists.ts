@@ -5,9 +5,9 @@
 
 import type { ChangeRequestSummary, ForgeFailure, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SearchKeys } from '@deepseek-ai/dsh-util-text-search'
-import type { ForgeReviewFrame } from '../types.ts'
-import type { ForgePanelKey } from './locales.ts'
-import { toneOf, type ChangeRequestTone } from './status.ts'
+import type { ForgeReviewFrame } from '../../types.ts'
+import type { ForgePanelKey } from '../locales.ts'
+import { toneOf, type ChangeRequestTone } from '../status.ts'
 
 /** The lists in the order the page shows them. */
 export const REVIEW_FILTERS: readonly ForgeViewerFilter[] = ['review-requested', 'authored', 'involved']

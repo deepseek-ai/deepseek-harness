@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
-import type { HostStream } from './source.ts'
+import type { HostStream } from '../source.ts'
 
 /** The state of one stream: its latest frame, and why it stopped when it did. */
 export interface StreamRead<F> {

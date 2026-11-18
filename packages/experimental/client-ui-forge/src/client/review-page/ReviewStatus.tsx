@@ -12,19 +12,19 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestCheck, ChangeRequestReviewer, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgeReviewChangeRequest } from '../types.ts'
+import type { ForgeReviewChangeRequest } from '../../types.ts'
 import {
   ChangesRow, FinishedRow, MergeStateRow, reviewOutcome, type ChangeRequestActions,
-} from './ChangeRequestCard.tsx'
+} from '../ChangeRequestCard.tsx'
 import {
   checkGroups, ChecksReadStatus, checksValue, checkTime, IssuesRow, rerunOf, ReviewerLine, ReviewerSearch, reviewersToAskAgain,
   ReviewRequestItems, useBusy, useCompleteChecks,
-} from './ChangeRequestOverview.tsx'
-import { CheckGlyph } from './glyphs.tsx'
-import type { NS } from './locales.ts'
-import { checkCounts } from './status.ts'
-import overview from './ChangeRequestOverview.module.css'
-import forge from './Forge.module.css'
+} from '../ChangeRequestOverview.tsx'
+import { CheckGlyph } from '../glyphs.tsx'
+import type { NS } from '../locales.ts'
+import { checkCounts } from '../status.ts'
+import overview from '../ChangeRequestOverview.module.css'
+import forge from '../Forge.module.css'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']

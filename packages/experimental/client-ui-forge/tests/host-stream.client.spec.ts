@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { useHostStream } from '../src/client/host-stream.ts'
+import { useHostStream } from '../src/client/review-page/host-stream.ts'
 import type { HostStream } from '../src/client/source.ts'
 import { fed, type Fed } from './review-fixtures.client.ts'
 

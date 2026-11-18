@@ -93,6 +93,7 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 | [`src/diff.ts`](src/diff.ts) | 补丁解析、把未跟踪文件表示为新增，以及 numstat 记录 |
 | [`src/local-diff.ts`](src/local-diff.ts) | 分叉点、本地范围、分支提交、新版本文本与 `branch` 范围摘要 |
 | [`src/layers.ts`](src/layers.ts) | 按路径 glob 与 `linguist-generated` 属性分层 |
+| [`src/viewer-lists.ts`](src/viewer-lists.ts) | 评审页的列表与计数，按仓库范围读取，仅在有读者显示时读取 |
 | [`src/client/mount.ts`](src/client/mount.ts) | Remote 挂载、slot 条目与操作结果映射 |
 | [`src/client/ChangeRequestCard.tsx`](src/client/ChangeRequestCard.tsx) | 可复用的变更请求卡片 |
 | [`src/client/ChangeRequestsSection.tsx`](src/client/ChangeRequestsSection.tsx) | 变更请求分栏、其中的登录状态行及其标题控件 |
@@ -102,6 +103,7 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 | [`src/client/AttentionIndicator.tsx`](src/client/AttentionIndicator.tsx) | 会话面板开关上的提醒标记 |
 | [`src/client/ChangeRequestOverview.tsx`](src/client/ChangeRequestOverview.tsx) | 检查、评审、合并与关联 issue 行及其菜单 |
 | [`src/client/ChangesTab.tsx`](src/client/ChangesTab.tsx) | 变更视图 |
+| [`src/client/review-page/`](src/client/review-page/) | 代码评审页：注册、导航计数、列表、带状态栏的详情与对话 |
 | [`src/client/BaseMenu.tsx`](src/client/BaseMenu.tsx) | “分支”范围的基准分支菜单 |
 | [`src/client/DiffFile.tsx`](src/client/DiffFile.tsx) | 变更视图中的一个文件 |
 | [`src/client/section-reach.ts`](src/client/section-reach.ts) | 文件段何时绘制各行 |

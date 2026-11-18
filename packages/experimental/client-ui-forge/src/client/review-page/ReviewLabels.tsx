@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode }
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestLabel } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { NS } from './locales.ts'
+import type { NS } from '../locales.ts'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
