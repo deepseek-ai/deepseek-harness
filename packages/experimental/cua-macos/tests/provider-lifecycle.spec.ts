@@ -1,4 +1,5 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
+import { randomUUID } from 'node:crypto'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -184,8 +185,9 @@ async function thinkingTurn(f: Awaited<ReturnType<typeof setup>>) {
       yield { type: 'finish', reason: { kind: 'aborted' } }
     }
   }
-  f.ctx.llm.registerAdapter(['thinking'], new WaitingModel())
-  Object.assign(f.handle.agent.options, { provider: 'thinking', model: 'fixture' })
+  const provider = `thinking-${randomUUID()}`
+  f.ctx.llm.registerAdapter([provider], new WaitingModel())
+  Object.assign(f.handle.agent.options, { provider, model: 'fixture' })
   f.handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Wait for input' }], source: { kind: 'user' } }))
   onTestFinished(async () => { f.handle.agent.cancel({ kind: 'user' }); await f.handle.agent.whenIdle() })
   await entered.promise
@@ -1082,11 +1084,11 @@ const physicalHover = { ...hoverTarget, useSystemPointer: true }
 
 async function hoverFixture(requireApproval = true) {
   const f = await setup()
-  await thinkingTurn(f)
   if (!requireApproval) {
     await f.provider.dispose()
     await f.ctx.plugin(NativeProvider, { ...config, requireSystemPointerApproval: false })
   }
+  await thinkingTurn(f)
   const questions = await f.ctx.plugin(UserQuestions)
   const questionId = 'cua-mouse-control'
   const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
@@ -1126,9 +1128,9 @@ it('requires an explicit system-pointer request on every move and asks only once
     [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
   ] as const) {
     expect((await f.execute('mouseMove', params)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical, ...physical ? { taskId: f.handle.agent.id, turn: 1 } : {} }, expect.any(AbortSignal), expect.any(String))
   }
-  expect(native.request.mock.calls[1]?.[1]).toEqual(physicalHover)
+  expect(native.request.mock.calls[1]?.[1]).toEqual({ ...physicalHover, taskId: f.handle.agent.id, turn: 1 })
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
@@ -1137,7 +1139,7 @@ it.each([true, false])('shares the mouse control decision for a system button wi
   const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
   for (const params of [target, { ...target, useSystemPointer: false }]) {
     expect((await f.execute('toggleMouse', params)).isError).toBe(false)
-    expect(native.request.mock.lastCall?.[1]).toEqual(target)
+    expect(native.request.mock.lastCall?.[1]).toEqual({ ...target, taskId: f.handle.agent.id, turn: 1 })
   }
   expect(f.ask).not.toHaveBeenCalled()
   const answer = Promise.withResolvers<typeof f.approved>()
@@ -1160,8 +1162,9 @@ it.each([true, false])('shares the mouse control decision for a system button wi
     await f.handle.agent.whenIdle()
     expect(native.cleanup).toHaveBeenCalledWith('releaseHeldInputs', { taskId: f.handle.agent.id, turn: 1 })
   } else {
-    for (const result of results) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
-    expect(native.request).not.toHaveBeenCalled()
+    for (const result of results.slice(0, 2)) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    expect(results[2]?.isError).toBe(false)
+    expect(native.request.mock.calls.map(([method]) => method)).toEqual(['toggleMouse'])
   }
   expect(f.ask).toHaveBeenCalledOnce()
 })
@@ -1205,10 +1208,11 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id, turn: 1 }, expect.any(AbortSignal), expect.any(String))
   const sessionId = f.handle.agent.id
   await f.handle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId })
+  await thinkingTurn({ ...f, handle: reopened })
   await f.select(reopened.agent)
   expect((await f.call(reopened.agent, 'mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
@@ -1264,7 +1268,7 @@ it('allows only the explicitly requested physical move when approval is disabled
   const f = await hoverFixture(false)
   for (const [target, expected] of [[hoverTarget, false], [physicalHover, true], [hoverTarget, false]] as const) {
     expect((await f.execute('mouseMove', target)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected, ...expected ? { taskId: f.handle.agent.id, turn: 1 } : {} }, expect.any(AbortSignal), expect.any(String))
   }
   expect(f.ask).not.toHaveBeenCalled()
 })
@@ -1319,7 +1323,7 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   const physical = await f.execute('mouseMove', physicalHover)
   expect(physical.isError).toBe(!systemPointer)
   expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
-  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id, turn: 1 }, expect.any(AbortSignal), expect.any(String))
   else expect(native.request).not.toHaveBeenCalled()
   expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,
