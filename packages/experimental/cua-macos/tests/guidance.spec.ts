@@ -40,6 +40,8 @@ it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a s
   expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
   expect(instructions).toContain('The question interrupts the user.')
   expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
+  expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemPointer?: boolean }")
+  expect(instructions).toContain('pass useSystemPointer: true on both down and up')
   const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
   expect(drag).toContain('useSystemPointer?: boolean')
   expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
@@ -78,11 +80,10 @@ it('documents explicit mouse-button events immediately after mouseMove', () => {
   expect(index).toBeLessThan(lines.indexOf('## Simulated keyboard'))
 })
 
-it.each([GUIDANCE, PROGRAM_GUIDANCE])('marks toggleMouse as unavailable in the macOS method entry', (catalog) => {
-  const shared = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- toggleMouse('))
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('documents the default window release and the optional system hold', (catalog) => {
   const entry = catalog.split('\n').find(line => line.startsWith('- toggleMouse('))
-  expect(entry).toBe(`${shared} Not implemented on macOS.`)
-  expect(PLATFORM_GUIDANCE).not.toContain('toggleMouse')
+  expect(entry).toContain('By default the window receives the events, even a release outside it, and the system button stays up.')
+  expect(entry).toContain('pass useSystemPointer: true on both down and up')
 })
 
 it('enumerates every public method once in its catalog entry', () => {
