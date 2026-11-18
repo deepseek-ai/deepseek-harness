@@ -123,20 +123,35 @@ def check_toggle_mouse(helper, owner, state_file, executable):
             events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 3)["events"][count:]
             assert [e["type"] for e in events] == [down, moved, up], events
             assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
+        def wait_button(pressed):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                buttons = json.loads(subprocess.check_output([executable, "--buttons"], text=True))
+                if buttons[0] == pressed:
+                    return
+                time.sleep(0.025)
+            raise AssertionError(f"System left button did not become {pressed}")
+
         for ending in ("releaseHeldInputs", "disconnect"):
+            call("activate", owner)
+            wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+            assert cursor(*inside) == inside
             connection = Connection(socket, key)
             try:
                 app = connection.call("getApp", {"selector": str(state["pid"])})
-                count = len(json.loads(state_file.read_text())["events"])
+                params = {**window, "mouseButton": "left", "useSystemPointer": True}
                 connection.call("toggleMouse", {**params, "appHandle": app["appHandle"], "direction": "down"})
-                wait_for_state(state_file, lambda s: len(s["events"]) > count)
+                wait_button(True)
                 call("toggleMouse", {**params, "direction": "up"}, "INVALID_ARGUMENT")
+                wait_button(True)
+                call("activate", {"appHandle": other_app["appHandle"]})
+                wait_for_state(state_file, lambda s: not s["active"])
                 if ending != "disconnect":
                     connection.call(ending, {})
             finally:
                 connection.close()
-            events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)["events"][count:]
-            assert [e["type"] for e in events] == [25, 26] and events[-1]["pressedButtons"] == 0, events
+            wait_button(False)
+
     finally:
         run_cleanup(lambda: cursor(*original), *([lambda: stop(other)] if other else []))
 

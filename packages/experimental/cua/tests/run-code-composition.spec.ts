@@ -456,7 +456,8 @@ it.each(['agent', 'provider', 'context'] as const)('awaits held input cleanup wh
   const release = f.native.controlNext('releaseHeldInputs')
   let disposed = false
   const closing = (owner === 'agent' ? f.handle.dispose() : owner === 'provider' ? f.provider.dispose() : f.ctx.fiber.dispose()).then(() => { disposed = true })
-  await release.entered
+  const first = await Promise.race([release.entered.then(() => 'cleanup'), closing.then(() => 'closed')])
+  expect(first, JSON.stringify({ calls: f.native.calls, events: f.native.events, held: f.native.held })).toBe('cleanup')
   try {
     expect(disposed).toBe(false)
     expect(f.native.state.closedChannels).toBe(0)

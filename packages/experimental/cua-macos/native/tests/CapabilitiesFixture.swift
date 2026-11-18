@@ -152,6 +152,11 @@ if CommandLine.arguments.dropFirst().first == "--cursor" {
     print("[\(position.x),\(position.y)]")
     exit(0)
 }
+if CommandLine.arguments.dropFirst().first == "--buttons" {
+    let values = [CGMouseButton.left, .right, .center].map { CGEventSource.buttonState(.combinedSessionState, button: $0) }
+    print(String(data: try! JSONSerialization.data(withJSONObject: values), encoding: .utf8)!)
+    exit(0)
+}
 let statePath = CommandLine.arguments.dropFirst().first ?? Bundle.main.object(forInfoDictionaryKey: "DSHFixtureStatePath") as? String
 if let statePath {
     let application = NSApplication.shared
