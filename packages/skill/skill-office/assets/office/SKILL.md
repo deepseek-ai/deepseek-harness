@@ -9,7 +9,7 @@ To create, read, or edit a file, first use the `read` tool, not shell commands, 
 
 Bundled Python includes `pypdf` for existing PDFs.
 
-If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
+If an Office tool below is missing, reload `office` with `skill`; it appears next step.
 
 - `office_render`: Office or PDF images, visual checks, and appearance or slide checks required by the format file; skip it when asked.
 - `office_recalculate`: formulas, with `format: "xlsx"` or `"ods"`.

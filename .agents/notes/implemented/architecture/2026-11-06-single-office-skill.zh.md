@@ -30,7 +30,7 @@ Status: implemented
 
 目录只携带一条 Office 摘要。创作需要多一步模型调用来读取格式文件，该 `read` 结果与技能结果一样保留在历史中。`office` 正文加一个格式文件的预算不超过原先"路由加格式技能"的预算；`read` 的行号前缀是额外开销。
 
-用户失去直接的格式命令和按格式覆盖：`/office` 是唯一的命令，用户定义的 `office` 技能会连同格式文件路由一起替换内置正文。迁移步骤见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.4/office-single-skill/guide.zh.md)。组合中必须提供文件 `read` 工具；在 SSH 工作区中进行 Office 创作时，除非格式文件能通过 Session 的文件系统访问，否则得不到格式指导。
+用户失去直接的格式命令和按格式覆盖：`/office` 是唯一的命令，用户定义的 `office` 技能会连同格式文件路由一起替换内置正文。迁移步骤见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.5/office-single-skill/guide.zh.md)。组合中必须提供文件 `read` 工具；在 SSH 工作区中进行 Office 创作时，除非格式文件能通过 Session 的文件系统访问，否则得不到格式指导。
 
 ## Testing
 

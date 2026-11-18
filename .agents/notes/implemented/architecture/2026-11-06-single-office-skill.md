@@ -30,7 +30,7 @@ The format files are Host files. On Desktop they lie inside `resources/app.asar`
 
 The catalog carries one Office summary. Authoring takes one more model step to read the format file, and that `read` result stays in history like a skill result. The budget for the `office` body plus one format file stays within the earlier router-plus-format-skill budget; `read` line-number prefixes are an additional cost.
 
-Users lose the direct format commands and per-format overrides: `/office` is the only command, and a user-defined `office` skill replaces the bundled body together with its format-file routing. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.4/office-single-skill/guide.md) owns the migration. Compositions must provide a file `read` tool, and Office authoring in SSH workspaces gets no format guidance until the format files are reachable through the Session's filesystem.
+Users lose the direct format commands and per-format overrides: `/office` is the only command, and a user-defined `office` skill replaces the bundled body together with its format-file routing. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.5/office-single-skill/guide.md) owns the migration. Compositions must provide a file `read` tool, and Office authoring in SSH workspaces gets no format guidance until the format files are reachable through the Session's filesystem.
 
 ## Testing
 

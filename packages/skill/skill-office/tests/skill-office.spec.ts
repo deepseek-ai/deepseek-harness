@@ -402,7 +402,8 @@ it('directs Office operations to dedicated tools without executable paths', asyn
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
     const route = (await ctx.skills.get('office'))!.content
-    expect(route).toContain('If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.')
+    expect(route).toContain('If an Office tool below is missing, reload `office` with `skill`; it appears next step.')
+    expect(route).toContain('Bundled Python includes `pypdf` for existing PDFs.')
     for (const instruction of ['`office_render`', '`office_recalculate`', '`office_convert` with `format`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(instruction)
     for (const content of [route, ...await Promise.all(references.map(readReference))]) {
       expect(content).not.toMatch(
