@@ -10,7 +10,7 @@ Web 服务通过 `web.searchProvider` 和 `web.fetchProvider` 两个独立字段
 
 ## 决策
 
-用户从 Host 已注册的提供方列表中分别选择搜索和抓取提供方。内置组合将搜索设为 Search API，将抓取设为本地 HTTP 抓取；DeepSeek Search 与 Fetch API 跟随会话的 DeepSeek 凭据。
+用户从 Host 已注册的提供方列表中分别选择搜索和抓取提供方。内置组合不固定搜索提供方，搜索因此跟随会话的模型路由，抓取设为本地 HTTP 抓取；DeepSeek Search 与 Fetch API 跟随会话的 DeepSeek 凭据。
 
 ### 已注册的提供方可观察，可用性不可观察
 
@@ -38,17 +38,23 @@ Search 与 Fetch 各有一个计费方式设置 `web-deepseek-api.searchBilling`
 
 ### 默认值与已保存的选择
 
-[base 组合](../../../../packages/bundle/base/cordis.patch.yml)设置 `searchProvider: deepseek-search-api` 和 `fetchProvider: http`。搜索默认使用 Search API，因为它返回来源时无需 Harness 发起辅助模型请求。抓取默认使用本地 HTTP 抓取，因为它没有按次的 API 费用，执行 Harness 自身的 URL 校验和资源限制，并且可以访问内网和本地地址。Fetch API 仍可在下拉框中直接选择。
+[base 组合](../../../../packages/bundle/base/cordis.patch.yml)设置 `fetchProvider: http`，不设置 `searchProvider`。没有配置搜索提供方时，`dsh-web` 按搜索所服务的模型请求的提供方路由，优先选用一个已注册且可用的提供方：在 `deepseek-official` 与 `deepseek-account` 模型路由上是 Messages 搜索（`deepseek-official`），因为 DeepSeek 不对 DeepSeek 模型请求声明的服务端搜索工具按次收费；在其他路由上以及模型请求之外是 Search API（`deepseek-search-api`），因为它返回来源时无需向会话没有使用的提供方发起辅助模型请求。`dsh-tool-web` 把发起调用的 Session 最近一次模型请求的路由写入每个搜索请求，`searchReady()` 按正在准备的步骤的路由选择，因此就绪判断与执行指向同一个提供方。这两条路由和两个提供方 id 是 `dsh-web` 中的常量：部署只能通过配置 `searchProvider` 改变结果，设置页把未配置的状态显示为**自动选择**。抓取默认使用本地 HTTP 抓取，因为它没有按次的 API 费用，执行 Harness 自身的 URL 校验和资源限制，并且可以访问内网和本地地址。Fetch API 仍可在下拉框中直接选择。
 
 已保存的选择——无论位于设置文档还是部署自身的组合中——优先于内置默认值，升级不会改写它。执行时从不替换选择：所选提供方缺失、不可用或失败时，操作以结构化错误失败，不会回退到其他搜索或抓取提供方。回退会把查询和凭据发往用户未选择的端点，并在不提示的情况下改变计费。
 
 ### 旧版 Messages 搜索
 
-DeepSeek Messages 搜索提供方仍以 **DeepSeek（旧版）**提供。已保存的 `web.searchProvider: deepseek-official`（或 `DSH_WEB_SEARCH_PROVIDER=deepseek-official`）会选中它，因此网关支持 Messages 搜索但不提供 `/v1/tools` 的用户可以保留可用的提供方。
+DeepSeek Messages 搜索提供方仍以 **DeepSeek 服务端搜索**提供，并承担 DeepSeek 模型路由上未配置提供方的搜索。已保存的 `web.searchProvider: deepseek-official`（或 `DSH_WEB_SEARCH_PROVIDER=deepseek-official`）会在所有路由上选中它，因此网关支持 Messages 搜索但不提供 `/v1/tools` 的用户可以保留可用的提供方。
 
 Messages 提供方负责声明并写入 `web/deepseek-search-llm-request`。声明和载荷保持与已发布会话兼容；Search 与 Fetch API 包既不声明也不写入这一辅助事件。
 
 ## 考虑过的替代方案
+
+**让每个提供方声明自己是哪些路由的默认项。** 在 `WebSearchProvider` 上加一个 `defaultFor(llmProvider)` 成员可以让 `dsh-web` 不含 DeepSeek 的 id，但要为只有一个实例的规则修改两个 DeepSeek 提供方包。
+
+**把路由到提供方的表放进 `dsh-web` 的配置。** profile 补丁会替换条目的整个 `config`，因此已存的提供方选择会连带存下这张表的副本，不再跟随内置的表；而这张表也不是用户需要做的选择：固定提供方已经可以覆盖它。
+
+**让 Search API 提供方在 DeepSeek 路由上转交给 Messages 搜索。** 菜单可以保持两项，但名为 DeepSeek Search API 的条目会运行另一个提供方，用户无法为 DeepSeek 模型固定 Search API，而且一个提供方包要依赖另一个。
 
 **保留一个同时切换两个 API 的开关。** 它让使用 Fetch API 无需修改配置，但把抓取的计费和目标访问策略绑在搜索选择上，也无法表达其他插件注册的提供方。
 
@@ -76,10 +82,10 @@ Messages 提供方负责声明并写入 `web/deepseek-search-llm-request`。声�
 
 ## 影响
 
-没有已保存搜索选择的用户通过 Search API 搜索：查询发往会话的 DeepSeek 凭据所选的 Search 端点，每次计为一次 Search API 请求，并且除非关闭 `sendOriginalQuestion`，还会把最近一条用户提示的至多 128 个字符作为 `ori_question` 发送。网关没有 `/v1/tools` 路由的部署会遇到搜索失败，直到选择 Messages 搜索，或把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `deepseek-official` 选择使用 Messages 搜索。没有已保存抓取选择的用户通过本地 HTTP 抓取。已登录但没有 API 密钥的用户在 `auto` 计费下，除 DeepSeek API 密钥路由上的会话外，都可以使用 DeepSeek 网页搜索；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/web-search-credential-modes/guide.zh.md)列出了每种受影响的配置。
+没有已保存搜索选择的用户在 DeepSeek 模型路由上的会话中通过 Messages 搜索进行搜索：每次搜索是一次按模型 token 计费的辅助 Messages 请求，发往 Messages 搜索自己的端点，该端点不跟随模型提供方的基础地址，因此 DeepSeek 模型提供方指向网关的部署会遇到搜索失败，直到把该网关保存为 Messages Base URL 或固定使用 Search API（[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.4/web-search-deepseek-model-default/guide.zh.md)）。在其他路由上他们通过 Search API 搜索：查询发往会话的 DeepSeek 凭据所选的 Search 端点，每次计为一次 Search API 请求，并且除非关闭 `sendOriginalQuestion`，还会把最近一条用户提示的至多 128 个字符作为 `ori_question` 发送。网关没有 `/v1/tools` 路由的部署在这些路由上会遇到搜索失败，直到选择 Messages 搜索，或把 `searchBaseURL` 设为提供这些路由的基础地址。`dsh-web` 点名了两条 DeepSeek 模型路由和两个 DeepSeek 搜索提供方，再出现一个按路由的默认值时须改为提供方无关的规则。已保存的 `deepseek-official` 选择使用 Messages 搜索。没有已保存抓取选择的用户通过本地 HTTP 抓取。已登录但没有 API 密钥的用户在 `auto` 计费下，除 DeepSeek API 密钥路由上的会话外，都可以使用 DeepSeek 网页搜索；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/web-search-credential-modes/guide.zh.md)列出了每种受影响的配置。
 
 插件提供方（包括在创作模式下编写的提供方）一经注册，就会以其 `title` 出现在对应的下拉框中。下拉框可能提供在当前请求中无法运行的提供方；失败会在执行搜索或抓取时出现。每次注册表变更会在每个观察它的 Client 中产生一次转发事件和一次列表读取。
 
 ## 验证
 
-[web.spec.ts](../../../../packages/web/web/tests/web.spec.ts) 覆盖列表内容与顺序、标题、注册与撤销后的事件、重复注册被拒绝时不触发事件，以及监听器失败的隔离。[deepseek.spec.ts](../../../../packages/web/web-search-deepseek/tests/deepseek.spec.ts) 覆盖独立的 Messages 提供方，[credential-resolution.spec.ts](../../../../packages/web/web-deepseek-api/tests/credential-resolution.spec.ts) 针对两个能力覆盖账号路由上的账号令牌及其在 HTTP 401 后被作废、未登录时回退到 API 密钥、官方、非 DeepSeek 和会话之外的操作使用路由密钥与端点、DeepSeek 路由之外没有密钥时回退到账号、在每个路由上只用账号或只用 API 密钥的计费、单独字段优先于计费方式、没有该路由时使用 `DEEPSEEK_API_KEY` 与官方基础地址、从不发送令牌的 YAML 单独字段、两个能力相互独立、就绪判断与每次操作一致，以及被忽略的已移除字段；[composition.spec.ts](../../../../packages/web/web-deepseek-api/tests/composition.spec.ts) 通过 Loader 启动真实的模型路由。[remote-events.host.spec.ts](../../../../packages/api/remotes/tests/remote-events.host.spec.ts) 覆盖事件转发，[base.spec.ts](../../../../packages/bundle/base/tests/base.spec.ts) 固定内置默认值。设置页的 controller 与 card 测试以及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖下拉框内容、Search 与 Fetch 的分别选择、DeepSeek API 的计费方式下拉框，以及各提供方保留的设置。
+[web.spec.ts](../../../../packages/web/web/tests/web.spec.ts) 覆盖列表内容与顺序、标题、注册与撤销后的事件、重复注册被拒绝时不触发事件、监听器失败的隔离，以及按路由的优先规则及其回退；[tool-web.spec.ts](../../../../packages/web/tool-web/tests/tool-web.spec.ts) 覆盖 `web_search` 发送的路由，`web-search-legacy-endpoint-guidance` 快照在未配置提供方的 DeepSeek 路由上运行 Messages 搜索。[deepseek.spec.ts](../../../../packages/web/web-search-deepseek/tests/deepseek.spec.ts) 覆盖独立的 Messages 提供方，[credential-resolution.spec.ts](../../../../packages/web/web-deepseek-api/tests/credential-resolution.spec.ts) 针对两个能力覆盖账号路由上的账号令牌及其在 HTTP 401 后被作废、未登录时回退到 API 密钥、官方、非 DeepSeek 和会话之外的操作使用路由密钥与端点、DeepSeek 路由之外没有密钥时回退到账号、在每个路由上只用账号或只用 API 密钥的计费、单独字段优先于计费方式、没有该路由时使用 `DEEPSEEK_API_KEY` 与官方基础地址、从不发送令牌的 YAML 单独字段、两个能力相互独立、就绪判断与每次操作一致，以及被忽略的已移除字段；[composition.spec.ts](../../../../packages/web/web-deepseek-api/tests/composition.spec.ts) 通过 Loader 启动真实的模型路由。[remote-events.host.spec.ts](../../../../packages/api/remotes/tests/remote-events.host.spec.ts) 覆盖事件转发，[base.spec.ts](../../../../packages/bundle/base/tests/base.spec.ts) 固定内置默认值。设置页的 controller 与 card 测试以及[插件配置浏览器场景](../../../../apps/web/tests/plugin-config.e2e.ts)覆盖下拉框内容、Search 与 Fetch 的分别选择、DeepSeek API 的计费方式下拉框，以及各提供方保留的设置。
