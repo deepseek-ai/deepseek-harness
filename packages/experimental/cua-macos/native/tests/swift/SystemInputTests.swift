@@ -85,3 +85,20 @@ import Testing
     #expect(event.getIntegerValueField(.mouseEventClickState) == 2)
     #expect(event.flags.contains(.maskShift))
 }
+
+@Test func systemDirectionalEventsPreserveExternalModifiers() throws {
+    let target = try NativePlatform.identity(getpid())
+    var ambient: CGEventFlags = .maskAlternate
+    let held = HeldKeys(systemFlags: { ambient })
+    var events: [CGEvent] = []
+    let system = SystemKeyboardInput(post: { events.append($0) }, keyState: { _ in false }, currentFlags: { ambient }, foreground: { target.pid })
+    let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, system: system)
+    try keyboard.keyDown("w", app: "app", run: "run", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("w", app: "app", run: "run", useSystemInput: true, recipient: { target })
+    #expect(try keyboard.keyUp("w", app: "app", run: "run", useSystemInput: true, recipientIfUnheld: { target }))
+    #expect(events.allSatisfy { $0.flags.contains(.maskAlternate) })
+    try keyboard.keyDown("command", app: "app", run: "run", useSystemInput: true, recipient: { target })
+    ambient.formUnion(.maskCommand)
+    try keyboard.releaseHeldKeys()
+    #expect(events.last?.flags == .maskAlternate)
+}

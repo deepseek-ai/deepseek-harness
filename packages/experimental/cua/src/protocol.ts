@@ -173,7 +173,7 @@ export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
   /** Whether the provider supports application-level accessibility observations. */
   appLevelAccessibility: z.boolean(),
-  /** Whether mouseMove accepts an explicit request to move the system pointer. */
+  /** Whether mouseMove, toggleMouse, click, drag, pressKey, and sendKeyEvent accept explicit system input. */
   systemInput: z.boolean().default(false),
   /** Scopes that support keyboard input. */
   keyboard: z.array(z.enum(['app', 'window'])),

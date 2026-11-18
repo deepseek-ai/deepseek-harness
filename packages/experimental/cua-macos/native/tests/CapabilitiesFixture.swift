@@ -144,7 +144,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
     }
 }
 if CommandLine.arguments.dropFirst().first == "--key-state" {
-    let codes: [CGKeyCode] = [13, 55, 56]
+    let codes: [CGKeyCode] = [55, 56]
     let state = Dictionary(uniqueKeysWithValues: codes.map { (String($0), CGEventSource.keyState(.combinedSessionState, key: $0)) })
     print(String(data: try JSONSerialization.data(withJSONObject: state), encoding: .utf8)!)
     exit(0)

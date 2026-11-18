@@ -62,7 +62,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `screenshotTarget` | unset | Fixed `{ longEdge, maxBytes }` request-image target for screenshots. Unset resolves the target from the Agent's model route and refuses capture when that route declares no image input. |
 | `allowedApps` | `[]` | Legacy path/signature grants, imported once for removal; they do not authorize new bundle-ID identities. |
 | `helperPath` | package-owned executable | Absolute executable inside the signed helper `.app`; a bare binary fails with `NATIVE_APPLICATION_REQUIRED`. |
-| `requireSystemInputApproval` | `true` | Ask once per session before an explicitly requested system mouse move, drag, or button event. |
+| `requireSystemInputApproval` | `true` | Ask once per session before explicitly requested system keyboard or mouse input. |
 | `sourceSigning` | `ad-hoc` | Source signing: `ad-hoc`, or `{ identity, keychain }` for an existing certificate and keychain path. Ignored for installed packages and `helperPath`. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
@@ -248,7 +248,7 @@ click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, a
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 
-Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. The first explicit system input requests permission; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
+Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```
 
 #### Token effect

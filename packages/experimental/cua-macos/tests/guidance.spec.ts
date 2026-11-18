@@ -37,7 +37,7 @@ it('prefixes concise platform guidance before the shared catalog', () => {
 it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a system-pointer prompt', (catalog) => {
   const instructions = withSystemInputGuidance(catalog)
   expect(catalog.split('- mouseMove(')[0]).toContain('Leave useSystemInput unset')
-  expect(instructions).toContain('The first explicit system input requests permission;')
+  expect(instructions).toContain('When approval is enabled, the first explicit system input requests permission;')
   expect(instructions).toContain('Omitting the option or passing false uses the provider default.')
   expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemInput?: boolean }")
   expect(instructions).toContain('pass useSystemInput: true on both down and up')
@@ -196,4 +196,8 @@ it('adds system-input selection to exactly the six supported methods', () => {
   const selected = catalog.split('\n').filter(line => line.startsWith('- ') && line.split(' -> ')[0]?.includes('useSystemInput'))
     .map(line => line.slice(2, line.indexOf('(')))
   expect(selected).toEqual(['mouseMove', 'toggleMouse', 'click', 'drag', 'pressKey', 'sendKeyEvent'])
+})
+
+it('rejects malformed provider input signatures instead of truncating their text', () => {
+  expect(() => withSystemInputGuidance('- click(target)')).toThrow('missing the result separator for click')
 })

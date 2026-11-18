@@ -22,6 +22,11 @@ final class HeldKeys: @unchecked Sendable {
 
     private let lock = NSLock()
     private var pressed: [Press] = []
+    private let systemFlags: () -> CGEventFlags
+
+    init(systemFlags: @escaping () -> CGEventFlags = { CGEventSource.flagsState(.combinedSessionState) }) {
+        self.systemFlags = systemFlags
+    }
 
     func snapshot(pid: Int32, system: Bool = false) -> [CGKeyCode: CGEventFlags] {
         lock.withLock { Dictionary(uniqueKeysWithValues: pressed.filter { $0.system == system && (system || $0.recipient.pid == pid) }.map { ($0.code, $0.flag) }) }
@@ -63,8 +68,8 @@ final class HeldKeys: @unchecked Sendable {
         }
     }
 
-    private func flags(for recipient: ProcessIdentity, system: Bool) -> CGEventFlags {
-        pressed.reduce(into: CGEventFlags()) { if $1.system == system && (system || $1.recipient == recipient) { $0.formUnion($1.flag) } }
+    private func flags(for recipient: ProcessIdentity, system: Bool, releasing: CGEventFlags = []) -> CGEventFlags {
+        pressed.reduce(into: system ? systemFlags().subtracting(releasing) : CGEventFlags()) { if $1.system == system && (system || $1.recipient == recipient) { $0.formUnion($1.flag) } }
     }
 
     /// An up always targets the process selected at down. Never post to a recycled PID.
@@ -76,7 +81,7 @@ final class HeldKeys: @unchecked Sendable {
             return false
         }
         pressed.remove(at: index)
-        key.up.flags = flags(for: key.recipient, system: key.system)
+        key.up.flags = flags(for: key.recipient, system: key.system, releasing: key.flag)
         post(key.up, key.recipient.pid, key.system)
         return true
     }

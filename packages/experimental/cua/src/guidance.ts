@@ -71,6 +71,7 @@ export function withSystemInputGuidance(guidance: string): string {
   const catalog = guidance.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
     if (!methods.has(method)) return entry
     const end = entry.indexOf(') -> ')
+    if (end < 0) throw new Error(`System input guidance is missing the result separator for ${method}`)
     const signature = entry.slice(0, end)
     const extended = signature.includes('options:') || signature.includes('options?:')
       ? signature.replace(' }', ', useSystemInput?: boolean }')
@@ -79,5 +80,5 @@ export function withSystemInputGuidance(guidance: string): string {
   })
   return `${catalog}
 
-Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. The first explicit system input requests permission; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.`
+Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.`
 }

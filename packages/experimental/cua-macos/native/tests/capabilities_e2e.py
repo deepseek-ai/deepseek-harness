@@ -320,15 +320,36 @@ def check_system_input(helper, owner, state_file, executable):
     assert [(event["type"], event.get("keyCode")) for event in events] == [(10, 2), (11, 2)], events
     assert all(event["shift"] for event in events) and not any(keys().values()), events
     held = {**owner, "key": "w", "runId": "system-input-e2e", "useSystemInput": True}
-    call("sendKeyEvent", {**held, "direction": "down"})
+    for cleanup in (False, True):
+        count = len(json.loads(state_file.read_text())["events"])
+        call("sendKeyEvent", {**held, "direction": "down"})
+        try:
+            state = wait_for_state(state_file, lambda value: any(
+                event["type"] == 10 and event.get("keyCode") == 13 for event in value["events"][count:]))
+            down = next(event for event in state["events"][count:] if event["type"] == 10 and event.get("keyCode") == 13)
+            assert down["systemW"], down
+        finally:
+            if cleanup:
+                call("releaseHeldKeys", {"runId": held["runId"]})
+            else:
+                call("sendKeyEvent", {**held, "direction": "up"})
+        state = wait_for_state(state_file, lambda value: any(
+            event["type"] == 11 and event.get("keyCode") == 13 for event in value["events"][count:]))
+        up = next(event for event in state["events"][count:] if event["type"] == 11 and event.get("keyCode") == 13)
+        assert not up["systemW"], up
+    shift = {**held, "key": "shift"}
+    mouse = {**window, "mouseButton": "left", "useSystemInput": True}
+    count = len(state["events"])
+    call("sendKeyEvent", {**shift, "direction": "down"})
     try:
-        assert keys()["13"], "System key down was not visible in keyboard state"
+        call("toggleMouse", {**mouse, "direction": "down"})
+        state = wait_for_state(state_file, lambda value: any(event["type"] == 1 for event in value["events"][count:]))
+        assert next(event for event in state["events"][count:] if event["type"] == 1)["shift"]
     finally:
-        call("sendKeyEvent", {**held, "direction": "up"})
-    assert not any(keys().values())
-    call("sendKeyEvent", {**held, "direction": "down"})
-    call("releaseHeldKeys", {"runId": held["runId"]})
-    assert not any(keys().values()), "Execution cleanup left a system key held"
+        call("sendKeyEvent", {**shift, "direction": "up"})
+        call("toggleMouse", {**mouse, "direction": "up"})
+    state = wait_for_state(state_file, lambda value: any(event["type"] == 2 for event in value["events"][count:]))
+    assert not next(event for event in state["events"][count:] if event["type"] == 2)["shift"], state
     key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
     connection = Connection(Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock"), key)
     try:

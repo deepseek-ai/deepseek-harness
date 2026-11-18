@@ -79,6 +79,7 @@ import Foundation
     func release(connection: UUID) {
         guard let press, press.connection == connection else { return }
         if let point = CGEvent(source: nil)?.location { press.release.location = point }
+        press.release.flags = CGEventSource.flagsState(.combinedSessionState)
         Self.post(press.release)
         self.press = nil
     }
