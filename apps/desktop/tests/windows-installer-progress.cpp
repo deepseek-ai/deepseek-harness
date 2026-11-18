@@ -65,6 +65,8 @@ int main() {
         progress.Complete(done);
         double previous = progress.value;
         for (std::uint64_t elapsed = 0; elapsed < 600; elapsed += 16) {
+            // A repeated completion notification must not restart the final animation.
+            if (elapsed == 320) progress.Complete(done + elapsed);
             progress.Advance(4, 1, done + elapsed);
             assert(progress.value >= previous && progress.value < 100);
             previous = progress.value;
