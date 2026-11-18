@@ -17,8 +17,6 @@ import { copy, operations, presentAccount, WECOM_PACKAGE } from './presentation.
 import { ENTRY, WECOM_SKILLS } from './skills.ts'
 import type { WecomAccountState, WecomCommand, WecomOperationKind, WecomPhase } from './types.ts'
 
-export type * from './types.ts'
-
 /** Plugin name. */
 export const name = 'wecom'
 
