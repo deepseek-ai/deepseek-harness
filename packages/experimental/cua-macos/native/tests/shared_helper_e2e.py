@@ -186,18 +186,26 @@ def main():
                     time.sleep(0.025)
                 window = primary["windowId"]
                 observed = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                b.call("click", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementId": '0'}, error="STALE_SNAPSHOT")
+                b.call("invoke", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementId": '0'}, error="STALE_SNAPSHOT")
                 own_observation = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 button = next(element for element in own_observation["elements"]
                               if element["role"] == "AXButton" and element["title"] == "Increment primary")
                 before = json.loads(state.read_text())["count"]
-                b.call("click", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementId": button["elementId"]})
+                b.call("invoke", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementId": button["elementId"]})
                 changed_until = time.monotonic() + 5
                 while json.loads(state.read_text())["count"] != before + 1:
                     assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"
                     time.sleep(0.025)
                 after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
+                events = after["recentActivity"]["events"]
+                assert any(event["source"] == "agent" and event["windowId"] == window
+                           and event["operation"] == "invoke" for event in events), events
+                repeated = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                assert not any(event["source"] == "agent" for event in repeated.get("recentActivity", {}).get("events", [])), repeated
+                own = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                assert not any(event["source"] == "agent" for event in own.get("recentActivity", {}).get("events", [])), own
+
 
                 def capture(pair):
                     client, handle = pair
