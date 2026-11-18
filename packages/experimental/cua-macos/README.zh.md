@@ -263,7 +263,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 读取较大的树仍受原生操作超时（`timeoutMs`）、单次 AX 调用超时（`axTimeoutMs`）和响应大小限制（`maxResponseBytes`）约束。
 
-队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
+队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不在调用之间独占应用。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
 
 <a id="known-limitations-and-deferred-work"></a>
 

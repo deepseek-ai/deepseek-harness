@@ -263,7 +263,7 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 
 The native operation deadline (`timeoutMs`), per-AX-call timeout (`axTimeoutMs`), and response size limit (`maxResponseBytes`) still apply to larger tree reads.
 
-The queue orders individual native requests. Holding an app object does not reserve its application across a Session; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) grants no cross-call ownership. Capture RPCs that never return occupy the single capture slot; creating new app objects does not reset that system connection.
+The queue orders individual native requests. Holding an app object does not reserve its application across a Session; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) does not reserve an application across calls. Capture RPCs that never return occupy the single capture slot; creating new app objects does not reset that system connection.
 
 <a id="known-limitations-and-deferred-work"></a>
 
