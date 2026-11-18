@@ -142,7 +142,7 @@ function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: b
 }
 
 function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
-  system: Extract<CuaSystemPermissionState, { platform: 'win32' }>
+  system: Extract<CuaSystemPermissionState, { platform: 'windows' }>
   uncertain: boolean
 }) {
   const unlocked = system.sessionLocked === false
@@ -161,7 +161,7 @@ function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
 function systemReady(system: CuaSystemPermissionState): boolean {
   switch (system.platform) {
     case 'darwin': return system.accessibility && system.screenRecording
-    case 'win32': return system.sessionLocked === false && system.captureAvailable
+    case 'windows': return system.sessionLocked === false && system.captureAvailable
     /* v8 ignore next -- Native permission responses validate the closed platform union. */
     default: return assertNever(system)
   }
@@ -172,6 +172,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
+  const windows = observed?.platform === 'windows' || (observed === null && state.windowsProvider.value === true)
   const apps = state.applications.value
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
@@ -186,16 +187,31 @@ export function PermissionPanel(props: PermissionPanelProps) {
   }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
+      <div className={css.guidance} data-cua-guidance>
+        <p>{t('previewNotice')}</p>
+        {windows && <>
+          <p>{t('windowsHelperBuild', {
+            directory: 'packages/experimental/cua-windows',
+            x64: 'pnpm run build:native:x64', arm64: 'pnpm run build:native:arm64',
+          })}</p>
+          <p>{t('windowsHelperPath', {
+            patch: 'cordis.patch.yml', entry: 'cua-windows', config: 'config', path: 'helperPath', exe: 'dsh-cua-windows.exe',
+          })}</p>
+        </>}
+      </div>
       <h3>{t('title')}</h3>
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
         <PersistentPtcSetting {...props} />
+        {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
+          {t('providerLookupFailed', { message: state.windowsProvider.error })}
+        </p>}
         {state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
         </div>}
         {observed === null ? <UnknownStatus loading={loading} t={t} />
-          : observed.platform === 'win32' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
+          : observed.platform === 'windows' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
             : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
               role="group" aria-label={t(permission)}>
               <div>
@@ -207,7 +223,7 @@ export function PermissionPanel(props: PermissionPanelProps) {
                 busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
             </div>)}
       </div>
-      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'win32'
+      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'windows'
         ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
         : t('permissionHint')}</p>
     </section>
@@ -241,12 +257,12 @@ export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOp
     && systemReady(state.value)
   useEffect(() => { if (ready && !state.busy) onDismiss() }, [ready, state.busy, onDismiss])
   return <Modal open={!ready && (state.value !== null || (!state.busy && state.error !== null))}
-    title={t(state.value?.platform === 'win32' ? 'windowsSetupTitle' : 'setupTitle')} closeLabel={t('close')} onClose={onDismiss}
+    title={t(state.value?.platform === 'windows' ? 'windowsSetupTitle' : 'setupTitle')} closeLabel={t('close')} onClose={onDismiss}
     footer={<>
       <Button variant="ghost" onClick={onDismiss}>{t('later')}</Button>
       <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>{t('openSetup')}</Button>
     </>}>
-    <p>{t(state.error !== null ? 'setupQueryFailed' : state.value?.platform !== 'win32' ? 'setupBody'
+    <p>{t(state.error !== null ? 'setupQueryFailed' : state.value?.platform !== 'windows' ? 'setupBody'
       : state.value.sessionLocked === null ? 'windowsSessionUnknown'
         : state.value.sessionLocked ? 'windowsSetupBody' : 'windowsCaptureUnavailable')}</p>
   </Modal>

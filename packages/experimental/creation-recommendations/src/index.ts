@@ -5,12 +5,13 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
-import { HarnessError, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { isPluginStopping } from '@deepseek-ai/dsh-action-cards'
-import type { ActionCardFields, ActionCardProposalOf, ActionCardResult } from '@deepseek-ai/dsh-action-cards'
+import type { ActionCardFields, ActionCardId, ActionCardProposalOf, ActionCardResult } from '@deepseek-ai/dsh-action-cards'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-app-boot'
@@ -22,7 +23,7 @@ export type * from './types.ts'
 
 export const name = 'creation-recommendations'
 
-/** Services the page kind uses; `actionCards` owns the card tool, state and user actions. */
+/** Services the page kind uses; `actionCards` owns card state and user actions. */
 export const inject = ['tools', 'pluginManager', 'agents', 'subagents', 'profileContext', 'skills', 'actionCards']
 
 /** Card action this plugin registers. */
@@ -43,7 +44,7 @@ const locationSchema = z.object({ slot: slotSchema, customLocation: customLocati
 
 /** A page card's recorded phase and validated data. */
 interface PageCard extends PageData {
-  readonly callId: ToolCallId
+  readonly cardId: ActionCardId
   readonly phase: string
 }
 
@@ -68,7 +69,7 @@ function fieldsOf({ slot, customLocation, bundleName, application }: PageData): 
 }
 
 function settled(card: PageCard): ActionCardResult {
-  return { status: 'settled', decision: { callId: card.callId, action: ACTION, phase: card.phase, data: fieldsOf(card) } }
+  return { status: 'settled', decision: { cardId: card.cardId, action: ACTION, phase: card.phase, data: fieldsOf(card) } }
 }
 
 function refused(reason: string): ActionCardResult {
@@ -92,10 +93,7 @@ class PersonalizedPages {
     const { ctx } = this
     registerCreationSkill(ctx)
     ctx.actionCards.register({
-      action: ACTION, skill: 'personalized-pages', details: detailsSchema,
-      invitation: 'End with at most one short invitation in the user’s language, in the first person: after they click Create below, '
-        + 'you will build it in the background as a plugin page that stays available, without blocking the chat; '
-        + 'the build takes minutes and many tokens.',
+      action: ACTION, details: detailsSchema,
       verbs: { create: { global: true, writes: true }, undo: { global: true }, cancel: {}, restore: { global: true } },
       openPhases: ['cancelled', 'failed', 'interrupted', 'unconfirmed'],
       statusGuidance: 'Cancelled means a started background creation was stopped before installation. '
@@ -121,7 +119,7 @@ class PersonalizedPages {
     }, 'creation-recommendations: drain creation')
     ctx.on('agent/created', async ({ agent }) => { await this.recoverOnOpen(agent) })
     ctx.on('agent/disposed', ({ agent }) => {
-      for (const job of this.jobs.values()) if (job.parent === agent && this.cardOf(agent, job.card.callId)?.phase !== 'installing') {
+      for (const job of this.jobs.values()) if (job.parent === agent && this.cardOf(agent, job.card.cardId)?.phase !== 'installing') {
         job.abort.abort()
         this.record(agent, { ...job.card, phase: 'interrupted' })
       }
@@ -141,27 +139,27 @@ class PersonalizedPages {
   }
 
   private record(agent: Agent, card: PageCard): void {
-    this.ctx.actionCards.record(agent, { callId: card.callId, action: ACTION, phase: card.phase, data: fieldsOf(card) })
+    this.ctx.actionCards.record(agent, { cardId: card.cardId, action: ACTION, phase: card.phase, data: fieldsOf(card) })
   }
 
   /** Page cards of a Session whose recorded data passes validation. */
   private cardsOf(agent: Agent): PageCard[] {
     return Object.values(this.ctx.actionCards.view(agent.session).decisions).flatMap((decision) => {
       const data = decision.action === ACTION ? dataSchema.safeParse(decision.data) : undefined
-      return data?.success === true ? [{ callId: decision.callId, phase: decision.phase, ...data.data }] : []
+      return data?.success === true ? [{ cardId: decision.cardId, phase: decision.phase, ...data.data }] : []
     })
   }
 
-  private cardOf(agent: Agent, callId: ToolCallId): PageCard | undefined {
-    return this.cardsOf(agent).find(card => card.callId === callId)
+  private cardOf(agent: Agent, cardId: ActionCardId): PageCard | undefined {
+    return this.cardsOf(agent).find(card => card.cardId === cardId)
   }
 
   private async recover(agent: Agent): Promise<void> {
     for (const card of this.cardsOf(agent)) {
-      if (!['creating', 'installing', 'interrupted', 'cancelled', 'failed', 'unconfirmed'].includes(card.phase) || this.jobs.has(JSON.stringify([agent.id, card.callId]))) continue
+      if (!['creating', 'installing', 'interrupted', 'cancelled', 'failed', 'unconfirmed'].includes(card.phase) || this.jobs.has(JSON.stringify([agent.id, card.cardId]))) continue
       const installed = (await this.ctx.pluginManager.listBundles()).find(bundle => bundle.name === card.bundleName && bundle.installed)
       if (installed !== undefined) this.record(agent, {
-        callId: card.callId, slot: card.slot, phase: 'installed', bundleName: installed.name,
+        cardId: card.cardId, slot: card.slot, phase: 'installed', bundleName: installed.name,
         ...(card.customLocation === undefined ? {} : { customLocation: card.customLocation }),
         ...(installed.error === undefined && installed.enabled ? {} : { application: 'failed' }),
       })
@@ -174,7 +172,7 @@ class PersonalizedPages {
     catch (error) {
       this.ctx.logger.warn('Cannot confirm created plugins for session %s: %s. Card retries recheck the profile before creating anything.', agent.id, String(error))
       for (const card of this.cardsOf(agent)) {
-        if (['creating', 'installing', 'interrupted', 'cancelled', 'failed'].includes(card.phase) && !this.jobs.has(JSON.stringify([agent.id, card.callId]))) {
+        if (['creating', 'installing', 'interrupted', 'cancelled', 'failed'].includes(card.phase) && !this.jobs.has(JSON.stringify([agent.id, card.cardId]))) {
           this.record(agent, { ...card, phase: 'unconfirmed' })
         }
       }
@@ -215,8 +213,8 @@ class PersonalizedPages {
     if (verb === 'create' && !location.success) return refused('invalid-location')
     // The card service hands over only a live root, checked again after reconciliation.
     if (this.isStopping()) return refused('closing')
-    const previous = this.cardOf(agent, proposal.callId)
-    const key = JSON.stringify([agent.id, proposal.callId])
+    const previous = this.cardOf(agent, proposal.cardId)
+    const key = JSON.stringify([agent.id, proposal.cardId])
     const job = this.jobs.get(key)
     if (job !== undefined) {
       if (verb === 'cancel' && previous?.phase !== 'installing') {
@@ -247,10 +245,10 @@ class PersonalizedPages {
     // Spawn preserves the parent's workspace-write boundary even with a different cwd.
     const sourceDirectory = join(agent.session.header.cwd ?? this.ctx.profileContext.cwd, '.dsh-created-plugins', id)
     const bundleName = RESERVED_PREFIX + id
-    const card: PageCard = { callId: proposal.callId, phase: 'creating', bundleName, ...location.data }
+    const card: PageCard = { cardId: proposal.cardId, phase: 'creating', bundleName, ...location.data }
     this.record(agent, card)
     const abort = new AbortController()
-    const childId = SessionId(randomUUID())
+    const childId = brandString<SessionId>(randomUUID())
     const done = this.generate(agent, childId, proposal, card, sourceDirectory, directory, bundleName, abort.signal)
       .finally(() => { this.jobs.delete(key) })
     this.jobs.set(key, { parent: agent, childId, card, abort, done })
@@ -270,7 +268,7 @@ class PersonalizedPages {
         provider: 'spawn', label: proposal.title, delivery: 'caller', signal, childId,
         parent: agent, agentPreset: 'cordis', cwd: sourceDirectory,
         prompt: [{ type: 'text', text: JSON.stringify({
-          task: 'Create one new independently removable DSH interface plugin. Implement the accepted behavior and data scope in brief; research APIs and choose the technical details needed to make it work. Do not add independent operations, data sources, automation or wider access beyond that scope. If unresolved business meaning prevents faithful implementation, report ready:false rather than inventing it. Read and use the cordis-plugin-development skill. Generate and build the package only; the caller validates and installs it. Do not install, enable, remove, or edit any existing plugin or profile configuration.',
+          task: 'Create one new independently removable DSH interface plugin. Implement the accepted behavior and data scope in brief; research APIs and choose the technical details needed to make it work. Do not add independent operations, data sources, automation or wider access beyond that scope. If unresolved business meaning prevents faithful implementation, report ready:false rather than inventing it. Load the dsh-doc skill and read references/plugin-development.md from its reported base directory. Generate and build the package only; the caller validates and installs it. Do not install, enable, remove, or edit any existing plugin or profile configuration.',
           title: proposal.title, brief: proposal.brief,
           ...(initialContent === undefined ? {} : {
             initialContent,
@@ -287,7 +285,7 @@ class PersonalizedPages {
             uiReferences: ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file => fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/' + file))),
             locationPolicy: 'location.request is the user’s final placement instruction, overriding earlier placement in brief. Resolve it using existing documented DSH extension points; the references describe common placements, not a new custom slot. Preserve the requested behavior and data scope. Do not change the application shell or install anything outside this removable plugin. If the placement cannot be implemented, report ready:false instead of silently substituting another location.',
           }),
-          lifecycle: 'Read the relevant absolute uiReference or uiReferences bundled with this plugin before implementation; they supplement the cordis-plugin-development skill. Follow their registration, persistence and teardown guidance. Unloading must remove only this plugin’s UI and tabs, preserving unrelated content. Generate and build only; the caller installs and validates the live result.',
+          lifecycle: 'Read the relevant absolute uiReference or uiReferences bundled with this plugin before implementation; they supplement the dsh-doc plugin-development guide. Follow their registration, persistence and teardown guidance. Unloading must remove only this plugin’s UI and tabs, preserving unrelated content. Generate and build only; the caller installs and validates the live result.',
           completion: 'After the package and required checks are complete, finish by calling structured_output with {"ready":true}. Do not send a final prose report: only that tool call hands the package back for installation. If the package cannot be completed, call structured_output with {"ready":false}.',
         }) }],
         outputSchema: { type: 'object', properties: { ready: { type: 'boolean' } }, required: ['ready'], additionalProperties: false },

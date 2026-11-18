@@ -74,7 +74,8 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`：后端注册表、spawn/send/read/signal/kill/list、所有者清理与 dispose |
-| [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合、错误码 |
+| [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合 |
+| [`src/error.ts`](src/error.ts) | `TerminalError`、其 code 与 `TerminalBackendCleanupError` |
 
 ### 数据模型与生命周期
 
@@ -83,12 +84,12 @@ kind: "package-reference"
 ### 所有权与清理规则
 
 - 限制基于确切的 `Agent` 对象：`hasOwnerActivity(owner)` 覆盖从尚未发布的设置到最终关闭的全过程，没有发布竞态，因此生命周期策略可以精确限制所有者。
-- 无法清理部分启动资源的后端会以 `TerminalBackendCleanupError` 拒绝；服务会将该失败保留为受跟踪的所有者活动，直到所有者或服务 dispose 消费并报告它。
+- 无法清理部分启动资源的后端会以 `TerminalBackendCleanupError` 拒绝，它是 code 为 `CLEANUP_FAILED` 的 `TerminalError`，在 `errors` 和 `AggregateError` 类型的 `cause` 中列出两个失败；服务会将该失败保留为受跟踪的所有者活动，直到所有者或服务 dispose 消费并报告它。
 - 调用方取消保留其确切的 `AbortSignal.reason`；`kill()` 与 dispose 只在后端捕获的进程树完全停稳后完成。
 
 ### 发送预留
 
-服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。
+服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。失败均为 `TerminalError`（一种 `HarnessError`）；除注册表 code 外，向正在关闭的会话发送会以 `SESSION_CLOSING` 失败，后端以同一类报告 `SESSION_EXITED`、`STARTUP_EXITED`、`STARTUP_TIMEOUT` 与 `NO_SANDBOX`。通过服务驱动 shell 的消费方在该 shell 拒绝自身的初始化输入时使用 `INIT_REJECTED`。
 
 </details>
 

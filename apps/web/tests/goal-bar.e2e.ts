@@ -53,9 +53,9 @@ describe('web e2e: goal bar clear convergence', () => {
     const bar = page.locator('[data-goal-bar]')
     await bar.waitFor({ timeout: 10_000 })
     const pause = bar.getByRole('button', { name: 'Pause goal' })
-    await expect.poll(() => pause.count(), {
+    await expect.poll(() => pause.isEnabled(), {
       timeout: 10_000,
-    }).toBe(1)
+    }).toBe(true)
     await pause.hover()
     const pauseTooltip = page.getByRole('tooltip', { name: 'Pause goal', exact: true })
     await pauseTooltip.waitFor()
@@ -120,7 +120,7 @@ describe('web e2e: goal bar clear convergence', () => {
     await input.fill('/goal retry after a blocker')
     await input.press('Enter')
     const bar = page.locator('[data-goal-bar]')
-    await bar.getByRole('button', { name: 'Pause goal' }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => bar.getByRole('button', { name: 'Pause goal' }).isEnabled(), { timeout: 10_000 }).toBe(true)
 
     const agents = scaffold.ctx.agents.list()
     expect(agents).toHaveLength(1)
@@ -140,7 +140,7 @@ describe('web e2e: goal bar clear convergence', () => {
     await compareOrRefreshGolden(BLOCKED_EXPECTED, blocked, MODE)
 
     await bar.getByRole('button', { name: 'Resume goal' }).click()
-    await bar.getByRole('button', { name: 'Pause goal' }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => bar.getByRole('button', { name: 'Pause goal' }).isEnabled(), { timeout: 10_000 }).toBe(true)
     expect(scaffold.ctx.goals.get(agent)).toMatchObject({
       phase: 'active', activation: 'armed', objective: 'retry with the edited plan',
     })

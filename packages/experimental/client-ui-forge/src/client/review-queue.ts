@@ -1,14 +1,20 @@
-/** Browser-persisted review drafts and the write whose outcome still needs confirmation. */
+/**
+ * Browser-persisted review records, the review summary, comment drafts an earlier panel kept in the browser, and the
+ * write whose outcome still needs confirmation. New pull request comments go to the pending review on the code host.
+ */
 
 import { z } from 'zod'
 import type { ForgeReviewRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ReviewSelection, ReviewSource } from './review.ts'
 
 const line = z.object({ path: z.string(), side: z.enum(['L', 'R']), startLine: z.number().int().positive(), endLine: z.number().int().positive(), body: z.string() })
-const selection = z.object({ source: z.object({ kind: z.literal('change'), url: z.string(), headSha: z.string() }), comment: line.extend({ hunk: z.string() }) })
+const commits = z.object({ from: z.string(), to: z.string() }).nullable().default(null)
+const selection = z.object({
+  source: z.object({ kind: z.literal('change'), url: z.string(), headSha: z.string(), commits }), comment: line.extend({ hunk: z.string() }),
+})
 const recordedSelection = selection.extend({ source: z.discriminatedUnion('kind', [
   selection.shape.source,
-  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null) }),
+  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null), commits }),
 ]) })
 const record = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), selection: recordedSelection }),
@@ -30,6 +36,13 @@ export type ReviewRecord =
 
 /** One inline record; its numeric key belongs only to the retained browser store. */
 export type ReviewThread = { readonly key: number } & (ReviewRecord | { readonly kind: 'pending'; readonly selection: ReviewSelection })
+
+/** A record taken out of the store, with the position that puts it back. */
+export interface RemovedRecord {
+  readonly record: ReviewRecord
+  /** Position among the stored records before the removal. */
+  readonly index: number
+}
 
 /** File-scoped snapshot that does not change while unrelated comments or the summary are edited. */
 export interface FileReviewState {
@@ -109,7 +122,7 @@ export class ReviewQueue {
       ...this.state.records.filter(item => matches(item.selection)).map(item => ({ ...item, key: this.keyOf(item.selection) })),
       ...this.state.comments.filter(matches).map(item => ({ kind: 'pending' as const, selection: item, key: this.keyOf(item) })),
     ]
-    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? [source.scope, source.baseRef] : source.url])
+    const key = JSON.stringify([path, source.kind, source.kind === 'local' ? [source.scope, source.baseRef] : source.url, source.commits])
     const previous = this.files.get(key)
     const locked = this.state.uncertain !== null
     if (previous !== undefined && previous.locked === locked && previous.error === this.state.error
@@ -142,6 +155,29 @@ export class ReviewQueue {
   }
 
   /**
+   * Remove the reference or publication receipt behind an inline record. A comment draft is deleted through `editThread`;
+   * a published comment stays on the code host.
+   * @param key - browser-store identity from fileComments.
+   * @returns the removed record and its position, or null when no record has the key or the removal was not saved.
+   */
+  removeRecord(key: number): RemovedRecord | null {
+    const index = this.state.records.findIndex(item => this.keyOf(item.selection) === key)
+    const record = this.state.records[index]
+    if (record === undefined) return null
+    return this.save({ ...this.state, records: this.state.records.filter(item => item !== record) }) ? { record, index } : null
+  }
+
+  /**
+   * Put a removed record back at its earlier position, or after the remaining records when fewer are left.
+   * @param removed - result of removeRecord.
+   * @returns whether the record was saved.
+   */
+  restoreRecord(removed: RemovedRecord): boolean {
+    const records = this.state.records
+    return this.save({ ...this.state, records: [...records.slice(0, removed.index), removed.record, ...records.slice(removed.index)] })
+  }
+
+  /**
    * Observe queue edits and storage failures.
    * @param listener - snapshot invalidation.
    * @returns unsubscribe.
@@ -149,16 +185,6 @@ export class ReviewQueue {
   readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
-  }
-
-  /**
-   * Save a frozen PR comment unless a write needs reconciliation.
-   * @param selection - frozen PR comment.
-   * @returns whether it was saved.
-   */
-  add(selection: ReviewSelection): boolean {
-    if (selection.source.kind !== 'change' || this.state.uncertain !== null) return false
-    return this.save({ ...this.state, comments: [...this.state.comments, selection] })
   }
 
   /**
@@ -251,9 +277,10 @@ export class ReviewQueue {
  * Compare review identity while allowing records from an older PR head to remain visible.
  * @param left - recorded source.
  * @param right - displayed source.
- * @returns whether the sources name the same PR, or the same local scope and base ref.
+ * @returns whether the sources name the same PR, or the same local scope and base ref, with the same chosen commits.
  */
 export function sameReviewSource(left: ReviewSource, right: ReviewSource): boolean {
+  if (left.commits?.from !== right.commits?.from || left.commits?.to !== right.commits?.to) return false
   return left.kind === 'local' ? right.kind === 'local' && left.scope === right.scope && left.baseRef === right.baseRef
     : right.kind === 'change' && left.url === right.url
 }

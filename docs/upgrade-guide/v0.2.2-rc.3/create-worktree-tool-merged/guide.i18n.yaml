@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.3/create-worktree-tool-merged/guide.md
+/:
+  en: d994abee8ad3650f
+  zh: 0857a7d70b9d395e
+/enter-worktree-replaces-create-worktree:
+  en: bdeb4b6e382fe6ba
+  zh: ac7389ae7a3e2a43
+/enter-worktree-replaces-create-worktree/change:
+  en: 844309112e229e12
+  zh: e018fbfe34ae4fd3
+/enter-worktree-replaces-create-worktree/migration:
+  en: 5a1bd8b061f43a37
+  zh: 2191774792218cfb

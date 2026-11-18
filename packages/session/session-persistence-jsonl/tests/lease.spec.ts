@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import {
   SessionAlreadyExistsError,
@@ -29,6 +29,7 @@ import * as JsonlSessionPersistence from '../src/index.ts'
 import { LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
 import type { JsonlSessionHandle } from '../src/storage.ts'
 import { sessionDir } from '../src/format.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // The lock's base name, duplicated for the hoisted mock factories: they run
 // while `../src/lease.ts` is still evaluating, before LEASE_FILENAME exists.
@@ -116,7 +117,7 @@ afterEach(async () => {
 })
 
 function meta(id: string, cwd = '/work'): SessionHeader {
-  return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 1_000, cwd, isSeeded: false }
+  return { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), createdAt: 1_000, cwd, isSeeded: false }
 }
 
 async function freshRoot(): Promise<string> {
@@ -133,7 +134,7 @@ async function mount(root: string): Promise<SessionPersistence> {
 }
 
 function lockPath(root: string, id: string, cwd = '/work'): string {
-  return join(sessionDir(root, cwd, SessionId(id)), LEASE_FILENAME)
+  return join(sessionDir(root, cwd, brandString<SessionId>(id)), LEASE_FILENAME)
 }
 
 /**
@@ -166,7 +167,7 @@ describe('cross-process write lock', () => {
     // the materialized duplicate is an existence fact, the write open an
     // ownership one.
     await expect(second.create(meta('excluded'))).rejects.toBeInstanceOf(SessionAlreadyExistsError)
-    await expect(second.open(SessionId('excluded'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await expect(second.open(brandString<SessionId>('excluded'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
     // Unmaterialized creates hold no lock and leave no artifact, so a rival
     // instance's create succeeds; the collision surfaces at the loser's first
     // materializing write, where the winner already holds the lock.
@@ -177,7 +178,7 @@ describe('cross-process write lock', () => {
     await pendingLoser.close()
     await pendingWinner.close()
     // Reads never touch the lock.
-    const reader = await second.open(SessionId('excluded'), 'read')
+    const reader = await second.open(brandString<SessionId>('excluded'), 'read')
     expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
     await reader.close()
 
@@ -185,7 +186,7 @@ describe('cross-process write lock', () => {
     // POSIX keeps the materialized session's lock file (Windows locks a kernel
     // object with no filesystem footprint); the kernel lock itself is gone.
     if (process.platform !== 'win32') expect(existsSync(lockPath(root, 'excluded'))).toBe(true)
-    const reopened = await second.open(SessionId('excluded'), 'write')
+    const reopened = await second.open(brandString<SessionId>('excluded'), 'write')
     await reopened.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await reopened.close()
   })
@@ -200,7 +201,7 @@ describe('cross-process write lock', () => {
     // The documented escape hatch for a live-but-stuck holder: deleting the
     // lock file orphans the held inode, and a successor locks the fresh one.
     await rm(lockPath(root, 'wedged'))
-    const successor = await second.open(SessionId('wedged'), 'write')
+    const successor = await second.open(brandString<SessionId>('wedged'), 'write')
     await successor.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await successor.close()
     await wedged.close()
@@ -209,7 +210,7 @@ describe('cross-process write lock', () => {
   it('write-opening an absent session leaves no lock residue', async () => {
     const root = await freshRoot()
     const backend = await mount(root)
-    await expect(backend.open(SessionId('absent'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+    await expect(backend.open(brandString<SessionId>('absent'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
     expect(existsSync(join(root, LEASE_FILENAME))).toBe(false)
   })
 
@@ -221,7 +222,7 @@ describe('cross-process write lock', () => {
     await writer.close()
     // The project directory exists but the id's session directory does not:
     // the generation scan reports absence rather than misreading a sibling.
-    await expect(backend.open(SessionId('absent-sibling'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+    await expect(backend.open(brandString<SessionId>('absent-sibling'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
   })
 
   it('a never-materialized create leaves no filesystem footprint at all', async () => {
@@ -233,7 +234,7 @@ describe('cross-process write lock', () => {
     expect(existsSync(join(lockPath(root, 'erased'), '..'))).toBe(false)
     await handle.close()
     expect(existsSync(join(lockPath(root, 'erased'), '..'))).toBe(false)
-    await expect(backend.stat(SessionId('erased'))).resolves.toBeUndefined()
+    await expect(backend.stat(brandString<SessionId>('erased'))).resolves.toBeUndefined()
   })
 
   it('materialization publishes the lock before the first log bytes and keeps it on the handle', async () => {
@@ -244,11 +245,11 @@ describe('cross-process write lock', () => {
     await creator.append([...EVENTS])
     // The materializing append acquired and retained the lock.
     if (process.platform !== 'win32') expect(existsSync(lockPath(root, 'lazy-lock'))).toBe(true)
-    await expect(second.open(SessionId('lazy-lock'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await expect(second.open(brandString<SessionId>('lazy-lock'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
     // A later append reuses the held lock rather than re-acquiring.
     await creator.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await creator.close()
-    const reopened = await second.open(SessionId('lazy-lock'), 'write')
+    const reopened = await second.open(brandString<SessionId>('lazy-lock'), 'write')
     await reopened.close()
   })
 
@@ -258,7 +259,7 @@ describe('cross-process write lock', () => {
     const second = await mount(root)
     const creator = await first.create(meta('flush-lock'))
     await creator.flush()
-    await expect(second.open(SessionId('flush-lock'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await expect(second.open(brandString<SessionId>('flush-lock'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
     await creator.close()
   })
 
@@ -270,7 +271,7 @@ describe('cross-process write lock', () => {
     await writer.close()
 
     refuse.lockOpen = true
-    await expect(backend.open(SessionId('open-blocked'), 'write')).rejects.toThrow(/EACCES/)
+    await expect(backend.open(brandString<SessionId>('open-blocked'), 'write')).rejects.toThrow(/EACCES/)
   })
 
   it.skipIf(process.platform === 'win32')('surfaces a non-contention flock failure', async () => {
@@ -281,7 +282,7 @@ describe('cross-process write lock', () => {
     await writer.close()
 
     refuse.flock = true
-    await expect(backend.open(SessionId('flock-blocked'), 'write')).rejects.toThrow(/EACCES/)
+    await expect(backend.open(brandString<SessionId>('flock-blocked'), 'write')).rejects.toThrow(/EACCES/)
   })
 
   it.skipIf(process.platform === 'win32')('maps the EWOULDBLOCK contention spelling to already-owned', async () => {
@@ -293,7 +294,7 @@ describe('cross-process write lock', () => {
 
     // Some libcs spell flock(2) contention EWOULDBLOCK rather than EAGAIN.
     refuse.flockBusy = true
-    await expect(backend.open(SessionId('win-contended'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await expect(backend.open(brandString<SessionId>('win-contended'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
   })
 
   it.skipIf(process.platform === 'win32')('surfaces a lock-path stat refusal from the inode verification', async () => {
@@ -304,7 +305,7 @@ describe('cross-process write lock', () => {
     await writer.close()
 
     refuse.lockStat = true
-    await expect(backend.open(SessionId('stat-blocked'), 'write')).rejects.toThrow(/EACCES/)
+    await expect(backend.open(brandString<SessionId>('stat-blocked'), 'write')).rejects.toThrow(/EACCES/)
   })
 
   it.skipIf(process.platform === 'win32')('retries when the locked inode is no longer the lock path, and wins on a stable pass', async () => {
@@ -317,7 +318,7 @@ describe('cross-process write lock', () => {
     // One churn (unlink+recreate under the verify stat) orphans the first
     // locked inode; the retry locks the fresh file and verifies clean.
     refuse.swapLockOnStat = 1
-    const reopened = await backend.open(SessionId('churned'), 'write')
+    const reopened = await backend.open(brandString<SessionId>('churned'), 'write')
     await reopened.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await reopened.close()
   })
@@ -330,7 +331,7 @@ describe('cross-process write lock', () => {
     await writer.close()
 
     refuse.dropLockOnStat = true
-    const reopened = await backend.open(SessionId('vanished'), 'write')
+    const reopened = await backend.open(brandString<SessionId>('vanished'), 'write')
     await reopened.close()
   })
 
@@ -343,7 +344,7 @@ describe('cross-process write lock', () => {
 
     // Churn on every attempt: the bounded retry refuses rather than spinning.
     refuse.swapLockOnStat = 3
-    await expect(backend.open(SessionId('unstable'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    await expect(backend.open(brandString<SessionId>('unstable'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
   })
 
   it('a failing lock release still frees the in-process claim on close', async () => {
@@ -355,7 +356,7 @@ describe('cross-process write lock', () => {
     failReleaseOnce()
     await expect(holder.close()).rejects.toThrow(/injected release failure/)
     // The claim is freed despite the failed release: the id is not wedged.
-    const reopened = await backend.open(SessionId('release-fails'), 'write')
+    const reopened = await backend.open(brandString<SessionId>('release-fails'), 'write')
     await reopened.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await reopened.close()
   })
@@ -374,7 +375,7 @@ describe('cross-process write lock', () => {
     await writeFile(join(dir, String(log)), `#${stored.slice(1)}`)
 
     failReleaseOnce()
-    const outcome = await backend.open(SessionId('open-and-release-fail'), 'write').then(() => undefined, (error: unknown) => error)
+    const outcome = await backend.open(brandString<SessionId>('open-and-release-fail'), 'write').then(() => undefined, (error: unknown) => error)
     expect(outcome).toBeInstanceOf(AggregateError)
     const errors = (outcome as AggregateError).errors as Error[]
     expect(errors).toHaveLength(2)
@@ -382,7 +383,7 @@ describe('cross-process write lock', () => {
     expect(String(errors[1])).toMatch(/injected release failure/)
     // The original diagnostic survives, and the claim is freed: the next
     // attempt reports the corruption again rather than a phantom owner.
-    await expect(backend.open(SessionId('open-and-release-fail'), 'write')).rejects.toThrow(/corrupt/i)
+    await expect(backend.open(brandString<SessionId>('open-and-release-fail'), 'write')).rejects.toThrow(/corrupt/i)
   })
 
   it('a drain failure and a release failure reject close as one AggregateError', async () => {
@@ -399,20 +400,20 @@ describe('cross-process write lock', () => {
     expect(outcome).toBeInstanceOf(AggregateError)
     expect((outcome as AggregateError).errors.map(String).join('\n')).toMatch(/drain refusal[\s\S]*release failure/)
     // Both failures reported, and the id is still not wedged.
-    const reopened = await backend.open(SessionId('drain-and-release-fail'), 'write')
+    const reopened = await backend.open(brandString<SessionId>('drain-and-release-fail'), 'write')
     await reopened.close()
   })
 
   it.skipIf(process.platform === 'win32')('release is idempotent and never removes the lock file', async () => {
     const root = await freshRoot()
     const dir = join(root, 'solo')
-    const lease = await SessionWriteLease.acquire(dir, SessionId('solo'))
+    const lease = await SessionWriteLease.acquire(dir, brandString<SessionId>('solo'))
     await lease.release()
     await lease.release()
     // The file survives every release, keeping the stable inode later
     // lockers verify against; the kernel lock died with the descriptor.
     expect(existsSync(join(dir, LOCK))).toBe(true)
-    const successor = await SessionWriteLease.acquire(dir, SessionId('solo'))
+    const successor = await SessionWriteLease.acquire(dir, brandString<SessionId>('solo'))
     await successor.release()
     expect(existsSync(join(dir, LOCK))).toBe(true)
   })

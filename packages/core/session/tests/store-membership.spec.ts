@@ -4,11 +4,12 @@ import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import SessionStore, {
   appendPluginRecord,
   Session,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
@@ -32,7 +33,7 @@ describe('Session store membership', () => {
     { name: 'events', append: (session: Session) => session.append('turn/start', { turn: 1 }) },
     { name: 'plugin records', append: (session: Session) => appendPluginRecord(session, 'plugin:test/store-membership', { value: 1 }) },
   ])('keeps independent $name local and adopts their history without replaying notifications', async ({ append }) => {
-    const session = Session.create(SessionId('independent'))
+    const session = Session.create(brandString<SessionId>('independent'))
     const observed: SessionEvent[] = []
     let initialHistory: readonly SessionEvent[] | undefined
     let disposalError: unknown
@@ -72,7 +73,7 @@ describe('Session store membership', () => {
     { name: 'events', append: (session: Session) => session.append('turn/start', { turn: 1 }) },
     { name: 'plugin records', append: (session: Session) => appendPluginRecord(session, 'plugin:test/store-membership', { value: 1 }) },
   ])('allows $name only after creation announcement and before removal', async ({ append }) => {
-    const session = ctx.sessions.prepare(SessionId('membership'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('membership'))
     const observed: SessionEvent[] = []
     ctx.on('session/event', (_session, event) => { observed.push(event) })
     const empty = session.snapshotEvents()
@@ -104,7 +105,7 @@ describe('Session store membership', () => {
   })
 
   it('keeps writes disabled after a failed announcement', () => {
-    const session = ctx.sessions.prepare(SessionId('failed-announcement'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('failed-announcement'))
     ctx.effect(() => ctx.sessions.enter(session))
     ctx.on('session/created', () => { throw new Error('creation observer failed') })
     expect(() => { ctx.sessions.announce(session) }).toThrow('creation observer failed')
@@ -114,7 +115,7 @@ describe('Session store membership', () => {
   })
 
   it.each(['events', 'plugin records'] as const)('rejects %s before reading payloads when writes are disabled', async (kind) => {
-    const session = ctx.sessions.prepare(SessionId('unread-payload'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('unread-payload'))
     let reads = 0
     const read = (): number => { reads++; return 1 }
     const append = (): void => {
@@ -136,7 +137,7 @@ describe('Session store membership', () => {
   })
 
   it.each(['events', 'plugin records'] as const)('rejects %s when reading the payload detaches the Session', (kind) => {
-    const session = ctx.sessions.prepare(SessionId('payload-detach'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('payload-detach'))
     const detach = ctx.sessions.enter(session)
     ctx.effect(() => detach)
     ctx.sessions.announce(session)
@@ -154,7 +155,7 @@ describe('Session store membership', () => {
   })
 
   it.each(['events', 'plugin records'] as const)('rechecks %s after payload evaluation transfers an independent Session to a store', (kind) => {
-    const session = Session.create(SessionId('payload-adoption'))
+    const session = Session.create(brandString<SessionId>('payload-adoption'))
     const read = (): number => {
       ctx.effect(() => ctx.sessions.enter(session))
       return 1
@@ -176,10 +177,10 @@ describe('Session store membership', () => {
     const seed: readonly SessionEvent[] = deepFreeze([
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     ])
-    const id = SessionId('history')
+    const id = brandString<SessionId>('history')
     const created = Session.create(id, seed)
     const restored = Session.fromRestore(id, seed, created.header, SessionLogOffset(0), 'shared-frozen')
-    const childId = SessionId('child')
+    const childId = brandString<SessionId>('child')
     const forked = Session.create(childId, seed, {
       ...created.header, id: childId, parentSession: id, isSeeded: true,
     }, SessionLogOffset(1))
@@ -199,7 +200,7 @@ describe('Session store membership', () => {
   })
 
   it.each(['detached', 'shared-frozen'] as const)('keeps prepared restored history read-only (%s)', (eventState) => {
-    const source = Session.create(SessionId('restored'))
+    const source = Session.create(brandString<SessionId>('restored'))
     source.append('turn/start', { turn: 1 })
     const session = ctx.sessions.prepare(source.id, {
       seed: [...source.snapshotEvents()],
@@ -214,7 +215,7 @@ describe('Session store membership', () => {
   })
 
   it('revokes writes when the owning fiber releases a session', async () => {
-    const session = ctx.sessions.create(SessionId('owned'))
+    const session = ctx.sessions.create(brandString<SessionId>('owned'))
     session.append('turn/start', { turn: 1 })
     await ctx.fiber.dispose()
 

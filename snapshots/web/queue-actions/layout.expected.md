@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": workspace
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -21,9 +22,9 @@
 - region "To-dos":
   - button "To-dos 1 completed · 1 in progress"
 - text: Ongoing Goal Keep the composer context panels aligned
-- button "Pause goal"
 - button "Edit goal"
 - button "Clear goal"
+- button "Pause goal"
 - button "2 queued messages"
 - textbox "Cmd/Ctrl+Enter steers all queued messages"
 - button "Add files or run commands"

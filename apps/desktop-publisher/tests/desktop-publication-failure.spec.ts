@@ -1,0 +1,76 @@
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { expect, it } from 'vitest'
+import { z } from 'zod'
+import { DesktopCosOperationError, desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
+import { DesktopPublishError } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
+
+it('preserves actionable validation and filesystem diagnostics', () => {
+  expect(desktopPublicationFailure(new DesktopPublishError('conflict', 'desktop publish: object differs: bin/app.exe'), 'upload'))
+    .toMatchObject({ code: 'conflict', message: 'desktop publish: object differs: bin/app.exe' })
+  expect(desktopPublicationFailure(new Error('Usage: rollback-desktop-channel.ts --record <directory>'), 'arguments').message).toContain('Usage:')
+  expect(desktopPublicationFailure(Object.assign(new Error('raw'), { code: 'ENOENT', path: '/fixture/config.json' }), 'config').message)
+    .toContain('/fixture/config.json')
+})
+
+it('does not retain provider bodies, unknown messages, JSON input or invalid field contents', () => {
+  const result = z.object({ preset: z.enum(['test', 'production']) }).safeParse({ preset: 'fixture-secret' })
+  if (result.success) throw new Error('fixture must reject')
+  for (const error of [result.error, new SyntaxError('fixture-secret'), new Error('fixture-secret'),
+    { code: 'AccessDenied', statusCode: 403, body: 'fixture-secret', message: 'fixture-secret' }]) {
+    expect(JSON.stringify(desktopPublicationFailure(error, 'fixture'))).not.toContain('fixture-secret')
+  }
+  expect(desktopPublicationFailure(result.error, 'config').message).toContain('preset')
+  expect(desktopPublicationFailure({ code: 'AccessDenied', statusCode: 403 }, 'upload').message).toContain('HTTP 403')
+})
+
+// These repository integration tests execute Desktop CLIs; the publisher runtime never imports them.
+it('prints rollback usage through the real CLI before any audit or remote operation', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
+    fileURLToPath(new URL('../../desktop/scripts/rollback-desktop-channel.ts', import.meta.url))], { encoding: 'utf8', timeout: 30_000 })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  const diagnostic = z.object({ code: z.string(), message: z.string() }).parse(JSON.parse(result.stderr))
+  expect(diagnostic.code).toBe('validation')
+  expect(diagnostic.message).toContain('Usage: rollback-desktop-channel.ts')
+})
+
+it('omits malformed provider receipt fields and never copies raw errors into COS diagnostics', () => {
+  const error = new DesktopCosOperationError('PutObject', { code: 'AccessDenied', statusCode: 'fixture-secret',
+    RequestId: 'Authorization: fixture-secret', body: 'fixture-secret', message: 'fixture-secret' })
+  const failure = desktopPublicationFailure(error, 'publication')
+  expect(failure).toMatchObject({ code: 'AccessDenied', operation: 'PutObject' })
+  expect(failure).not.toHaveProperty('requestId')
+  expect(failure).not.toHaveProperty('httpStatus')
+  expect(JSON.stringify(failure)).not.toContain('fixture-secret')
+})
+
+it('prints structured archival failure through the real CLI', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
+    fileURLToPath(new URL('../../desktop/scripts/archive-desktop-ci.ts', import.meta.url))], {
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, DESKTOP_ARCHIVE_NAME: '', GITHUB_OUTPUT: '' },
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
+  expect(result.status).toBe(1)
+  expect(JSON.parse(result.stderr)).toEqual({ phase: 'artifact archival', code: 'validation',
+    message: 'desktop archival: invalid ZIP output settings' })
+})
+
+it.each(['percentage cannot decrease; inspect the current rollout', 'feed changed before write; inspect and retry',
+  'written feed is unconfirmed; inspect before retrying'])('retains rollout recovery instructions: %s', (message) => {
+  expect(desktopPublicationFailure(new Error(`desktop rollout: ${message}`), 'desktop rollout'))
+    .toEqual({ phase: 'desktop rollout', code: 'validation', message: `desktop rollout: ${message}` })
+})
+
+it.each([['check', 'extra'], ['route']])('prints actionable rollout CLI failures for %s', (...args) => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx/esm',
+    fileURLToPath(new URL('../src/publish-desktop-rollout-ci.ts', import.meta.url)), ...args], {
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, GITHUB_OUTPUT: '', GH_TOKEN: '' },
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(1)
+  expect(JSON.parse(result.stderr)).toMatchObject({ phase: 'desktop rollout', code: 'validation',
+    message: args[0] === 'route' ? 'desktop rollout: Actions output required' : 'desktop rollout: expected one operation' })
+})

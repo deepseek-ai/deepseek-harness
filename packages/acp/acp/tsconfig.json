@@ -9,6 +9,12 @@
   ],
   "references": [
     {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitLab change requests",
+    "description": "Read and write GitLab merge requests for the forge registry through the GitLab CLI on the host."
+  }
+}

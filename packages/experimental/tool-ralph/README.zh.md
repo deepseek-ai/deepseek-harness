@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 调用工具
 
-模型提交 `{ objective, maxRounds? }`，调用会阻塞到整个运行结算。部署配置中的 `maxRounds` 既是默认值，也是调用覆盖值的上限。终态结果为 `complete`、`blocked` 或 `budget-limited`，携带最后一份有界报告与已启动的 Round 数量；普通子 agent 失败会返回错误，其中标明失败的 Round，并在存在时保留上一次成功交接。
+模型提交 `{ objective, maxRounds? }`，调用会阻塞到整个运行结算。部署配置中的 `maxRounds` 既是默认值，也是调用覆盖值的上限。终态结果为 `complete`、`blocked` 或 `budget-limited`，携带最后一份有界报告与已启动的 Round 数量；普通子 agent 失败会返回错误，其中标明失败的 Round，并在存在时保留上一次成功交接。失败携带 `RalphError`，其 code 为封闭集合：子 agent Round 结束时没有结构化报告为 `RALPH_ROUND_FAILED`，workflow 出错或被调用方以外的原因取消为 `RALPH_WORKFLOW_FAILED`，其中包括在 workflow 内校验失败的子 agent 报告，因为 workflow 只以文本返回错误，workflow 返回值格式错误为 `RALPH_INVALID_RESULT`，提供方路由不符合要求为 `RALPH_PROVIDER_UNAVAILABLE` 或 `RALPH_PROVIDER_UNSUPPORTED`。空目标或超出范围的 `maxRounds` 是 `ToolArgsError`，调用方取消是 `AbortError`。
 
 ### 每个 Round 看到什么
 

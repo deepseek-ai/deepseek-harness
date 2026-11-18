@@ -1,6 +1,7 @@
 /** Deterministic keyless Agent Teams adapter shared by profile snapshot and CLI e2e. */
 
-import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 let nextCall = 0
 
@@ -17,7 +18,7 @@ function latestAssistantCalls(messages) {
 
 function hasNewCoordinationInput(messages) {
   const toolIndex = messages.findLastIndex(message => message.role === 'tool')
-  return messages.some((message, index) => index > toolIndex && message.role === 'user'
+  return toolIndex >= 0 && messages.some((message, index) => index > toolIndex && message.role === 'user'
     && ['agent-message', 'subagent-settled'].includes(message.source?.kind))
 }
 
@@ -42,7 +43,8 @@ function latestToolText(messages) {
 function toolChunks(specs) {
   const chunks = []
   for (const [index, spec] of specs.entries()) {
-    const id = ToolCallId(`team-fixture-${++nextCall}`)
+    /** @type {import('@deepseek-ai/dsh-llm/types').ToolCallId} */
+    const id = brandString(`team-fixture-${++nextCall}`)
     const args = JSON.stringify(spec.args)
     chunks.push(
       { type: 'block-start', index, blockType: 'tool-call' },
@@ -189,13 +191,15 @@ function lead(messages) {
 class TeamFixtureAdapter extends LlmAdapter {
   async * stream(options) {
     const tools = options.tools.map(tool => tool.name)
-    const initial = options.messages.findLast(message => message.role === 'user' && message.source.kind === 'user')
-    const workflowChild = initial?.content[0]?.text === 'TEAM_WORKFLOW_CHILD'
+    const initial = options.messages.find(message => message.role === 'user'
+      && ['user', 'agent-message'].includes(message.source.kind))
+    const taskContent = initial?.source.kind === 'agent-message' ? initial.content.slice(1) : initial?.content
+    const workflowChild = taskContent?.[0]?.text === 'TEAM_WORKFLOW_CHILD'
     const context = options.messages.findLast(message => message.source?.kind === 'runtime-context')
     const section = name => context?.source.sections?.find(candidate => candidate.name === name)?.text
     const role = section('subagent:identity')
     const parentId = role?.match(/You are a subagent delegated by agent "([^"]+)"/u)?.[1]
-    const task = initial?.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+    const task = taskContent?.filter(block => block.type === 'text').map(block => block.text).join('\n')
     if (!workflowChild && (!tools.includes('subagent') || !tools.includes('workflow') || !tools.includes('team_task_create'))) {
       throw new Error('Team profile is missing delegation, workflow, or task tools')
     }

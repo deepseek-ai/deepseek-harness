@@ -1,19 +1,18 @@
 /** Base branch picker of the local changes view's `branch` scope: the automatic fork point, then remote-tracking and local branches. */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconSearchOutlineRegular,
-  IconWarningTriangleOutlineRegular, Input, Menu, MenuItemButton, StateDot, Tooltip,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconSearchOutlineRegular,
+  IconWarningTriangleOutlineRegular, Input, Menu, MenuItemButton, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeBaseBranch, ForgeBaseBranches } from '../types.ts'
+import { branchSearchStatus, useBranchSearch } from './branch-search.tsx'
 import type { NS } from './locales.ts'
+import { searchFieldKeyDown } from './menu-search.ts'
 import css from './BaseMenu.module.css'
-
-/** Milliseconds between the last keystroke of a search and the listing it reads. */
-const SEARCH_DELAY_MS = 150
 
 /** Props of the base branch picker. */
 export interface BaseMenuProps extends PropsLocale<typeof NS> {
@@ -48,32 +47,11 @@ interface BaseOption {
  */
 export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: BaseMenuProps): ReactNode {
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [attempt, setAttempt] = useState(0)
-  const [listing, setListing] = useState<RemoteResult<ForgeBaseBranches> | null>(null)
-  const search = useRef<HTMLInputElement>(null)
   const shown = visible && open
-  useEffect(() => {
-    if (!shown) return
-    const controller = new AbortController()
-    const timer = setTimeout(() => {
-      void list(query, controller.signal).then((result) => { if (!controller.signal.aborted) setListing(result) })
-    }, query === '' ? 0 : SEARCH_DELAY_MS)
-    return () => {
-      clearTimeout(timer)
-      controller.abort()
-    }
-  }, [shown, query, attempt, list])
-  // The portalled menu measures itself hidden before its first frame, and a hidden field cannot take the keyboard.
-  // A touch screen keeps its on-screen keyboard closed until the field is tapped.
-  useEffect(() => {
-    if (!shown || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)) return
-    const frame = requestAnimationFrame(() => { search.current?.focus() })
-    return () => { cancelAnimationFrame(frame) }
-  }, [shown])
+  const { query, setQuery, listing, retry, reset, field } = useBranchSearch(shown, list)
   const close = (): void => {
     setOpen(false)
-    setQuery('')
+    reset()
   }
   const pick = (base: ForgeBaseBranch | null): void => {
     close()
@@ -109,20 +87,8 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
   ].filter(group => group.options.length > 0)
   const first = groups[0]?.options[0]
 
-  let body: ReactNode
-  if (listing === null) {
-    body = <div className={css.status} role="status"><StateDot state="ongoing" />{t('diff.base.loading')}</div>
-  } else if (!listing.ok) {
-    body = (
-      <div className={css.status} role="status">
-        <span>{t('toast.branchesFailed')}</span>
-        <Button size="sm" variant="outline" onClick={() => { setAttempt(count => count + 1) }}>{t('retry')}</Button>
-      </div>
-    )
-  } else if (groups.length === 0) {
-    body = <div className={css.status}>{t('diff.base.empty')}</div>
-  } else {
-    body = groups.map(group => (
+  const body: ReactNode = branchSearchStatus({ listing, empty: groups.length === 0, retry, className: css.status, t })
+    ?? groups.map(group => (
       <div key={group.id} role="group" aria-label={group.label}>
         {/* The automatic row's tag names it, so its group shows no heading. */}
         {group.id !== 'automatic' && <div className={css.label} role="presentation">{group.label}</div>}
@@ -141,7 +107,6 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
         })}
       </div>
     ))
-  }
 
   return (
     <Menu
@@ -166,15 +131,10 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
     >
       <div className={css.root} data-forge-base-menu="">
         <div className={css.search}>
-          <Input ref={search} className={clsx(css.searchInput)} icon={<IconSearchOutlineRegular size={14} />} value={query}
+          <Input ref={field} className={clsx(css.searchInput)} icon={<IconSearchOutlineRegular size={14} />} value={query}
             aria-label={t('diff.base.search')} placeholder={t('diff.base.search')}
             onChange={(event) => { setQuery(event.target.value) }}
-            onKeyDown={(event) => {
-              if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation()
-              if (event.key !== 'Enter' || event.nativeEvent.isComposing || first === undefined) return
-              event.preventDefault()
-              pick(first.base)
-            }} />
+            onKeyDown={(event) => { searchFieldKeyDown(event, first === undefined ? undefined : () => { pick(first.base) }) }} />
         </div>
         <div className={css.rows}>{body}</div>
         <div className={css.note}>{t('diff.base.note')}</div>

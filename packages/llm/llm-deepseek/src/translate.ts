@@ -1,6 +1,7 @@
 /** Translate Messages events while preserving block order and cumulative usage. */
 
-import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { object, replayState } from './replay.ts'
 import type { ReplayBlock } from './replay.ts'
@@ -53,7 +54,7 @@ function startBlock(event: Record<string, unknown>, index: number): Block {
       replay = { type: 'reasoning', ...native.signature === undefined ? {} : { signature: string(native.signature) } }
       break
     case 'tool_use':
-      content = { type: 'tool-call', id: ToolCallId(string(native.id)), name: string(native.name), arguments: JSON.stringify(object(native.input)) }
+      content = { type: 'tool-call', id: brandString<ToolCallId>(string(native.id)), name: string(native.name), arguments: JSON.stringify(object(native.input)) }
       if (!content.id || !content.name) return malformed('empty tool identity')
       replay = { type: 'tool-call' }
       break
@@ -87,6 +88,12 @@ function deltaChunk(block: Block, raw: unknown): StreamChunk | undefined {
   return malformed(`unsupported delta ${String(delta.type)} for ${content.type}`)
 }
 
+/** Build the failure for a `refusal` stop, keeping the provider's explanation such as blocked images. */
+function refusal(details: unknown): LlmError {
+  const explanation = typeof details === 'object' && details !== null && 'explanation' in details ? details.explanation : undefined
+  return new LlmError(`DeepSeek refused to answer under its content safety review${typeof explanation === 'string' && explanation ? `: ${explanation}` : ''}`, 'CONTENT_REFUSED')
+}
+
 function stopReason(raw: unknown): FinishReason {
   switch (raw) {
     case 'end_turn': case 'stop_sequence': return { kind: 'stop' }
@@ -99,13 +106,14 @@ function stopReason(raw: unknown): FinishReason {
 /** Translate decoded SSE data into the Harness stream protocol.
  * @param events - framed, decoded provider events in arrival order.
  * @param model - requested model id stored in durable replay state.
- * @returns blocks, one final usage value, and exactly one terminal finish.
+ * @returns blocks, then final usage and a finish chunk on completion. A refusal yields final usage before throwing `CONTENT_REFUSED`.
  */
 export async function* translate(events: AsyncIterable<Record<string, unknown>>, model: string): AsyncGenerator<StreamChunk> {
   const blocks = new Map<number, Block>()
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
   let started = false
   let reason: FinishReason | undefined
+  let refused: LlmError | undefined
   for await (const event of events) {
     if (event.type === 'message_start') {
       if (started) return malformed('duplicate message_start')
@@ -142,9 +150,16 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
       }
     } else if (event.type === 'message_delta') {
       const delta = object(event.delta)
-      if (delta.stop_reason != null) reason = stopReason(delta.stop_reason)
+      if (delta.stop_reason === 'refusal') refused = refusal(delta.stop_details)
+      else if (delta.stop_reason != null) reason = stopReason(delta.stop_reason)
       if (event.usage !== undefined) updateUsage(usage, event.usage)
     } else {
+      usage.totalTokens = usage.inputTokens + usage.outputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+      if (refused !== undefined) {
+        // Tokens consumed before a refusal are billed, so report them before failing.
+        yield { type: 'usage', usage }
+        throw refused
+      }
       if (reason === undefined || [...blocks.values()].some(block => !block.closed)) return malformed('message_stop without settled blocks and stop reason')
       if (blocks.size === 0 && reason.kind === 'stop') throw new LlmError('DeepSeek Messages returned no content', 'EMPTY_RESPONSE')
       // Truncated tool JSON is retained in the stream, then pruned by the shared assembler.
@@ -156,7 +171,6 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
           object(parsed)
         }
       }
-      usage.totalTokens = usage.inputTokens + usage.outputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
       yield { type: 'usage', usage }
       yield { type: 'finish', reason, replayState: replayState(model, [...blocks.values()].map(block => block.replay)) }
       return

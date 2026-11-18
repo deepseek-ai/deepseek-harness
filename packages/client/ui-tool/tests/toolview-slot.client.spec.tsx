@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -100,7 +101,7 @@ async function bench(nodes: ToolResultNode[]) {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.sessions.add({
     id: SID,
     summary: { title: 'S', displayTitle: 'S', cwd: '/w' },
@@ -110,9 +111,9 @@ async function bench(nodes: ToolResultNode[]) {
       prompt: vi.fn<ISession['prompt']>(async () => ({ ok: true, value: { accepted: true } })),
     },
   })
-  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
   await runtime.root.declare(LAYOUT_CHILDREN, AppRoot)
-  await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
   await runtime.mount({ inject: [...injectTool], apply: applyTool })
   return { runtime, slots: runtime.slots, layout, openWorkspacePath, sidebarRight }
@@ -381,7 +382,7 @@ describe('registrant declaration injection', () => {
     runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
     runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-    await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+    await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
     await runtime.root.declare(LAYOUT_CHILDREN, AppRoot)
 
     // Third-party posture, mounted BEFORE ui-conversation. Plugin apply runs,
@@ -403,7 +404,7 @@ describe('registrant declaration injection', () => {
     expect(runtime.slots.entries('tool.call.toolview')).toHaveLength(0)
 
     // Mounting the package declares the slot and activates the waiting entry.
-    await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+    await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
     await runtime.mount({ inject: [...injectChat], apply: applyChat })
     await runtime.mount({ inject: [...injectTool], apply: applyTool })
     expect(runtime.slots.entries('tool.call.toolview').map(e => e.options.key))

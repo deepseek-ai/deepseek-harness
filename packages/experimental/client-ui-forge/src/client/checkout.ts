@@ -2,6 +2,7 @@
 
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { branchLabel } from '../branch-name.ts'
 import type { ForgePanelState } from '../types.ts'
 import type { NS } from './locales.ts'
 
@@ -52,7 +53,7 @@ export function checkoutLabel(state: ForgePanelState, home: string | undefined, 
   const { root, branch, linked, commit } = state.checkout.checkout
   const path = abbreviateHomePath(root, home)
   if (created !== null && created.path === root) {
-    const base = created.from ?? created.baseCommit.slice(0, 7)
+    const base = created.from === null ? created.baseCommit.slice(0, 7) : branchLabel(created.from)
     return {
       name: branch ?? commit,
       detached: branch === null,

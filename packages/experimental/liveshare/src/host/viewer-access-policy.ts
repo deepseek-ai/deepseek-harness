@@ -17,7 +17,8 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/viewer-access-policy
  */
 
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   RemoteAccessAction,
   RemoteAccessBinding,
@@ -106,24 +107,44 @@ const VIEWER_GLOBAL_ROLE: RemoteAccessRole<'global'> = {
     'session/control',
     'session/list',
     'session/modelCatalog',
+    'pluginEvents/follow',
+    'productAnalytics/enabled',
+    'productAnalytics/report',
+    'productAnalytics/watchPolicy',
+    'speech/cancelPreparation',
+    'speech/catalog',
+    'speech/follow',
+    'speech/prepare',
+    'speech/transcribe',
     'workspace/follow',
   ],
 }
 
 /**
- * Reads of one Session the reader can see, the Session notifications forwarded about it, and attachment
- * upload.
+ * Reads of one Session the reader can see, its goal and background jobs, the @ reference candidates,
+ * the Session notifications forwarded about it, and attachment upload.
  *
  * The role binds every Session this share serves the reader — the shared source and each of its own
- * forks — so attachment upload follows visibility alone: neither the tier nor the fork switch decides it.
+ * forks — so these actions follow visibility alone: neither the tier nor the fork switch decides them.
+ * That is why every goal mutation and answer submission a reader owns ride this role; only the actions
+ * that start or steer a turn need the drivable tier and its confined layer.
  */
 const VIEWER_SESSION_READ_ROLE: RemoteAccessRole<'session'> = {
   name: 'liveshare:viewer-session-read',
   resource: 'session',
   actions: [
     'commands/list',
+    'fileReferences/list',
     'fileUploads/upload',
     'goals/get',
+    'goals/edit',
+    'goals/clear',
+    'goals/complete',
+    'goals/create',
+    'goals/pause',
+    'goals/resume',
+    'job/list',
+    'job/follow',
     'session/attachment',
     'session/control',
     'session/events',
@@ -135,6 +156,9 @@ const VIEWER_SESSION_READ_ROLE: RemoteAccessRole<'session'> = {
     'session/page',
     'session/projections',
     'session/state',
+    'sessionReferenceResolver/candidates',
+    'userQuestions/answer',
+    'userQuestions/attachWait',
     'session/wait',
     'skills/list',
     'toolResults/watch',
@@ -450,7 +474,7 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
       if ('refusal' in serving) return []
       const { share } = serving
       const mode = drivableMode(share)
-      const sources = share.sessionIds.map(id => SessionId(id))
+      const sources = share.sessionIds.map(id => brandString<SessionId>(id))
       // Revoked forks stay bound for reading, so the reader's snapshot states them as read-only.
       const children = facts.forks.listForShare(viewer.shareId)
         .filter(child => identityKeyOf(child.creator) === identityKeyOf(viewer.actor))
@@ -476,7 +500,7 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
         )
       }
       for (const child of children) {
-        const id = SessionId(child.childSessionId)
+        const id = brandString<SessionId>(child.childSessionId)
         bindings.push(
           { role: VIEWER_SESSION_READ_ROLE, resource: { kind: 'session', id } },
           {
@@ -517,7 +541,7 @@ export function createViewerAccessPolicy(facts: ViewerAccessFacts): RemoteAccess
         bindings.push(
           { role: declarationRole('liveshare:viewer-method-global', 'global', exposed), resource: { kind: 'global' } },
         )
-        for (const id of [...sources, ...children.map(child => SessionId(child.childSessionId))]) {
+        for (const id of [...sources, ...children.map(child => brandString<SessionId>(child.childSessionId))]) {
           bindings.push({ role: declarationRole('liveshare:viewer-method-session', 'session', exposed),
             resource: { kind: 'session', id } })
         }

@@ -20,7 +20,7 @@ vi.mock('../src/transport.ts', () => ({ createTransport: mockTransport }))
 const config: Config = {
   transport: 'stdio', serverName: 'fixture', command: 'fixture', args: [], env: {}, cwd: '',
   toolCallTimeoutMs: 60_000, startupTimeoutMs: 30, closeTimeoutMs: 5_000,
-  expandTemplates: false, failOnStartupError: true,
+  expandTemplates: false, failOnStartupError: true, toolLoading: 'eager', catalogDescriptionMaxLength: 160,
 }
 
 it('unregisters tools when disposal interrupts the registration result', async () => {
@@ -117,7 +117,7 @@ it('reports confirmed transport closure when local work outlives cleanup', async
   await observedClose.promise
   await vi.advanceTimersByTimeAsync(101)
   expect(await closing).toEqual({
-    closeConfirmed: true, cleanupError: 'Error: MCP cleanup did not settle',
+    closeConfirmed: true, cleanupError: 'McpLocalError: MCP cleanup did not settle',
   })
 })
 
@@ -142,5 +142,5 @@ it.each([false, true])('distinguishes local work from unfinished negotiation (tr
   await entered.promise
   const closing = generation.close()
   await vi.advanceTimersByTimeAsync(101)
-  expect(await closing).toEqual({ closeConfirmed: !created, cleanupError: 'Error: MCP cleanup did not settle' })
+  expect(await closing).toEqual({ closeConfirmed: !created, cleanupError: 'McpLocalError: MCP cleanup did not settle' })
 })

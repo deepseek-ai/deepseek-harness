@@ -2,8 +2,9 @@
 import { memo, type ComponentProps } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ActionCardId } from '@deepseek-ai/dsh-action-cards/types'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { ActionCardDecision, ActionCardResult, ActionCardView } from '@deepseek-ai/dsh-action-cards/types'
 import { ActionCard, ActionCardTail, FoldedText } from '../src/client/Card.tsx'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,12 +14,12 @@ import type { ActionCardBodyProps, RegisteredBody } from '../src/client/registry
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 type CardProps = ComponentProps<typeof ActionCard>
-const callId = ToolCallId('card-1')
-const proposal = { callId, turn: 3, action: 'test_action', title: 'Counter', brief: 'Keep my task count visible.', details: { value: 'a' } }
+const cardId = brandString<ActionCardId>('card-1')
+const proposal = { cardId, turn: 3, action: 'test_action', title: 'Counter', brief: 'Keep my task count visible.', details: { value: 'a' } }
 
 function props(bodies: ReadonlyMap<string, RegisteredBody> = new Map(), decision?: ActionCardDecision, chinese = false): CardProps {
-  return { proposal, decision, sessionId: SessionId('session-1'),
-    act: vi.fn(async (): Promise<ActionCardResult | undefined> => ({ status: 'settled', decision: { callId, action: 'test_action', phase: 'dismissed' } })),
+  return { proposal, decision, sessionId: brandString<SessionId>('session-1'),
+    act: vi.fn(async (): Promise<ActionCardResult | undefined> => ({ status: 'settled', decision: { cardId, action: 'test_action', phase: 'dismissed' } })),
     bind: vi.fn(() => (key: string) => `body:${key}`),
     useBodies: selector => selector(bodies),
     t: makeTranslate(chinese ? zh : en) }
@@ -33,7 +34,7 @@ it('places the card admitted in its turn once the turn has ended with an answer,
   const tail = (end: typeof ended | undefined): Tail => ({ ...value, useProjection: () => view,
     turn: { turn: 3, start: undefined, end, status: end === undefined ? 'open' : 'closed', steps: [],
       data: { get: turnData, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) } } })
-  const card = (id: string, turn: number) => ({ ...proposal, callId: ToolCallId(id), turn })
+  const card = (id: string, turn: number) => ({ ...proposal, cardId: brandString<ActionCardId>(id), turn })
   const { rerender } = render(<ActionCardTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
   view = { decisions: {}, proposals: { earlier: card('earlier', 2) } }
@@ -49,7 +50,7 @@ it('places the card admitted in its turn once the turn has ended with an answer,
   turnData.mockReturnValueOnce({ closing: null })
   rerender(<ActionCardTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
-  view = { ...view, decisions: { a: { callId: ToolCallId('a'), action: 'test_action', phase: 'dismissed' } } }
+  view = { ...view, decisions: { a: { cardId: brandString<ActionCardId>('a'), action: 'test_action', phase: 'dismissed' } } }
   rerender(<ActionCardTail {...tail(ended)} />)
   expect(screen.getByRole('status').textContent).toBe(en.dismissed)
   // A call id naming an inherited object member reads no decision.
@@ -67,14 +68,24 @@ it('renders a registered body with the frame summary, the fold, its own translat
       <body.Folded text="Long details" expandLabel="more" collapseLabel="less" /></div>
   })
   const bodies = new Map<string, RegisteredBody>([['test_action', { locale: 'testCard', render: (frame, t) => <Body {...frame} t={t} /> }]])
-  const value = props(bodies, { callId, action: 'test_action', phase: 'running' })
+  const value = props(bodies, { cardId, action: 'test_action', phase: 'running' })
   render(<ActionCard {...value} />)
   expect(value.bind).toHaveBeenCalledWith('testCard')
   expect(screen.getByRole('region', { name: 'Counter' }).textContent).toContain('Keep my task count visible.')
   expect(screen.getByText('Long details')).toBeTruthy()
   expect(seen.at(-1)).toMatchObject({ proposal, decision: { phase: 'running' }, sessionId: 'session-1', Folded: FoldedText })
   fireEvent.click(screen.getByRole('button', { name: 'body:start' }))
-  expect(value.act).toHaveBeenCalledWith(callId, 'start', { value: 'x' })
+  expect(value.act).toHaveBeenCalledWith(cardId, 'start', { value: 'x' })
+})
+
+it('hands a registered body the fallback, which offers only Not now for a card the body cannot read', async () => {
+  const value = props(new Map([['test_action', { locale: 'testCard', render: frame => frame.fallback }]]))
+  render(<ActionCard {...value} />)
+  expect(screen.getByRole('region', { name: 'Counter' }).textContent).toContain('Keep my task count visible.')
+  const dismiss = screen.getByRole('button', { name: en.dismiss })
+  fireEvent.click(dismiss)
+  expect(value.act).toHaveBeenCalledWith(cardId, 'dismiss', undefined)
+  await vi.waitFor(() => { expect(dismiss.hasAttribute('disabled')).toBe(false) })
 })
 
 it('offers only Not now for a card whose kind registered no body, and reports refusals and lost replies', async () => {
@@ -88,7 +99,7 @@ it('offers only Not now for a card whose kind registered no body, and reports re
   const dismiss = screen.getByRole('button', { name: zh.dismiss })
   fireEvent.click(dismiss)
   expect(dismiss.hasAttribute('disabled')).toBe(true)
-  expect(value.act).toHaveBeenCalledWith(callId, 'dismiss', undefined)
+  expect(value.act).toHaveBeenCalledWith(cardId, 'dismiss', undefined)
   await act(async () => { pending.resolve({ status: 'refused', reason: 'unknown' }) })
   expect(screen.getByRole('alert').textContent).toBe(zh.unavailable)
   for (const text of [zh.transport, zh.transport, zh.unavailable]) {
@@ -104,14 +115,14 @@ it('dismisses a card through the fallback Not now when the Host records the dism
   render(<ActionCard {...value} />)
   const dismiss = screen.getByRole('button', { name: en.dismiss })
   fireEvent.click(dismiss)
-  expect(value.act).toHaveBeenCalledWith(callId, 'dismiss', undefined)
+  expect(value.act).toHaveBeenCalledWith(cardId, 'dismiss', undefined)
   await vi.waitFor(() => { expect(dismiss.hasAttribute('disabled')).toBe(false) })
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it.each([['dismissed', en.dismissed], ['replaced', en.replaced], ['finished', undefined], ['toString', undefined]] as const)(
   'shows the fallback status of a %s card without actions', (phase, text) => {
-    render(<ActionCard {...props(new Map(), { callId, action: 'test_action', phase })} />)
+    render(<ActionCard {...props(new Map(), { cardId, action: 'test_action', phase })} />)
     expect(screen.queryByRole('status')?.textContent).toBe(text)
     expect(screen.queryByRole('button', { name: en.dismiss })).toBeNull()
   })

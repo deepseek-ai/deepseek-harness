@@ -1,9 +1,10 @@
 /** Schedule creation, prompt prefill, and editing through the shipped Web composition. */
-import { chromium } from 'playwright'
+import { fileURLToPath } from 'node:url'
+import { chromium, type Locator } from 'playwright'
 import { expect, it } from 'vitest'
 import type { ScheduleTiming } from '@deepseek-ai/dsh-schedule/client'
-import { launchWebScaffold, watchConsole } from './scaffold.ts'
-import { writeComposerDraft } from './support.ts'
+import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
+import { revealNavigationDrawer, writeComposerDraft } from './support.ts'
 
 it.each([
   { locale: 'en', panel: 'Automation tasks', create: 'New', menu: 'Choose a creation method', chat: 'Create in a session',
@@ -43,6 +44,96 @@ it.each([
       expect(await scaffold.ctx.schedule.catalog()).toEqual([])
     }
     expect(tripwire.pageErrors).toEqual([])
+  } finally {
+    try { await browser?.close() } finally { await scaffold.close() }
+  }
+})
+
+it.each([
+  { locale: 'en', panel: 'Automation tasks', heading: 'Recommended', title: 'Daily brief',
+    prompt: 'Create an automation task named "Daily brief": every weekday at 9:00, review the last 24 hours of changes in the current workspace and list what needs my follow-up and what to do first today; when the workspace is a code repository, also cover new commits, pull requests awaiting my review, and failing CI.' },
+  { locale: 'zh', panel: '自动化任务', heading: '推荐', title: '每日简报',
+    prompt: '创建一个名为「每日简报」的自动化任务：每个工作日 9:00 查看当前工作区过去 24 小时的变化，列出需要我跟进的事和今天先做的事；工作区是代码仓库时，也看新提交、待我评审的 PR 和失败的 CI。' },
+])('prefills a recommended task request from the empty task page in $locale', async (copy) => {
+  const scaffold = await launchWebScaffold({ firstUse: true })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    browser = await chromium.launch()
+    const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: copy.locale })
+    await page.addInitScript((locale) => { localStorage.setItem('dsh.locale', locale) }, copy.locale)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const input = page.locator('[data-composer-input][contenteditable="true"]').first()
+    for (const draft of ['', 'Existing unsent draft']) {
+      await writeComposerDraft(page, input, draft)
+      await page.getByRole('button', { name: copy.panel, exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      const recommendations = manager.getByRole('region', { name: copy.heading, exact: true })
+      const recommendation = recommendations.getByRole('button', { name: copy.title, exact: true })
+      await recommendation.waitFor()
+      expect(await recommendations.getByRole('button').count()).toBe(8)
+      if (draft === '') {
+        expect(await recommendationColumns(recommendations)).toBe(2)
+        await compareOrRefreshGolden(
+          fileURLToPath(new URL(`./expected/schedule-recommendations-${copy.locale}.expected.md`, import.meta.url)),
+          await captureStableAria(page, '[data-testid="schedule-recommendations"]', scaffold.workspaceCwd),
+          webSnapshotMode(),
+        )
+      }
+      await recommendation.click()
+      await manager.waitFor({ state: 'detached' })
+      await input.getByText(copy.prompt, { exact: true }).waitFor()
+      expect(await input.evaluate(element => [...element.children].map(paragraph => paragraph.textContent).join('\n')))
+        .toBe(draft === '' ? copy.prompt : `${draft}\n${copy.prompt}`)
+      const events = scaffold.ctx.agents.list().flatMap(agent => agent.session.snapshotEvents())
+      expect(events.filter(event => event.type === 'user/message' || event.type === 'turn/start')).toEqual([])
+      expect(await scaffold.ctx.schedule.catalog()).toEqual([])
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  } finally {
+    try { await browser?.close() } finally { await scaffold.close() }
+  }
+})
+
+/** Number of grid tracks the recommendation list lays its tiles in. */
+async function recommendationColumns(recommendations: Locator): Promise<number> {
+  return recommendations.getByRole('list').evaluate(list => getComputedStyle(list).gridTemplateColumns.split(' ').length)
+}
+
+it.each([
+  { locale: 'en', panel: 'Automation tasks', title: 'Daily brief' },
+  { locale: 'de', panel: 'Automatisierungsaufgaben', title: 'Tagesüberblick' },
+] as const)('shows every recommendation title and description in full on phone and desktop widths in $locale', async (copy) => {
+  const scaffold = await launchWebScaffold({ firstUse: true })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    browser = await chromium.launch()
+    // 680px puts the list just above the 600px column breakpoint, where each column is narrowest.
+    for (const { width, columns } of [{ width: 390, columns: 1 }, { width: 680, columns: 2 }, { width: 1440, columns: 2 }]) {
+      const phone = width < 600
+      const page = await browser.newPage({ viewport: { width, height: 900 }, isMobile: phone, hasTouch: phone, locale: copy.locale })
+      await page.addInitScript((locale) => { localStorage.setItem('dsh.locale', locale) }, copy.locale)
+      const tripwire = watchConsole(page)
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await revealNavigationDrawer(page, copy.locale)
+      await page.getByRole('button', { name: copy.panel, exact: true }).click()
+      const recommendations = page.getByTestId('schedule-recommendations')
+      await recommendations.getByRole('button', { name: copy.title, exact: true }).waitFor()
+      await page.evaluate(() => document.fonts.ready)
+      expect(await recommendationColumns(recommendations)).toBe(columns)
+      // The title carries the button's name and the first description reference is the description; neither clips.
+      expect(await recommendations.getByRole('button').evaluateAll(buttons => buttons.flatMap((button) => {
+        const name = button.getAttribute('aria-label')!
+        const title = [...button.querySelectorAll('span')].find(span => span.textContent === name)!
+        const description = document.getElementById(button.getAttribute('aria-describedby')!.split(' ')[0]!)!
+        return [
+          ...title.scrollWidth > title.clientWidth ? [`title: ${name}`] : [],
+          ...description.scrollHeight > description.clientHeight ? [`description: ${name}`] : [],
+        ]
+      }))).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+      await page.close()
+    }
   } finally {
     try { await browser?.close() } finally { await scaffold.close() }
   }
@@ -165,8 +256,8 @@ it('creates from a paused empty state, selects the task, and saves an inline edi
         topRight: style.borderTopRightRadius, bottomRight: style.borderBottomRightRadius }
     }))
     expect(createStyles).toEqual([
-      { height: '32px', topLeft: '16px', bottomLeft: '16px', topRight: '0px', bottomRight: '0px' },
-      { height: '32px', topLeft: '0px', bottomLeft: '0px', topRight: '16px', bottomRight: '16px' },
+      { height: '32px', topLeft: '12px', bottomLeft: '12px', topRight: '0px', bottomRight: '0px' },
+      { height: '32px', topLeft: '0px', bottomLeft: '0px', topRight: '12px', bottomRight: '12px' },
     ])
     await manager.getByRole('button', { name: '已暂停', exact: true }).click()
     await manager.getByRole('heading', { name: '没有已暂停的自动化任务', exact: true }).waitFor()
@@ -275,11 +366,12 @@ it('creates from a paused empty state, selects the task, and saves an inline edi
     const beforeCreate = Date.now()
     await dialog.getByRole('button', { name: '创建', exact: true }).click()
     await detail.getByRole('heading', { name: '检查最新进展', exact: true }).waitFor()
+    const afterCreate = Date.now()
     const intervalTask = (await scaffold.ctx.schedule.catalog()).find(item => item.title === '检查最新进展')
     if (intervalTask === undefined) throw new Error('interval task was not created')
     expect(intervalTask.target.kind).toBe('new')
     expect(Date.parse(intervalTask.scheduledAt) - beforeCreate).toBeGreaterThan(240_000)
-    expect(Date.parse(intervalTask.scheduledAt) - beforeCreate).toBeLessThanOrEqual(300_000)
+    expect(Date.parse(intervalTask.scheduledAt) - afterCreate).toBeLessThanOrEqual(300_000)
     await detail.getByRole('button', { name: '暂停任务', exact: true }).click()
     await detail.getByRole('button', { name: '恢复任务', exact: true }).waitFor()
     expect(await detail.getByText('待创建', { exact: true }).count()).toBe(0)

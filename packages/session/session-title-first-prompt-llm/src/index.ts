@@ -3,11 +3,13 @@
 /* jscpd:ignore-start -- both shipped providers import the same shared packages. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { LlmResolvedModelInfo, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+import { type LlmResolvedModelInfo, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import {
   normalizeSessionTitle,
-  SessionTitleProviderId,
   type SessionTitleUserMessage,
 } from '@deepseek-ai/dsh-session-title'
 import {
@@ -127,10 +129,7 @@ function titleFromResponse(response: SessionTitleLlmResponse): string {
   if (response.blocks.some(block => block.type === 'tool-call')) {
     throw new Error('session-title-llm: title output must contain text only')
   }
-  const text = response.blocks
-    .filter((block): block is Extract<(typeof response.blocks)[number], { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join(' ')
+  const text = extractTextContent(response.blocks, { separator: ' ' })
   const title = normalizeSessionTitle(titleFromOutput(text), Number.MAX_SAFE_INTEGER)
   if (title.length === 0) throw new Error('session-title-llm: title model produced no text')
   return title
@@ -144,7 +143,7 @@ function titleFromResponse(response: SessionTitleLlmResponse): string {
  */
 export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
-  const titleProvider = SessionTitleProviderId(name)
+  const titleProvider = brandString<SessionTitleProviderId>(name)
   ctx.sessionTitle.register({
     id: titleProvider,
     automatic: 'first-prompt',

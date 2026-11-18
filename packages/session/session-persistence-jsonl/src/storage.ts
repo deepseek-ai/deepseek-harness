@@ -10,6 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import {
@@ -19,7 +20,7 @@ import {
   SessionAlreadyOwnedError,
   SessionHandleClosedError,
   SessionPersistenceNotFoundError,
-  SessionPersistenceRevision,
+  type SessionPersistenceRevision,
   SessionReadOnlyError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
@@ -107,6 +108,9 @@ export class JsonlSessionHandle implements SessionHandle {
   get inheritedEventCount(): SessionLogOffset {
     return this.state.inheritedEventCount
   }
+
+  /** Completion of an already-started close, including its final durability drain. */
+  get closeCompletion(): Promise<void> | undefined { return this.closing }
 
   /**
    * Read a slice of the valid contiguous logical log; see the seam contract.
@@ -416,7 +420,7 @@ export class JsonlBackendTracker {
     this.writers.set(header.id, null)
     this.pending.set(header.id, {
       header,
-      revision: SessionPersistenceRevision(`memory:${this.name}:${++this.counter}`),
+      revision: brandString<SessionPersistenceRevision>(`memory:${this.name}:${++this.counter}`),
       inheritedEventCount,
     })
   }
@@ -455,6 +459,15 @@ export class JsonlBackendTracker {
    */
   hasPending(id: SessionId): boolean {
     return this.pending.has(id)
+  }
+
+  /**
+   * Join an already-started writer close before reading its stored history.
+   * @param id - Session whose writer may still be draining.
+   * @returns completion of that writer's close, or undefined when no close is active.
+   */
+  closeCompletion(id: SessionId): Promise<void> | undefined {
+    return this.writers.get(id)?.closeCompletion
   }
 
   /**

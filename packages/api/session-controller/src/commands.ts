@@ -15,7 +15,7 @@ import type {
 import type { FileUploadReceiptId, StagedAttachment } from '@deepseek-ai/dsh-client-file-upload/types'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
-  ReasoningEffortId, createUserMessage, freezeMessage,
+  type ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
 import type { MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
@@ -173,7 +173,7 @@ export class SessionCommandController {
           model: request.model,
           ...(request.reasoningEffort === undefined
             ? {}
-            : { reasoningEffort: ReasoningEffortId(request.reasoningEffort) }),
+            : { reasoningEffort: brandString<ReasoningEffortId>(request.reasoningEffort) }),
         }
         await this.ctx.llm.resolveCallConfig(selected)
         agent.model.select(selected)
@@ -262,6 +262,7 @@ export class SessionCommandController {
       )
     }
     const seed = buildForkSeed(source.events, boundary)
+    const endSeq = SessionLogOffset(Math.min(boundary + 1, source.persistedEventCount ?? boundary + 1))
     let workspace: Workspace | undefined
     try {
       workspace = await this.forkWorkspace(source.header)
@@ -279,6 +280,7 @@ export class SessionCommandController {
       await this.ctx.agents.create({
         sessionId: childId,
         seed,
+        parentSource: { sessionId: request.sessionId, endSeq },
         inheritedEventCount: SessionLogOffset(boundary + 1),
         meta: {
           ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),

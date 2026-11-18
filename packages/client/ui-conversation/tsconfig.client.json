@@ -10,6 +10,9 @@
   ],
   "references": [
     {
+      "path": "../config"
+    },
+    {
       "path": "../../../vendor/schemastery"
     },
     {
@@ -17,6 +20,9 @@
     },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-session-status/tsconfig.client.json"
     },
     {
       "path": "../../api/workspace-controller/tsconfig.client.json"

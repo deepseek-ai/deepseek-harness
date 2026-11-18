@@ -7,7 +7,9 @@
  * publish one fixed, current-session-only preset with a synchronous admission
  * check; settings defaults remain limited to the configured table. The read
  * side exposes a process catalog plus the current-value-only `permissions`
- * Session projection; the write side ships as the `/permission` command.
+ * Session projection; the write side ships as the `/permission` command and
+ * the `set` Remote, whose Session resource the session controller's resolver
+ * names from `request.sessionId`.
  *
  * @module dsh-permission-presets
  */
@@ -17,10 +19,11 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { Volatile } from '@deepseek-ai/cordis'
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands/types'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { SANDBOX_MODES, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
@@ -32,7 +35,12 @@ import { APPROVAL_POLICIES, setApprovalPolicy } from '@deepseek-ai/dsh-user-appr
 // Type-only: resolves the required projection service and optional settings/command children.
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-commands'
-import type { PermissionCatalog, PermissionSelection, PresetOption } from './types.ts'
+import type {
+  PermissionCatalog,
+  PermissionPresetSetRequest,
+  PermissionSelection,
+  PresetOption,
+} from './types.ts'
 
 export type * from './types.ts'
 
@@ -253,7 +261,7 @@ export class PermissionPresetService extends TypertRemoteService {
     // activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
       commandCtx.commands.register({
-        definitionId: CommandDefinitionId('@deepseek-ai/dsh-permission-presets'),
+        definitionId: brandString<CommandDefinitionId>('@deepseek-ai/dsh-permission-presets'),
         name: 'permission',
         description: 'Switch the permission preset (sandbox mode + approval policy)',
         input: { hint: '<preset>' },
@@ -295,6 +303,70 @@ export class PermissionPresetService extends TypertRemoteService {
       defaultOptions: Object.keys(this.presets).map(name => this.optionOf(name)),
       defaultPreset: this.defaultSettings().defaultPreset,
     }
+  }
+
+  /**
+   * Switch one live Session to another preset, opened as a Remote call so a
+   * caller's Session access is decided before any preset is resolved or any
+   * knob is written. The call's `session` resource is the Session named by
+   * `request.sessionId`, per {@link PermissionPresetSetRequest}; the session
+   * controller's resolver names it.
+   *
+   * The switch appends `permission/preset` and the changed knob events to the
+   * Session log, so persisted-only Sessions are refused: they have no live log
+   * to append to.
+   * @param request - live target Session and the preset name to switch to.
+   * @returns the Session's current selection after the switch, read the way
+   * the client reads it: the recorded preset while its bundle still matches,
+   * otherwise the first preset whose bundle matches, otherwise `custom`.
+   * @throws {RemoteError} `gateway/bad-request` for an unknown preset name or a
+   * Session this process does not hold live; neither call writes.
+   */
+  @Remote({ name: 'set' })
+  setPreset(request: PermissionPresetSetRequest): PermissionSelection {
+    return this.switchPreset(request, (session, policy) => { setApprovalPolicy(session, policy) })
+  }
+
+  /**
+   * Apply one preset switch, letting the caller own the approval write.
+   *
+   * A Remote parameter cannot carry an Agent, so a caller that holds the
+   * target's Agent supplies a setter routing the approval knob through the
+   * approval service; that caller then keeps the model-visible policy notice
+   * its own switch produces. {@link setPreset} writes the knob directly.
+   * @param request - live target Session and the preset name to switch to.
+   * @param setApproval - writes the approval policy on the resolved Session.
+   * @returns the Session's current selection after the switch.
+   * @throws {RemoteError} `gateway/bad-request` for an unknown preset name or a
+   * Session this process does not hold live; neither call writes.
+   */
+  private switchPreset(
+    request: PermissionPresetSetRequest,
+    setApproval: (session: Session, policy: ApprovalPolicy) => void,
+  ): PermissionSelection {
+    const session = this.callSession(request.sessionId)
+    try {
+      this.apply(session, request.preset, (policy) => { setApproval(session, policy) })
+    } catch (error: unknown) {
+      /* v8 ignore next -- the setters and the log append only throw Error subclasses, so `String` has nothing to render. */
+      const message = error instanceof Error ? error.message : String(error)
+      throw new RemoteError('gateway/bad-request', message, {}, { cause: error })
+    }
+    return { currentValue: this.current(session) }
+  }
+
+  /**
+   * Read the live Session one Remote call names.
+   * @param sessionId - id carried by the request.
+   * @returns the live Session.
+   * @throws {RemoteError} `gateway/bad-request` when no live Session carries the id.
+   */
+  private callSession(sessionId: PermissionPresetSetRequest['sessionId']): Session {
+    const session = this.ctx.sessions.get(sessionId)
+    if (session === undefined) {
+      throw new RemoteError('gateway/bad-request', `permission: no live session "${sessionId}"`, {})
+    }
+    return session
   }
 
   /**

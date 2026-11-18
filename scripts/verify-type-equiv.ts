@@ -253,7 +253,7 @@ function bodylessMember(text: string, sf: ts.SourceFile, member: ts.ClassElement
 
 /**
  * Render a class as an ambient declaration containing only its public fields,
- * constructor, accessors, and methods. Implementation bodies and private or
+ * constructor, accessors, and methods. Overload implementations, other bodies, and private or
  * protected members are deliberately absent; original class/member JSDoc is
  * retained so the projection is the source-owned public contract.
  */
@@ -268,6 +268,11 @@ function sourcePublicApi(sourceRel: string, symbol: string): string | null {
     const header = `declare ${abstract}class ${symbol}${typeParameters ? `<${typeParameters}>` : ''}${heritage ? ` ${heritage}` : ''} {`
     const members = stmt.members
       .filter(isPublicMember)
+      .filter(member => !(ts.isMethodDeclaration(member) && member.body !== undefined
+        && stmt.members.some(candidate => ts.isMethodDeclaration(candidate) && candidate.body === undefined
+          && candidate.name.getText(sf) === member.name.getText(sf)
+          && Boolean(ts.getModifiers(candidate)?.some(modifier => modifier.kind === ts.SyntaxKind.StaticKeyword))
+            === Boolean(ts.getModifiers(member)?.some(modifier => modifier.kind === ts.SyntaxKind.StaticKeyword)))))
       .map((member) => {
         const jsDoc = sourceJSDoc(text, member)
         const declaration = bodylessMember(text, sf, member)

@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, fullscreenBox, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 /** The produced file the seeded turn writes, and what the preview should show. */
@@ -496,6 +496,25 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(await filesTab.locator('[data-dockkit-tab-close]').count()).toBe(1)
       const guideTab = column.locator('[data-dockkit-tab]').filter({ hasText: 'Start' })
       expect(await guideTab.locator('[data-dockkit-tab-close]').count()).toBe(1)
+      // A pane shorter than the guide scrolls it from the compass to the last capsule.
+      const viewport = page.viewportSize()
+      if (viewport === null) throw new Error('expected a fixed viewport')
+      const guide = column.locator('[data-sidebar-right-guide]')
+      await page.setViewportSize({ width: viewport.width, height: 240 })
+      try {
+        await expect.poll(async () => await guide.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
+        expect(await guide.evaluate(node => node.scrollTop)).toBe(0)
+        const lastEntry = guide.locator('[data-sidebar-right-guide-entry]').last()
+        await guide.evaluate((node) => { node.scrollTop = node.scrollHeight })
+        expect(await guide.evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+        expect(await lastEntry.evaluate((node) => {
+          const entry = node.getBoundingClientRect()
+          const pane = node.closest('[data-sidebar-right-guide]')?.getBoundingClientRect()
+          return pane !== undefined && entry.top >= pane.top && entry.bottom <= pane.bottom
+        })).toBe(true)
+      } finally {
+        await page.setViewportSize(viewport)
+      }
       // Back to the seeded shape the cases below start from.
       await guideTab.hover()
       await guideTab.locator('[data-dockkit-tab-close]').click()
@@ -524,7 +543,7 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(await width(column)).toBe(trackWidth)
       const viewport = page.viewportSize()
       if (viewport === null) throw new Error('expected a fixed viewport')
-      await expect.poll(async () => await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+      await expect.poll(async () => await panel.boundingBox()).toEqual(fullscreenBox(viewport))
       expect(await expandOf(page).count()).toBe(0)
       expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
       await shot(page, '03-fullscreen-panel')
@@ -558,7 +577,7 @@ describe('web e2e: shipped right Sidebar', () => {
       await frame.evaluate(async (node) => { await Promise.allSettled(node.getAnimations().map(animation => animation.finished)) })
       const normalColumns = (await geometry()).columns
       await column.locator('[data-sidebar-right-mode="fullscreen"]').click()
-      await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+      await expect.poll(() => panel.boundingBox()).toEqual(fullscreenBox(viewport))
       await column.locator('[data-sidebar-right-toggle]').click()
       await Promise.all([
         panel.evaluate(async (node) => {
@@ -586,7 +605,7 @@ describe('web e2e: shipped right Sidebar', () => {
 
         await held.evaluate((state) => { (state.animation as Animation).finish() })
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
-        expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+        expect(await panel.boundingBox()).toEqual(fullscreenBox(viewport))
         expect(await geometry()).toEqual({ columns: normalColumns, transition: 'none', handles: ['none'], animatingGrid: false })
 
         const exit = await holdPanelSlide(panel)
@@ -621,7 +640,7 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBeNull()
         await expandOf(page).click()
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
-        expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+        expect(await panel.boundingBox()).toEqual(fullscreenBox(viewport))
         expect((await geometry()).columns).toBe(normalColumns)
         expect((await geometry()).animatingGrid).toBe(false)
       } finally {
@@ -733,7 +752,7 @@ describe('web e2e: shipped right Sidebar', () => {
 
         await page.setViewportSize({ width: 767, height: viewport.height })
         await expect.poll(async () => await panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
-        await expect.poll(async () => await width(panel)).toBe(767)
+        await expect.poll(async () => await width(panel)).toBe(768)
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
         expect(await expandOf(page).count()).toBe(0)
         expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
@@ -1001,7 +1020,8 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(async () => await settled.getAttribute('aria-selected')).toBe('true')
         await expect.poll(records, { timeout: 15_000 }).toEqual(before)
         expect(await column.locator('[data-sidebar-right-open]').count()).toBe(1)
-        expect(await wrap.getAttribute('aria-pressed')).toBe('true')
+        // The settled Session stayed a recent view, so its preview keeps the wrap choice made before switching.
+        expect(await wrap.getAttribute('aria-pressed')).toBe('false')
         expect(await column.locator('pre').first().innerText()).toContain('produced by the seeded turn')
         let warningStart = fxTripwire.warnings.length
         await fx.reload({ waitUntil: 'load' })
@@ -1045,9 +1065,11 @@ describe('web e2e: shipped right Sidebar', () => {
       await proseChip(page).click()
       await expect.poll(async () => await tabTitles(first)).toEqual(['Files', SAMPLE_NAME])
       const order = await tabTitles(first)
-      // The insertion index is measured against chip midpoints, not strip width.
-      await dragTo(page, first.locator('[data-dockkit-tab]').last(),
-        await pointIn(first.locator('[data-dockkit-tab]').first(), 0.25, 0.5),
+      const tabs = first.locator('[data-dockkit-tab]')
+      const firstTab = tabs.first()
+      // Drag coordinates are viewport-relative. Wait for the strip to settle before measuring the first chip.
+      await firstTab.hover({ trial: true })
+      await dragTo(page, tabs.last(), await pointIn(firstTab, 0.25, 0.5),
         strip.locator('[data-dockkit-caret="0"]'))
       await expect.poll(async () => await tabTitles(first)).toEqual([...order].reverse())
 

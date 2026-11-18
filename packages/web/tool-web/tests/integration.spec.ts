@@ -14,9 +14,11 @@ import { AddressInfo } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -36,7 +38,7 @@ let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
 // web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
-const agent = { id: SessionId('tool-web-integration') } as Agent
+const agent = { id: brandString<SessionId>('tool-web-integration') } as Agent
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }
@@ -54,6 +56,7 @@ beforeEach(async () => {
   })
   await ctx.plugin(WebFetchLocal, {})
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'search-key' } }]))
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(WebDeepSeekApi, { searchBaseURL: SEARCH_API_BASE, sendOriginalQuestion: false })
   // The shipped deployment shape: the tool-call budget is declared by tool-web
   // config (default 30s, attached as ToolDefinition.timeoutMs) and enforced by
@@ -75,7 +78,7 @@ let counter = 0
 async function call(name: string, args: unknown, on: Context = ctx): Promise<ToolExecutionResult> {
   const toolSet = await on.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
   try {
-    return await executeToolFixture(on, { agent, toolSet, signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+    return await executeToolFixture(on, { agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
   } finally {
     toolSet.dispose()
   }

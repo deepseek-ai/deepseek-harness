@@ -19,10 +19,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage, openSettings } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare global {
   interface Window {
@@ -248,7 +249,7 @@ async function sendFromOpenedGroup(browser: Browser, id: string, answerParagraph
     const tripwire = watchConsole(page)
     await page.setViewportSize({ width: 1170, height: 826 })
     await page.emulateMedia({ reducedMotion: 'no-preference' })
-    const session = SessionId(`open-fold-${id}`)
+    const session = brandString<SessionId>(`open-fold-${id}`)
     const { log, search } = seededLog(id, answerParagraphs)
     await seedSession(scaffold, log, session)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })

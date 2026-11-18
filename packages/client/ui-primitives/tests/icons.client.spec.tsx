@@ -42,6 +42,7 @@ describe('product icon set', () => {
       'IconMicrophoneOutlineRegular',
       'IconPlanOutlineRegular', 'IconCompactOutlineRegular', 'IconShieldOutlineRegular', 'IconDeliverDocRegular',
       'IconWarningTriangleOutlineRegular', 'IconCompareSplitOutlineRegular', 'IconCloseCircleFillRegular',
+      'IconEyeOutlineRegular', 'IconEyeOffOutlineRegular',
     ]))
   })
 
@@ -56,6 +57,18 @@ describe('product icon set', () => {
       expect(paths[0]!.getAttribute('stroke')).toBeNull()
     }
     expect(render(<primitives.IconCloseCircleFillRegular />).container.querySelector('svg')!.getAttribute('width')).toBe('16')
+  })
+
+  it('draws the open eye as an outline with a pupil and the closed eye with a slash through the same contour', () => {
+    for (const weight of ['regular', 'medium'] as const) {
+      const eye = artwork('eye-outline', weight)
+      expect(eye.documentElement.getAttribute('viewBox')).toBe('0 0 16 16')
+      expect(eye.querySelector('circle')?.getAttribute('r')).toBe('2.25')
+      const off = artwork('eye-off-outline', weight)
+      expect(off.querySelector('circle')).toBeNull()
+      expect(off.querySelector('path')?.getAttribute('d')).toBe('M2.25 2.25L13.75 13.75')
+      for (const doc of [eye, off]) expect([...doc.querySelectorAll('path, circle')].every(node => node.getAttribute('fill') === null)).toBe(true)
+    }
   })
 
   it.each([
@@ -81,10 +94,11 @@ describe('product icon set', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 16 16')
     expect(svg.getAttribute('fill')).toBe('none')
     expect(svg.getAttribute('stroke-width')).toBe(String(stroke))
-    expect(svg.querySelector('[transform], [vector-effect], [stroke-width]')).toBeNull()
+    expect(svg.querySelector('[transform], [stroke-width]')).toBeNull()
     expect(svg.hasAttribute('transform')).toBe(false)
     expect(svg.hasAttribute('vector-effect')).toBe(false)
     expect(paths.every(path => path.getAttribute('stroke') === 'currentColor')).toBe(true)
+    expect(paths.every(path => path.getAttribute('vector-effect') === 'non-scaling-stroke')).toBe(true)
     expect(primitives.ICON_SYMBOLS[`dsw-icon-users-outline-${weight}`])
       .toBe(ICON_ARTWORK['users-outline'].svg(stroke))
     const view = render(<Icon />)
@@ -113,10 +127,11 @@ describe('product icon set', () => {
     expect(svg.getAttribute('stroke-width')).toBe(String(stroke))
     expect(svg.getAttribute('stroke-linecap')).toBe('round')
     expect(svg.getAttribute('stroke-linejoin')).toBe('round')
-    expect(svg.querySelector('[transform], [vector-effect], [stroke-width], [stroke-linecap], [stroke-linejoin]')).toBeNull()
+    expect(svg.querySelector('[transform], [stroke-width], [stroke-linecap], [stroke-linejoin]')).toBeNull()
     expect(svg.hasAttribute('transform')).toBe(false)
     expect(svg.hasAttribute('vector-effect')).toBe(false)
     expect(paths.every(path => path.getAttribute('stroke') === 'currentColor')).toBe(true)
+    expect(paths.every(path => path.getAttribute('vector-effect') === 'non-scaling-stroke')).toBe(true)
     expect(primitives.ICON_SYMBOLS[`dsw-icon-layers-outline-${weight}`])
       .toBe(ICON_ARTWORK['layers-outline'].svg(stroke))
     const view = render(<Icon />)

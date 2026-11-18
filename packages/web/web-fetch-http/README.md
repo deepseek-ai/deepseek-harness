@@ -67,7 +67,7 @@ A malformed comma- or whitespace-joined charset declaration containing a UTF-8 l
 
 ### Failures and recovery
 
-Failures throw `WebError` with a machine-routable code: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_REDIRECT_BLOCKED`, `WEB_UNSUPPORTED_CONTENT_TYPE`, `WEB_ABORTED`, or `WEB_PROVIDER_ERROR`. `WEB_UNSUPPORTED_CONTENT_TYPE` covers unsupported media types, unsupported charset declarations, and invalid UTF-8 during malformed-declaration recovery. Direct callers can route on the code; the model-facing `web_fetch` tool surfaces the failure text to the model under its own error wrapper.
+Failures throw `WebError` with a machine-routable code: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_REDIRECT_BLOCKED`, `WEB_UNSUPPORTED_CONTENT_TYPE`, `WEB_ABORTED`, a transport failure code, or `WEB_PROVIDER_ERROR`. `WEB_UNSUPPORTED_CONTENT_TYPE` covers unsupported media types, unsupported charset declarations, and invalid UTF-8 during malformed-declaration recovery. A network failure before or during the response is classified by its system error code as `WEB_FETCH_DNS_FAILED`, `WEB_FETCH_CONNECTION_REFUSED`, `WEB_FETCH_CONNECTION_TIMEOUT`, `WEB_FETCH_CERTIFICATE_INVALID`, `WEB_FETCH_CONNECTION_INTERRUPTED`, or `WEB_FETCH_NETWORK_UNREACHABLE`; a missing, unrecognized, or mixed code yields `WEB_FETCH_NETWORK_ERROR`. Its message states the class, the system code when known, and the underlying error, for example `web fetch failed: could not resolve the host name (ENOTFOUND): getaddrinfo ENOTFOUND host`. The detail lists at most four connection attempts, counts the rest, and keeps at most 500 characters. Direct callers can route on the code; the model-facing `web_fetch` tool surfaces the failure text to the model under its own error wrapper.
 
 -----
 
@@ -92,6 +92,7 @@ The package is built on one separation and one layered timeout:
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, limit validation, provider registration |
 | [`src/provider.ts`](src/provider.ts) | The `HttpFetchProvider`: transport, redirect following, capped reads, charset decoding |
+| [`src/transport-failure.ts`](src/transport-failure.ts) | Transport failure classes: system error code to `WEB_FETCH_*` code, summary, and bounded detail |
 | [`src/policy.ts`](src/policy.ts) | URL validation, same-origin checks, content-type classification, charset parsing |
 
 ### Read path
@@ -119,7 +120,7 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-web`, which renders this provider's `maxBodyChars`-bounded decoded text or markdown-shaped HTML under its fetch-result wrapper while redirects, headers, and transport limits remain hidden.
+Indirectly, through `dsh-tool-web`, which renders this provider's `maxBodyChars`-bounded decoded text or markdown-shaped HTML under its fetch-result wrapper while redirects, headers, and transport limits remain hidden. A network failure reaches the model as its classified message.
 
 #### KV Cache effect
 

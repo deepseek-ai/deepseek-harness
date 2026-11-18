@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, the account model listing, and model gating for `deepseek-account`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, the account catalog, and model admission.
 
-Authentication resolution returns `x-dsh-auth-token` and a failure callback capturing the same token. HTTP 401 classification and rejection stay in this provider; a rejected older request cannot clear a replacement login.
+Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/README.md) for the account sign-in the account service releases for the destination, carrying `x-dsh-auth-token`, and adds a failure callback that invalidates that same credential. HTTP 401 classification stays in this provider; a rejected older request cannot clear a replacement login. The route connects its route id and base URL to that service, so the DeepSeek web providers send the account sign-in to the same deployment.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Authentication resolution returns `x-dsh-auth-token` and a failure callback capt
 <a id="use-this-package"></a>
 ## Use this package
 
-Only `deepseekAccount.resolveToken(url)` supplies the token; the account service validates the destination. Signed-out or ineligible requests fail with `ACCOUNT_SIGN_IN_REQUIRED` and discovery returns an empty catalog. The route never falls back to an API key. Other credential lookup errors propagate.
+Only the account sign-in supplies the credential: `ctx.deepseekAuth` asks `deepseekAccount.resolveRequestCredential(url)`, and the account service validates the destination. Signed-out or ineligible requests fail with `ACCOUNT_SIGN_IN_REQUIRED` and discovery returns an empty catalog. The route never falls back to an API key. Other credential lookup errors propagate. The plugin starts only in a composition that mounts `@deepseek-ai/dsh-deepseek-auth`; the `base` bundle mounts it.
 
 The route's catalog comes from the account's `GET /models` listing at the origin of the Messages `baseURL` (`https://api.deepseek.com/models` for the official endpoint); the listing endpoint is not configurable. Listing requests carry the account token in `x-dsh-auth-token` and the harness `User-Agent`, and reject redirects.
 
@@ -56,14 +56,14 @@ An offered model shows the badge its listing entry declares under `client_metada
 | `modelsMaxAgeMs` | `600,000` | Automatic refresh interval after first use, also used after failure; `0` refreshes on access only |
 | `modelOverrides` | `{}` | Field overrides by model id |
 
-An account request HTTP 401 maps to `ACCOUNT_TOKEN_INVALID` independently of the response body. The account service removes the credential only if it still matches the request token. HTTP 403 and other failures do not clear the login. The account module owns task cancellation after sign-out; this plugin does not inspect Agents.
+An account request HTTP 401 maps to `ACCOUNT_TOKEN_INVALID` independently of the response body. The account service removes the credential only if it still matches the request token. HTTP 403 and other failures do not clear the login. After `deepseek-account/signed-out`, this plugin cancels running Agents whose latest bound request used this route, keeping their inboxes; it publishes `deepseek-account/model-sign-in-required` for a request that fails with `ACCOUNT_SIGN_IN_REQUIRED`, and registers a running-task report with the account service so its sign-out confirmation knows about that work. A model request or file operation in flight when the account signs out ends with its credential's `revoked` signal and fails with `ACCOUNT_SIGN_IN_REQUIRED`; a listing request keeps its `modelsTimeoutMs` deadline. That request's failure callback cancels the same Agents, so a request that outlives this plugin, after the route was disabled mid-turn, still ends its turn with the signed-out cause.
 
 The settings namespace is the Cordis entry id, or the plugin name without an entry. Product profiles retain the official entry id `llm-deepseek` and use `llm-deepseek-account` for the account route.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Account-token lookup and invalidation use the [shared credential helpers](../llm-deepseek/src/credential.ts); this plugin retains HTTP error classification. Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the token.
+Account credential lookup and invalidation go through `ctx.deepseekAuth`, which asks the account service's `resolveRequestCredential`; this plugin retains HTTP error classification and owns the sign-out policy over running Agents in [`account-tasks.ts`](src/account-tasks.ts). Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request; a model request in flight keeps its credential and failure callback until it ends, so both can run after disposal. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the credential headers.
 
 A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
 
@@ -99,6 +99,7 @@ Credentials and catalog availability do not enter model input; the protocol tran
 - The listing's effort levels are ignored.
 - When the current version can serve no listed model, the account offers no models, and model selectors show their generic empty state rather than an upgrade prompt.
 - An override can set but not remove `systemPromptUpdate` and `toolUpdate` declarations.
+- While this plugin is disabled, a task it started that still runs is not reported to the account's sign-out confirmation, and a sign-out ends it only through a model request in flight. A task that is executing a tool at that moment runs until its next model request, which fails because the route is no longer registered.
 
 <a id="dev-note"></a>
 ### Dev Note

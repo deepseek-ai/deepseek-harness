@@ -42,6 +42,18 @@ export const IconSearchOutlineRegular = productIcon('search-outline', 'regular')
 /** Medium IconSearchOutline artwork with a 1.3px stroke. */
 export const IconSearchOutlineMedium = productIcon('search-outline', 'medium')
 
+/** Regular one-pixel IconEyeOutline artwork. */
+export const IconEyeOutlineRegular = productIcon('eye-outline', 'regular')
+
+/** Medium IconEyeOutline artwork with a 1.3px stroke. */
+export const IconEyeOutlineMedium = productIcon('eye-outline', 'medium')
+
+/** Regular one-pixel IconEyeOffOutline artwork. */
+export const IconEyeOffOutlineRegular = productIcon('eye-off-outline', 'regular')
+
+/** Medium IconEyeOffOutline artwork with a 1.3px stroke. */
+export const IconEyeOffOutlineMedium = productIcon('eye-off-outline', 'medium')
+
 /** Regular one-pixel IconGlobeOutline artwork. */
 export const IconGlobeOutlineRegular = productIcon('globe-outline', 'regular')
 
@@ -77,6 +89,18 @@ export const IconCheckOutlineRegular = productIcon('check-outline', 'regular')
 
 /** Medium IconCheckOutline artwork with a 1.3px stroke. */
 export const IconCheckOutlineMedium = productIcon('check-outline', 'medium')
+
+/** Closed envelope with an unread dot, using the regular product stroke. */
+export const IconMailUnreadOutlineRegular = productIcon('mail-unread-outline', 'regular')
+
+/** Closed envelope with an unread dot, using the medium product stroke. */
+export const IconMailUnreadOutlineMedium = productIcon('mail-unread-outline', 'medium')
+
+/** Open envelope for read content, using the regular product stroke. */
+export const IconMailReadOutlineRegular = productIcon('mail-read-outline', 'regular')
+
+/** Open envelope for read content, using the medium product stroke. */
+export const IconMailReadOutlineMedium = productIcon('mail-read-outline', 'medium')
 
 /** Regular one-pixel IconBranchOutline artwork. */
 export const IconBranchOutlineRegular = productIcon('branch-outline', 'regular')
@@ -240,10 +264,10 @@ export const IconWarningOutlineRegular = productIcon('warning-outline', 'regular
 /** Medium IconWarningOutline artwork with a 1.3px stroke. */
 export const IconWarningOutlineMedium = productIcon('warning-outline', 'medium')
 
-/** Regular IconCheckCircleFill artwork (circled check); its fill-only geometry is weight-independent. */
+/** Regular one-pixel IconCheckCircleFill artwork. */
 export const IconCheckCircleFillRegular = productIcon('check-circle-fill', 'regular')
 
-/** Medium IconCheckCircleFill artwork; it matches Regular because the geometry is fill-only. */
+/** Medium IconCheckCircleFill artwork with a fixed 1.3px stroke. */
 export const IconCheckCircleFillMedium = productIcon('check-circle-fill', 'medium')
 
 /** Regular rounded warning triangle with an exclamation mark. */
@@ -293,6 +317,12 @@ export const IconDownloadOutlineRegular = productIcon('download-outline', 'regul
 
 /** Medium IconDownloadOutline artwork with a 1.3px stroke. */
 export const IconDownloadOutlineMedium = productIcon('download-outline', 'medium')
+
+/** Regular one-pixel IconUploadOutline artwork: the download tray with the arrow pointing up. */
+export const IconUploadOutlineRegular = productIcon('upload-outline', 'regular')
+
+/** Medium IconUploadOutline artwork with a 1.3px stroke. */
+export const IconUploadOutlineMedium = productIcon('upload-outline', 'medium')
 
 /** Regular one-pixel IconPlayOutline artwork. */
 export const IconPlayOutlineRegular = productIcon('play-outline', 'regular')
@@ -432,6 +462,12 @@ export const IconListPenOutlineRegular = productIcon('list-pen-outline', 'regula
 /** Medium IconListPenOutline artwork with a 1.3px stroke. */
 export const IconListPenOutlineMedium = productIcon('list-pen-outline', 'medium')
 
+/** Regular one-pixel IconFilesDiffOutline artwork. */
+export const IconFilesDiffOutlineRegular = productIcon('files-diff-outline', 'regular')
+
+/** Medium IconFilesDiffOutline artwork with a 1.3px stroke. */
+export const IconFilesDiffOutlineMedium = productIcon('files-diff-outline', 'medium')
+
 /** Regular one-pixel IconGoalOutline artwork. */
 export const IconGoalOutlineRegular = productIcon('goal-outline', 'regular')
 
@@ -462,10 +498,10 @@ export const IconQuestionOutlineRegular = productIcon('question-outline', 'regul
 /** Medium IconQuestionOutline artwork with a 1.3px stroke. */
 export const IconQuestionOutlineMedium = productIcon('question-outline', 'medium')
 
-/** Regular IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+/** Regular one-pixel IconInfoOutline artwork. */
 export const IconInfoOutlineRegular = productIcon('info-outline', 'regular')
 
-/** Medium IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+/** Medium IconInfoOutline artwork with a fixed 1.3px stroke. */
 export const IconInfoOutlineMedium = productIcon('info-outline', 'medium')
 
 /** Regular one-pixel plugin pinwheel artwork. */
@@ -531,7 +567,7 @@ export const IconShieldOutlineMedium = productIcon('shield-outline', 'medium')
 /** Regular one-pixel IconCheckCircleOutline artwork. */
 export const IconCheckCircleOutlineRegular = productIcon('check-circle-outline', 'regular')
 
-/** Medium IconCheckCircleOutline artwork with a 1.3px stroke. */
+/** Medium IconCheckCircleOutline artwork with a fixed 1.3px stroke. */
 export const IconCheckCircleOutlineMedium = productIcon('check-circle-outline', 'medium')
 
 /** Regular one-pixel IconUnarchiveOutline artwork. */

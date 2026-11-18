@@ -9,7 +9,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -19,6 +19,7 @@ import { loadStoredSession } from './persistence-helpers.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { bindSubagentActivation, managerState, subagentManager } from './manager-internals.ts'
 import { requireLocalActivation } from '../src/activation.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A model reply, or a turn that stays open until its Agent is cancelled. */
 type Reply = StreamChunk[] | 'hang'
@@ -73,7 +74,7 @@ async function setup(replies: Record<string, Reply[]>, maxActiveSubagents = 16) 
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   const adapter = new RoutedAdapter(new Map(Object.entries(replies)))
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   ctx.on('agent/pre-step', async ({ agent }, next) => agent === parent ? { kind: 'reject' } : next())
   return { ctx, parent, adapter }
 }
@@ -143,7 +144,8 @@ describe('subagent sibling messages', () => {
       .toEqual([3, 3])
 
     await ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'hello' }], { signal })
-    const delivered = (await storedUserMessages(ctx, b)).find(event => event.data.source.kind === 'agent-message')!
+    const delivered = (await storedUserMessages(ctx, b)).find(event => event.data.source.kind === 'agent-message'
+      && event.data.source.senderSessionId === a)!
     expect(textOf(delivered)).toBe('Agent agent-1 sent a message: hello')
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     ctx.subagents.interrupt(a, { kind: 'ancestor', agent: parent })
@@ -152,7 +154,7 @@ describe('subagent sibling messages', () => {
 
   it('keeps unrelated parents outside sibling delivery even when descriptions match', async () => {
     const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
-    const other = await ctx.agentLoop.create(SessionId('other-parent'), { provider: 'mock', model: 'mock' })
+    const other = await ctx.agentLoop.create(brandString<SessionId>('other-parent'), { provider: 'mock', model: 'mock' })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, other, 'b')
@@ -171,18 +173,18 @@ describe('tree-wide messages', () => {
     const { ctx, parent } = await setup({})
     expect(ctx.subagents.rootOf(parent)).toBe(parent)
     expect(() => ctx.subagents.rootOf({ ...parent })).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
-    const source = ctx.sessions.create(SessionId('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    const source = ctx.sessions.create(brandString<SessionId>('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
     source.append('turn/start', { turn: 1 })
     source.append('subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label: 'source' })
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const fork = ctx.sessions.fork(source, undefined, SessionId('ordinary-fork'))
+    const fork = ctx.sessions.fork(source, undefined, brandString<SessionId>('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }
     onTestFinished(ctx.agents.enter(caller))
     expect(ctx.subagents.rootOf(caller)).toBe(caller)
     for (const [id, parentSession] of [
-      ['orphan', undefined], ['offline-parent', SessionId('absent')], ['cycle', SessionId('cycle')],
+      ['orphan', undefined], ['offline-parent', brandString<SessionId>('absent')], ['cycle', brandString<SessionId>('cycle')],
     ] as const) {
-      const session = ctx.sessions.create(SessionId(id), {
+      const session = ctx.sessions.create(brandString<SessionId>(id), {
         meta: { origin: 'subagent', ...parentSession === undefined ? {} : { parentSession } },
       })
       const child = { ...parent, id: session.id, session }
@@ -237,7 +239,8 @@ describe('tree-wide messages', () => {
     await ctx.subagents.sendMessage(sender, leafId, [{ type: 'text', text: 'cold cousin' }], { signal })
 
     const messages = await storedUserMessages(ctx, leafId)
-    const delivered = messages.find(event => event.data.source.kind === 'agent-message')!
+    const delivered = messages.find(event => event.data.source.kind === 'agent-message'
+      && event.data.source.senderSessionId === a)!
     expect(textOf(delivered)).toBe('Agent agent-2 sent a message: cold cousin')
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     await settled(ctx, branchId)
@@ -458,7 +461,7 @@ describe('agent names', () => {
 
   it('addresses members below an unnamed historical creator by Session id', async () => {
     const { ctx, parent } = await setup({ legacy: ['hang'], leaf: ['hang'] })
-    const legacy = await ctx.agentLoop.create(SessionId('legacy-child'), { provider: 'mock', model: 'mock' })
+    const legacy = await ctx.agentLoop.create(brandString<SessionId>('legacy-child'), { provider: 'mock', model: 'mock' })
     bindSubagentActivation(ctx, legacy, parent)
     expect(ctx.subagents.namesOf(legacy)).toEqual({ self: 'legacy-child', parent: 'lead' })
     const leaf = await startNamed(ctx, legacy, 'leaf', 'checker')

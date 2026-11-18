@@ -5,6 +5,7 @@ import {
   type ConnectionGenerationSource,
   type ConnectionHandle,
 } from '../src/client/index.ts'
+import { syncedConnectionConfig } from './synced-config.client.ts'
 
 type BrowserGlobal = {
   location?: { hostname: string }
@@ -23,7 +24,7 @@ async function mount(): Promise<ConnectionHandle> {
   ;(globalThis as BrowserGlobal).location = { hostname: 'localhost' }
   const ctx = new Context()
   contexts.add(ctx)
-  await ctx.plugin({ apply, inject: [] })
+  await ctx.plugin({ apply, inject: [] }, syncedConnectionConfig())
   const connection = ctx.get('connection') as ConnectionHandle | undefined
   if (connection === undefined) throw new Error('plugin did not provide Connection')
   return connection

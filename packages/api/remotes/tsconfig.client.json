@@ -113,10 +113,7 @@
       "path": "../../document/office-kit"
     },
     {
-      "path": "../account-controller"
-    },
-    {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../../web/web"

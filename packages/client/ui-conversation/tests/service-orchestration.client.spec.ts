@@ -3,8 +3,9 @@
 // TestSessions mints tagged scopes through the production createScope, so the
 // service's scopeOf/binding path runs against production resolution (no local
 // tag probe).
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { makeTranslate, RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -31,7 +32,7 @@ const UPLOAD_IMAGES = true
 /** `createDrafts` mode of a draft whose images travel inline, as a subagent continuation's do. */
 const INLINE_IMAGES = false
 
-async function bench(maxConcurrentFileUploads = 2) {
+async function bench(maxConcurrentFileUploads: number | 'absent' = 2) {
   const runtime = await SlotTestRuntime.create()
   runtime.fileUpload.upload = (sessionId: SessionId, ...args: unknown[]) => {
     const session = runtime.sessions.behavior(sessionId) as {
@@ -62,16 +63,17 @@ async function bench(maxConcurrentFileUploads = 2) {
   // config.input is required (the apply shares its hub with the inject
   // factories); the bench passes its own instance explicitly.
   const hub = new InputHub(runtime.ctx, makeTranslate(zh, {}))
+  const uploadLimit = createSnapshotStore<number | undefined>(maxConcurrentFileUploads === 'absent' ? undefined : maxConcurrentFileUploads)
   const fiber = runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
-    maxConcurrentFileUploads,
+    maxConcurrentFileUploads: uploadLimit,
   })
   await fiber.await()
   const root = runtime.ctx.get('conversation') as ConversationController
   const scoped = runtime.sessions.scope('s1')!.get('conversation') as ConversationController
   const shell = hub.shellFor(runtime.sessions.binding('s1')!)
-  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder, reference }
+  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder, reference, uploadLimit }
 }
 
 describe('ConversationController', () => {
@@ -138,7 +140,7 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
-  it('releases draft previews when their session scope is disposed', async () => {
+  it('keeps draft previews registered when their session scope is disposed and re-adopts them on return', async () => {
     const b = await bench()
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft-1')
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
@@ -150,8 +152,11 @@ describe('ConversationController', () => {
       b.root.input.for(b.runtime.sessions.scope('s1')!).addAttachments([attachment.id])
       b.reference.release()
       await b.runtime.flush()
-      expect(b.root.resolveDraftAttachments([attachment.id])).toEqual([])
-      expect(revoked).toHaveBeenCalledWith('blob:draft-1')
+      expect(b.root.resolveDraftAttachments([attachment.id])).toEqual([attachment])
+      expect(revoked).not.toHaveBeenCalled()
+      const again = b.runtime.sessions.retain('s1' as SessionId)
+      await again.ready
+      expect(b.hub.shellFor(b.runtime.sessions.binding('s1')!).snapshot.attachmentIds).toEqual([attachment.id])
     } finally {
       created.mockRestore()
       revoked.mockRestore()
@@ -317,7 +322,8 @@ describe('ConversationController', () => {
   })
 
   it('bounds upload Workers, advances on settlement, and skips a queued file removed by the user', async () => {
-    const b = await bench(2)
+    // With no limit from the Host, two uploads run at once, as before the limit moved to the Host.
+    const b = await bench('absent')
     const session = b.runtime.sessions.binding('s1')!.session
     type UploadResult = {
       ok: true
@@ -363,6 +369,21 @@ describe('ConversationController', () => {
     expect(maxActive).toBe(2)
     expect(uploadFile.mock.calls.map(call => call[1])).not.toContain('removed.txt')
     expect(b.root.fileUploads.getSnapshot()[drafts[4]!.id]).toBeUndefined()
+    await b.runtime.dispose()
+  })
+
+  it('starts a queued upload at once when the Host raises the upload limit', async () => {
+    const b = await bench(2)
+    const session = b.runtime.sessions.binding('s1')!.session
+    const uploadFile = vi.fn((_data: Uint8Array, _name?: string, signal?: AbortSignal) => new Promise<never>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+    }))
+    ;(session as { uploadFile?: unknown }).uploadFile = uploadFile
+    b.root.createDrafts(session.sessionId, ['one', 'two', 'three'].map(name =>
+      new File([Uint8Array.of(1)], `${name}.txt`, { type: 'text/plain' })), UPLOAD_IMAGES)
+    await vi.waitFor(() => { expect(uploadFile).toHaveBeenCalledTimes(2) })
+    b.uploadLimit.set(3)
+    await vi.waitFor(() => { expect(uploadFile).toHaveBeenCalledTimes(3) })
     await b.runtime.dispose()
   })
 
@@ -603,7 +624,7 @@ describe('ConversationController', () => {
     await bare.plugin(ConversationController, {
       input: new InputHub(bare, makeTranslate(zh, {})),
       blocks: new ComposerBlockRegistry(),
-      maxConcurrentFileUploads: 2,
+      maxConcurrentFileUploads: createSnapshotStore(2),
     }).await()
     const orphan = bare.get('conversation') as ConversationController
     await expect(orphan.send('x')).rejects.toThrow(/sessions service unavailable/)

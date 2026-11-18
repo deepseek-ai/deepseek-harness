@@ -9,8 +9,9 @@ import type { PlatformBridge } from '../src/client/PlatformOverlay.tsx'
 import { createPlatformPages, type PlatformPages } from '../src/client/platform-pages.ts'
 import { AccountPlatformHost } from '../src/client/AccountPlatformHost.tsx'
 import { AccountSection, type AccountSectionInjected, type AccountSnapshot } from '../src/client/AccountSection.tsx'
-import type { BonusNotice } from '../src/client/bonus-notices.ts'
 import type { AccountMenuProps } from '../src/client/AccountMenu.tsx'
+import type { AccountNoticesProps } from '../src/client/AccountNotices.tsx'
+import type { AccountNotificationsOwnerProps } from '../src/client/account-ui.ts'
 import type {} from '../src/client/index.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
 import css from '../src/client/AccountSection.module.css'
@@ -37,7 +38,6 @@ function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<Accou
     },
     hasRunningAccountTasks: vi.fn(async () => false),
     contactUs: vi.fn(), showLogin: vi.fn(), setOnboarding: vi.fn(),
-    bonusNoticeShown: vi.fn(), bonusNoticeDismissed: vi.fn(),
     refreshAccount: vi.fn(() => Promise.resolve()),
     avatarFailed: vi.fn(),
     start: vi.fn(() => Promise.resolve()), cancel: vi.fn(() => Promise.resolve()), signOut: vi.fn(() => Promise.resolve()),
@@ -236,7 +236,8 @@ it('reports a failed start in the login dialog, not as a sidebar alert', async (
     snapshot = { ...snapshot, loginVisible: true, loginFailed: true }
     return Promise.reject(new Error('account start failed'))
   })
-  const view = render(<AccountMenu {...({} as GlobalStandardProps)} {...operations} settingsOpen={false} start={start}
+  const view = render(<AccountMenu {...({} as GlobalStandardProps)} {...operations} settingsOpen={false}
+    start={start}
     useAccount={selector => selector(snapshot)} useTheme={selector => selector(operations.hooks.theme.getSnapshot())}
     wide openOnboarding={() => {}} openSettings={() => {}}
     t={key => key in en ? en[key as AccountKey] : key} />)
@@ -244,7 +245,8 @@ it('reports a failed start in the login dialog, not as a sidebar alert', async (
   await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en.signIn })) })
   expect(start).toHaveBeenCalledOnce()
   expect(screen.queryByRole('alert')).toBeNull()
-  view.rerender(<AccountMenu {...({} as GlobalStandardProps)} {...operations} settingsOpen={false} start={start}
+  view.rerender(<AccountMenu {...({} as GlobalStandardProps)} {...operations} settingsOpen={false}
+    start={start}
     useAccount={selector => selector(snapshot)} useTheme={selector => selector(operations.hooks.theme.getSnapshot())}
     wide openOnboarding={() => {}} openSettings={() => {}}
     t={key => key in en ? en[key as AccountKey] : key} />)
@@ -306,6 +308,7 @@ it('opens usage inside Desktop and returns to the same Account settings', async 
   expect(platform.open).toHaveBeenCalledWith('usage', { x: 0, y: 0, width: 0, height: 0 })
   const back = screen.getByRole('button', { name: en.backToHarness })
   await expect(`${back.parentElement!.parentElement!.textContent}\n`).toMatchFileSnapshot('./expected/platform-header-en.txt')
+  expect(screen.getByRole('dialog', { name: en.backToHarness }).dataset.shortcutModal).toBe('platform')
   await act(async () => { fireEvent.click(back) })
   expect(platform.close).toHaveBeenCalledOnce()
   expect(screen.queryByRole('button', { name: en.backToHarness })).toBeNull()
@@ -605,7 +608,8 @@ it('dismisses a collapsed menu and hands its login dialog to the API-key onboard
   const { AccountMenu } = await import('../src/client/AccountMenu.tsx')
   const openOnboarding = vi.fn()
   let snapshot = operations.hooks.account.getSnapshot()
-  const props = { ...({} as GlobalStandardProps), ...operations, wide: false, settingsOpen: false, openSettings: vi.fn(), openOnboarding,
+  const props = { ...({} as GlobalStandardProps), ...operations, wide: false, settingsOpen: false,
+    openSettings: vi.fn(), openOnboarding,
     useAccount: <T,>(select: (value: AccountSnapshot) => T) => select(snapshot),
     useTheme: <T,>(select: (value: ThemeSnapshot) => T) => select(operations.hooks.theme.getSnapshot()),
     t: (key: string) => en[key as AccountKey] }
@@ -623,29 +627,6 @@ it('dismisses a collapsed menu and hands its login dialog to the API-key onboard
   snapshot = { ...snapshot, onboarding: true }
   view.rerender(<AccountMenu {...props} />)
   expect(screen.queryByRole('dialog')).toBeNull()
-})
-
-it('paints the bonus notice under the open settings panel and reports its display once', async () => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
-  const operations = mount({ status: 'credential-stored', attempt: null }, en, {
-    profile: { status: 'ready', value: { id: null, name: 'User', contact: null } },
-  })
-  cleanup()
-  const notice = { orderId: 'order-1' as BonusNotice['orderId'], message: 'Awarded 5.00', expiresAt: '2099-01-01T00:00:00Z' }
-  // The launcher mounts first; the entry's refresh then delivers the notice while the panel is open.
-  let snapshot: AccountSnapshot = operations.hooks.account.getSnapshot()
-  const view = render(await accountMenu(operations, () => snapshot, true))
-  expect(screen.queryByRole('status')).toBeNull()
-  snapshot = { ...snapshot, notices: [notice] }
-  view.rerender(await accountMenu(operations, () => snapshot, true))
-  // The settings overlay is translucent, so the card paints underneath it instead of waiting for the exit.
-  await vi.waitFor(() => { expect(screen.getByRole('status').textContent).toBe(`${en.bonusNoticeTitle}${notice.message}`) })
-  // A card that passed a presented frame reports once even while the panel is open; that report is the acknowledgement.
-  await vi.waitFor(() => { expect(operations.bonusNoticeShown).toHaveBeenCalledExactlyOnceWith(notice.orderId) })
-  // Leaving the panel keeps the same card without reporting its display a second time.
-  view.rerender(await accountMenu(operations, () => snapshot, false))
-  await vi.waitFor(() => { expect(screen.getByRole('status').textContent).toBe(`${en.bonusNoticeTitle}${notice.message}`) })
-  expect(operations.bonusNoticeShown).toHaveBeenCalledOnce()
 })
 
 it('reads once per Settings entry, whatever section the entry opens', async () => {
@@ -737,20 +718,44 @@ it.each([en, zh])('shows live model sign-in guidance without replaying it after 
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
-it.each(['desktopOnboardingVisible', 'onboarding'] as const)('defers bonus display and acknowledgement until %s ends', async (field) => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+it.each(['desktopOnboardingVisible', 'onboarding'] as const)('hides the notification slot until %s ends', async (field) => {
+  const { AccountNotices } = await import('../src/client/AccountNotices.tsx')
   const operations = operationsOf({ status: 'credential-stored', attempt: null })
-  const notice = { orderId: 'order-onboarding' as BonusNotice['orderId'], message: 'Awarded 5.00', expiresAt: '2099-01-01T00:00:00Z' }
-  let snapshot: AccountSnapshot = { ...operations.hooks.account.getSnapshot(), notices: [notice], [field]: true }
-  const view = render(await accountMenu(operations, () => snapshot, false))
-  expect(screen.queryByText(notice.message)).toBeNull()
-  expect(operations.bonusNoticeShown).not.toHaveBeenCalled()
-  view.unmount()
-  expect(operations.bonusNoticeShown).not.toHaveBeenCalled()
-  const reopened = render(await accountMenu(operations, () => snapshot, false))
-  expect(screen.queryByText(notice.message)).toBeNull()
+  let snapshot: AccountSnapshot = { ...operations.hooks.account.getSnapshot(), [field]: true }
+  let active: boolean | undefined
+  let openAccount: (() => void) | undefined
+  const openSettings = vi.fn()
+  const renderSlot: AccountNoticesProps['renderSlot'] = (name, owner) => {
+    expect(name).toBe('settings.launcher.notifications')
+    const value: object = owner
+    const props = value as AccountNotificationsOwnerProps
+    active = props.active
+    openAccount = props.openAccount
+    return null
+  }
+  const notices = () => <AccountNotices renderSlot={renderSlot} {...({} as GlobalStandardProps)} {...operations}
+    useAccount={selector => selector(snapshot)}
+    useTheme={selector => selector(operations.hooks.theme.getSnapshot())} openSettings={openSettings} />
+  const view = render(notices())
+  expect(active).toBe(false)
   snapshot = { ...snapshot, [field]: false }
-  reopened.rerender(await accountMenu(operations, () => snapshot, false))
-  await vi.waitFor(() => { expect(operations.bonusNoticeShown).toHaveBeenCalledExactlyOnceWith(notice.orderId) })
-  expect(screen.getByText(notice.message)).toBeTruthy()
+  view.rerender(notices())
+  expect(active).toBe(true)
+  openAccount?.()
+  expect(openSettings).toHaveBeenCalledExactlyOnceWith('account')
+})
+
+it('keeps the notification slot inactive while signed out', async () => {
+  const { AccountNotices } = await import('../src/client/AccountNotices.tsx')
+  const operations = operationsOf({ status: 'signed-out', attempt: null })
+  const owners: AccountNotificationsOwnerProps[] = []
+  const renderSlot: AccountNoticesProps['renderSlot'] = (_name, owner) => {
+    const value: object = owner
+    owners.push(value as AccountNotificationsOwnerProps)
+    return null
+  }
+  render(<AccountNotices renderSlot={renderSlot} {...({} as GlobalStandardProps)} {...operations}
+    useAccount={selector => selector(operations.hooks.account.getSnapshot())}
+    useTheme={selector => selector(operations.hooks.theme.getSnapshot())} openSettings={() => {}} />)
+  expect(owners.at(-1)?.active).toBe(false)
 })

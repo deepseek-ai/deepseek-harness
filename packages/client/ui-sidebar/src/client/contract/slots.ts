@@ -25,6 +25,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       props: SidebarPanelIconOwnerProps & { readonly id: string }
       children: { 'sidebar.panellist': { kind: 'list'; scope: 'root' } }
     }
+    /** Render a panel's trailing content in its navigation row. */
+    'sidebar.panel.trailing': {
+      scope: 'root'
+      props: SidebarPanelTrailingOwnerProps & { readonly id: string }
+      children: { 'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; inline: true } }
+    }
   }
   interface SlotMap {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
@@ -45,6 +51,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the sidebar owns the button and resolves its label from list metadata.
      */
     'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
+    /**
+     * Non-interactive inline content at the end of a panel's navigation row, registered with the panel's id, such as a
+     * count. The expanded row lays it out after its title, before the space its unpin action takes, so a row without
+     * content keeps its full title width; the collapsed rail shows it over the icon's top trailing corner. It renders
+     * inside the row's button: its text describes that button for assistive technology, so decorative parts are
+     * `aria-hidden`, and it holds no interactive elements.
+     */
+    'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; inline: true; owner: SidebarPanelTrailingOwnerProps }
     /** Rows of the panel list's More menu; the sidebar shows More only while this list has registrations. */
     'sidebar.panellist.actions': { kind: 'list'; scope: 'root'; owner: SidebarPanelActionsOwnerProps }
     /**
@@ -73,6 +87,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's 'sidebar' entry; each action receives only the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
+    /**
+     * HOC layer around the inner content of the New-session row — the Tooltip
+     * and button the shell passes as `children`, rendered only while the Peer
+     * may create Sessions. An occupant receives that content and returns it,
+     * possibly wrapped, together with its own controls, so it decorates the
+     * row without adding a wrapper element. Occupants nest around the content
+     * instead of rendering beside it: one that adds nothing must return
+     * `children`, and with no occupant the content renders unchanged.
+     * Declared by this package's 'sidebar' entry.
+     */
+    'sidebar.session.action': { kind: 'hoc'; scope: 'root'; owner: SidebarSessionActionOwnerProps }
   }
 }
 
@@ -92,6 +117,14 @@ export interface SidebarBrandNameOwnerProps {
 export interface SidebarPanelIconOwnerProps {
   /** Requested square edge in pixels. */
   size: number
+  /** Whether this panel is selected in the main column. */
+  active: boolean
+}
+
+/** Row state supplied to a panel's trailing content. */
+export interface SidebarPanelTrailingOwnerProps {
+  /** Whether the sidebar is expanded; the collapsed rail leaves room for a mark of a few pixels only. */
+  wide: boolean
   /** Whether this panel is selected in the main column. */
   active: boolean
 }
@@ -189,6 +222,12 @@ export interface SidebarFooterActionOwnerProps {
   wide: boolean
 }
 
+/** Owner share of the New-session row's HOC layer. */
+export interface SidebarSessionActionOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
 /**
  * Registrant-private injected share (arrives via the register inject
  * factory). The renderer binds the panel metadata source to usePanels.
@@ -238,5 +277,6 @@ export type SidebarRootComponentProps =
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
+    | 'sidebar.session.action'
   >
   & PropsRenderFactories & InjectFace<SidebarRootInjected> & PropsLocale<'sidebar'>

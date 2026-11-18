@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { failureOf, openWorkspace, signal, type Harness } from './harness.ts'
 
 let harness: Harness
@@ -56,7 +57,7 @@ describe('workspaceFiles.stat', () => {
 
   it('omits bytes when the backend reports no size', async () => {
     await writeFile(join(harness.workspace, 'notes.txt'), 'hello\n', 'utf8')
-    vi.spyOn(harness.ctx.fs, 'stat').mockResolvedValue({ version: FsVersion('v-sizeless'), type: 'file' })
+    vi.spyOn(harness.ctx.fs, 'stat').mockResolvedValue({ version: brandString<FsVersion>('v-sizeless'), type: 'file' })
     const result = await harness.endpoint().stat(harness.scope, 'notes.txt', signal())
     expect(result).toEqual({ absolutePath: result.absolutePath, version: 'v-sizeless' })
   })

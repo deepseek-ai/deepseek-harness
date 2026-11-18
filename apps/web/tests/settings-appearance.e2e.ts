@@ -149,7 +149,7 @@ it('shares settings card materials and control sizes in both palettes', async ()
       bonusWallets: [{ currency: 'CNY', balance: '12.00' }],
     }),
     vi.spyOn(account, 'watch').mockImplementation(async function* (signal) {
-      yield state
+      yield { type: 'snapshot', state }
       if (signal.aborted) return
       await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
     }),
@@ -188,12 +188,6 @@ it('shares settings card materials and control sizes in both palettes', async ()
     expect(topUp).toMatchObject({ radius: '12px', height: 36 })
     await compareOrRefreshGolden(join(EXPECTED, 'account.expected.md'),
       await captureStableAria(page, 'section[aria-label="账号与余额"]', scaffold.workspaceCwd), webSnapshotMode())
-
-    await dialog.getByRole('button', { name: '内置插件', exact: true }).click()
-    await dialog.getByRole('button', { name: /^全局/ }).click()
-    const plugin = dialog.locator('[data-plugin-scope="global"] [data-plugin-entry]').first()
-    await plugin.waitFor()
-    expect(await appearance(plugin)).toMatchObject(material)
 
     await dialog.getByRole('button', { name: 'Agent 预设', exact: true }).click()
     const preset = dialog.locator('li').first()

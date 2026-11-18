@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop authentication",
+    "description": "Authenticate Desktop requests with a private credential shared by the parent and Host processes."
+  }
+}

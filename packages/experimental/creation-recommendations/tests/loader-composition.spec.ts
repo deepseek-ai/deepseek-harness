@@ -8,11 +8,12 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { boot, initProfile, loadProfileDirectory, readProfilePatches, readProfileManifest, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import PluginManager from '@deepseek-ai/dsh-plugin-manager'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import Llm, { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -25,7 +26,7 @@ import * as ActionCards from '@deepseek-ai/dsh-action-cards'
 import type { SubagentActivation, SubagentActivationSpec } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as Recommendations from '../src/index.ts'
-import { RESULT_TEXT, writeBundle } from './fixture.ts'
+import { writeBundle } from './fixture.ts'
 
 it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and installs through pnpm/HMR: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-creation-loader-'))
@@ -53,7 +54,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   const profile: ProfileContext = {
     name: 'test', dir, home, cwd: home, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor,
     startedBundles: loadProfileDirectory('test', dir, anchor).layers.map(layer => layer.packageName),
-    overlays: [], telemetryDisabledEnv: undefined,
+    overlayPaths: [], telemetryDisabledEnv: undefined,
   }
   const starts: SubagentActivationSpec[] = []
   const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (ctx) => {
@@ -84,30 +85,27 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await ctx.hmr.runExclusive(async () => {})
   await ctx.plugin(AgentLoop, { agents: [] })
-  const callId = ToolCallId('call-card')
+  const block = JSON.stringify({ action: 'create_personalized_page', title: 'Counter',
+    brief: 'Keep a counter in the right sidebar.', details: { slot: 'sidebar-right' } })
   const adapter = new MockAdapter([
     toolCallResponse('call-skill', 'skill', { name: 'personalized-pages' }),
-    toolCallResponse('call-card', 'propose_action', { action: 'create_personalized_page', title: 'Counter',
-      brief: 'Keep a counter in the right sidebar.', details: { slot: 'sidebar-right' } }),
-    textResponse('After you click Create below, I will build it in the background.'),
+    textResponse(`After you click Create below, I will build it in the background.\n\n\`\`\`action-card\n${block}\n\`\`\`\n`),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const agent = await ctx.agentLoop.create(SessionId('creation-live'), { provider: 'mock', model: 'mock' }, { cwd: home })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('creation-live'), { provider: 'mock', model: 'mock' }, { cwd: home })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'I want a counter that stays visible.' }], source: { kind: 'user' } }))
   await vi.waitFor(() => { expect(agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(true) })
-  // The card tool is declared only from the step after the card skill loaded; the addition is logged.
-  const declared = adapter.requests.map(request => (request.tools ?? []).some(tool => tool.name === 'propose_action'))
-  expect(declared).toEqual([false, true, true])
-  expect(agent.session.snapshotEvents().flatMap(event => event.type === 'developer/message' ? event.data.message.content : []))
-    .toContainEqual({ type: 'tool-addition', toolName: 'propose_action' })
+  // The card comes from the block that ends the answer; no request declares a card tool.
+  expect(adapter.requests.flatMap(request => (request.tools ?? []).map(tool => tool.name))).not.toContain('propose_action')
   const results = agent.session.snapshotEvents().flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-  expect(results.map(message => message.isError === true)).toEqual([false, false])
-  expect(results[1]?.content).toEqual([{ type: 'text', text: RESULT_TEXT }])
-  const receipt = () => ctx.actionCards.view(agent.session).decisions[callId]
-  expect(ctx.actionCards.view(agent.session).proposals[callId]).toMatchObject({ action: 'create_personalized_page', title: 'Counter' })
+  expect(results.map(message => message.isError === true)).toEqual([false])
+  const proposals = Object.values(ctx.actionCards.view(agent.session).proposals)
+  expect(proposals).toMatchObject([{ action: 'create_personalized_page', title: 'Counter' }])
+  const cardId = proposals[0]!.cardId
+  const receipt = () => ctx.actionCards.view(agent.session).decisions[cardId]
   expect(starts).toHaveLength(0)
   const access = [...ctx.loader.entries()].find(entry => entry.options.id === 'access')
-  expect(await ctx.actionCards.act(agent, callId, 'create', { slot: 'page' })).toEqual({ status: 'accepted' })
+  expect(await ctx.actionCards.act(agent, cardId, 'create', { slot: 'page' })).toEqual({ status: 'accepted' })
   if (scenario === 'foreign-nested-row') {
     await vi.waitFor(() => { expect(receipt()?.phase).toBe('failed') })
     expect([...ctx.loader.entries()].find(entry => entry.options.id === 'access')).toBe(access)
@@ -128,7 +126,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   const live = () => [...ctx.loader.entries()].find(entry => entry.options.id === name + ':counter')?.fiber
   expect(live()).toBeDefined()
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toContain(name)
-  await ctx.actionCards.act(agent, callId, 'undo')
+  await ctx.actionCards.act(agent, cardId, 'undo')
   expect(receipt()?.phase).toBe('removed')
   expect(live()).toBeUndefined()
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['fixture-base'])
@@ -137,5 +135,5 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   expect(feature?.fiber).toBeDefined()
   await feature!.fiber!.dispose()
   expect(await ctx.skills.list()).toEqual([])
-  expect(await ctx.actionCards.act(agent, callId, 'restore')).toEqual({ status: 'refused', reason: 'unavailable' })
+  expect(await ctx.actionCards.act(agent, cardId, 'restore')).toEqual({ status: 'refused', reason: 'unavailable' })
 }, 30_000)

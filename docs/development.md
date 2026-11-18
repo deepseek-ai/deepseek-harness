@@ -133,7 +133,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://... # optional
 ```
 
-`DEEPSEEK_BASE_URL` is optional and defaults to the public API. Never commit real credentials. The real-API e2e suites self-skip when `DEEPSEEK_API_KEY` is not set.
+`DEEPSEEK_BASE_URL` is optional and defaults to the public API. The e2e and Web Vitest configurations, and the snapshot configuration when `DSH_SNAPSHOT=record`, load the root `.env` themselves; `pnpm dsh` and `pnpm run demo:ptc` launched from the repository root read it as a project `.env`, which may not set `DEEPSEEK_BASE_URL`, so export that variable or put it in `$DSH_HOME/.env` for those launches. Never commit real credentials. The real-API e2e suites self-skip when `DEEPSEEK_API_KEY` is not set.
 
 ### Git integrations
 

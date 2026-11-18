@@ -31,18 +31,18 @@ describe('parseLspArgs', () => {
 
   it('rejects an unknown operation', () => {
     expect(() => parseLspArgs({ operation: 'rename', file_path: 'a.ts', line: 1, character: 1 }))
-      .toThrow(/operation must be one of/)
+      .toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringMatching(/operation must be one of/) as string }))
   })
 
   it('rejects a blank file_path', () => {
     expect(() => parseLspArgs({ operation: 'hover', file_path: '   ', line: 1, character: 1 }))
-      .toThrow(/file_path/)
+      .toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: 'invalid arguments: file_path must be a non-empty string' }))
   })
 
   it('rejects non-positive or non-integer coordinates', () => {
-    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 0, character: 1 })).toThrow(/line/)
-    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 1, character: 0 })).toThrow(/character/)
-    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 1.5, character: 1 })).toThrow(/line/)
+    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 0, character: 1 })).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringMatching(/line must be a positive integer/) as string }))
+    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 1, character: 0 })).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringMatching(/character must be a positive integer/) as string }))
+    expect(() => parseLspArgs({ operation: 'hover', file_path: 'a.ts', line: 1.5, character: 1 })).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringMatching(/line must be a positive integer/) as string }))
   })
 })
 

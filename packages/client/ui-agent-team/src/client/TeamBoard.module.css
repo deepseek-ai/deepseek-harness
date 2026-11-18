@@ -1,46 +1,18 @@
+/* Rows share the Session panel's columns: the glyph's center 14px from the row
+   start, text at 30px, and the chevron's center 14px from the row end. */
 .board {
   min-width: 0;
-  padding: 8px 7px;
 }
 
-.board[data-with-members='true'] {
-  margin-top: 4px;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 7px;
-  margin: 0 0 4px;
-  padding: 0;
-}
-
-.lead,
-.glyph,
-.chevron {
-  display: grid;
-  flex: none;
-  place-items: center;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.title {
-  flex: none;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 24px;
-}
-
+/* Beside the section title, one line that clips before the title does. */
 .progress {
-  margin-inline-start: 4px;
+  min-width: 0;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  font-weight: 400;
+  font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
-  line-height: 20px;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tasks {
@@ -59,18 +31,16 @@
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 7px;
-  width: calc(100% + 12px);
+  gap: 8px;
+  width: 100%;
   min-width: 0;
-  margin: 0 -6px;
-  padding: 7px 6px;
+  min-height: 28px;
+  padding: 4px 6px;
   border: 0;
-  border-radius: var(--dsw-radius-md);
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 13px;
-  line-height: 17px;
+  font: var(--dsw-font-xs-13);
   text-align: left;
   cursor: pointer;
 }
@@ -86,9 +56,14 @@
   }
 }
 
-.glyph {
-  width: 14px;
-  height: 17px;
+.glyph,
+.chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .subject {
@@ -113,13 +88,8 @@
   transform: rotate(180deg);
 }
 
-.chevron {
-  width: 28px;
-  height: 17px;
-}
-
 .details {
-  padding: 0 0 8px 21px;
+  padding: 0 6px 8px 30px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -156,8 +126,8 @@
 .error {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 5px 6px;
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 18px;

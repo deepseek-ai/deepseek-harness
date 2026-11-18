@@ -48,6 +48,8 @@ Tab context menus show the close action name without a shortcut hint: they act o
 <a id="embedding-it"></a>
 ## Embedding it
 
+Strip chrome continues the adjacent control spacing, so embedder actions and the split action form one consistent trailing group.
+
 Everything host-specific arrives through props:
 
 | Contract | Carries |
@@ -88,7 +90,7 @@ These are not stylistic; each one fixes a defect found in a real browser.
 <a id="build-shape"></a>
 ## Build shape
 
-The package is statically linked: tsdown's `staticLinked` preset emits one browser ESM bundle at `lib/index.js` (every bare specifier stays an import, sourcemaps chain to the sources) and ships the stylesheet under `lib/` at its `src`-relative path, and the Web shell resolves the package name and bundles that artifact itself, so vite stays the only owner of class hashing. One consequence is load-bearing — the kit keeps **one** stylesheet, `dockkit.module.css`, because a consumer de-duplicates injected sheets by file name and a collision would drop one silently.
+The package is statically linked: tsdown's `staticLinked` preset emits one browser ESM bundle at `lib/index.js` (every bare specifier stays an import, sourcemaps chain to the sources), and the Web shell resolves the package name and bundles that artifact itself. The preset compiles `dockkit.module.css` with class names of the form `<hash>_<local>` and carries its text in the bundle's `__$dsh_client_module_manifest` export; the renderer installs it as one style element with `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` and `data-path="src/components/dockkit.module.css"`.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -100,6 +102,8 @@ None, as the package is a browser-side docking layout engine and component set t
 None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
+
+Dock-zone menu glyphs retain a 16px layout box with an inset painted frame, matching the neighboring split action.
 
 <a id="known-limitations-and-deferred-work"></a>
 

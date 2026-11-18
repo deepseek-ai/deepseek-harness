@@ -16,6 +16,8 @@ root 作用域的 list `sidebar.panellist.actions`、`conversation.session.heade
 
 [ui-settings](../../packages/client/ui-settings/README.zh.md#filling-the-settings-slots) 记录设置页面与导航图标扩展点。
 
+[ui-session-panel](../../packages/client/ui-session-panel/README.zh.md#contribute-a-section) 记录会话面板的分栏、标题控件、行与开关角标扩展位置。
+
 ## 声明与生命周期
 
 `SlotMap` 是编译期注册表。包通过声明合并写入 key、cardinality（基数）、scope、owner props、keyed props 与可选的 slot 级 inject face。运行时声明则是拥有该渲染位置的组件在 `children` 中给出的对应条目。
@@ -108,7 +110,8 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 
 | 可用范围 | Props | Owner |
 |---|---|---|
-| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessions`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessionStatus` | `ui-session-status` |
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
@@ -149,6 +152,8 @@ root [AppFrame]
       │     ├─ conversation.session.header.lineage
       │     ├─ conversation.session.header.actions
       │     ├─ conversation.session.header.utilities
+      │     │  └─ id=session-panel [SessionPanelToggle]
+      │     │     └─ conversation.session.panel.indicator [list, inline]
       │     ├─ conversation.session.header.views.actions
       │     └─ conversation.session.header.corner
       └─ calls Factory: conversation.content
@@ -159,6 +164,11 @@ Factory: conversation.content [ConversationContent]
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
 │     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
+│     │  ├─ conversation.chat.aside [SessionPanel]
+│     │  │  ├─ conversation.session.panel.section [list]
+│     │  │  │  └─ id=environment [EnvironmentSection]
+│     │  │  │     └─ conversation.session.panel.environment.row [list]
+│     │  │  └─ conversation.session.panel.section.actions [keyed]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]

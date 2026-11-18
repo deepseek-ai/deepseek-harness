@@ -1,0 +1,20 @@
+# Computer Use with the provider's default preset selection on the SDK profile, which composes no presets.
+- id: llm-replay
+  config:
+    providers:
+      - id: deepseek-official
+        name: DeepSeek
+        models:
+          - id: deepseek-v4-flash-vision-exp
+            inputModalities: [text, image]
+
+- insert:
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: cua-run-code-fixture
+      name: '../../session/cua-run-code/provider.mjs'
+      config:
+        allowedApps:
+          - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            name: Fixture
+            executablePath: /fixture/app

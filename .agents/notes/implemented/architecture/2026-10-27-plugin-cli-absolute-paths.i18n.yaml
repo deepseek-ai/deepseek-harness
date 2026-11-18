@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-27-plugin-cli-absolute-paths.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-27-plugin-cli-absolute-paths.md
+/agent-note-plugin-clis-by-absolute-path-in-runtime-context:
+  en: cf842dd82c5a905a
+  zh: 1cb7923bbc0e3583
+/agent-note-plugin-clis-by-absolute-path-in-runtime-context/problem:
+  en: 623b3e7c6bbb038d
+  zh: 0c3725119fb9c41e
+/agent-note-plugin-clis-by-absolute-path-in-runtime-context/decision:
+  en: 3911a3ee37139116
+  zh: 648b896c5c71b16d
+/agent-note-plugin-clis-by-absolute-path-in-runtime-context/alternatives-considered:
+  en: 7c2f56152247cadf
+  zh: a77e41a020ec6835
+/agent-note-plugin-clis-by-absolute-path-in-runtime-context/consequences:
+  en: c80b941f81db6daf
+  zh: 964ff6d38b3903d1

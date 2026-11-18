@@ -27,10 +27,12 @@ import { FilesBody } from '../src/client/FilesBody.tsx'
 import type { FilesBodyProps } from '../src/client/FilesBody.tsx'
 import { NavigatorToggle } from '../src/client/NavigatorToggle.tsx'
 import { zh } from '../src/client/locales.ts'
+import type { WorkspaceSearchPreferenceBook } from '../src/client/search-preferences.ts'
 import { createFilesStore } from '../src/client/store.ts'
 import type { FilesStoreInstance } from '../src/client/store.ts'
 import { scriptedList } from './scripted-list.client.ts'
 import type { ScriptedList } from './scripted-list.client.ts'
+import { memoryBook, scriptedSearch, type ScriptedSearch } from './search-fixture.client.ts'
 
 export const SESSION = 's-test' as SessionId
 export const ROOT = '/work/app'
@@ -71,6 +73,12 @@ export interface Mounted {
   readonly view: RenderResult
   readonly instance: FilesStoreInstance
   readonly script: ScriptedList
+  /** The search the face calls; it matches nothing until a spec gives it matches. */
+  readonly search: ScriptedSearch['search']
+  /** That search's script: the searches it started, and how it answers later ones. */
+  readonly searches: ScriptedSearch
+  /** The search preferences of every workspace, which another mount may share. */
+  readonly book: WorkspaceSearchPreferenceBook
   readonly face: FilesInjected
   /** The first tab's lifetime. */
   readonly controller: AbortController
@@ -93,9 +101,11 @@ export interface Mounted {
 }
 
 /** One store instance, one face, one owner share. */
-function harness(placement: Placement, controller: AbortController) {
+function harness(placement: Placement, controller: AbortController, book: WorkspaceSearchPreferenceBook) {
   const instance = createFilesStore().create()
   const script = scriptedList()
+  const searches = scriptedSearch()
+  const search = searches.search
   // Whether some tab type opens files: one predicate per answer, as registrations change it.
   const listeners = new Set<() => void>()
   let check = (_address: string): boolean => true
@@ -115,7 +125,7 @@ function harness(placement: Placement, controller: AbortController) {
   // The owner's count of drawings that placed the face beside each tab.
   const placed = new Map<TabId, number>()
   const navigation = createSnapshotStore({ address: placement.contentId, params: undefined, revision: 0 })
-  const face = filesFace(script.list, script.watch, canOpen, () => navigation)(SESSION, instance, (tabId) => {
+  const face = filesFace(script.list, script.watch, canOpen, () => navigation, search, book)(SESSION, instance, (tabId) => {
     placed.set(tabId, (placed.get(tabId) ?? 0) + 1)
     return () => { placed.set(tabId, placed.get(tabId)! - 1) }
   })
@@ -164,9 +174,13 @@ function harness(placement: Placement, controller: AbortController) {
     },
     useCanOpen: <S,>(sel: (check: (address: string) => boolean) => S) =>
       sel(useSyncExternalStore(listener => hooks.canOpen.subscribe(listener), () => hooks.canOpen.getSnapshot())),
+    useSearchPreferences: (cwd: string) => {
+      const source = keyedHooks.searchPreferences(cwd)
+      return useSyncExternalStore(listener => source.subscribe(listener), () => source.getSnapshot())
+    },
     t,
   }
-  return { instance, script, face, controller, viewers, tabActions, onOpen, beside, shared }
+  return { instance, script, search, searches, book, face, controller, viewers, tabActions, onOpen, beside, shared }
 }
 
 /**
@@ -278,16 +292,18 @@ function bodyProps(shared: object): FilesBodyProps {
  * @param placement - the tab's address, the pane's presentation, and the session's working directory.
  * @param draw - the drawing over the shared props.
  * @param recordObservers - capture navigator measurement notifications.
+ * @param book - the search preferences, shared with another mount when given.
  * @returns the mounted hands.
  */
 function mount(
   given: Omit<Placement, 'tabId' | 'signal'>,
   draw: (shared: ReturnType<typeof harness>['shared']) => ReactNode,
   recordObservers = false,
+  book: WorkspaceSearchPreferenceBook = memoryBook(),
 ): Mounted {
   const controller = new AbortController()
   const placement: Placement = { ...given, tabId: TAB, signal: controller.signal }
-  const { shared, ...hands } = harness(placement, controller)
+  const { shared, ...hands } = harness(placement, controller, book)
   const { row, viewport } = measureRows(recordObservers)
   const element = (): ReactNode => <div data-test-row>{draw(shared)}</div>
   const view = render(element())
@@ -319,9 +335,15 @@ export function mountBody(cwd: string | null = ROOT, placement: Partial<Placemen
  * @param contentId - the previewed file's address.
  * @param placement - the pane's presentation.
  * @param cwd - the session's working directory; `null` for a session without one.
+ * @param book - the search preferences, shared with another mount when given.
  * @returns the mounted hands.
  */
-export function mountNavigator(contentId: string, placement: Partial<Placement> = {}, cwd: string | null = ROOT): Mounted {
+export function mountNavigator(
+  contentId: string,
+  placement: Partial<Placement> = {},
+  cwd: string | null = ROOT,
+  book?: WorkspaceSearchPreferenceBook,
+): Mounted {
   return mount({ contentId, ...placement, cwd }, shared => (
     <>
       <NavigatorToggle {...factoryProps(shared)} />
@@ -330,5 +352,5 @@ export function mountNavigator(contentId: string, placement: Partial<Placement> 
         <FileNavigator {...factoryProps(shared)} page={false} />
       </div>
     </>
-  ), true)
+  ), true, book)
 }

@@ -26,6 +26,8 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
       config: {}
 ```
 
+To declare the DSH versions the bundle supports in `engines.dsh`, read `references/dsh-version.md` first.
+
 ## Display metadata, detail document, and icon
 
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. The bundle's page in Plugin Manager shows the detail document that `meta.detail` names, otherwise the package README. Complete this checklist before installation:
@@ -62,7 +64,7 @@ An existing plugin's metadata may remain unchanged when it still describes the r
 - `export function apply(ctx, config) {}` with optional `export const inject = ['tools']` and `export const Config`.
 - A service class as the default export.
 
-Register every resource inside `apply` with `ctx.effect` or `ctx.on` and return its cleanup. A plugin that declares `Config` validates the row's `config` at activation; before writing an installed plugin's `config`, read its schema from `Config.listConfigs` through `cordis_inspect_query`, following `$defs` references, or from the owning package's README and source when inspection is unavailable.
+Register every resource inside `apply` with `ctx.effect` or `ctx.on` and return its cleanup. A plugin that declares `Config` validates the row's `config` at activation; before writing an installed plugin's `config`, read its schema from `Config.listConfigs` through `cordis_inspect`, following `$defs` references, or from the owning package's README and source when inspection is unavailable.
 
 ## Persist your own configuration
 
@@ -72,4 +74,4 @@ Read `references/configuration.md` before saving plugin configuration or credent
 
 `plugin_manager` `install_bundle` performs package installation and bundle selection; do not reproduce those steps with shell commands. Only pass `approvedBuilds` after the user explicitly approves the reported pending build scripts. Preserve returned failures and pending states; report success only after observing the requested capability.
 
-`list_plugins` and `list_bundles` return exact identifiers for existing installations. `set_plugin` and `set_bundle` toggle them; `remove_bundle` removes a bundle. Inspect saved-state and activation outcomes separately: `failed` requires diagnosis, `overridden` means a higher-priority layer wins, and `restart-required` means the change is not live. Installing a new bundle can activate through HMR; replacing an installed package requires restart to load a fresh JavaScript module generation. Do not infer updated browser code from an unchanged slot id.
+`list_plugins` and `list_bundles` return exact identifiers for existing installations. `set_plugin` and `set_bundle` toggle them; `remove_bundle` removes a bundle. Inspect saved-state and activation outcomes separately: `failed` requires diagnosis, `overridden` means a higher-priority layer wins, and `restart-required` means the change is not live. With HMR, installing a new bundle activates it, and an installed package whose files changed on disk, including the directory a local installation links, reloads at the next profile recomposition without a restart: call `set_plugin` on its row with `enabled: true`, which recomposes even when the row is already enabled. `install_bundle` with an already-installed spec returns `already-installed` and reloads nothing. After the call, exercise the changed capability; a Client bundle whose `client.js` changed reaches open pages through Client HMR. Do not report that a restart is required before recomposing and probing the change, and do not infer updated browser code from an unchanged slot id.

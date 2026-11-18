@@ -23,9 +23,11 @@ import { z } from 'zod'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { apply, probeServer } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { probeServer } from '@deepseek-ai/dsh-mcp-client/src/probe.ts'
 import { publicToolName } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
 import { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -90,7 +92,7 @@ function textOf(block: unknown): string {
 
 let callSeq = 0
 function nextCallId(): ToolCallId {
-  return ToolCallId(`e2e-${++callSeq}`)
+  return brandString<ToolCallId>(`e2e-${++callSeq}`)
 }
 
 // ---- Fixture server tests ----
@@ -174,6 +176,7 @@ describe('fixture server — controlled scenarios', () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ type: 'text' })
+    expect(result.error?.info).toEqual({ name: 'McpToolError', code: 'MCP_TOOL_ERROR' })
   })
 
   it('executes image() → ordered durable image content', async () => {

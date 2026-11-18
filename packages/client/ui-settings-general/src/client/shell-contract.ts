@@ -8,7 +8,7 @@
  */
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+  HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-sidebar's SlotMap merge (the 'sidebar.settings' entry)
 // into every program that sees this contract.
@@ -67,14 +67,15 @@ export type SettingsRootComponentProps =
   PropsRuntime<'sidebar.settings'>
   & PropsRenderSlots<
     | 'settings.launcher'
+    | 'settings.notice'
     | 'settings.trigger'
     | 'settings.header'
     | 'settings.action'
     | 'settings.close'
-    | 'settings.section'
     | 'settings.section.icon'
     | 'settings.onboarding'
   >
+  & PropsRenderFactories
   & InjectFace<SettingsRootInjected>
   & PropsLocale<'settings'>
   & PropsStore<ReturnType<typeof createSettingsShellStore>>

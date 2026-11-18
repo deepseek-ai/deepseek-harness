@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /** Chat's Markdown fence Slot over the assembled Conversation and Chat plugins. */
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -10,7 +11,8 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyConversation, inject as injectConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyChat, inject as injectChat } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
@@ -55,7 +57,7 @@ function settledReply(text: string): SessionEventLikeEntry[] {
     ...turnStart,
     { type: 'event', event: { type: 'assistant/message', seq: SessionSeq(3), time: 3, surfaceOp: 'append', data: {
       turn: 1, step: 1, stream: [], message: {
-        id: MessageId('reply'), role: 'assistant', content: [{ type: 'text', text }],
+        id: brandString<MessageId>('reply'), role: 'assistant', content: [{ type: 'text', text }],
         source: { kind: 'model', provider: 'fixture', model: 'fixture' },
       },
     } } },
@@ -68,7 +70,7 @@ function streamingReply(text: string): SessionEventLikeEntry[] {
   return [
     ...turnStart,
     { type: 'transient', event: { type: 'assistant/live-chunk', seq: SessionSeq(3), time: 3, data: {
-      attemptId: LlmAttemptId('fence-attempt'), turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text },
+      attemptId: brandString<LlmAttemptId>('fence-attempt'), turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text },
     } } },
   ]
 }
@@ -90,7 +92,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   runtime.remote.provideNamespaces({ session: { openWorkspacePath: vi.fn() } })
   let mainReference: ReturnType<typeof runtime.sessions.retain> | undefined
   const openSession = (id: SessionId): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     mainReference?.release()
     mainReference = next
   }
@@ -105,7 +107,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.sessions.add({
     id: SID,
     summary: { title: 'F', displayTitle: 'F', cwd: '/proj' },
@@ -117,7 +119,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
     'main': { kind: 'keyed', scope: 'root' },
     'settings.general.item': { kind: 'list', scope: 'root' },
   }, AppRoot)
-  await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
   return runtime.renderRoot()
 }

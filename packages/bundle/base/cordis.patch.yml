@@ -118,9 +118,13 @@
       name: '@deepseek-ai/dsh-authorization'
 
     - id: deepseek-account
-      name: '@deepseek-ai/dsh-deepseek-account-platform'
+      name: '@deepseek-ai/dsh-deepseek-account'
       config:
         desktopPlatform: !!js "ctx.get('profileContext')?.name === 'desktop' && ['darwin', 'win32'].includes(process.platform) ? process.platform : null"
+
+    # DeepSeek model routes and web providers ask this service for the API key or the account sign-in of each request.
+    - id: deepseek-auth
+      name: '@deepseek-ai/dsh-deepseek-auth'
 
     - id: credentials
       name: '@deepseek-ai/dsh-credentials-local'
@@ -165,9 +169,6 @@
     # loud without it; web layers reuse this same mount for list rows.
     - id: working-directory
       name: '@deepseek-ai/dsh-working-directory'
-
-    - id: tool-working-directory
-      name: '@deepseek-ai/dsh-tool-working-directory'
 
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'
@@ -233,6 +234,11 @@
 
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
+
+    # CLI app plugins register their vendor CLI and account with this Service,
+    # which adds nothing to a composition until one registers.
+    - id: cli-account
+      name: '@deepseek-ai/dsh-cli-account'
 
     # Every shipped CLI mode starts with the same file-effect boundary.
     # The environment remains an explicit deployment override; otherwise fresh
@@ -318,6 +324,11 @@
     - id: tool-skill
       name: '@deepseek-ai/dsh-tool-skill'
 
+    # CLI app plugins register their entry skill and its pinned upstream files
+    # with this Service, which downloads nothing until one registers.
+    - id: upstream-skills
+      name: '@deepseek-ai/dsh-upstream-skills'
+
     - id: commands
       name: '@deepseek-ai/dsh-commands'
 
@@ -385,6 +396,8 @@
     # separately loaded follow-up tool registers the one global `send_message`.
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
+      config:
+        interrupt: false
 
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'

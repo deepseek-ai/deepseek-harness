@@ -52,7 +52,6 @@
             "get_goal",
             "glob",
             "grep",
-            "interrupt_agent",
             "job_kill",
             "job_list",
             "job_output",
@@ -75,7 +74,6 @@
             "web_fetch",
             "web_search",
             "workflow",
-            "working_directory",
             "write"
           ]
         },
@@ -116,7 +114,6 @@
             "get_goal",
             "glob",
             "grep",
-            "interrupt_agent",
             "job_kill",
             "job_list",
             "job_output",
@@ -140,7 +137,6 @@
             "web_fetch",
             "web_search",
             "workflow",
-            "working_directory",
             "write"
           ]
         },
@@ -195,7 +191,6 @@
             "get_goal",
             "glob",
             "grep",
-            "interrupt_agent",
             "job_kill",
             "job_list",
             "job_output",
@@ -218,7 +213,6 @@
             "web_fetch",
             "web_search",
             "workflow",
-            "working_directory",
             "write"
           ]
         },

@@ -22,6 +22,7 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
+    windowsProvider: { value: null, busy: false, error: null },
     runtime: { value: { persistent: false, writable: true }, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
@@ -164,6 +165,9 @@ it('offers setup after inspection, permits dismissal, and dismisses once both pr
   expect(screen.queryByRole('dialog')).toBeNull()
   f.publish({ ...observe(value) })
   const dialog = screen.getByRole('dialog', { name: en.setupTitle })
+  expect(within(dialog).getByText('Computer use is enabled. Before using it, grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.')).toBeTruthy()
+  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
   fireEvent.click(within(dialog).getByRole('button', { name: en.openSetup }))
   expect(onOpenDetails).toHaveBeenCalledOnce()
   fireEvent.click(within(dialog).getByRole('button', { name: en.later }))
@@ -377,6 +381,7 @@ it.each([en, zh])('saves persistent PTC only from its own row and retains failur
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const row = screen.getByRole('group', { name: dictionary.persistentTitle })
+  expect(within(row).getByText(dictionary.persistentBody)).toBeTruthy()
   expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
   const write = Promise.withResolvers<boolean>()
   f.props.setPersistentPtc.mockReturnValueOnce(write.promise)
@@ -437,11 +442,36 @@ it('retains a known read-only configuration and query failure throughout managem
   expect(f.state.getSnapshot().changing).toBe(true)
 })
 
+it('shows Windows setup above the controls even when the helper is missing', () => {
+  const f = fixture()
+  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: true, error: null, busy: false } })
+  render(<PermissionPanel {...f.props} />)
+  const instructions = screen.getByText(/pnpm run build:native:x64/)
+  const firstSetting = screen.getByRole('group', { name: en.defaultTitle })
+  expect(instructions.compareDocumentPosition(firstSetting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.getByText(/helperPath/)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: en.request })).toBeNull()
+})
+
+it('keeps the provider lookup diagnostic beside the native error until the platform is known', () => {
+  const f = fixture()
+  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: null, error: 'offline', busy: false } })
+  render(<PermissionPanel {...f.props} />)
+  const diagnostic = en.providerLookupFailed.replace('{message}', 'offline')
+  expect(screen.getByText(diagnostic)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: en.retry }))
+  expect(f.props.refresh).toHaveBeenCalledTimes(2)
+  f.publish({ system: { value: value.system, error: null, busy: false } })
+  expect(screen.queryByText(diagnostic)).toBeNull()
+})
+
 it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
   const f = fixture()
-  f.publish({ ...observe(value), system: { value: { platform: 'win32', sessionLocked, captureAvailable: true,
-    elevated: false, helper: { pid: 9, path: 'C:\\helper.exe' } }, error: null, busy: false } })
+  f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
+    elevated: false, helper: { path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
+  expect(screen.getByText(en.previewNotice)).toBeTruthy()
+  expect(screen.getByText(/helperPath/)).toBeTruthy()
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
   const capture = screen.getByRole('group', { name: en.windowsCapture })
   expect(within(desktop).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.locked : en.available)).toBeTruthy()
@@ -451,8 +481,8 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
   expect(screen.queryByRole('button', { name: en.granted })).toBeNull()
   expect(screen.queryByText('C:\\helper.exe')).toBeNull()
-  f.publish({ system: { value: { platform: 'win32', sessionLocked: false, captureAvailable: false,
-    elevated: true, helper: { pid: 9 } }, error: null, busy: false } })
+  f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
+    elevated: true, helper: {} }, error: null, busy: false } })
   expect(within(capture).getByText(en.unavailable)).toBeTruthy()
   expect(screen.getByText(en.elevated, { exact: false })).toBeTruthy()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
@@ -461,8 +491,8 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
 
 it.each([[true, true], [false, true], [false, false], [null, true]] as const)('offers Windows setup for lock=%s and capture=%s', (sessionLocked, captureAvailable) => {
   const f = fixture(), onDismiss = vi.fn()
-  f.publish({ system: { value: { platform: 'win32', sessionLocked, captureAvailable,
-    elevated: false, helper: { pid: 9 } }, error: null, busy: false } })
+  f.publish({ system: { value: { platform: 'windows', sessionLocked, captureAvailable,
+    elevated: false, helper: {} }, error: null, busy: false } })
   render(<PermissionSetup {...f.props} onDismiss={onDismiss} onOpenDetails={vi.fn()} />)
   const needsSetup = sessionLocked !== false || !captureAvailable
   expect(screen.queryByRole('dialog') !== null).toBe(needsSetup)

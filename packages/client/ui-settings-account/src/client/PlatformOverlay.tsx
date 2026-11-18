@@ -66,7 +66,8 @@ export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failure
       })
     }
   }, [bridge, page, attempt])
-  return createPortal(<div ref={layer} className={css.overlay} role="dialog" aria-modal="true" aria-label={backLabel}>
+  return createPortal(<div ref={layer} className={css.overlay} role="dialog" aria-modal="true" aria-label={backLabel}
+    data-shortcut-modal="platform">
     <header className={css.header} data-window-drag>
       <div className={css.controls}>
         <span className={css.trafficLights} aria-hidden="true" />

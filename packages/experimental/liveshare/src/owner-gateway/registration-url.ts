@@ -35,6 +35,9 @@ export function registrationUrl(spec: TunnelShareSpec): URL {
   if (spec.dshVersion !== undefined && spec.dshVersion !== '') {
     url.searchParams.set('dshVersion', spec.dshVersion)
   }
+  if (spec.platform !== undefined) {
+    url.searchParams.set('platform', spec.platform)
+  }
   if (spec.ownerInstanceId !== undefined && spec.ownerInstanceId !== '') {
     url.searchParams.set('ownerInstanceId', spec.ownerInstanceId)
   }

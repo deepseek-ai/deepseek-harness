@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../util/brand" },
+    { "path": "../../util/values" },
+    { "path": "../../util/package-manifest" },
+    { "path": "../mcp-client" },
+    { "path": "../mcp-manager" },
+    { "path": "../../client/ui-connector-account/tsconfig.host.json" }
+  ]
+}

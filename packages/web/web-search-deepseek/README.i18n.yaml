@@ -15,17 +15,17 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-web-search-deepseek/use-this-package:
-  en: e0d352d6402d9d3b
-  zh: a449234557ef8bd6
+  en: ad3fa6a3820c138a
+  zh: 98ecae8075955c8b
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/when-to-choose-it:
   en: 0187c8af8d2d98c5
   zh: 1c9607b3a662bcaa
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/minimal-configuration:
-  en: 0553b6c926c44cf4
-  zh: 5cd3221d3e8eebd9
+  en: b336edf5f1a6f43f
+  zh: 215cd616bcd91874
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/authentication:
-  en: 7a765ba931329067
-  zh: 6fc14edcc378684a
+  en: f5af5bfdd5d26c66
+  zh: 840c9cff505a08ac
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/what-a-search-returns:
   en: e30442c90365357b
   zh: 9c9e2f1182963a8a
@@ -39,14 +39,14 @@
   en: 9842c69ad3636bb3
   zh: 3cdc3f816cbdd0cb
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/design-philosophy:
-  en: 1b1760efbf4568c1
-  zh: fca06c959e51ce16
+  en: e4ad49ef66f73a8e
+  zh: 13bbf09a8bc9f396
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/source-map:
   en: 6488e1c85646339f
   zh: 2b5ca1c6b5939a8c
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation/request-flow:
-  en: d6c3f30b70a5f4b5
-  zh: ab7c5b7d6fc3cae6
+  en: 77119c7dc83d870a
+  zh: 1853a414bfd91f84
 /deepseek-ai-dsh-web-search-deepseek/further-exploration:
   en: 3a650478cf33d792
   zh: ab4247c4c31f4a90
@@ -69,8 +69,8 @@
   en: 666f5753c99783ab
   zh: b44328e99bcc45c9
 /deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/what-the-model-sees:
-  en: 0764d19c9b82aa98
-  zh: 88b0ba22ef64225b
+  en: fbe717bd9c6c43a5
+  zh: 598ad961a5561ae1
 /deepseek-ai-dsh-web-search-deepseek/model-experience/conversation-tool-result-indirectly/token-effect:
   en: 01ec43a9b616139d
   zh: 0a5b7c28fde34bcf

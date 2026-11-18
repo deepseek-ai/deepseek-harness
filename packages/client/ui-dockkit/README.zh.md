@@ -48,6 +48,8 @@ kind: "package-reference"
 <a id="embedding-it"></a>
 ## 如何嵌入
 
+标签栏尾部控件沿用相邻控件的间距，使嵌入方操作与分栏操作组成一致的尾部操作组。
+
 一切宿主相关的东西都通过 props 进入：
 
 | 约定 | 承载内容 |
@@ -88,7 +90,7 @@ Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间�
 <a id="build-shape"></a>
 ## 构建形态
 
-本包静态链接：tsdown 的 `staticLinked` 预设在 `lib/index.js` 产出一个浏览器 ESM bundle（所有裸说明符保持为 import，sourcemap 链回源码），并把样式表按其相对 `src` 的路径放到 `lib/` 下；Web 外壳按包名解析并自行打包该产物，因此 vite 仍是 class 哈希的唯一拥有者。有一个后果至关重要——套件只保留**一张**样式表 `dockkit.module.css`，因为消费方按文件名去重注入的样式表，撞名会静默丢掉一张。
+本包静态链接：tsdown 的 `staticLinked` 预设在 `lib/index.js` 产出一个浏览器 ESM bundle（所有裸说明符保持为 import，sourcemap 链回源码），Web 外壳按包名解析并自行打包该产物。预设以 `<hash>_<local>` 形式的类名编译 `dockkit.module.css`，其文本随 bundle 的 `__$dsh_client_module_manifest` 导出交付；renderer 将它安装为一个 style 元素，带 `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` 和 `data-path="src/components/dockkit.module.css"`。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -100,6 +102,8 @@ Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间�
 无；本包既不组装也不发送提供方请求。
 
 ## 已知限制与延期工作
+
+停靠区域菜单图标保留 16px 布局框，实际绘制的边框向内缩进，与相邻分栏操作保持视觉比例。
 
 <a id="known-limitations-and-deferred-work"></a>
 

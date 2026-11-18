@@ -68,6 +68,7 @@ interface Harness {
   readonly sourceConfined: ReturnType<typeof vi.fn>
   readonly storedCredential: ReturnType<typeof vi.fn>
   readonly effectiveRelay: ReturnType<typeof vi.fn>
+  readonly holdOwnerState: (held: boolean) => void
 }
 
 function harness(): Harness {
@@ -109,9 +110,11 @@ function harness(): Harness {
   const sourceConfined = vi.fn(() => true)
   const storedCredential = vi.fn(() => undefined)
   const effectiveRelay = vi.fn(() => effective)
+  let ownerStateHeld = false
   const operations = createOwnerShareOperations({
     ownerShares,
     pendingRemovals,
+    ownerStateHeld: () => ownerStateHeld,
     allowedSubjectIds: [],
     forks,
     viewerRead,
@@ -136,6 +139,7 @@ function harness(): Harness {
     operations, ownerShares, pendingRemovals, tunnel, relay, viewerRead, forks, offeredCapabilities, workspaces,
     persistOwnerState, applySourceAccess, accessChanged, cancelShareTurn, cancelChildTurns, reconcileSourceAccess,
     selectRelayAddress, bumpRelayRevision, sourceConfined, storedCredential, effectiveRelay,
+    holdOwnerState: (held: boolean) => { ownerStateHeld = held },
   }
 }
 
@@ -864,5 +868,61 @@ describe('Relay checks', () => {
       allowedSubjectIds: [], allowsFork: false, sessionMode: 'view',
     }), { relay: RELAY, credential: 'owner-credential' })
     expect(h.tunnel.probeRelayPublish).toHaveBeenCalledWith(RELAY, expect.objectContaining({ shareId: '' }))
+  })
+})
+
+describe('reading the owner identity without the state', () => {
+  it('reports what this host holds without asking the Relay for support', async () => {
+    const h = harness()
+    h.holdOwnerState(true)
+    // The credential it reports is the one a login commits here; the probe would ask the holder's
+    // Relay on this host's behalf, and the owner-state-held case refuses the actions that read it.
+    await expect(h.operations.identity({})).resolves.toMatchObject({ relay: RELAY })
+    expect(h.tunnel.ownerIdentityStatus).toHaveBeenCalledWith(RELAY, {}, undefined)
+    expect(h.tunnel.probeRelayCredentialSupport).not.toHaveBeenCalled()
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+  })
+})
+
+describe('a state another live host owns', () => {
+  it('refuses every write and still lists what is shared', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare())
+    h.holdOwnerState(true)
+
+    for (const write of [
+      () => h.operations.create({ sessionId: 'session-1' }),
+      // The persisted record is the whole map, so an addition from a stale snapshot rolls back every
+      // share the holder created, changed, or stopped since this host restored its own.
+      () => h.operations.addSessions({ shareId: 'share-1', sessionIds: ['session-2'] }),
+      () => h.operations.stop({ shareId: 'share-1' }),
+      () => h.operations.updatePermissions({ shareId: 'share-1', sessionMode: 'write' }),
+      // A request that repeats the stored state installs an access layer instead of returning.
+      () => h.operations.updatePermissions({ shareId: 'share-1' }),
+      () => h.operations.setCapabilities({ shareId: 'share-1', viewerPlugins: [], viewerPluginAccess: 'none' }),
+      () => h.operations.setRelay({ relayUrl: null }),
+      // Relay probes change state as well: testRelay persists owed removals from this host's stale
+      // maps, testPublish registers a throwaway share on the holder's Relay, and audit presents a
+      // management token.
+      () => h.operations.testRelay(),
+      () => h.operations.testPublish({ sessionId: 'session-1' }),
+      () => h.operations.audit({ shareId: 'share-1' }),
+    ]) {
+      await expect(write()).rejects.toMatchObject({ code: 'liveshareShares/owner-state-held' })
+    }
+    // No write reached a Relay, a stored record, an installed layer, or the state file.
+    expect(h.tunnel.send).not.toHaveBeenCalled()
+    expect(h.ownerShares.get('share-1')).toBeDefined()
+    expect(h.persistOwnerState).not.toHaveBeenCalled()
+    expect(h.applySourceAccess).not.toHaveBeenCalled()
+    expect(h.tunnel.probeRelayPublish).not.toHaveBeenCalled()
+
+    const listed = await h.operations.list()
+    expect(listed.shares.map(share => share.shareId)).toEqual(['share-1'])
+    // Everything that acts on the holder's Relay registration, including the title reconciliation that
+    // re-registers a renamed share, stays with the holder.
+    expect(h.relay.readRelayAuthority).not.toHaveBeenCalled()
+    expect(h.tunnel.reconcileShareTitles).not.toHaveBeenCalled()
+    expect(h.tunnel.flushPendingRemovals).not.toHaveBeenCalled()
   })
 })

@@ -17,7 +17,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ScopedLayers, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
+import { JobError, JobRegistry, type JobId } from '@deepseek-ai/dsh-jobs'
 import type {
   JobAppendOptions, JobEvent, JobEvents, JobHandle, JobKind, JobOutcome, JobOutputRead, JobOutputSource,
   JobRead, JobRegisteredData, JobSettleCause, JobSettledData, JobSpec, JobStatus, JobToolCall, JobView,
@@ -26,6 +26,7 @@ import { JobEventHub, JobLayer } from './events.ts'
 import { startPump } from './pump.ts'
 import type { PumpHandle } from './pump.ts'
 import { OutputRing } from './ring.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Timeout code that distinguishes a bounded wait from caller cancellation. */
 export const TASK_WAIT_TIMEOUT = 'TASK_WAIT_TIMEOUT'
@@ -93,6 +94,8 @@ interface TrackedJob {
   state: ProducerState
   /** Terminal reason; a recorded kill reason is merged in at settlement. */
   detail: string | undefined
+  /** Exit code the producer reported at settlement. */
+  exitCode: number | undefined
   result: string | undefined
   startedAt: number
   finishedAt: number | undefined
@@ -115,6 +118,13 @@ interface TrackedJob {
    * follows a source that withdraws its file.
    */
   spillPaths: (string | undefined)[]
+}
+
+/** The cancellation a wait reports when its caller's signal aborts; the name lets the tool registry classify it. */
+function waitAborted(): Error {
+  const error = new Error('wait aborted')
+  error.name = 'AbortError'
+  return error
 }
 
 /** True for the three terminal {@link JobStatus} values. */
@@ -207,7 +217,10 @@ export class LocalJobRegistry extends JobRegistry {
   start(spec: JobSpec): JobId {
     const owner = this.resolveOwner(spec.owner)
     if (!this.servesOwner(owner)) {
-      throw new Error('background jobs unavailable: no job controller serves this agent (load @deepseek-ai/dsh-tool-jobs in its composition)')
+      throw new JobError(
+        'background jobs unavailable: no job controller serves this agent (load @deepseek-ai/dsh-tool-jobs in its composition)',
+        'JOB_CONTROLLER_UNAVAILABLE',
+      )
     }
     if (spec.kind.length === 0) throw new Error('invalid job kind: expected a non-empty string')
     if (spec.label.length === 0) throw new Error('invalid job label: expected a non-empty string')
@@ -219,8 +232,9 @@ export class LocalJobRegistry extends JobRegistry {
 
     const active = this.activeJobCount(owner)
     if (active >= this.maxConcurrentJobsPerOwner) {
-      throw new Error(
+      throw new JobError(
         `background job limit reached for this owner (limit: ${this.maxConcurrentJobsPerOwner}); use job_kill to stop an unneeded job, wait for it to finish, then retry`,
+        'JOB_LIMIT_REACHED',
       )
     }
 
@@ -228,7 +242,7 @@ export class LocalJobRegistry extends JobRegistry {
     // Retry a collision while this registry still holds an earlier id.
     let id: JobId
     do {
-      id = JobId(`${spec.kind}-${randomUUID().replaceAll('-', '').slice(0, 16)}`)
+      id = brandString<JobId>(`${spec.kind}-${randomUUID().replaceAll('-', '').slice(0, 16)}`)
     } while (this.store.has(id))
     const toolCall = spec.toolCall === undefined ? undefined : { ...spec.toolCall }
     const ring = new OutputRing()
@@ -256,6 +270,7 @@ export class LocalJobRegistry extends JobRegistry {
       resultDelivered: false,
       state,
       detail: undefined,
+      exitCode: undefined,
       result: undefined,
       startedAt: Date.now(),
       finishedAt: undefined,
@@ -362,11 +377,11 @@ export class LocalJobRegistry extends JobRegistry {
     if (session === undefined) return undefined
     const agents = this.selfCtx.get('agents')
     if (agents === undefined) {
-      throw new Error('background job ownership requires the agent registry (load @deepseek-ai/dsh-agent)')
+      throw new JobError('background job ownership requires the agent registry (load @deepseek-ai/dsh-agent)', 'JOB_OWNER_REGISTRY_UNAVAILABLE')
     }
     const owner = agents.get(session)
     if (owner === undefined) {
-      throw new Error(`session "${session}" has no live agent (background job owner must be live)`)
+      throw new JobError(`session "${session}" has no live agent (background job owner must be live)`, 'JOB_OWNER_NOT_LIVE')
     }
     return owner
   }
@@ -397,7 +412,7 @@ export class LocalJobRegistry extends JobRegistry {
   /** Look up a job and enforce caller access. */
   private expect(id: JobId, caller?: SessionId): TrackedJob {
     const job = this.store.get(id)
-    if (job === undefined) throw new Error(`unknown job ${id}`)
+    if (job === undefined) throw new JobError(`unknown job ${id}`, 'JOB_NOT_FOUND')
     this.assertAccess(job, caller)
     return job
   }
@@ -409,7 +424,7 @@ export class LocalJobRegistry extends JobRegistry {
    */
   private assertAccess(job: TrackedJob, caller: SessionId | undefined): void {
     if (job.owner !== undefined && job.owner.id !== caller) {
-      throw new Error(`job ${job.id} belongs to another session`)
+      throw new JobError(`job ${job.id} belongs to another session`, 'JOB_FOREIGN_SESSION')
     }
   }
 
@@ -426,6 +441,7 @@ export class LocalJobRegistry extends JobRegistry {
       status: job.status,
       ...job.state.progress !== undefined ? { progress: job.state.progress } : {},
       ...job.detail !== undefined ? { detail: job.detail } : {},
+      ...job.exitCode !== undefined ? { exitCode: job.exitCode } : {},
       startedAt: job.startedAt,
       ...job.finishedAt !== undefined ? { finishedAt: job.finishedAt } : {},
       output: {
@@ -498,7 +514,7 @@ export class LocalJobRegistry extends JobRegistry {
       throw new Error(`invalid wait timeout: expected a positive number of milliseconds, got ${JSON.stringify(timeoutMs)}`)
     }
     if (!isTerminal(job.status)) {
-      if (signal?.aborted) throw new Error('wait aborted')
+      if (signal?.aborted) throw waitAborted()
       // The scoped deadline distinguishes a successful wait timeout from
       // caller cancellation and clears its timer on every exit.
       using d = deadline(signal, timeoutMs, TASK_WAIT_TIMEOUT)
@@ -517,7 +533,7 @@ export class LocalJobRegistry extends JobRegistry {
           if (timeoutOf(d.signal, TASK_WAIT_TIMEOUT) !== undefined) {
             resolve()
           } else {
-            reject(new Error('wait aborted'))
+            reject(waitAborted())
           }
         }
         job.waitResolvers.add(onSettled)
@@ -615,6 +631,7 @@ export class LocalJobRegistry extends JobRegistry {
       job.detail = outcome.detail
     }
     job.state.progress = undefined
+    job.exitCode = outcome.exitCode
     job.result = outcome.result
     job.finishedAt = Date.now()
     this.recordSessionEvent(job, {

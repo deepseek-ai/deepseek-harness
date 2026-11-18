@@ -1,5 +1,6 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { provideWorkingDirectoryFixture, mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -7,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -89,9 +90,9 @@ describe('unmatched hooks and directory recovery', () => {
         parameters: { cd: { type: 'string', required: true } },
         async execute(args) { return [{ type: 'text', text: args.cd }] },
       }))
-      const agent = await ctx.agentLoop.create(SessionId('recovery'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('recovery'), { provider: 'mock', model: 'mock' })
       const result = await executeToolFixture(ctx, {
-        name: 'working_directory', callId: ToolCallId('recover'), arguments: { cd: dir },
+        name: 'working_directory', callId: brandString<ToolCallId>('recover'), arguments: { cd: dir },
         agent, signal: new AbortController().signal,
       })
       expect(result.isError).toBe(false)
@@ -109,7 +110,7 @@ describe('hooks-codex bridge', () => {
     const capture = script(dir, 'resume.sh', '#!/usr/bin/env bash\necho "resumed context"\n')
     writeHooks(dir, { SessionStart: [{ matcher: 'resume', hooks: [{ type: 'command', command: capture }] }] })
     const ctx = await harness(dir, new MockAdapter([]))
-    const session = ctx.sessions.create(SessionId('registry-resume'))
+    const session = ctx.sessions.create(brandString<SessionId>('registry-resume'))
     const inject = vi.fn()
     const agent = { id: session.id, session, ctx, inject } as unknown as Agent
 
@@ -131,7 +132,7 @@ describe('hooks-codex bridge', () => {
     const ctx = await harness(dir, adapter)
     let ran = false
     ctx.tools.register(defineContentToolFixture({ name: 'Bash', description: 'b', parameters: { command: { type: 'string' } }, async execute() { ran = true; return [{ type: 'text', text: 'no' }] } }))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'run ls' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
@@ -152,7 +153,7 @@ describe('hooks-codex bridge', () => {
 
     const adapter = new MockAdapter([textResponse('first answer'), textResponse('second answer after goal')])
     const ctx = await harness(dir, adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
@@ -169,7 +170,7 @@ describe('hooks-codex bridge', () => {
 
     const adapter = new MockAdapter([textResponse('must not run')])
     const ctx = await harness(dir, adapter)
-    const agent = await ctx.agentLoop.create(SessionId('cancel-prompt-hook'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('cancel-prompt-hook'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'cancel the hook' }], source: { kind: 'user' } }))
     await waitFor(() => existsSync(marker))
     const pid = Number(readFileSync(pidFile, 'utf8').trim())
@@ -192,7 +193,7 @@ describe('hooks-codex bridge', () => {
 
     const adapter = new MockAdapter([textResponse('fine')])
     const ctx = await harness(dir, adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1)
@@ -202,7 +203,7 @@ describe('hooks-codex bridge', () => {
     const dir = configDir() // no hooks.json written
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(dir, adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1)
@@ -217,7 +218,7 @@ describe('hooks-codex bridge', () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const warn = vi.fn()
     const ctx = await harness(dir, adapter, (ctx) => { ctx.logger.warn = warn as never })
-    const agent = await ctx.agentLoop.create(SessionId('invalid-codex-matcher'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('invalid-codex-matcher'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1)
@@ -244,7 +245,7 @@ describe('hooks-codex bridge', () => {
     const fiber = await ctx.plugin(HooksCodex, { configPath: join(dir, 'hooks.json'), model: 'm' })
     await fiber.dispose()
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(1) // not blocked → the listener is gone
@@ -269,7 +270,7 @@ describe('hooks-codex bridge', () => {
     ctx.llm.registerAdapter(['mock'], new MockAdapter([]))
     const warn = vi.fn()
     ctx.logger.warn = warn as never
-    const creating = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const creating = ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     try {
       await waitFor(() => existsSync(marker))
       const pid = Number(readFileSync(pidFile, 'utf8').trim())

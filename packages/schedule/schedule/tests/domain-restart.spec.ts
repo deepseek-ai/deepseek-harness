@@ -7,13 +7,21 @@ import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { scheduleDomain, scheduleTaskSchema, type ScheduleTask } from '../src/storage.ts'
 import {
-  createAfterScheduleRecord, createAtScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord,
-  decodeScheduleRecord, ScheduleId, resolveDailyOccurrence, resolveEveryOccurrence, resolveWeeklyOccurrence,
+  createAfterScheduleRecord,
+  createAtScheduleRecord,
+  createDailyScheduleRecord,
+  createEveryScheduleRecord,
+  decodeScheduleRecord,
+  resolveDailyOccurrence,
+  resolveEveryOccurrence,
+  resolveWeeklyOccurrence,
 } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import { boundTask } from './harness.ts'
 
@@ -36,14 +44,14 @@ async function open(root: string) {
 
 /** One saved delivery receipt of the Session-bound task in `sessionId`. */
 function receipt(sessionId: string, scheduledAt: string, deliveredAt: string, messageId: string) {
-  return { scheduledAt, deliveredAt, messageId: MessageId(messageId), targetSessionId: SessionId(sessionId) }
+  return { scheduledAt, deliveredAt, messageId: brandString<MessageId>(messageId), targetSessionId: brandString<SessionId>(sessionId) }
 }
 
 it('reopens persisted task bindings and coalesces an overdue recurring schedule', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-domain-')); roots.push(root)
   const createdAt = Date.parse('2026-09-16T00:00:00Z')
-  const rule = createEveryScheduleRecord(ScheduleId('persisted'), 'Check progress', 300, createdAt, 'Check progress')
-  const task = boundTask(SessionId('cold-session'), rule)
+  const rule = createEveryScheduleRecord(brandString<ScheduleId>('persisted'), 'Check progress', 300, createdAt, 'Check progress')
+  const task = boundTask(brandString<SessionId>('cold-session'), rule)
   const first = await open(root)
   await first.domain.table('tasks').put(rule.id, task)
   await first.ctx.fiber.dispose()
@@ -62,9 +70,9 @@ it('reopens persisted task bindings and coalesces an overdue recurring schedule'
 
 it('retains an ended task and receipt in JSON storage until explicit deletion', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-ended-')); roots.push(root)
-  const rule = createAfterScheduleRecord(ScheduleId('ended'), 'Delivered', 1, Date.parse('2026-09-16T00:00:00Z'), 'Delivered')
+  const rule = createAfterScheduleRecord(brandString<ScheduleId>('ended'), 'Delivered', 1, Date.parse('2026-09-16T00:00:00Z'), 'Delivered')
   const delivered = receipt('original', rule.scheduledAt, '2026-09-16T00:00:02.000Z', 'delivered-message')
-  const task = boundTask(SessionId('original'), rule, {
+  const task = boundTask(brandString<SessionId>('original'), rule, {
     status: 'ended', lastDelivery: delivered,
     deliveryHistory: { earlierRecordsUnavailable: false, earlierRecordsPruned: false, records: [{ ...delivered, prompt: 'Delivered' }] },
   })
@@ -82,24 +90,24 @@ it('retains an ended task and receipt in JSON storage until explicit deletion', 
 it('reopens active and ended daily tasks with their rules and receipts alongside all three existing kinds', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-daily-')); roots.push(root)
   const createdAt = Date.parse('2026-09-16T00:00:00.000Z')
-  const daily = createDailyScheduleRecord(ScheduleId('daily-active'), 'Daily check', {
+  const daily = createDailyScheduleRecord(brandString<ScheduleId>('daily-active'), 'Daily check', {
     time: '08:30:00.125', time_zone: 'Asia/Shanghai',
   }, createdAt, 'Daily check')
   const previous = receipt('daily-session', '2026-09-15T00:30:00.125Z', '2026-09-15T00:30:02.000Z', 'previous-daily')
   const final = receipt('ended-session', '9999-12-31T23:59:59.999Z', '9999-12-31T23:59:59.999Z', 'final-daily')
   const history = (latest: typeof previous) => ({ records: [latest], earlierRecordsUnavailable: true, earlierRecordsPruned: false })
   const records: ScheduleTask[] = [
-    boundTask(SessionId('daily-session'), daily, { lastDelivery: previous, deliveryHistory: history(previous) }),
-    boundTask(SessionId('ended-session'), createDailyScheduleRecord(ScheduleId('daily-ended'), 'Final daily', {
+    boundTask(brandString<SessionId>('daily-session'), daily, { lastDelivery: previous, deliveryHistory: history(previous) }),
+    boundTask(brandString<SessionId>('ended-session'), createDailyScheduleRecord(brandString<ScheduleId>('daily-ended'), 'Final daily', {
       time: '23:59:59.999', time_zone: 'UTC',
     }, Date.parse('9999-12-31T00:00:00.000Z'), 'Final daily'), {
       status: 'ended', lastDelivery: final, deliveryHistory: history(final),
     }),
-    boundTask(SessionId('after-session'), createAfterScheduleRecord(ScheduleId('old-after'), 'Delay', 60, createdAt, 'Delay')),
-    boundTask(SessionId('at-session'),
-      createAtScheduleRecord(ScheduleId('old-at'), 'Absolute', '2026-09-16T01:00:00Z', createdAt, 'Absolute')),
-    boundTask(SessionId('every-session'),
-      createEveryScheduleRecord(ScheduleId('old-every'), 'Fixed rate', 300, createdAt, 'Fixed rate')),
+    boundTask(brandString<SessionId>('after-session'), createAfterScheduleRecord(brandString<ScheduleId>('old-after'), 'Delay', 60, createdAt, 'Delay')),
+    boundTask(brandString<SessionId>('at-session'),
+      createAtScheduleRecord(brandString<ScheduleId>('old-at'), 'Absolute', '2026-09-16T01:00:00Z', createdAt, 'Absolute')),
+    boundTask(brandString<SessionId>('every-session'),
+      createEveryScheduleRecord(brandString<ScheduleId>('old-every'), 'Fixed rate', 300, createdAt, 'Fixed rate')),
   ]
   const first = await open(root)
   for (const task of records) await first.domain.table('tasks').put(task.record.id, task)
@@ -118,8 +126,8 @@ it('reopens active and ended daily tasks with their rules and receipts alongside
 it('preserves a stored daily zone alias and pinned UTC target across JSON reopen', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-daily-alias-')); roots.push(root)
   const latest = receipt('alias-session', '2026-09-15T14:00:00.000Z', '2026-09-15T14:00:03.000Z', 'alias-receipt')
-  const task = boundTask(SessionId('alias-session'), {
-    id: ScheduleId('daily-alias'), kind: 'daily', title: 'Preserve stored rule', prompt: 'Preserve stored rule',
+  const task = boundTask(brandString<SessionId>('alias-session'), {
+    id: brandString<ScheduleId>('daily-alias'), kind: 'daily', title: 'Preserve stored rule', prompt: 'Preserve stored rule',
     // A stored target need not match the current time-zone database's resolution of the rule.
     time: '09:00:00.000', timeZone: 'US/Eastern', scheduledAt: '2026-09-16T14:00:00.000Z',
   }, { lastDelivery: latest, deliveryHistory: { records: [latest], earlierRecordsUnavailable: true, earlierRecordsPruned: false } })
@@ -136,8 +144,8 @@ it('preserves a stored daily zone alias and pinned UTC target across JSON reopen
 it('reopens a weekly task with its stored zone alias, weekday set, receipts, and history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-weekly-alias-')); roots.push(root)
   const previous = receipt('weekly-session', '2026-09-14T12:30:00.125Z', '2026-09-14T12:30:02.000Z', 'previous-weekly')
-  const task = boundTask(SessionId('weekly-session'), {
-    id: ScheduleId('weekly-alias'), kind: 'weekly', title: 'Weekly check', prompt: 'Weekly check',
+  const task = boundTask(brandString<SessionId>('weekly-session'), {
+    id: brandString<ScheduleId>('weekly-alias'), kind: 'weekly', title: 'Weekly check', prompt: 'Weekly check',
     // A stored target need not match the current time-zone database's resolution of the rule.
     time: '08:30:00.125', timeZone: 'US/Eastern', weekdays: [1, 5],
     scheduledAt: '2026-09-18T12:30:00.125Z',
@@ -166,7 +174,7 @@ it('reopens a weekly task with its stored zone alias, weekday set, receipts, and
 it('reads version-1 tasks without status as active without writing', async () => {
   const ctx = new Context(); contexts.push(ctx)
   await ctx.plugin(Storage)
-  const rule = createAfterScheduleRecord(ScheduleId('legacy-task'), 'Pending', 1, Date.parse('2026-09-16T00:00:00Z'), 'Pending')
+  const rule = createAfterScheduleRecord(brandString<ScheduleId>('legacy-task'), 'Pending', 1, Date.parse('2026-09-16T00:00:00Z'), 'Pending')
   const pool = new MemoryMediaPool()
   pool.versions.set('schedule', 1)
   pool.media.set('schedule', {
@@ -183,11 +191,11 @@ it('reads version-1 tasks without status as active without writing', async () =>
   expect(pool.media.get('schedule')?.tables.get('tasks')?.get(rule.id)).toEqual({ sessionId: 'original', record: rule })
 })
 
-const rule = createAfterScheduleRecord(ScheduleId('validation'), 'Validate', 1, Date.parse('2026-09-16T00:00:00Z'), 'Validate')
+const rule = createAfterScheduleRecord(brandString<ScheduleId>('validation'), 'Validate', 1, Date.parse('2026-09-16T00:00:00Z'), 'Validate')
 const lastDelivery = {
   scheduledAt: rule.scheduledAt, deliveredAt: '2026-09-16T00:00:02.000Z', messageId: 'receipt-message', targetSessionId: 'cold',
 }
-const stored = boundTask(SessionId('cold'), rule)
+const stored = boundTask(brandString<SessionId>('cold'), rule)
 const delivered = (latest: unknown) => ({
   ...stored, lastDelivery: latest, deliveryHistory: { records: [latest], earlierRecordsUnavailable: false, earlierRecordsPruned: false },
 })
@@ -301,7 +309,7 @@ it.each([
   const facility = new DomainFacility(ctx, { backend: 'memory' })
   const first = await facility.open(scheduleDomain)
   await first.close()
-  const valid = boundTask(SessionId('cold'), decodeScheduleRecord(dailyRecord))
+  const valid = boundTask(brandString<SessionId>('cold'), decodeScheduleRecord(dailyRecord))
   pool.media.get(scheduleDomain.name)!.tables.set('tasks', new Map([['broken', { ...valid, record: invalidRule }]]))
   const reopened = new DomainFacility(ctx, { backend: 'memory' })
   await expect(reopened.open(scheduleDomain)).rejects.toMatchObject({ code: 'invalid-record', detail: { key: 'broken' } })
