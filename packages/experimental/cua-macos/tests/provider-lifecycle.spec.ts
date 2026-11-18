@@ -336,7 +336,7 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
 
-it('merges startup capabilities into runtime native fields', async () => {
+it('reports declared methods outside a turn while merging runtime native fields', async () => {
   const f = await setup()
   const runtime = { permissions: { accessibility: true, screenRecording: false }, sessionLocked: false }
   native.request.mockResolvedValueOnce(runtime)
@@ -346,7 +346,7 @@ it('merges startup capabilities into runtime native fields', async () => {
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-      'selectText', 'setValue', 'show', 'typeText',
+      'selectText', 'sendKeyEvent', 'setValue', 'show', 'toggleMouse', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })

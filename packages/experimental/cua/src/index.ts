@@ -363,11 +363,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       if (method === 'getCapabilities') {
         const runtime = z.record(z.string(), z.json()).parse(result)
         const capabilities = backend.capabilities
-        const canHoldInput = !inputTurns || inputTurns.scope(agent) !== undefined
         return {
           ...runtime,
           platform: capabilities.platform, systemPointer,
-          methods: capabilities.methods.filter(method => canHoldInput || (method !== 'sendKeyEvent' && method !== 'toggleMouse')),
+          methods: [...capabilities.methods],
           appLevelAccessibility: capabilities.appLevelAccessibility,
           keyboard: [...capabilities.keyboard],
           browser: capabilities.browser,
