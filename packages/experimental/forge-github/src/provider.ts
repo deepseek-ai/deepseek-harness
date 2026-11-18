@@ -168,19 +168,8 @@ export class GitHubProvider implements ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
-    const byHost = new Map<string, ChangeRequestRef[]>()
     const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
-    for (const ref of refs) {
-      const failure = this.hostFailure(ref.repository.host)
-      if (failure !== undefined) {
-        results.set(changeRequestKey(ref), failure)
-        continue
-      }
-      const group = byHost.get(ref.repository.host)
-      if (group === undefined) byHost.set(ref.repository.host, [ref])
-      else group.push(ref)
-    }
-    for (const [host, group] of byHost) {
+    for (const [host, group] of this.hostGroups(refs, results)) {
       for (const [key, result] of await this.fetchHost(host, group, signal)) results.set(key, result)
     }
     return results
@@ -200,15 +189,9 @@ export class GitHubProvider implements ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>> {
-    const byHost = new Map<string, ChangeRequestRef[]>()
     const results = new Map<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>()
-    for (const ref of refs) {
-      const failure = this.hostFailure(ref.repository.host)
-      if (failure !== undefined) results.set(changeRequestKey(ref), failure)
-      else byHost.set(ref.repository.host, [...byHost.get(ref.repository.host) ?? [], ref])
-    }
     const queries: { readonly host: string; readonly query: StatusQuery }[] = []
-    for (const [host, group] of byHost) {
+    for (const [host, group] of this.hostGroups(refs, results)) {
       for (let start = 0; start < group.length; start += this.limits.briefBatchSize) {
         queries.push({ host, query: briefQuery(group.slice(start, start + this.limits.briefBatchSize)) })
       }
@@ -536,6 +519,30 @@ export class GitHubProvider implements ForgeProvider {
     return this.served.has(host.toLowerCase()) ? undefined : {
       code: 'unavailable', message: `forge-github: host ${JSON.stringify(host)} is not configured`,
     }
+  }
+
+  /**
+   * Group pull requests by host, in the order given.
+   * @param refs - pull requests to group.
+   * @param results - receives the failure of each pull request on a host this provider does not serve.
+   * @returns the pull requests of each served host.
+   */
+  private hostGroups<Status>(
+    refs: readonly ChangeRequestRef[],
+    results: Map<ChangeRequestKey, Status | ForgeFailure>,
+  ): Map<string, ChangeRequestRef[]> {
+    const byHost = new Map<string, ChangeRequestRef[]>()
+    for (const ref of refs) {
+      const failure = this.hostFailure(ref.repository.host)
+      if (failure !== undefined) {
+        results.set(changeRequestKey(ref), failure)
+        continue
+      }
+      const group = byHost.get(ref.repository.host)
+      if (group === undefined) byHost.set(ref.repository.host, [ref])
+      else group.push(ref)
+    }
+    return byHost
   }
 
   private async fetchHost(
