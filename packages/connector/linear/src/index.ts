@@ -13,7 +13,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-mcp-account'
 import type {} from '@deepseek-ai/dsh-mcp-manager'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { COPY } from './copy.ts'
+import { COPY } from './locales.ts'
 
 export const name = 'linear'
 export const inject = ['mcpManager', 'systemPrompt']
