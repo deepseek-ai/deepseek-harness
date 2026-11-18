@@ -12,18 +12,15 @@ import {
   listPullRequestReviews,
   parseApprovalPolicy,
   runApprovalCheck as runPublisher,
-  publishApprovalPhase,
 } from './check-approval.mjs'
 
 const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
-const emptyCheckRuns = { total_count: 0, check_runs: [] }
-const isCheckRunsList = path => path.includes('/commits/') && path.includes('/check-runs?')
-const withoutChecks = api => (path, options) =>
-  isCheckRunsList(path) ? emptyCheckRuns : path.includes('/check-runs') ? {} : api(path, options)
-const withoutComments = api => withoutChecks((path, options) => path.includes('/comments?') ? [] : api(path, options))
+const STATUS_MARKER = '<!-- weighted-approval -->'
+const withoutComments = api => (path, options) =>
+  path.includes('/comments?') ? [] : api(path, options)
 const evaluateApproval = options => evaluateWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
-const runWithHistory = options => runPublisher({ ...options, api: withoutChecks(options.api) })
-const runApprovalCheck = options => runWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
+const runWithHistory = options => runPublisher(options)
+const runApprovalCheck = options => runWithHistory({ getMergedCount: async () => 0, ...options })
 const HEAD_SHA = '1234567890abcdef1234567890abcdef12345678'
 
 const pullRequestEvent = ({ author = 'author', draft = false } = {}) => ({
@@ -38,6 +35,32 @@ const pullRequestEvent = ({ author = 'author', draft = false } = {}) => ({
 })
 
 const review = (login, state, submitted_at = '2026-09-14T00:00:00Z', id = 10) => ({ user: { login }, state, submitted_at, id })
+const botReview = (state = 'APPROVED', id = 200) => ({
+  user: { login: 'dsh-approval[bot]', type: 'Bot' }, state, submitted_at: '2026-09-14T00:00:00Z', id,
+  body: `${STATUS_MARKER}\nWeighted approval satisfied.`,
+})
+const statusComment = (body = `${STATUS_MARKER}\nold status`, id = 90, type = 'Bot') => ({
+  id, body, user: { login: type === 'Bot' ? 'dsh-approval[bot]' : 'reviewer', type },
+})
+
+function publicationApi({ reviews = [], comments = [], permissions = {} } = {}) {
+  const calls = []
+  const api = async (path, options = {}) => {
+    const method = options.method ?? 'GET'
+    calls.push({ path, method, body: options.body })
+    if (path.includes('/reviews?')) return reviews
+    const permission = /\/collaborators\/([^/]+)\/permission$/u.exec(path)
+    if (permission) return { permission: permissions[decodeURIComponent(permission[1]).toLowerCase()] ?? 'write' }
+    if (path.includes('/comments?')) return comments
+    if (path.endsWith('/issues/42/comments')) return { id: 100 }
+    if (path.includes('/issues/comments/')) return {}
+    if (path.endsWith('/pulls/42/reviews')) return { id: 200 }
+    const dismissal = /\/reviews\/([0-9]+)\/dismissals$/u.exec(path)
+    if (dismissal) return { id: Number(dismissal[1]), state: 'DISMISSED' }
+    throw new Error(`unexpected API path ${path}`)
+  }
+  return { api, calls }
+}
 
 test('loads the repository approval score policy', () => {
   const policy = parseApprovalPolicy(policySource)
@@ -239,31 +262,21 @@ test('ignores a reviewer whose collaborator permission lookup returns 404', asyn
   assert.deepEqual(result.ignoredReviewers, ['former-writer'])
 })
 
-test('keeps the status pending on a write-capable change request while ignoring the author and read-only reviewers', async () => {
-  const statuses = []
+test('comments a write-capable change request while ignoring the author and read-only reviewers', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [
+      review('turtle1999', 'APPROVED'),
+      review('blocker', 'CHANGES_REQUESTED'),
+      review('reader', 'CHANGES_REQUESTED'),
+      review('author', 'CHANGES_REQUESTED'),
+    ],
+    permissions: { reader: 'read' },
+  })
   const result = await runApprovalCheck({
     event: pullRequestEvent({ author: 'author' }),
     policySource,
     getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    runUrl: 'https://github.example/actions/runs/1',
-    api: async (path, options = {}) => {
-      if (path.includes('/reviews?')) {
-        return [
-          review('turtle1999', 'APPROVED'),
-          review('blocker', 'CHANGES_REQUESTED'),
-          review('reader', 'CHANGES_REQUESTED'),
-          review('author', 'CHANGES_REQUESTED'),
-        ]
-      }
-      if (path.includes('/collaborators/turtle1999/permission')) return { permission: 'admin' }
-      if (path.includes('/collaborators/blocker/permission')) return { permission: 'write' }
-      if (path.includes('/collaborators/reader/permission')) return { permission: 'read' }
-      if (path.includes('/statuses/')) {
-        statuses.push(options.body)
-        return {}
-      }
-      throw new Error(`unexpected API path ${path}`)
-    },
+    api,
     write: () => {},
   })
   assert.equal(result.state, 'pending')
@@ -271,17 +284,12 @@ test('keeps the status pending on a write-capable change request while ignoring 
   assert.equal(result.points, 2)
   assert.deepEqual(result.blockers, ['blocker'])
   assert.deepEqual(result.ignoredReviewers, ['reader'])
-  assert.deepEqual(statuses, [{
-    state: 'pending',
-    context: 'weighted approval',
-    description: 'Evaluating approval points.',
-    target_url: 'https://github.example/actions/runs/1',
-  }, {
-    state: 'pending',
-    context: 'weighted approval',
-    description: '1 blocking change request.',
-    target_url: 'https://github.example/actions/runs/1',
-  }])
+  const comment = calls.find(call => call.path.endsWith('/issues/42/comments'))
+  assert.equal(comment?.method, 'POST')
+  assert.match(comment.body.body, /2\/2 points/u)
+  assert.match(comment.body.body, /Blocking change requests:\n- @blocker/u)
+  assert.match(comment.body.body, /Reviews without write access are not counted: @reader\./u)
+  assert.ok(!calls.some(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST'))
 })
 
 test('keeps drafts pending without reading reviews', async () => {
@@ -296,58 +304,60 @@ test('keeps drafts pending without reading reviews', async () => {
   assert.match(result.description, /draft pull request/u)
 })
 
-test('publishes the required status and replaces stale success with error on evaluation failure', async () => {
-  const calls = []
+test('submits the approving review and removes a stale status comment', async () => {
   const output = []
+  const { api, calls } = publicationApi({
+    reviews: [review('turtle2099', 'APPROVED')],
+    comments: [statusComment()],
+  })
   const result = await runApprovalCheck({
     event: pullRequestEvent(),
     policySource,
     getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    runUrl: 'https://github.example/actions/runs/1',
-    api: async (path, options = {}) => {
-      calls.push({ path, options })
-      if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
-      if (path.includes('/collaborators/turtle2099/permission')) return { permission: 'write' }
-      if (path.includes('/statuses/')) return {}
-      throw new Error(`unexpected API path ${path}`)
-    },
+    api,
     write: line => output.push(line),
   })
   assert.equal(result.state, 'success')
-  assert.deepEqual(calls.at(-1), {
-    path: `/repos/deepseek-harness/deepseek-harness/statuses/${HEAD_SHA}`,
-    options: {
-      method: 'POST',
-      body: {
-        state: 'success',
-        context: 'weighted approval',
-        description: '2/2 approval points.',
-        target_url: 'https://github.example/actions/runs/1',
-      },
-    },
-  })
   assert.equal(output[0], 'Author credit: not evaluated (reviewer points suffice).')
   assert.equal(output[1], 'Approval score: 2/2.')
+  assert.equal(calls.find(call => call.path.endsWith('/issues/comments/90'))?.method, 'DELETE')
+  const approval = calls.find(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST')
+  assert.equal(approval?.body.event, 'APPROVE')
+  assert.match(approval.body.body, /Weighted approval satisfied: 2\/2 points\./u)
+  assert.match(approval.body.body, /- @turtle2099: 2 points/u)
+  assert.ok(!calls.some(call => call.path.endsWith('/issues/42/comments') && call.method === 'POST'))
+})
 
-  const failures = []
-  await assert.rejects(runApprovalCheck({
+test('keeps its approval out of the score and does not submit a second review', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [botReview(), review('writer', 'APPROVED'), review('second', 'APPROVED')],
+  })
+  const result = await runApprovalCheck({
     event: pullRequestEvent(),
     policySource,
     getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    runUrl: 'https://github.example/actions/runs/2',
+    api,
+    write: () => {},
+  })
+  assert.equal(result.state, 'success')
+  assert.equal(result.points, 2)
+  assert.ok(!calls.some(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST'))
+})
+
+test('fails without publishing when evaluation fails', async () => {
+  const calls = []
+  await assert.rejects(runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
     api: async (path, options = {}) => {
+      calls.push({ path, method: options.method ?? 'GET' })
       if (path.includes('/reviews?')) throw new Error('reviews unavailable')
-      if (path.includes('/statuses/')) {
-        failures.push({ path, options })
-        return {}
-      }
       throw new Error(`unexpected API path ${path}`)
     },
-    write: () => {},
   }), /reviews unavailable/u)
-  assert.equal(failures[0].options.body.state, 'pending')
-  assert.equal(failures[1].options.body.state, 'error')
-  assert.equal(failures[1].options.body.description, 'Approval evaluation failed.')
+  assert.deepEqual(calls.map(call => call.path), [
+    '/repos/deepseek-harness/deepseek-harness/pulls/42/reviews?per_page=100&page=1',
+  ])
 })
 
 test('sends authenticated JSON and escapes an API error body', async () => {
@@ -422,39 +432,27 @@ test('does not fetch history when approvals already have two-point weights', asy
   assert.equal(result.points, 2)
 })
 
-test('publishes error when production attribution fails', async () => {
-  const states = []
+test('fails without publishing when production attribution fails', async () => {
+  const { api, calls } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
   await assert.rejects(runApprovalCheck({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
+    event: pullRequestEvent(), policySource,
     getOwnership: async () => { throw new Error('incomplete history') },
-    api: async (path, options) => {
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-      if (path.includes('/permission')) return { permission: 'write' }
-      if (path.includes('/comments?')) return []
-      states.push(options.body.state)
-      return {}
-    },
+    api, write: () => {},
   }), /incomplete history/u)
-  assert.deepEqual(states, ['pending', 'error'])
+  assert.ok(calls.every(call => call.method === 'GET'))
 })
 
 
-test('revokes a previous success before starting expensive attribution', async () => {
-  const states = []
+test('does not publish before evaluating expensive attribution', async () => {
+  const { api, calls } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
   await runApprovalCheck({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    event: pullRequestEvent(), policySource, write: () => {},
     getOwnership: async () => {
-      assert.deepEqual(states, ['pending'])
+      assert.ok(calls.every(call => call.method === 'GET'))
       return { totalLines: 100, reviewerLines: { writer: 25 } }
     },
-    api: async (path, options) => {
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-      if (path.includes('/permission')) return { permission: 'write' }
-      states.push(options.body.state)
-      return {}
-    },
+    api,
   })
-  assert.deepEqual(states, ['pending', 'success'])
 })
 
 for (const reviewers of [['first', 'second'], ['turtle1999', 'first']]) {
@@ -480,182 +478,123 @@ test('uses policy endpoints and formats only the displayed score', async () => {
   assert.equal(result.description, '3.08/5 approval points (author 0).')
 })
 
-test('publishes setup phases without evaluating or installing dependencies', async () => {
-  const states = []
-  const phases = []
-  const options = {
-    event: pullRequestEvent(), runUrl: 'https://github.example/run/1',
-    api: async (path, options = {}) => {
-      if (isCheckRunsList(path)) return emptyCheckRuns
-      if (path.includes('/check-runs')) { phases.push(options.body?.conclusion ?? options.body?.status); return {} }
-      assert.match(path, /\/statuses\//u)
-      states.push(options.body.state)
-    },
-  }
-  await publishApprovalPhase({ ...options, phase: 'pending' })
-  await publishApprovalPhase({ ...options, phase: 'error' })
-  assert.deepEqual(states, ['pending', 'error'])
-  assert.deepEqual(phases, ['in_progress', 'failure'])
-  await assert.rejects(publishApprovalPhase({ ...options, phase: 'success' }), /invalid approval setup phase/u)
-})
-
-test('updates the App-owned run instead of creating another', async () => {
-  const calls = []
-  const appRuns = [{ id: 42, app: { slug: 'dsh-weighted-approval' }, conclusion: 'success', external_id: 'weighted-approval-decision' }]
-  await runPublisher({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
-    checkAppSlug: 'dsh-weighted-approval',
-    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    getMergedCount: async () => 0,
-    api: async (path, options = {}) => {
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
-      if (path.includes('/comments?')) return []
-      if (path.includes('/statuses/')) return {}
-      throw new Error(`unexpected status API path ${path}`)
-    },
-    checkApi: async (path, options = {}) => {
-      calls.push({ path, method: options.method, body: options.body })
-      if (isCheckRunsList(path)) return { total_count: appRuns.length, check_runs: appRuns }
-      if (path.includes('/check-runs')) return {}
-      throw new Error(`unexpected check API path ${path}`)
-    },
+test('reuses one status comment and updates it when the score changes', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [review('writer', 'APPROVED')],
+    comments: [statusComment()],
   })
-  assert.deepEqual(calls.map(call => call.path), [
-    `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
-    '/repos/deepseek-harness/deepseek-harness/check-runs/42',
-  ])
-  assert.equal(calls[1].method, 'PATCH')
-  assert.equal(calls[1].body.name, undefined)
-})
-
-test('ignores job-token runs when the App token publishes', async () => {
-  const calls = []
-  const jobRuns = [{ id: 7, app: { slug: 'github-actions' }, conclusion: 'success', external_id: 'weighted-approval-decision' }]
-  await runPublisher({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
-    checkAppSlug: 'dsh-weighted-approval',
+  const result = await runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
     getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    getMergedCount: async () => 0,
-    api: async (path) => {
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
-      if (path.includes('/comments?')) return []
-      if (path.includes('/statuses/')) return {}
-      throw new Error(`unexpected status API path ${path}`)
-    },
-    checkApi: async (path, options = {}) => {
-      calls.push({ path, method: options.method, body: options.body })
-      if (isCheckRunsList(path)) return { total_count: jobRuns.length, check_runs: jobRuns }
-      if (path.includes('/check-runs')) return {}
-      throw new Error(`unexpected check API path ${path}`)
-    },
-  })
-  assert.equal(calls.at(-1).method, 'POST')
-  assert.equal(calls.at(-1).body.name, 'weighted approval decision')
-  assert.equal(calls.at(-1).body.external_id, 'weighted-approval-decision')
-})
-
-test('publishes the check run through the App token when one is provided', async () => {
-  const statusCalls = []
-  const checkCalls = []
-  await runPublisher({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
-    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    getMergedCount: async () => 0,
-    api: async (path, options = {}) => {
-      statusCalls.push({ path, body: options.body })
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
-      if (path.includes('/comments?')) return []
-      if (path.includes('/statuses/')) return {}
-      throw new Error(`unexpected status API path ${path}`)
-    },
-    checkApi: async (path, options = {}) => {
-      checkCalls.push({ path, body: options.body })
-      if (isCheckRunsList(path)) return emptyCheckRuns
-      if (path.includes('/check-runs')) return {}
-      throw new Error(`unexpected check API path ${path}`)
-    },
-  })
-  assert.equal(statusCalls.at(-1).body.context, 'weighted approval')
-  assert.equal(checkCalls.at(-1).body.name, 'weighted approval decision')
-  assert.equal(checkCalls.at(-1).body.conclusion, 'action_required')
-  assert.ok(statusCalls.every(call => !call.path.includes('/check-runs')))
-  assert.ok(checkCalls.every(call => !call.path.includes('/statuses/')))
-})
-
-test('keeps the status gate when the label write fails', async () => {
-  const writes = []
-  const states = []
-  await runPublisher({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
-    write: line => writes.push(line),
-    getOwnership: async () => ({ totalLines: 100, reviewerLines: { turtle2099: 25 } }),
-    api: async (path, options = {}) => {
-      if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
-      if (path.includes('/collaborators/turtle2099/permission')) return { permission: 'write' }
-      if (path.includes('/comments?')) return []
-      if (path.includes('/statuses/')) { states.push(options.body.state); return {} }
-      if (path.includes('/check-runs')) throw new Error('check runs unavailable')
-      throw new Error(`unexpected API path ${path}`)
-    },
-  })
-  assert.deepEqual(states, ['pending', 'success'])
-  assert.ok(writes.some(line => /Decision check run not published/.test(line)))
-})
-
-test('reports the decision on a non-required check run beside the status', async () => {
-  const calls = []
-  const api = async (path, options = {}) => {
-    calls.push({ path, method: options.method, body: options.body })
-    if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
-    if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
-    if (path.includes('/comments?')) return []
-    if (isCheckRunsList(path)) return emptyCheckRuns
-    if (path.includes('/check-runs') || path.includes('/statuses/')) return {}
-    throw new Error(`unexpected API path ${path}`)
-  }
-  const result = await runPublisher({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
-    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-    getMergedCount: async () => 0,
     api,
+    write: () => {},
   })
-  const status = calls.filter(call => call.path.includes('/statuses/')).at(-1)
-  const check = calls.filter(call => call.path.endsWith('/check-runs')).at(-1)
   assert.equal(result.state, 'pending')
-  assert.equal(status.body.state, 'pending')
-  assert.equal(check.body.name, 'weighted approval decision')
-  assert.equal(check.body.conclusion, 'action_required')
+  const update = calls.find(call => call.path.endsWith('/issues/comments/90'))
+  assert.equal(update?.method, 'PATCH')
+  assert.match(update.body.body, /1\/2 points/u)
+  assert.match(update.body.body, /- @writer: 1 point\n/u)
+  assert.match(update.body.body, /1 more approval point is required\./u)
+  assert.ok(!calls.some(call => call.path.endsWith('/issues/42/comments') && call.method === 'POST'))
 })
 
-test('revokes a published success check run and updates one run per head', async () => {
-  const calls = []
-  const checkRuns = [
-    { id: 7, app: { slug: 'github-actions' }, conclusion: 'success', external_id: '' },
-    { id: 8, app: { slug: 'github-actions' }, conclusion: 'action_required', external_id: 'weighted-approval-decision' },
-    { id: 9, app: { slug: 'other-app' }, conclusion: 'success', external_id: '' },
-    { id: 10, app: { slug: 'github-actions' }, conclusion: 'success', external_id: 'a-job-check-run' },
-  ]
-  await publishApprovalPhase({
-    event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'pending',
-    api: async (path, options = {}) => {
-      calls.push({ path, method: options.method, body: options.body })
-      return isCheckRunsList(path) ? { total_count: checkRuns.length, check_runs: checkRuns } : {}
-    },
+test('creates a status comment and ignores a copied marker', async () => {
+  const copied = statusComment(`${STATUS_MARKER}\nnot the approval bot`, 91, 'User')
+  const { api, calls } = publicationApi({ comments: [copied] })
+  const result = await runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    api,
+    write: () => {},
   })
-  assert.deepEqual(calls.map(call => call.path), [
-    `/repos/deepseek-harness/deepseek-harness/statuses/${HEAD_SHA}`,
-    `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
-    '/repos/deepseek-harness/deepseek-harness/check-runs/7',
-    '/repos/deepseek-harness/deepseek-harness/check-runs/10',
-  ])
-  for (const call of calls.slice(2)) {
-    assert.equal(call.method, 'PATCH')
-    assert.equal(call.body.conclusion, 'action_required')
-  }
+  assert.equal(result.state, 'pending')
+  const created = calls.find(call => call.path.endsWith('/issues/42/comments') && call.method === 'POST')
+  assert.match(created.body.body, /0\/2 points/u)
+  assert.match(created.body.body, /2 more approval points are required/u)
+  assert.ok(!calls.some(call => call.path.includes('/issues/comments/91')))
 })
+
+test('dismisses its approval when the policy no longer holds', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [botReview('APPROVED', 77), review('writer', 'APPROVED')],
+  })
+  const result = await runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    api,
+    write: () => {},
+  })
+  assert.equal(result.state, 'pending')
+  assert.equal(result.points, 1)
+  const dismissal = calls.find(call => call.path.endsWith('/reviews/77/dismissals'))
+  assert.equal(dismissal?.method, 'PUT')
+  assert.equal(dismissal.body.event, 'DISMISS')
+  assert.ok(calls.some(call => call.path.endsWith('/issues/42/comments') && call.method === 'POST'))
+})
+
+test('approves again after its previous approval was dismissed', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [botReview('DISMISSED', 77), review('turtle2099', 'APPROVED')],
+  })
+  const result = await runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    api,
+    write: () => {},
+  })
+  assert.equal(result.state, 'success')
+  assert.ok(calls.some(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST'))
+})
+
+test('fails when the approval dismissal is not confirmed', async () => {
+  const { api } = publicationApi({ reviews: [botReview('APPROVED', 77)] })
+  const failing = async (path, options) => {
+    if (path.endsWith('/reviews/77/dismissals')) return { id: 77, state: 'APPROVED' }
+    return api(path, options)
+  }
+  await assert.rejects(runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    api: failing,
+    write: () => {},
+  }), /approval review dismissal was not confirmed/u)
+})
+
+test('retracts its approval and removes the comment on a draft', async () => {
+  const { api, calls } = publicationApi({
+    reviews: [botReview('APPROVED', 77)],
+    comments: [statusComment()],
+  })
+  await runApprovalCheck({
+    event: pullRequestEvent({ draft: true }),
+    policySource,
+    api,
+    write: () => {},
+  })
+  assert.ok(calls.some(call => call.method === 'PUT' && call.path.endsWith('/reviews/77/dismissals')))
+  assert.ok(calls.some(call => call.method === 'DELETE' && call.path.endsWith('/issues/comments/90')))
+})
+
+test('fails when the approval review cannot be submitted', async () => {
+  const { api } = publicationApi({ reviews: [review('turtle2099', 'APPROVED')] })
+  const failing = async (path, options) => {
+    if (path.endsWith('/pulls/42/reviews') && options?.method === 'POST') throw new Error('review rejected')
+    return api(path, options)
+  }
+  await assert.rejects(runApprovalCheck({
+    event: pullRequestEvent(),
+    policySource,
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    api: failing,
+    write: () => {},
+  }), /review rejected/u)
+})
+
 
 for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {
   test(`author with ${mergedCount} merged PRs contributes ${credit} points but cannot approve alone`, async () => {
@@ -672,11 +611,12 @@ for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089]
 
 test('turtle2099 contributes fixed author points without a history lookup', async () => {
   const output = []
+  const { api } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
   const result = await runApprovalCheck({
-    event: pullRequestEvent({ author: 'Turtle2099' }), policySource, runUrl: 'https://github.example/run/1',
+    event: pullRequestEvent({ author: 'Turtle2099' }), policySource,
     getMergedCount: async () => { throw new Error('fixed author credit must skip history') },
     getOwnership: async () => ({ totalLines: 10, reviewerLines: { writer: 2 } }),
-    api: async path => path.includes('/reviews?') ? [review('writer', 'APPROVED')] : { permission: 'write' },
+    api,
     write: line => output.push(line),
   })
   assert.deepEqual(result.authorCredit, { mergedCount: null, points: 0.2 })
@@ -726,21 +666,17 @@ test('blockers skip history and ignore non-write reviewers', async () => {
   assert.deepEqual(result.ignoredReviewers, ['reader'])
 })
 
-test('drafts skip history and history failures revoke success with error', async () => {
+test('drafts skip history and history failures fail the run', async () => {
   await evaluateApproval({
     event: pullRequestEvent({ draft: true }), policySource,
     getMergedCount: async () => { throw new Error('draft must skip history') },
   })
-  const states = []
+  const { api } = publicationApi()
   await assert.rejects(runApprovalCheck({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
+    event: pullRequestEvent(), policySource,
     getMergedCount: async () => { throw new Error('history unavailable') },
-    api: async (path, options) => {
-      if (path.includes('/reviews?')) return []
-      states.push(options.body.state)
-    },
+    api,
   }), /history unavailable/u)
-  assert.deepEqual(states, ['pending', 'error'])
 })
 
 
@@ -756,13 +692,12 @@ test('a score just below the threshold remains pending even if its display round
 
 test('the publisher counts merged history through the production API path', async () => {
   const event = pullRequestEvent()
-  const states = []
   const output = []
+  const { api: base, calls } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
   const result = await runWithHistory({
-    event, policySource, runUrl: 'https://github.example/run/1', write: line => output.push(line),
+    event, policySource, write: line => output.push(line),
     getOwnership: async () => ({ totalLines: 80, reviewerLines: { writer: 9 } }),
     api: async (path, options) => {
-      if (path.includes('/comments?')) return []
       if (path === '/graphql') {
         assert.equal(options.body.variables.owner, 'deepseek-harness')
         return { data: { repository: { pullRequests: {
@@ -772,36 +707,36 @@ test('the publisher counts merged history through the production API path', asyn
           pageInfo: { hasNextPage: !options.body.variables.after, endCursor: 'next' },
         } } } }
       }
-      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
       if (path.includes('/permission')) return { permission: 'write' }
-      states.push(options.body.state)
-      return {}
+      return base(path, options)
     },
   })
   assert.equal(result.points, 2)
   assert.equal(result.authorCredit.points, 0.55)
   assert.equal(result.approvals[0].points, 1.45)
-  assert.deepEqual(states, ['pending', 'success'])
+  const approval = calls.find(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST')
+  assert.match(approval.body.body, /Weighted approval satisfied: 2\/2 points\./u)
+  assert.match(approval.body.body, /Author credit: 0\.55 points\./u)
   assert.equal(output[0], 'Author credit: 0.55 (50 merged PRs).')
 })
 
 test('sufficient reviewer points and drafts publish without querying author history', async () => {
   for (const draft of [false, true]) {
     const output = []
+    const { api, calls } = publicationApi({ reviews: [review('turtle2099', 'APPROVED')] })
     const result = await runWithHistory({
-      event: pullRequestEvent({ draft }), policySource, runUrl: 'https://github.example/run/1',
+      event: pullRequestEvent({ draft }), policySource,
       write: line => output.push(line),
-      api: async path => {
+      api: async (path, options) => {
         assert.notEqual(path, '/graphql')
-        if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
         if (path.includes('/permission')) return { permission: 'write' }
-        if (path.includes('/comments?')) return []
-        return {}
+        return api(path, options)
       },
     })
     assert.equal(result.state, draft ? 'pending' : 'success')
     assert.equal(result.authorCredit, null)
     assert.equal(output[0], `Author credit: not evaluated (${draft ? 'draft' : 'reviewer points suffice'}).`)
+    assert.equal(calls.some(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST'), !draft)
   }
 })
 
@@ -842,6 +777,9 @@ function delegationApi({ comments = [], reviews = [], permissions = {} } = {}) {
     if (path.includes('/reviews?')) return reviews
     const match = /\/collaborators\/([^/]+)\/permission$/u.exec(path)
     if (match) return { permission: permissions[decodeURIComponent(match[1]).toLowerCase()] ?? 'write' }
+    if (path.endsWith('/issues/42/comments') && options?.method === 'POST') return { id: 100 }
+    if (path.includes('/issues/comments/')) return {}
+    if (path.endsWith('/pulls/42/reviews') && options?.method === 'POST') return { id: 200 }
     throw new Error(`unexpected API path ${path}`)
   }
 }
@@ -1009,14 +947,13 @@ test('an active delegate command requests review once and preserves other reques
       const api = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')] })
       const result = await runWithHistory({
         event: { ...pullRequestEvent(), issue: { number: 42, pull_request: {} }, action, comment: { id: 1 } },
-        policySource, runUrl: 'https://github.example/run/1', getMergedCount: async () => 0,
+        policySource, getMergedCount: async () => 0,
         write: line => output.push(line),
         api: async (path, options) => {
           if (path.endsWith('/requested_reviewers')) {
             if (options?.method === 'POST') { requests.push(options.body); return {} }
             return { users: [{ login: 'another-reviewer' }, ...(alreadyRequested ? [{ login: 'WRITER' }] : [])], teams: [] }
           }
-          if (path.includes('/statuses/')) return {}
           return api(path, options)
         },
       })
@@ -1041,10 +978,9 @@ test('inactive commands and drafts do not request review', async () => {
       event: { ...pullRequestEvent({ draft: scenario.draft }),
         ...(scenario.event ?? { issue: { number: 42, pull_request: {} }, action: 'created', comment: { id: 1 } }),
       },
-      policySource, runUrl: 'https://github.example/run/1', getMergedCount: async () => 0, write: () => {},
+      policySource, getMergedCount: async () => 0, write: () => {},
       api: async (path, options) => {
         assert.ok(!path.endsWith('/requested_reviewers'))
-        if (path.includes('/statuses/')) return {}
         return api(path, options)
       },
     })
@@ -1053,14 +989,12 @@ test('inactive commands and drafts do not request review', async () => {
 
 test('failed review requests preserve the computed score and report the retry', async () => {
   for (const failedRead of [false, true]) {
-    const statuses = []
     const api = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews: [review('imccyu', 'APPROVED')] })
     const output = []
     await runWithHistory({
       event: { ...pullRequestEvent(), issue: { number: 42, pull_request: {} }, action: 'created', comment: { id: 1 } },
-      policySource, runUrl: 'https://github.example/run/1', getMergedCount: async () => 0, getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }), write: line => output.push(line),
+      policySource, getMergedCount: async () => 0, getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }), write: line => output.push(line),
       api: async (path, options) => {
-        if (path.includes('/statuses/')) { statuses.push(options.body.state); return {} }
         if (path.endsWith('/requested_reviewers')) {
           if (options?.method === 'POST') throw new Error('request rejected')
           return failedRead ? {} : { users: [] }
@@ -1070,7 +1004,6 @@ test('failed review requests preserve the computed score and report the retry', 
     })
     assert.match(output.at(-1), failedRead ? /no users array/u : /request rejected/u)
     assert.match(output.at(-1), /score is unchanged.*will retry/u)
-    assert.deepEqual(statuses, ['pending', 'success'])
   }
 })
 
@@ -1079,10 +1012,8 @@ test('delegation dismisses only the sender old decisions and stays active across
     review('turtle1999', 'COMMENTED', undefined, 12), review('turtle1999', 'PENDING', null, 13),
     review('writer', 'APPROVED', undefined, 20), review('other', 'CHANGES_REQUESTED', undefined, 21)]
   const calls = []
-  const states = []
   const read = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews })
   const api = async (path, options) => {
-    if (path.includes('/statuses/')) { states.push(options.body.state); return {} }
     if (path.endsWith('/dismissals')) {
       calls.push(options)
       const id = Number(path.split('/').at(-2))
@@ -1098,7 +1029,7 @@ test('delegation dismisses only the sender old decisions and stays active across
     return read(path, options)
   }
   const result = await runWithHistory({ event: { ...pullRequestEvent(), issue: { number: 42, pull_request: {} }, action: 'created', comment: { id: 1 } },
-    policySource, api, runUrl: 'https://github.example/run/1', write: () => {}, getMergedCount: async () => 0,
+    policySource, api, write: () => {}, getMergedCount: async () => 0,
   })
   assert.deepEqual(calls.map(call => call.method), ['PUT', 'PUT'])
   assert.equal(calls[0].body.event, 'DISMISS')
@@ -1106,7 +1037,6 @@ test('delegation dismisses only the sender old decisions and stays active across
   assert.deepEqual(result.blockers, ['other'])
   assert.equal(result.delegations.length, 1)
   assert.deepEqual(result.delegations[0].reviewIds, [])
-  assert.deepEqual(states, ['pending', 'pending'])
   reviews.find(review => review.id === 21).state = 'DISMISSED'
   for (const state of ['APPROVED', 'DISMISSED', 'COMMENTED', 'APPROVED']) {
     reviews.find(review => review.id === 20).state = state
@@ -1124,9 +1054,8 @@ test('a new sender review arriving during dismissal is not dismissed or delegate
   const reviews = [review('turtle1999', 'CHANGES_REQUESTED')]
   const read = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews })
   const result = await runWithHistory({ event: { ...pullRequestEvent(), issue: { number: 42, pull_request: {} }, action: 'created', comment: { id: 1 } },
-    policySource, runUrl: 'https://github.example/run/1', write: () => {}, getMergedCount: async () => 0,
+    policySource, write: () => {}, getMergedCount: async () => 0,
     api: async (path, options) => {
-      if (path.includes('/statuses/')) return {}
       if (path.endsWith('/dismissals')) {
         assert.ok(path.endsWith('/reviews/10/dismissals'))
         reviews[0].state = 'DISMISSED'
@@ -1141,14 +1070,12 @@ test('a new sender review arriving during dismissal is not dismissed or delegate
   assert.deepEqual(result.blockers, ['turtle1999'])
 })
 
-test('a failed or unconfirmed dismissal prevents review requests and publishes error', async () => {
+test('a failed or unconfirmed dismissal fails the run before review requests', async () => {
   for (const rejected of [false, true]) {
-    const states = []
     const read = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews: [review('turtle1999', 'CHANGES_REQUESTED')] })
     await assert.rejects(runWithHistory({ event: { ...pullRequestEvent(), issue: { number: 42, pull_request: {} }, action: 'created', comment: { id: 1 } },
-      policySource, runUrl: 'https://github.example/run/1', write: () => {},
+      policySource, write: () => {},
       api: async (path, options) => {
-        if (path.includes('/statuses/')) { states.push(options.body.state); return {} }
         if (path.endsWith('/dismissals')) {
           if (rejected) throw new Error('dismissal denied')
           return { id: 10, state: 'CHANGES_REQUESTED' }
@@ -1157,20 +1084,17 @@ test('a failed or unconfirmed dismissal prevents review requests and publishes e
         return read(path, options)
       },
     }), rejected ? /dismissal denied/u : /dismissal was not confirmed/u)
-    assert.deepEqual(states, ['pending', 'error'])
   }
 })
 
 test('reads all comment pages, logs the score owner, and fails closed on missing comment history', async () => {
-  const statuses = []
   const output = []
   const pageCommand = comment('turtle1999', '/delegate @writer')
   const api = delegationApi({ comments: [pageCommand], reviews: [review('writer', 'APPROVED')] })
   const run = comments => runWithHistory({
-    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
+    event: pullRequestEvent(), policySource,
     getMergedCount: async () => 0, write: line => output.push(line),
     api: async (path, options) => {
-      if (path.includes('/statuses/')) { statuses.push(options.body.state); return {} }
       if (path.includes('/comments?')) return comments(path)
       return api(path, options)
     },
@@ -1181,9 +1105,9 @@ test('reads all comment pages, logs the score owner, and fails closed on missing
     return path.endsWith('page=1') ? Array.from({ length: 100 }, () => comment('writer', 'text'))
       : [pageCommand]
   })
-  assert.equal(pages.length, 2)
+  assert.ok(pages.some(path => path.endsWith('page=1')))
+  assert.ok(pages.some(path => path.endsWith('page=2')))
   assert.ok(output.includes('- @turtle1999: 2 (delegated to @writer)'))
-  assert.deepEqual(statuses.splice(0), ['pending', 'success'])
   for (const [comments, message] of [
     [() => { throw new Error('comment API unavailable') }, /comment API unavailable/u],
     [() => ({}), /comments response is not an array/u],
@@ -1193,7 +1117,6 @@ test('reads all comment pages, logs the score owner, and fails closed on missing
     [() => Array.from({ length: 100 }, () => comment('writer', 'text')), /comments exceed 3000/u],
   ]) {
     await assert.rejects(run(comments), message)
-    assert.deepEqual(statuses.splice(0), ['pending', 'error'])
   }
 })
 
@@ -1277,7 +1200,6 @@ test('later events reconcile all active delegations after a draft or replaced co
     const effects = []
     const requested = []
     const api = async (path, options) => {
-      if (path.includes('/statuses/')) return {}
       if (path.endsWith('/dismissals')) {
         const old = reviews.find(review => path.endsWith(`/reviews/${review.id}/dismissals`))
         effects.push(old.id)
@@ -1291,7 +1213,7 @@ test('later events reconcile all active delegations after a draft or replaced co
       return read(path, options)
     }
     const run = draft => runWithHistory({ event: { ...pullRequestEvent({ draft }), action }, policySource, api,
-      runUrl: 'https://github.example/run/1', getMergedCount: async () => 0, write: () => {},
+      getMergedCount: async () => 0, write: () => {},
     })
     await run(true)
     assert.deepEqual(effects, [])
@@ -1307,9 +1229,8 @@ test('already approved delegates need no new request', async () => {
   const read = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')],
     reviews: [review('writer', 'APPROVED')],
   })
-  const result = await runWithHistory({ event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+  const result = await runWithHistory({ event: pullRequestEvent(), policySource, write: () => {},
     api: (path, options) => {
-      if (path.includes('/statuses/')) return {}
       assert.ok(!path.endsWith('/requested_reviewers'))
       return read(path, options)
     },

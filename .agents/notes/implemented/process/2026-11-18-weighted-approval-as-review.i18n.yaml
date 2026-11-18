@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-18-weighted-approval-as-review.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-11-18-weighted-approval-as-review.md
+/agent-note-weighted-approval-becomes-an-approving-review:
+  en: d0de39331df7ddc6
+  zh: b30d6ea91b71ada0
+/agent-note-weighted-approval-becomes-an-approving-review/problem:
+  en: 194bd75985001119
+  zh: 8977742bc0e9bb6f
+/agent-note-weighted-approval-becomes-an-approving-review/decision:
+  en: 3b044e1e06baf5e0
+  zh: 10a5e8c98a0ca318
+/agent-note-weighted-approval-becomes-an-approving-review/verification:
+  en: 6d1ed03f2a625243
+  zh: 80b14c1238228d8f
+/agent-note-weighted-approval-becomes-an-approving-review/alternatives-considered:
+  en: 58b869b858e13a70
+  zh: f372843df8d9a2b5
+/agent-note-weighted-approval-becomes-an-approving-review/consequences:
+  en: 53b3f1298afde4db
+  zh: 79246ff11e79dbd5

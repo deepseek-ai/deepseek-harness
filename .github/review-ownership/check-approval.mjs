@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { appendFileSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
@@ -10,9 +10,7 @@ import { FIXED_AUTHOR_POINTS, authorCreditPoints, countMergedAuthorPulls } from 
 const API_VERSION = '2026-03-10'
 const MAX_PULL_REQUEST_RECORDS = 3_000
 const PAGE_SIZE = 100
-const STATUS_CONTEXT = 'weighted approval'
-const CHECK_NAME = 'weighted approval decision'
-const CHECK_RUN_MARKER = 'weighted-approval-decision'
+const STATUS_MARKER = '<!-- weighted-approval -->'
 const WRITABLE_PERMISSIONS = new Set(['admin', 'write'])
 const REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING'])
 
@@ -221,7 +219,9 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
   }
 
   const reviews = await listPullRequestReviews(api, pull.repository, pull.number)
-  const decisions = effectiveReviewDecisions(reviews)
+  // The publisher's own approval records the decision; counting it again would let one reviewer
+  // reach the threshold with the bot's review alone.
+  const decisions = effectiveReviewDecisions(reviews.filter(review => !isApprovalReview(review)))
     .filter(({ login }) => login.toLowerCase() !== pull.author.toLowerCase())
   const comments = await listRecords(api, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
   const commands = await delegationCommands(api, comments)
@@ -308,76 +308,61 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
 }
 
 /**
- * Evaluate and publish the required commit status, publishing an error status when evaluation fails.
- * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, checkApi?: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, checkAppSlug?: string, runUrl: string, write?: (line: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs; checkApi publishes the decision check run, defaulting to api, and checkAppSlug selects the runs that client can update.
- * @returns {Promise<Awaited<ReturnType<typeof evaluateApproval>>>} Published approval decision.
+ * Evaluate the approval policy and publish its outcome as a status comment or an approving review.
+ * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, write?: (line: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs.
+ * @returns {Promise<Awaited<ReturnType<typeof evaluateApproval>>>} Evaluated approval decision.
  */
-export async function runApprovalCheck({ event, policySource, api, checkApi = api, checkAppSlug = 'github-actions', runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
+export async function runApprovalCheck({ event, policySource, api, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
   const pull = pullRequestFromEvent(event)
-  await publishStatus(api, pull, 'pending', 'Evaluating approval points.', runUrl)
-  let result
-  try {
-    result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
-    for (const delegation of result.delegations) {
-      for (const reviewId of delegation.reviewIds) {
-        const dismissed = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
-          method: 'PUT',
-          body: { message: `@${delegation.login} delegated approval to @${delegation.delegatedTo} via /delegate.`, event: 'DISMISS' },
-        })
-        if (!isRecord(dismissed) || dismissed.id !== reviewId || dismissed.state !== 'DISMISSED') {
-          throw new Error('delegated review dismissal was not confirmed')
-        }
-        write(`Dismissed @${delegation.login}'s review ${reviewId} for delegation to @${delegation.delegatedTo}.`)
+  let result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
+  for (const delegation of result.delegations) {
+    for (const reviewId of delegation.reviewIds) {
+      const dismissed = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
+        method: 'PUT',
+        body: { message: `@${delegation.login} delegated approval to @${delegation.delegatedTo} via /delegate.`, event: 'DISMISS' },
+      })
+      if (!isRecord(dismissed) || dismissed.id !== reviewId || dismissed.state !== 'DISMISSED') {
+        throw new Error('delegated review dismissal was not confirmed')
       }
+      write(`Dismissed @${delegation.login}'s review ${reviewId} for delegation to @${delegation.delegatedTo}.`)
     }
-    if (result.delegations.some(({ reviewIds }) => reviewIds.length)) {
-      result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
-    }
-  } catch (error) {
-    await publishStatus(api, pull, 'error', 'Approval evaluation failed.', runUrl)
-    await tryPublishCheck(checkApi, pull, 'failure', 'Approval evaluation failed.', runUrl, write, checkAppSlug)
-    throw error
+  }
+  if (result.delegations.some(({ reviewIds }) => reviewIds.length)) {
+    result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
   }
   write(result.authorCredit
     ? `Author credit: ${result.authorCredit.points} (${result.authorCredit.mergedCount === null ? `fixed for @${pull.author}` : `${result.authorCredit.mergedCount} merged PRs`}).`
     : `Author credit: not evaluated (${pull.draft ? 'draft' : result.blockers.length ? 'blocking review' : 'reviewer points suffice'}).`)
-  write(`Approval score: ${result.points}/${result.requiredPoints}.`)
+  write(`Approval score: ${formatPoints(result.points)}/${result.requiredPoints}.`)
   writeList(write, 'Counted approvals', result.approvals.map(({ login, points, ownership, delegatedTo }) =>
-    `@${login}: ${points}${delegatedTo ? ` (delegated to @${delegatedTo})` : ''}${ownership ? ` (${ownership.ownedLines}/${ownership.totalLines} old production lines)` : ''}`))
+    `@${login}: ${formatPoints(points)}${delegatedTo ? ` (delegated to @${delegatedTo})` : ''}${ownership ? ` (${ownership.ownedLines}/${ownership.totalLines} old production lines)` : ''}`))
   writeList(write, 'Blocking change requests', result.blockers.map(login => `@${login}`))
   writeList(write, 'Ignored reviewers without write access', result.ignoredReviewers.map(login => `@${login}`))
-  await publishStatus(api, pull, result.state, result.description, runUrl)
-  await tryPublishCheck(checkApi, pull, result.state === 'success' ? 'success' : 'action_required', result.description, runUrl, write, checkAppSlug)
-  write(`Published ${JSON.stringify(STATUS_CONTEXT)} status ${JSON.stringify(result.state)}.`)
+
+  const reviews = await listPullRequestReviews(api, pull.repository, pull.number)
+  const approvalReviews = reviews.filter(isApprovalReview)
+  if (pull.draft) {
+    await retractApprovalReviews(api, pull, approvalReviews, write)
+    await removeStatusComment(api, pull, write)
+  } else if (result.state === 'success') {
+    await removeStatusComment(api, pull, write)
+    if (latestReviewState(approvalReviews) !== 'APPROVED') {
+      await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews`, {
+        method: 'POST',
+        body: { event: 'APPROVE', body: approvalReviewBody(result) },
+      })
+      write('Submitted the weighted approval review.')
+    }
+  } else {
+    await retractApprovalReviews(api, pull, approvalReviews, write)
+    await upsertStatusComment(api, pull, result, write)
+  }
   try {
     await requestDelegatedReviews(result, api, write)
   } catch (error) {
     write(`Review request failed; approval score is unchanged and the next evaluation will retry: ${JSON.stringify(error instanceof Error ? error.message : String(error))}`)
   }
   return result
-}
-
-/**
- * Revoke a previous success before dependency installation, or report its failure.
- * @param {{event: unknown, api: (path: string, options: object) => Promise<unknown>, checkApi?: (path: string, options: object) => Promise<unknown>, checkAppSlug?: string, runUrl: string, phase: string, write?: (line: string) => void}} options Publication inputs; checkApi publishes the decision check run and checkAppSlug selects the runs it can update.
- * @returns {Promise<void>} Completion of the status write and the corresponding check-run write.
- */
-export async function publishApprovalPhase({ event, api, checkApi = api, checkAppSlug = 'github-actions', runUrl, phase, write = line => process.stdout.write(`${line}\n`) }) {
-  const pull = pullRequestFromEvent(event)
-  if (phase === 'pending') {
-    await publishStatus(api, pull, 'pending', 'Preparing approval evaluation.', runUrl)
-    try {
-      await revokeApproval(checkApi, pull, runUrl, checkAppSlug)
-    } catch (error) {
-      write(`Decision check run not revoked; the commit status is unchanged: ${JSON.stringify(error instanceof Error ? error.message : String(error))}`)
-    }
-    return
-  }
-  if (phase === 'error') {
-    await publishStatus(api, pull, 'error', 'Approval setup or evaluation failed.', runUrl)
-    return tryPublishCheck(checkApi, pull, 'failure', 'Approval setup or evaluation failed.', runUrl, write, checkAppSlug)
-  }
-  throw new Error('invalid approval setup phase')
 }
 
 /**
@@ -431,7 +416,7 @@ export async function approvalEventFromComment({ event, api }) {
 }
 
 /**
- * Refresh a pull-request event before any status write; closed PRs and stale heads are skipped.
+ * Refresh a pull-request event before any API write; closed PRs and stale heads are skipped.
  * @param {{event: unknown, api: (path: string) => Promise<unknown>}} options Pull-request event and API caller.
  * @returns {Promise<Record<string, unknown> | null>} Live event, or null for a closed PR or superseded head.
  */
@@ -484,86 +469,119 @@ async function reviewerPermission(api, repository, login) {
   return response.permission.toLowerCase()
 }
 
-// The required gate is the commit status; this check run reports the same decision as a conclusion
-// label and is not required. A failed label write is reported and never changes the gate, including
-// for a replayed workflow whose token has no checks permission.
-async function tryPublishCheck(checkApi, pull, conclusion, title, runUrl, write, appSlug) {
-  try {
-    await publishCheck(checkApi, pull, conclusion, title, runUrl, appSlug)
-  } catch (error) {
-    write(`Decision check run not published; the commit status is unchanged: ${JSON.stringify(error instanceof Error ? error.message : String(error))}`)
+// Only bot reviews and comments carrying the marker belong to the approval publisher; a reviewer
+// can copy the marker, so the account type keeps a copied body from being edited or dismissed.
+function isApprovalReview(review) {
+  return isRecord(review) && isRecord(review.user) && review.user.type === 'Bot'
+    && typeof review.state === 'string' && typeof review.body === 'string' && review.body.includes(STATUS_MARKER)
+}
+
+function isStatusComment(comment) {
+  return isRecord(comment) && isRecord(comment.user) && comment.user.type === 'Bot'
+    && typeof comment.body === 'string' && comment.body.includes(STATUS_MARKER)
+}
+
+function latestReviewState(reviews) {
+  const latest = reviews.at(-1)
+  return typeof latest?.state === 'string' ? latest.state.toUpperCase() : undefined
+}
+
+async function retractApprovalReviews(api, pull, reviews, write) {
+  for (const review of reviews) {
+    if (review.state.toUpperCase() !== 'APPROVED') continue
+    const reviewId = positiveInteger(review.id, 'approval review ID')
+    const dismissed = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
+      method: 'PUT',
+      body: { message: 'Weighted approval no longer holds.', event: 'DISMISS' },
+    })
+    if (!isRecord(dismissed) || dismissed.id !== reviewId || dismissed.state !== 'DISMISSED') {
+      throw new Error('approval review dismissal was not confirmed')
+    }
+    write(`Dismissed the weighted approval review ${reviewId}.`)
   }
 }
 
-async function publishCheck(checkApi, pull, conclusion, title, runUrl, appSlug) {
-  requireHttpsRunUrl(runUrl)
-  const body = { status: 'completed', conclusion, details_url: runUrl, output: { title, summary: `${title} [Workflow run](${runUrl})` } }
-  const runs = await decisionRuns(checkApi, pull, appSlug)
-  if (runs.length === 0) {
-    await checkApi(`/repos/${pull.repository}/check-runs`, {
-      method: 'POST',
-      body: { name: CHECK_NAME, head_sha: pull.headSha, external_id: CHECK_RUN_MARKER, ...body },
-    })
+async function upsertStatusComment(api, pull, result, write) {
+  const comments = await listRecords(api, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
+  const existing = comments.find(isStatusComment)
+  const body = statusCommentBody(result)
+  if (!existing) {
+    await api(`/repos/${pull.repository}/issues/${pull.number}/comments`, { method: 'POST', body: { body } })
+    write('Created the weighted approval comment.')
     return
   }
-  for (const run of runs) {
-    if (!Number.isSafeInteger(run.id)) throw new Error('check run has no valid id')
-    await checkApi(`/repos/${pull.repository}/check-runs/${run.id}`, { method: 'PATCH', body })
+  const commentId = positiveInteger(existing.id, 'approval comment ID')
+  if (existing.body === body) return
+  await api(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'PATCH', body: { body } })
+  write(`Updated the weighted approval comment ${commentId}.`)
+}
+
+async function removeStatusComment(api, pull, write) {
+  const comments = await listRecords(api, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
+  for (const comment of comments.filter(isStatusComment)) {
+    const commentId = positiveInteger(comment.id, 'approval comment ID')
+    await api(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'DELETE' })
+    write(`Deleted the weighted approval comment ${commentId}.`)
   }
 }
 
-// A head without a decision starts in progress; a published success becomes action_required, so an
-// interrupted evaluation cannot leave a success that its current inputs no longer support.
-async function revokeApproval(checkApi, pull, runUrl, appSlug) {
-  requireHttpsRunUrl(runUrl)
-  const title = 'Preparing approval evaluation.'
-  const output = { title, summary: `${title} [Workflow run](${runUrl})` }
-  const runs = await decisionRuns(checkApi, pull, appSlug)
-  if (runs.length === 0) {
-    await checkApi(`/repos/${pull.repository}/check-runs`, {
-      method: 'POST',
-      body: { name: CHECK_NAME, head_sha: pull.headSha, external_id: CHECK_RUN_MARKER, status: 'in_progress', details_url: runUrl, output },
-    })
-    return
+function statusCommentBody(result) {
+  const lines = [
+    STATUS_MARKER,
+    `## Weighted approval: ${formatPoints(result.points)}/${result.requiredPoints} points`,
+    '',
+    'Counted approvals:',
+    ...countedApprovalLines(result),
+  ]
+  if (result.authorCredit) lines.push('', `Author credit: ${pointLabel(result.authorCredit.points)}.`)
+  const remaining = result.requiredPoints - result.points
+  if (remaining > 1e-12) lines.push('', `${formatPoints(remaining)} more approval ${formatPoints(remaining) === 1 ? 'point is' : 'points are'} required.`)
+  if (result.blockers.length > 0) {
+    lines.push('', 'Blocking change requests:')
+    for (const login of result.blockers) lines.push(`- @${login}`)
   }
-  for (const run of runs) {
-    if (!Number.isSafeInteger(run.id)) throw new Error('check run has no valid id')
-    // The label is not a gate; only a published success has to stop claiming the policy holds.
-    if (run.conclusion !== 'success') continue
-    await checkApi(`/repos/${pull.repository}/check-runs/${run.id}`, {
-      method: 'PATCH',
-      body: { status: 'completed', conclusion: 'action_required', details_url: runUrl, output },
-    })
+  const waiting = result.delegations.filter(({ approved }) => !approved)
+  if (waiting.length > 0) {
+    lines.push('', 'Delegated reviews awaited:')
+    for (const delegation of waiting) lines.push(`- @${delegation.delegatedTo} for @${delegation.login}`)
   }
+  if (result.ignoredReviewers.length > 0) {
+    lines.push('', `Reviews without write access are not counted: ${result.ignoredReviewers.map(login => `@${login}`).join(', ')}.`)
+  }
+  lines.push('', 'This comment is updated on each evaluation and removed when the policy holds.')
+  return `${lines.join('\n')}\n`
 }
 
-// A completed check run never returns to in_progress: GitHub answers 200 and leaves it completed.
-async function decisionRuns(checkApi, pull, appSlug) {
-  const listed = await checkApi(`/repos/${pull.repository}/commits/${pull.headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&filter=all&per_page=100`)
-  if (!isRecord(listed) || !Array.isArray(listed.check_runs) || listed.total_count !== listed.check_runs.length) {
-    throw new Error('check-run list response is invalid or incomplete')
-  }
-  // Only runs created by the publishing token can be updated: the job token cannot patch an App run
-  // and the App token cannot patch an Actions run, so the slug selects the runs this token owns.
-  return listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === appSlug)
+function approvalReviewBody(result) {
+  const lines = [
+    STATUS_MARKER,
+    `Weighted approval satisfied: ${formatPoints(result.points)}/${result.requiredPoints} points.`,
+    '',
+    'Counted approvals:',
+    ...countedApprovalLines(result),
+  ]
+  if (result.authorCredit) lines.push('', `Author credit: ${pointLabel(result.authorCredit.points)}.`)
+  return `${lines.join('\n')}\n`
 }
 
-function requireHttpsRunUrl(runUrl) {
-  if (!/^https:\/\/[^\s]+$/u.test(runUrl)) throw new Error('workflow run URL must use HTTPS')
-}
-
-async function publishStatus(api, pull, state, description, runUrl) {
-  if (!/^https:\/\/[^\s]+$/u.test(runUrl)) throw new Error('workflow run URL must use HTTPS')
-  if (description.length > 140) throw new Error('commit status description exceeds 140 characters')
-  await api(`/repos/${pull.repository}/statuses/${pull.headSha}`, {
-    method: 'POST',
-    body: {
-      state,
-      context: STATUS_CONTEXT,
-      description,
-      target_url: runUrl,
-    },
+function countedApprovalLines(result) {
+  if (result.approvals.length === 0) return ['- (none)']
+  return result.approvals.map(({ login, points, delegatedTo, ownership }) => {
+    const details = [
+      delegatedTo ? `delegated to @${delegatedTo}` : undefined,
+      ownership && ownership.totalLines > 0 ? `${ownership.ownedLines}/${ownership.totalLines} changed production lines` : undefined,
+    ].filter(detail => detail !== undefined)
+    return `- @${login}: ${pointLabel(points)}${details.length > 0 ? ` (${details.join('; ')})` : ''}`
   })
+}
+
+function pointLabel(points) {
+  const formatted = formatPoints(points)
+  return `${formatted} ${formatted === 1 ? 'point' : 'points'}`
+}
+
+function formatPoints(points) {
+  return Number(points.toFixed(3))
 }
 
 function pullRequestFromEvent(event) {
@@ -638,21 +656,12 @@ async function main() {
   if (!eventPath) throw new Error('GITHUB_EVENT_PATH is not set')
   let event = JSON.parse(readFileSync(eventPath, 'utf8'))
   const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
-  const api = createGitHubApi({
-    token: process.env.GITHUB_TOKEN ?? '',
-    apiUrl: process.env.GITHUB_API_URL,
-  })
-  // The decision check run is published by the dedicated approval App so GitHub associates its check
-  // suite with the pull request instead of whichever Actions suite started first. Both the token and
-  // the App slug must be configured; otherwise the publisher keeps the job token, whose runs only
-  // show on the Checks page.
-  const appToken = process.env.DECISION_TOKEN
-  const appSlug = process.env.DECISION_APP_SLUG
-  const useApp = Boolean(appToken && appSlug)
-  const checkApi = useApp
-    ? createGitHubApi({ token: appToken, apiUrl: process.env.GITHUB_API_URL })
-    : api
-  const checkAppSlug = useApp ? appSlug : 'github-actions'
+  // The approval App token owns every write: the status comment, the approving review, and the
+  // review dismissal that takes it back. GitHub counts an App approval toward required reviews only
+  // while the App has Contents write, so the workflow requests that permission explicitly.
+  const token = process.env.APPROVAL_TOKEN
+  if (!token) throw new Error('APPROVAL_TOKEN is not set')
+  const api = createGitHubApi({ token, apiUrl: process.env.GITHUB_API_URL })
   if (isRecord(event) && isRecord(event.issue)) {
     event = await approvalEventFromComment({ event, api })
   } else if (isRecord(event) && isRecord(event.workflow_run)) {
@@ -664,19 +673,10 @@ async function main() {
     process.stdout.write('Skipped an issue, closed pull request, or superseded pull-request head.\n')
     return
   }
-  const phase = process.argv[2]
-  if (phase) {
-    await publishApprovalPhase({ event, api, checkApi, checkAppSlug, runUrl: process.env.GITHUB_RUN_URL ?? '', phase })
-    if (phase === 'pending' && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'active=true\n')
-    return
-  }
   await runApprovalCheck({
     event,
     policySource,
     api,
-    checkApi,
-    checkAppSlug,
-    runUrl: process.env.GITHUB_RUN_URL ?? '',
   })
 }
 
