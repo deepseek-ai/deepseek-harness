@@ -5,7 +5,7 @@ description: Create or edit Office files; inspect Office files and PDFs. Load be
 
 # Office task routing
 
-For authoring or reading, load `office-docx`, `office-pptx`, or `office-xlsx`; skip for operations alone. Bundled Python includes `pypdf` for existing PDFs.
+For authoring or reading, load `office-docx`, `office-pptx`, or `office-xlsx`. Bundled Python includes `pypdf` for existing PDFs.
 
 If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
