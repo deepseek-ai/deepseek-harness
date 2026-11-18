@@ -15,6 +15,7 @@ class InputTurn {
     this.signal = AbortSignal.any([signal, this.controller.signal])
   }
 
+  /** installCua retains one Agent connection until its registered cleanup closes admission here. */
   track(client: NativeClient): void {
     this.signal.throwIfAborted()
     if (!this.client) {

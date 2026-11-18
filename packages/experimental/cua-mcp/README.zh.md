@@ -157,7 +157,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 #### Token 影响
 
-工具描述携带注册项的执行规则，约 3,200 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 500 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
+工具描述携带注册项的执行规则，约 3,200 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 600 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
 
 #### KV Cache 影响
 

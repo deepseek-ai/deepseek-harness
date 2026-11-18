@@ -247,8 +247,8 @@ export interface CuaApp extends CuaSurface {
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
   /**
-   * Inspect permissions without requesting them.
-   * @returns reported native capabilities.
+   * Inspect permissions without requesting them. Turn-managed providers omit explicit hold methods outside an active turn.
+   * @returns Reported native capabilities for this execution context.
    */
   getCapabilities(): Promise<CuaCapabilities>
   /**
