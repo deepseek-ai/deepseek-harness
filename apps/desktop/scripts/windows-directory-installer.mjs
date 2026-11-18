@@ -99,7 +99,7 @@ export function installWindowsDirectoryInstaller() {
 /**
  * Retain the original uninstall directory and bypass shared cleanup for directory-only removal.
  * @param {string} source - Pinned upstream uninstaller source.
- * @returns {string} Uninstaller with long-path removal and upgrade rollback, without upstream RMDir data removal.
+ * @returns {string} Uninstaller with long-path removal, native data cleanup, and upgrade rollback; updated-mode ownership mismatches exit with code 2.
  */
 export function directoryUninstaller(source) {
   let normalized = source.replaceAll('\r\n', '\n')

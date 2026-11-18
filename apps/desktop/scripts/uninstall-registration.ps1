@@ -1,9 +1,9 @@
 ﻿<# Remove only owned registrations; independently failed operations leave a diagnostic report. #>
 param([Parameter(Mandatory)][string]$Directory,
     [string]$ExecutableName = 'DeepSeek Harness.exe',
-    [string]$EnvironmentKey = 'Environment',
-    [string]$OwnerKey = 'Software\DeepSeekHarness\Command',
-    [string]$ProtocolKey = 'Software\Classes\dsh',
+    [Parameter(Mandatory)][string]$EnvironmentKey,
+    [Parameter(Mandatory)][string]$OwnerKey,
+    [Parameter(Mandatory)][string]$ProtocolKey,
     [Parameter(Mandatory)][string]$ReportPath,
     [string]$MutexName,
     [switch]$UnownedOnly,
