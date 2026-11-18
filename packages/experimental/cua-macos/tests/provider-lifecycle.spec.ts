@@ -1484,7 +1484,7 @@ it.each([true, false])('shares approval between system clicks and keyboard chord
   const chord = { appHandle: 'app-one', key: 's', modifiers: ['command'], useSystemInput: true }
   for (const [method, params] of [['click', click], ['pressKey', chord]] as const) {
     const result = await f.execute(method, params)
-    expect(result.isError === true).toBe(!allow)
+    expect(result.isError).toBe(!allow)
     if (allow) expect(native.request).toHaveBeenLastCalledWith(method, params, expect.any(AbortSignal), expect.any(String))
     else expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
   }
