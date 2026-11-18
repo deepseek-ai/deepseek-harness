@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { scheduleDomain, type ScheduleCatalogEntry, type ScheduleDeliveryReceipt } from '@deepseek-ai/dsh-schedule'
 import { descriptorOf } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
@@ -57,9 +58,9 @@ try {
     await world.agent.whenIdle()
     await sessions.flush(world.agent.session)
     const events = await readSession()
-    const inputs = events.filter(event => event.type === 'user/message' && event.data.id === receipt.messageId)
+    const inputs: readonly SessionEvent[] = events.filter(event => event.type === 'user/message' && event.data.id === receipt.messageId)
     assert.equal(inputs.length, 1, 'the receipt identifies exactly one persisted user message')
-    const input = inputs[0]
+    const input: SessionEvent | undefined = inputs[0]
     assert.ok(input?.type === 'user/message')
     assert.equal(input.data.source.kind, 'schedule')
     const text = input.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
