@@ -1,6 +1,6 @@
 /** Approval controls and persistent outcome notices, independent of Cordis contexts. */
 import { useId, useState } from 'react'
-import { Button, IconWarningOutlineMedium, StateDot, Tag, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWarningOutlineMedium, StateDot, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
@@ -26,19 +26,17 @@ type Face = InjectFace<PairingInjected> & PropsLocale<'remoteConnection'>
 /**
  * Render pending request codes and connection source IP addresses within Remote connection settings.
  * @param props - standard resource hook, owner actions, mutation state and localized copy.
- * @returns the approval card with an empty status or pending requests and their permission warning.
+ * @returns the approval card with pairing instructions and any pending requests.
  */
 export function PairingRequests({ useResource, useApproval, decide, t }: Pick<RemoteConnectionContentProps, 'useResource'> & Face) {
   const title = useId()
   const [retry, setRetry] = useState(0)
   const requests = useResource<'device-pairing'>(`dsh-resource://device-pairing/requests?retry=${String(retry)}`)
   const busy = useApproval(value => value.busy)
-  const empty = requests.status === 'live' && requests.value?.requests.length === 0
   const hasRequests = requests.value !== undefined && requests.value.requests.length > 0
   return <section className={`${card.card} ${css.section}`} aria-labelledby={title}>
     <header className={card.cardHeader}>
       <h3 className={card.methodTitle} id={title}>{t('pairing.title')}</h3>
-      {empty && <span className={css.status} role="status"><Tag tone="neutral">{t('pairing.empty')}</Tag></span>}
     </header>
     <p className={card.description}>{t('pairing.description')}</p>
     {hasRequests && <div className={card.caution} role="note">

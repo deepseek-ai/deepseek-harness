@@ -130,6 +130,12 @@ async function createCode(page: Page, section: Locator): Promise<string> {
   return url
 }
 
+async function waitForPairingList(pairing: Locator): Promise<void> {
+  await pairing.waitFor()
+  await pairing.getByRole('status', { name: '正在加载配对申请', exact: true }).waitFor({ state: 'hidden' })
+  expect(await pairing.getByRole('alert').count()).toBe(0)
+}
+
 async function snapshot(page: Page, fixture: RemoteConnectionFixture, name: string, addressUrl = fixture.authenticatedUrl): Promise<void> {
   await expect.poll(() => page.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()).toBe(addressUrl)
   const section = page.getByRole('region', { name: '远程连接', exact: true })
@@ -1284,6 +1290,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await svg.innerHTML()).toBe(initialSvg)
       const loginUrl = await section.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()
       expect(loginUrl).not.toBeNull()
+      await waitForPairingList(section.getByRole('region', { name: '配对申请', exact: true }))
       const extendedAria = await captureStableAria(page, '[data-slot="settings.section"]', scaffold.workspaceCwd, {
         replacements: [[loginUrl!, '{{access-address}}?token={{login-token}}'], [invitationId, '{{invitation-id}}']],
       })

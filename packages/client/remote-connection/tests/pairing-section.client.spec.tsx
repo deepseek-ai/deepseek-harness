@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Owner decisions remain visible outside Settings; read failures preserve the last request list. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { allowAllAccess, bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
@@ -48,7 +48,6 @@ it('shows the code and source IP, then announces the decision after Settings clo
     expect(screen.getByRole('heading', { level: 3, name: en['pairing.title'] })).toBeTruthy()
     expect(screen.getByRole('region', { name: en['pairing.title'] })).toBeTruthy()
     expect(screen.getByRole('note').textContent).toBe(en['pairing.permission'])
-    expect(screen.queryByText(en['pairing.empty'])).toBeNull()
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([en['pairing.approve'], en['pairing.deny']])
     expect(screen.getByText('ABCD 2345')).toBeTruthy()
     expect(screen.getByText(en['pairing.sourceIp'])).toBeTruthy()
@@ -113,7 +112,7 @@ it('retains loaded requests during a read failure and disables decisions until r
   } finally { approval.dispose() }
 })
 
-it('shows a loading indicator, then a read-only empty status in the card header without a permission warning', async () => {
+it('shows only pairing instructions once an empty list loads', () => {
   const { props, approval, snapshot, useResource } = fixture()
   useResource.mockReturnValue({ status: 'loading', value: undefined, failure: undefined })
   try {
@@ -123,17 +122,14 @@ it('shows a loading indicator, then a read-only empty status in the card header 
     useResource.mockReturnValue({ ...snapshot, value: { requests: [], pollIntervalMs: 1000 } })
     view.rerender(<PairingRequests {...props} t={makeTranslate(zh)} />)
     expect(screen.getByRole('heading', { level: 3, name: zh['pairing.title'] })).toBeTruthy()
-    await waitFor(() => { expect(screen.getByText(zh['pairing.empty'])).toBeTruthy() })
-    const status = screen.getByRole('status')
-    expect(status.textContent).toBe(zh['pairing.empty'])
-    expect(screen.getByRole('heading', { level: 3, name: zh['pairing.title'] }).closest('header')?.contains(status)).toBe(true)
-    expect(status.querySelector('button')).toBeNull()
+    expect(screen.getByText(zh['pairing.description'])).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
     expect(screen.queryByRole('note')).toBeNull()
-    expect(screen.queryByRole('button', { name: zh['pairing.approve'] })).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
     useResource.mockReturnValue({ ...snapshot, status: 'failed', value: { requests: [], pollIntervalMs: 1000 } })
     view.rerender(<PairingRequests {...props} t={makeTranslate(zh)} />)
     expect(screen.getByRole('alert').textContent).toBe(zh['pairing.readFailed'])
-    expect(screen.queryByText(zh['pairing.empty'])).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
   } finally { approval.dispose() }
 })
 
@@ -146,6 +142,6 @@ it('removes the permission warning when the last pending request leaves the list
     view.rerender(<PairingRequests {...props} />)
     expect(screen.queryByRole('note')).toBeNull()
     expect(screen.queryByText('ABCD 2345')).toBeNull()
-    expect(screen.getByRole('status').textContent).toBe(en['pairing.empty'])
+    expect(screen.queryByRole('status')).toBeNull()
   } finally { approval.dispose() }
 })

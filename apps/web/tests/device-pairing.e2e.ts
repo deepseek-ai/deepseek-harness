@@ -199,7 +199,7 @@ it('lets a paired mobile browser approve another device and keeps denied or canc
       .getByRole('button', { name: '远程连接', exact: true }).click()
     const mobileSection = applicant.getByRole('region', { name: '远程连接', exact: true })
     const mobileApprovals = mobileSection.getByRole('region', { name: '配对申请', exact: true })
-    await mobileApprovals.getByText('暂无待审批的申请', { exact: true }).waitFor()
+    await mobileApprovals.waitFor()
     expect(await mobileSection.getByRole('img', { name: '一次性登录二维码', exact: true }).count()).toBe(0)
 
     const third = await browser.newPage({ locale: ZH_BROWSER_LOCALE, viewport: { width: 390, height: 844 } })
@@ -352,7 +352,7 @@ it('keeps one Remote connection panel, its QR invitation, and login link while a
     const loginLink = section.getByRole('region', { name: '链接登录', exact: true }).locator('code')
     await expect.poll(() => loginLink.innerText()).toBe(fixture.authenticatedUrl)
     const approvals = section.getByRole('region', { name: '配对申请', exact: true })
-    await approvals.getByText('暂无待审批的申请', { exact: true }).waitFor()
+    await approvals.waitFor()
     const created = owner.waitForResponse(response => new URL(response.url()).pathname === '/api/remoteConnection/create')
     await section.getByRole('button', { name: '生成二维码', exact: true }).click()
     const invitation = await (await created).json() as { result: { ok: boolean; value: { url: string } } }

@@ -3,11 +3,6 @@
   line-height: 20px;
 }
 
-.status {
-  display: flex;
-  min-width: 0;
-}
-
 .sourceIp,
 .error {
   margin: 0;
