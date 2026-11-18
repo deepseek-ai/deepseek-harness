@@ -1,21 +1,22 @@
 ---
 kind: upgrade-guide
-description: "pi-ai request images inherit catalog dimensions and byte budgets unless their route explicitly overrides them."
+description: "Request-image byte limits are enforced after encoding, and DeepSeek's soft target uses imageTargetBytes."
 ---
-# pi-ai image resize defaults
+# Request-image byte limits
 
 English | [中文](guide.zh.md)
 
 ## Change
 
-`@deepseek-ai/dsh-llm-pi-ai` applies the selected model's `inputLimits.images.resize` width, height, and byte budgets to request images. Previously, request projection used only the total-pixel budget and a fixed 1 MiB raw encoded-byte target. Catalog byte budgets count base64 payload and are converted to raw bytes. Images already stored in a Session receive the new request projection without rewriting their attachments.
+Model-request images distinguish `maxImageBytes`, a hard encoded-byte limit, from `imageTargetBytes`, a preferred target. The encoder keeps the 85/75/60 quality ladder and reduces dimensions further only when its smallest output exceeds the hard limit. Each reduction starts from the saved source. A limit that cannot fit even a 1×1 image fails with `IMAGE_REQUEST_TOO_LARGE`; oversized bytes are never returned. Stored attachments are unchanged, and request caches regenerate under a new transform version.
 
-The route's `requestImageMaxBytes` remains a raw encoded-byte override. The new `requestImageMaxDimension` overrides both catalog dimensions. Models without resize metadata retain the existing defaults. Both request serialization and screenshot coordinate targets use these resolved limits.
+pi exposes only hard limits. `maxImageBytes` replaces `requestImageMaxBytes` and overrides the selected model's per-image byte cap. `requestImageBudgetCount` defaults to 20. The effective hard limit is the smaller of that cap and `3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount))`; the internal soft target equals it. Default allocation is 0.75 MiB per image. Width and height follow catalog limits unless `requestImageMaxDimension` overrides both with the same value; unequal local width/height overrides are not supported.
 
-The aggregate `maxRequestImageBytes` budget stays at 20 MiB. Larger encoded images can cause earlier history-image offloading and reduce prefix-cache reuse; see the [retained-image example](../../../../packages/llm/llm-pi-ai/README.md#model-experience). The per-image byte target can be lowered independently of the aggregate budget.
+DeepSeek renames the configurable `imageMaxBytes` soft target to `imageTargetBytes`, retaining its 2 MiB default. Its hard cap is fixed at 32 MiB. CUA's fixed `screenshotTarget.maxBytes` also becomes a hard cap. Request-image targets describe maximum dimensions; actual output can be smaller. Aggregate request limits still apply to actual encoded payloads.
 
 ## Migration
 
-1. Leave both overrides unset to follow the installed pi-ai catalog. Review long-image resolution and request sizes after upgrading pi-ai.
-2. If a gateway needs different dimensions, set `requestImageMaxDimension` in its `providers.<route>` configuration. Set `requestImageMaxBytes: 1048576` to preserve the previous raw byte target. Choose values the gateway accepts; these overrides can raise or lower the catalog values.
-3. Verify the model-facing image descriptor's request dimensions and, for screenshots, the coordinate target. Neither width nor height may exceed the configured dimension. The byte setting remains an encoding target; the smallest quality-ladder result can exceed it.
+1. In pi provider profiles, replace `requestImageMaxBytes` with `maxImageBytes` and review its hard-limit meaning. Set `requestImageBudgetCount` to the desired allocation divisor, independently of the retained-count cap. The aggregate base64 budget must allow at least four bytes per share. For 1 MiB allocations, use a sufficient aggregate budget and divisor, such as 32 MiB and 20 shares, plus `maxImageBytes: 1048576`.
+2. In DeepSeek `models` and `modelOverrides`, rename `imageMaxBytes` to `imageTargetBytes`. Keep the value at or below 32 MiB. The retired field is rejected with migration guidance.
+3. Consumers of `ImageRequestTarget` replace `maxBytes` with `maxImageBytes` and supply `imageTargetBytes` no greater than it. Read the final width and height from `readImageRequest`, including for coordinate mapping. Direct `readRequestImageFile` and `requestImageVariantId` callers must pass resolved resize controls; DeepSeek helper consumers use `resolveRequestImageTargetBytes` and `DEFAULT_REQUEST_IMAGE_TARGET_BYTES`.
+4. Attachment-local deployments may tune `requestImageMinShrinkFactor` (default 1.1, greater than one) and `requestImageByteHeadroom` (default 0.95, in `(0, 1]`). Verify actual encoded bytes stay within the hard limit and coordinate mappings match the returned dimensions.

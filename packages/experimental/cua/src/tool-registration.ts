@@ -57,7 +57,10 @@ declare module '@deepseek-ai/cordis' {
  * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
  */
 export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
-  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
+  return {
+    ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxImageBytes: configured.maxBytes,
+    imageTargetBytes: configured.maxBytes,
+  }
 }
 
 /**

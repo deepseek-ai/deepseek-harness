@@ -288,8 +288,8 @@ export interface PiImageRequestBudget {
   maxWidth?: number
   /** Maximum height inherited from the model or explicitly overridden by the route. */
   maxHeight?: number
-  /** Encoded-byte target for one request image. */
-  maxBytes: number
+  /** Hard encoded-byte limit for one request image; pi also uses it as the preferred target. */
+  maxImageBytes: number
 }
 
 /**
@@ -301,7 +301,8 @@ export interface PiImageRequestBudget {
 export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageRequestBudget): ImageRequestTarget {
   return {
     ...requestImageDimensions(ref.width, ref.height, budget.maxPixels, budget.maxWidth, budget.maxHeight),
-    maxBytes: budget.maxBytes,
+    maxImageBytes: budget.maxImageBytes,
+    imageTargetBytes: budget.maxImageBytes,
   }
 }
 
@@ -367,7 +368,7 @@ async function toPiContextWithImages(
   const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages, imageOffloadCountQuantum } = images
   const requestImagePolicy = images.requestImagePolicy ?? {
     maxPixels: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
-    maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+    maxImageBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
   }
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)

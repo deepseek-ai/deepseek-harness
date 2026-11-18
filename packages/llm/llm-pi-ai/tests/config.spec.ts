@@ -90,27 +90,32 @@ describe('request image policy bounds', () => {
     const omitted = routeWith({})() as Options
     const profile = resolveProfiles(omitted.providers).get('acme-gateway')!
     expect(profile.requestImageMaxDimension).toBeUndefined()
-    expect(profile.requestImageMaxBytes).toBeUndefined()
-    const explicit = routeWith({ requestImageMaxDimension: 3000, requestImageMaxBytes: 2000000 })() as Options
+    expect(profile.maxImageBytes).toBeUndefined()
+    expect(profile.requestImageBudgetCount).toBe(20)
+    const explicit = routeWith({ requestImageMaxDimension: 3000, maxImageBytes: 2000000 })() as Options
     expect(resolveProfiles(explicit.providers).get('acme-gateway')).toMatchObject({
-      requestImageMaxDimension: 3000, requestImageMaxBytes: 2000000,
+      requestImageMaxDimension: 3000, maxImageBytes: 2000000,
     })
   })
 
-  it.each(['requestImageMaxDimension', 'requestImageMaxBytes'])('rejects invalid %s at the configuration parser', (field) => {
-    for (const value of [0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(routeWith({ [field]: value })).toThrow()
-    }
-  })
+  it.each(['requestImageMaxDimension', 'maxImageBytes', 'requestImageBudgetCount'])(
+    'rejects invalid %s at the configuration parser', (field) => {
+      for (const value of [0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        expect(routeWith({ [field]: value })).toThrow()
+      }
+    },
+  )
 
   it.each([
+    ['requestImageBudgetCount', 0, /requestImageBudgetCount must be a positive safe integer/],
+    ['requestImageBudgetCount', 1.5, /requestImageBudgetCount must be a positive safe integer/],
     ['requestImagePixelBudget', 0, /requestImagePixelBudget must be a positive safe integer/],
     ['requestImagePixelBudget', Number.MAX_SAFE_INTEGER + 1, /requestImagePixelBudget must be a positive safe integer/],
     ['requestImageMaxDimension', 0, /requestImageMaxDimension must be a positive safe integer/],
     ['requestImageMaxDimension', 1.5, /requestImageMaxDimension must be a positive safe integer/],
     ['requestImageMaxDimension', Number.MAX_SAFE_INTEGER + 1, /requestImageMaxDimension must be a positive safe integer/],
-    ['requestImageMaxBytes', 0, /requestImageMaxBytes must be a positive safe integer/],
-    ['requestImageMaxBytes', 1.5, /requestImageMaxBytes must be a positive safe integer/],
+    ['maxImageBytes', 0, /maxImageBytes must be a positive safe integer/],
+    ['maxImageBytes', 1.5, /maxImageBytes must be a positive safe integer/],
   ] as const)('rejects %s=%s at service resolution', (field, value, message) => {
     const programmatic = {
       providers: {
@@ -126,4 +131,25 @@ describe('request image policy bounds', () => {
       assertServiceable(programmatic)
     }).toThrow(message)
   })
+})
+
+
+it('rejects an aggregate budget without room for one base64 group per allocated image', () => {
+  expect(() => resolveProfiles({ anthropic: { maxRequestImageBytes: 79, requestImageBudgetCount: 20 } }))
+    .toThrow(/four base64 bytes/)
+  expect(resolveProfiles({ anthropic: { maxRequestImageBytes: 80, requestImageBudgetCount: 20 } }).get('anthropic'))
+    .toMatchObject({ maxRequestImageBytes: 80, requestImageBudgetCount: 20 })
+  expect(() => resolveProfiles({ anthropic: { maxRequestImageBytes: Number.MAX_SAFE_INTEGER + 1 } }))
+    .toThrow(/maxRequestImageBytes/)
+})
+
+it('rejects the retired soft-byte configuration key instead of ignoring it', () => {
+  expect(() => { assertServiceable(routeWith({ requestImageMaxBytes: 1024 })() as Options) })
+    .toThrow(/replace requestImageMaxBytes with maxImageBytes/)
+})
+
+
+it('refuses a separate pi soft target at the configuration boundary', () => {
+  expect(() => { assertServiceable(routeWith({ imageTargetBytes: 1024 })() as Options) })
+    .toThrow(/imageTargetBytes is not configurable/)
 })

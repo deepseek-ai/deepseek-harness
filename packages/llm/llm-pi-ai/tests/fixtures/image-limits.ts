@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-attachment'
+import { isAttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
@@ -24,9 +24,18 @@ export function apply(ctx: Context): void {
       for (const [provider, model] of [['anthropic', 'claude-sonnet-4-5'], ['image-override', 'vision']] as const) {
         const target = ctx.llm.imageRequestTarget(provider, model, source)
         const encoded = await ctx.attachments.readImageRequest(source, target)
-        results.push({ provider, target, encoded: { width: encoded.width, height: encoded.height } })
+        results.push({ provider, target, encoded: {
+          width: encoded.width, height: encoded.height, withinLimit: encoded.bytes <= target.maxImageBytes,
+        } })
       }
-      return [{ type: 'text', text: JSON.stringify({ source: { width: source.width, height: source.height }, results }) }]
+      let impossibleBudgetError = ''
+      try {
+        await ctx.attachments.readImageRequest(source, { width: 1, height: 1, maxImageBytes: 1, imageTargetBytes: 1 })
+      } catch (error) {
+        if (!isAttachmentError(error) || error.code !== 'IMAGE_REQUEST_TOO_LARGE') throw error
+        impossibleBudgetError = error.code
+      }
+      return [{ type: 'text', text: JSON.stringify({ impossibleBudgetError, source: { width: source.width, height: source.height }, results }) }]
     },
   })))
 }

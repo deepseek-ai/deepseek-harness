@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.4/pi-image-resize-defaults/guide.md
 /:
-  en: d33a8682a54c4897
-  zh: de9a68ccc5347c5d
-/pi-ai-image-resize-defaults:
-  en: de949ea90a970dc4
-  zh: bc79f0d1bef40861
-/pi-ai-image-resize-defaults/change:
-  en: 904cf562c1617774
-  zh: 3c9cba949e792a1b
-/pi-ai-image-resize-defaults/migration:
-  en: d77384609b1c5aa6
-  zh: 06be2b4496cfa037
+  en: 8eab7a795974913a
+  zh: 54b06c3fea95487a
+/request-image-byte-limits:
+  en: dfddf0d405d1e813
+  zh: 87f32625f9ddc97c
+/request-image-byte-limits/change:
+  en: f0636ed9e57d5081
+  zh: ad5c5584f0e8bfe1
+/request-image-byte-limits/migration:
+  en: 56bb5f70380e26b8
+  zh: c7a62c8709b1bd90

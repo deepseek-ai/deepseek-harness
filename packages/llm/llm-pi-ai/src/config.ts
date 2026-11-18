@@ -66,9 +66,11 @@ export const DEFAULT_MAX_REQUEST_IMAGES = 50
  * than once per image.
  */
 export const DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM = 10
+/** Number of equal image allocations used to derive the default hard per-image byte limit. */
+export const DEFAULT_REQUEST_IMAGE_BUDGET_COUNT = 20
 /** Default total-pixel budget preserves the complete 2048px normalized attachment. */
 export const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
-/** Default raw encoded-byte target before inline base64 expansion; the smallest quality-ladder output is used when no quality fits. */
+/** Fallback hard per-image byte cap when the catalog declares none, before sharing the aggregate budget. */
 export const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024
 
 /** Context capacity assumed for a model neither configuration nor the catalog sizes. */
@@ -193,16 +195,18 @@ export interface PiAiProviderProfile {
    * steps rewrite the request prefix less often.
    */
   imageOffloadCountQuantum?: number
+  /** Fixed divisor of maxRequestImageBytes when allocating hard per-image budgets; independent of current image count. Default: 20. */
+  requestImageBudgetCount?: number
   /** Total-pixel budget for each deterministic inline request version. */
   requestImagePixelBudget?: number
   /** Maximum width and height for each request image; omission uses the selected pi-ai model's resize limits. */
   requestImageMaxDimension?: number
   /**
-   * Raw encoded-byte target overriding the selected model's base64 byte budget;
-   * omission uses that budget converted to raw bytes, or 1 MiB without catalog metadata.
-   * The smallest quality-ladder output is used when no quality fits.
+   * Hard per-image encoded-byte cap overriding the selected model's base64 budget.
+   * The effective cap is the smaller of this value and the route's equal share of maxRequestImageBytes.
+   * Omission uses the catalog budget converted to raw bytes, or 1 MiB without catalog metadata.
    */
-  requestImageMaxBytes?: number
+  maxImageBytes?: number
   /** Provider-owned model-request retry policy; omission uses normal mode with five retries. */
   retryPolicy?: RetryPolicyConfig
 }
@@ -224,6 +228,8 @@ export interface ResolvedPiAiProviderProfile
   maxRequestImages: number
   /** Positive count-overflow offload step, at most {@link maxRequestImages}, after defaulting. */
   imageOffloadCountQuantum: number
+  /** Positive fixed divisor of the aggregate image-byte budget after defaulting. */
+  requestImageBudgetCount: number
   /** Positive total-pixel request-version budget after defaulting. */
   requestImagePixelBudget: number
   /** Immutable retry policy captured with this provider route. */
@@ -372,9 +378,10 @@ const profile = z.object({
   maxRequestImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_IMAGE_BYTES),
   maxRequestImages: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_IMAGES),
   imageOffloadCountQuantum: z.number().step(1).min(1),
+  requestImageBudgetCount: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_REQUEST_IMAGE_BUDGET_COUNT),
   requestImagePixelBudget: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET),
   requestImageMaxDimension: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
-  requestImageMaxBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
+  maxImageBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -448,6 +455,12 @@ export function resolveProfiles(
   const resolved = new Map<string, ResolvedPiAiProviderProfile>()
   for (const [provider, source] of entries) {
     rejectRemovedFields(provider, source)
+    if ('imageTargetBytes' in source) {
+      throw new Error('llm-pi-ai: imageTargetBytes is not configurable; pi uses its effective maxImageBytes as the target')
+    }
+    if ('requestImageMaxBytes' in source) {
+      throw new Error('llm-pi-ai: replace requestImageMaxBytes with maxImageBytes; the new value is a hard per-image cap')
+    }
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
     if (source.baseURL !== undefined && source.baseURL.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`)
@@ -465,8 +478,15 @@ export function resolveProfiles(
       )
     }
     const maxRequestImageBytes = source.maxRequestImageBytes ?? DEFAULT_MAX_REQUEST_IMAGE_BYTES
-    if (!Number.isInteger(maxRequestImageBytes) || maxRequestImageBytes <= 0) {
+    if (!Number.isSafeInteger(maxRequestImageBytes) || maxRequestImageBytes <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" maxRequestImageBytes must be a positive integer`)
+    }
+    const requestImageBudgetCount = source.requestImageBudgetCount ?? DEFAULT_REQUEST_IMAGE_BUDGET_COUNT
+    if (!Number.isSafeInteger(requestImageBudgetCount) || requestImageBudgetCount <= 0) {
+      throw new Error(`llm-pi-ai: provider "${provider}" requestImageBudgetCount must be a positive safe integer`)
+    }
+    if (requestImageBudgetCount > Math.floor(maxRequestImageBytes / 4)) {
+      throw new Error(`llm-pi-ai: provider "${provider}" maxRequestImageBytes must allow four base64 bytes per requestImageBudgetCount`)
     }
     const maxRequestImages = source.maxRequestImages ?? DEFAULT_MAX_REQUEST_IMAGES
     if (!Number.isSafeInteger(maxRequestImages) || maxRequestImages <= 0) {
@@ -480,7 +500,7 @@ export function resolveProfiles(
     if (!Number.isSafeInteger(requestImagePixelBudget) || requestImagePixelBudget <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" requestImagePixelBudget must be a positive safe integer`)
     }
-    for (const field of ['requestImageMaxDimension', 'requestImageMaxBytes'] as const) {
+    for (const field of ['requestImageMaxDimension', 'maxImageBytes'] as const) {
       const value = source[field]
       if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
         throw new Error(`llm-pi-ai: provider "${provider}" ${field} must be a positive safe integer`)
@@ -538,6 +558,7 @@ export function resolveProfiles(
       maxRequestImages,
       imageOffloadCountQuantum,
       requestImagePixelBudget,
+      requestImageBudgetCount,
       retryPolicy: resolveRetryPolicy(retryPolicy, `llm-pi-ai: provider "${provider}" retryPolicy`),
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },

@@ -389,7 +389,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(readImageRequest).toHaveBeenCalledWith(ref, {
       width: 1,
       height: 1,
-      maxBytes: 3_538_944,
+      maxImageBytes: 786_432, imageTargetBytes: 786_432,
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
@@ -1255,16 +1255,20 @@ it.each([
 })
 
 it('resolves the exact pi-ai image budget for screenshot coordinates', () => {
-  const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, requestImageMaxBytes: 50_000 } })
+  const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, maxImageBytes: 50_000 } })
   expect(adapter.imageRequestTarget('deepseek', 'deepseek-flash', { ...IMAGE_REF, width: 1000, height: 1000 }))
-    .toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+    .toEqual({ width: 100, height: 100, maxImageBytes: 50_000, imageTargetBytes: 50_000 })
   expect(() => adapter.imageRequestTarget('missing', 'deepseek-flash', IMAGE_REF)).toThrow('does not own provider')
 })
 
 
 it.each([
-  [{}, { width: 627, height: 2000, maxBytes: 3_538_944 }],
-  [{ requestImageMaxDimension: 3000, requestImageMaxBytes: 500_000 }, { width: 940, height: 3000, maxBytes: 500_000 }],
+  [{}, { width: 627, height: 2000, maxImageBytes: 786_432, imageTargetBytes: 786_432 }],
+  [{
+    requestImageMaxDimension: 3000, maxImageBytes: 500_000,
+  }, {
+    width: 940, height: 3000, maxImageBytes: 500_000, imageTargetBytes: 500_000,
+  }],
 ])('uses the same catalog and override image target for coordinates and the wire request: %j', async (overrides, expected) => {
   const server = await mockServer([{ events: anthropicTextEvents }])
   const ctx = new Context()
@@ -1286,8 +1290,10 @@ it.each([
   const ref = { ...IMAGE_REF, width: 1146, height: 3657 }
   expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toEqual(expected)
   const prepared = await adapter.prepareCall('anthropic', 'claude-sonnet-4-5')
-  providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, requestImageMaxBytes: 333 } }
-  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({ height: 777, maxBytes: 333 })
+  providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, maxImageBytes: 333 } }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({
+    height: 777, maxImageBytes: 333, imageTargetBytes: 333,
+  })
   const messages = Array.from({ length: 22 }, () => createUserMessage({ content: [{ type: 'image', attachment: ref }], source: { kind: 'user' } }))
   const chunks: unknown[] = []
   for await (const chunk of prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages })) chunks.push(chunk)
