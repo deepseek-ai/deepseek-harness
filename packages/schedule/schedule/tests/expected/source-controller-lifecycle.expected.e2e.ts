@@ -92,14 +92,8 @@ function smokeOptions(
         outcome: {
           status: 'rejected',
           error: {
-            name: 'SourceError', code: 'SOURCE_DELIVERY_FAILED',
-            cause: {
-              name: 'AggregateError',
-              errors: [expect.objectContaining({
-                name: 'RemoteError', code: 'gateway/internal',
-                message: expect.stringContaining('failed to create session: Error: cannot create effect on inactive context') as string,
-              })],
-            },
+            name: 'RemoteError', code: 'gateway/internal',
+            message: expect.stringContaining('failed to create session: Error: cannot create effect on inactive context') as string,
           },
         },
         task: { status: 'active', record: taskRecord, target: { kind } },

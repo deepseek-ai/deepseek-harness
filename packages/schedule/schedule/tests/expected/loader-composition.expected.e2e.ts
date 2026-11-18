@@ -11,7 +11,7 @@ const tsconfigPath = fileURLToPath(new URL('../../../../../tsconfig.base.json', 
 const expectedPath = new URL('./source-input.txt', import.meta.url)
 
 describe('source instances through app boot and Loader', () => {
-  it('combines typed observations into logged task input and releases the Loader-owned subscriptions', async () => {
+  it('submits two ordinary source instances to logged tasks and rejects submissions after their Loader owner closes', async () => {
     const expected = await readFile(expectedPath, 'utf8')
     const authoredConfig = await readFile(configPath)
     try {

@@ -11,7 +11,7 @@ A plugin package's entry point takes one of two forms, and they are not mixed. A
 - The Loader four and its exact form are defined in [cordis-primer.md](../cordis-primer.md#loader-configuration).
 - Judged condition: a function plugin's entry (`src/index.ts`) exports an entity beyond the four; a default export is added beside the four, or the two forms are mixed; a `/client` entry exports an implementation value or lets another feature plugin import one; a fixture reaches another package by relative path.
 - Boundary: only Loader plugin entry points are constrained. Internal modules, helper functions, and hooks keep exporting values; a Host entry's Service Definition classes and error types are expected exports; and a test fixture stays inside its own package — a relative path into another package's `src` bypasses the `exports` map and the package-boundary checks.
-- Exception: `@deepseek-ai/dsh-schedule` may export the concrete class declarations `SourceInput`, `SourceOutput`, and `TimeSource` from its class-style plugin entry (a concrete default class without `apply`). Re-exports preserve shared root/leaf constructor identity. This exception excludes abstract classes, functions, constructor-typed values, other names, and the same names in other packages. Other exceptions require the domain owner's confirmation.
+- Exception: requires the domain owner's confirmation.
 
 The compliant entry — the four exports, with the same-package test path recorded as a comment rather than as a fifth export.
 
@@ -80,7 +80,6 @@ A `package.json` `exports` map uses only the standard key set, in which every ke
 - Keys outside that set (`./brand` in 5 packages, `./worker` in 4, `./startup`, `./runner`, and `./protocol` in 2 each, plus many one-off keys) have no documented meaning; they are pending review, not a pattern to copy.
 - `dsh-tools` additionally exposes `./pipeline` for reusable invocation stages and batch scheduling. Its main and pipeline bundles share runtime chunks to preserve error-class identity; workspace constraints check the export targets and publication files.
 - `dsh-tool-executor-ptc` exposes `./run-code` for the shared program-tool factory, explicit runtime and call limits, and private callable tool definitions. Workspace constraints check its export targets and publication files.
-- `@deepseek-ai/dsh-schedule` exposes `./source` for subclassable typed Source instances. The root owns the `SourceError`, `SourceInput`, `SourceOutput`, and `TimeSource` constructors and only type-exports `AutomationSource`. The leaf imports root-owned constructors through the root package specifier and re-exports the input, output, and time classes, preserving their identity without a root-to-leaf runtime cycle. Keep the root protocol's relative error import; do not load separate emitted class copies from the leaf. Workspace constraints check declaration/runtime targets and publication files.
 - Judged condition: does a change add an export key outside the standard set?
 - Exception: none by default; a new key changes the owning document and the check first, with the domain owner's confirmation.
 - Recompute the distribution:

@@ -4,15 +4,16 @@ import { glob, writeFile } from 'node:fs/promises'
 import { boot, resolveConfigPath } from '@deepseek-ai/dsh-app-boot'
 import { LlmAdapter, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import ScheduleService, { scheduleDomain, type AutomationCandidate } from '@deepseek-ai/dsh-schedule'
-import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { installCreateGate } from './persistence.ts'
 
 const INITIAL_INPUT = 'Inspect the completed build.'
 const RECOVERY_INPUT = 'Inspect the replacement build.'
 
-class CandidateSource extends AutomationSource<AutomationCandidate> {
-  publish(text: string): Promise<void> { return this.emit({ text }) }
+class CandidateSource {
+  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+
+  publish(text: string): Promise<void> { return this.submit({ text }) }
 }
 
 class DeterministicAdapter extends LlmAdapter {
@@ -53,9 +54,9 @@ assert.equal(process.execArgv.includes('--import'), mode === 'src')
 const scheduleModule = import.meta.resolve('@deepseek-ai/dsh-schedule')
 assert.ok(new URL(scheduleModule).pathname.includes(mode === 'lib' ? '/lib/' : '/src/'))
 const ctx = await boot('source-controller-lifecycle', resolveConfigPath(configPath, undefined))
-const source = new CandidateSource()
 let work: Promise<object> | undefined
 let closing: Promise<void> | undefined
+ctx.effect(() => async () => { await work })
 const persistence = ctx.get('sessionPersistence')
 assert.ok(persistence)
 const gate = installCreateGate(ctx, phase)
@@ -85,7 +86,7 @@ try {
   const readTask = (id = task.id) =>
     scheduleDomain.tables.tasks.valueSchema.parse(domain.table('tasks').get(id))
   const initial = readTask()
-  schedule.input(task.id).connect(source.output)
+  const source = new CandidateSource(candidate => schedule.submit(task.id, candidate))
   work = source.publish(INITIAL_INPUT).then(
     () => ({ status: 'fulfilled' }),
     (error: unknown) => ({ status: 'rejected', error: errorDetails(error) }),
@@ -243,6 +244,6 @@ try {
   try {
     await Promise.all([work, closing])
   } finally {
-    try { await source.dispose() } finally { await ctx.fiber.dispose() }
+    await ctx.fiber.dispose()
   }
 }

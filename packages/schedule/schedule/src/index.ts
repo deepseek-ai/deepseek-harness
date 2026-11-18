@@ -3,12 +3,11 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, CordisError, FiberState, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
 import { rethrowAfterCleanup } from './cleanup-failure.ts'
 import type { AutomationCandidate } from './source-types.ts'
-import type { SourceInput } from './source-protocol.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -32,10 +31,7 @@ import type {
 } from './types.ts'
 export type * from './client.ts'
 export { SourceError } from './source-error.ts'
-export { SourceInput, SourceOutput } from './source-protocol.ts'
-export { TimeSource } from './time-source.ts'
 export type * from './source-types.ts'
-export type { AutomationSource } from './source.ts'
 export { scheduleDomain } from './storage.ts'
 export type { ScheduleTask } from './storage.ts'
 export type { RecurringOccurrence } from './domain.ts'
@@ -375,28 +371,25 @@ export class ScheduleService extends TypertRemoteService {
   }
 
   /**
-   * Create a task input that connects to typed upstream outputs through the common Source protocol.
-   * @param id - Task identity rechecked on every delivery inside the management FIFO.
-   * @returns A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`.
-   * Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream
-   * Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.
-   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT
-   * if the calling context is inactive. Task availability and admission failures are reported when a value is sent.
+   * Submit an observation to this runtime without consuming the task's scheduled occurrence.
+   * @param id - Task identity rechecked inside the management FIFO.
+   * @param candidate - Additional observed data accompanying the stored instruction.
+   * @returns Resolves after Session inbox persistence and the task receipt commit, not model completion.
+   * Declared consumers stop their producers through their own effects. An unloading or disposed caller cannot submit
+   * new work; accepted work drains with Schedule's FIFO even if that caller unloads. A captured service never
+   * rebinds to a replacement runtime. Failures may follow partial persistence; no automatic retry is provided.
+   * @throws Cordis INACTIVE_EFFECT for an inactive calling context; SourceError with
+   * SOURCE_TASK_RECEIVER_UNAVAILABLE before initialization or after shutdown admission closes, or the task's
+   * admission error. Provider and storage failures propagate directly.
    */
-  input(id: ScheduleId): SourceInput<AutomationCandidate> {
+  async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
+    this.ctx.fiber.assertActive()
+    if (this.ctx.fiber.state === FiberState.UNLOADING) throw new CordisError('INACTIVE_EFFECT')
     const runtime = this.runtime
     if (this.stopping || runtime === undefined) {
       throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
     }
-    const input = runtime.input(id)
-    try {
-      this.ctx.effect(() => () => input.dispose())
-    } catch (error: unknown) {
-      // No connection has escaped when effect acquisition fails; release the unconnected input.
-      void input.dispose()
-      throw error
-    }
-    return input
+    await runtime.deliverSource(id, candidate)
   }
 
   /** Read effective delivery limits without loading or activating a task.

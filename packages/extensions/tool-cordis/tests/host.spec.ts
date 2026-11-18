@@ -7,7 +7,7 @@ import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as CordisInspectProviders from '../src/host.ts'
 import * as CordisInspectTools from '../src/index.ts'
-import { queryServiceApi, TYPE_API } from '../src/api-catalog.ts'
+import { queryServiceApi } from '../src/api-catalog.ts'
 import { hostInspectProviders } from '../src/providers.ts'
 
 /**
@@ -28,23 +28,22 @@ async function host(): Promise<Context> {
 }
 
 describe('the cordis-inspect-providers host entry', () => {
-  it('exposes the complete Schedule connection and endpoint disposal APIs', () => {
-    const input = TYPE_API.find(type => type.name === 'SourceInput')
-    const connectionName = input?.declaration.match(/\bconnect:[^;]*=>\s*(\w+)\s*</)?.[1]
-    expect(connectionName).toBeDefined()
+  it('exposes Schedule submission, candidate text, and persistence acknowledgement', () => {
     const result = queryServiceApi('schedule')
-    const connectionDeclaration: unknown = expect.stringMatching(
-      /\bsend\(value:[^)]*\):\s*Promise<void>;[\s\S]*\bdispose\(\):\s*Promise<void>;/,
+    const acknowledgement: unknown = expect.stringContaining(
+      'Resolves after Session inbox persistence and the task receipt commit, not model completion.',
     )
-    expect.soft(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
-      name: connectionName, declaration: connectionDeclaration,
+    expect(result).toHaveProperty('service.access.hardDependency', {
+      inject: ['schedule'], expression: 'ctx.schedule',
+    })
+    expect(result).toHaveProperty('service.methods', expect.arrayContaining([expect.objectContaining({
+      signature: 'async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>',
+      returns: acknowledgement,
     })]))
-    const endpointDeclaration: unknown = expect.stringMatching(/\bdispose\(\):\s*Promise<void>;/)
-    for (const name of ['SourceInput', 'SourceOutput']) {
-      expect.soft(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
-        name, declaration: endpointDeclaration,
-      })]))
-    }
+    const declaration: unknown = expect.stringMatching(/\breadonly text:\s*string;/)
+    expect(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
+      name: 'AutomationCandidate', declaration,
+    })]))
   })
 
   it('registers the first-party Host providers and withdraws them on disposal', async () => {

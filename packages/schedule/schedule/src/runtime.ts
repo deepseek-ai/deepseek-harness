@@ -1,4 +1,4 @@
-/** Schedule task delivery driven by typed source inputs; activation is a delivery operation. */
+/** Schedule task delivery driven by observations and time callbacks; activation is a delivery operation. */
 import { randomUUID } from 'node:crypto'
 import { inspect } from 'node:util'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -14,7 +14,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
 import type { AutomationCandidate } from './source-types.ts'
-import { SourceInput } from './source-protocol.ts'
 import { TimeSource } from './time-source.ts'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -69,10 +68,6 @@ function batchSessionOf(task: ScheduleTask): SessionIdType | undefined {
 /** Receives time and task inputs; delivery and management share the serialized operation. */
 export class ScheduleRuntime {
   private readonly time: TimeSource
-  private readonly timeInput: SourceInput<number>
-  /** Connect time signals to this runtime; each accepted signal awaits a serialized due-task scan. */
-  readonly connect: SourceInput<number>['connect']
-  private readonly inputs = new Set<SourceInput<AutomationCandidate>>()
   private readonly executing = new Set<ScheduleId>()
   private stopping = false
 
@@ -97,49 +92,25 @@ export class ScheduleRuntime {
     private readonly sessionController: () => Context['sessionController'] | undefined
       | Promise<Context['sessionController'] | undefined>,
   ) {
-    this.time = new TimeSource((error) => {
-      this.ctx.logger.warn(`schedule: dispatch stopped: ${inspect(error)}`)
-    })
-    this.timeInput = new SourceInput(async () => {
+    this.time = new TimeSource(async () => {
       try {
         await this.ctx.agents.withoutInitiator(() => this.transact(async () => { await this.drive() }))
       } catch (error: unknown) {
         // A time signal rejected by shutdown has no remaining due-task scan.
         if (!(error instanceof SourceError && error.code === 'SOURCE_CLOSED')) throw error
       }
+    }, (error) => {
+      this.ctx.logger.warn(`schedule: dispatch stopped: ${inspect(error)}`)
     })
-    this.connect = this.timeInput.connect
-    this.connect(this.time.output)
   }
 
   /** Request a time input after startup or a durable change; failures are reported without automatic retry. */
   requestDrive(): void { this.time.request() }
 
-  /**
-   * Create an input for one task; every connection uses this runtime's ordinary source admission.
-   * @param id - Task identity checked again for each received candidate.
-   * @returns An independently disposable receiver, closed with this runtime and never rebound to a replacement.
-   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE after runtime disposal starts.
-   */
-  input(id: ScheduleId): SourceInput<AutomationCandidate> {
-    if (this.stopping) throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
-    const inputs = this.inputs
-    const input = new class extends SourceInput<AutomationCandidate> {
-      override dispose(): Promise<void> {
-        const closed = super.dispose()
-        void closed.then(() => { inputs.delete(this) })
-        return closed
-      }
-    }(candidate => this.deliverSource(id, candidate))
-    inputs.add(input)
-    return input
-  }
-
-  /** Stop time production, close receiving endpoints, and drain their accepted calls before storage closes. */
+  /** Stop time production and await its accepted callback after the owner drains the shared FIFO. */
   async dispose(): Promise<void> {
     this.stopping = true
-    const closing = [...this.inputs].map(input => input.dispose())
-    await Promise.all([this.time.dispose(), this.timeInput.dispose(), ...closing])
+    await this.time.dispose()
   }
 
   /**
@@ -163,6 +134,7 @@ export class ScheduleRuntime {
    * this delivery. Other delivery failures preserve their cause and may follow partial persistence.
    */
   async deliverSource(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
+    if (this.stopping) throw new SourceError('The Schedule runtime is stopping.', 'SOURCE_CLOSED')
     await this.deliverNow(id, candidate)
   }
 

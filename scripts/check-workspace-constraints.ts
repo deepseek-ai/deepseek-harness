@@ -611,10 +611,6 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       && !hasExportPair(manifest, './run-code', './lib/types/run-code.d.ts', './lib/run-code.js')) {
       errors.push(`${label}: exports["./run-code"] must expose lib/types/run-code.d.ts and lib/run-code.js`)
     }
-    if (manifest.name === '@deepseek-ai/dsh-schedule'
-      && !hasExportPair(manifest, './source', './lib/types/source.d.ts', './lib/types/source.js')) {
-      errors.push(`${label}: exports["./source"] must expose lib/types/source.d.ts and lib/types/source.js`)
-    }
     const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))
     if (!sameStringList(manifest.files, expectedFiles)) {
       errors.push(`${label}: package.json files must be ${JSON.stringify(expectedFiles)}`)

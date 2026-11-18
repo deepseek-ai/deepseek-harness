@@ -245,7 +245,7 @@ it('logs startup dispatch admission failure without rejecting initialized storag
     },
   })
   expect(test.ctx.logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(
-    /^schedule: dispatch stopped: SourceError: [\s\S]*SOURCE_DELIVERY_FAILED[\s\S]*Error: startup dispatch failed/,
+    /^schedule: dispatch stopped: Error: startup dispatch failed/,
   ))
   expect(await test.service.catalog()).toEqual([])
   expect(facility?.get(scheduleDomain.name)).toBeDefined()

@@ -172,7 +172,7 @@ A v1 binary rejects a store after a v2 write. Invalid or ambiguous receipts reje
 
 ### Dispatch and lifecycle
 
-The runtime connects a numeric input to `TimeSource.output` and awaits due evaluation inside the management FIFO. TimeSource owns one segmented timer and coalesces requests; runtime task policy computes its next deadline. The [Source reference](source/README.md) owns the shared input protocol and time API.
+The internal `TimeSource` invokes one asynchronous callback with actual wall-clock milliseconds and awaits due evaluation inside the management FIFO. It owns one segmented timer and coalesces requests; runtime task policy computes its next deadline. `TimeSource` is not a public package export.
 
 All seven kinds use the normal evaluator. Shared [`Cron` and `RRule`](../../util/time/README.md) own pure parsing and bounded recurrence arithmetic; Schedule maps refusal reasons to its input errors and owns task policy, targets, and delivery floors. Existing Cron expression and zone stay authoritative. Reads and metadata edits preserve committed UTC occurrences and stored zone aliases.
 
@@ -187,15 +187,42 @@ History stays with the task and is pruned only on append. Missing old history ke
 <a id="source-delivery"></a>
 ### Source delivery
 
-Plugins declare a `schedule` dependency and call `ctx.schedule.input(id).connect(source.output)` to deliver typed candidate text to an existing active task. `input(id)` synchronously returns a caller-context-owned `SourceInput<AutomationCandidate>`; it is not a Remote method. Sources and runtime inputs share the same receiving-side `connect`, directed `send`, broadcast, and drainable connection protocol. Consumer unload or runtime shutdown closes the task input without disposing borrowed Sources. The [source reference](source/README.md) owns connection semantics and ordered composite cleanup. Schedule checks admission inside the management FIFO, then resolves the target, awaits Session flush, and commits the receipt. Source input preserves the stored instruction, timing, and active status; it does not consume a timed occurrence.
+Plugins declare a `schedule` dependency and call `ctx.schedule.submit(id, candidate): Promise<void>` to deliver an `AutomationCandidate` containing `text` to an existing active task. This is a local service method, not a Remote method. A Source is an ordinary class receiving a submission callback; multiple instances need no base class, input/output endpoint, connection, or registration protocol. Schedule checks admission inside the management FIFO, resolves the target, awaits Session inbox flush, and durably commits the receipt. Fulfillment acknowledges those writes, not model completion. Submission preserves the stored instruction, timing, and active status; it does not consume a timed occurrence.
+
+Construct producers inside their owning `ctx.effect`. In this example, the integration's `start` begins observation and returns a disposer that stops production and drains its outstanding `publish` calls. The integration reports rejected background calls. Each instance captures the current Schedule service rather than looking up a replacement on each delivery.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { AutomationCandidate, ScheduleId } from '@deepseek-ai/dsh-schedule'
+
+class ObservationSource {
+  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+
+  publish(text: string): Promise<void> {
+    return this.submit({ text })
+  }
+}
+
+export function observeTask(
+  scope: Context,
+  id: ScheduleId,
+  start: (publish: (text: string) => Promise<void>) => () => Promise<void>,
+): void {
+  scope.effect(() => {
+    const schedule = scope.schedule
+    const source = new ObservationSource(candidate => schedule.submit(id, candidate))
+    return start(text => source.publish(text))
+  })
+}
+```
 
 Source, manual, and timed deliveries share per-task admission: reused targets share an execution slot, and every target shares its minimum delivery interval. A source delivery can therefore delay an upcoming timed delivery without changing the task's stored `scheduledAt`. The first source delivery to a `new_once` target can create its reserved Session before the timed occurrence; after acknowledgment, later deliveries reuse that Session. A `new` target creates a Session for each source delivery, which can also occur before the timed occurrence. Admission has no fairness upper bound: a source that keeps publishing at the interval floor can postpone a timed occurrence indefinitely while the task's stored `scheduledAt` remains unchanged. A source producer must bound its output rate and leave capacity for timed delivery.
 
-Missing tasks reject with `SOURCE_TASK_UNAVAILABLE`, paused or ended tasks with `SOURCE_TASK_INACTIVE`, and a task that is executing, inside its per-target minimum delivery interval, or recovering an outstanding previous delivery from the Session inbox rejects the current candidate with `SOURCE_TASK_BUSY`. The task does not consume that candidate; direct `connection.send()` preserves the task error, while broadcast aggregates it as `SOURCE_DELIVERY_FAILED`. Recovery holds the task for the previous `lastDelivery` message rather than the rejected candidate.
+Missing tasks reject with `SOURCE_TASK_UNAVAILABLE`, paused or ended tasks with `SOURCE_TASK_INACTIVE`, and a task that is executing, inside its per-target minimum delivery interval, or recovering an outstanding previous delivery from the Session inbox rejects the current candidate with `SOURCE_TASK_BUSY`. The task does not consume or queue that candidate. Errors propagate directly to the caller. Recovery holds the task for the previous `lastDelivery` message rather than the rejected candidate.
 
-Input acquisition preserves Cordis `INACTIVE_EFFECT` for an inactive caller context and throws `SOURCE_TASK_RECEIVER_UNAVAILABLE` before Schedule is ready or while it is stopping. Connecting a closed input or output throws `SOURCE_CLOSED`. A connection callback that reaches Schedule after its FIFO admission stops rejects with `SOURCE_CLOSED`; work already in that FIFO still drains. Runtime shutdown closes its inputs and connections; later directed sends reject with `SOURCE_CONNECTION_CLOSED`. An otherwise open output with no remaining connections emits nothing. Declare the `schedule` dependency and reconnect to a new input after the replacement runtime becomes ready; old inputs never rebind.
+`submit` returns a rejected Promise with Cordis `INACTIVE_EFFECT` for an unloading or inactive caller context and `SOURCE_TASK_RECEIVER_UNAVAILABLE` before Schedule is ready or while it is stopping. Runtime admission can reject with `SOURCE_CLOSED`. Accepted FIFO work drains even if the producer context subsequently unloads. Schedule drains accepted work before disposing its runtime and closing storage. A callback captured from a stopped service does not rebind to a replacement; the newly activated producer captures the replacement service in its own effect.
 
-Target and persistence failures propagate to the source. Session and task commits are separate, so a failure can follow inbox acceptance; neither Schedule nor source fan-out retries automatically. Schedule stops admitting new work and drains accepted deliveries before closing storage. Connections and intermediate source state are not stored in task rows.
+Target, provider, and persistence failures propagate to the source without delivery-error aggregation. Session and task commits are separate, so a failure can follow inbox acceptance; submission does not retry automatically. Producers own observation size limits, output rate, persistence of observation state, and stop/drain cleanup. Source instances and intermediate observations are process-local, not task records; submission adds no event-only task schema or source-specific permission policy.
 
 </details>
 
@@ -205,7 +232,6 @@ Target and persistence failures propagate to the source. Session and task commit
 ## Further Exploration
 
 - [Schedule subsystem](../../../docs/subsystems/schedule.md) — timing, management, storage, and delivery contracts.
-- [Source instances](source/README.md) — typed source classes, subscriptions, composition, and Schedule task connections.
 - [Time utilities](../../util/time/README.md) — Cron and RRULE parsers and occurrence arithmetic.
 - [Domain helpers](src/domain.ts), [timing edits](src/update.ts), [storage](src/storage.ts), and [runtime](src/runtime.ts) own Schedule policy.
 
@@ -276,7 +302,7 @@ An accepted source delivery uses the one-shot reminder framing and the task's un
 
 #### Token effect
 
-Each accepted delivery adds its JSON-encoded observation and one fixed instruction line to the ordinary reminder text. Source-to-source observations that never reach the task receiver add no tokens.
+Each accepted delivery adds its JSON-encoded observation and one fixed instruction line to the ordinary reminder text. Intermediate observations that are not submitted to a task add no tokens.
 
 #### KV Cache effect
 

@@ -5,42 +5,18 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import ScheduleService, { ScheduleId, scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
-import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 
-class SampleSource extends AutomationSource<string> {
-  sample(text: string): Promise<void> {
-    return this.emit(text)
+class SampleSource {
+  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+
+  sample(left: string, right: string): Promise<void> {
+    return this.submit({ text: `Left: ${left}\nRight: ${right}` })
   }
 }
 
-class CombinedSamples extends AutomationSource<AutomationCandidate> {
-  private left: string | undefined
-  private right: string | undefined
-  readonly connectLeft = this.createInput<string>(async (value) => {
-    this.left = value
-    await this.publish()
-  }).connect
-
-  readonly connectRight = this.createInput<string>(async (value) => {
-    this.right = value
-    await this.publish()
-  }).connect
-
-  constructor(left: SampleSource, right: SampleSource) {
-    super()
-    this.connectLeft(left.output)
-    this.connectRight(right.output)
-  }
-
-  private async publish(): Promise<void> {
-    if (this.left === undefined || this.right === undefined) return
-    await this.emit({ text: `Left: ${this.left}\nRight: ${this.right}` })
-  }
-}
-
-/** Snapshot-only source composition name. */
+/** Snapshot-only source producer name. */
 export const name = 'source-task-input'
-/** The profile owns persistence, while this fixture owns its one task and source instances. */
+/** The profile owns persistence, while this fixture owns its one task and sample producer. */
 export const inject = ['agents', 'sessions', 'sessionPersistence', 'storageDomain']
 
 /**
@@ -71,18 +47,12 @@ export function apply(ctx: Context): void {
       name: 'source-task-input-consumer',
       inject: ['schedule'],
       apply(scope: Context) {
-        const left = new SampleSource()
-        const right = new SampleSource()
+        const source = new SampleSource(candidate => scope.schedule.submit(id, candidate))
+        let delivery: Promise<void> | undefined
         scope.effect(function* () {
           yield scope.on('schedule/resolve-agent', (sessionId, next) => sessionId === agent.id ? Promise.resolve(agent) : next())
-          const combined = new CombinedSamples(left, right)
-          const receiver = scope.inject([], (target) => {
-            target.schedule.input(id).connect(combined.output)
-          })
-          yield receiver.dispose
-          yield () => combined.dispose()
-          yield async () => { await Promise.all([left.dispose(), right.dispose()]) }
-        }, 'source-snapshot.connections()')
+          yield async () => { await delivery }
+        }, 'source-snapshot.producer()')
         let delivered = false
         scope.on('agent/pre-step', async ({ agent: subject }, next) => {
           if (subject !== agent || delivered) return next()
@@ -91,8 +61,8 @@ export function apply(ctx: Context): void {
           const now = Date.now
           Date.now = () => Date.UTC(2026, 10, 11, 0, 0, 0)
           try {
-            await left.sample('build passed')
-            await right.sample('tests failed\n"review" \\ observed')
+            delivery = source.sample('build passed', 'tests failed\n"review" \\ observed')
+            await delivery
           } finally {
             Date.now = now
           }

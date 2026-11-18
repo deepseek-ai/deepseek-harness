@@ -207,7 +207,6 @@
       "@deepseek-ai/dsh-command-feedback/types": ["./packages/feedback/command-feedback/src/types.ts"],
       "@deepseek-ai/dsh-goal/types": ["./packages/goal/goal/src/types.ts"],
       "@deepseek-ai/dsh-goal/client": ["./packages/goal/goal/src/client.ts"],
-      "@deepseek-ai/dsh-schedule/source": ["./packages/schedule/schedule/src/source.ts"],
       "@deepseek-ai/dsh-llm/types": ["./packages/llm/llm/src/types.ts"],
       "@deepseek-ai/dsh-llm/assistant-stream": ["./packages/llm/llm/src/assistant-stream.ts"],
       "@deepseek-ai/dsh-deepseek-llm-api-extensions/types": ["./packages/llm/deepseek-llm-api-extensions/src/types.ts"],

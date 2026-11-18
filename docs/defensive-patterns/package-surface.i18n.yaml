@@ -6,14 +6,14 @@
   en: 28d4c2d7da24269f
   zh: d723b807815401d7
 /package-surface-rules/a-plugin-package-exports-what-the-loader-loads:
-  en: 77dd11d4d8477064
-  zh: c807b5b07ac7f600
+  en: 98a668d09dcef95b
+  zh: 5c537939c5d475df
 /package-surface-rules/two-package-shapes-and-both-are-dynamic-plugin-packages:
   en: bf79c6acf35c90a5
   zh: 9f2ce6c7f6493b17
 /package-surface-rules/package-json-exports-uses-the-standard-key-set:
-  en: 883d35b0b2203a64
-  zh: 12d09c112139033b
+  en: 37d7728d42231610
+  zh: ba27dd3935f50572
 /package-surface-rules/dependency-declarations-and-version-consistency-are-enforced-by-the-dependency-scan:
   en: e68bfcde70f845b4
   zh: 73e5c4fb067c4fa1

@@ -1,9 +1,8 @@
+/** The internal timer samples wall time and drains one coalesced callback sequence. */
 import { afterEach, beforeEach, expect, expectTypeOf, it, vi } from 'vitest'
-import { SourceInput } from '../src/source-protocol.ts'
 import { MAX_TIMER_DELAY_MS, TimeSource } from '../src/time-source.ts'
 
 const sources: TimeSource[] = []
-const inputs: SourceInput<number>[] = []
 const releases: Array<() => void> = []
 const START = Date.parse('2026-09-16T00:00:00.000Z')
 
@@ -12,23 +11,19 @@ afterEach(async () => {
   try {
     for (const release of releases.splice(0)) release()
     await Promise.all(sources.splice(0).map(source => source.dispose()))
-    await Promise.all(inputs.splice(0).map(input => input.dispose()))
   } finally {
     vi.restoreAllMocks()
     vi.useRealTimers()
   }
 })
 
-function setup(reportFailure = vi.fn<(error: unknown) => void>()) {
-  const source = new TimeSource(reportFailure)
+function setup(
+  onTime: (now: number) => Promise<void>,
+  reportFailure = vi.fn<(error: unknown) => void>(),
+) {
+  const source = new TimeSource(onTime, reportFailure)
   sources.push(source)
   return { source, reportFailure }
-}
-
-function connect(source: TimeSource, receive: (value: number) => Promise<void>) {
-  const input = new SourceInput(receive)
-  inputs.push(input)
-  return input.connect(source.output)
 }
 
 function gate() {
@@ -37,31 +32,23 @@ function gate() {
   return release
 }
 
-it('broadcasts the current wall time through shared input connections and leaves detached receivers untouched', async () => {
-  const { source, reportFailure } = setup()
-  source.request()
-  await vi.advanceTimersByTimeAsync(0)
-  const first = vi.fn(async (value: number) => { expectTypeOf(value).toEqualTypeOf<number>() })
-  const second = vi.fn(async (_value: number) => {})
-  const connection = connect(source, first)
-  connect(source, second)
+it('submits the sampled wall time to its callback', async () => {
+  const receive = vi.fn(async (value: number) => { expectTypeOf(value).toEqualTypeOf<number>() })
+  const { source, reportFailure } = setup(receive)
   vi.setSystemTime(START + 100)
   source.request()
+  vi.setSystemTime(START + 200)
   await vi.advanceTimersByTimeAsync(0)
-  expect(first).toHaveBeenCalledExactlyOnceWith(START + 100)
-  expect(second).toHaveBeenCalledExactlyOnceWith(START + 100)
-  await connection.dispose()
+  expect(receive).toHaveBeenCalledExactlyOnceWith(START + 100)
   source.request()
   await vi.advanceTimersByTimeAsync(0)
-  expect(first).toHaveBeenCalledOnce()
-  expect(second).toHaveBeenCalledTimes(2)
+  expect(receive).toHaveBeenLastCalledWith(START + 200)
   expect(reportFailure).not.toHaveBeenCalled()
 })
 
 it('replaces or cancels its one armed timer and leaves no automatic recurrence', async () => {
-  const { source } = setup()
   const receive = vi.fn(async (_value: number) => {})
-  connect(source, receive)
+  const { source } = setup(receive)
   source.arm(START + 10)
   source.arm(START + 20)
   expect(vi.getTimerCount()).toBe(1)
@@ -77,11 +64,10 @@ it('replaces or cancels its one armed timer and leaves no automatic recurrence',
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('emits at each long-wait segment and lets its receiver recompute the deadline after clock rollback', async () => {
-  const { source } = setup()
+it('samples each long-wait segment and lets its callback recompute the deadline after clock rollback', async () => {
   const deadline = START + MAX_TIMER_DELAY_MS + 2_000
   const received: number[] = []
-  connect(source, async (now) => {
+  const { source } = setup(async (now) => {
     received.push(now)
     source.arm(now < deadline ? deadline : undefined)
   })
@@ -98,12 +84,11 @@ it('emits at each long-wait segment and lets its receiver recompute the deadline
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('waits for accepted input before coalesced requests produce the next signal', async () => {
-  const { source } = setup()
+it('waits for accepted work before coalesced requests produce the next sample', async () => {
   const entered = Promise.withResolvers<undefined>()
   const release = gate()
   let calls = 0
-  connect(source, async () => {
+  const { source } = setup(async () => {
     calls++
     if (calls === 1) { entered.resolve(undefined); await release.promise }
     source.arm(START + calls * 1_000)
@@ -124,27 +109,28 @@ it('waits for accepted input before coalesced requests produce the next signal',
   expect(calls).toBe(3)
 })
 
-it('reports a failed receiver with its cause without arming a retry', async () => {
-  const { source, reportFailure } = setup()
-  const failure = new Error('time input failed')
-  const receive = vi.fn(async () => { throw failure })
-  connect(source, receive)
+it.each([false, true])('reports a callback failure directly without arming a retry (synchronous=%s)', async (synchronous) => {
+  const failure = new Error('time callback failed')
+  const receive = vi.fn(() => {
+    if (synchronous) throw failure
+    return Promise.reject(failure)
+  })
+  const { source, reportFailure } = setup(receive)
   source.arm(START + 1)
   await vi.advanceTimersByTimeAsync(1)
-  expect(reportFailure).toHaveBeenCalledOnce()
-  expect(reportFailure.mock.calls[0]).toHaveLength(1)
-  expect(reportFailure.mock.calls[0]![0]).toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
-  expect(reportFailure.mock.calls[0]![0]).toHaveProperty('cause.errors', [failure])
+  expect(reportFailure).toHaveBeenCalledExactlyOnceWith(failure)
   expect(vi.getTimerCount()).toBe(0)
   await vi.advanceTimersByTimeAsync(86_400_000)
   expect(receive).toHaveBeenCalledOnce()
+  source.request()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(receive).toHaveBeenCalledTimes(2)
 })
 
-it('retains an explicit request made while the failed broadcast is being reported', async () => {
-  const reportFailure = vi.fn(() => { source.request() })
-  const { source } = setup(reportFailure)
+it('retains an explicit request made while a failed callback is being reported', async () => {
   let calls = 0
-  connect(source, async () => { if (++calls === 1) throw new Error('first input failed') })
+  const reportFailure = vi.fn<(error: unknown) => void>(() => { source.request() })
+  const { source } = setup(async () => { if (++calls === 1) throw new Error('first callback failed') }, reportFailure)
   source.request()
   await vi.advanceTimersByTimeAsync(0)
   expect(calls).toBe(2)
@@ -152,12 +138,11 @@ it('retains an explicit request made while the failed broadcast is being reporte
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('closes admission immediately and drains accepted input without emitting its queued request', async () => {
-  const { source, reportFailure } = setup()
+it('closes admission immediately and drains accepted work without delivering its queued request', async () => {
   const entered = Promise.withResolvers<undefined>()
   const release = gate()
   const receive = vi.fn(async () => { entered.resolve(undefined); await release.promise })
-  const connection = connect(source, receive)
+  const { source, reportFailure } = setup(receive)
   source.request()
   await entered.promise
   source.request()
@@ -165,8 +150,6 @@ it('closes admission immediately and drains accepted input without emitting its 
   const closing = source.dispose()
   expect(source.dispose()).toBe(closing)
   expect(vi.getTimerCount()).toBe(0)
-  await expect(connection.send(START)).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
-  await expect(source.output.emit(START)).rejects.toMatchObject({ code: 'SOURCE_CLOSED' })
   let finished = false
   void closing.then(() => { finished = true })
   source.request()
@@ -183,9 +166,8 @@ it('closes admission immediately and drains accepted input without emitting its 
 })
 
 it('disposes an idle source and cancels its future timer', async () => {
-  const { source } = setup()
   const receive = vi.fn(async (_value: number) => {})
-  connect(source, receive)
+  const { source } = setup(receive)
   source.arm(START + MAX_TIMER_DELAY_MS)
   await source.dispose()
   await vi.advanceTimersByTimeAsync(MAX_TIMER_DELAY_MS)

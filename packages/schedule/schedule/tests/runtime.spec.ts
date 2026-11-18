@@ -5,8 +5,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { ScheduleRuntime } from '../src/runtime.ts'
-import { MAX_TIMER_DELAY_MS, TimeSource } from '../src/time-source.ts'
-import { SourceInput, SourceOutput } from '../src/source-protocol.ts'
+import { MAX_TIMER_DELAY_MS } from '../src/time-source.ts'
 import { SourceError } from '../src/source-error.ts'
 import {
   createAfterScheduleRecord,
@@ -77,32 +76,19 @@ it.each(['closed', 'other-code', 'foreign'] as const)('contains only typed time-
     test.resolveAgent, () => test.ctx.get('sessionController'))
   runtimes.push(runtime)
   const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
-  const reportFailure = vi.fn<(error: unknown) => void>()
-  const clock = new TimeSource(reportFailure)
-  beforeDispose.push(async () => { await clock.dispose() })
-  runtime.connect(clock.output)
   runtime.requestDrive()
   await vi.advanceTimersByTimeAsync(0)
-  clock.request()
+  runtime.requestDrive()
   await vi.advanceTimersByTimeAsync(0)
-  await clock.dispose()
   await runtime.dispose()
   expect(scan).not.toHaveBeenCalled()
   expect(transaction).toHaveBeenCalledTimes(2)
   if (kind === 'closed') {
     expect(warning).not.toHaveBeenCalled()
-    expect(reportFailure).not.toHaveBeenCalled()
   } else {
-    expect(warning).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('schedule: dispatch stopped'))
-    expect(reportFailure).toHaveBeenCalledOnce()
-    const reported = reportFailure.mock.calls[0]![0]
-    expect(reported).toBeInstanceOf(SourceError)
-    if (!(reported instanceof SourceError) || !(reported.cause instanceof AggregateError)) {
-      throw new Error('Time delivery did not preserve an aggregate failure')
-    }
-    expect(reported.code).toBe('SOURCE_DELIVERY_FAILED')
-    expect(reported.cause.errors).toHaveLength(1)
-    expect(reported.cause.errors[0]).toBe(failure)
+    expect(warning).toHaveBeenCalledTimes(2)
+    expect(warning).toHaveBeenNthCalledWith(1, expect.stringContaining(failure.message))
+    expect(warning).toHaveBeenNthCalledWith(2, expect.stringContaining(failure.message))
   }
 })
 
@@ -111,19 +97,17 @@ it('returns typed closure when runtime shutdown interrupts target resolution', a
   const test = await setup([task(record)])
   const entered = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
-  const output = new SourceOutput<{ text: string }>()
-  const connection = test.runtime.input(record.id).connect(output)
   const pending: Promise<void>[] = []
   beforeDispose.push(async () => {
     release.resolve(undefined)
-    await Promise.allSettled([...pending, output.dispose()])
+    await Promise.allSettled(pending)
   })
   test.resolve.mockImplementationOnce(async () => {
     entered.resolve(undefined)
     await release.promise
     return { agent: test.agent }
   })
-  const sending = connection.send({ text: 'Accepted before target resolution finished' })
+  const sending = test.runtime.deliverSource(record.id, { text: 'Accepted before target resolution finished' })
   pending.push(sending)
   const rejected = expect(sending).rejects.toMatchObject({ name: 'SourceError', code: 'SOURCE_CLOSED' })
   await entered.promise
@@ -132,6 +116,8 @@ it('returns typed closure when runtime shutdown interrupts target resolution', a
   release.resolve(undefined)
   await rejected
   await closing
+  await expect(test.runtime.deliverSource(record.id, { text: 'After runtime close' })).rejects.toMatchObject({ code: 'SOURCE_CLOSED' })
+  expect(test.resolve).toHaveBeenCalledOnce()
   expect(test.followup).not.toHaveBeenCalled()
   expect(test.commit).not.toHaveBeenCalled()
 })
@@ -673,28 +659,15 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(test.followup).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['flush', 'receipt'] as const)('acknowledges a public time source only after %s completes', async (stage) => {
+  it.each(['flush', 'receipt'] as const)('keeps its time callback pending until %s completes', async (stage) => {
     const record = createAfterScheduleRecord(brandString<ScheduleId>('source-time'), 'Time input', 1, Date.now() - 2000, 'Time input')
     const records = [task(record)]
     const test = await setup(records)
+    await vi.advanceTimersByTimeAsync(0)
     const entered = Promise.withResolvers<undefined>()
     const released = Promise.withResolvers<undefined>()
-    const firstObserved = Promise.withResolvers<undefined>()
-    const secondObserved = Promise.withResolvers<undefined>()
-    const receipts: boolean[] = []
-    const reportFailure = vi.fn<(error: unknown) => void>()
-    const clock = new TimeSource(reportFailure)
-    const observer = new SourceInput<number>(async () => {
-      receipts.push(records[0]?.lastDelivery !== undefined)
-      if (receipts.length === 1) firstObserved.resolve(undefined)
-      if (receipts.length === 2) secondObserved.resolve(undefined)
-    })
-    beforeDispose.push(async () => {
-      released.resolve(undefined)
-      await Promise.allSettled([clock.dispose(), observer.dispose()])
-    })
-    const connection = test.runtime.connect(clock.output)
-    observer.connect(clock.output)
+    beforeDispose.push(async () => { released.resolve(undefined) })
+    const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
     if (stage === 'flush') {
       test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await released.promise })
     } else {
@@ -704,35 +677,29 @@ describe('Schedule dispatch failures and concurrent changes', () => {
         records[0] = value
       })
     }
-    clock.request()
+    test.runtime.requestDrive()
     await entered.promise
-    await firstObserved.promise
-    clock.request()
+    const result = admission.mock.results[0]
+    if (result?.type !== 'return') throw new Error('The time callback did not enter its transaction')
+    let settled = false
+    const accepted = Promise.resolve(result.value).then(() => { settled = true })
+    test.runtime.requestDrive()
     await vi.advanceTimersByTimeAsync(0)
-    expect(receipts).toEqual([false])
+    expect(settled).toBe(false)
+    expect(admission).toHaveBeenCalledOnce()
     expect(records[0]?.lastDelivery).toBeUndefined()
     released.resolve(undefined)
-    await secondObserved.promise
+    await accepted
     await vi.advanceTimersByTimeAsync(0)
-    expect(receipts).toEqual([false, true])
+    expect(settled).toBe(true)
+    expect(admission).toHaveBeenCalledTimes(2)
     expect(test.followup).toHaveBeenCalledOnce()
     expect(test.commit).toHaveBeenCalledOnce()
     expect(records[0]).toMatchObject({ status: 'ended', lastDelivery: { targetSessionId: ORIGINAL } })
-    await connection.dispose()
-    await expect(connection.send(Date.now())).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
-    clock.request()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(receipts).toEqual([false, true, true])
-    expect(test.commit).toHaveBeenCalledOnce()
-    const retained = test.runtime.connect(clock.output)
     await test.runtime.dispose()
-    await expect(retained.send(Date.now())).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
-    expect(() => test.runtime.connect(clock.output)).toThrow(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
-    expect(() => test.runtime.input(record.id)).toThrow(expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }))
-    clock.request()
+    test.runtime.requestDrive()
     await vi.advanceTimersByTimeAsync(0)
-    expect(receipts).toEqual([false, true, true, true])
-    expect(reportFailure).not.toHaveBeenCalled()
+    expect(admission).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -815,71 +782,58 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(transaction).toHaveBeenCalledTimes(2)
   })
 
-  it('contains recomputation admission refusal between ancestor unloading and runtime cleanup', async () => {
+  it('contains a queued time callback refused while its owning context unloads', async () => {
     const test = await setup([])
     await vi.advanceTimersByTimeAsync(0)
     const entered = Promise.withResolvers<undefined>()
-    const released = Promise.withResolvers<undefined>()
-    const records = [task(createEveryScheduleRecord(brandString<ScheduleId>('retiring'), 'Future occurrence', 300, Date.now(), 'Future occurrence'))]
+    const release = Promise.withResolvers<undefined>()
+    const unloadingEntered = Promise.withResolvers<undefined>()
+    const allowStop = Promise.withResolvers<undefined>()
+    const reported = Promise.withResolvers<undefined>()
     const serial = {
       transact: async <T>(work: () => Promise<T>) => {
         const result = await work()
         entered.resolve(undefined)
-        await released.promise
+        await release.promise
         return result
       },
     }
     const transaction = vi.spyOn(serial, 'transact')
-    const runtime = new ScheduleRuntime(test.ctx, () => records, serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
+    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS,
+      test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
-    test.ctx.effect(() => () => runtime.dispose())
-    const stop = vi.spyOn(runtime, 'dispose')
+    test.ctx.effect(function* () {
+      yield () => runtime.dispose()
+      yield async () => { unloadingEntered.resolve(undefined); await allowStop.promise }
+    })
     const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
-    const reportFailure = vi.fn<(error: unknown) => void>()
-    const clock = new TimeSource(reportFailure)
-    runtime.connect(clock.output)
+    const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => { reported.resolve(undefined) })
     let unloading: Promise<void> | undefined
-    let retired: Promise<void> | undefined
-    const cleanup = async (): Promise<void> => {
-      released.resolve(undefined)
-      await Promise.allSettled([retired, clock.dispose()])
-      await Promise.allSettled([unloading])
+    const cleanup = async () => {
+      release.resolve(undefined)
+      allowStop.resolve(undefined)
+      await Promise.allSettled([unloading, runtime.dispose()])
     }
     beforeDispose.push(cleanup)
     try {
       runtime.requestDrive()
       await entered.promise
-      const result = admission.mock.results[0]
-      if (result?.type !== 'return') throw new Error('Drive was not admitted')
-      retired = (result.value as Promise<void>).then(() => {
-        clock.request()
-        unloading = test.ctx.fiber.dispose()
-        expect(stop).not.toHaveBeenCalled()
-      })
-      expect(vi.getTimerCount()).toBe(1)
-      released.resolve(undefined)
-      await retired
-      await unloading
-      await clock.dispose()
+      runtime.requestDrive()
+      unloading = test.ctx.fiber.dispose()
+      await unloadingEntered.promise
+      release.resolve(undefined)
+      await reported.promise
       expect(admission).toHaveBeenCalledTimes(2)
       expect(admission.mock.results[1]).toMatchObject({ type: 'throw' })
-      expect(reportFailure).toHaveBeenCalledOnce()
-      const [failureCall] = reportFailure.mock.calls
-      expect(failureCall).toHaveLength(1)
-      const failure = failureCall![0]
-      expect(failure).toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
-      expect(failure).toHaveProperty('cause.errors', [expect.objectContaining({})])
-      expect(failure).toHaveProperty('cause.errors.0.message', expect.stringContaining('agent initiator scope is disposed'))
-      expect(transaction).toHaveBeenCalledTimes(1)
-      expect(stop).toHaveBeenCalledTimes(1)
+      expect(warning).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('agent initiator scope is disposed'))
+      expect(transaction).toHaveBeenCalledOnce()
+      allowStop.resolve(undefined)
+      await unloading
       expect(vi.getTimerCount()).toBe(0)
       await vi.advanceTimersByTimeAsync(86_400_000)
       expect(admission).toHaveBeenCalledTimes(2)
-      expect(transaction).toHaveBeenCalledTimes(1)
     } finally {
       await cleanup()
-      stop.mockRestore()
-      admission.mockRestore()
     }
   })
 

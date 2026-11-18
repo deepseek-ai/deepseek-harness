@@ -172,7 +172,7 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 
 ### 调度与生命周期
 
-runtime 将数值输入连接到 `TimeSource.output`，并在管理 FIFO 内等待到期求值。TimeSource 拥有一个分段定时器并合并请求；runtime 任务策略计算其下一个截止时间。[Source 参考](source/README.zh.md)拥有共享输入协议与时间 API。
+内部 `TimeSource` 使用实际墙钟毫秒值调用唯一的异步回调，并在管理 FIFO 内等待到期求值。它拥有一个分段定时器并合并请求；runtime 任务策略计算其下一个截止时间。`TimeSource` 不是包的公开导出。
 
 七种类型使用正常求值器。共享的 [`Cron` 和 `RRule`](../../util/time/README.zh.md) 拥有纯解析和有界重复计算；Schedule 将拒绝原因映射到输入错误，并拥有任务策略、目标和最小投递间隔。已有 Cron 的表达式和时区保持权威性。读取和元数据编辑保留已提交 UTC 发生时点及存储的时区别名。
 
@@ -187,15 +187,42 @@ runtime 将数值输入连接到 `TimeSource.output`，并在管理 FIFO 内等�
 <a id="source-delivery"></a>
 ### Source 投递
 
-插件声明 `schedule` 依赖，并调用 `ctx.schedule.input(id).connect(source.output)`，将类型化候选文本投递给已有活动任务。`input(id)` 同步返回归调用方 context 所有的 `SourceInput<AutomationCandidate>`，不是 Remote 方法。Source 与 runtime 输入共用由接收方发起的 `connect`、定向 `send`、广播及可排空连接协议。消费者卸载或 runtime 停止会关闭任务输入，不销毁借用的 Source。[source 参考](source/README.zh.md)拥有连接语义与复合 Source 的有序清理。Schedule 在管理 FIFO 内检查准入，再解析目标、等待 Session flush 并提交回执。Source 输入保留已存指令、时间规则与活动状态，不消耗定时发生时点。
+插件声明 `schedule` 依赖，并调用 `ctx.schedule.submit(id, candidate): Promise<void>`，将含 `text` 的 `AutomationCandidate` 投递给已有活动任务。这是本地服务方法，不是 Remote 方法。Source 是接收提交回调的普通 class；多个实例不需要基类、输入／输出端点、连接或注册协议。Schedule 在管理 FIFO 内检查准入，解析目标，等待 Session 收件箱 flush，并持久化提交回执。Promise 成功确认这些写入，而非模型执行完成。提交保留已存指令、时间规则与活动状态，不消耗定时发生时点。
+
+在拥有生产者的 `ctx.effect` 内构造实例。本例中，集成方的 `start` 开始观测，返回的 disposer 停止生产并排空尚未结束的 `publish` 调用。集成方报告被拒绝的后台调用。每个实例捕获当前 Schedule 服务，而不是在每次投递时查找替代服务。
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { AutomationCandidate, ScheduleId } from '@deepseek-ai/dsh-schedule'
+
+class ObservationSource {
+  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+
+  publish(text: string): Promise<void> {
+    return this.submit({ text })
+  }
+}
+
+export function observeTask(
+  scope: Context,
+  id: ScheduleId,
+  start: (publish: (text: string) => Promise<void>) => () => Promise<void>,
+): void {
+  scope.effect(() => {
+    const schedule = scope.schedule
+    const source = new ObservationSource(candidate => schedule.submit(id, candidate))
+    return start(text => source.publish(text))
+  })
+}
+```
 
 source、手动与定时投递共用单任务准入：复用目标共用执行槽，所有目标共用各自的最小投递间隔。因此，source 投递可能延迟后续到期投递，但不改变任务存储的 `scheduledAt`。`new_once` 目标的首次 source 投递可以在原定时发生时点之前创建预留 Session；确认后，后续投递复用该 Session。`new` 目标每次 source 投递创建一个 Session，创建时间也可能早于原定时发生时点。准入没有公平性上界：持续以最小间隔发布的 source 可以无限推迟定时发生时点，而任务存储的 `scheduledAt` 保持不变。source 生产者必须限制输出速率，并为定时投递留出机会。
 
-任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次候选以 `SOURCE_TASK_BUSY` 拒绝。任务不会消费该候选；直接 `connection.send()` 保留任务错误，广播则将其聚合为 `SOURCE_DELIVERY_FAILED`。恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
+任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次候选以 `SOURCE_TASK_BUSY` 拒绝。任务不会消费或排队该候选。错误直接传播给调用方。恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
 
-获取输入时，不活动的调用方 context 保留 Cordis `INACTIVE_EFFECT`；Schedule 尚未就绪或正在停止时抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。连接已关闭的输入或输出会抛出 `SOURCE_CLOSED`。连接回调在 Schedule 停止 FIFO 准入后才到达时，以 `SOURCE_CLOSED` 拒绝；已进入该 FIFO 的工作仍会排空。runtime 停止会关闭其输入与连接；后续定向发送以 `SOURCE_CONNECTION_CLOSED` 拒绝。仍然打开但没有剩余连接的输出不发出数据。调用方声明 `schedule` 依赖，并在替代 runtime 就绪后连接新的输入；旧输入不会重新绑定。
+调用方 context 正在卸载或已不活动时，`submit` 返回以 Cordis `INACTIVE_EFFECT` 拒绝的 Promise；Schedule 尚未就绪或正在停止时，以 `SOURCE_TASK_RECEIVER_UNAVAILABLE` 拒绝。runtime 准入可能以 `SOURCE_CLOSED` 拒绝。已进入 FIFO 的工作即使在生产者 context 随后卸载时仍会排空。Schedule 在销毁 runtime 和关闭存储前排空已接受工作。从已停止服务捕获的回调不会重新绑定到替代服务；重新激活的生产者在自己的 effect 中捕获替代服务。
 
-目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；Schedule 和 source 多接收者投递都不自动重试。Schedule 在关闭存储之前停止接受新工作，并排空已接受的投递。连接和中间 source 状态不存入任务记录。
+目标、provider 和持久化失败传播给 source，不聚合为投递错误。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；提交不会自动重试。生产者拥有观测大小限制、输出速率、观测状态持久化及停止／排空清理。Source 实例和中间观测仅存在于进程内，不是任务记录；提交不增加纯事件任务 schema 或 source 专属权限策略。
 
 </details>
 
@@ -205,7 +232,6 @@ source、手动与定时投递共用单任务准入：复用目标共用执行�
 ## 进一步探索
 
 - [Schedule 子系统](../../../docs/subsystems/schedule.zh.md)——时间、管理、存储与投递契约。
-- [Source 实例](source/README.zh.md)——类型化 source class、订阅、组合与 Schedule 任务连接。
 - [时间工具](../../util/time/README.zh.md)——Cron 与 RRULE 解析和发生时点计算。
 - [领域助手](src/domain.ts)、[时间编辑](src/update.ts)、[存储](src/storage.ts)和[运行时](src/runtime.ts)拥有 Schedule 策略。
 
@@ -277,7 +303,7 @@ This is a scheduled message from the user
 
 #### Token 影响
 
-每次被接受的投递在普通提醒文本之外增加经过 JSON 编码的观测和一行固定说明。未到达任务接收者的 source 间观测不增加 token。
+每次被接受的投递在普通提醒文本之外增加经过 JSON 编码的观测和一行固定说明。未提交给任务的中间观测不增加 token。
 
 #### KV Cache 影响
 

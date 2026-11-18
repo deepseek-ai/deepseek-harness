@@ -7,11 +7,11 @@ Schedule stores Host tasks independently of Session activation. One management A
 <a id="source-instances"></a>
 ## Source instances
 
-`SourceInput<T>` accepts an asynchronous `SourceReceiver<T>` callback; a receiving Source exposes its input's bound `connect` as `sourceB.connect(sourceA.output)`. The returned `AutomationConnection` preserves the upstream output's value type, sends to that receiver with `send(value)`, and detaches with `dispose()`; both methods return `Promise<void>`. `SourceOutput<T>.emit(value)` broadcasts through the same directed delivery operation. The [Source reference](../../packages/schedule/schedule/source/README.md) owns input/output types, sharing, acceptance, errors, cleanup, and publication identity. `AutomationSource<TOut>` owns its output and any typed inputs created by its subclass. Intermediate observations remain process-local, not model input.
+A Source is an ordinary class that owns observation and condition state and receives a submission callback. Multiple independent instances submit final `AutomationCandidate` values with `ctx.schedule.submit(id, candidate): Promise<void>`. No common base class, Source-to-Source input, connection, or registration protocol is required. Intermediate observations remain process-local, not model input.
 
-`ScheduleService.input(id)` returns a caller-context-owned `SourceInput<AutomationCandidate>`, used as `ctx.schedule.input(id).connect(source.output)`. It accepts text for an existing task through the same protocol as other Source inputs. Schedule checks admission inside its mutation FIFO and commits the receipt after Session persistence, preserving stored timing and status. Runtime shutdown closes inputs without rebinding them. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns task errors, admission limits, and message framing.
+Schedule checks admission inside its mutation FIFO and acknowledges Session inbox flush plus the durable task receipt, not model completion. It preserves stored timing and status. Accepted submissions drain on shutdown; captured callbacks do not rebind to a replacement service. Producers use their existing Cordis effects to stop observation and drain calls. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns the example, errors, admission limits, and message framing.
 
-`TimeSource` emits actual wall-clock milliseconds through `SourceOutput<number>`. `ScheduleRuntime.connect(time.output)` uses a numeric input whose acknowledgement includes the serialized due scan. TimeSource owns a segmented timer and coalesced requests; runtime policy owns computed deadlines, recurrence evaluation, batching, floors, and persistence. Numeric time input and candidate-text task input share connection semantics, not a payload type.
+The internal `TimeSource` passes actual wall-clock milliseconds to one asynchronous callback that awaits the serialized due scan. It owns a segmented timer and coalesced requests; runtime policy owns deadlines, recurrence evaluation, batching, floors, and persistence. It is not root-exported.
 
 <a id="durable-tasks"></a>
 ## Durable tasks
@@ -164,15 +164,18 @@ Shared management service; reads and management writes never activate a Session,
 
 ```ts cordis-catalog
 /**
- * Create a task input that connects to typed upstream outputs through the common Source protocol.
- * @param id - Task identity rechecked on every delivery inside the management FIFO.
- * @returns A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`.
- * Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream
- * Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT
- * if the calling context is inactive. Task availability and admission failures are reported when a value is sent.
+ * Submit an observation to this runtime without consuming the task's scheduled occurrence.
+ * @param id - Task identity rechecked inside the management FIFO.
+ * @param candidate - Additional observed data accompanying the stored instruction.
+ * @returns Resolves after Session inbox persistence and the task receipt commit, not model completion.
+ * Declared consumers stop their producers through their own effects. An unloading or disposed caller cannot submit
+ * new work; accepted work drains with Schedule's FIFO even if that caller unloads. A captured service never
+ * rebinds to a replacement runtime. Failures may follow partial persistence; no automatic retry is provided.
+ * @throws Cordis INACTIVE_EFFECT for an inactive calling context; SourceError with
+ * SOURCE_TASK_RECEIVER_UNAVAILABLE before initialization or after shutdown admission closes, or the task's
+ * admission error. Provider and storage failures propagate directly.
  */
-input(id: ScheduleId): SourceInput<AutomationCandidate>
+async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>
 
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.

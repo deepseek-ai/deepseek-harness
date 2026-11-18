@@ -1,22 +1,25 @@
-/** Wall-clock wakeups delivered through the shared source protocol. */
-import { SourceOutput } from './source-protocol.ts'
+/** Internal wall-clock wakeups submitted to the owning Schedule runtime. */
 
 /** Largest delay Node timers represent without clamping. */
 export const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 /** One segmented timer and a coalesced sequence of acknowledged time signals. */
 export class TimeSource {
-  /** Actual wall-clock milliseconds sampled at broadcast, not a task's scheduled occurrence. */
-  readonly output: SourceOutput<number> = new SourceOutput<number>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private running: Promise<void> | undefined
   private requested = false
   private closing: Promise<void> | undefined
 
-  /** @param reportFailure - Reports a failed broadcast without retrying it; this callback must not throw. */
-  constructor(private readonly reportFailure: (error: unknown) => void) {}
+  /**
+   * @param onTime - Accepts the sampled wall time and resolves when its due-task scan has settled.
+   * @param reportFailure - Reports a failed callback without retrying it; this callback must not throw.
+   */
+  constructor(
+    private readonly onTime: (now: number) => Promise<void>,
+    private readonly reportFailure: (error: unknown) => void,
+  ) {}
 
-  /** Request a time signal without waiting for its receivers; requests during a broadcast coalesce into one next signal. */
+  /** Request a time signal without waiting for its callback; requests during a callback coalesce into one next signal. */
   request(): void {
     if (this.closing !== undefined) return
     this.requested = true
@@ -25,7 +28,7 @@ export class TimeSource {
   }
 
   /**
-   * Replace the timer without waiting for an in-flight broadcast. Each long-wait segment produces a time signal.
+   * Replace the timer without waiting for an in-flight callback. Each long-wait segment produces a time signal.
    * @param next - Finite epoch milliseconds for the next wakeup, or undefined to cancel the timer.
    */
   arm(next: number | undefined): void {
@@ -39,12 +42,12 @@ export class TimeSource {
     this.timer.unref()
   }
 
-  /** Stop new wakeups and output immediately, then join accepted broadcasts; repeated calls join the same cleanup. */
+  /** Stop new wakeups immediately, then await the accepted callback; repeated calls join the same cleanup. */
   dispose(): Promise<void> {
     if (this.closing === undefined) {
       this.requested = false
       this.clearTimer()
-      this.closing = Promise.allSettled([this.output.dispose(), this.running]).then(() => {})
+      this.closing = Promise.allSettled([this.running]).then(() => {})
     }
     return this.closing
   }
@@ -59,7 +62,8 @@ export class TimeSource {
       while (this.requested) {
         this.requested = false
         this.clearTimer()
-        await this.output.emit(Date.now())
+        const now = Date.now()
+        await Promise.resolve().then(() => this.onTime(now))
       }
     } catch (error: unknown) {
       this.reportFailure(error)

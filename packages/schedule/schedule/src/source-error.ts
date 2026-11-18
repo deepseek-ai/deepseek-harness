@@ -1,8 +1,8 @@
-/** Structured failures for source output and automation-task delivery. */
+/** Structured failures for observation submission and automation-task delivery. */
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SourceErrorCode } from './source-types.ts'
 
-/** A source failure preserves the original cause, including partial fan-out failures. */
+/** A task-delivery or cleanup failure with its original cause. */
 export class SourceError extends HarnessError {
   declare readonly code: SourceErrorCode
 

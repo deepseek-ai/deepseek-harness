@@ -382,28 +382,6 @@ describe('package payload constraints', () => {
     } })).toContainEqual(expect.stringContaining('exports["./run-code"] must expose'))
   })
 
-  it('publishes the typed source class separately from its bundled error entry', () => {
-    const dir = 'packages/schedule/schedule'
-    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
-    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
-    expect(manifest.peerDependencies).toHaveProperty('@deepseek-ai/dsh-error', 'workspace:*')
-    expect(manifest.devDependencies).toHaveProperty('@deepseek-ai/dsh-error', 'workspace:*')
-    expect(manifest).not.toHaveProperty(['dependencies', '@deepseek-ai/dsh-error'])
-    expect(checkWorkspaceManifest({ dir, manifest: {
-      ...manifest, files: manifest.files!.filter(file => file !== 'lib/types/**/*.js'),
-    } })).toContainEqual(expect.stringContaining('package.json files must be'))
-    const withoutSource = { ...manifest.exports }
-    delete withoutSource['./source']
-    for (const exports of [
-      withoutSource,
-      { ...manifest.exports, './source': { types: './lib/types/source.d.ts', default: './lib/index.js' } },
-      { ...manifest.exports, './source': { types: './lib/types/index.d.ts', default: './lib/types/source.js' } },
-    ]) {
-      expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, exports } }))
-        .toContainEqual(expect.stringContaining('exports["./source"] must expose'))
-    }
-  })
-
   it('publishes the directory of each locale detail document after the locale resources', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })

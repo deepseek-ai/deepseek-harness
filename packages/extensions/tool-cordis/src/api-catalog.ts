@@ -3056,11 +3056,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.\n\n`sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.',
     methods: [
       {
-        signature: 'input(id: ScheduleId): SourceInput<AutomationCandidate>',
-        description: 'Create a task input that connects to typed upstream outputs through the common Source protocol.',
-        parameters: [{ name: 'id', description: 'Task identity rechecked on every delivery inside the management FIFO.' }],
-        returns: 'A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`. Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.',
-        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT if the calling context is inactive. Task availability and admission failures are reported when a value is sent.'],
+        signature: 'async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>',
+        description: 'Submit an observation to this runtime without consuming the task\'s scheduled occurrence.',
+        parameters: [{ name: 'id', description: 'Task identity rechecked inside the management FIFO.' }, { name: 'candidate', description: 'Additional observed data accompanying the stored instruction.' }],
+        returns: 'Resolves after Session inbox persistence and the task receipt commit, not model completion. Declared consumers stop their producers through their own effects. An unloading or disposed caller cannot submit new work; accepted work drains with Schedule\'s FIFO even if that caller unloads. A captured service never rebinds to a replacement runtime. Failures may follow partial persistence; no automatic retry is provided.',
+        throws: ['Cordis INACTIVE_EFFECT for an inactive calling context; SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE before initialization or after shutdown admission closes, or the task\'s admission error. Provider and storage failures propagate directly.'],
       },
       {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',
@@ -6433,10 +6433,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AutomationCandidate',
     declaration: 'export interface AutomationCandidate {\n    readonly text: string;\n}',
-  },
-  {
-    name: 'AutomationConnection',
-    declaration: 'export interface AutomationConnection<in T> {\n    send(value: T): Promise<void>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'BackendRegistry',
@@ -10249,18 +10245,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillViewOptions',
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
-  },
-  {
-    name: 'SourceInput',
-    declaration: 'export class SourceInput<T> extends SourceEndpoint<never> {\n    constructor(private readonly receive: SourceReceiver<T>);\n    override dispose(): Promise<void>;\n    readonly connect: <Value extends T>(output: SourceOutput<Value>) => AutomationConnection<Value>;\n}',
-  },
-  {
-    name: 'SourceOutput',
-    declaration: 'export class SourceOutput<in out T> extends SourceEndpoint<T> {\n    override dispose(): Promise<void>;\n    async emit(value: T): Promise<void>;\n}',
-  },
-  {
-    name: 'SourceReceiver',
-    declaration: 'export type SourceReceiver<T> = (value: T) => Promise<void>;',
   },
   {
     name: 'SpeechCatalog',
