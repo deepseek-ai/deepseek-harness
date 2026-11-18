@@ -734,6 +734,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies.',
   },
   {
+    key: 'upstreamSkills',
+    pkg: 'upstream-skills',
+    title: 'Upstream skills of CLI app plugins',
+    mode: 'service',
+    note: 'Holds what each CLI app plugin registers: downloads the pinned upstream files its entry skill indexes from the vendor\'s GitHub repository, verifies and caches them, and lists the entry skill through `ctx.skills` once they are in place.',
+  },
+  {
     key: 'agents',
     pkg: 'agent',
     title: 'Agent service',

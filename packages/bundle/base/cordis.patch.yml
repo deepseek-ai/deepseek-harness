@@ -324,6 +324,11 @@
     - id: tool-skill
       name: '@deepseek-ai/dsh-tool-skill'
 
+    # CLI app plugins register their entry skill and its pinned upstream files
+    # with this Service, which downloads nothing until one registers.
+    - id: upstream-skills
+      name: '@deepseek-ai/dsh-upstream-skills'
+
     - id: commands
       name: '@deepseek-ai/dsh-commands'
 

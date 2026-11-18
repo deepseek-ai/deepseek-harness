@@ -2,6 +2,8 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { SyncedConfig, SyncedConfigRef } from '@deepseek-ai/dsh-client-config/types'
+import type { ShortcutsConfig } from '../types.ts'
 import { ShortcutRegistry } from './registry.ts'
 import { detectEnvironment, installKeyboard } from './dom.ts'
 import { bindingIssue, initialShortcutConfig, normalizeBinding, overlappingBindings, presentBinding } from '../protocol.ts'
@@ -10,7 +12,6 @@ import { desktopShortcutStorage, webShortcutStorage } from './storage.ts'
 import type { Shortcuts } from './types.ts'
 import type { ShortcutFixedInput } from './types.ts'
 import { installNativeKeyboard } from './native.ts'
-import { Config } from '../config.ts'
 
 export type { ShortcutCatalogEntry, ShortcutCommand, ShortcutContext, ShortcutGesture, Shortcuts } from './types.ts'
 export type { ShortcutFixedInput, ShortcutFixedCommand, ShortcutFixedCatalogEntry } from './types.ts'
@@ -23,6 +24,9 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Double-Escape interval while the Host sends none; equals the Host schema default. */
+const ABSENT_STOP_SEQUENCE_MS = 500
+
 /** Cordis keyboard provider; Desktop startup requires its native keyboard bridge. */
 export default class ShortcutsService extends Service implements Shortcuts {
   static inject = ['locale']
@@ -31,7 +35,7 @@ export default class ShortcutsService extends Service implements Shortcuts {
   readonly catalog: Shortcuts['catalog']
   readonly config: Shortcuts['config']
   readonly fixedCatalog: Shortcuts['fixedCatalog']
-  readonly stopSequenceMs: number
+  private readonly stopSequence: SyncedConfigRef<number | undefined>
   private readonly fixedListeners = new Set<(input: ShortcutFixedInput) => void>()
   private readonly adapter: DesktopShortcutsApi | undefined
   private readonly keyboard: DesktopKeyboardApi | undefined
@@ -39,7 +43,11 @@ export default class ShortcutsService extends Service implements Shortcuts {
   private connected = false
   private readonly registry: ShortcutRegistry
 
-  constructor(ctx: Context) {
+  /**
+   * @param ctx - plugin-owned Client context.
+   * @param config - Host-synced sequence timing, read whenever `stopSequenceMs` is read.
+   */
+  constructor(ctx: Context, config: SyncedConfig<ShortcutsConfig>) {
     const environment = detectEnvironment(document, navigator)
     const keyboard = environment.runtime === 'desktop'
       ? (window as Window & { dshDesktop?: { keyboard?: DesktopKeyboardApi } }).dshDesktop?.keyboard : undefined
@@ -48,8 +56,7 @@ export default class ShortcutsService extends Service implements Shortcuts {
     this.keyboard = keyboard
     this.runtime = environment.runtime
     this.platform = environment.platform
-    const config = Config((globalThis as { __DSH_SHORTCUTS_CONFIG__?: unknown }).__DSH_SHORTCUTS_CONFIG__ ?? {})
-    this.stopSequenceMs = config.stopSequenceMs
+    this.stopSequence = config.stopSequenceMs
     this.registry = new ShortcutRegistry(this.runtime, this.platform, initialShortcutConfig())
     this.catalog = this.registry.catalog
     this.config = this.registry.config
@@ -72,6 +79,10 @@ export default class ShortcutsService extends Service implements Shortcuts {
       return () => { off(); this.fixedListeners.clear() }
     }, 'shortcuts: keyboard')
     ctx.effect(() => ctx.locale.subscribe(() => { this.registry.refreshLabels() }), 'shortcuts: locale')
+  }
+
+  get stopSequenceMs(): number {
+    return this.stopSequence.get() ?? ABSENT_STOP_SEQUENCE_MS
   }
 
   register(command: Parameters<Shortcuts['register']>[0]): () => void {
