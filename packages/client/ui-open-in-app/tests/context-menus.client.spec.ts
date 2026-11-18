@@ -35,7 +35,7 @@ it('offers image actions on file targets, copies absolute paths, and keeps save 
   } }
   ctx.provide('remote', remote as never)
   ctx.provide('contextMenus', { register: registry.register.bind(registry), notify } as never)
-  ctx.provide('sessions', { list: createSnapshotStore({ byId: { [id]: { cwd: '/workspace' } } }) } as never)
+  ctx.provide('sessions', { list: createSnapshotStore({ byId: { [id]: { cwd: '/workspace' } }, projectionsBySession: {} }) } as never)
   ctx.provide('fileActions', { save, copyImage: copy, canSaveAs: true } as never)
   const paths = new OpenInAppPathController(remote)
   const directories = new OpenInAppController()

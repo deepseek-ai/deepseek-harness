@@ -31,6 +31,9 @@
     },
     {
       "path": "../../fs/fs"
+    },
+    {
+      "path": "../../session/working-directory"
     }
   ]
 }

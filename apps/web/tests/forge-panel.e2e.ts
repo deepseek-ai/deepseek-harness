@@ -1142,6 +1142,14 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     await captureStableAria(page, '[data-composer-input]', scaffold.workspaceCwd), MODE)
   expect((await readPersistedEvents(scaffold, sessionId)).some(event => event.type === 'user/message'
     && event.data.content.some(block => block.type === 'text' && block.text.includes('## User Comment')))).toBe(false)
+  // Removing a reference card leaves its quote in the composer, and the notice's Undo puts the card back at its line.
+  const extra = local.locator('[data-forge-diff-file="src/extra.ts"]')
+  await extra.getByRole('button', { name: '评论 R1 的操作', exact: true }).click()
+  await page.getByRole('menuitem', { name: '移除', exact: true }).click()
+  await expect.poll(() => extra.locator('[data-forge-review-thread]').count()).toBe(0)
+  expect(await page.locator('[data-composer-input]').first().innerText()).toContain('请检查这项修改')
+  await page.getByRole('alert').filter({ hasText: '已移除' }).getByRole('button', { name: '撤销', exact: true }).click()
+  await extra.locator('[data-forge-review-thread="agent"]').getByText('请检查这项修改', { exact: true }).waitFor()
   const reviewed = scaffold.whenTurnSettled()
   await page.locator('[data-composer-input]').first().press('Enter')
   await reviewed

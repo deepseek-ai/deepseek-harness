@@ -1494,6 +1494,33 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'viewerSources(): ForgeViewerSource[]',
+        description: 'List the viewer lists every registered provider offers; `forge/providers-changed` announces a change.',
+        parameters: [],
+        returns: 'one source per provider that declares viewer lists and reads them, in registration order.',
+      },
+      {
+        signature: 'async listForViewer(forge: string, query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>',
+        description: 'Read one list of open change requests that involve the signed-in user.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider.' }, { name: 'query', description: 'host, list, repository, and limit of the read.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the list, or why the host did not provide it; `unsupported` when the provider does not offer the host or list.',
+        throws: ['when no provider serves `forge`, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>',
+        description: 'Count the change requests in each viewer list a provider offers on one host.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider.' }, { name: 'host', description: 'lowercase host name the provider lists on.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the count of each list, or why the host did not provide them; `unsupported` when the provider does not list on `host`.',
+        throws: ['when no provider serves `forge`, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>',
+        description: 'Read the description and labels of a change request.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the description, or why the host did not provide it; `unsupported` when the provider reads no descriptions.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
         description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1549,6 +1576,148 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'signal', description: 'ends the stream.' }],
         returns: 'frames in publication order.',
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>',
+        description: 'Stream the review page\'s lists of the signed-in user\'s open change requests on every host a provider lists them on: the lists read so far first, then a frame after each read settles. Readers of one repository scope share one reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'repository', description: 'one repository to list in, or null for every repository the user can read.' }, { name: 'signal', description: 'ends the stream.' }],
+        returns: 'frames, each complete.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *reviewCount(signal: AbortSignal): AsyncIterable<ForgeReviewCountFrame>',
+        description: 'Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read: the latest count first, then each change. It is read every `reviewCountIntervalMs` while some stream lasts, and a list stream of every repository updates it as well. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'signal', description: 'ends the stream.' }],
+        returns: 'frames, each complete.',
+      },
+      {
+        signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>',
+        description: 'Read every streamed review page list and the count again at once.',
+        parameters: [{ name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>',
+        description: 'Poll one change request the review page shows at once; its stream reports the result.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *reviewChangeRequest(url: string, signal: AbortSignal): AsyncIterable<ForgeReviewChangeRequest>',
+        description: 'Stream one change request the review page shows in full: its latest polling result first, then each later result and each review change `forge/review-changed` announces for it. The change request is polled through `ctx.forge` while the stream lasts. Review page reads and actions name a change request by URL and need no Session binding, so only callers that may use the Host\'s code host credentials reach them.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'ends the stream.' }],
+        returns: 'frames, each complete.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL.'],
+      },
+      {
+        signature: '@Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>',
+        description: 'Read the description and labels of a change request for the review page.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the description.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
+        description: 'Read every check of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'headSha', description: 'head commit whose checks the page shows.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the snapshot with every check.',
+        throws: ['as {@link ForgePanelController.changeRequestChecks} does, with `forgePanel/unrecognized-url` in place of `forgePanel/not-bound`.'],
+      },
+      {
+        signature: '@Remote async reviewThreads(url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>',
+        description: 'Read the review threads of a change request the review page shows, at the head of its latest status.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'headSha', description: 'head commit the page shows.' }, { name: 'fresh', description: 'whether to read from the host even when threads at this head and update time are kept.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the threads at `headSha`.',
+        throws: ['as {@link ForgePanelController.changeRequestReview} does, with `forgePanel/unrecognized-url` in place of `forgePanel/not-bound`.'],
+      },
+      {
+        signature: '@Remote async reviewThreadWrite(url: string, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>',
+        description: 'Write to the review threads or the pending review of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'write', description: 'the write and the head commit the user saw.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'whether the host took the write, as {@link ForgePanelController.changeRequestReviewWrite} does.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid write.'],
+      },
+      {
+        signature: '@Remote async reviewSubmit(url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
+        description: 'Publish a line comment or a completed review on a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'reviewed head, ranges, plain text, and explicit review decision.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'confirmed publication or a typed failure, as {@link ForgePanelController.submitReview} does.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid review.'],
+      },
+      {
+        signature: '@Remote async reviewDiff(url: string, commits: ForgeCommitRange | null, signal: AbortSignal): Promise<ForgeChangeRequestDiff>',
+        description: 'Read the changes of a change request the review page shows, or of consecutive commits of it.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'commits', description: 'consecutive commits of the change request, or null for all of it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the files and the commit they end at, without a local checkout count.',
+        throws: ['as {@link ForgePanelController.changeRequestDiff} does, with `forgePanel/unrecognized-url` in place of `forgePanel/not-bound`.'],
+      },
+      {
+        signature: '@Remote async reviewCommits(url: string, signal: AbortSignal): Promise<ForgeCommitList | null>',
+        description: 'List the commits of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the commits, or null when the provider does not read commits.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-failed` when the host does not list them.'],
+      },
+      {
+        signature: '@Remote async reviewText(url: string, commit: string, path: string, signal: AbortSignal): Promise<string>',
+        description: 'Read one file of a change request\'s repository at a commit for the review page.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'commit', description: 'commit object name.' }, { name: 'path', description: 'path relative to the repository root.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the text.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-too-large` or `forgePanel/diff-failed` when the host does not provide the file.'],
+      },
+      {
+        signature: '@Remote async reviewViewed(url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
+        description: 'Read the signed-in user\'s viewed marks on the files of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the marks, or null when the provider keeps no viewed marks.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head` or `forgePanel/viewed-failed` as {@link ForgePanelController.changeRequestViewed} does.'],
+      },
+      {
+        signature: '@Remote async reviewSetViewed(url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void>',
+        description: 'Set or clear the signed-in user\'s viewed mark on one file of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'the file, its mark, and the head commit of the shown diff.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; the action errors of {@link ForgePanelController.setFileViewed}.'],
+      },
+      {
+        signature: '@Remote async reviewMarkReady(url: string, signal: AbortSignal): Promise<void>',
+        description: 'Mark a draft change request the review page shows ready for review.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>',
+        description: 'Merge a change request the review page shows while its head is still `headSha`.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote async reviewRerunChecks(url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
+        description: 'Rerun the failed checks of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'the head commit whose checks the user saw.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote async reviewRequestReviews(url: string, reviewers: readonly Pick<ChangeRequestReviewer, \'kind\' | \'login\'>[], signal: AbortSignal): Promise<void>',
+        description: 'Request reviews of a change request the review page shows from more reviewers.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'reviewers', description: 'the reviewers to ask, by kind and login.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or `forgePanel/action-unknown` with the host\'s reason; an error without reviewers.'],
+      },
+      {
+        signature: '@Remote async reviewReviewerCandidates(url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]>',
+        description: 'List accounts a review of a change request the review page shows can be requested from.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'query', description: 'text the login or name contains; empty for the host\'s suggestions.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the accounts, the host\'s suggestions first.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/reviewers-failed` when the host does not list them.'],
+      },
+      {
+        signature: '@Remote async reviewUpdateBranch(url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void>',
+        description: 'Bring the base branch\'s new commits into the head branch of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'method', description: 'merge or rebase.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(session: Session, url: string | null, signal: AbortSignal): Promise<void>',
+        description: 'Remember the change request a review conversation\'s draft quotes, or forget it with null. When the Session\'s next message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts; a Session that already started is bound at its next message. The choice lives in memory until then.',
+        parameters: [{ name: 'session', description: 'the Session whose draft quotes the change request.' }, { name: 'url', description: 'web URL of the change request, or null.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL.'],
       },
       {
         signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
@@ -3030,10 +3199,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session\'s working directory is its workspace-write boundary, so a Host move of the Session moves the boundary; the configured root is the fallback for agentless calls and, without the working-directory service, sessions without a header directory. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
-        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s recorded cwd is relative or contains a NUL byte.'],
+        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s directory is relative or contains a NUL byte.'],
       },
       {
         signature: 'registerWritableRoot(session: Session, directory: string): () => void',
@@ -4838,7 +5007,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'web',
     summary: 'The web access service.',
-    description: 'The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
+    description: 'The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No search id configured, and the provider assigned to the route of the model request the search serves is usable → that provider: `deepseek-official` (Messages search) on the `deepseek-official` and `deepseek-account` routes, `deepseek-search-api` on every other route and outside a model request.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
     methods: [
       {
         signature: 'registerSearchProvider(provider: WebSearchProvider): () => void',
@@ -4861,7 +5030,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>',
         description: 'Run one search through the selected provider. Resolves the provider at call time with the selection rules above; throws WebError when the capability cannot run. The seam enforces `request.maxResults` on the result: if the provider over-returns, `sources[]` is truncated and `truncated` set.',
-        parameters: [{ name: 'request', description: 'the query and optional result limit.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
+        parameters: [{ name: 'request', description: 'the query, the optional result limit, and the route of the model request the search serves.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
         returns: 'the provider\'s results, capped to `request.maxResults`.',
       },
       {
@@ -5121,6 +5290,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     description: 'Host Remote file reads and workspace directory observations over the composed filesystem.',
     methods: [
+      {
+        signature: 'scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined>',
+        description: 'Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses: a live Session\'s sandbox workspace root, else a stored Session\'s cached directory, else its header directory.',
+        parameters: [{ name: 'sessionId', description: 'Session identity received on the wire.' }, { name: 'signal', description: 'cancellation for the persistence read of a stored Session.' }],
+        returns: 'the scope, or undefined when no live or stored Session has that identity.',
+      },
       {
         signature: '@Remote async read( workspaceFileScope: WorkspaceFileScope, path: string, range: WorkspaceFileRange, signal: AbortSignal, ): Promise<WorkspaceFileText>',
         description: 'Read one page of lines from a UTF-8 file readable by the filesystem backend.',
@@ -6516,12 +6691,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n    readonly startedAt: string | null;\n    readonly completedAt: string | null;\n    readonly rerun: ForgeCheckId | null;\n}',
   },
   {
+    name: 'ChangeRequestDescription',
+    declaration: 'export interface ChangeRequestDescription {\n    readonly body: string;\n    readonly labels: readonly ChangeRequestLabel[];\n    readonly labelsTruncated: boolean;\n    readonly images: Readonly<Record<string, string>>;\n    readonly imagesExpireAt: string | null;\n    readonly createdAt: string;\n}',
+  },
+  {
     name: 'ChangeRequestIssue',
     declaration: 'export interface ChangeRequestIssue {\n    readonly repository: ForgeRepository;\n    readonly number: number;\n    readonly title: string;\n    readonly state: \'open\' | \'closed\';\n    readonly url: string;\n}',
   },
   {
     name: 'ChangeRequestKey',
     declaration: 'export type ChangeRequestKey = Branded<\'ChangeRequestKey\'>;',
+  },
+  {
+    name: 'ChangeRequestLabel',
+    declaration: 'export interface ChangeRequestLabel {\n    readonly name: string;\n    readonly color: string | null;\n}',
   },
   {
     name: 'ChangeRequestListener',
@@ -6548,8 +6731,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ChangeRequestState = \'open\' | \'closed\' | \'merged\';',
   },
   {
+    name: 'ChangeRequestSummary',
+    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n}',
+  },
+  {
     name: 'ChangeRequestUpdate',
     declaration: 'export type ChangeRequestUpdate = {\n    readonly key: ChangeRequestKey;\n    readonly fetchedAt: number;\n} & ({\n    readonly snapshot: ChangeRequestSnapshot;\n} | {\n    readonly failure: ForgeFailure;\n});',
+  },
+  {
+    name: 'ChangeRequestViewerReview',
+    declaration: 'export interface ChangeRequestViewerReview {\n    readonly verdict: ReviewVerdict;\n    readonly reviewedSha: string | null;\n}',
   },
   {
     name: 'ChangeResult',
@@ -7385,7 +7576,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeFailure',
-    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'rate-limited\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
   },
   {
     name: 'ForgeFileLayer',
@@ -7473,7 +7664,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | F /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readin /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
@@ -7504,8 +7695,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeReviewChange = {\n    readonly kind: \'write\';\n    readonly write: ForgeReviewWrite[\'kind\'];\n    readonly headSha: string;\n} | {\n    readonly kind: \'submit\';\n    readonly headSha: string;\n} | {\n    readonly kind: \'viewed\';\n    readonly path: string;\n    readonly viewed: boolean;\n    readonly headSha: string;\n};',
   },
   {
+    name: 'ForgeReviewChangeRequest',
+    declaration: 'export interface ForgeReviewChangeRequest {\n    readonly url: string;\n    readonly ref: ChangeRequestRef;\n    readonly forge: ForgeDescription | null;\n    readonly update: ChangeRequestUpdate | null;\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
+  },
+  {
     name: 'ForgeReviewComment',
     declaration: 'export interface ForgeReviewComment {\n    readonly id: ForgeCommentId;\n    readonly author: ForgeCommentAuthor | null;\n    readonly body: string;\n    readonly createdAt: string;\n    readonly pending: boolean;\n    readonly url: string | null;\n    readonly viewerCanEdit: boolean;\n    readonly viewerCanDelete: boolean;\n}',
+  },
+  {
+    name: 'ForgeReviewCountFrame',
+    declaration: 'export interface ForgeReviewCountFrame {\n    readonly reviewRequested: number | null;\n}',
   },
   {
     name: 'ForgeReviewData',
@@ -7524,8 +7723,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeReviewEvent = \'comment\' | \'approve\' | \'request-changes\';',
   },
   {
+    name: 'ForgeReviewFrame',
+    declaration: 'export interface ForgeReviewFrame {\n    readonly hosts: readonly ForgeReviewHost[];\n    readonly reading: boolean;\n}',
+  },
+  {
+    name: 'ForgeReviewHost',
+    declaration: 'export interface ForgeReviewHost {\n    readonly forge: string;\n    readonly host: string;\n    readonly viewer: string | null;\n    readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>;\n}',
+  },
+  {
     name: 'ForgeReviewId',
     declaration: 'export type ForgeReviewId = Branded<\'ForgeReviewId\'>;',
+  },
+  {
+    name: 'ForgeReviewList',
+    declaration: 'export interface ForgeReviewList {\n    readonly items: readonly ChangeRequestSummary[] | null;\n    readonly total: number;\n    readonly fetchedAt: number | null;\n    readonly failure: ForgeFailure | null;\n}',
   },
   {
     name: 'ForgeReviewRequest',
@@ -7566,6 +7777,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeViewedState',
     declaration: 'export type ForgeViewedState = \'viewed\' | \'unviewed\' | \'dismissed\';',
+  },
+  {
+    name: 'ForgeViewerCapability',
+    declaration: 'export interface ForgeViewerCapability {\n    readonly hosts: readonly string[];\n    readonly filters: ReadonlySet<ForgeViewerFilter>;\n    readonly maxItems: number;\n}',
+  },
+  {
+    name: 'ForgeViewerFilter',
+    declaration: 'export type ForgeViewerFilter = \'review-requested\' | \'authored\' | \'involved\';',
+  },
+  {
+    name: 'ForgeViewerList',
+    declaration: 'export interface ForgeViewerList {\n    readonly viewer: string;\n    readonly items: readonly ChangeRequestSummary[];\n    readonly total: number;\n}',
+  },
+  {
+    name: 'ForgeViewerQuery',
+    declaration: 'export interface ForgeViewerQuery {\n    readonly host: string;\n    readonly filter: ForgeViewerFilter;\n    readonly repository: Pick<ForgeRepository, \'owner\' | \'name\'> | null;\n    readonly limit: number;\n}',
+  },
+  {
+    name: 'ForgeViewerSource',
+    declaration: 'export interface ForgeViewerSource extends ForgeViewerCapability {\n    readonly forge: string;\n}',
   },
   {
     name: 'ForgeWorktreeBases',
@@ -11333,7 +11564,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchRequest',
-    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n}',
+    declaration: 'export interface WebSearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n    readonly llmProvider?: string;\n}',
   },
   {
     name: 'WebSearchResult',

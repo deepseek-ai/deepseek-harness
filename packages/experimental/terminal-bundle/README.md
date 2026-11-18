@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add six experimental global terminal tools to every Agent, plus two read-only tools for the person's own terminals. The bundle owns an isolated terminal registry whose backend opens each terminal as a sidebar tab the person can watch and take over. It ships switched off in Web and Desktop and is omitted from the Plugins bundle lists and detail pages.
+Add six experimental global terminal tools to every Agent, plus two read-only tools for the person's own terminals. The bundle owns an isolated terminal registry whose backend opens each terminal as a sidebar tab the person can watch and take over. It ships switched off in Web and Desktop and appears under Plugins → More, immediately after Timeline.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Add six experimental global terminal tools to every Agent, plus two read-only to
 <a id="use-this-package"></a>
 ## Use this package
 
-In `$DSH_HOME/profiles/<name>/package.json` (default home: `~/.dsh`), add `@deepseek-ai/dsh-experimental-terminal-bundle` to `dsh.profile.bundles` to enable its profile layer; remove it from that list to disable it. Restart that profile to apply the change; see the [profile reference](../../../apps/cli/reference/README.md#profile-boot). The [minimal preset](../../bundle/web-app/presets/minimal.patch.yml) loads its own persistent shell independently of this bundle.
+Open **Plugins → More** and switch on **Persistent terminals** below **Timeline**. The bundle also appears on the main Plugins list while enabled; switching it off keeps it in More. The [minimal preset](../../bundle/web-app/presets/minimal.patch.yml) loads its own persistent shell independently of this bundle.
 
-The selected layer adds its global tools to every Agent in the Host, in every preset including minimal. Hiding the management entry preserves existing selections; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/persistent-terminal-controls/guide.md) explains how to disable a previously enabled layer.
+The selected layer adds its global tools to every Agent in the Host, in every preset including minimal.
 
 -----
 

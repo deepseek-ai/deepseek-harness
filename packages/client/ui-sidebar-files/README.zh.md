@@ -56,7 +56,7 @@ kind: "package-reference"
 <a id="the-tree"></a>
 ## 树
 
-根是会话的工作目录，读自 `useSessions().byId[sessionId].cwd`。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。名称以 `.` 开头的条目，在读者[显示隐藏条目](#search)之前不显示。
+根是会话的工作目录，用 `selectSessionDirectory` 从列表快照选出：投影的 `workingDirectory`，否则为 header 目录。`/` 和 Windows 盘根等文件系统根路径均可作为树的根。每一层以绝对路径为键；子路径是父路径以 `/` 拼上条目名。一层在首次展开时经 `@deepseek-ai/dsh-api-workspace-files` 命名空间的 `remote.workspaceFiles.list(sessionId, absolutePath)` 列出。各行由[目录树 Factory](#tree-factory) 绘制并排序；`workspace-tree.ts` 传入每个已列出的条目，名字取目录列表中的拼写，类型作为 `meta.kind`，根的键去掉末尾分隔符，并传入已本地化的失败行。Factory 自行从 files locale 读取文案。名称以 `.` 开头的条目，在读者[显示隐藏条目](#search)之前不显示。
 
 | 条目类型 | 行 |
 |---|---|
@@ -83,7 +83,7 @@ kind: "package-reference"
 
 设置面板浮在导航栏中搜索栏的下方，列出排除的文件和目录，最新的在最前：每条规则有开关它的复选框、路径和删除按钮。不含 `/` 的规则指任意深度上所有同名的文件或目录，含 `/` 的规则指一个相对于工作区的路径；排除一个目录时其内容也一并排除。添加规则的输入框固定在列表上方，只有列表本身滚动；Enter 把输入的名称或路径添加到最上方，或在输入框下方说明拒绝的原因。默认列表先是版本控制、包管理器和构建输出目录（`.git`、`.hg`、`.next`、`.pnpm-store`、`.svn`、`.turbo`、`.yarn`、`build`、`coverage`、`dist`、`node_modules`），然后是 macOS 和 Windows 写入的元数据（`.DS_Store`、`.Spotlight-V100`、`.Trashes`、`.fseventsd`、`Thumbs.db`、`desktop.ini`、`$RECYCLE.BIN`、`System Volume Information`）。标题行末端是还原按钮和关闭按钮；列表与默认列表有任何不同（包括顺序不同）时显示还原按钮，点击后把列表重置为默认列表。列表上方的「尊重忽略文件（.gitignore 等）」（Respect ignore files (.gitignore, etc.)）复选框默认勾选，此时略过 ripgrep 忽略规则忽略的条目：git 仓库内的 `.gitignore`（包括工作区根以上的）、`.ignore` 文件和全局 Git excludes；不在 git 仓库内时 `.gitignore` 不生效；它和眼睛一样，一改变就保存。规则的编辑留在面板内，直到面板通过放大镜、关闭按钮、Escape 或键盘焦点离开它（在面板外按下也是如此）而关闭；关闭即保存。排除规则只缩小搜索范围，从不影响目录树。
 
-规则、眼睛与 `.gitignore` 选择按工作区根保存，即去掉尾随分隔符的 Session 工作目录（文件系统根需要的那一个除外），因此根在同一目录的每个 Session 与分栏共享它们，其他根互不影响。它们保存在浏览器存储的 `dsh.sidebar-files.workspace-search.v1` 下，读者改过的每个根各占一项，只保存与默认值不同的字段，因此读者没改过规则的根能用上后续版本的默认列表；改回默认值的根删除其条目，缺失或格式不对的字段按默认值读取。分栏的搜索文字非空时发生的变化会立即重新搜索。
+规则、眼睛与 `.gitignore` 选择按工作区根保存，即去掉尾随分隔符的工作区根（文件系统根需要的那一个除外），因此根在同一目录的每个 Session 与分栏共享它们，其他根互不影响。它们保存在浏览器存储的 `dsh.sidebar-files.workspace-search.v1` 下，读者改过的每个根各占一项，只保存与默认值不同的字段，因此读者没改过规则的根能用上后续版本的默认列表；改回默认值的根删除其条目，缺失或格式不对的字段按默认值读取。分栏的搜索文字非空时发生的变化会立即重新搜索；Session 在搜索文字非空时进入另一个检出目录，会用该检出目录自己的偏好在那里重新搜索。
 
 在搜索框中按 ↓ 把键盘焦点移到第一行，↑ 与 ↓ 在目录树或搜索结果的行之间移动，搜索栏显示时在第一行按 ↑ 回到搜索框；在行上按 Enter 与单击效果相同。Escape 先关闭设置面板，再清空搜索文字（搜索栏收起时也一样），之后才交给覆盖式导航栏的关闭行为；清空隐藏的查询时，焦点留在目录树内。在已有停靠文件页或停靠预览旁，`workspace.files` 显示搜索框并把键盘焦点移给它；其他位置遵循[命令的文件页打开行为](#what-it-registers)。
 
@@ -116,7 +116,7 @@ kind: "package-reference"
 - **含 `/` 的查询不会跨名称高亮。**每个名称单独高亮，因此跨越 `/` 的查询不会在任何行上标出。
 - **含通配符的名称无法排除。**规则不能包含 `* ? [ ] { } !`，因此无法写出 Next.js `app/[slug]` 这类字面路径。
 - **偏好不会同步到其他浏览器标签页。**每个标签页只在插件加载时读取一次浏览器存储，并把所有根的偏好作为一个整体写回，因此一个标签页写入时，会覆盖其他标签页在它加载之后对任何工作区偏好所做的修改，直到它重新加载。
-- **只有一个根。**树以会话工作目录为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
+- **只有一个根。**树以会话工作区根为根；没有办法浏览到它之上，而 Host 本来也拒绝工作区根之外的路径。
 
 <a id="dev-note"></a>
 ### 开发备注
