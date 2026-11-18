@@ -34,6 +34,7 @@ class Connection:
         self.socket.connect(str(path))
         self.reader = self.socket.makefile("rb")
         self.sequence = 0
+        self.input_turn = 1
         self.diagnostics = []
         self.cleanup_timeout = overrides.get("graceMs", CONFIG["graceMs"]) / 1000
         self.send({"type": "hello", "protocol": 1, "runtimeKey": key, "config": {**CONFIG, **overrides}})
@@ -55,6 +56,10 @@ class Connection:
                 return value
 
     def call(self, method, params, error=None):
+        if method in ("sendKeyEvent", "toggleMouse", "releaseHeldInputs") or (method == "mouseMove" and params.get("useSystemPointer")):
+            params = {**params, "taskId": "native-fixture", "turn": self.input_turn}
+        if method == "releaseHeldInputs":
+            self.input_turn += 1
         self.sequence += 1
         identifier = str(self.sequence)
         self.send({"id": identifier, "method": method, "params": params})

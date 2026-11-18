@@ -83,7 +83,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 `pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。`pressKey`、`click` 和 `drag` 都接受修饰键 `command`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`。只有 `pressKey` 的修饰键参数还接受 `command` 的别名 `cmd`。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
 
-长按时，在 `run_code` 或 `cua_run_code` 中调用 `app.sendKeyEvent('w', 'down')`。首次按下后，该键在同一次执行的后续工具调用中保持按下。对自己已按住的普通键再发一次 `down`，原接收进程会收到一次带重复标志的按下事件。调用方决定是否重复和间隔多久。控件可能过滤模拟的重复事件，可通过控件的实际变化确认效果。松键只需一次 `up`。每个键可分别松开。例如先按 W，再按 D，松开 D 后 W 仍按着。程序正常返回、出错退出或用户暂停时，helper 为本次执行仍按着的键逐一发送松开事件，每个事件都发回原接收进程。后续执行不能释放前一次执行的键。
+长按时，在活动回合中调用 `app.sendKeyEvent('w', 'down')`。按键可跨 `run_code` 和 `cua_run_code` 执行保持；程序出错后回合仍继续时，也保留持有状态。显式 `up` 立即向原接收方释放按键。普通键的重复 `down` 只保留一条持有记录。回合正常完成、异常结束和用户停止时，所有仍按住的键盘键与鼠标按钮按实际派发顺序的反序统一释放。完整的 `pressKey`、`typeText`、`click` 和 `drag` 操作仍自行及时清理。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -123,7 +123,7 @@ inspect(await window.getScreenshot())
 
 普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemPointer: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemPointer: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
 
-默认情况下，`win.toggleMouse(button, direction)` 在当前指针位置向所选窗口发送事件。按下要求指针命中前台应用的所选窗口，否则返回 `FOREGROUND_REQUIRED`。松开允许指针移出窗口或应用失去焦点。只有控件需要读取系统鼠标键状态时，才在按下和松开时都传 `{ useSystemPointer: true }`。系统模式与拖动共用会话审批，按住期间用户移动鼠标也可能触发拖动。任务回合结束或连接关闭时会松开剩余的系统按键。
+`win.toggleMouse(button, direction)` 默认向窗口发送当前鼠标位置的事件。按下时必须命中选定的前台窗口。需要系统按钮状态时，在 `down` 上传入 `{ useSystemPointer: true }`，沿用拖动审批。`up` 始终使用保存的输入方式和窗口，即使焦点改变或窗口关闭也如此。原进程退出后，系统按钮清理仍在当前鼠标位置释放；定向释放会检查保存的进程身份，跳过已退出或复用的 PID。
 
 默认拖动向目标窗口发送鼠标事件。需要系统鼠标按键状态的控件可使用 `win.drag(from, to, { useSystemPointer: true })`。该操作与系统指针移动共用会话授权，起点和拖动路径必须位于可接收输入的前台窗口内。取消或失去目标窗口时，helper 在最后投递的位置释放鼠标键。
 
@@ -147,6 +147,8 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
+
+共享 helper 的 `HeldInputs` 在每次显式按下派发前记录任务、回合、连接、进程代次、应用或窗口和实际输入方式。同一把锁维护键盘与鼠标的派发和释放顺序。`agent/turn-finalizing` 关闭宿主输入准入、取消在途原生操作，并通过独立且有超时限制的请求等待 `releaseHeldInputs` 确认。`whenIdle()` 和 Agent 销毁都包含这段等待。连接关闭会先取消并等待原生操作停止，再做兜底释放；宿主被强杀时依靠这条断连路径。重复清理不会释放后续回合的输入。
 
 <details>
 <summary>操作分派与资源归属</summary>
@@ -228,7 +230,7 @@ Leave useSystemPointer unset for ordinary mouseMove, drag, and toggleMouse calls
 
 Use an explicit window for pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. With useSystemPointer omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
-- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemPointer?: boolean }) -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; the opposite event is not sent automatically. Press over the selected foreground window. By default the window receives the events, even a release outside it, and the system button stays up. For a system hold, pass useSystemPointer: true on both down and up. Physical moves can then drag, including your own mouse movements. The turn ending or the connection closing releases a remaining system hold.
+- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemPointer?: boolean }) -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; platform guidance defines their cleanup scope. Press over the selected foreground window. By default the window receives the events, even a release outside it, and the system button stays up. For a system hold, pass useSystemPointer: true on down. Up uses the input route and window saved by down. Physical moves can then drag, including your own mouse movements. Both routes hold across programs in the same turn and release with held keys when the turn ends. click and drag release their own buttons within the operation.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
 - drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean, useSystemPointer?: boolean }) -> ActionResult — drag between two points of one window. Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control. An explicit system drag shares the session decision with mouseMove and holds the chosen button along the path in the unobscured foreground window.
@@ -240,7 +242,7 @@ Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: Modifier[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier. Send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier. Send 'down' to hold a key across run_code and cua_run_code calls in the same turn, for example W down, D down, D up, W up. Send 'up' to release it immediately at its original recipient. A repeated 'down' for an ordinary held key sends one repeat without adding another hold. A program returning or throwing keeps its holds while the turn continues. When the turn completes, fails, or is stopped, macOS releases remaining keys and mouse buttons together in reverse press order. pressKey and typeText still release their own presses within the operation.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
@@ -265,7 +267,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 默认窗口模式下，程序结束时不会自动补发松开事件。调用方应在 `finally` 中向原窗口发送 `up`。
+- 原生确认表示事件已派发，不表示应用已处理。回合清理被拒绝、超时或断连时，CUA 会报告不确定结果，并禁止该任务继续发送输入。检查桌面状态后再创建新任务。
 - 最低支持 macOS 14；设置导航、拖放接收和权限刷新需要在各支持版本验收。若 macOS 要求在修改屏幕录制权限后退出并重新打开 helper，权限检查在重启前可能仍返回未授权。可以关闭引导框，不必终止其他连接。
 - 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
 - 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、AX 差分、无法确认应用归属的系统面板和仅后台辅助类型的应用。

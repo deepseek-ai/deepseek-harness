@@ -416,6 +416,17 @@ declare module '@deepseek-ai/cordis' {
      * @mode serial
      */
     'agent/turn-stopping'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; signal: AbortSignal }): Promise<void> | void
+    /**
+     * The turn has irrevocably stopped admitting steps. Await all resource finalizers before
+     * committing turn/end, becoming idle, or starting another turn, including on cancellation.
+     * Listeners own bounded cleanup independent of the cancelled operation signal. Failures
+     * are reported through agent/error and the durable turn ending after every listener settles.
+     * @param payload.agent - the agent whose work has settled.
+     * @param payload.turn - the turn being finalized.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+     * @mode parallel
+     */
+    'agent/turn-finalizing'(this: Scoped<Agent>, payload: { agent: Agent; turn: number }): Promise<void> | void
     // ---- error notifications (emit) ----
     /**
      * A step or turn errored. The machine reports a failure here even when

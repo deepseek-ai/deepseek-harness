@@ -489,13 +489,24 @@
             },
             "useSystemPointer": {
               "type": "boolean"
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "turn": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": [
             "appHandle",
             "windowId",
             "mouseButton",
-            "direction"
+            "direction",
+            "taskId",
+            "turn"
           ],
           "additionalProperties": false
         }
@@ -541,6 +552,15 @@
                 },
                 "useSystemPointer": {
                   "type": "boolean"
+                },
+                "taskId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "turn": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
               "required": [
@@ -575,6 +595,15 @@
                 },
                 "useSystemPointer": {
                   "type": "boolean"
+                },
+                "taskId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "turn": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 }
               },
               "required": [
@@ -1097,16 +1126,22 @@
                 "up"
               ]
             },
-            "runId": {
+            "taskId": {
               "type": "string",
               "minLength": 1
+            },
+            "turn": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": [
             "appHandle",
             "key",
             "direction",
-            "runId"
+            "taskId",
+            "turn"
           ],
           "additionalProperties": false
         }
@@ -1515,42 +1550,25 @@
         },
         "method": {
           "type": "string",
-          "const": "releaseHeldKeys"
+          "const": "releaseHeldInputs"
         },
         "params": {
           "type": "object",
           "properties": {
-            "runId": {
+            "taskId": {
               "type": "string",
               "minLength": 1
+            },
+            "turn": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": [
-            "runId"
+            "taskId",
+            "turn"
           ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string",
-          "const": "releaseSystemButton"
-        },
-        "params": {
-          "type": "object",
-          "properties": {},
           "additionalProperties": false
         }
       },

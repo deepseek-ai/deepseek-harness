@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.4/cua-turn-inputs/guide.md
+/:
+  en: 41907c88d906eadf
+  zh: 738dc3d3b4cc33e4
+/macos-cua-input-holds-last-for-one-turn:
+  en: 34b24b7c3428274b
+  zh: 7e73cf9ba46ff2dd
+/macos-cua-input-holds-last-for-one-turn/change:
+  en: fdf88fdc0141c9d8
+  zh: a4af8cab104d38d1
+/macos-cua-input-holds-last-for-one-turn/migration:
+  en: 5e45c629483d2fd5
+  zh: 3e8be5a85f2c54ef

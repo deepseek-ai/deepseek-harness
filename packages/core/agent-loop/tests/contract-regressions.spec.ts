@@ -1528,3 +1528,41 @@ describe('disposal and cancellation during pre-step assembly', () => {
     expect(adapter.requests).toHaveLength(0)
   })
 })
+
+describe('turn finalization', () => {
+  it('waits for every finalizer after a rejection and commits failure before idle', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('done')]))
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('finalization'), { provider: 'mock', model: 'mock' })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const release: PromiseWithResolvers<void> = Promise.withResolvers()
+    const reported: unknown[] = []
+    ctx.on('agent/error', ({ error }) => { reported.push(error) })
+    ctx.on('agent/turn-finalizing', () => { throw new Error('first finalizer failed') })
+    agent.ctx.on('agent/turn-finalizing', async () => { entered.resolve(); await release.promise })
+    try {
+      send(agent, 'go')
+      await entered.promise
+      expect(agent.status).toBe('running')
+      expect(agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(false)
+      release.resolve()
+      await agent.whenIdle()
+      expect(reported).toHaveLength(1)
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'error' } } })
+    } finally { release.resolve(); await ctx.fiber.dispose() }
+  })
+
+  it('does not finalize when turn-stopping steering continues the current turn', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('first'), textResponse('second')]))
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('finalization-steering'), { provider: 'mock', model: 'mock' })
+    const finalized: number[] = []
+    let stops = 0
+    ctx.on('agent/turn-stopping', () => { if (++stops === 1) agent.steer(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } })) })
+    ctx.on('agent/turn-finalizing', ({ turn }) => { finalized.push(turn) })
+    try {
+      send(agent, 'go')
+      await agent.whenIdle()
+      expect(finalized).toEqual([1])
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'step/start')).toHaveLength(2)
+    } finally { await ctx.fiber.dispose() }
+  })
+})

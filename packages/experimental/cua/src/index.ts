@@ -14,6 +14,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { MouseControl } from './mouse-control.ts'
+import { CuaInputTurns } from './turn-inputs.ts'
 import { withSystemPointerGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
@@ -186,9 +187,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
-  sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
-    execution: Readonly<ToolExecution>) => Promise<JsonValue>
+  /** Opt in to task/turn parameters and acknowledged releaseHeldInputs; omission preserves the provider's existing protocol. */
+  turnInputLifecycle?: boolean
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -207,6 +207,7 @@ export interface CuaBackend {
  */
 export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend): void {
   const { helperPath } = backend
+  const inputTurns = backend.turnInputLifecycle ? new CuaInputTurns(ctx) : undefined
   const systemPointer = backend.capabilities.systemPointer === true
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
@@ -285,8 +286,13 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       // Earlier helpers accept an explicit false only for mouseMove.
       if (method !== 'mouseMove' && !useSystemPointer) delete params.useSystemPointer
       else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
-      if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
-      if (method === 'toggleMouse' && useSystemPointer && params.direction === 'down') mouseControl?.trackPress(agent, client)
+      if (inputTurns && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
+        const turn = inputTurns.scope(agent)
+        if (!turn) throw new ToolContextUnavailableError('Directional CUA input requires an active agent turn')
+        turn.track(client)
+        params.taskId = agent.id
+        params.turn = turn.turn
+      }
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
         : method === 'paste'
@@ -380,7 +386,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
         const owner = ownerFor(agent)
-        const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal])
+        const turn = inputTurns?.scope(agent)
+        const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal, ...turn ? [turn.signal] : []])
         signal.throwIfAborted()
         const operation = (async () => {
           const previous = clients.get(agent)
@@ -408,7 +415,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          const route = request.method === 'mouseMove' || request.method === 'drag' || request.method === 'toggleMouse'
+          const route = request.method === 'mouseMove' || request.method === 'drag'
+            || (request.method === 'toggleMouse' && !(inputTurns && request.params.direction === 'up'))
             ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
             : undefined
           if (route?.prepare) owner.coordinates.parameters(request)

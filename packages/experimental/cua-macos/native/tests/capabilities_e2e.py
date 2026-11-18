@@ -122,7 +122,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
             events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 3)["events"][count:]
             assert [e["type"] for e in events] == [down, moved, up], events
             assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
-        for ending in ("releaseSystemButton", "disconnect"):
+        for ending in ("releaseHeldInputs", "disconnect"):
             connection = Connection(socket, key)
             try:
                 app = connection.call("getApp", {"selector": str(state["pid"])})
@@ -268,7 +268,7 @@ def check_keyboard(call, owner, state_file, state):
     count = len(state["events"])
 
     def key(name, direction):
-        call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
+        call("sendKeyEvent", {**owner, "key": name, "direction": direction})
 
     key("w", "down")
     key("d", "down")
@@ -280,7 +280,7 @@ def check_keyboard(call, owner, state_file, state):
     held = state["events"][count:]
     assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
     assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
-    call("releaseHeldKeys", {"runId": "held-input"})
+    call("releaseHeldInputs", {})
     state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
     assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
 
@@ -290,7 +290,7 @@ def check_keyboard(call, owner, state_file, state):
         key("w", "down")
         if explicit_up:
             key("w", "up")
-        call("releaseHeldKeys", {"runId": "held-input"})
+        call("releaseHeldInputs", {})
         state = wait_for_state(state_file, lambda value: any(
             e["type"] == 11 and e.get("keyCode") == 13 for e in value["events"][count:]))
         view_events = [(e["type"], e["keyCode"], e["repeat"]) for e in state["events"][count:]]

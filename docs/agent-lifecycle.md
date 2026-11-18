@@ -78,6 +78,7 @@ sequenceDiagram
   end
   end
   end
+  Driver->>Hooks: <code>agent/turn-finalizing</code> await all resource finalizers
   Driver->>Session: <code>turn/end</code>
   Driver-->>SDK: <code>agent/status</code> idle
 ```

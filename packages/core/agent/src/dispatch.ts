@@ -69,6 +69,13 @@ export interface AgentEventDispatch {
    */
   serial<K extends AgentSubjectEvent>(name: K, payload: PayloadRest<K>): Promise<Awaited<Return<Events[K]>>>
   /**
+   * Await every listener, including after another listener fails; reject with all failures.
+   * @param name - the agent-subject event to dispatch.
+   * @param payload - the event's payload fields; `agent` is injected.
+   * @returns completion after all listeners settle.
+   */
+  settled<K extends AgentSubjectEvent>(name: K, payload: PayloadRest<K>): Promise<void>
+  /**
    * Around-middleware dispatch (Cordis `waterfall`) in the agent's scope. The
    * declared event parameters already end with the `next` callback, so `rest`
    * is exactly the event's arguments after the payload — the final element
@@ -134,6 +141,13 @@ export function agentEvents(ctx: Context, agent: Agent, carrier: Scoped<Agent> =
           ctx.logger.warn(`agent event "${name}" listener threw: ${String(error)}`)
         }
       }
+    },
+    async settled(name, payload) {
+      const args: unknown[] = [carrier, name, fused(payload)]
+      const callbacks = ctx.events.dispatch('parallel', args)
+      const results = await Promise.allSettled(callbacks.map(callback => Promise.resolve().then(() => callback(...args))))
+      const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+      if (errors.length > 0) throw new AggregateError(errors, `Agent event "${name}" failed`)
     },
     async serial(name, payload) {
       // oxlint-disable-next-line typescript/unbound-method -- the events mixin accessor returns a pre-bound function

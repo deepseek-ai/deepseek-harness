@@ -8,7 +8,6 @@ import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
-import { installHeldKeys } from './held-keys.ts'
 import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
 import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
@@ -64,7 +63,7 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
+  const backend = { createChannel: createSharedNativeChannel, turnInputLifecycle: true,
     getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {

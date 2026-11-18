@@ -127,6 +127,8 @@ The runtime-context projection compares the ordered names and text in committed 
 
 ### Failure and cancellation
 
+`agent/turn-finalizing` runs after the turn stops admitting steps, on completion, error and cancellation. All listeners settle before `turn/end`, idle status, subsequent turns and Agent disposal. A listener failure does not skip other finalizers; it produces `agent/error` and an error ending. Finalizers own their cleanup deadlines and must not reuse an aborted operation signal or await this Agent becoming idle.
+
 `turn/end` declares `TurnEndCancelCause`; cancellation records a fresh `AgentCancelCause` there, retaining the caller's `kind` and the hook's `reason` text. The live `AbortSignal.reason` remains the caller's object, which a transport may extend — Node's fetch assigns a `stack` onto it — so the copy keeps that trace out of the log and keeps the ending appendable.
 
 Final adapter selection, dispatch, and iteration failures arrive as terminal finishes and enter `agent/request-error`; a handling listener returns `{ kind: 'retry' }` without calling `next()`, while an unhandled failure is terminal. Middleware, result-processing, tool, and other extension failures remain thrown and close the turn directly — plugin failure ends the turn, not the loop. Undispatched model tool calls after cancellation receive synthetic `tool/call` plus `ABORTED_BEFORE_DISPATCH` result pairs.

@@ -157,10 +157,10 @@ export interface CuaSurface {
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
-   * Does not send the opposite event.
+   * macOS retains explicit downs across programs within one turn and releases remaining input at turn end.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
-   * @param direction - Explicit event direction; the opposite event is never sent implicitly.
+   * @param direction - Down establishes a hold; up immediately releases owned input at its saved recipient.
    * @returns Whether the provider successfully executed the requested operation.
    */
   sendKeyEvent(key: string, direction: 'down' | 'up'): Promise<CuaActionResult>
@@ -192,7 +192,8 @@ export interface CuaWindow extends CuaSurface {
     options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
    * Send one mouse-button down or up event without moving the pointer.
-   * Does not send the opposite event; callers explicitly release a pressed button.
+   * macOS retains explicit downs within one turn; up uses the saved window and input route.
+   * Turn completion, failure, or cancellation releases remaining keys and buttons in reverse press order.
    * @param mouseButton - Mouse button to press or release.
    * @param direction - Explicit event direction.
    * @param options - Request a system button on a provider reporting systemPointer.

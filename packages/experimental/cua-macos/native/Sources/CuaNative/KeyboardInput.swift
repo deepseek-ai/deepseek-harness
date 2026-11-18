@@ -9,21 +9,22 @@ final class KeyboardInput {
         let flag: CGEventFlags
     }
 
-    private let connection = UUID()
-    private let held: HeldKeys
+    private let connection: UUID
+    private let held: HeldInputs
     private let post: (CGEvent, Int32) -> Void
     private let textEventInterval: Double
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldKeys = HeldKeys(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldInputs = HeldInputs(), connection: UUID = UUID(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
         self.held = held
+        self.connection = connection
         self.post = post
         self.textEventInterval = textEventInterval
         self.checkCancellation = checkCancellation
     }
 
-    func keyDown(_ name: String, app: String, run: String, recipient: () throws -> ProcessIdentity) throws {
-        let owner = HeldKeys.Owner(connection: connection, run: run, app: app)
+    func keyDown(_ name: String, app: String, scope: HeldInputs.Scope, recipient: () throws -> ProcessIdentity) throws {
+        let owner = HeldInputs.Owner(connection: connection, scope: scope, app: app)
         let code = try Self.keyCode(name)
         let source = try Self.source()
         let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
@@ -33,17 +34,13 @@ final class KeyboardInput {
         let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
         try checkCancellation()
         try NativePlatform.verify(target)
-        try held.down(owner: owner, recipient: target, name: name, code: code, flag: Self.namedModifier(name)?.flag ?? [],
+        try held.keyDown(owner: owner, recipient: target, name: name, code: code, flag: Self.namedModifier(name)?.flag ?? [],
                       down: down, up: up, post: post)
     }
 
-    func keyUp(_ name: String, app: String, run: String, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
-        try held.up(owner: .init(connection: connection, run: run, app: app), name: name, code: Self.keyCode(name),
-                    recipientIfUnheld: recipientIfUnheld, post: post)
-    }
-
-    func releaseHeldKeys(run: String? = nil) throws {
-        try held.release(connection: connection, run: run, post: post)
+    func keyUp(_ name: String, app: String, scope: HeldInputs.Scope, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+        try held.keyUp(owner: .init(connection: connection, scope: scope, app: app), name: name, code: Self.keyCode(name),
+                    recipientIfUnheld: recipientIfUnheld)
     }
 
     /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
@@ -56,7 +53,7 @@ final class KeyboardInput {
         chord.append(Key(keyCode: code, flag: Self.namedModifier(name)?.flag ?? []))
         let alreadyHeld = held.snapshot(pid: pid)
         guard alreadyHeld[code] == nil else {
-            throw RequestParameters.invalid("Key '\(name)' is already held for this target. Use pressKey after the run_code that holds it releases it.")
+            throw RequestParameters.invalid("Key '\(name)' is already held for this target. Release it before using pressKey.")
         }
         var selected = Set(alreadyHeld.keys)
         var flags = alreadyHeld.values.reduce(CGEventFlags()) { $0.union($1) }

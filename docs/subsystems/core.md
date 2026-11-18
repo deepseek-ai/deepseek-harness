@@ -1087,6 +1087,30 @@ Types: [Scoped](scope.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
+<a id="agentturn-finalizing--parallel"></a>
+
+#### `agent/turn-finalizing` — parallel
+
+The turn has irrevocably stopped admitting steps. Await all resource finalizers before committing turn/end, becoming idle, or starting another turn, including on cancellation. Listeners own bounded cleanup independent of the cancelled operation signal. Failures are reported through agent/error and the durable turn ending after every listener settles.
+
+```ts cordis-catalog
+/**
+ * The turn has irrevocably stopped admitting steps. Await all resource finalizers before
+ * committing turn/end, becoming idle, or starting another turn, including on cancellation.
+ * Listeners own bounded cleanup independent of the cancelled operation signal. Failures
+ * are reported through agent/error and the durable turn ending after every listener settles.
+ * @param payload.agent - the agent whose work has settled.
+ * @param payload.turn - the turn being finalized.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
+ * @mode parallel
+ */
+'agent/turn-finalizing'(this: Scoped<Agent>, payload: { agent: Agent; turn: number }): Promise<void> | void
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
 <a id="agentturn-stopping--serial"></a>
 
 #### `agent/turn-stopping` — serial

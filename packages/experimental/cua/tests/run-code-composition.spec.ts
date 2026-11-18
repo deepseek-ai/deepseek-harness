@@ -40,6 +40,7 @@ const programs = [
 
 class ProgramModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  beforeStream?: (index: number, options: GenerateOptions) => Promise<void>
   /** Requests a test holds back until it has finished acting between two model steps. */
   readonly gates = new Map<number, Promise<void>>()
   constructor(private readonly programs: readonly string[]) { super() }
@@ -47,6 +48,7 @@ class ProgramModel extends LlmAdapter {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    await this.beforeStream?.(this.requests.length, options)
     await this.gates.get(this.requests.length)
     const code = this.programs[this.requests.length]
     this.requests.push(options)
@@ -63,7 +65,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, turnInputLifecycle = false) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -103,8 +105,8 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
           getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
-          acceptsPidSelector: selectorPid !== undefined,
-          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot'],
+          acceptsPidSelector: selectorPid !== undefined, turnInputLifecycle,
+          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -140,7 +142,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
   ctx.on('agent/status', ({ agent: subject, status }) => { if (subject === agent && status === 'idle') idle.resolve() })
   const provider = [...ctx.loader.entries()].find(entry => entry.options.id === 'cua')
   if (provider?.fiber === undefined) throw new Error('Loader did not activate the CUA fixture provider')
-  return { ctx, native, guarded, model, agent, provider: provider.fiber,
+  return { ctx, native, guarded, model, agent, handle, provider: provider.fiber,
     run: () => {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect and increment the fixture counter.' }], source: { kind: 'user' } }))
       return idle.promise
@@ -353,4 +355,129 @@ it('forwards per-read accessibility limits to the Windows backend', async () => 
   await run()
   expect(native.calls.find(call => call.method === 'getState')?.params)
     .toMatchObject({ maxElements: 30, maxDepth: 3 })
+})
+
+const holdProgram = 'var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")'
+
+it('keeps held keys across programs and a failed program until explicit up or turn completion', async () => {
+  const f = await setup([holdProgram, 'throw Error("program failed")',
+    'await app.sendKeyEvent("w", "up"); await app.sendKeyEvent("shift", "down"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("d", "down")'],
+  'macos', undefined, true, true)
+  await f.run()
+  const results = f.agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError)).toEqual([false, true, false])
+  expect(f.native.events).toEqual(['w:down', 'w:up', 'shift:down', 'left:down', 'd:down', 'd:up', 'left:up', 'shift:up'])
+  const requests = f.native.calls.filter(call => call.method === 'sendKeyEvent')
+  expect(requests.map(call => [call.params.taskId, call.params.turn])).toEqual(Array(4).fill([f.agent.id, 1]))
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
+  expect(f.native.held).toEqual([])
+})
+
+it.each(['normal', 'model failure', 'thinking stop'] as const)('awaits native release before idle on %s', async (ending) => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.model.beforeStream = async (index, options) => {
+    if (index !== 1) return
+    if (ending === 'model failure') throw new Error('Model request failed')
+    if (ending === 'thinking stop') {
+      thinking.resolve()
+      await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
+    }
+  }
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  if (ending === 'thinking stop') { await thinking.promise; f.agent.cancel({ kind: 'user' }) }
+  await release.entered
+  try {
+    expect(f.agent.status).toBe('running')
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(false)
+    expect(f.native.held.map(press => press.key)).toEqual(['w'])
+  } finally { release.reply(); await running }
+  expect(f.native.held).toEqual([])
+  expect(f.agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: {
+    kind: ending === 'normal' ? 'completed' : ending === 'model failure' ? 'error' : 'aborted',
+  } } })
+})
+
+it('stops an in-flight down before cleanup and does not release input from the next turn', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const down = f.native.controlNext('sendKeyEvent', { afterDispatch: true, waitForCancellation: true })
+  const running = f.run()
+  await down.entered
+  f.agent.cancel({ kind: 'user' })
+  await down.cancelled
+  expect(f.native.held.map(press => press.key)).toEqual(['w'])
+  expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+  down.reply({ code: 'NATIVE_CANCELLED', message: 'Input stopped after dispatch' })
+  await running
+  expect(f.native.held).toEqual([])
+  f.model.requests.length = 0
+  const release = f.native.controlNext('releaseHeldInputs')
+  f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Next turn' }], source: { kind: 'user' } }))
+  await release.entered
+  expect(f.native.held.map(press => press.turn)).toEqual([2])
+  release.reply()
+  await f.agent.whenIdle()
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs').map(call => call.params.turn)).toEqual([1, 2])
+  expect(f.native.events.filter(event => event === 'w:up')).toHaveLength(2)
+})
+
+it.each(['refusal', 'disconnect'] as const)('reports cleanup %s and prevents this task from dispatching more input', async (failure) => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const errors: unknown[] = []
+  f.ctx.on('agent/error', (event) => { errors.push(event.error) })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  await release.entered
+  if (failure === 'refusal') release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Fixture release rejected' })
+  else release.disconnect()
+  await running
+  expect(errors).toHaveLength(1)
+  expect(f.agent.session.snapshotEvents().at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'error' } } })
+  const count = f.native.calls.length
+  f.model.requests.length = 0
+  f.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Try again' }], source: { kind: 'user' } }))
+  await f.agent.whenIdle()
+  expect(f.native.calls).toHaveLength(count)
+  expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('INPUT_CLEANUP_UNCONFIRMED')
+})
+
+it.each(['agent', 'provider'] as const)('awaits held input cleanup when the %s is disposed', async (owner) => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.model.beforeStream = async (index, options) => {
+    if (index !== 1) return
+    thinking.resolve()
+    await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
+  }
+  const running = f.run()
+  await thinking.promise
+  const release = f.native.controlNext('releaseHeldInputs')
+  let disposed = false
+  const closing = (owner === 'agent' ? f.handle.dispose() : f.provider.dispose()).then(() => { disposed = true })
+  await release.entered
+  try {
+    expect(disposed).toBe(false)
+    expect(f.native.state.closedChannels).toBe(0)
+  } finally {
+    release.reply()
+    f.agent.cancel({ kind: 'user' })
+    await closing
+    await running
+  }
+  expect(f.native.held).toEqual([])
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
+  expect(f.native.state.closedChannels).toBe(1)
+})
+
+it('does not send turn input parameters or cleanup to a provider that has not opted in', async () => {
+  const f = await setup([holdProgram, 'await app.sendKeyEvent("w", "up")'], 'windows', undefined, true)
+  await f.run()
+  const input = f.native.calls.filter(call => call.method === 'sendKeyEvent')
+  expect(input).toHaveLength(2)
+  for (const call of input) {
+    expect(call.params).not.toHaveProperty('turn')
+    expect(call.params).not.toHaveProperty('taskId')
+  }
+  expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
 })

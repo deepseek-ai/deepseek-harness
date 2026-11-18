@@ -81,3 +81,9 @@ struct RequestParameters: Sendable {
     }
     func point(_ x: String = "x", _ y: String = "y") throws -> WindowPoint { WindowPoint(x: try number(x), y: try number(y)) }
 }
+
+extension RequestParameters {
+    func inputScope() throws -> HeldInputs.Scope {
+        try HeldInputs.Scope(task: string("taskId"), turn: integer("turn", in: 1...Int.max))
+    }
+}

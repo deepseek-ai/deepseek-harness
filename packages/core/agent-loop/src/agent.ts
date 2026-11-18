@@ -424,8 +424,17 @@ export class ReactLoopAgent implements Agent {
       this.throwError(error)
     } finally {
       try {
-        // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
-        this.session.append('turn/end', { turn, reason: turnEnds! })
+        try {
+          await this.dispatch.settled('agent/turn-finalizing', { turn })
+          const cause = abortedCancelCause(signal)
+          if (cause !== undefined) turnEnds = { kind: 'aborted', reason: cause }
+        } catch (error: unknown) {
+          turnEnds = { kind: 'error', error: { code: 'UNKNOWN', message: errorChain(error) } }
+          throw error
+        } finally {
+          // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
+          this.session.append('turn/end', { turn, reason: turnEnds! })
+        }
       } catch (error: unknown) {
         this.throwError(error)
       }

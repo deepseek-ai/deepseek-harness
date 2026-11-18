@@ -5376,6 +5376,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.status - the status just entered (the transition\'s destination). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
+    name: 'agent/turn-finalizing',
+    mode: 'parallel',
+    signature: '\'agent/turn-finalizing\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number }): Promise<void> | void',
+    summary: 'The turn has irrevocably stopped admitting steps.',
+    description: 'The turn has irrevocably stopped admitting steps. Await all resource finalizers before committing turn/end, becoming idle, or starting another turn, including on cancellation. Listeners own bounded cleanup independent of the cancelled operation signal. Failures are reported through agent/error and the durable turn ending after every listener settles.',
+    parameters: [{ name: 'payload', description: '.turn - the turn being finalized. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
     name: 'agent/turn-stopping',
     mode: 'serial',
     signature: '\'agent/turn-stopping\'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; signal: AbortSignal }): Promise<void> | void',
