@@ -18,7 +18,13 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../util/error"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/package-manifest"
     }
   ]
 }

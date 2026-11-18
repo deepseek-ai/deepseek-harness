@@ -3,11 +3,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { fireEvent } from '@testing-library/dom'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { installKeyboard } from '../src/client/dom.ts'
 import ShortcutsService from '../src/client/index.ts'
 import { ShortcutRegistry } from '../src/client/registry.ts'
 import type { ShortcutFixedCommand, ShortcutFixedInput } from '../src/client/types.ts'
 import type { ShortcutCommandId } from '../src/protocol.ts'
+import type { ShortcutsConfig } from '../src/types.ts'
 
 let dispose: (() => void) | undefined
 afterEach(() => { dispose?.(); document.body.replaceChildren(); vi.restoreAllMocks(); vi.useRealTimers(); localStorage.clear() })
@@ -114,8 +116,14 @@ it('contains observer failures and makes prior consumption visible to later obse
   ctx.provide('locale', new LocaleRuntime(ctx))
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
   try {
-    const service = new ShortcutsService(ctx)
+    const config = syncedConfig<ShortcutsConfig>({ stopSequenceMs: 800 })
+    const service = new ShortcutsService(ctx, config)
     const offFixed = service.registerFixed({ id: 'response.stop' as ShortcutCommandId, label: () => 'Stop', keys: ['Esc', 'Esc'], bindings: [{ code: 'Escape', modifiers: [] }], group: 'input' })
+    expect(service.stopSequenceMs).toBe(800)
+    const read = vi.spyOn(config.stopSequenceMs, 'get').mockReturnValue(900)
+    expect(service.stopSequenceMs).toBe(900)
+    // No value from the Host: the interval falls back to the Host schema default.
+    read.mockReturnValue(undefined)
     expect(service.stopSequenceMs).toBe(500)
     expect(service.fixedCatalog.getSnapshot()).toHaveLength(1)
     service.observeFixedInput(() => { throw new Error('owner failure') })
@@ -137,7 +145,7 @@ it('delivers resets and skips an observer removed earlier in the same dispatch',
   const ctx = new Context()
   ctx.provide('locale', new LocaleRuntime(ctx))
   try {
-    const service = new ShortcutsService(ctx)
+    const service = new ShortcutsService(ctx, syncedConfig({}))
     let off = (): void => {}
     const first = vi.fn(() => { off() })
     service.observeFixedInput(first)

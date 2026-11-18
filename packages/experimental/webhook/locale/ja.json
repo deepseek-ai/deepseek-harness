@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Webhook ランタイム",
+    "description": "応答を待たない Webhook ルールに従い、ワークスペースに属する Harness セッションを作成します。"
+  }
+}

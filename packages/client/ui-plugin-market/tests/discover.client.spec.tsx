@@ -6,7 +6,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import { DiscoverSection, type DiscoverSectionProps } from '../src/client/DiscoverSection.tsx'
-import type { DiscoverState, ListingState } from '../src/client/market-store.ts'
+import type { DetailsState, DiscoverState, ListingState } from '../src/client/market-store.ts'
 import { INITIAL_QUERY, type DiscoverQuery } from '../src/client/presentation.ts'
 import { en, zh, type PluginMarketLocaleKey } from '../src/client/locales.ts'
 
@@ -24,7 +24,7 @@ const COMMIT = '0123456789abcdef0123456789abcdef01234567'
 function release(name: string, version: string, fields: Partial<MarketListingVersion> = {}): MarketListingVersion {
   return {
     version, publishTimestamp: 1790476800, source: { type: 'npm' }, engines: {},
-    install: { spec: `${name}@${version}` }, compatibility: { compatible: true }, ...fields,
+    install: { spec: `${name}@${version}` }, compatibility: { compatible: true }, update: false, ...fields,
   }
 }
 
@@ -50,7 +50,7 @@ const LISTING: MarketSearchResult = {
   fetchedAt: 1,
   total: 6,
   nextOffset: null,
-  title: { en: 'Alpha market', zh: '甲市场' },
+  title: { en: 'Alpha index', zh: '甲索引' },
   metadata: {
     categories: { tools: { title: 'Tools' }, themes: { title: 'Themes' } },
     labels: { official: { title: 'Official' }, beta: { title: 'Beta' } },
@@ -75,7 +75,8 @@ const LISTING: MarketSearchResult = {
 
 const READY: DiscoverState = {
   status: 'ready', indexes: [{ url: A, title: LISTING.title }, { url: B }], selected: A,
-  listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: LISTING, answered: INITIAL_QUERY, failure: null }, editing: false, draft: '', saving: false, sourceFailure: null,
+  listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: LISTING, answered: INITIAL_QUERY, failure: null },
+  editing: false, draft: '', sourceOptions: { path: '', ref: '' }, saving: false, sourceFailure: null,
 }
 
 function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<PluginMarketLocaleKey, string> = en) {
@@ -85,15 +86,18 @@ function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<Plugin
   const actions = {
     ensure: vi.fn(), reload: vi.fn(), select: vi.fn(), search: vi.fn(), more: vi.fn(), refresh: vi.fn(), retry: vi.fn(),
     toggleSources: vi.fn(),
-    editDraft: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
+    editDraft: vi.fn(), editSourceOptions: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
+    loadDetail: vi.fn(), retryDetail: vi.fn(), detailImage: vi.fn(() => undefined),
   }
   const install = vi.fn()
+  const update = vi.fn()
   const openPackage = vi.fn()
   const props = {
-    t: translator(dictionary), install, openPackage, ...actions,
+    t: translator(dictionary), install, update, openPackage, ...actions,
     resolveText: (text: string | Record<string, string>) => typeof text === 'string' ? text : text[language] ?? text.en,
     useDiscover: bindSnapshotSelector(store),
     useLocale: bindSnapshotSelector(locale),
+    useDetails: bindSnapshotSelector(createSnapshotStore<DetailsState>({})),
   } as DiscoverSectionProps
   render(<DiscoverSection {...props} />)
   const set = (next: Partial<DiscoverState>): void => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) }
@@ -101,7 +105,7 @@ function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<Plugin
   const answer = (query: DiscoverQuery, value: Partial<MarketSearchResult> = {}): void => {
     set({ listing: { ...store.getSnapshot().listing as ListingState, query, value: { ...LISTING, ...value }, answered: query } })
   }
-  return { actions, install, openPackage, set, answer }
+  return { actions, install, update, openPackage, set, answer }
 }
 
 const names = (): string[] => Array.from(document.querySelectorAll('[data-market-entry]')).map(node => node.getAttribute('data-market-entry') ?? '')
@@ -199,6 +203,7 @@ describe('DiscoverSection', () => {
       expect(screen.queryByRole('menuitem', { name: en.sortRelevance })).toBeNull()
       expect(actions.search).toHaveBeenCalledTimes(4)
     } finally {
+      cleanup()
       vi.useRealTimers()
     }
   })
@@ -229,7 +234,7 @@ describe('DiscoverSection', () => {
     expect(screen.getByText(en.emptyIndex)).toBeTruthy()
   })
 
-  it('sorts by publish date, a market sort key, either direction, and back to the index order', () => {
+  it('sorts by publish date, an index sort key, either direction, and back to the index order', () => {
     const { actions, answer } = renderTab()
     openMenu(/^Sort: Default order/)
     pick(en.sortPublished)
@@ -254,7 +259,7 @@ describe('DiscoverSection', () => {
     answer(INITIAL_QUERY)
     openMenu(/^Sort: Default order/)
     expect(screen.queryByRole('menuitem', { name: en.switchToAscending })).toBeNull()
-    for (const name of [/^Sort:/, en.filter, /^Switch plugin market/]) {
+    for (const name of [/^Sort:/, en.filter, /^Switch plugin index/]) {
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
       expect(screen.queryByRole('menu')).toBeNull()
       openMenu(name)
@@ -262,28 +267,64 @@ describe('DiscoverSection', () => {
     }
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
-    openMenu(/^Switch plugin market/)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
+    openMenu(/^Switch plugin index/)
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('switches markets and opens source management from the market menu', () => {
+  it('switches indexes and opens source management from the index menu', () => {
     const { actions } = renderTab()
-    openMenu('Switch plugin market, currently Alpha market')
+    openMenu('Switch plugin index, currently Alpha index')
     pick('b.example')
     expect(actions.select).toHaveBeenCalledWith(B)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
     pick(en.manageSources)
     expect(actions.toggleSources).toHaveBeenCalledOnce()
   })
 
+  it('keeps the Raw index title before its GitHub repository on the button and in the menu', () => {
+    const url = 'https://raw.githubusercontent.com/acme/plugins/main/index.json'
+    const other = 'git+ssh://git@github.com/acme/internal.git'
+    const label = 'Alpha index · github:acme/plugins'
+    const { actions } = renderTab({
+      indexes: [{ url, title: LISTING.title }, { url: other, title: 'Internal plugins' }], selected: url,
+      listing: { url, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url }, answered: INITIAL_QUERY, failure: null },
+    })
+    const button = screen.getByRole('button', { name: `Switch plugin index, currently ${label}` })
+    expect(within(button).getByText(label)).toBeTruthy()
+    fireEvent.click(button)
+    expect(screen.getByRole('menuitem', { name: label })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'github:acme/internal' }))
+    expect(actions.select).toHaveBeenCalledWith(other)
+  })
+
+  it('distinguishes Git indexes in the same GitHub repository by ref and file path', () => {
+    const url = 'git+https://github.com/acme/plugins.git'
+    const other = 'git+ssh://git@github.com/acme/plugins.git?path=market%2Findex.json&ref=release%2Fstable'
+    const label = 'github:acme/plugins · HEAD:index.json'
+    const otherLabel = 'github:acme/plugins · release/stable:market/index.json'
+    const listing: ListingState = {
+      url, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url }, answered: INITIAL_QUERY, failure: null,
+    }
+    const { actions, set } = renderTab({ indexes: [{ url }, { url: other }], selected: url, listing })
+    openMenu(`Switch plugin index, currently ${label}`)
+    expect(screen.getByRole('menuitem', { name: label })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: otherLabel }))
+    expect(actions.select).toHaveBeenCalledWith(other)
+    set({ selected: other, listing: { ...listing, url: other, value: { ...LISTING, url: other } } })
+    const button = screen.getByRole('button', { name: `Switch plugin index, currently ${otherLabel}` })
+    expect(within(button).getByText(otherLabel)).toBeTruthy()
+  })
+
   it('opens an entry page with its source facts and actions, and returns to the list', () => {
-    const { install, openPackage } = renderTab()
+    const { install, openPackage, actions } = renderTab()
     fireEvent.click(card('dsh-a').getByRole('button', { name: 'View Alpha' }))
     const detail = within(document.querySelector('[data-market-detail="dsh-a"]') as HTMLElement)
+    expect(actions.loadDetail).toHaveBeenCalledWith({ url: A, name: 'dsh-a', version: '1.0.0', npm: true }, 'en')
+    expect(detail.getByRole('status', { name: en.detailLoading })).toBeTruthy()
     expect(detail.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
     expect(detail.getByText('dsh-a')).toBeTruthy()
-    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha market']) expect(detail.getByText(value)).toBeTruthy()
+    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha index']) expect(detail.getByText(value)).toBeTruthy()
     const homepage = detail.getByRole('link', { name: 'https://example.com/alpha#readme' })
     expect([homepage.getAttribute('href'), homepage.getAttribute('target'), homepage.getAttribute('rel')])
       .toEqual(['https://example.com/alpha#readme', '_blank', 'noopener noreferrer'])
@@ -297,6 +338,7 @@ describe('DiscoverSection', () => {
     fireEvent.click(detail.getByRole('button', { name: en.backToList }))
     fireEvent.click(card('dsh-b').getByRole('button', { name: 'View dsh-b' }))
     const git = within(document.querySelector('[data-market-detail="dsh-b"]') as HTMLElement)
+    expect(actions.loadDetail).toHaveBeenLastCalledWith({ url: A, name: 'dsh-b', version: '1.0.0', npm: false }, 'en')
     expect(git.queryByRole('link')).toBeNull()
     for (const value of ['https://github.com/o/r', COMMIT, 'packages/b', 'Themes']) expect(git.getByText(value)).toBeTruthy()
     fireEvent.click(git.getByRole('button', { name: 'View dsh-b in Installed' }))
@@ -316,7 +358,7 @@ describe('DiscoverSection', () => {
     expect(detail.getByRole('link', { name: 'https://git.example/o/c' }).closest('dd')?.querySelector('code')).toBeNull()
   })
 
-  it('lists every version on the entry page and installs the one chosen', () => {
+  it('lists every version on the entry page and installs the one chosen while none is installed', () => {
     const name = 'dsh-v'
     const versions = [
       release(name, '3.0.0-rc.1'),
@@ -328,7 +370,8 @@ describe('DiscoverSection', () => {
       name, versions, defaultVersion: '1.1.0', installation: { status: 'different-version', installedVersion: '1.0.0+build.1' },
       metadata: { keywords: [], labels: [], sortKeys: {} },
     }
-    const { install } = renderTab({ listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, entries: [multi] }, answered: INITIAL_QUERY, failure: null } })
+    const listing = (entry: MarketListingEntry): ListingState => ({ url: A, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, entries: [entry] }, answered: INITIAL_QUERY, failure: null })
+    const { install, set } = renderTab({ listing: listing(multi) })
     expect(card(name).getByText(/^1\.1\.0 · /)).toBeTruthy()
     fireEvent.click(card(name).getByRole('button', { name: `View ${name}` }))
     const list = within(screen.getByRole('list', { name: `Versions of ${name}` }))
@@ -337,16 +380,56 @@ describe('DiscoverSection', () => {
       .toEqual(['3.0.0-rc.1', '2.0.0', '1.1.0', '1.0.0+build.1'])
     expect(row('3.0.0-rc.1').getByText(en.versionPrerelease)).toBeTruthy()
     expect(row('2.0.0').getByText(en.versionIncompatible)).toBeTruthy()
-    expect(row('2.0.0').queryByRole('button')).toBeNull()
     expect(row('1.1.0').getByText(en.versionDefault)).toBeTruthy()
     expect(row('1.0.0+build.1').getByText(en.versionInstalled)).toBeTruthy()
     expect(row('1.0.0+build.1').queryByText(en.versionPrerelease)).toBeNull()
-    expect(row('1.0.0+build.1').queryByRole('button')).toBeNull()
+    // Installation never goes over an installed copy.
+    expect(list.queryByRole('button')).toBeNull()
+    set({ listing: listing({ ...multi, installation: { status: 'not-installed' } }) })
+    expect(row('2.0.0').queryByRole('button')).toBeNull()
     fireEvent.click(list.getByRole('button', { name: `Install ${name} 3.0.0-rc.1` }))
     const dialog = within(screen.getByRole('dialog'))
     expect(dialog.getByText('dsh-v@3.0.0-rc.1')).toBeTruthy()
     fireEvent.click(dialog.getByRole('button', { name: en.install }))
     expect(install).toHaveBeenCalledWith({ spec: 'dsh-v@3.0.0-rc.1', title: 'dsh-v', version: '3.0.0-rc.1' })
+  })
+
+  it('updates a Git copy to a newer Git version from its card and its version list through the Plugins page', () => {
+    const name = 'dsh-u'
+    const git = (version: string, update: boolean): MarketListingVersion => release(name, version, {
+      source: { type: 'git', url: 'https://git.example/o/u', commit: COMMIT }, install: { spec: `git+https://git.example/o/u.git#${version}` }, update,
+    })
+    const upgradable: MarketListingEntry = {
+      name, title: 'Upgrade', versions: [git('1.2.0', true), git('1.1.0', true), git('1.0.0', false), git('0.9.0', false)], defaultVersion: '1.2.0',
+      installation: { status: 'update-available', installedVersion: '1.0.0' }, metadata: { keywords: [], labels: [], sortKeys: {} },
+    }
+    const { install, update } = renderTab({ listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, entries: [upgradable] }, answered: INITIAL_QUERY, failure: null } })
+    fireEvent.click(card(name).getByRole('button', { name: 'Update Upgrade to 1.2.0' }))
+    expect(update).toHaveBeenLastCalledWith({ packageName: name, version: '1.2.0', spec: 'git+https://git.example/o/u.git#1.2.0' })
+    // The Plugins page confirms the update, so Discover opens no dialog of its own.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(card(name).getByRole('button', { name: 'View Upgrade' }))
+    const row = (version: string) => within(document.querySelector(`[data-market-version="${version}"]`) as HTMLElement)
+    fireEvent.click(row('1.1.0').getByRole('button', { name: 'Update Upgrade to 1.1.0' }))
+    expect(update).toHaveBeenLastCalledWith({ packageName: name, version: '1.1.0', spec: 'git+https://git.example/o/u.git#1.1.0' })
+    expect(row('1.0.0').queryByRole('button')).toBeNull()
+    expect(row('0.9.0').queryByRole('button')).toBeNull()
+    expect(within(document.querySelector('[data-market-detail="dsh-u"]') as HTMLElement).getAllByRole('button', { name: /^Update Upgrade to 1\.2\.0$/ })).toHaveLength(2)
+    expect(install).not.toHaveBeenCalled()
+  })
+
+  it('offers the newest stable update on the card when the default version does not update the Git copy', () => {
+    const name = 'dsh-w'
+    const git = (version: string, update: boolean): MarketListingVersion => release(name, version, {
+      source: { type: 'git', url: 'https://git.example/o/w', commit: COMMIT }, install: { spec: `git+https://git.example/o/w.git#${version}` }, update,
+    })
+    const moved: MarketListingEntry = {
+      name, versions: [git('2.0.0-rc.1', true), release(name, '1.3.0'), git('1.2.0', true), git('1.0.0', false)], defaultVersion: '1.3.0',
+      installation: { status: 'update-available', installedVersion: '1.0.0' }, metadata: { keywords: [], labels: [], sortKeys: {} },
+    }
+    const { update } = renderTab({ listing: { url: A, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, entries: [moved] }, answered: INITIAL_QUERY, failure: null } })
+    fireEvent.click(card(name).getByRole('button', { name: `Update ${name} to 1.2.0` }))
+    expect(update).toHaveBeenLastCalledWith({ packageName: name, version: '1.2.0', spec: 'git+https://git.example/o/w.git#1.2.0' })
   })
 
   it('marks exempted versions and offers no version of a bundle DSH provides', () => {
@@ -415,14 +498,14 @@ describe('DiscoverSection', () => {
     expect(screen.getByRole('status', { name: en.loading })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.refresh }).hasAttribute('disabled')).toBe(true)
     set({ listing: { url: B, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url: B, entries: [], total: 0 }, answered: INITIAL_QUERY, failure: null } })
-    expect(screen.getByRole('button', { name: 'Switch plugin market, currently b.example' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Switch plugin index, currently b.example' })).toBeTruthy()
   })
 
   it('manages sources in a dialog with the trust notice and each refusal', () => {
     const { actions, set } = renderTab({ editing: true, draft: 'https://c.example/index.json', indexes: [{ url: A, title: LISTING.title }, { url: B, error: 'HTTP 404' }] })
     const dialog = within(screen.getByRole('dialog', { name: en.sourcesTitle }))
     expect(dialog.getByText(en.sourcesTrust)).toBeTruthy()
-    expect(dialog.getByText('Alpha market')).toBeTruthy()
+    expect(dialog.getByText('Alpha index')).toBeTruthy()
     expect(dialog.getByText(B)).toBeTruthy()
     expect(dialog.getByText('HTTP 404')).toBeTruthy()
     fireEvent.click(dialog.getByRole('button', { name: `Remove ${B}` }))
@@ -433,6 +516,7 @@ describe('DiscoverSection', () => {
     expect(actions.addSource).toHaveBeenCalledOnce()
     for (const [failure, text] of [
       [{ kind: 'invalid' }, en.sourceInvalid], [{ kind: 'duplicate' }, en.sourceDuplicate],
+      [{ kind: 'invalid-git' }, en.sourceInvalidGit],
       [{ kind: 'unavailable' }, en.sourceUnavailable], [{ kind: 'other', reason: 'boom' }, en.sourceFailed],
     ] as const) {
       set({ sourceFailure: failure })
@@ -446,9 +530,30 @@ describe('DiscoverSection', () => {
     expect(screen.queryByRole('list', { name: en.sourcesLabel })).toBeNull()
   })
 
+  it('shows Git file options only for a recognized repository address', () => {
+    const { actions, set } = renderTab({ editing: true, draft: 'https://git.example/acme/plugins' })
+    const dialog = within(screen.getByRole('dialog', { name: en.sourcesTitle }))
+    const address = dialog.getByRole('textbox', { name: en.sourceUrl })
+    const add = dialog.getByRole('button', { name: en.addSource })
+    expect(dialog.queryByRole('combobox')).toBeNull()
+    expect(add.hasAttribute('disabled')).toBe(false)
+    expect(dialog.queryByRole('textbox', { name: en.sourcePath })).toBeNull()
+    expect(dialog.queryByRole('textbox', { name: en.sourceRef })).toBeNull()
+    set({ draft: 'git@github.com:acme/plugins.git' })
+    expect(add.hasAttribute('disabled')).toBe(false)
+    expect(dialog.getByRole('textbox', { name: en.sourceUrl })).toBe(address)
+    fireEvent.change(dialog.getByRole('textbox', { name: en.sourcePath }), { target: { value: 'market/index.json' } })
+    fireEvent.change(dialog.getByRole('textbox', { name: en.sourceRef }), { target: { value: 'main' } })
+    expect(actions.editSourceOptions).toHaveBeenNthCalledWith(1, { path: 'market/index.json' })
+    expect(actions.editSourceOptions).toHaveBeenNthCalledWith(2, { ref: 'main' })
+    set({ draft: 'https://raw.githubusercontent.com/acme/plugins/main/index.json' })
+    expect(dialog.queryByRole('textbox', { name: en.sourcePath })).toBeNull()
+    expect(dialog.queryByRole('textbox', { name: en.sourceRef })).toBeNull()
+  })
+
   it('renders the Chinese copy and dates', () => {
     renderTab({}, zh)
-    expect(screen.getByRole('button', { name: '切换插件市场，当前为 甲市场' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '切换插件索引，当前为 甲索引' })).toBeTruthy()
     expect(card('dsh-a').getByText('甲')).toBeTruthy()
     expect(card('dsh-a').getByText(/^1\.0\.0 · Jane · 2026年9月/)).toBeTruthy()
     expect(card('dsh-b').getByText(zh.statusInstalled)).toBeTruthy()

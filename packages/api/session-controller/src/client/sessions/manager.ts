@@ -2,7 +2,7 @@
 
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
-import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
+import type { SessionProjectionMap, SessionProjectionViewValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {
   SessionControlBaseline,
@@ -58,9 +58,14 @@ export interface SessionListSnapshot {
 
 }
 
-/** Shared projection values and the lifecycle of their explicit baseline read. */
+/**
+ * Every projection value the store currently holds, with the summary mark
+ * stripped, and the lifecycle of its explicit baseline read. This is the full
+ * attached-Session set, not a list row's summary contract (see
+ * `SessionListEntry.projectionValues`).
+ */
 export interface SessionProjectionSnapshot {
-  readonly values: Readonly<Partial<SessionProjectionMap>>
+  readonly values: Readonly<Partial<SessionProjectionViewValues>>
   readonly state: 'idle' | 'loading' | 'ready' | 'migration-required' | 'error'
   readonly error: RemoteFailure | null
 }
@@ -142,12 +147,7 @@ export class SessionManager {
       throw new Error(`sessions.retain: unknown session ${id}`)
     }
     if (address !== undefined) this.addresses.set(id, address)
-    this.sessions.get(id)?.configureSubagent(
-      address,
-      address === undefined
-        ? undefined
-        : this.agentAvailable(address.parentSessionId),
-    )
+    this.sessions.get(id)?.configureSubagent(address)
     return id
   }
 
@@ -271,14 +271,8 @@ export class SessionManager {
 
   private createSession(sessionId: SessionId): Session {
     const address = this.addresses.get(sessionId)
-    const parentAvailable = address === undefined
-      ? undefined
-      : this.agentAvailable(address.parentSessionId)
     return new Session(sessionId, this.remote, {
-      ...(address === undefined ? {} : {
-        address,
-        ...parentAvailable === undefined ? {} : { parentAvailable },
-      }),
+      ...(address === undefined ? {} : { address }),
       // The sender's local first-send flip mirrors into the list row so the
       // session surfaces (lists filter on blank) before any host frame lands.
       onEngaged: (engaged) => {
@@ -395,18 +389,6 @@ export class SessionManager {
     return operation
   }
 
-  private agentAvailable(sessionId: SessionId): boolean | undefined {
-    return this.summaries.find(summary => summary.sessionId === sessionId)?.agentAvailable
-      ?? (this.listPhase === 'ready' ? false : undefined)
-  }
-
-  private updateParentAvailability(): void {
-    for (const [childId, address] of this.addresses) {
-      const available = this.agentAvailable(address.parentSessionId)
-      if (available !== undefined) this.sessions.get(childId)?.handleSubagentParentAvailable(available)
-    }
-  }
-
   // ---- List API ----
 
   /** Full refresh via session.list (single-flight within one Host generation). */
@@ -441,7 +423,7 @@ export class SessionManager {
           for (const sessionId of this.engagedSessions) this.pruneEngagement(sessionId, retained)
           this.listState = 'idle'
           this.listPhase = 'ready'
-          this.updateParentAvailability()
+
           // Resident Sessions and list rows share one display blank, reconciled with the metadata projection.
           for (const s of this.summaries) {
             const session = this.sessions.get(s.sessionId)
@@ -548,7 +530,7 @@ export class SessionManager {
    * immediately (same synchronous-addressability guarantee as create).
    * Blankness starts provisionally true so the authoritative Host summary can
    * preserve it or lower it after an exact cut before the first `turn/start`;
-   * lineage rides parentSessionId. A child published before Workspace
+   * the fork has no durable source relationship. A child published before Workspace
    * attachment fails is also reconciled into the list.
    * @param opts - source session, optional exact inclusive boundary seq, and permission to start migration.
    * @returns the fork result (the child session id).
@@ -568,7 +550,6 @@ export class SessionManager {
     if (childId !== undefined) {
       this.recordMutation({ kind: 'placeholder', summary: { agentAvailable: true,
         sessionId: childId, updatedAt: Date.now(), running: false, blank: true,
-        parentSessionId: opts.sessionId,
         ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
       } })
     }
@@ -595,7 +576,6 @@ export class SessionManager {
    */
   private mergeSummary(summary: SessionSummary): void {
     this.recordMutation({ kind: 'upsert', summary })
-    this.updateParentAvailability()
   }
 
   /** Apply immediately and retain for replay when a list response is in flight. */
@@ -638,15 +618,17 @@ export class SessionManager {
   // ---- Live control and Host-event sinks ----
 
   /**
-   * Apply a complete control baseline or one later replacement frame.
-   * @param frame - baseline or live control replacement from Session Controller.
+   * Apply a complete control baseline or one later per-event projection frame.
+   * @param frame - baseline or live per-event projection change from Session Controller.
    */
   handleControlFrame(frame: SessionControlFrame): void {
     if (frame.type === 'baseline') {
       this.replaceControlBaseline(frame.value)
       return
     }
-    this.projectionStore(frame.sessionId).apply(frame.key, frame.value, SessionSeq(frame.seq))
+    const store = this.projectionStore(frame.sessionId)
+    const seq = SessionSeq(frame.seq)
+    for (const change of frame.changes) store.apply(change.key, change.val, seq)
     this.notifier.markDirty()
   }
 
@@ -715,11 +697,6 @@ export class SessionManager {
     this.projectionInflight.get(sessionId)?.controller.abort()
     this.projectionInflight.delete(sessionId)
     this.projectionLoads.delete(sessionId)
-    for (const [childId, address] of this.addresses) {
-      if (address.parentSessionId === sessionId) {
-        this.sessions.get(childId)?.handleSubagentParentAvailable(false)
-      }
-    }
   }
 
   /**
@@ -730,7 +707,6 @@ export class SessionManager {
   handleSessionStatus(sessionId: SessionId, running: boolean): void {
     if (!this.disposed && running) this.engagedSessions.add(sessionId)
     this.recordMutation({ kind: 'status', sessionId, running, agentAvailable: true })
-    this.updateParentAvailability()
     this.sessions.get(sessionId)?.handleRunning(running)
   }
 

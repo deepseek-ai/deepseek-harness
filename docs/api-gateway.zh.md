@@ -14,7 +14,7 @@
 
 `@RemoteScope(key)` 表示先通过 `ctx.typert.contexts` 把 identity 解析为一个作用域 Context，再从该 Context 取得服务并调用方法。它适用于方法本身依赖作用域组合、而不需要显式接收 `Agent` 等对象的情形。
 
-`@Remote` 接受导出名或 `{ name?, mode?, resources? }`；`@RemoteScope(key, option?)` 的第二个参数接受导出名（如下文的 `@RemoteScope('agent', 'current')`）或 `{ name?, resources? }`。`resources` 按资源种类给出读取函数，返回一次调用所访问资源的身份，供访问控制使用；每个读取函数以方法的 wire 参数作为自身参数，类型从被装饰方法推断。多数方法不声明读取函数，因为 Gateway 还会从声明了 `resource` 的 lookup 参数与作用域 Context 以及 `typert.resources` 中的默认字段读取身份；[Typert 子系统](subsystems/typert.zh.md)负责该顺序。
+`@Remote` 接受导出名或 `{ name?, mode?, resources? }`；`@RemoteScope(key, option?)` 的第二个参数接受导出名（如下文的 `@RemoteScope('agent', 'current')`）或 `{ name?, resources? }`。`resources` 按资源种类给出读取函数，返回一次调用所访问资源的身份，供访问控制使用；每个读取函数以方法的 wire 参数作为自身参数，类型从被装饰方法推断。多数方法不声明读取函数，因为 Gateway 还会从声明了 `resource` 的 lookup 参数与作用域 Context 以及 `typert.resources` 中的默认字段或 resolver 读取身份；[Typert 子系统](subsystems/typert.zh.md)负责该顺序。
 
 服务通常继承 `TypertRemoteService`，让 Cordis 服务 key 与默认 Remote namespace 在构造器中显式绑定。已有其他基类的服务可以改为声明 `readonly typertRemote = bindTypertRemote(this, serviceKey)`；两种方式都会留下可检查的公开 binding，不依赖编译器向构造函数注入 symbol。
 
@@ -101,11 +101,11 @@ API Gateway 包同时拥有 Host dispatcher 与 Client Remote endpoint 两个对
 
 ## 严格生成流水线
 
-根构建依次编译并打包 Host face、Client face，再构建 Web 壳层（[步骤顺序](development.zh.md#typescript-project-layout)）。Host 阶段先编译 Host 包 reference，再运行 `tsdown --env.DSH_BUILD_FACE host`；Typert generator 由正常 Host Project Reference 图编译，并在这次 tsdown 中以 Host aggregate 为唯一 `ts.Program` 种子运行。Client 阶段随后编译 Client 包 reference 并运行 `tsdown --env.DSH_BUILD_FACE client`，使用刚生成的 Remote Client 声明和运行时贡献，但不再次启动 Typert。
+根构建首先通过 `scripts/generate-typert.ts` 运行仅源码的 Host 分析，再编译并打包 Host 与 Client face，最后构建 Web（[步骤顺序](development.zh.md#typescript-project-layout)）。生成器以 Host aggregate 为唯一 `ts.Program` 种子，在包编译前写出 Remote 声明。Host tsdown 阶段转换装饰器，但不重复生成元数据；Client 阶段消费这些声明与运行时贡献。
 
 两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`（[构建顺序](development.zh.md#typescript-project-layout)），且都只打包 `lib/types` 中由对应 tsc 阶段发射的 JavaScript。根配置不扫描 Client 产物、不按包名分类，也不向 tsdown 传维护式 filter；各包的本地配置根据 `DSH_BUILD_FACE` 返回当前阶段的入口。普通 Client 插件在 Client 阶段一起生成 Node loader 入口与 browser bundle。
 
-`api/remotes`、`api/gateway`、`api/session-controller` 与 `api/workspace-controller`（外加 `client/connection`）都拆分 TypeScript face。`api/remotes` 的 Client project 依赖业务包在 Host tsdown 中生成的 `/remote` 声明；根 aggregate 与直接消费方必须分别引用各拆分包自己的 `tsconfig.host.json` 或 `tsconfig.client.json`。`api-remotes` 的 `clientBundle(..., { hostPhase: true })` 让 Host 入口在 Host tsdown 中生成，让 Client tsdown 只生成 browser 入口。Agent/Session lookup 策略位于 `@deepseek-ai/dsh-api-session-controller`，而非 `api-remotes`。
+`api/remotes`、`api/gateway`、`api/session-controller` 与 `api/workspace-controller`（外加 `client/connection`）都拆分 TypeScript face。`api/remotes` 的 Client project 依赖业务包在包编译前生成的 `/remote` 声明；根 aggregate 与直接消费方必须分别引用各拆分包自己的 `tsconfig.host.json` 或 `tsconfig.client.json`。`api-remotes` 的 `clientBundle(..., { hostPhase: true })` 让 Host 入口在 Host tsdown 中生成，让 Client tsdown 只生成 browser 入口。Agent/Session lookup 策略位于 `@deepseek-ai/dsh-api-session-controller`，而非 `api-remotes`。
 
 每个贡献业务包把生成文件写入自己的 `lib/`，而不是源码目录：
 
@@ -159,7 +159,7 @@ pnpm run dev:web
 pnpm run build:lib
 ```
 
-运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 的构建 lane 与发布构建则在 Client tsc 之前的 Host bundle 阶段生成它。
+运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 的构建 lane 与发布构建同样在包编译之前使用仅源码生成。
 
 <a id="boundaries"></a>
 

@@ -1,0 +1,3 @@
+- name: '@deepseek-ai/dsh-session'
+- name: '@deepseek-ai/dsh-session-projection'
+- name: './legacy-plugin.ts'

@@ -16,13 +16,14 @@ export const inject = ['agents', 'subagentModelSelection']
 export function apply(ctx: Context, config: Config): void {
   const install = (agent: Agent): void => {
     agent.ctx.inject(ToolSubagent.inject, (runtimeCtx) => {
-      return ToolSubagent.apply(runtimeCtx, {
+      ToolSubagent.apply(runtimeCtx, {
         provider: config.provider,
-        modelSelectionSettings: true,
+        modelSelection: true,
+        modelDiscovery: true,
         ...(config.toolName === undefined ? {} : { toolName: config.toolName }),
         ...(config.agentOptions === undefined ? {} : { agentOptions: config.agentOptions }),
         ...(config.maxDepth === undefined ? {} : { maxDepth: config.maxDepth }),
-      }, agent.session)
+      })
     })
   }
   ctx.on('agent/created', ({ agent }) => { install(agent) })

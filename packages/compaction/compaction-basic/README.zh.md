@@ -43,7 +43,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-command-compact'
 ```
 
-你可以通过观察会话越过本来会溢出的位置继续工作、以及运行 `/compact` 立即压缩一次来确认成功。如果组合缺少 LLM、会话存储或 token 测量，插件会加载失败。同一个后端可以服务上下文大小不同的模型；用按模型覆盖为每条路由设置各自的阈值与保留：
+你可以通过观察会话越过本来会溢出的位置继续工作、以及运行 `/compact` 立即压缩一次来确认成功。如果组合缺少 LLM、会话存储、会话投影或 token 测量，插件会加载失败。同一个后端可以服务上下文大小不同的模型；用按模型覆盖为每条路由设置各自的阈值与保留：
 
 ```yaml
 - name: '@deepseek-ai/dsh-compaction-basic'
@@ -54,6 +54,8 @@ kind: "package-reference"
       - provider: local
         model: small-context
         thresholdRatio: 0.7
+        headroomTokens: 4096
+        maxTokens: 4096
         retainTokens: 2048
 ```
 
@@ -67,8 +69,8 @@ kind: "package-reference"
 | `headroomTokens` | `65536` | 路由请求输出预留之外的额外压力余量；必须为非负整数。 |
 | `retainRatio` | `0.16` | 以 `W − O` 的一部分表示逐字保留的近期对话；与 `retainTokens` 互斥。 |
 | `retainTokens` | — | 逐字保留的近期对话绝对预算；与 `retainRatio` 互斥，并且必须低于已解析阈值。 |
-| `summarizationProvider` | `''` | 与 `summarizationModel` 一起设置；空对使用最新已路由请求目标，再回退到 `AgentOptions` 对。 |
-| `summarizationModel` | `''` | 与 `summarizationProvider` 一起设置；空对使用最新已路由请求目标，再回退到 `AgentOptions` 对。 |
+| `summarizationProvider` | `''` | 与 `summarizationModel` 一起设置；空对使用产生最新助手消息的模型，再回退到最新已路由请求目标，最后回退到 `AgentOptions` 对。 |
+| `summarizationModel` | `''` | 与 `summarizationProvider` 一起设置；空对使用产生最新助手消息的模型，再回退到最新已路由请求目标，最后回退到 `AgentOptions` 对。 |
 | `maxTokens` | `headroomTokens`（`65536`） | 正数摘要输出上限，包含提供方计入的推理 token。显式模型上限覆盖显式全局上限；否则跟随解析后的余量。 |
 | `compactionRetries` | `1` | 压力仍高于阈值时，在首次压缩后进行的额外尝试次数。 |
 | `maxOverflowRetries` | `1` | 已确认上下文窗口溢出后的最大重试次数；`0` 只禁用恢复。 |
@@ -80,6 +82,12 @@ kind: "package-reference"
 ### 压缩运行时会发生什么
 
 最旧的平衡范围会被替换为一条摘要消息，近期尾部保持逐字不变；对话从摘要继续。操作会报告压缩了多少历史项以及估算释放的 token 数。如果没有任何内容可以安全压缩——例如整个对话就是一个不可分单元——则不会有任何改变，也不会向会话日志写入任何内容。如果没有模型可以撰写摘要（既未配置目标，也还没有已路由请求），压缩会失败并给出清晰错误，提示你配置摘要提供方与模型，或先路由一次请求。
+
+### 切换模型
+
+在提供方或模型发生变化的请求写入日志前，自动压缩会按目标模型的容量、输出预留和压力策略测量现有历史。会话已有助手消息时，每次摘要（包括 `/compact` 和溢出恢复）都发给产生最新一条助手消息的模型，并使用该模型的摘要设置；首条助手消息之前，摘要使用最新请求头，再回退到 `AgentOptions` 对；新选中的模型在给出回答之前不会被使用，显式配置的摘要目标仍然优先。因此，当估算放行了目标模型、而它的第一次请求因过长被拒绝时，溢出恢复会用上一个给出回答的模型生成摘要，再重试目标请求。只有历史降到目标阈值以下，才会继续目标请求。失败会报告 `MODEL_SWITCH_COMPACTION_FAILED`，并保留原请求头；可选择更大窗口的模型，或修正报告的原因后重试。即使后续尝试失败，已经完成的裁剪或压缩仍保留在会话中。检查在下次请求准备时执行，`auto: false` 会禁用它。
+
+即使历史很短，目标也必须有已注册的适配器、已声明的上下文容量和有效的压力预算。默认 65,536 token 的余量无法适配同等或更小的窗口；请按上例为该路由设置 `modelPolicies[].headroomTokens`。迁移方法见[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/model-switch-compaction/guide.zh.md)。
 
 ### 通过 /compact 按需压缩
 
@@ -103,20 +111,22 @@ kind: "package-reference"
 
 该后端建立在四项承诺之上：
 
-- **一个测量服务为每个决策定价。** 单例 `ctx.tokenMeter` 会在同一个已消费日志 revision 上测量最新规范已记录 envelope 与当前表层。路由适配器声明请求图片定价时，meter 会将其应用于图片历史。压力、近期尾部保留、范围选择与缩减验证使用同一套路由定价的节点数值；已记录的替换影子价仍使用与路由无关的启发式规则，使纯投影 fold 保持一致。
+- **一个测量服务为每个决策定价。** 单例 `ctx.tokenMeter` 会在同一个已消费日志 revision 上测量最新规范已记录 envelope 与当前表层。路由适配器声明请求图片定价时，meter 会将其应用于图片历史。模型切换的压力、保留与范围选择使用目标定价；区域缩减验证使用上次已提交路由；已记录的替换影子价仍使用与路由无关的启发式规则，使纯投影 fold 保持一致。
 - **日志记录的标记对就是事务。** 所有入口点共享一个先记录标记的区域事务：验证范围与活动锁，同步追加 `compaction/start`，准备并等待摘要，重新验证，再追加 `compaction/summary` 与替换，最后恰好进行一次闭合尝试。自动调用与显式范围调用要求数字标识的开放轮次归属与整个表层稳定；`compactNow()` 会预留空闲接纳，使用 `turn: null`，允许所选 span 之外追加仅追加上下文，flush 每次已闭合尝试，并在 `finally` 中释放接纳预留。
 - **摘要复用提供方的热前缀。** 逐字回放 surface 节点 0 处 `system/message` 所承载的系统提示词、上次已路由请求的工具与已遮蔽区域消息，使辅助调用成为会话的真正前缀，因此只有尾随指令与摘要输出未缓存。
 - **`summarize()` 是唯一的子类钩子。** 基于模板或远程摘要器的子类可以覆盖它，同时压力、保留、被引用的源事件、缩减验证与已遮蔽 token 计量仍由 token meter 负责。
 
 ### 自动触发与溢出恢复
 
+`agent/request` listener 等待路由 listener 选定目标，再在新 header 记入日志前检查其压力。它直接使用 `compactPressure`，因为 `compactIfNeeded` 读取的是已提交的 header；两条路径都通过 `summarize()` 生成摘要；它先读取最新助手消息上记录的路由，再读取已提交的 header，因为失败的请求已经替换了该 header。仅供宿主使用的会话投影 `compactionAnsweredRoute` 保存这对提供方／模型，因此恢复的会话从检查点读取它；插件在构造时注册该投影，卸载时释放。
+
 当 `auto: true` 时，串行 `agent/pre-step` listener 会在请求派生前检查压力：它通过 `ctx.tokenMeter` 为最新持久路由请求 envelope 定价，当压力越过路由模型的阈值时，先剪枝，再在保留已定价近期尾部的同时摘要最旧的平衡范围。每个选定范围都从第一个不是 `system/message` 的 surface 节点开始，因此位于 surface 节点 0 的系统提示词永不会被遮蔽；由历史内提示词更新追加的后续 `system/message` 是普通历史，范围可以遮蔽它，agent loop（智能体循环）的投影随后会在二者文本不同时用当前提示词替换节点 0（[决策规则](../../core/agent-loop/README.zh.md#understand-the-implementation)）。`agent/request-error` listener 响应提供方确认的 `CONTEXT_WINDOW_EXCEEDED`：它绕过常规阈值与保留策略，尝试一次最大平衡头部缩减，并且只在表层替换 generation 前进后才授权重试。取消全程保持最终决定权。
 
-压力策略从拥有持久路由的适配器解析容量。容量缺失、输出预留与余量耗尽窗口，或保留预算不小于阈值时，手动压力路径会抛出目标特定配置错误。自动 listener 会对该精确目标警告一次，并在配置修正前跳过主动压缩；提供方确认溢出后的恢复仍然可用。
+压力策略从拥有持久路由的适配器解析容量。容量缺失、输出预留与余量耗尽窗口，或保留预算不小于阈值时，手动压力路径会抛出目标特定配置错误。`agent/pre-step` listener 会对该精确目标警告一次，并继续本轮；提供方确认溢出后的恢复仍然可用。模型切换检查则以 `MODEL_SWITCH_COMPACTION_FAILED` 拒绝请求，容量或适配器查找失败时亦如此。
 
 ### 摘要机制
 
-直接 `ctx.llm.stream()` 调用使用已配置的提供方／模型对与上限，回退到最新已记录请求目标，然后再回退到 `AgentOptions` 对，而不运行仅用于 agent loop 的 `agent/request` 扩展点。该调用将 surface 节点 0 处派生的 `system/message` 作为 `messages` 的首项回放，后接已遮蔽区域消息（包括位于其 surface 位置的被遮蔽历史内 `system/message`），并提供 header 的有效工具供路由特定投影使用。所选适配器必须解析回放消息中的图片引用或明确拒绝它们。调用将压缩指令作为最后一条 user 消息追加，在投影允许时保留提供方的热前缀 cache。空内容系统头节点不贡献消息，但仍处于压缩范围之外。最终指令是冻结的 `RequestUserInput`，不含持久身份或来源；回放历史和持久化检查点仍然使用持久消息。调用将 `GenerateOptions.purpose` 设为 `compaction`；只有返回文本进入检查点，推理与工具调用都会被排除。图片输出会以 `UNSUPPORTED_CONTENT` 失败，而不是消失。替换 user 消息用 `<compacted-summary>` 标签框定摘要；原始摘要保留在 `compaction/summary` 事件上。 调用还携带 `Session.toolHistory()`，供运行时投影延迟和保留定义；若前缀缺少更新消息，则使用有效声明且不发送 developer 更新。
+直接 `ctx.llm.stream()` 调用使用已配置的提供方／模型对与上限，回退到产生最新助手消息的模型，再回退到最新已记录请求目标，最后回退到 `AgentOptions` 对，而不运行仅用于 agent loop 的 `agent/request` 扩展点。该调用将 surface 节点 0 处派生的 `system/message` 作为 `messages` 的首项回放，后接已遮蔽区域消息（包括位于其 surface 位置的被遮蔽历史内 `system/message`），并提供最新请求 header 的有效工具供路由特定投影使用；摘要发给与该 header 不同的模型时也是如此。所选适配器必须解析回放消息中的图片引用或明确拒绝它们。调用将压缩指令作为最后一条 user 消息追加，在投影允许时保留提供方的热前缀 cache。空内容系统头节点不贡献消息，但仍处于压缩范围之外。最终指令是冻结的 `RequestUserInput`，不含持久身份或来源；回放历史和持久化检查点仍然使用持久消息。调用将 `GenerateOptions.purpose` 设为 `compaction`；只有返回文本进入检查点，推理与工具调用都会被排除。图片输出会以 `UNSUPPORTED_CONTENT` 失败，而不是消失。替换 user 消息用 `<compacted-summary>` 标签框定摘要；原始摘要保留在 `compaction/summary` 事件上。 调用还携带 `Session.toolHistory()`，供运行时投影延迟和保留定义；若前缀缺少更新消息，则使用有效声明且不发送 developer 更新。
 
 ### 区域事务
 
@@ -126,17 +136,20 @@ kind: "package-reference"
 
 ### 配置解析
 
-`resolveConfig` 验证并分离默认值，`resolveTargetPolicy` 合并精确的提供方／模型覆盖，`resolveCompactSpec` 要求显式传入适配器容量与路由请求的输出预留，以解析触发阈值和保留预算。预留取自生效信封的 `maxTokens`，否则回退到适配器默认值，再回退到零。策略解析绝不咨询模型发现（`listModels()`）；只有持久路由的容量才重要。
+`resolveConfig` 验证并分离默认值，`resolveTargetPolicy` 合并精确的提供方／模型覆盖，`resolveCompactSpec` 要求显式传入适配器容量与路由请求的输出预留，以解析触发阈值和保留预算。预留取自生效信封的 `maxTokens`，否则回退到适配器默认值，再回退到零。策略解析绝不咨询模型发现（`listModels()`）；容量来自持久路由，切换模型时则来自拟使用的目标。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`BasicCompactionEngine`、自动 listener、入口点分发 |
+| [`src/answered-route.ts`](src/answered-route.ts) | 仅供宿主使用的投影，保存最新助手消息上记录的提供方／模型 |
 | [`src/region.ts`](src/region.ts) | 保留选择与共享的先记录标记压缩事务 |
 | [`src/summarizer.ts`](src/summarizer.ts) | 默认 `ctx.llm.stream()` 摘要、检查点框定、安全摘要投影 |
 | [`src/config.ts`](src/config.ts) | 加载时验证与路由模型策略解析 |
 | [`src/types.ts`](src/types.ts) | `BasicCompactionConfig` 与已解析策略词汇 |
+
+包根入口的类型声明将 `compaction` 添加到 `LlmRequestPurposeMap`。直接构造压缩请求的调用方使用 `import type {} from '@deepseek-ai/dsh-compaction-basic'`，使 `GenerateOptions.purpose` 包含该键。
 
 </details>
 
@@ -240,10 +253,13 @@ Rules:
 这些限制说明自动压缩何时不合适，或何时需要特别注意；它们是当前包约束。
 
 - **计量准确度取决于固定启发式规则**——可复用提供方用量缺失时，会回退到字符数加结构开销，而非精确的 token 化；只有在适配器声明了请求图片定价的路由上，图片出现处才携带提供方精确的视觉 token。
+- **不会跳过已不可用的回答模型**——即使产生最新助手消息的模型已无法处理请求（例如凭据被撤销或额度用尽），摘要仍发给它。在新选中的模型给出第一次回答之前，`/compact` 和压力压缩会在该模型上失败；请发送一条消息让新模型给出回答，或配置 `summarizationModel`。
+- **摘要请求不会拆分**——当摘要模型装不下所选范围加压缩指令时（例如它自己的历史已经溢出），摘要请求失败，不写入检查点；请配置窗口更大的 `summarizationModel`。
 - **溢出分类由适配器维护**——提供方措辞可能改变；两个 DeepSeek 适配器将可识别的上下文限制失败规范化为 `CONTEXT_WINDOW_EXCEEDED`。
 - **部分不可分单元与仅 envelope 溢出仍不在表层压缩范围内**——恢复无法缩减系统／工具／前缀、拆分不可分的非工具节点，或修复不可剪枝剩余部分仍超出窗口的工具单元。可选 pruner 可以缩减原本不可分工具对内的文本型工具结果主体。
 - **`compactRegion` 要求存在未结束的轮次**——在完全关闭的会话上手动调用会抛出异常（「no open turn」），而不是执行压缩。
-- **摘要失败会保留最新持久表层**——任何替换前，自动路径会记录警告，并携带完整超预算历史继续。如果剪枝已落地，后续摘要失败会从该持久剪枝表层继续。因达到 `maxTokens` 而发生的摘要截断（隐藏推理 token 可能会耗尽该额度）遵循同一规则。
+- **摘要失败会保留最新持久表层**——步前压力检查会记录警告并继续；模型切换压力检查会拒绝目标请求。两种失败都会保留已完成的剪枝与之前的检查点。因达到 `maxTokens` 而发生的摘要截断（隐藏推理 token 可能会耗尽该额度）遵循同一规则。
+- **跨模型图片定价可能拒绝有效摘要**——切换时按目标定价选择范围，但按已提交路由验证缩减。不同的图片价格可能使摘要未通过缩减验证，即使它能降低目标压力。
 
 <a id="dev-note"></a>
 ### 开发备注

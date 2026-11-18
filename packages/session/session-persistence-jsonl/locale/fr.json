@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistance du journal de session",
+    "description": "Enregistrez le journal de session en tant que fichier JSONL local pour une récupération et une lecture ultérieures."
+  }
+}

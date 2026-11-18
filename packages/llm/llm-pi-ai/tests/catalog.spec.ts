@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 const configurations = new WeakMap<Context, Awaited<ReturnType<typeof liveConfig>>>()
@@ -170,7 +171,7 @@ describe('hand-declared providers', () => {
       resolved.get(route)?.piProvider?.getModels() ?? []
 
     expect(modelsOf('acme-gateway')).toMatchObject([
-      { id: 'bare', contextWindow: 262_144, maxTokens: 32_768 },
+      { id: 'bare', contextWindow: 1_000_000, maxTokens: 128_000 },
       { id: 'sized', contextWindow: 8192, maxTokens: 512 },
     ])
     // The fallback is a guess, so a deployment whose gateway serves smaller
@@ -1075,7 +1076,7 @@ describe('compat switches', () => {
     await assemble(ctx, {
       provider: 'acme-gateway',
       model: 'acme-think',
-      reasoningEffort: ReasoningEffortId('high'),
+      reasoningEffort: brandString<ReasoningEffortId>('high'),
       system: 'you are a harness',
       messages: [],
     })

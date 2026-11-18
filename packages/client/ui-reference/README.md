@@ -33,11 +33,19 @@ A file closes completion as an atomic inline reference displayed with a file gly
 
 A session pick inserts an atomic inline reference whose hidden `ref` and clipboard representation is the canonical `@[label](dsh-session:…)` mention returned by the Host; its visible form is a chat-bubble glyph plus the session title. Sending carries the mention through `session.prompt`, and the session-reference service validates it and captures model context at `agent/pre-step`.
 
+The shared file context menu ends with **Add to chat**. It inserts the clicked file as the same kind of reference into that Session’s draft, preserves existing text and selection, and returns focus without sending. The reference captures the resolved absolute path; line numbers are not included. The action is disabled when the Session cannot be edited at the moment the menu opens or the path cannot use the mention grammar; a draft that becomes uneditable while the menu stays open makes the action report failure instead of inserting. An open menu updates its label and failure feedback when the interface language changes.
+
+### Sent file and folder mentions
+
+In sent messages, queued rows, and local echoes, an `@path` or `@"path"` token renders as a file or folder reference only after the Session's filesystem confirms the path exists. Until then, and for a path that does not exist, such as a hand-typed `@notes`, the original text stays verbatim; email addresses never match. A candidate picked and sent in the same Session during one page load counts as confirmed, so its echo shows the reference immediately.
+
 ### Failure behavior
 
 One unavailable or failed candidate domain yields no rows for that domain while the other still lists. A session-reference preparation failure occurs after prompt acceptance and terminates that agent turn.
 
 Click a file reference in the composer to preview its current contents in the right Sidebar. Quoted paths retain their spaces, and paths resolve in the composer Session. Folder and Session references retain their editing behavior.
+
+Interactive file chips obtain `useContextMenu` from their Session Slot and receive path resolution through the file-reference registration. Paths resolve against the live workspace root when the gesture begins; the Session’s working directory does not change reference meaning. Display-only chips install no context-menu handlers, and no Markdown provider is needed.
 
 -----
 
@@ -59,7 +67,7 @@ Candidate requests require an existing retained Client Session and share one tem
 
 File picks preserve the natural text defined by the shared `@path` grammar as the hidden serialized and clipboard form. Session picks use the canonical `@[label](dsh-session:…)` mention; serialization never reconstructs identity from the visible title.
 
-The plugin also registers file and folder matchers with [UserText](../ui-conversation/README.md#sent-user-text) and owns their `conversation.user.text.node` renderers. Each query returns the next complete reference at an original-text offset without file discovery; the shared evaluator resolves overlaps by source position. Interactive file nodes receive a Session-bound `openFile` injection; navigation failures keep the reference visible and offer a local retry/close dialog. Folder nodes remain labels.
+The plugin also registers file and folder matchers with [UserText](../ui-conversation/README.md#sent-user-text) and owns their `conversation.user.text.node` renderers. Each query returns the next complete candidate reference at an original-text offset without file discovery; the shared evaluator resolves overlaps by source position. Both node renderers subscribe to a Session-bound `pathPresence` keyed Hook backed by `workspaceFiles/stat`: a stat result or a `workspace-file/not-regular-file` failure (a directory, a symbolic link whatever it points to, or another non-regular entry) confirms the path, `workspace-file/not-found` rejects it, and any other failure leaves it unconfirmed for the next subscriber to retry. The plugin owns these answers, keeps one per Session and path, and aborts outstanding stats on disposal; a settling pick records its path as confirmed. Presence does not read the [`file` resource](../../api/workspace-files/README.md) through `useResource`: that provider keeps one Host change subscription open per Session and path while a reader is mounted, and a mention needs a single answer. Interactive file nodes also receive a Session-bound `openFile` injection; navigation failures keep the reference visible and offer a local retry/close dialog. Folder nodes remain labels.
 
 </details>
 
@@ -95,6 +103,7 @@ These limits define when the reference source cannot help; they are current pack
 
 - **Candidate failure is intentionally quiet** — one unavailable or failed Remote discovery call yields no rows for that domain. A session-reference preparation failure occurs after prompt acceptance and terminates that agent turn.
 - **No browser-side file scan** — Web completion requires a mounted Host `ctx.fileReferences` provider; the browser cannot fall back to its own filesystem.
+- **Sent references do not follow file changes** — a path's confirmed or missing answer lasts for the page load; creating or removing the path later changes how its mentions render only after reload.
 - **Session search remains metadata-only** — discovery filters session id, cwd, and the latest log-backed title through `ctx.sessionReferenceResolver`; message bodies and full transcripts are not searched.
 
 <a id="dev-note"></a>

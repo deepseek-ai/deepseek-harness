@@ -23,19 +23,65 @@
 - id: hmr
   disabled: true
 
-# The packaged carrier supplies a default; DSH_PRIMARY_RUNTIME overrides it,
-# including an empty-string opt-out. Each row can be patched independently.
+- id: tool-plugin-manager
+  disabled: false
+
+# DSH_PRIMARY_RUNTIME names the primary runtime; the packaged launcher fills it
+# from its download cache when unset, and an empty value opts out. Each row can
+# be patched independently. Office skills and the Office tools always load, and
+# the skills use their packaged assets. With a primary runtime the skills select
+# `workspace-dependencies` and use its Python environment; without one they
+# select `user` and direct the model to the user's Python.
 - insert:
+    - id: office-kit
+      name: '@deepseek-ai/dsh-office-kit'
+      config:
+        outputDirectory: !!js dshHomePath('office-kit', 'outputs')
+
+    # The Office tools stay registered without Kit; calls report the service's unavailable error.
+    - id: tool-office
+      name: '@deepseek-ai/dsh-tool-office'
+
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
-      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+      disabled: !!js "!process.env.DSH_PRIMARY_RUNTIME"
       config:
-        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
+        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? '')"
 
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
-      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) && !process.env.DSH_BUNDLED_OFFICE_CLI"
       config:
-        assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS ?? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', '..', 'office-skills')"
-        cli: !!js "process.env.DSH_BUNDLED_OFFICE_CLI === '' ? false : process.env.DSH_BUNDLED_OFFICE_CLI"
-        node: !!js "process.env.DSH_BUNDLED_OFFICE_NODE ?? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')"
+        pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
+
+# Share native desktop tools and model context without starting a Web server.
+- insert:
+    - id: connection
+      name: '@deepseek-ai/dsh-client-connection'
+
+    - id: file-upload
+      name: '@deepseek-ai/dsh-client-file-upload'
+
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
+      inject: [sdkSessionActivation]
+
+    - id: time-context
+      name: '@deepseek-ai/dsh-time-context'
+
+    - id: tool-schedule
+      name: '@deepseek-ai/dsh-tool-schedule'
+
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
+
+    - id: present
+      name: '@deepseek-ai/dsh-tool-present'
+
+    - id: file-reference-local
+      name: '@deepseek-ai/dsh-file-reference-local'
+
+    - id: deliverable-file-references
+      name: '@deepseek-ai/dsh-deliverable-file-references'

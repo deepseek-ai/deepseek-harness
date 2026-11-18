@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK プロファイル",
+    "description": "dsh-base 上で標準入出力の JSON-RPC とプロセスのライフサイクル管理を提供します。"
+  }
+}

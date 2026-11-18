@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-23-store-scoped-image-reads.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-23-store-scoped-image-reads.md
+/agent-note-image-reads-use-attachment-store-access:
+  en: 31c8a0d9016d99af
+  zh: 05db308dec85db67
+/agent-note-image-reads-use-attachment-store-access/problem:
+  en: ff8886cfa4634163
+  zh: 46dfdd50638b64c2
+/agent-note-image-reads-use-attachment-store-access/decision:
+  en: 439a3277ee3b169d
+  zh: c9f1e10254850844
+/agent-note-image-reads-use-attachment-store-access/alternatives-considered:
+  en: 0c7a8319c0c91dc2
+  zh: 6b7b58b142839571
+/agent-note-image-reads-use-attachment-store-access/consequences:
+  en: a46c3d951077ec7d
+  zh: 30a0cc5bcb681a21
+/agent-note-image-reads-use-attachment-store-access/verification:
+  en: 89603b3a4c3e12df
+  zh: f1b01d166f399f87

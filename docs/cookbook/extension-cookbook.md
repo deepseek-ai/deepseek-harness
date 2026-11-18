@@ -91,6 +91,49 @@ export function apply(ctx: Context) {
 }
 ```
 
+## A forge review extension
+
+Change request review opens to plugins through the [forge extension API](../subsystems/forge.md#extension-api). A Host plugin registers a filter lens, which keeps some of the files a changes view shows and names the lines it is about:
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ForgeLensId } from '@deepseek-ai/dsh-experimental-client-ui-forge'
+
+export const name = 'exports-lens'
+export const inject = ['forgePanel']
+
+export function apply(ctx: Context) {
+  // An effect of this plugin's fiber: unloading the plugin withdraws the lens and aborts its runs.
+  ctx.forgePanel.registerLens({
+    id: brandString<ForgeLensId>('example/exports'),
+    version: '1',
+    async classify(input, signal) {
+      const files: Record<string, { ranges: { old: []; new: { start: number; end: number }[] } }> = {}
+      for (const file of input.files) {
+        const lines = (await input.text('new', file.path, signal))?.split('\n') ?? []
+        const ranges = lines.flatMap((line, at) => line.startsWith('export') ? [{ start: at + 1, end: at + 1 }] : [])
+        if (ranges.length > 0) files[file.path] = { ranges: { old: [], new: ranges } }
+      }
+      return { files }
+    },
+  })
+}
+```
+
+A Client plugin names that lens and adds line annotations; `notesOf` returns one stable observable per view, and `NoteBody` is a module-scope component that draws one annotation inside the frame the view draws. The forge tests' [fixture plugin](../../apps/web/tests/fixtures/plugins/fixture-forge-extension/client.js) also uses the toolbar, file menu, comment form, and card slots.
+
+```ts ignore-check
+export const inject = ['forgeChanges', 'slots']
+
+export function apply(ctx: Context) {
+  ctx.effect(() => ctx.forgeChanges.describeLens({ id: brandString<ForgeLensId>('example/exports'), title: () => 'Exports' }))
+  ctx.effect(() => ctx.forgeChanges.registerAnnotations({ id: 'example-notes', observe: target => notesOf(target) }))
+  ctx.slots.inject('forge.diff.line.annotation', () => ctx.slots.register(
+    { name: 'forge.diff.line.annotation', key: 'example-notes' }, NoteBody))
+}
+```
+
 ## Runnable wirings
 
 Shipped applications contribute profile layers through `packages/bundle/*/cordis.patch.yml`, and the product `dsh` launcher owns Web, ACP, SDK, and one-shot headless execution through named profiles. Optional user-facing overlays live under `apps/cli/config/examples/`; profile integration tests live under `apps/cli/tests/profiles/`, while package-specific Loader compositions stay with their package tests.
@@ -103,7 +146,7 @@ Every product feature maps to a listener on a documented extension point — the
 
 | Product feature | Plugin mechanism |
 |---|---|
-| Hook system (user + project level) | listeners on `agent/created`, `agent/pre-step`, `agent/request`, `tools/pre-execute`, `tools/post-execute`, and `agent/turn-stopping`; the waterfalls return typed decisions, while `agent/turn-stopping` may steer another step; the `dsh-hooks-claude-code` / `dsh-hooks-codex` bridges map hook config files onto these extension points |
+| Hook system (user + project level) | listeners on `agent/created`, `agent/pre-step`, `tools/pre-execute`, `tools/post-execute`, and `agent/turn-stopping`; the waterfalls return typed decisions, while `agent/turn-stopping` may steer another step; the `dsh-hooks-claude-code` / `dsh-hooks-codex` bridges map hook config files onto these extension points |
 | `/goal` | `ctx.goals` owns durable state, `dsh-goal-round-driver` schedules same-session rounds through the public `Agent`, and separate command/tool producers expose human/model control |
 | `/loop` | on the `turn/end` session event, `followup()` the next iteration; or force-continue |
 | Dynamic workflow | `ctx.workflowEngine` + the PTC workflow engine + the `workflow` tool; structured in-process children enforce output with scoped prompt/tool registrations, a monotonic tool guard, final `tools/result` commit (including enclosing `run_code`), and the structured-output execution's monotonic `concludeTurn()` marker |

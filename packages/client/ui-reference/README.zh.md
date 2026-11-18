@@ -33,11 +33,19 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 选择会话会插入一个原子的行内引用，其隐藏 `ref` 与剪贴板表示均为宿主返回的规范 `@[label](dsh-session:…)` mention；可见形式为聊天气泡图标加会话标题。发送会经 `session.prompt` 携带该 mention，session-reference 服务会在 `agent/pre-step` 校验它并捕获模型上下文。
 
+共享文件右键菜单最底部提供**添加到对话**。它将所选文件作为同类引用插入该 Session 的草稿，保留现有文字和选中内容，恢复输入焦点但不发送。引用记录解析后的绝对路径，不包含行号。打开菜单时 Session 不可编辑，或路径无法用 mention 语法表示时，此入口不可用；菜单打开期间草稿变为不可编辑时，点击会提示失败而不插入。切换界面语言时，已打开菜单的标题和失败提示随之更新。
+
+### 已发送的文件与目录引用
+
+在已发送消息、排队行和本地回显中，`@path` 或 `@"path"` token 只有在 Session 的文件系统确认该路径存在后才渲染为文件或目录引用。确认之前，以及路径不存在时（例如手写的 `@notes`），原文保持不变；邮箱地址永远不会匹配。在同一 Session、同一次页面加载内从候选中选择并发送的路径视为已确认，因此其回显会立即显示引用。
+
 ### 失败行为
 
 某个候选领域不可用或失败时，该领域不产生任何行，另一领域仍正常列出。会话引用准备失败发生在提示词接受后，并会终止该 agent 轮次。
 
 点击输入框中的文件引用，可在右侧栏预览文件当前的内容。带引号路径中的空格会保留，路径按输入框所属 Session 解析。文件夹和 Session 引用保留原有的编辑行为。
+
+可交互文件标签从自身 Session Slot 获取 `useContextMenu`，通过文件引用注册接收路径解析能力。手势发生时按当前工作区根目录解析路径，Session 工作目录不会改变引用含义。只读展示标签不安装菜单处理器，也无需 Markdown Provider。
 
 -----
 
@@ -59,7 +67,7 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 文件选择把共享 `@path` 语法所定义的自然文本保留为隐藏的序列化与剪贴板形式。会话选择使用规范的 `@[label](dsh-session:…)` mention；序列化永远不会根据可见标题重建身份。
 
-插件还向 [UserText](../ui-conversation/README.zh.md#sent-user-text) 注册文件和目录匹配器，并拥有它们的 `conversation.user.text.node` renderer。每次查询返回原文偏移之后的下一个完整引用，不执行文件发现；共享计算器按原文位置裁定重叠。可交互的文件节点通过 Injection 接收绑定 Session 的 `openFile`；导航失败时保留引用，提供局部重试／关闭对话框。目录节点仍为标签。
+插件还向 [UserText](../ui-conversation/README.zh.md#sent-user-text) 注册文件和目录匹配器，并拥有它们的 `conversation.user.text.node` renderer。每次查询返回原文偏移之后的下一个完整候选引用，不执行文件发现；共享计算器按原文位置裁定重叠。两个节点 renderer 都订阅绑定 Session 的 `pathPresence` 键控 Hook，其背后是 `workspaceFiles/stat`：stat 成功或 `workspace-file/not-regular-file` 失败（目录、无论指向何处的符号链接或其他非普通条目）即确认路径存在，`workspace-file/not-found` 判定不存在，其他失败则保持未确认，由下一个订阅者重试。插件持有这些结果，每个 Session 与路径保留一份，并在卸载时中止未完成的 stat；选定 pick 会把其路径记为已确认。存在性不通过 `useResource` 读取 [`file` 资源](../../api/workspace-files/README.zh.md)：该 provider 在有读取方挂载期间为每个 Session 与路径保持一个 Host 变更订阅，而一次提及只需要一个结果。可交互的文件节点还通过 Injection 接收绑定 Session 的 `openFile`；导航失败时保留引用，提供局部重试／关闭对话框。目录节点仍为标签。
 
 </details>
 
@@ -95,6 +103,7 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 - **候选失败有意保持静默**：Remote 发现调用不可用或失败时，该领域不产生候选行。会话引用准备失败发生在提示词接受后，并会终止该 agent 轮次。
 - **浏览器侧不扫描文件**：Web 补全需要挂载宿主 `ctx.fileReferences` 提供方；浏览器无法回退到自身文件系统。
+- **已发送引用不跟随文件变化**：路径的确认或不存在结果在一次页面加载内保持不变；之后创建或删除该路径，只有刷新页面后才会改变其引用的渲染。
 - **会话搜索仍仅使用元数据**：发现流程通过 `ctx.sessionReferenceResolver` 筛选 session id、cwd 与以日志为依据的最新标题；不搜索消息主体或完整 transcript。
 
 <a id="dev-note"></a>

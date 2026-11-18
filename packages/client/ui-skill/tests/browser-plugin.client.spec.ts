@@ -1,3 +1,4 @@
+import { es, fr, de, ru, pt } from '../src/client/locales.ts'
 /**
  * ui-skill browser half: source and keyed toolview registration +
  * locale dictionaries + source duplicate-name proof +
@@ -141,6 +142,7 @@ describe('apply', () => {
     expect(entry?.component).toBe(SkillToolRow)
     expect(presentation.dictionaries).toEqual([{
       namespace: 'skill', dictionaries: {
+        es, fr, de, ru, pt,
         zh: {
           'row.title': '加载技能',
           'row.running': '正在加载 skill',
@@ -160,6 +162,16 @@ describe('apply', () => {
           'row.instructions': 'Instructions',
           'row.inspect': 'Inspect',
           'menu.userOnly': 'user-only',
+        },
+        ja: {
+          'row.title': 'スキル',
+          'row.running': 'スキルを読み込み中',
+          'row.preparing': 'スキルの読み込みを準備中',
+          'row.failed': 'スキルの読み込みに失敗しました',
+          'row.stopped': 'スキルの読み込みが停止しました',
+          'row.instructions': '手順',
+          'row.inspect': '詳細を確認',
+          'menu.userOnly': 'ユーザー専用',
         },
       },
     }])
@@ -248,7 +260,7 @@ describe('candidates: sessionId addressing', () => {
     }
   })
 
-  it('lists via {sessionId} and ranks case-insensitive subsequence matches with prefixes first', async () => {
+  it('lists via {sessionId} and ranks prefix, substring, then fuzzy name matches', async () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
     const items = await source.candidates(proj('s1'), req('co'))
@@ -259,10 +271,12 @@ describe('candidates: sessionId addressing', () => {
       { name: 'code-review', description: 'review flow' },
     ])
     const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map(c => c.name)
-    // 'de' prefixes deploy and is a subsequence of code-review: the prefix ranks first.
+    // 'de' prefixes deploy and occurs inside code-review: the prefix ranks first.
     await expect(names('de')).resolves.toEqual(['deploy', 'code-review'])
     await expect(names('REV')).resolves.toEqual(['code-review'])
     await expect(names('zzz')).resolves.toEqual([])
+    // Descriptions do not match: 'flow' appears only in descriptions.
+    await expect(names('flow')).resolves.toEqual([])
   })
 
   it('rejects on a failed result (the slash shell owns the menu-side fold)', async () => {

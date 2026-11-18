@@ -22,6 +22,10 @@ export interface TrajectoryToolbarProps {
   allAssistantsCollapsed: boolean
   /** Fold or expand tool calls under every collapsible assistant. */
   onToggleAllAssistants: () => void
+  /** Whether every tool's nested calls are currently folded. */
+  allSubCallsCollapsed: boolean
+  /** Fold or expand nested calls under every tool. */
+  onToggleAllSubCalls: () => void
   /** Current live ledger search query. */
   searchQuery: string
   /** Update the live ledger search query. */
@@ -44,6 +48,8 @@ export function TrajectoryToolbar({
   onToggleAllTurns,
   allAssistantsCollapsed,
   onToggleAllAssistants,
+  allSubCallsCollapsed,
+  onToggleAllSubCalls,
   searchQuery,
   onSearchQueryChange,
   t,
@@ -109,6 +115,19 @@ export function TrajectoryToolbar({
               {allAssistantsCollapsed ? '⊞' : '⊟'}
             </span>
             {t('toolbar.calls')}
+          </button>
+          <button
+            type="button"
+            className={css.action}
+            aria-label={allSubCallsCollapsed ? t('toolbar.expandSubCalls') : t('toolbar.collapseSubCalls')}
+            aria-pressed={allSubCallsCollapsed}
+            title={allSubCallsCollapsed ? t('toolbar.expandSubCalls') : t('toolbar.collapseSubCalls')}
+            onClick={onToggleAllSubCalls}
+          >
+            <span className={css.actionIcon} aria-hidden="true">
+              {allSubCallsCollapsed ? '⊞' : '⊟'}
+            </span>
+            {t('toolbar.subCalls')}
           </button>
         </div>
         <div className={css.search}>

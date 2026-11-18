@@ -137,7 +137,7 @@ HELLO
 
 由此得到一项纪律：**只负责观察或标注的 waterfall 监听器必须调用 `next()`**；不调用就直接返回代表有意短路。如果日志监听器忘记调用 `next()`，会悄无声息地吞掉所有下游的默认行为。这是本仓库的常设规则（[waterfall 语义](../cordis-primer.zh.md#cordis-waterfall-semantics)）。
 
-harness 使用 waterfall 处理协作插件可以包装或回答的决策：[`agent/request`](../subsystems/core.zh.md#agentrequest--waterfall) 允许插件替换模型调用配置，[`approval/request`](../subsystems/approval.zh.md#approvalrequest--waterfall) 允许策略代替用户作答。
+harness 使用 waterfall 处理协作插件可以包装或回答的决策：[`agent/pre-step`](../subsystems/core.zh.md#agentpre-step--waterfall) 允许插件拒绝拟议步骤或替换其输入，[`approval/request`](../subsystems/approval.zh.md#approvalrequest--waterfall) 允许策略代替用户作答。
 
 下一章：[配置](05-config.zh.md)：来自 `cordis.yml` 的插件选项。
 

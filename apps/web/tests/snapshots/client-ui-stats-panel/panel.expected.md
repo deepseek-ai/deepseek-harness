@@ -1,0 +1,43 @@
+- table "Statistics":
+  - rowgroup:
+    - row "Turn / step Trigger Execution Context Output Cache hit First token Model time Output speed Tool time Total time":
+      - columnheader "Turn / step"
+      - columnheader "Trigger"
+      - columnheader "Execution"
+      - columnheader "Context"
+      - columnheader "Output"
+      - columnheader "Cache hit"
+      - columnheader "First token"
+      - columnheader "Model time"
+      - columnheader "Output speed"
+      - columnheader "Tool time"
+      - columnheader "Total time"
+  - rowgroup:
+    - row "Expand or collapse turn 1 · 01-15 {{clock}} Show the measured round. read ×1 → 7 chars 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse turn 1 · 01-15 {{clock}}":
+        - button "Expand or collapse turn 1" [expanded]: Turn 1
+        - text: · 01-15 {{clock}}
+      - cell "Show the measured round."
+      - cell "read ×1 → 7 chars"
+      - cell "5.2K"
+      - cell "0.24K"
+      - cell "69.23%"
+      - cell "{{ttft}}"
+      - cell "{{duration}}"
+      - cell "{{tps}}"
+      - cell "{{duration}}"
+      - cell "{{duration}}"
+    - row "Expand or collapse the tool details of step 1 · details 01-15 {{clock}} read /work/notes.md 2 lines 5.2K 0.24K 69.23% {{ttft}} {{duration}} {{tps}} {{duration}} {{duration}}":
+      - cell "Expand or collapse the tool details of step 1 · details":
+        - button "Expand or collapse the tool details of step 1": Step 1
+        - text: · details
+      - cell "01-15 {{clock}}"
+      - cell "read /work/notes.md 2 lines"
+      - cell "5.2K"
+      - cell "0.24K"
+      - cell "69.23%"
+      - cell "{{ttft}}"
+      - cell "{{duration}}"
+      - cell "{{tps}}"
+      - cell "{{duration}}"
+      - cell "{{duration}}"

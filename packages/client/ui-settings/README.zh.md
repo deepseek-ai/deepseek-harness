@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包使 Web 客户端功能能够公开由宿主设置文档支持的可编辑偏好设置，而无需自行实现传输或 schema 处理。每项功能都可按命名空间读写、原子更新多个字段、校验 schema，并避免静默覆盖并发更改。它还为设置界面框架、页面、标题栏操作、插件标签页和引导流程提供标准扩展点，但自身不渲染任何界面。任何持有偏好设置的功能都可在不依赖呈现包的情况下使用它；设置外壳由单独的包提供。
+本包使 Web 客户端功能能够公开由宿主设置文档支持的可编辑偏好设置，而无需自行实现传输或 schema 处理。每项功能都可按命名空间读写、原子更新多个字段、校验 schema，并避免静默覆盖并发更改。它还为设置界面框架、页面、标题栏操作和引导流程提供标准扩展点，但自身不渲染任何界面。任何持有偏好设置的功能都可在不依赖呈现包的情况下使用它；设置外壳由单独的包提供。
 
 ## 目录
 
@@ -39,9 +39,12 @@ kind: "package-reference"
 
 编辑另一个插件所拥有命名空间的页面通过 `ctx.configForms.whileServed(namespaces, register)` 注册：只要所列命名空间中的任一个进入共享镜像，`register` 就运行一次，收到 Host 当前服务的命名空间集合，并返回该注册的 disposer；当它们全都不再被服务，或 `whileServed` 返回的 disposer 被调用时，这个 disposer 就运行。调用方持有返回的 disposer 并把它包进 `ctx.effect`；与 `get` 不同，服务不会在调用方的 context 上注册任何东西。因此从未组合过所有者的部署看不到该页面的任何痕迹，Host 停止服务的命名空间会撤下它。插件页上的四个官方页面各自通过一个伴生包走这条路径。
 
+<a id="filling-the-settings-slots"></a>
 ### 填充设置 slot
 
-设置界面会注册进本包声明的 slot 类型。外壳（`sidebar.settings` 占位方、导航、界面框架）位于 ui-settings-general；功能页面注册 `settings.section` 贡献；「插件」分区承载 `settings.plugins.tab` 页面；首次使用引导步骤注册 `settings.onboarding`。跨命名空间的表面（schema 内省、已服务命名空间目录、`hasDocument`）通过 `ctx.configForms.describe()` 读同一面镜像。
+设置界面会注册进本包声明的 slot 类型。外壳（`sidebar.settings` 占位方、导航、界面框架）位于 ui-settings-general；设置页面（包括插件自己的设置页面）注册 `settings.section` 贡献；由 ui-settings-general 注册的 `settings.section.view` Component Factory 声明该 slot，按调用方传入的 `id` 渲染对应条目，并传入调用方的 `close` 操作，设置与[插件页面](../ui-plugin-manager/README.zh.md#configuration-pages)都经由它渲染；首次使用引导步骤注册 `settings.onboarding`。跨命名空间的表面（schema 内省、已服务命名空间目录、`hasDocument`）通过 `ctx.configForms.describe()` 读同一面镜像。
+
+要自定义页面的导航图标，使用 `ctx.slots.inject('settings.section.icon', ...)`，并以与其 `settings.section` 贡献相同的 `id` 注册图标组件。不匹配的 id 不会渲染，图标的 `label` 选项不会显示。组件接收以像素为单位的 `size` 和 `active`；外壳负责按钮、标签和装饰性图标容器。没有匹配的图标注册时，外壳渲染默认图标。释放图标贡献后恢复该默认图标。
 
 ### 可观察的成功与失败
 
@@ -52,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-可选的 `settings.launcher` 贡献接收侧栏布局、设置面板是否覆盖侧栏、设置导航回调，以及有效的设置键位标签和无障碍组合。命令未绑定时，外壳不传快捷键展示信息；未注册入口时，外壳保留普通设置按钮。
+可选的 `settings.launcher` 贡献接收侧栏布局、设置面板是否覆盖侧栏、设置导航回调，以及有效的设置键位标签和无障碍组合。命令未绑定时，外壳不传快捷键展示信息；未注册入口时，外壳保留普通设置按钮。 入口可以向 openSettings 传入分区 ID，直接打开对应分区；未传 ID 时使用默认分区。可选的 `settings.notice` 贡献接收 openSettings，渲染在入口行上方零高度的满宽行中，浮在侧栏列表之上；折叠轨道中外壳隐藏该行但不卸载它。
 
 <details>
 <summary>实现细节——点击展开</summary>
@@ -81,7 +84,7 @@ kind: "package-reference"
 以下页面覆盖设置界面家族及其背后的持久化 seam。
 
 - [ui-settings-general](../ui-settings-general/README.zh.md)——设置外壳：触发控件、导航、「通用」分区、引导投影。
-- [ui-settings-plugins](../ui-settings-plugins/README.zh.md)——围绕清单标签页的「内置插件」分区壳。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md)——插件页面，也在插件所在的组合包行上显示其 `settings.section` 条目。
 - [ui-settings-shell](../ui-settings-shell/README.zh.md)、[ui-settings-agent-loop](../ui-settings-agent-loop/README.zh.md)、[ui-settings-subagent](../ui-settings-subagent/README.zh.md)、[ui-settings-web-search](../ui-settings-web-search/README.zh.md)——插件页上的官方配置页，各自通过 `whileServed` 跟随其命名空间。
 - [ui-settings-models](../ui-settings-models/README.zh.md)——建立在本底座之上的 Models 页面与 DeepSeek 引导。
 - [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。

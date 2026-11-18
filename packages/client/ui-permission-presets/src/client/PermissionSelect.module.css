@@ -5,7 +5,7 @@
   min-width: 0;
   max-width: 220px;
   height: 28px;
-  padding: 0 4px 0 8px;
+  padding: 0 4px 0 12px;
   border: none;
   /* Rounded chip chrome, matching the sibling model trigger. */
   border-radius: var(--dsw-radius-sm);
@@ -18,8 +18,10 @@
   cursor: pointer;
 }
 
-.trigger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .trigger:focus-visible {
@@ -36,11 +38,10 @@
   flex: 0 0 auto;
 }
 
-/* The shared 16px glyphs render one step smaller on the exposed trigger;
-   the dropdown rows keep the full 16px. */
+/* Keep the composer mode visible beside its label. */
 .triggerIcon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .triggerLabel {

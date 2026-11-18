@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,8 +7,9 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -44,7 +46,7 @@ async function mountRalph(script: MockScript, config: toolRalph.Config) {
   await ctx.plugin(toolRalph, config)
   ctx.llm.registerAdapter(['mock'], adapter)
   const parentHandle = await ctx.agents.create({
-    sessionId: SessionId('ralph-parent'),
+    sessionId: brandString<SessionId>('ralph-parent'),
     meta: { cwd },
     agentOptions: { provider: 'mock', model: 'mock' },
   })
@@ -83,7 +85,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     ctx.llm.registerAdapter(['mock'], adapter)
 
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('ralph-parent'),
+      sessionId: brandString<SessionId>('ralph-parent'),
       meta: { cwd },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
@@ -99,9 +101,9 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       expect(agent).toBeDefined()
       children.push(agent!)
     })
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('ralph-integration'),
+      callId: brandString<ToolCallId>('ralph-integration'),
       name: 'ralph',
       arguments: { objective: 'Complete both migration slices.', maxRounds: 2 },
       agent: parent,
@@ -146,15 +148,12 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       toolCallResponse('round-1', STRUCTURED_OUTPUT_TOOL, firstReport),
       maxTokensResponse('unfinished child output'),
     ], { maxRounds: 2 })
-    const children: Agent[] = []
-    ctx.on('workflow/agent-start', (_run, child) => {
-      const agent = ctx.agents.get(child.childId)
-      if (agent !== undefined) children.push(agent)
-    })
+    const childIds: SessionId[] = []
+    ctx.on('workflow/agent-start', (_run, child) => { childIds.push(child.childId) })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('ralph-child-failure'),
+      callId: brandString<ToolCallId>('ralph-child-failure'),
       name: 'ralph',
       arguments: { objective: 'Complete both migration slices.', maxRounds: 2 },
       agent: parent,
@@ -165,8 +164,8 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     expect(text).toContain('Ralph round 2 child failed before producing a structured report.')
     expect(text).toContain('Last successful handoff:')
     expect(text).toContain('ROUND_ONE_HANDOFF')
-    expect(children).toHaveLength(2)
-    for (const child of children) expect(ctx.agents.get(child.id)).toBeUndefined()
+    expect(childIds).toHaveLength(2)
+    for (const childId of childIds) expect(ctx.agents.get(childId)).toBeUndefined()
     await parentHandle.dispose()
   })
 
@@ -241,9 +240,9 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       toolCallResponse('round-report', STRUCTURED_OUTPUT_TOOL, report),
     ], config)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('ralph-script-enforcement'),
+      callId: brandString<ToolCallId>('ralph-script-enforcement'),
       name: 'ralph',
       arguments: { objective: 'Complete the scoped work.', maxRounds: config.maxRounds },
       agent: parent,
@@ -269,8 +268,8 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     })
     ctx.on('workflow/agent-end', (_run, child) => { outcomes.push(child.outcome) })
     const controller = new AbortController()
-    const pending = ctx.tools.execute({
-      callId: ToolCallId('ralph-real-cancel'),
+    const pending = executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('ralph-real-cancel'),
       name: 'ralph',
       arguments: { objective: 'Keep working until cancelled.', maxRounds: 2 },
       agent: parent,
@@ -285,6 +284,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       const result = await pending
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('Ralph workflow was cancelled')
+      expect(result.isError && result.error.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
       expect(outcomes).toEqual(['cancelled'])
       expect(ctx.agents.get(children[0]!.id)).toBeUndefined()
     } finally {

@@ -35,18 +35,24 @@ export async function serveWebDocument(request: Request, root: string): Promise<
   })
 }
 
+/** Cookie store operations used to remove legacy Host authentication cookies. */
+export interface HostCookieStore {
+  get(filter: { url: string }): Promise<readonly { readonly name: string }[]>
+  remove(url: string, name: string): Promise<void>
+}
+
 /**
- * Exchange the Host launch URL for an authority-bound browser cookie.
- * @param url - Authenticated URL reported by the owned Host process.
- * @returns Cookie header for requests forwarded to that Host.
+ * Remove every `dsh-auth-*` cookie that earlier releases left in a cookie store for the Host's hostname.
+ * Cookies ignore ports, so cookies from earlier random-port Hosts would otherwise travel with every
+ * request to that hostname until they expire.
+ * @param cookies - Electron session cookie store.
+ * @param url - Host URL; cookies for its hostname on every port are removed.
  */
-export async function authenticateWebHost(url: string): Promise<string> {
-  const response = await fetch(url, { redirect: 'manual' })
-  const cookie = response.headers.get('set-cookie')
-  await response.body?.cancel()
-  if (response.status !== 303 || cookie === null) throw new Error('Desktop Host authentication failed')
-  const end = cookie.indexOf(';')
-  return end < 0 ? cookie : cookie.slice(0, end)
+export async function removeLegacyHostCookies(cookies: HostCookieStore, url: string): Promise<void> {
+  const origin = new URL(url).origin
+  for (const { name } of await cookies.get({ url: origin })) {
+    if (name.startsWith('dsh-auth-')) await cookies.remove(origin, name)
+  }
 }
 
 /**
@@ -71,7 +77,7 @@ const PLUGIN_BUNDLE_PATH = /^\/plugins\//u
  * no later launch can reuse.
  * @param request - Request from the application origin.
  * @param host - Owned Host URL.
- * @param cookie - Host-issued authentication cookie.
+ * @param cookie - Desktop-private credential carried in the Cookie header for the owned Host.
  * @returns Host response without connection-level headers.
  */
 export async function forwardWebRequest(request: Request, host: string, cookie: string): Promise<Response> {

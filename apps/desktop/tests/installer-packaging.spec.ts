@@ -1,15 +1,21 @@
+import { readInstallerLocales } from '../scripts/installer-locales.mjs'
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import { Arch, Platform } from 'electron-builder'
-import { Packager } from 'app-builder-lib'
+import { AppInfo, Packager } from 'app-builder-lib'
+import { expandMacro } from 'app-builder-lib/out/util/macroExpander.js'
 import { describe, expect, it, vi } from 'vitest'
 
-const { execute } = vi.hoisted(() => ({ execute: vi.fn(async () => undefined) }))
+const { execute, write } = vi.hoisted(() => ({ execute: vi.fn(async () => undefined), write: vi.fn(async () => undefined) }))
 vi.mock('node:child_process', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:child_process')>()
   const { promisify } = await import('node:util')
   return { ...original, execFile: Object.assign(vi.fn(), { [promisify.custom]: execute }) }
 })
+
+vi.mock('node:fs/promises', async importOriginal => ({
+  ...await importOriginal<typeof import('node:fs/promises')>(), writeFile: write,
+}))
 
 describe('installer preparation preserves application dependencies', () => {
   it.each(['win32', 'darwin'] as const)('rejects a missing production policy before signing on %s', async (platform) => {
@@ -19,8 +25,9 @@ describe('installer preparation preserves application dependencies', () => {
       DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://test.example.com',
     }, platform, 'x64')).toThrow('DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN')
   })
-  it.each(['win32', 'darwin'] as const)('keeps electron-builder responsible for node_modules on %s', async (platform) => {
+  it.each(['win32', 'darwin'] as const)('preserves installer metadata and dependency ownership on %s', async (platform) => {
     execute.mockClear()
+    write.mockClear()
     const env = {
       DSH_DESKTOP_APP_ID: 'com.example.installer',
       DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
@@ -37,6 +44,19 @@ describe('installer preparation preserves application dependencies', () => {
     try {
       const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
       const config = createElectronBuilderConfig(env, platform, 'x64')
+      const metadataPackager = new Packager({ projectDir: tmpdir() })
+      const metadata: unknown = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+      Object.defineProperties(metadataPackager, {
+        config: { value: config },
+        metadata: { value: metadata },
+      })
+      const appInfo = new AppInfo(metadataPackager, undefined)
+      expect(appInfo.companyName).toBe('Hangzhou DeepSeek Artificial Intelligence Co., Ltd.')
+      expect(appInfo.copyright).toBe(`Copyright © ${new Date().getFullYear()} DeepSeek Harness`)
+      if (platform === 'win32') {
+        expect(expandMacro(config.nsis.uninstallDisplayName, null, appInfo, {}, false)).toBe('DeepSeek Harness')
+        expect(config.nsis.installerLanguages).toEqual(readInstallerLocales().map(locale => locale.id))
+      }
       const aboutIcon = config.extraResources.find(resource => resource.to === 'icon.png')
       expect(aboutIcon).toBeDefined()
       expect(readFileSync(aboutIcon!.from)).toEqual(readFileSync(new URL('../resources/icon-windows.png', import.meta.url)))
@@ -58,6 +78,11 @@ describe('installer preparation preserves application dependencies', () => {
       await packager.installAppDependencies(process.platform === 'win32' ? Platform.LINUX : Platform.WINDOWS, Arch.x64)
       expect(packager.areNodeModulesHandledExternally).toBe(false)
       expect(execute).toHaveBeenCalledTimes(platform === 'win32' ? 1 : 0)
+      expect(write).toHaveBeenCalledTimes(platform === 'win32' ? 1 : 0)
+      if (platform === 'win32') {
+        expect(write).toHaveBeenCalledWith(expect.stringMatching(/installer-ui[\\/]strings\.nsh$/u),
+          expect.stringContaining('LangString INSTALLER_INSTALL ${LANG_JAPANESE}'), 'utf8')
+      }
     } finally {
       vi.unstubAllEnvs()
       vi.restoreAllMocks()

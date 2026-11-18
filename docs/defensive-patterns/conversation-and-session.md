@@ -10,7 +10,7 @@ Session data is read and computed through Projection. A client reads a projectio
 
 - Judged condition: every Session-derived value a client renders arrives through a projection read at the render position, and every new in-Session computation is registered as a unit whose result reaches clients as a published value. A component that fetches Session data itself, or a computation a reader triggers on demand, is the violation.
 - State and View: a unit folds host-side State and declares the client-visible View over it, and the registration states that division. The `ProjectionDefinition` fields and the registry that drives them belong to [session-projection.md](../subsystems/session-projection.md#ctxsessionprojections--sessionprojectionregistry).
-- Version: `stateVersion` starts at 1 and is bumped whenever the serialized state fields or the fold semantics change, compatible or not. Prefer a compatible change where one exists, but still bump; registering one key twice with different `stateVersion` values throws instead of merging.
+- Version: `stateVersion` starts at 1. Follow the [checkpoint version rules](../../packages/session/session-projection/README.md): state fields or fold changes require a bump, except for tested optional additions that preserve historical meaning and old-checkpoint suffix equivalence with full replay. Registering one key twice with different versions throws instead of merging.
 - Compute strategy: units compute in full by default. Narrowing what a unit computes needs the owning domain expert's confirmation, never the implementer's own decision.
 - Boundary: a partial projection view may serve interface availability for individual keys, such as a cached block drawn before the connected Session answers. It never decides an externally visible result, which waits for the standard projection value.
 
@@ -24,7 +24,7 @@ function PlanChip({ useProjection }: PlanChipProps) {
 }
 
 // The computation is a registered unit; the registry drives it and publishes changes.
-const planDefinition: ProjectionDefinition<'plan'> = {
+const planDefinition: ProjectionDefinition<'plan', typeof emptyPlan> = {
   key: 'plan',
   stateVersion: 1,
   init: () => emptyPlan,
@@ -97,7 +97,7 @@ class SidebarSessionView implements Disposable {
   private readonly reference: SessionReference
 
   constructor(readonly id: SessionId, sessions: ISessions) {
-    this.reference = sessions.retain(id, { source: 'sidebarView' })
+    this.reference = sessions.retain(id, { source: 'sidebarView', facets: { conversation: true } })
     void this.reference.ready.catch((error: unknown) => { console.error('opening failed:', error) })
   }
 
@@ -124,6 +124,26 @@ export function reclaimIdle(): void {
 ```
 
 Nobody can count who still uses the Session, and the next state added to the Session escapes the enumeration and is never reclaimed.
+
+## Retained excerpts do not keep their source string alive
+
+Session events, tool result `meta`, and other values kept for a Session's lifetime copy any excerpt taken from a large transient string, such as decoded file text or command output. In V8, a `slice`, `substring`, `split` piece, or regular-expression capture of 13 or more characters can reference its whole parent string, a concatenation references its parts, and `Session.append` copies objects but not string storage. A 200-character line kept in `meta` can therefore keep a 16 MB file in memory until the Session closes.
+
+- Judged condition: can a retained string be an excerpt of a larger string that would otherwise be garbage? The excerpt is copied with `Buffer.from(text, 'utf16le').toString('utf16le')` before it is retained, and a test drops a heap-allocated source, forces garbage collection, and checks that heap usage does not grow with the source size.
+- Boundary: the rule applies to excerpts that outlive the operation. It does not apply when the source itself is retained or when the value comes from `JSON.parse`, `TextDecoder`, or `Buffer#toString`. `String()`, `slice(0)`, `trim()`, `'' + text`, and `join` can return the input string itself and are not copies.
+- Ownership: the code that takes the excerpt copies it; the Session does not copy strings on append.
+
+The `read` tool copies a returned line once when it was built from a slice:
+
+```ts ignore-check
+const line = lineHasSlice ? Buffer.from(lineBuffer, 'utf16le').toString('utf16le') : lineBuffer
+```
+
+Keeping the slice keeps the decoded file:
+
+```ts ignore-check
+const line = lineBuffer // may be a slice of the whole decoded file
+```
 
 ## Node computation is incremental and streaming publication is batched
 

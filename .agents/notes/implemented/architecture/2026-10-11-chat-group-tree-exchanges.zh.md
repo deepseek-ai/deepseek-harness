@@ -14,7 +14,7 @@ Status: implemented
 
 - **分组树位置。** `ChatConversationViewNode.groupTree` 声明节点在分组树中的位置，类型为 `ChatGroupTree = 'exchange' | 'input' | 'turn' | 'process'`，由外到内有序；站在某个位置的节点同时具有所有内层位置的效果。`exchange` 开启一个交互段。`input` 表示节点是所在 Turn 的输入：出现在该轮过程之前即为开场输入，之后出现即为中途输入，使整个 Turn 保持展开。`turn` 让节点留在 Turn 的整轮折叠之外，`process` 让节点留在整轮折叠之内、步骤组之外，没有位置的节点并入相邻的步骤组。`isAtOrOutside(node, position)` 是读取这一顺序的唯一入口：过程分组读 `process`，整轮折叠读 `turn`，轮次输入判断读 `input`，交互段读 `exchange`。
 - **交互段。** 含 `exchange` 节点的 Turn 开启一个交互段，交互段持续到下一个开启 Turn。业务层的 message Definition 只给 Step 1 中被认领的真人输入（`user` 或 `steering`）标 `exchange`；之后的真人输入和触发通知位于 `input`，不开启交互段。
-- **内置位置。** `turn-error`、`turn-max-tokens`、`turn-tail` 与 `turn-process` 控件位于 `turn`；`model-retry` 位于 `process`。ui-chat 自己的 `assistant-step` 节点保留两条放置规则：推理行并入步骤组、回复行在步骤组之外；该轮的过程规格让最终答案的回复留在整轮折叠之外，因为哪一步是最终答案会随后续步骤到来而变化。
+- **内置位置。** `turn-error`、`turn-max-tokens`、`turn-tail` 与 `turn-process` 控件位于 `turn`；`model-retry` 位于 `process`。ui-chat 自己的 `assistant-step` 节点保留两条放置规则：推理行并入步骤组、回复行在步骤组之外；在默认的「收起后显示的回复」选项下，每个回复行也留在整轮折叠之外（[整轮折叠保留全部 Assistant 回复](../feature/2026-10-15-chat-keep-assistant-replies.zh.md)）。
 - **机制。** `GroupTreeSegments(position)` 按含该位置节点的 Turn 切分已加载的 Turn，最新一段从最后一个开启 Turn 开始，窗口中没有开启 Turn 时从第一个已加载 Turn 开始。它按 Turn 增量计数，不扫描已加载节点；起点移动时只返回进入或离开最新一段的 Turn。Chat Builder 的 `bottomSource` 为"节点可见且属于最新交互段"。
 
 结果是：通知唤醒的 Turn 不再折叠前面的 Turn，没有折叠就没有补白；真人下一次普通输入时，整个交互段经由自己输入的路径一起折叠。

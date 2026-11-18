@@ -2,3 +2,7 @@
 - id: session-log-deepseek
   config:
     enabled: false
+
+- insert:
+    - id: minimal-checkpoint-observer
+      name: './checkpoint-observer.mjs'

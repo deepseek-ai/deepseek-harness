@@ -81,6 +81,8 @@ The executor is built on one rule: **durable before wait, open-step boundaries.*
 
 ### Recovery flow
 
+The recovery listener is installed before awaiting projection registration. Failures arriving during activation wait for the reader before applying the provider policy. Registration failure propagates to the agent; cancellation or plugin disposal while waiting prevents retry records and further attempts.
+
 A failed step arrives on the waterfall with its provider and resolved policy. Always mode settles downstream recovery first and honors a downstream `retry` decision; normal mode first checks that the failure code is eligible and the budget is not exhausted. The plugin computes the delay — provider `Retry-After` when valid and within bounds, otherwise local bounded exponential backoff with symmetric jitter — appends the `llm/retry` event, waits on a cancellable timer, appends `llm/retry-started`, and returns `{ kind: 'retry' }`. The loop then re-runs the failed step inside the same open turn over the same durable history.
 
 ### Waterfall composition

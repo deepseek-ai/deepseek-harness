@@ -12,8 +12,8 @@
   en: a15c7c13f167e5ac
   zh: 63bcc2ef60c2f344
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/decision/boot-the-same-profile-as-the-served-web-deployment:
-  en: caf1ca77192dcb20
-  zh: d663e2cbb05fe4fc
+  en: 9b957e37f290abaf
+  zh: 06a4599c8fe449ad
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/decision/node-internal-module-interfaces-in-the-worker:
   en: 37d8e809eaa21d25
   zh: 8c7c31bd6f45c823
@@ -24,14 +24,14 @@
   en: 428699f74f19e998
   zh: 2e8fcdbc9616f70b
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/decision/watching-and-client-plugin-delivery:
-  en: f3e6ba098433a70a
-  zh: 345b93f451d2768c
+  en: 814c344e891f7f91
+  zh: a024d5e30607968b
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/alternatives-considered:
   en: 99ee505e82fa9c7c
   zh: 448bc0e160424cbf
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/consequences:
-  en: 53d72faa09e78410
-  zh: a5224e4662a4846b
+  en: ed424571c81bcb91
+  zh: 9b79bf03741c1c21
 /agent-note-boot-the-preview-worker-from-the-shipped-profile-and-fetch-lazy-chunks-on-demand/testing:
   en: 532918df1acd147d
   zh: e476c090d183d0a4

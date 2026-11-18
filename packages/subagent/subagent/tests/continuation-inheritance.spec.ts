@@ -17,10 +17,10 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { queueHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
+import { subagentManager } from './manager-internals.ts'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
@@ -28,6 +28,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -55,7 +56,7 @@ async function setup(script: Script) {
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
 
@@ -63,7 +64,7 @@ function startSpec(parent: Agent, provider = 'spawn') {
   return {
     provider,
     label: 'child task',
-    request: { prompt: [{ type: 'text' as const, text: 'child task' }], parent },
+    prompt: [{ type: 'text' as const, text: 'child task' }], parent,
     signal: new AbortController().signal,
   }
 }
@@ -80,7 +81,7 @@ function policyEvents(events: readonly SessionEvent[]) {
 }
 
 function foldedSandboxMode(ctx: Context, id: SessionId, events: readonly SessionEvent[]): unknown {
-  return ctx.sessionProjections.stateOf(Session.create(id, events), 'sandboxMode')
+  return ctx.sandboxPolicy.overrideOf(Session.create(id, events)) ?? null
 }
 
 function foldedApprovalPolicy(ctx: Context, id: SessionId, events: readonly SessionEvent[]): unknown {
@@ -114,10 +115,9 @@ describe('continuable policy inheritance', () => {
       expect(current).toHaveBeenCalledExactlyOnceWith(parent.session)
       parent.session.append('permission/preset', { preset: preset === 'auto' ? 'danger-full-access' : 'auto' })
       current.mockImplementation(() => { throw new Error('cold resume must not read parent permission') })
-      await queueHostSubagentPrompt(
-        ctx.subagents, parent, started.childId,
-        [{ type: 'text', text: 'continue please' }], { kind: 'user' }, new AbortController().signal,
-      )
+      await subagentManager(ctx).deliverPrompt(started.childId, [{ type: 'text', text: 'continue please' }], {
+        delivery: 'queue', source: { kind: 'user' }, signal: new AbortController().signal,
+      })
       await waitNoActivation(ctx, started.childId)
       const resumed = await loadStoredSession(ctx.sessionPersistence, started.childId)
       expect(resumed.events.filter(event => event.type === 'permission/preset')).toMatchObject([
@@ -271,14 +271,9 @@ describe('continuable policy inheritance', () => {
     // The parent widens AFTER the child was created; the resumed child keeps
     // the delegation-time snapshot from its own log.
     setSandboxMode(parent.session, 'danger-full-access')
-    await queueHostSubagentPrompt(
-      ctx.subagents,
-      parent,
-      started.childId,
-      [{ type: 'text', text: 'continue please' }],
-      { kind: 'user' },
-      new AbortController().signal,
-    )
+    await subagentManager(ctx).deliverPrompt(started.childId, [{ type: 'text', text: 'continue please' }], {
+      delivery: 'queue', source: { kind: 'user' }, signal: new AbortController().signal,
+    })
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)

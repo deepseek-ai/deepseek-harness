@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "NodeJS инспектор",
+    "description": "Нажмите Ctrl/Cmd+Shift+. чтобы открыть Chrome DevTools на нижней панели для разработки и отладки."
+  }
+}

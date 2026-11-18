@@ -38,7 +38,8 @@ const path = require('node:path')
 const consumer = process.env.INIT_CWD || process.cwd()
 const cache = path.join(consumer, '.npm-cache', '_cacache')
 const files = fs.existsSync(cache) ? fs.readdirSync(cache, { recursive: true }).filter(name => fs.statSync(path.join(cache, name)).isFile()) : []
-fs.writeFileSync(process.env.CACHE_EVIDENCE, JSON.stringify({ consumer, files }))
+fs.writeFileSync(process.env.CACHE_EVIDENCE, JSON.stringify({ consumer, files,
+  installed: ['matching', 'wrong-os', 'wrong-cpu'].filter(name => fs.existsSync(path.join(consumer, 'node_modules', name))) }))
 `
       writeFileSync(join(source, 'probe.cjs'), probe + (outcome === 'install failure' ? '\nprocess.exit(37)\n' : ''))
       writeFileSync(join(source, 'lib/bin.js'), outcome === 'entry failure' ? 'process.exit(37)\n' : 'console.log("0.0.1")\n')
@@ -51,6 +52,21 @@ fs.writeFileSync(process.env.CACHE_EVIDENCE, JSON.stringify({ consumer, files })
       expect(archive.error).toBeUndefined()
       expect(archive.signal).toBeNull()
       expect(archive.status, archive.stderr).toBe(0)
+      for (const [name, platform] of [
+        ['matching', { os: [process.platform], cpu: ['any'] }],
+        ['wrong-os', { os: [`!${process.platform}`] }],
+        ['wrong-cpu', { cpu: [process.arch === 'arm64' ? 'x64' : 'arm64'] }],
+      ] as const) {
+        const packageDirectory = join(directory, name, 'package')
+        mkdirSync(packageDirectory, { recursive: true })
+        writeFileSync(join(packageDirectory, 'package.json'), JSON.stringify({ name, version: '0.0.1', ...platform }))
+        const packedPlatform = spawnSync('tar', ['-czf', join(packed, `${name}.tgz`), '-C', join(directory, name), 'package'], {
+          encoding: 'utf8', timeout: 30_000,
+        })
+        expect(packedPlatform.error).toBeUndefined()
+        expect(packedPlatform.signal).toBeNull()
+        expect(packedPlatform.status, packedPlatform.stderr).toBe(0)
+      }
       const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key)))
       Object.assign(environment, {
         npm_config_cache: ambient,
@@ -68,7 +84,8 @@ fs.writeFileSync(process.env.CACHE_EVIDENCE, JSON.stringify({ consumer, files })
       expect(result.error).toBeUndefined()
       expect(result.signal).toBeNull()
       expect(result.status, result.stdout + result.stderr).toBe(outcome === 'success' ? 0 : 1)
-      const observation = JSON.parse(readFileSync(evidence, 'utf8')) as { consumer: string; files: string[] }
+      const observation = JSON.parse(readFileSync(evidence, 'utf8')) as { consumer: string; files: string[]; installed: string[] }
+      expect(observation.installed).toEqual(['matching'])
       expect(observation.files.length, 'npm must write tarball content into the consumer-private cache').toBeGreaterThan(0)
       expect(observation.consumer).toContain('dsh-packed-dsh-')
       expect(existsSync(observation.consumer), 'the verifier finally must remove its consumer and cache').toBe(false)

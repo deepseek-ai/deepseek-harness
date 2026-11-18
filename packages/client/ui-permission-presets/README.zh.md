@@ -27,9 +27,11 @@ kind: "package-reference"
 
 将本插件与 settings、commands 和 conversation 包一同挂载。通用设置获得未来默认值行；composer 获得 `conversation.input.permission` 控件，裸 `/permission` 打开 slash 选择器。当前会话控件同时要求 Session 投影和完整目录快照。不提供权限功能的装配既不公开当前会话控件，也不公开设置行。
 
+窄屏浏览器设置中，默认权限标签与控件的间距缩小；Windows 和 macOS 桌面窗口保留标准间距。
+
 ### 选择器
 
-选中即提交 `/permission <preset>` 命令行。带参形式（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write`、`Full access` 和 `Auto review`，在中文界面中是「仅可查看」「工作区内修改」「完全权限」和「自动审查」。显式 host 标签保持原样，未知 kebab-case 名称渲染为 Title Case；`auto` 在菜单选项中带有 `EXP` 标记，并在可见选择时要求实验风险确认。选中后的 composer 控件显示模式，不展示该标记。`custom` 只是显示状态，绝非目标。
+选中即提交 `/permission <preset>` 命令行。带参形式（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write`、`Full access` 和 `Auto review`，在中文界面中是「仅可查看」「工作区内修改」「完全权限」和「自动审查」。显式 host 标签保持原样，未知 kebab-case 名称渲染为 Title Case；`auto` 在菜单选项中带有 `EXP` 标记，并在可见选择时要求实验风险确认。选中后的 composer 控件显示模式，不展示该标记。`custom` 只是显示状态，绝非目标。Composer 入口使用 16px Medium 权限图标，描边固定为 1.3px；普通菜单行保留 14px Regular 图标，描边固定为 1px。入口与菜单文本相对各自对齐的表面左边缘，共享 32px 起点。
 
 实时目录撤销某个预设时，composer 关闭对应的待确认对话框，并用 Session 的当前值替代已不可用的乐观选择。每次目录失效（无 payload 的通知或连接代际变更）会关闭已打开的 slash 选择器或其确认对话框，不消费草稿；而发布某个 picker 正在等待的读取结果时，该 picker 保持打开并保留失败与重试状态；重新打开时读取当前目录。已经提交的命令在响应结束前继续保持忙碌状态。
 

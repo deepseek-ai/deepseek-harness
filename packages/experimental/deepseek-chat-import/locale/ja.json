@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek チャットのインポート",
+    "description": "「新規セッション」の横にあるボタンから DeepSeek ウェブサイトのチャットエクスポート ZIP をアップロードすると、各会話が選択したワークスペースのセッションになります。",
+    "detail": "docs/DETAIL.md"
+  }
+}

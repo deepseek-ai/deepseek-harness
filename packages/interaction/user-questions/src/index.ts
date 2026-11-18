@@ -7,16 +7,16 @@
  * @module @deepseek-ai/dsh-user-questions
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage, HarnessError, type MessageId, type ToolCallId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import z from '@deepseek-ai/schemastery'
-import { userQuestionProjectionDefinition } from './projection.ts'
+import { userQuestionProjectionDefinition, type UserQuestionProjectionState } from './projection.ts'
 import { TimedQuestionWait } from './timed-wait.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -78,14 +78,12 @@ type QueuedReply = { messageId: MessageId; claimedTurn?: number }
 /** `ctx.userQuestions`: validation plus the scoped answerer waterfall. */
 export class UserQuestionService extends TypertRemoteService {
   static Config = z.object({})
+  private userQuestionProjectionHandle: ProjectionHandle<UserQuestionProjectionState> | undefined
   private readonly waits = new Map<Agent, Map<ToolCallId, TimedQuestionWait>>()
   private readonly queuedReplies = new WeakMap<Session, Map<ToolCallId, QueuedReply>>()
 
   constructor(ctx: Context) {
     super(ctx, 'userQuestions')
-    ctx.inject(['sessionProjections'], (projectionCtx) => {
-      projectionCtx.sessionProjections.register(userQuestionProjectionDefinition)
-    })
     ctx.effect(() => () => {
       for (const calls of this.waits.values()) {
         for (const wait of calls.values()) wait.close(abortedQuestion())
@@ -128,6 +126,14 @@ export class UserQuestionService extends TypertRemoteService {
     calls.delete(callId)
   }
 
+  protected async [Service.init](): Promise<void> {
+    const binding = this.ctx.inject(['sessionProjections'], async (ctx) => {
+      this.userQuestionProjectionHandle = await ctx.sessionProjections.register(userQuestionProjectionDefinition)
+      return () => { this.userQuestionProjectionHandle = undefined }
+    })
+    if (this.ctx.get('sessionProjections') !== undefined) await binding
+  }
+
   private assertLiveRoot(agent: Agent): void {
     const agents = this.ctx.get('agents')
     if (agents === undefined || agents.get(agent.id) !== agent) {
@@ -135,7 +141,7 @@ export class UserQuestionService extends TypertRemoteService {
         'human interaction requires the exact live calling agent when an agent is supplied',
         'CALLER_NOT_LIVE')
     }
-    if (!agents.roots().includes(agent)) {
+    if (agent.session.header.origin === 'subagent') {
       throw new UserQuestionError(
         'human interaction is unavailable while the calling agent is owned by another live agent; '
         + "include the unresolved question or decision in the child agent's final result",
@@ -144,19 +150,36 @@ export class UserQuestionService extends TypertRemoteService {
   }
 
   private continued(agent: Agent): readonly PendingUserQuestion[] {
-    const state = this.ctx.get('sessionProjections')?.stateOf(agent.session, 'userQuestions')
-    return (state?.questions.active ?? []).filter(question => question.state === 'continued')
+    return this.userQuestionProjectionHandle?.stateOf(agent.session).questions.active.filter(question => question.state === 'continued') ?? []
   }
 
   /**
    * Answer a continued question. The reply is steered into the agent as a
    * user message whose source names the call; that message is also the
    * record that closes the question in the projection.
+   *
+   * The only call this method can answer is one the projection lists as
+   * `continued` on this Session, and it steers a user message into the running
+   * turn, so it speaks for the person the Session runs for. A LiveShare reader
+   * reaches it through the Session read role, which is safe only while an
+   * approval question cannot become `continued`: the projection tracks only
+   * calls made under the timed `ask_user_question` schema, and a call becomes
+   * `continued` only by returning the pending result a timed wait produces (or,
+   * for PTC, a pending dispatch) or by resume repair recording
+   * `TOOL_OUTCOME_UNKNOWN` for a call the process never finished. Plan review
+   * (`plan-review`) and the CUA approvals (`approval`) reach `ctx.userQuestions.ask`
+   * without a `wait` and without a `timeout`, so their result is a settled
+   * answer, an abort, or a failure, never a pending result, and they stay out
+   * of the projection. A future approval surface must keep asking without
+   * `wait`/`timeout`, or it must gain its own owner-only gate; giving it a timed
+   * form makes an approval answerable by a share viewer.
    * @param agent - Live root agent for the owning Session.
    * @param callId - Continued question identity.
    * @param answer - Complete structured answer batch, one item per question of the call.
-   * @returns Whether the question is still continued; an accepted reply stays
-   *   queued until the agent admits its user message.
+   * @returns Whether the question is still continued (`false` when this Session
+   *   lists no such continued call, or its composition carries no Session
+   *   projections); an accepted reply stays queued until the agent admits its
+   *   user message.
    * @throws {UserQuestionError} `BAD_ANSWER` when the batch does not name each
    *   question of the call exactly once, or `REPLY_QUEUED` when a reply is
    *   already waiting for admission.
@@ -164,6 +187,9 @@ export class UserQuestionService extends TypertRemoteService {
   @Remote
   answer(agent: Agent, callId: ToolCallId, answer: AskUserQuestionAnswer): boolean {
     this.assertLiveRoot(agent)
+    // The projection is the authorization: its `continued` entries are exactly the
+    // timed asks still answerable, and an approval ask never enters it. Reading the
+    // fold directly also keeps this method off any answerer a viewer could install.
     const question = this.continued(agent).find(item => item.callId === callId)
     if (question === undefined) return false
     const queued = this.queuedReplies.get(agent.session)
@@ -272,17 +298,19 @@ export class UserQuestionService extends TypertRemoteService {
    * Ask the scoped answerer waterfall and wait for the user's answer.
    *
    * When a caller supplies an agent, human interaction is valid only for the
-   * exact live runtime root. Runtime ownership, not durable session lineage,
-   * decides this boundary: an owned child has no human answerer and would
-   * block forever, while a lineage-bearing session resumed as a new runtime
-   * root may ask normally.
+   * exact live instance of an ordinary Session. Explicit subagent origin
+   * rejects delegated callers; historical ordinary forks may retain parent
+   * metadata and still ask normally.
    *
    * @param request Questions, owner agent, and abort signal.
    * @returns The answer chosen or typed by the human.
    * @throws {UserQuestionError} code `ASK_ABORTED` when the supplied signal
    *   is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent
-   *   is not the registry's exact live instance, or `DELEGATED_CALLER` when
-   *   that live agent is owned by another agent.
+   *   is not the registry's exact live instance, `DELEGATED_CALLER` when
+   *   that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the
+   *   original message, when an answerer fails with a value that is not a
+   *   `HarnessError`; a coded `HarnessError` from an answerer keeps its `name`
+   *   and `code`.
    */
   async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
     if (request.signal?.aborted) {
@@ -293,26 +321,44 @@ export class UserQuestionService extends TypertRemoteService {
     }
     const agent = request.agent
     if (agent !== undefined) this.assertLiveRoot(agent)
-    // A presentation intent asserts two things the types cannot: that the
-    // named approve label is one of this question's own options, and that a
-    // plan-review carries the plan it is a review of. A UI honouring the
-    // intent answers with that label, and shows that detail as the plan, so
-    // either gap would put a choice the asker never offered — or an approval of
-    // something invisible — in front of the user. Caught at the asker, where
-    // the mistake is, rather than in each UI.
     for (const question of request.questions) {
       const intent = question.intent
       if (intent === undefined) continue
-      if (!(question.options ?? []).some(option => option.label === intent.approve)) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} whose approve label `
-          + `${JSON.stringify(intent.approve)} names none of its options`,
-          'BAD_INTENT')
+      const labels = intent.kind === 'approval'
+        ? [intent.approve, intent.reject, ...intent.always === undefined ? [] : [intent.always]]
+        : [intent.approve]
+      const options = question.options ?? []
+      const unoffered = labels.find(label => !options.some(option => option.label === label))
+      if (unoffered !== undefined) {
+        if (intent.kind === 'plan-review') {
+          throw new UserQuestionError(
+            `question ${question.id} declares intent ${intent.kind} whose approve label `
+            + `${JSON.stringify(intent.approve)} names none of its options`,
+            'BAD_INTENT')
+        }
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} whose action label `
+          + `${JSON.stringify(unoffered)} names none of its options`, 'BAD_INTENT')
       }
       if (question.detail === undefined) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} without the detail it reviews`,
-          'BAD_INTENT')
+        const detail = intent.kind === 'approval' ? 'scope detail it requires' : 'detail it reviews'
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} without the ${detail}`, 'BAD_INTENT')
+      }
+      if (intent.kind === 'approval') {
+        if (request.questions.length !== 1) {
+          throw new UserQuestionError(`approval presentation requires one question; received ${request.questions.length}`, 'BAD_INTENT')
+        }
+        if (question.multiSelect === true) {
+          throw new UserQuestionError(`approval question ${question.id} does not support multiSelect`, 'BAD_INTENT')
+        }
+        if (request.wait !== undefined) {
+          throw new UserQuestionError(`approval question ${question.id} requires a blocking request without wait`, 'BAD_INTENT')
+        }
+        if (new Set(labels).size !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires distinct action labels; received ${JSON.stringify(labels)}`, 'BAD_INTENT')
+        }
+        if (options.length !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires ${labels.length} options matching its actions; received ${options.length}`, 'BAD_INTENT')
+        }
       }
     }
     const noAnswerer = () => Promise.reject(new UserQuestionError(
@@ -334,7 +380,9 @@ export class UserQuestionService extends TypertRemoteService {
       if (request.signal?.aborted) {
         throw abortedQuestion(error)
       }
-      throw restored
+      if (restored instanceof HarnessError) throw restored
+      const message = error instanceof Error ? error.message : 'the user-questions answerer failed before the user answered'
+      throw new UserQuestionError(message, 'PROVIDER_ERROR', { cause: error })
     }
   }
 }

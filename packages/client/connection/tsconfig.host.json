@@ -8,7 +8,7 @@
   "files": [
     "src/api-path.ts",
     "src/api-request-trust.ts",
-    "src/browser-auth.ts",
+    "src/authentication.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
     "src/connect-protocol.ts",
@@ -19,7 +19,8 @@
     "src/recovery-config.ts",
     "src/rpc-host.ts",
     "src/rpc-schema.ts",
-    "src/rpc.ts"
+    "src/rpc.ts",
+    "src/types.ts"
   ],
   "references": [
     {

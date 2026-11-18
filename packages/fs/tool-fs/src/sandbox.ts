@@ -11,6 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { ESCALATION_TARGETS, approveEscalation, escalationHintMarker, sandboxDenialMarker, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -74,10 +75,11 @@ export class FsSandboxController {
   /**
    * The policy to stamp onto this mutation: an approved escalation grant (a
    * strictly wider retry resolved through `ctx.approval` before anything
-   * executes), else the Session's standing mode. Repeating the standing mode
-   * requires no approval. The workspace root is the original Session
-   * directory, or the deployment fallback when absent. Validates the escalation argument
-   * pairing first.
+   * executes), else the Session's standing mode. An omitted or repeated mode
+   * permits an omitted or blank justification; repeating the mode needs no
+   * approval. A different mode requires a non-empty justification, and a
+   * non-empty justification without a mode is rejected. The workspace root is
+   * the original Session directory, or the deployment fallback when absent.
    * @param toolName - the mutating tool's name, for the approval audit trail.
    * @param args - the call's escalation arguments.
    * @param exec - the tool-execution context (agent, callId, signal).
@@ -85,13 +87,18 @@ export class FsSandboxController {
    *   unsandboxed backend.
    */
   async resolvePolicy(toolName: string, args: FsEscalationArgs, exec: ToolExecution): Promise<SandboxExecutionPolicy | undefined> {
-    validateEscalationArgs(args.sandbox_permissions, args.justification)
+    // The schema omits both fields without a sandboxing filesystem; reject them before pairing checks.
+    if (this.escalationModes.length === 0 && (args.sandbox_permissions !== undefined || (args.justification ?? '').trim() !== '')) {
+      throw new ToolArgsError(['sandbox_permissions and justification are not available in this composition (no sandboxing filesystem to escalate)'])
+    }
     const standingPolicy = this.policy?.resolve({ ...exec.agent ? { session: exec.agent.session } : {} })
+    if (args.sandbox_permissions !== undefined && args.sandbox_permissions === standingPolicy?.mode) return standingPolicy
+    const justification = args.sandbox_permissions === undefined && args.justification?.trim() === ''
+      ? undefined
+      : args.justification
+    validateEscalationArgs(args.sandbox_permissions, justification)
     if (args.sandbox_permissions === undefined || args.justification === undefined) {
       return standingPolicy
-    }
-    if (this.escalationModes.length === 0) {
-      throw new Error('sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)')
     }
     const policy = standingPolicy as SandboxExecutionPolicy
     const approvedMode = await approveEscalation(
@@ -121,6 +128,14 @@ export class FsSandboxController {
    * @param policy - the policy stamped onto the call (names the mode in the marker).
    * @returns the error to throw — the marker `FsError` for a sandbox denial, else the original.
    */
+  mapError(error: FsError, policy: SandboxExecutionPolicy | undefined): FsError
+  /**
+   * Map a caught value, preserving failures other than sandbox denials.
+   * @param error - value thrown by a mutation.
+   * @param policy - policy stamped onto the call, when applicable.
+   * @returns the denial marker error, or the unchanged caught value.
+   */
+  mapError(error: unknown, policy: SandboxExecutionPolicy | undefined): unknown
   mapError(error: unknown, policy: SandboxExecutionPolicy | undefined): unknown {
     if (!(error instanceof FsError) || error.code !== 'FS_SANDBOX_DENIED') return error
     // A FS_SANDBOX_DENIED only arises under a confining backend, whose tool

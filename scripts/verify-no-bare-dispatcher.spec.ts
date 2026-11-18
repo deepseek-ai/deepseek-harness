@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { findDispatcherViolations, scanRepository, DISPATCHER_OWNER } from './verify-no-bare-dispatcher.ts'
 
-const FILE = 'packages/web/web-fetch-http/src/network.ts'
+const FILE = 'packages/web/web-fetch-http/src/provider.ts'
 
 function reasons(source: string, file = FILE): string[] {
   return findDispatcherViolations(file, source).map(violation => violation.what)

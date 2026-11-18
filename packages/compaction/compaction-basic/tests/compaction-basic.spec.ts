@@ -1,31 +1,36 @@
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import BasicCompactionEngine from '@deepseek-ai/dsh-compaction-basic'
 import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
 import { selectCompactableRange } from '@deepseek-ai/dsh-compaction-basic/src/region.ts'
+import { answeredRouteProjectionDefinition } from '@deepseek-ai/dsh-compaction-basic/src/answered-route.ts'
 import { frameSummary } from '@deepseek-ai/dsh-compaction-basic/src/summarizer.ts'
 import type { SummarizationInput, SummaryResult } from '@deepseek-ai/dsh-compaction-basic/src/summarizer.ts'
-import { CompactionId, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
+import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import {
   resolveCompactSpec,
   resolveConfig,
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, type ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
   LlmFailure,
+  LlmCallConfig,
   LlmResolvedModelInfo,
   Message,
   StreamChunk,
   TokenUsage,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionCheckpoint } from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { agentEvents, type Agent, type RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
@@ -116,7 +121,7 @@ function promptInput(text: string): SummarizationInput {
  * A `system` text puts a `system/message` at surface node 0 before turn 1's user message.
  */
 function conversation(turns = 4, text = 'fixture '.repeat(40).trim(), system?: string): Session {
-  const session = Session.create(SessionId(`conversation-${turns}`))
+  const session = Session.create(brandString<SessionId>(`conversation-${turns}`))
   for (let turn = 1; turn <= turns; turn += 1) {
     session.append('turn/start', { turn })
     if (turn === 1 && system !== undefined) {
@@ -160,9 +165,9 @@ function conversation(turns = 4, text = 'fixture '.repeat(40).trim(), system?: s
 }
 
 function toolConversation(): Session {
-  const session = Session.create(SessionId('tools'))
+  const session = Session.create(brandString<SessionId>('tools'))
   for (let turn = 1; turn <= 3; turn += 1) {
-    const callId = ToolCallId(`call-${turn}`)
+    const callId = brandString<ToolCallId>(`call-${turn}`)
     session.append('turn/start', { turn })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: `request ${turn} `.repeat(300) }],
@@ -210,8 +215,8 @@ function toolConversation(): Session {
 
 /** One closed routed tool step followed by an open turn for rewrite events. */
 function oversizedToolResult(chars = 3_000, withCompactablePrompt = false): Session {
-  const session = Session.create(SessionId(`oversized-tool-${chars}`))
-  const callId = ToolCallId('oversized')
+  const session = Session.create(brandString<SessionId>(`oversized-tool-${chars}`))
+  const callId = brandString<ToolCallId>('oversized')
   session.append('turn/start', { turn: 1 })
   if (withCompactablePrompt) {
     session.append('user/message', createUserMessage({
@@ -584,7 +589,7 @@ describe('pressure measurement and retention', () => {
 
   it('skips when no durable routed model exists instead of using AgentOptions fallback', async () => {
     const compact = service(compactConfig)
-    const session = Session.create(SessionId('headerless'))
+    const session = Session.create(brandString<SessionId>('headerless'))
     session.append('turn/start', { turn: 1 })
     await expect(compact.compactIfNeeded(agent(session, MODEL), 'pressure', SIGNAL))
       .resolves.toBeNull()
@@ -706,8 +711,8 @@ describe('pressure measurement and retention', () => {
 
   it('declines forced overflow when the whole surface is one indivisible tool pair', async () => {
     const compact = service(compactConfig)
-    const session = Session.create(SessionId('single-tool-pair'))
-    const callId = ToolCallId('single-call')
+    const session = Session.create(brandString<SessionId>('single-tool-pair'))
+    const callId = brandString<ToolCallId>('single-call')
     session.append('turn/start', { turn: 1 })
     session.append('step/start', { turn: 1, step: 1 })
     session.append('request/header', {
@@ -827,13 +832,13 @@ describe('pressure measurement and retention', () => {
     const result = await compactIfNeeded(compact, session, 'pressure', 'fallback')
     expect(result).not.toBeNull()
     expect(session.requestHeader()?.config.model).toBe('actual')
-    expect(measure.mock.calls[0]).toEqual([session])
+    expect(measure.mock.calls[0]).toEqual([session, session.requestHeader()])
   })
 
   it('declines when envelope pressure is high but the surface has no compactable range', async () => {
     const compact = service(compactConfig)
     const bulkTools = [{ name: 'bulk', description: 'x'.repeat(100_000), parameters: { type: 'object' } }]
-    const empty = Session.create(SessionId('empty'))
+    const empty = Session.create(brandString<SessionId>('empty'))
     empty.append('turn/start', { turn: 1 })
     empty.append('request/header', {
       header: { config: { provider: MODEL, model: MODEL }, tools: bulkTools },
@@ -908,8 +913,8 @@ describe('pressure measurement and retention', () => {
 
   it('declines when rounding a cut would consume the only tool pair', () => {
     const ctx = createContext()
-    const session = Session.create(SessionId('one-tool-pair'))
-    const callId = ToolCallId('only')
+    const session = Session.create(brandString<SessionId>('one-tool-pair'))
+    const callId = brandString<ToolCallId>('only')
     session.append('turn/start', { turn: 1 })
     session.append('step/start', { turn: 1, step: 1 })
     session.append('assistant/message', {
@@ -1059,7 +1064,7 @@ describe('compaction region transaction', () => {
     expect(head.content[0]?.type === 'text' ? head.content[0].text : '').toContain('<compacted-summary>')
     expect(head.content.at(-1)).toEqual({ type: 'text', text: '</compacted-summary>' })
 
-    const replay = Session.create(SessionId('replay'), session.snapshotEvents())
+    const replay = Session.create(brandString<SessionId>('replay'), session.snapshotEvents())
     expect(replay.deriveMessages()).toEqual(session.deriveMessages())
   })
 
@@ -1159,7 +1164,7 @@ describe('compaction region transaction', () => {
 
     const locked = conversation(1)
     locked.append('compaction/start', {
-      compactionId: CompactionId('locked-compaction'),
+      compactionId: brandString<CompactionId>('locked-compaction'),
       turn: 2,
     })
     const lockedNodes = locked.surface.nodes
@@ -1172,7 +1177,7 @@ describe('compaction region transaction', () => {
 
   it('rejects a session with no turn boundary at all', async () => {
     const compact = service()
-    const session = Session.create(SessionId('turnless'))
+    const session = Session.create(brandString<SessionId>('turnless'))
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'orphan' }],
       source: { kind: 'user' },
@@ -1292,7 +1297,7 @@ describe('compaction region transaction', () => {
 
   it('lets a model-independent custom summarizer compact without a conversation model', async () => {
     const compact = service()
-    const session = Session.create(SessionId('model-less-region'))
+    const session = Session.create(brandString<SessionId>('model-less-region'))
     session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'history '.repeat(100) }],
@@ -1423,7 +1428,7 @@ describe('default one-shot summarizer', () => {
     const { adapter, compact } = await summarizerHarness([
       { type: 'reasoning', text: 'private' },
       { type: 'text', text: 'public summary' },
-      { type: 'tool-call', id: ToolCallId('unexpected'), name: 'x', arguments: '{}' },
+      { type: 'tool-call', id: brandString<ToolCallId>('unexpected'), name: 'x', arguments: '{}' },
     ], undefined, MODEL, {
       auto: false,
       summarizationProvider: MODEL,
@@ -1439,7 +1444,7 @@ describe('default one-shot summarizer', () => {
       rawOutput: [
         { type: 'reasoning', text: 'private' },
         { type: 'text', text: 'public summary' },
-        { type: 'tool-call', id: ToolCallId('unexpected'), name: 'x', arguments: '{}' },
+        { type: 'tool-call', id: brandString<ToolCallId>('unexpected'), name: 'x', arguments: '{}' },
       ],
       llmStreamCall: true,
       provider: MODEL,
@@ -1469,7 +1474,7 @@ describe('default one-shot summarizer', () => {
         {
           type: 'image',
           attachment: {
-            attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+            attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
             mediaType: 'image/png',
             bytes: 1,
             width: 1,
@@ -1541,7 +1546,7 @@ describe('default one-shot summarizer', () => {
 
   it('resolves the latest routed provider/model before the AgentOptions pair', async () => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, 'routed')
-    const session = conversation(1)
+    const session = Session.create(brandString<SessionId>('unanswered-route'))
     session.append('request/header', {
       header: { config: { provider: 'routed', model: 'routed' } },
       reason: 'initial',
@@ -1551,6 +1556,104 @@ describe('default one-shot summarizer', () => {
     expect(output.model).toBe('routed')
     expect(adapter.lastOptions?.provider).toBe('routed')
     expect(adapter.lastOptions?.model).toBe('routed')
+  })
+
+  it('summarizes on the route that last answered, with its policy, after a later request got no response', async () => {
+    const { ctx, adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, MODEL, {
+      auto: false,
+      maxTokens: 111,
+      modelPolicies: [
+        { provider: MODEL, model: MODEL, maxTokens: 222 },
+        { provider: 'unanswered', model: 'unanswered', maxTokens: 333 },
+      ],
+    })
+    const unanswered = new ScriptedAdapter([{ type: 'text', text: 'wrong route' }])
+    ctx.llm.registerAdapter(['unanswered'], unanswered)
+    const session = conversation(1)
+    session.append('request/header', {
+      header: { config: { provider: 'unanswered', model: 'unanswered' } },
+      reason: 'change',
+    })
+
+    const output = await compact.runSummarize(promptInput('history'), agent(session, 'fallback'))
+
+    expect(session.requestHeader()?.config.model).toBe('unanswered')
+    expect(output).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
+    expect(adapter.lastOptions).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
+    expect(unanswered.lastOptions).toBeUndefined()
+  })
+
+  it.each([false, true])('restores the answered route from a JSON checkpoint and folds only the suffix (answer in suffix: %s)', async (answerInSuffix) => {
+    const { ctx, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    ctx.llm.registerAdapter(['later'], new ScriptedAdapter([{ type: 'text', text: 'later summary' }]))
+    const session = conversation(1)
+    const checkpoint = JSON.parse(JSON.stringify(ctx.sessionProjections.checkpoint(session))) as ProjectionCheckpoint
+    expect(checkpoint['compactionAnsweredRoute']).toMatchObject({ ver: 1, val: { provider: MODEL, model: MODEL } })
+    const cut = session.seq
+    session.append('step/start', { turn: 2, step: 1 })
+    session.append('request/header', { header: { config: { provider: 'later', model: 'later' } }, reason: 'change' })
+    if (answerInSuffix) {
+      session.append('assistant/message', {
+        stream: [],
+        turn: 2,
+        step: 1,
+        message: createMessage({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'later answer' }],
+          source: { kind: 'model', provider: 'later', model: 'later' },
+        }),
+      }, { surfaceOp: 'append' })
+    }
+    const events = session.snapshotEvents()
+    const restored = Session.fromRestore(session.id, events, session.header, SessionLogOffset(0), 'detached')
+    const apply = vi.spyOn(answeredRouteProjectionDefinition, 'apply')
+    onTestFinished(() => { apply.mockRestore() })
+    ctx.sessionProjections.hydrate(restored, checkpoint, events.slice(cut), cut)
+    expect(apply.mock.calls.map(([, event]) => event.seq)).toEqual(events.slice(cut).map(event => event.seq))
+
+    const expected = answerInSuffix ? 'later' : MODEL
+    await expect(compact.runSummarize(promptInput('history'), agent(restored))).resolves
+      .toMatchObject({ provider: expected, model: expected })
+    await expect(compact.runSummarize(promptInput('history'), agent(session))).resolves
+      .toMatchObject({ provider: expected, model: expected })
+  })
+
+  it('keeps the answered-route state reference for unrelated events and an unchanged route', () => {
+    const { init, apply } = answeredRouteProjectionDefinition
+    const events = conversation(2).snapshotEvents()
+    const answers = events.filter(event => event.type === 'assistant/message')
+    const first = apply(init(), answers[0]!)
+    expect(first).toEqual({ provider: MODEL, model: MODEL })
+    for (const event of events) expect(apply(first, event)).toBe(first)
+    expect(apply(null, events.find(event => event.type === 'request/header')!)).toBeNull()
+    expect(answers).toHaveLength(2)
+  })
+
+  it('registers the answered-route projection with the plugin and releases it on unload', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(TokenMeter)
+    const fiber = await ctx.plugin(BasicCompactionEngine, { auto: false })
+    expect(ctx.sessionProjections.checkpoint(conversation(1))).toHaveProperty('compactionAnsweredRoute')
+
+    await fiber.dispose()
+    expect(ctx.sessionProjections.checkpoint(conversation(2))).not.toHaveProperty('compactionAnsweredRoute')
+  })
+
+  it('fails plugin activation when the answered-route projection cannot register', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(TokenMeter)
+    await ctx.sessionProjections.register({ ...answeredRouteProjectionDefinition, stateVersion: 2 })
+
+    await expect(ctx.plugin(BasicCompactionEngine, { auto: false })).rejects.toThrow('compactionAnsweredRoute')
+    expect(ctx.get('compaction')).toBeUndefined()
   })
 
   it('records the model actually dispatched after one-shot stream routing', async () => {
@@ -1582,13 +1685,13 @@ describe('default one-shot summarizer', () => {
     await ctx.plugin(SessionProjectionRegistry)
     void new TokenMeter(ctx)
     const compact = new ExposedCompactionEngine(ctx, { auto: false })
-    await expect(compact.runSummarize(promptInput('history'), agent(Session.create(SessionId('model-less')))))
+    await expect(compact.runSummarize(promptInput('history'), agent(Session.create(brandString<SessionId>('model-less')))))
       .rejects.toThrow(/no provider\/model available for summarization/)
   })
 
   it('uses a complete AgentOptions target when no durable route exists', async () => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
-    const session = Session.create(SessionId('headerless-summary'))
+    const session = Session.create(brandString<SessionId>('headerless-summary'))
 
     await expect(compact.runSummarize(promptInput('history'), agent(session, MODEL))).resolves.toMatchObject({
       provider: MODEL,
@@ -1604,7 +1707,7 @@ describe('default one-shot summarizer', () => {
   ])('rejects incomplete AgentOptions target %#', async (options) => {
     const { compact } = await summarizerHarness([{ type: 'text', text: 'unused' }])
     const owner = {
-      session: Session.create(SessionId(`incomplete-${String(options.model)}`)),
+      session: Session.create(brandString<SessionId>(`incomplete-${String(options.model)}`)),
       options,
     } as Agent
     await expect(compact.runSummarize(promptInput('history'), owner))
@@ -1643,7 +1746,7 @@ describe('default one-shot summarizer', () => {
       {
         type: 'image',
         attachment: {
-          attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+          attachmentId: brandString<AttachmentId>(`sha256:${'b'.repeat(64)}`),
           mediaType: 'image/png',
           bytes: 1,
           width: 1,
@@ -1660,7 +1763,7 @@ describe('default one-shot summarizer', () => {
     const { compact } = await summarizerHarness([{
       type: 'image',
       attachment: {
-        attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
+        attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`),
         mediaType: 'image/png',
         bytes: 1,
         width: 1,
@@ -1672,10 +1775,245 @@ describe('default one-shot summarizer', () => {
   })
 })
 
+describe('model-switch pressure', () => {
+  function request(ctx: Context, session: Session, config: LlmCallConfig, signal = SIGNAL) {
+    return agentEvents(ctx, agent(session, MODEL)).waterfall(
+      'agent/request', { turn: 5, step: 1, signal }, () => Promise.resolve(config),
+    )
+  }
+
+  function harness(
+    config: BasicCompactionConfig = {},
+    finish?: Extract<StreamChunk, { type: 'finish' }>['reason'],
+  ) {
+    const ctx = new Context()
+    void new LlmRuntime(ctx)
+    new SessionProjectionRegistry(ctx)
+    void new TokenMeter(ctx)
+    onTestFinished(() => ctx.fiber.dispose())
+    const adapter = new ScriptedAdapter([{ type: 'text', text: 'checkpoint' }], finish)
+    ctx.llm.registerAdapter(['small'], new ContextAdapter(1_000))
+    ctx.llm.registerAdapter([MODEL], adapter)
+    const compact = new BasicCompactionEngine(ctx, {
+      headroomTokens: 0, maxTokens: 32, thresholdRatio: 0.5, retainTokens: 100, ...config,
+    })
+    return { ctx, adapter, compact }
+  }
+
+  it('checks the newly routed window and summarizes with the previous model before returning it', async () => {
+    const { ctx, adapter } = harness()
+    const session = conversation(4, 'fixture '.repeat(80))
+    const previous = session.requestHeader()
+    const selected = { provider: 'small', model: 'small' }
+    const before = ctx.tokenMeter.measure(session).totalTokens
+    expect(before).toBeGreaterThan(1_000)
+    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), ...selected }))
+
+    await expect(request(ctx, session, { provider: MODEL, model: MODEL })).resolves.toEqual(selected)
+
+    expect(adapter.lastOptions).toMatchObject({ provider: MODEL, model: MODEL, purpose: 'compaction' })
+    expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
+    expect(session.requestHeader()).toEqual(previous)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary'))
+      .toHaveLength(1)
+  })
+
+  it('uses the proposed output reservation and the destination retention policy', async () => {
+    const { ctx, adapter } = harness({
+      modelPolicies: [{ provider: 'small', model: 'small', retainTokens: 0 }],
+    })
+    const session = conversation(2)
+    expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(500)
+    await request(ctx, session, { provider: 'small', model: 'small', maxTokens: 700 })
+    expect(adapter.lastOptions).toBeDefined()
+    expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(300)
+  })
+
+  it.each([false, true])('requires a valid small-window policy even for short history (override: %s)', async (override) => {
+    const { ctx, adapter } = harness({
+      headroomTokens: 65_536, maxTokens: 65_536,
+      modelPolicies: override ? [{ provider: '64k', model: '64k', headroomTokens: 4_096, maxTokens: 4_096 }] : [],
+    })
+    ctx.llm.registerAdapter(['64k'], new ContextAdapter(65_536))
+    const session = conversation(1, 'short')
+    const previous = session.requestHeader()
+    const selected = { provider: '64k', model: '64k', maxTokens: 4_096 }
+    const switching = request(ctx, session, selected)
+    if (override) await expect(switching).resolves.toEqual(selected)
+    else await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    expect(session.requestHeader()).toEqual(previous)
+    expect(adapter.lastOptions).toBeUndefined()
+  })
+
+  it('repeatedly summarizes on the previous route until destination pressure is below threshold', async () => {
+    const { ctx, adapter } = harness()
+    const first = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(1_600) }])
+    const calls = vi.spyOn(adapter, 'stream').mockImplementationOnce(options => first.stream(options))
+    const session = conversation(4, 'fixture '.repeat(80))
+    const previous = session.requestHeader()
+    const selected = { provider: 'small', model: 'small' }
+
+    await expect(request(ctx, session, selected)).resolves.toEqual(selected)
+
+    expect(calls).toHaveBeenCalledTimes(2)
+    for (const [options] of calls.mock.calls) expect(options).toMatchObject({ provider: MODEL, model: MODEL })
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(2)
+    expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
+    expect(session.requestHeader()).toEqual(previous)
+  })
+
+  it.each(['summary error', 'non-shrinking summary', 'cancellation'] as const)(
+    'keeps the first checkpoint and permits retry after a second-attempt %s',
+    async (failure) => {
+      const { ctx, adapter } = harness()
+      const first = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(1_600) }])
+      const second = failure === 'non-shrinking summary' ? first : new ScriptedAdapter([], {
+        kind: 'error', failure: { code: 'AUTH', message: 'summary credentials expired' },
+      })
+      const controller = new AbortController()
+      const cancelled = new Error('cancel second summary')
+      vi.spyOn(adapter, 'stream')
+        .mockImplementationOnce(options => first.stream(options))
+        .mockImplementationOnce((options) => {
+          if (failure === 'cancellation') controller.abort(cancelled)
+          return second.stream(options)
+        })
+      const session = conversation(4, 'fixture '.repeat(80))
+      const previous = session.requestHeader()
+      const selected = { provider: 'small', model: 'small' }
+
+      const switching = request(ctx, session, selected, controller.signal)
+      if (failure === 'cancellation') await expect(switching).rejects.toBe(cancelled)
+      else await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+
+      expect(session.requestHeader()).toEqual(previous)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(1)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/start')).toHaveLength(2)
+      expect(session.snapshotEvents().filter(event => event.type === 'compaction/end')).toHaveLength(2)
+      expect(session.deriveMessages().some(message => message.source.kind === 'compact-checkpoint')).toBe(true)
+      await expect(request(ctx, session, selected)).resolves.toEqual(selected)
+      expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
+    },
+  )
+
+  it('stops after the destination retry budget while retaining completed checkpoints', async () => {
+    const { ctx, adapter } = harness({ compactionRetries: 2 })
+    const calls = vi.spyOn(adapter, 'stream')
+    for (const length of [1_600, 1_500, 1_400]) {
+      const summary = new ScriptedAdapter([{ type: 'text', text: 'm'.repeat(length) }])
+      calls.mockImplementationOnce(options => summary.stream(options))
+    }
+    const session = conversation(4, 'fixture '.repeat(80))
+    const previous = session.requestHeader()
+    const switching = request(ctx, session, { provider: 'small', model: 'small' })
+
+    await expect(switching).rejects.toThrow('still above threshold after 3 compaction attempts')
+
+    expect(calls).toHaveBeenCalledTimes(3)
+    expect(session.requestHeader()).toEqual(previous)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(3)
+    expect(session.snapshotEvents().filter(event => event.type === 'compaction/end')).toHaveLength(3)
+  })
+
+  it('retains an explicit summary target when switching models', async () => {
+    const { ctx, adapter } = harness({ summarizationProvider: 'summary', summarizationModel: 'summary' })
+    ctx.llm.registerAdapter(['summary'], adapter)
+    const session = conversation(4)
+    await request(ctx, session, { provider: 'small', model: 'small' })
+    expect(adapter.lastOptions).toMatchObject({ provider: 'summary', model: 'summary' })
+  })
+
+  it('skips initial, incomplete, unchanged, below-threshold, disabled and already cancelled requests', async () => {
+    const { ctx, adapter } = harness()
+    const selected = { provider: 'small', model: 'small' }
+    await request(ctx, Session.create(brandString<SessionId>('initial-switch')), selected)
+    await request(ctx, conversation(4), { provider: MODEL, model: MODEL })
+    for (const config of [{ provider: '', model: 'small' }, { provider: 'small', model: '' }]) {
+      await expect(request(ctx, conversation(4), config)).resolves.toEqual(config)
+    }
+    await request(ctx, conversation(1), selected)
+    await request(ctx, conversation(4), selected, AbortSignal.abort('cancelled'))
+    expect(adapter.lastOptions).toBeUndefined()
+    const disabled = harness({ auto: false })
+    await request(disabled.ctx, conversation(4), selected)
+    expect(disabled.adapter.lastOptions).toBeUndefined()
+  })
+
+  it('rejects a failed summary without committing the destination model', async () => {
+    const { ctx } = harness({}, {
+      kind: 'error', failure: { code: 'AUTH', message: 'summary credentials expired' },
+    })
+    const session = conversation(4)
+    const previous = session.requestHeader()
+    const nodes = [...session.surface.nodes]
+    const switching = request(ctx, session, { provider: 'small', model: 'small' })
+    await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    await expect(switching).rejects.toThrow('summary credentials expired')
+    expect(session.requestHeader()).toEqual(previous)
+    expect(session.surface.nodes).toEqual(nodes)
+    expect(session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'compaction/end', data: { error: 'summary credentials expired' },
+    })
+  })
+
+  it('rejects an oversized indivisible tail instead of accepting the switch', async () => {
+    const { ctx } = harness()
+    const session = conversation(1, 'large '.repeat(800))
+    await expect(request(ctx, session, { provider: 'small', model: 'small' }))
+      .rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    expect(session.requestHeader()?.config.provider).toBe(MODEL)
+  })
+
+  it('rejects pressure with no compactable span before making a summary call', async () => {
+    const { ctx, adapter } = harness()
+    const session = Session.create(brandString<SessionId>('indivisible-switch'))
+    session.append('request/header', { header: { config: { provider: MODEL, model: MODEL } }, reason: 'initial' })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'large '.repeat(800) }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    const switching = request(ctx, session, { provider: 'small', model: 'small' })
+    await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    await expect(switching).rejects.toThrow('no safe compaction range')
+    expect(adapter.lastOptions).toBeUndefined()
+  })
+
+  it('reports a non-Error capacity failure without changing the route', async () => {
+    const { ctx } = harness()
+    vi.spyOn(ctx.llm, 'resolveModelInfo').mockRejectedValueOnce('capacity lookup unavailable')
+    const session = conversation(4)
+    const switching = request(ctx, session, { provider: 'small', model: 'small' })
+    await expect(switching).rejects.toMatchObject({ code: 'MODEL_SWITCH_COMPACTION_FAILED' })
+    await expect(switching).rejects.toThrow('capacity lookup unavailable')
+    expect(session.requestHeader()?.config.provider).toBe(MODEL)
+  })
+
+  it('preserves cancellation while resolving the destination capacity', async () => {
+    const { ctx, adapter } = harness()
+    const controller = new AbortController()
+    const cancelled = new Error('cancel destination check')
+    vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementationOnce(async () => {
+      controller.abort(cancelled)
+      throw cancelled
+    })
+    await expect(request(ctx, conversation(4), { provider: 'small', model: 'small' }, controller.signal))
+      .rejects.toBe(cancelled)
+    expect(adapter.lastOptions).toBeUndefined()
+  })
+
+  it('removes the switch check when the contributing plugin is unloaded', async () => {
+    const ctx = createContext()
+    onTestFinished(() => ctx.fiber.dispose())
+    const fiber = await ctx.plugin(BasicCompactionEngine, { headroomTokens: 0, maxTokens: 32 })
+    await fiber.dispose()
+    const selected = { provider: 'missing', model: 'missing' }
+    await expect(request(ctx, conversation(4), selected)).resolves.toEqual(selected)
+  })
+})
+
 describe('automatic listener and loader composition', () => {
   function preStep(ctx: Context, owner: Agent, signal = SIGNAL) {
     return agentEvents(ctx, owner).waterfall(
-      'agent/pre-step', { messages: [], turn: 1, step: 1, signal },
+      'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
       () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
     )
   }
@@ -1962,7 +2300,7 @@ describe('automatic listener and loader composition', () => {
     const compact = new TestCompactionEngine(ctx)
     const session = conversation(2)
     const fakeResult: CompactionResult = {
-      compactionId: CompactionId('fake-compaction'),
+      compactionId: brandString<CompactionId>('fake-compaction'),
       startSeq: SessionSeq(1),
       summarySeq: SessionSeq(2),
       endSeq: SessionSeq(3),
@@ -2054,7 +2392,7 @@ describe('automatic listener and loader composition', () => {
   it('delegates canonical overflow when no durable routed target exists', async () => {
     const ctx = createContext()
     void new TestCompactionEngine(ctx)
-    const session = Session.create(SessionId('headerless-overflow'))
+    const session = Session.create(brandString<SessionId>('headerless-overflow'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -2199,7 +2537,7 @@ describe('route-priced image pressure', () => {
 
   /** Closed short-text turns whose user messages each carry one image. */
   function imageConversation(turns = 4): Session {
-    const session = Session.create(SessionId(`image-dense-${turns}`))
+    const session = Session.create(brandString<SessionId>(`image-dense-${turns}`))
     for (let turn = 1; turn <= turns; turn += 1) {
       session.append('turn/start', { turn })
       session.append('user/message', createUserMessage({
@@ -2208,7 +2546,7 @@ describe('route-priced image pressure', () => {
           {
             type: 'image',
             attachment: {
-              attachmentId: AttachmentId(`sha256:${String(turn).repeat(8)}`),
+              attachmentId: brandString<AttachmentId>(`sha256:${String(turn).repeat(8)}`),
               mediaType: 'image/png',
               bytes: 2048,
               width: 800,

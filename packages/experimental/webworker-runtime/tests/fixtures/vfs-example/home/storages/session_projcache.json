@@ -21,6 +21,22 @@
             "val": "WebWorker Preview Showcase"
           }
         }
+      },
+      "preview-turn-spacing": {
+        "identity": {
+          "formatVersion": 4,
+          "createdAt": 1787472300000,
+          "cwd": "/dsh/workspace",
+          "isSeeded": false,
+          "inheritedEventCount": 0
+        },
+        "rows": {
+          "title": {
+            "ver": 1,
+            "seq": 42,
+            "val": "Turn spacing sample"
+          }
+        }
       }
     }
   }

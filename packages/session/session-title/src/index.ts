@@ -8,6 +8,7 @@ import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { isAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { assertNever, deepFreeze } from '@deepseek-ai/dsh-util-values'
@@ -17,7 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-session'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-agent'
 export type {
   SessionTitleEventData,
@@ -137,10 +138,7 @@ export interface SessionTitleProvider {
 function sessionTitleUserMessageOf(event: SessionEvent): SessionTitleUserMessage | undefined {
   if (event.type !== 'user/message' || event.data.source.kind !== 'user') return undefined
   const content = event.data.content
-  const text = content
-    .filter((block): block is Extract<(typeof content)[number], { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join('\n')
+  const text = extractTextContent(content, { separator: '\n' })
   if (normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER).length === 0) return undefined
   return { seq: event.seq, text }
 }
@@ -299,13 +297,14 @@ export function foldSessionTitle(events: readonly SessionEvent[]): SessionTitleS
 
 /** Log-backed title fold plus asynchronous fallback generation. */
 export class SessionTitleService extends Service {
-  static inject = ['sessions', 'sessionProjections']
+  static inject = ['sessions', 'sessionProjections', 'agents']
   static Config: z<Config> = z.object({
     fallbackMaxWords: z.number().step(1).min(1).required(),
     fallbackMaxBytes: z.number().step(1).min(1).required(),
     maxTitleBytes: z.number().step(1).min(1).required(),
   })
 
+  private titleInputProjectionHandle!: ProjectionHandle<TitleInputState>
   private readonly config: ResolvedConfig
   private readonly ownerFiber: Fiber
   private registration: ProviderRegistration | undefined
@@ -328,7 +327,10 @@ export class SessionTitleService extends Service {
       throw new Error('session-title: fallbackMaxBytes must not exceed maxTitleBytes')
     }
     this.config = deepFreeze({ ...value })
+  }
 
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('session-title service disposed'))
       if (this.registration !== undefined) this.registration.closing = true
@@ -341,29 +343,11 @@ export class SessionTitleService extends Service {
       this.work.clear()
     }, 'sessionTitle lifecycle')
 
-    ctx.sessionProjections.register(titleProjectionDefinition)
-
-    ctx.sessionProjections.register<'titleInput', TitleInputState>({
-      key: 'titleInput',
-      stateVersion: 3,
-      stateSchema: titleInputStateSchema,
-      init: () => EMPTY_TITLE_INPUT,
-      apply: (state, event) => {
-        const message = sessionTitleUserMessageOf(event)
-        if (message === undefined) return state
-        return {
-          first: state.first ?? message,
-          count: state.count + 1,
-          lastSeq: message.seq,
-        }
-      },
-    })
-
+    // oxlint-disable-next-line typescript/no-misused-promises -- session/event reports rejected observer promises without awaiting them.
     ctx.on('session/event', (session, event) => {
       switch (event.type) {
         case 'user/message':
-          this.onUserMessage(session, event)
-          break
+          return this.onUserMessage(session, event)
         case 'request/header':
           this.onRequestHeader(session, event)
           break
@@ -380,6 +364,24 @@ export class SessionTitleService extends Service {
       if (state === undefined) return
       state.active?.controller.abort(new Error('session disposed during title generation'))
       this.work.delete(session)
+    })
+
+    await ctx.sessionProjections.register(titleProjectionDefinition)
+
+    this.titleInputProjectionHandle = await ctx.sessionProjections.register<'titleInput', TitleInputState>({
+      key: 'titleInput',
+      stateVersion: 3,
+      stateSchema: titleInputStateSchema,
+      init: () => EMPTY_TITLE_INPUT,
+      apply: (state, event) => {
+        const message = sessionTitleUserMessageOf(event)
+        if (message === undefined) return state
+        return {
+          first: state.first ?? message,
+          count: state.count + 1,
+          lastSeq: message.seq,
+        }
+      },
     })
   }
 
@@ -502,17 +504,22 @@ export class SessionTitleService extends Service {
     return dispose
   }
 
-  /** Schedule fallback creation and any provider cadence for one eligible event. */
-  private onUserMessage(session: Session, event: Extract<SessionEvent, { type: 'user/message' }>): void {
-    if (!this.serviceActive()) return
+  /** Schedule current-provider work; activation-time messages only request the fallback. */
+  private async onUserMessage(session: Session, event: Extract<SessionEvent, { type: 'user/message' }>): Promise<void> {
     if (event.data.source.kind !== 'user' || sessionTitleUserMessageOf(event) === undefined) return
+    if (this.ownerFiber.state === FiberState.LOADING) {
+      await this.ownerFiber.await()
+      if (this.serviceActive() && this.ctx.sessions.get(session.id) === session) await this.ensureFallback(session)
+      return
+    }
+    if (!this.serviceActive()) return
     // A user rename pins the title: no automatic revision may override it.
     if (this.get(session)?.source.kind === 'user') return
     const registration = this.registration
     if (registration !== undefined && !registration.closing) {
       const count = this.titleInputOf(session).count
       const shouldSchedule = registration.provider.automatic === 'all-prompts'
-        || (session.header.parentSession === undefined && count === 1 && this.get(session) === undefined)
+        || (!session.header.isSeeded && session.header.origin !== 'subagent' && count === 1 && this.get(session) === undefined)
       if (shouldSchedule) {
         const state = this.stateFor(session)
         const revision = this.supersede(state, 'newer user message superseded title generation')
@@ -549,7 +556,7 @@ export class SessionTitleService extends Service {
     const state = session === undefined ? undefined : this.work.get(session)
     const pending = state?.pending
     if (session === undefined || state === undefined || pending === undefined) return
-    const boundary = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')?.lastStepBoundary
+    const boundary = this.ctx.agents.turnBoundaryOf(session).lastStepBoundary
     const route = session.requestHeader()?.config
     if (boundary?.kind !== 'start'
       || route?.provider !== options.provider
@@ -730,7 +737,7 @@ export class SessionTitleService extends Service {
   }
 
   private titleInputOf(session: Session): TitleInputState {
-    return this.ctx.sessionProjections.stateOf(session, 'titleInput') as TitleInputState
+    return this.titleInputProjectionHandle.stateOf(session)
   }
 
   /** Queue detached service work and retain it through service disposal. */

@@ -50,7 +50,9 @@ export const Config: z<Config> = z.object({
 /**
  * The SQLite {@link StorageBackend}. Owns one `DatabaseSync` connection and
  * the open-unit table; `kv.open` validates names, enforces the per-unit
- * version stamp in `units`, and ensures the unit's record tables.
+ * version stamp in `units`, and ensures the unit's record tables. A failed
+ * rollback makes all reads, writes, and opens reject the retained failure;
+ * close the backend and recreate it before further use.
  */
 export class SqliteStorageBackend implements StorageBackend {
   /** The key-value facet; the only shape this backend serves. */
@@ -60,6 +62,7 @@ export class SqliteStorageBackend implements StorageBackend {
   /** Open (or still-opening) units by name; presence is the double-open guard. */
   private readonly units = new Map<string, Promise<SqliteKvUnit>>()
   private closing: Promise<void> | undefined
+  private failure: StorageError | undefined
 
   /**
    * @param config - Validated plugin configuration.
@@ -76,6 +79,7 @@ export class SqliteStorageBackend implements StorageBackend {
     if (this.closing !== undefined) {
       return Promise.reject(new StorageError('closed', 'sqlite storage backend is closed'))
     }
+    if (this.failure !== undefined) return Promise.reject(this.failure)
     if (!UNIT_NAME_RE.test(descriptor.name)) {
       return Promise.reject(new Error(`kv unit name '${descriptor.name}' violates ${UNIT_NAME_RE}`))
     }
@@ -97,12 +101,13 @@ export class SqliteStorageBackend implements StorageBackend {
 
   private async materializeUnit(descriptor: KvUnitDescriptor): Promise<SqliteKvUnit> {
     const db = await this.ready
+    this.ensureUsable()
     const row = db.prepare('SELECT version FROM units WHERE name = ?').get(descriptor.name) as
       | { version: number }
       | undefined
     if (row === undefined) {
       db.prepare('INSERT INTO units (name, version) VALUES (?, ?)').run(descriptor.name, descriptor.version)
-    } else if (row.version !== descriptor.version) {
+    } else if (row.version !== descriptor.version && !descriptor.compatibleVersions?.includes(row.version)) {
       throw new StorageError(
         'version-mismatch',
         `kv unit '${descriptor.name}' is stamped version ${row.version} on the medium, incompatible with descriptor version ${descriptor.version}`,
@@ -117,9 +122,18 @@ export class SqliteStorageBackend implements StorageBackend {
         ) STRICT
       `)
     }
-    return new SqliteKvUnit(db, descriptor, () => {
-      this.units.delete(descriptor.name)
-    })
+    return new SqliteKvUnit(
+      db,
+      descriptor,
+      row?.version ?? descriptor.version,
+      () => { this.units.delete(descriptor.name) },
+      () => { this.ensureUsable() },
+      (error) => { this.failure = error },
+    )
+  }
+
+  private ensureUsable(): void {
+    if (this.failure !== undefined) throw this.failure
   }
 
   /**

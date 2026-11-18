@@ -8,9 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createToolResultMessage, createUserMessage, ToolCallId, ReasoningEffortId, createMessage, createSystemMessage } from '@deepseek-ai/dsh-llm'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import LlmRuntime, { createToolResultMessage, createUserMessage, type ToolCallId, type ReasoningEffortId, createMessage, createSystemMessage } from '@deepseek-ai/dsh-llm'
 import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
-import AttachmentStore, { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import AttachmentStore from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import type {
   ImageAttachmentLimits,
@@ -21,12 +24,13 @@ import type {
   StoredImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as PluginPackageInventoryDeepSeek from '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type { Options as Config } from '@deepseek-ai/dsh-llm-deepseek'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import type { WireRequest } from '../src/wire-types.ts'
 import { assemble, type AssembledResult } from './assemble.ts'
 
@@ -59,7 +63,7 @@ class E2eAttachmentStore extends AttachmentStore {
     mediaTypes: ['image/png'],
   }
   readonly ref: ImageAttachmentRef = {
-    attachmentId: AttachmentId(`sha256:${randomBytes(32).toString('hex')}`),
+    attachmentId: brandString<AttachmentId>(`sha256:${randomBytes(32).toString('hex')}`),
     mediaType: 'image/png',
     bytes: TEST_PNG.byteLength,
     width: 256,
@@ -67,7 +71,7 @@ class E2eAttachmentStore extends AttachmentStore {
     name: 'files-api-e2e.png',
   }
   readonly version: RequestImageAttachment = {
-    variantId: ImageVariantId(`sha256:${randomBytes(32).toString('hex')}`),
+    variantId: brandString<ImageVariantId>(`sha256:${randomBytes(32).toString('hex')}`),
     attachment: this.ref,
     data: TEST_PNG,
     mediaType: 'image/png',
@@ -110,6 +114,7 @@ async function harness(model: string, config: Partial<Config> = {}) {
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(E2eAttachmentStore)
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(LlmDeepSeek, {
     baseURL: Protocol.PUBLIC_BASE_URL,
     ...model === VISION ? { models: [{ id: VISION, inputModalities: ['text', 'image'] }] } : {},
@@ -155,6 +160,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     contexts.push(ctx)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LocalAttachments)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(LlmDeepSeek, { baseURL: Protocol.PUBLIC_BASE_URL, maxTokens: 4096 })
     const model = 'deepseek-flash'
     await expect(ctx.llm.resolveModelInfo('deepseek-official', model)).resolves.toMatchObject({
@@ -167,7 +173,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       { ...message, content: [...message.content, { type: 'image', attachment }] },
     ]
     const reply = async () => {
-      const response = await assemble(ctx, { model, messages: history, reasoningEffort: ReasoningEffortId('high') })
+      const response = await assemble(ctx, { model, messages: history, reasoningEffort: brandString<ReasoningEffortId>('high') })
       expect(response.finish.kind, JSON.stringify(response.finish)).toBe('stop')
       history.push(response.message)
       return textOf(response).trim().toLowerCase()
@@ -194,7 +200,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
       if (method === 'POST' && url.pathname.endsWith('/files') && response.ok) {
         const value = await response.clone().json() as { id?: unknown }
-        if (typeof value.id === 'string') uploadedFile = Protocol.DeepSeekFileId(value.id)
+        if (typeof value.id === 'string') uploadedFile = brandString<Protocol.DeepSeekFileId>(value.id)
       }
       return response
     }
@@ -228,14 +234,16 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(Loader)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
     await ctx.plugin(SessionLogDeepSeek, { enabled: true })
     await ctx.plugin(PluginPackageInventoryDeepSeek)
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(LlmDeepSeek, { baseURL: Protocol.PUBLIC_BASE_URL, thinking: 'disabled' })
-    const session = ctx.sessions.create(SessionId('real-extension-fields'))
+    const session = ctx.sessions.create(brandString<SessionId>('real-extension-fields'))
     session.append('turn/start', { turn: 1 })
 
     const result = await assemble(ctx, {
@@ -264,6 +272,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       contexts.push(ctx)
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
+      await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(LlmDeepSeek, { baseURL: Protocol.PUBLIC_BASE_URL })
 
       const result = await assemble(ctx, {
@@ -294,7 +303,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
 
     const withThinking = await assemble(ctx,{
       model: FLASH,
-      reasoningEffort: ReasoningEffortId('low'),
+      reasoningEffort: brandString<ReasoningEffortId>('low'),
       messages: ask('Which is larger, 9.11 or 9.8? Answer with just the number.'),
       maxTokens: 2000,
     })
@@ -312,7 +321,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       // Turn 1: the model must call the tool (and think before it).
       const first = await assemble(ctx,{
         model: FLASH,
-        reasoningEffort: ReasoningEffortId('max'),
+        reasoningEffort: brandString<ReasoningEffortId>('max'),
         messages: ask('What is the weather in Paris right now? Use the get_weather tool.'),
         tools: [weatherTool],
         maxTokens: 2000,
@@ -330,7 +339,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       // block in history (the official thinking+tools passback rule).
       const second = await assemble(ctx,{
         model: FLASH,
-        reasoningEffort: ReasoningEffortId('max'),
+        reasoningEffort: brandString<ReasoningEffortId>('max'),
         messages: [
           ...ask('What is the weather in Paris right now? Use the get_weather tool.'),
           createMessage({
@@ -338,7 +347,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
             source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
           }),
           createToolResultMessage({
-            callId: ToolCallId(call!.id),
+            callId: brandString<ToolCallId>(call!.id),
             content: [{ type: 'text', text: 'Sunny, 22°C' }],
             isError: false,
           }),

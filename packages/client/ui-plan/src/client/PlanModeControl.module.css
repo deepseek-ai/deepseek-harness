@@ -23,12 +23,14 @@
   cursor: pointer;
 }
 
-.chip:hover:not(:disabled) {
-  background: color-mix(
-    in srgb,
-    var(--dsw-alias-state-business-tertiary),
-    var(--dsw-alias-state-business-primary) 6%
-  );
+@media (hover: hover) {
+  .chip:hover:not(:disabled) {
+    background: color-mix(
+      in srgb,
+      var(--dsw-alias-state-business-tertiary),
+      var(--dsw-alias-state-business-primary) 6%
+    );
+  }
 }
 
 .chip:focus-visible {
@@ -53,14 +55,24 @@
 }
 
 .hoverGlyph,
-.chip:hover:not(:disabled) .restGlyph,
 .chip:focus-visible .restGlyph {
   display: none;
 }
 
-.chip:hover:not(:disabled) .hoverGlyph,
+@media (hover: hover) {
+  .chip:hover:not(:disabled) .restGlyph {
+    display: none;
+  }
+}
+
 .chip:focus-visible .hoverGlyph {
   display: block;
+}
+
+@media (hover: hover) {
+  .chip:hover:not(:disabled) .hoverGlyph {
+    display: block;
+  }
 }
 
 .error {

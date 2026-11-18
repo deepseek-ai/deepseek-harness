@@ -1,18 +1,22 @@
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 /**
  * Consumer API tests over a fake provider and the real policy collaborator: schemas,
  * validation, formatting, typed errors, intent dispatch, and observation-driven authorization.
  */
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolResult } from '@deepseek-ai/dsh-tools'
-import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, type FsTargetKey, type FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
   FsEditOutcome,
@@ -32,13 +36,18 @@ import { sessionResolveOptions } from '../src/session-cwd.ts'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const testToolSignal = new AbortController().signal
 
 /** An in-memory fake provider; a test can arm a rejection on any primitive. */
 class FakeFs extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   files = new Map<string, string>()
   rejectWith?: FsError
@@ -50,7 +59,7 @@ class FakeFs extends FileSystem {
   }
 
   override async resolve(path: string): Promise<FsTarget> {
-    return { targetKey: FsTargetKey(`key:${path}`), displayPath: `/abs/${path}` }
+    return { targetKey: brandString<FsTargetKey>(`key:${path}`), displayPath: `/abs/${path}` }
   }
   override processPath(target: FsTarget): string { return target.displayPath }
   override fileUrl(target: FsTarget): string { return `file://${target.targetKey}` }
@@ -61,12 +70,12 @@ class FakeFs extends FileSystem {
     this.throwIfArmed()
     const content = this.files.get(target.targetKey)
     if (content === undefined) return undefined
-    return { version: FsVersion('v1'), type: 'file', size: content.length }
+    return { version: brandString<FsVersion>('v1'), type: 'file', size: content.length }
   }
   override async lstat(path: string): Promise<FsPathInfo | undefined> {
     const content = this.files.get(`key:${path}`)
     if (content === undefined) return undefined
-    return { version: FsVersion('v1'), type: 'file', size: content.length }
+    return { version: brandString<FsVersion>('v1'), type: 'file', size: content.length }
   }
   override async readText(target: FsTarget): Promise<string> {
     return this.files.get(target.targetKey) ?? ''
@@ -93,7 +102,7 @@ class FakeFs extends FileSystem {
     this.writeIntents.push(expected)
     const before = this.files.get(target.targetKey) ?? null
     this.files.set(target.targetKey, content)
-    return { operation: before !== null ? 'update' : 'create', version: FsVersion('v2'), before, after: content }
+    return { operation: before !== null ? 'update' : 'create', version: brandString<FsVersion>('v2'), before, after: content }
   }
   override async editText(target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }): Promise<FsEditOutcome> {
     this.throwIfArmed()
@@ -101,7 +110,7 @@ class FakeFs extends FileSystem {
     const content = this.files.get(target.targetKey) ?? ''
     const after = content.split(edit.oldString).join(edit.newString)
     this.files.set(target.targetKey, after)
-    return { version: FsVersion('v3'), before: content, after }
+    return { version: brandString<FsVersion>('v3'), before: content, after }
   }
 }
 
@@ -110,6 +119,7 @@ async function setup(config: ToolFs.Config = {}) {
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(FakeFs)
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs, config)
@@ -119,9 +129,9 @@ async function setup(config: ToolFs.Config = {}) {
 
 let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: object) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: args,
     ...agent ? { agent: agent as never } : {},
@@ -152,6 +162,7 @@ describe('registration', () => {
     { config: { read: false }, tools: ['edit', 'write'], sections: ['tool:edit', 'tool:write'] },
     { config: { write: false }, tools: ['edit', 'read'], sections: ['tool:edit', 'tool:read'] },
     { config: { edit: false }, tools: ['read', 'write'], sections: ['tool:read', 'tool:write'] },
+    { config: { write: false, applyPatch: true }, tools: ['apply_patch', 'edit', 'read'], sections: ['tool:apply_patch', 'tool:edit', 'tool:read'] },
     { config: { read: false, readImage: false, write: false, edit: false }, tools: [], sections: [] },
   ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
     const { ctx } = await setup(config)
@@ -159,14 +170,14 @@ describe('registration', () => {
       expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(tools)
       expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
         .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
-      const excluded = ['read', 'write', 'edit'].find(name => !tools.some(tool => tool === name))!
+      const excluded = ['read', 'write', 'edit', 'apply_patch'].find(name => !tools.some(tool => tool === name))!
       expect((await call(ctx, excluded, { file_path: 'a.txt' })).isError).toBe(true)
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
+  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }, { applyPatch: 'true' }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
     expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
   })
 
@@ -193,11 +204,11 @@ describe('registration', () => {
 
   it('declares read parallel-safe while write/edit remain exclusive', async () => {
     const { ctx } = await setup()
-    expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
       .toEqual({ kind: 'parallel' })
-    expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
       .toEqual({ kind: 'exclusive' })
-    expect(ctx.tools.executionMode({ signal: testToolSignal, callId: ToolCallId('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
       .toEqual({ kind: 'exclusive' })
   })
 
@@ -214,6 +225,7 @@ describe('registration', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(ToolFs) // no fs provider
     expect(ctx.tools.schemas()).toHaveLength(0)
   })
@@ -223,6 +235,7 @@ describe('registration', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(FakeFs)
     await ctx.plugin(FsPolicy)
     const fiber = await ctx.plugin(ToolFs)
@@ -275,6 +288,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: 'a.txt', offset: 0 })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('offset must be a positive integer')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a fractional offset and a zero/negative limit', async () => {
@@ -287,6 +301,7 @@ describe('read tool', () => {
       const result = await call(ctx, 'read', args)
       expect(result.isError, JSON.stringify(args)).toBe(true)
       expect(text(result)).toMatch(/must be a positive integer/)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     }
   })
 
@@ -302,6 +317,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: 'a.txt', limit: 99999 })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('less than or equal to 2000')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a blank file_path', async () => {
@@ -309,6 +325,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: '   ' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('records observed state so a follow-up edit by the same session is authorized', async () => {
@@ -331,7 +348,7 @@ describe('read tool', () => {
   it('rejects a non-regular target', async () => {
     const { ctx, fs } = await setup()
     fs.files.set('key:d', '')
-    fs.stat = async () => ({ version: FsVersion('v1'), type: 'directory' })
+    fs.stat = async () => ({ version: brandString<FsVersion>('v1'), type: 'directory' })
     const result = await call(ctx, 'read', { file_path: 'd' })
     expect(result.isError).toBe(true)
     expect(result.error).toMatchObject({ info: { code: 'FS_NOT_REGULAR_FILE' } })
@@ -342,7 +359,7 @@ describe('read tool', () => {
     fs.files.set('key:big.txt', 'alpha\nbeta')
     const readSpy = vi.spyOn(fs, 'readText')
     const streamSpy = vi.spyOn(fs, 'streamText')
-    fs.stat = async () => ({ version: FsVersion('v1'), type: 'file', size: STREAM_MIN_SIZE })
+    fs.stat = async () => ({ version: brandString<FsVersion>('v1'), type: 'file', size: STREAM_MIN_SIZE })
     const result = await call(ctx, 'read', { file_path: 'big.txt' })
     expect(result.isError).toBe(false)
     expect(text(result)).toContain('1: alpha')
@@ -354,7 +371,7 @@ describe('read tool', () => {
     const { ctx, fs } = await setup()
     fs.files.set('key:a.txt', 'alpha')
     const streamSpy = vi.spyOn(fs, 'streamText')
-    fs.stat = async () => ({ version: FsVersion('v1'), type: 'file' }) // no size
+    fs.stat = async () => ({ version: brandString<FsVersion>('v1'), type: 'file' }) // no size
     const result = await call(ctx, 'read', { file_path: 'a.txt' })
     expect(result.isError).toBe(false)
     expect(streamSpy).toHaveBeenCalled()
@@ -444,6 +461,7 @@ describe('write tool', () => {
     const result = await call(ctx, 'write', { file_path: '   ', content: 'hi' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('propagates a backend FsError as an isError result carrying its code and remedy', async () => {
@@ -482,6 +500,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: 'a.txt', old_string: 'x', new_string: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('must differ')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects an empty old_string', async () => {
@@ -489,6 +508,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: 'a.txt', old_string: '', new_string: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('old_string must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a blank file_path', async () => {
@@ -496,6 +516,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: '  ', old_string: 'a', new_string: 'b' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('propagates FS_NOT_OBSERVED when the file was never read (the gate decides)', async () => {
@@ -642,7 +663,7 @@ describe('result-time contextual diff (meta + presentResult)', () => {
     const { ctx, fs } = await setup()
     const session = { header: {} }
     fs.files.set('key:note.txt', 'initial')
-    vi.spyOn(fs, 'resolve').mockImplementation(async path => ({ targetKey: FsTargetKey(`key:${path}`), displayPath: `pretty://${path}` }))
+    vi.spyOn(fs, 'resolve').mockImplementation(async path => ({ targetKey: brandString<FsTargetKey>(`key:${path}`), displayPath: `pretty://${path}` }))
     vi.spyOn(fs, 'processPath').mockReturnValue('/execution/current/note.txt')
     const read = await call(ctx, 'read', { file_path: 'note.txt' }, { session })
     const write = await call(ctx, 'write', { file_path: 'note.txt', content: 'written' }, { session })
@@ -761,6 +782,7 @@ describe('read caps are plugin config', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(FakeFs)
     await ctx.plugin(FsPolicy)
     await ctx.plugin(ToolFs, config)
@@ -775,6 +797,7 @@ describe('read caps are plugin config', () => {
     const overCap = await call(ctx, 'read', { file_path: 'a.txt', limit: 3 })
     expect(overCap.isError).toBe(true)
     expect(text(overCap)).toContain('less than or equal to 2')
+    expect(overCap.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     const readSchema = ctx.tools.schemas().find(s => s.name === 'read')
     expect(JSON.stringify(readSchema)).toContain('Defaults to 2.')
   })
@@ -819,6 +842,7 @@ describe('read caps are plugin config', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(FakeFs)
     await expect(ctx.plugin(ToolFs, config)).rejects.toThrow(new RegExp(`tool-fs: ${name} must be a positive integer`))
   })
@@ -862,8 +886,9 @@ describe('sandbox escalation API (write/edit)', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     await ctx.plugin(SandboxingFakeFs)
     await ctx.plugin(FsPolicy)
@@ -874,7 +899,7 @@ describe('sandbox escalation API (write/edit)', () => {
 
   /** A fake agent whose session records appends (the approval audit trail), mid-turn, carrying the given events for the fold. */
   function escalationAgent(records: Array<{ type: string; data?: Record<string, unknown> }> = []): object {
-    const id = SessionId('sess-fs-esc')
+    const id = brandString<SessionId>('sess-fs-esc')
     const events: Array<{
       type: string
       seq: ReturnType<typeof SessionSeq>
@@ -927,6 +952,7 @@ describe('sandbox escalation API (write/edit)', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(SandboxingFakeFs)
     await expect(ctx.plugin(ToolFs)).rejects.toThrow('tool-fs: the mounted filesystem confines but ctx.sandboxPolicy is missing')
   })
@@ -956,7 +982,7 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(fs.stamped).toEqual([{
       mode: 'workspace-write',
       workspaceRoot: '/session-project',
-      sessionId: SessionId('sess-fs-esc'),
+      sessionId: brandString<SessionId>('sess-fs-esc'),
     }])
   })
 
@@ -966,7 +992,7 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(fs.stamped).toEqual([{
       mode: 'read-only',
       workspaceRoot: '/session-project',
-      sessionId: SessionId('sess-fs-esc'),
+      sessionId: brandString<SessionId>('sess-fs-esc'),
     }])
   })
 
@@ -977,6 +1003,24 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('[sandbox: file access denied under workspace-write mode]')
     expect(text(result)).toContain('retry this exact operation once with sandbox_permissions')
+  })
+
+  it('keeps read-only denials when an ordinary write includes a blank reason', async () => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      fs.rejectWith = new FsError('denied', 'FS_SANDBOX_DENIED')
+      const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', justification: '' },
+        escalationAgent([{ type: 'sandbox/mode', data: { mode: 'read-only' } }]))
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('[sandbox: file access denied under read-only mode]')
+      expect(fs.stamped[0]?.mode).toBe('read-only')
+      expect(fs.files.size).toBe(0)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('a non-FS_SANDBOX_DENIED provider error passes through unchanged', async () => {
@@ -993,8 +1037,8 @@ describe('sandbox escalation API (write/edit)', () => {
     ctx.on('approval/request', () => Promise.resolve('allowed-once' as const))
     // Pass a signal so the escalation ask forwards it to the approval request
     // (the request rides the tool-execution abort signal).
-    await ctx.tools.execute({
-      callId: ToolCallId('call-fs-esc-grant'),
+    await executeToolFixture(ctx, {
+      callId: brandString<ToolCallId>('call-fs-esc-grant'),
       name: 'write',
       arguments: { file_path: 'a.txt', content: 'x', sandbox_permissions: 'danger-full-access', justification: 'the test needs it' },
       agent: escalationAgent() as never,
@@ -1003,7 +1047,7 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(fs.stamped).toEqual([{
       mode: 'danger-full-access',
       workspaceRoot: '/session-project',
-      sessionId: SessionId('sess-fs-esc'),
+      sessionId: brandString<SessionId>('sess-fs-esc'),
     }])
   })
 
@@ -1014,8 +1058,59 @@ describe('sandbox escalation API (write/edit)', () => {
     }, escalationAgent([{ type: 'sandbox/mode', data: { mode } }]))
     expect(result.isError).toBe(false)
     expect(fs.stamped).toEqual([{
-      mode, workspaceRoot: '/session-project', sessionId: SessionId('sess-fs-esc'),
+      mode, workspaceRoot: '/session-project', sessionId: brandString<SessionId>('sess-fs-esc'),
     }])
+  })
+
+  it.each(['workspace-write', 'danger-full-access'] as const)('writes and edits under %s with absent or blank unused reasons', async (mode) => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      const agent = escalationAgent([{ type: 'sandbox/mode', data: { mode } }])
+      for (const [index, justification] of ['', undefined, ' \t\n'].entries()) {
+        for (const repeatMode of [true, false]) {
+          const file_path = `unused-reason-${index}-${repeatMode}.txt`
+          const args = {
+            file_path,
+            ...repeatMode ? { sandbox_permissions: mode } : {},
+            ...justification === undefined ? {} : { justification },
+          }
+          const written = await call(ctx, 'write', { ...args, content: 'before' }, agent)
+          expect(written.isError, text(written)).toBe(false)
+          const edited = await call(ctx, 'edit', { ...args, old_string: 'before', new_string: 'after' }, agent)
+          expect(edited.isError, text(edited)).toBe(false)
+          expect(fs.files.get(`key:${file_path}`)).toBe('after')
+        }
+      }
+      expect(fs.stamped).toHaveLength(12)
+      expect(fs.stamped.every(policy => policy?.mode === mode && policy.workspaceRoot === '/session-project')).toBe(true)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['write', 'edit'] as const)('rejects missing or blank widening reasons before %s mutates or requests approval', async (tool) => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      for (const justification of [undefined, '', ' \t\n']) {
+        const result = await call(ctx, tool, {
+          file_path: 'denied.txt', content: 'x', old_string: 'x', new_string: 'y',
+          sandbox_permissions: 'workspace-write',
+          ...justification === undefined ? {} : { justification },
+        }, escalationAgent([{ type: 'sandbox/mode', data: { mode: 'read-only' } }]))
+        expect(result.isError).toBe(true)
+        expect(text(result)).toContain(justification === undefined ? 'requires a justification' : 'expected a non-empty sentence')
+      }
+      expect(fs.stamped).toEqual([])
+      expect(fs.files.size).toBe(0)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('a rejected escalation fails closed with its own text and never mutates', async () => {
@@ -1043,16 +1138,24 @@ describe('sandbox escalation API (write/edit)', () => {
 
   it('rejects the escalation argument pairing (one field without the other)', async () => {
     const { ctx } = await setupConfining()
-    const missing = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write' }, escalationAgent())
+    const missing = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'danger-full-access' }, escalationAgent())
     expect(missing.isError).toBe(true)
     expect(text(missing)).toContain('sandbox_permissions requires a justification')
+    const orphan = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', justification: 'why' }, escalationAgent())
+    expect(orphan.isError).toBe(true)
+    expect(text(orphan)).toContain('justification is only valid together with sandbox_permissions')
   })
 
-  it('sandbox_permissions under a non-confining backend fails closed (unadvertised field still reaches execute)', async () => {
+  it.each([
+    { sandbox_permissions: 'workspace-write', justification: 'why' },
+    { sandbox_permissions: 'workspace-write' },
+    { justification: 'why' },
+  ])('rejects unadvertised escalation fields under a non-confining backend as argument errors: %o', async (fields) => {
     const { ctx } = await setup()
-    const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write', justification: 'why' }, escalationAgent())
+    const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', ...fields }, escalationAgent())
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('not available in this composition')
+    expect(text(result)).toContain('invalid arguments: sandbox_permissions and justification are not available in this composition')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 })
 
@@ -1066,9 +1169,9 @@ async function guidanceScope(ctx: Context) {
 }
 
 const originalGuidance = {
-  read: 'Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.',
-  write: 'Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.',
-  edit: 'Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.',
+  read: 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
+  write: 'Read an existing file before overwriting it with write and prefer edit for targeted changes.',
+  edit: 'Read a file before editing it unless you just created or edited it in this session.',
 }
 
 describe('scope-aware filesystem guidance', () => {
@@ -1127,7 +1230,7 @@ class GuidancePtcRuntime extends PtcRuntime {
 
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  run() { return Promise.resolve({ logs: [] }) }
+  run() { return Promise.resolve({ output: [] }) }
 }
 
 describe('scope-aware PTC guidance', () => {
@@ -1137,7 +1240,8 @@ describe('scope-aware PTC guidance', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(GuidancePtcRuntime)
-    await ctx.plugin(ToolRuntime, { mode })
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
     await ctx.plugin(FakeFs)
     await ctx.plugin(ToolFs)
     const { key, scope } = await guidanceScope(ctx)

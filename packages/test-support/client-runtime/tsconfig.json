@@ -3,12 +3,18 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    "types": ["client-build-environment", "node"]
+    "types": [
+      "client-build-environment",
+      "node"
+    ]
   },
   "include": [
     "src"
   ],
   "references": [
+    {
+      "path": "../../client/config"
+    },
     {
       "path": "../../../vendor/cordis"
     },
@@ -23,6 +29,9 @@
     },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-session-status/tsconfig.client.json"
     },
     {
       "path": "../../api/workspace-controller/tsconfig.client.json"
@@ -61,7 +70,7 @@
       "path": "../../client/ui-renderer"
     },
     {
-      "path": "../../client/ui-workspace"
+      "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {
       "path": "../../client/ui-session"
@@ -85,7 +94,10 @@
       "path": "../remote-mock"
     },
     {
-      "path": "../../client/hmr"
+      "path": "../../client/hmr/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-context-menu"
     }
   ]
 }

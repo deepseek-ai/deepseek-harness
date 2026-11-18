@@ -15,26 +15,26 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-primitives/use-this-package:
-  en: 7bae72c97d0449f5
-  zh: 4589ecc2b216edc5
+  en: f4b8f00c40213dc1
+  zh: 7d12e0b41beabda4
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/component-catalog:
-  en: 6f5457b84fc9db09
-  zh: 85993f1c44bfee2c
+  en: 07574e4640e01163
+  zh: cc3f074a6ec0a17d
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/controls-and-icons:
-  en: 28ac8f0b1edbcf81
-  zh: 5c4c324bf84a282f
+  en: ba57395620c1aab5
+  zh: 551f454132fb4669
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/rendering-agent-output:
-  en: 12fe9d9b1410edef
-  zh: f2dfdc01170d7cce
+  en: 7fed4894a6d0d568
+  zh: c22881bfcef2d4b6
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/localizing-copy:
-  en: 4aef65dea11de083
-  zh: abc22cd7c65cdf38
+  en: 3942dc183d5f966d
+  zh: 63b1a07476fbc672
 /deepseek-ai-dsh-client-ui-primitives/understand-the-implementation:
-  en: 0b4082dbb778476f
-  zh: b6daaaf9de675b57
+  en: 6711120ef56212fb
+  zh: b18541d630196881
 /deepseek-ai-dsh-client-ui-primitives/understand-the-implementation/source-map:
-  en: 44eb32370cbeafe8
-  zh: 728009c66375c6bb
+  en: a39e67d79e171221
+  zh: 593e260c073336f9
 /deepseek-ai-dsh-client-ui-primitives/understand-the-implementation/input-modality:
   en: cb61e1a37d6c27e5
   zh: 1f3fa79dd5ab2e45
@@ -45,8 +45,8 @@
   en: 45f4cd1ef96bb6d2
   zh: f264d25b780ad1dc
 /deepseek-ai-dsh-client-ui-primitives/further-exploration:
-  en: e82b713cdb2f954b
-  zh: a877f34b148f433f
+  en: 19f1407f92cb8264
+  zh: 16205d2db9c91ad1
 /deepseek-ai-dsh-client-ui-primitives/model-experience:
   en: 3120df665299c634
   zh: 1d9f365d091d0d2a
@@ -54,8 +54,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-primitives/known-limitations-and-deferred-work:
-  en: 22fc14aa3a224552
-  zh: aa6309e84ad8c2a3
+  en: 96ab15bc5b281c46
+  zh: b1e073e60e348b0e
 /deepseek-ai-dsh-client-ui-primitives/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

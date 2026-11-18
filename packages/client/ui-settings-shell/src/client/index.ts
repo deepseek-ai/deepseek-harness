@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { ShellCard } from './ShellCard.tsx'
 import { BASH_NS, PWSH_NS, ShellCardController } from './shell-card-controller.ts'
-import { en, zh, type ShellSettingsLocaleKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type ShellSettingsLocaleKey } from './locales.ts'
 
 export type { ShellCardProps } from './ShellCard.tsx'
 export type { ShellCardFace, ShellCardState, ShellSettings } from './shell-card-controller.ts'
@@ -42,7 +42,7 @@ export const inject = ['slots', 'locale', 'configForms']
  */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-shell: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-settings-shell: dictionaries')
   // The base bundle composes exactly one shell executor per platform; the page binds the served one.
   const bash = new ShellCardController(ctx.configForms.get(BASH_NS))
   const pwsh = new ShellCardController(ctx.configForms.get(PWSH_NS))

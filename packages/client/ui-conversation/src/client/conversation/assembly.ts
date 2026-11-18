@@ -19,23 +19,39 @@ import type {
 } from '../contract/request-inspection.ts'
 import { inspectRequestPrompt } from '../contract/request-inspection.ts'
 import { inspectSystemPrompt, type SystemPromptState } from '../contract/system-prompt.ts'
-import { ConversationNodeAssembler } from './assembler.ts'
+import { ConversationNodeAssembler, ConversationUpdateError } from './assembler.ts'
 import { ConversationEventRegistry } from './event-registry.ts'
 import { HistoricalImageCache } from './historical-images.ts'
 import { ConversationViewRegistry } from './view-registry.ts'
 import { ConversationGroupRegistry } from './group-registry.ts'
+import { ConversationInteractionRegistry } from './interaction-registry.ts'
 import { UserTextRegistry } from './user-text-registry.ts'
 
-/** Observable faces published for one Session's Conversation assembly. */
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionRetainFacetMap {
+    /**
+     * Conversation assembly of the Session's event window. While a reference retains it, the binding folds the
+     * window and follows its changes; when the last such reference is released, the binding drops the fold and
+     * publishes the empty result, and retaining it again folds the current window once.
+     */
+    conversation: unknown
+  }
+}
+
+/**
+ * Observable faces published for one Session's Conversation assembly. Every face follows the
+ * Session only while a reference retains the `conversation` facet.
+ */
 export interface ConversationBinding {
   readonly snapshot: ObservableSnapshot<ConversationSnapshot>
   /**
    * Identity-stable source of the latest turn number, undefined unless its start is loaded and it remains open.
-   * Turn changes publish synchronously, including without an active View.
+   * Turn changes publish synchronously while the facet is retained, including without an active View.
    */
   readonly openTurn: ObservableSnapshot<number | undefined>
   /**
-   * Add one selected target to the Session's monotonic active set.
+   * Add one selected target to the Session's monotonic active set; while the facet is not retained,
+   * the target's view stays empty until retention folds the window.
    * @param target - registered or subsequently registered Conversation target.
    */
   activate(target: string): void
@@ -58,19 +74,34 @@ class BoundConversation implements ConversationBinding {
   private readonly targetSources = new Map<string, ObservableSnapshot<unknown>>()
   private revision = -1
   private frame: number | undefined
+  private following = false
+  /** Whether the assembler holds the window at `revision`; a failed fold leaves nothing to extend incrementally. */
+  private folded = false
   private disposeFeed: () => void = () => {}
+  private disposeRetained: () => void = () => {}
 
+  /**
+   * @param feed - the Session's contiguous event window.
+   * @param assembler - this binding's Node assembler.
+   * @param retained - whether any reference retains the `conversation` facet; assembly follows the feed only while true.
+   */
   constructor(
-    feed: SessionEventSource,
+    private readonly feed: SessionEventSource,
     private readonly assembler: ConversationNodeAssembler,
+    private readonly retained: ObservableSnapshot<boolean>,
   ) {
     this.viewStore = assembler
     this.snapshot = createSnapshotStore(this.currentSnapshot())
     this.openTurn = createSnapshotStore(assembler.openTurn())
-    this.replace(feed.getSnapshot())
-    this.disposeFeed = feed.subscribe(() => {
-      this.accept(feed.getSnapshot())
-    })
+  }
+
+  /**
+   * Begin following facet retention; the owner registers this binding's disposal first,
+   * so subscriptions acquired before a failed initial fold still have an owner.
+   */
+  start(): void {
+    this.disposeRetained = this.retained.subscribe(() => { this.follow(this.retained.getSnapshot()) })
+    this.follow(this.retained.getSnapshot())
   }
 
   target<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
@@ -93,15 +124,59 @@ class BoundConversation implements ConversationBinding {
   }
 
   activate(target: string): void {
-    if (this.assembler.activateTarget(target)) this.snapshot.set(this.currentSnapshot())
-    this.openTurn.set(this.assembler.openTurn())
+    this.publishing(() => this.assembler.activateTarget(target))
   }
 
-  rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
+  rebuild(): void {
+    // A binding that does not follow holds no fold; following again rebuilds against the current registry.
+    if (!this.following) return
+    this.publish(this.assembler.rebuildRegistry())
+  }
 
   dispose(): void {
+    this.following = false
+    this.disposeRetained()
     this.cancelFrame()
     this.disposeFeed()
+  }
+
+  /**
+   * Start or stop following the feed. Starting folds the whole current window and publishes it at once;
+   * stopping drops the fold and publishes the empty result.
+   */
+  private follow(retained: boolean): void {
+    if (retained === this.following) return
+    this.following = retained
+    this.cancelFrame()
+    if (!retained) {
+      this.disposeFeed()
+      this.disposeFeed = () => {}
+      this.folded = false
+      this.publishing(() => {
+        this.assembler.rebuildRegistry([], false)
+        return this.assembler.flush()
+      })
+      return
+    }
+    // A dispatch already in progress keeps a copy of its listeners, so the callback checks
+    // whether the binding still follows rather than relying on unsubscription alone.
+    this.disposeFeed = this.feed.subscribe(() => {
+      if (this.following) this.accept(this.feed.getSnapshot())
+    })
+    this.foldWindow()
+  }
+
+  /** Fold the whole current window against the current registry and publish it synchronously. */
+  private foldWindow(): void {
+    const window = this.feed.getSnapshot()
+    this.folded = false
+    this.cancelFrame()
+    this.publishing(() => {
+      this.assembler.rebuildRegistry(window.entries, window.hasMore)
+      this.revision = window.revision
+      this.folded = true
+      return this.assembler.flush()
+    })
   }
 
   private replace(window: SessionEventWindow): void {
@@ -110,6 +185,10 @@ class BoundConversation implements ConversationBinding {
   }
 
   private accept(window: SessionEventWindow): void {
+    if (!this.folded) {
+      this.foldWindow()
+      return
+    }
     if (window.revision === this.revision) return
     if (window.revision !== this.revision + 1 || window.change.kind === 'replace') {
       this.replace(window)
@@ -165,7 +244,23 @@ class BoundConversation implements ConversationBinding {
   }
 
   private flush(): void {
-    if (this.assembler.flush()) this.snapshot.set(this.currentSnapshot())
+    this.publishing(() => this.assembler.flush())
+  }
+
+  /** Publish an assembler result, including a complete rebuild that the assembler finished before it reported a failure. */
+  private publishing(operation: () => boolean): void {
+    let changed: boolean
+    try {
+      changed = operation()
+    } catch (error: unknown) {
+      if (error instanceof ConversationUpdateError && error.rebuilt) this.publishSnapshot(true)
+      throw error
+    }
+    this.publishSnapshot(changed)
+  }
+
+  private publishSnapshot(changed: boolean): void {
+    if (changed) this.snapshot.set(this.currentSnapshot())
     this.openTurn.set(this.assembler.openTurn())
   }
 
@@ -193,6 +288,8 @@ export class UiConversation extends Service {
   readonly groups: ConversationGroupRegistry
   /** Pure text rules and parser snapshots, independent of durable Session assembly. */
   readonly userText: UserTextRegistry
+  /** Plugin-owned handlers for selection and context-menu gestures. */
+  readonly interactions: ConversationInteractionRegistry
   private readonly bindings = new WeakMapWithValues<SessionBinding, BindingRecord>()
   private readonly images: HistoricalImageCache
 
@@ -206,6 +303,7 @@ export class UiConversation extends Service {
     this.views = new ConversationViewRegistry(ctx)
     this.groups = new ConversationGroupRegistry(ctx, this.views)
     this.userText = new UserTextRegistry(ctx)
+    this.interactions = new ConversationInteractionRegistry(ctx)
     this.images = new HistoricalImageCache(ctx, sessions)
     const rebuild = (): void => {
       for (const record of this.bindings.values) record.binding.rebuild()
@@ -250,6 +348,7 @@ export class UiConversation extends Service {
     const binding = new BoundConversation(
       owner.eventSource,
       new ConversationNodeAssembler(this.events, this.views, this.groups),
+      this.retainedConversation(owner),
     )
     const record: BindingRecord = { source: owner, binding, disposeScope: () => {} }
     this.bindings.set(owner, record)
@@ -258,13 +357,33 @@ export class UiConversation extends Service {
       'ui-conversation binding',
     )
     record.disposeScope = () => { void disposeScope() }
+    try {
+      binding.start()
+    } catch (error: unknown) {
+      // A failed initial fold leaves no binding behind, so the next resolution starts afresh.
+      this.drop(record, true)
+      throw error
+    }
     return binding
   }
 
   /**
-   * Resolve one session-authorized durable image URL, cached per Session so
+   * Whether a reference retains the `conversation` facet of this exact binding; a same-id
+   * replacement generation's counts do not apply to a binding that is no longer current.
+   */
+  private retainedConversation(owner: SessionBinding): ObservableSnapshot<boolean> {
+    const info = this.sessions.retainInfo(owner.sessionId)
+    return {
+      getSnapshot: () => this.sessions.binding(owner.sessionId) === owner
+        && (info.getSnapshot().retainedFacets?.conversation ?? 0) > 0,
+      subscribe: listener => info.subscribe(listener),
+    }
+  }
+
+  /**
+   * Resolve one Gateway-authorized durable image URL, cached per Session so
    * every Conversation target shares one read and one browser URL.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference from a session event.
    * @returns browser URL valid until the Session binding is released.
    */
@@ -274,7 +393,7 @@ export class UiConversation extends Service {
 
   /**
    * Read a cached durable image URL synchronously when one is available.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference from a session event.
    * @returns current preview or canonical URL, if cached.
    */
@@ -286,7 +405,7 @@ export class UiConversation extends Service {
    * Adopt an already-displayable URL for one durable reference (see
    * HistoricalImageCache.seed): the transcript node then renders it without a
    * byte round-trip.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference the URL displays.
    * @param url - browser URL to adopt.
    * @returns whether the cache took URL ownership.

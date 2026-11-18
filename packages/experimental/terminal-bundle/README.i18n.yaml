@@ -3,35 +3,35 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/terminal-bundle/README.md
 /:
-  en: a7cd372176f1d476
-  zh: 07276ed339e7bc02
+  en: 62a9c0d52c672fc2
+  zh: ceb5f7141cd7e3b9
 /deepseek-ai-dsh-experimental-terminal-bundle:
   en: cc18693529aee09c
   zh: fbf1c7d8388eeba8
 /deepseek-ai-dsh-experimental-terminal-bundle/summary:
-  en: 161ff8d60aa7623e
-  zh: 90ea4ac87b96f20a
+  en: 39707e225afc6561
+  zh: a25a811aa3377d3f
 /deepseek-ai-dsh-experimental-terminal-bundle/table-of-contents:
   en: d152484eb41ac6b4
   zh: 988e839059414d27
 /deepseek-ai-dsh-experimental-terminal-bundle/use-this-package:
-  en: 924d2c0de1f247a7
-  zh: 7d77aef5ceb3f097
+  en: 8b2d9dd5727d0a27
+  zh: ca6c9b8e3d196a54
 /deepseek-ai-dsh-experimental-terminal-bundle/understand-the-implementation:
-  en: 0da35df3f93e3b7f
-  zh: 481b786e161616ab
+  en: fcebdcd659f55f24
+  zh: 7837339127a15e40
 /deepseek-ai-dsh-experimental-terminal-bundle/further-exploration:
-  en: 9956186ebda37273
-  zh: eb622f1391f61ad4
+  en: 3e26c10b04beb08f
+  zh: 1f810053e6401ca3
 /deepseek-ai-dsh-experimental-terminal-bundle/model-experience:
-  en: 33b928765f080dbf
-  zh: a0ed945765c3b62f
+  en: 2bac34c923c6cb8e
+  zh: e42998adc33a51fb
 /deepseek-ai-dsh-experimental-terminal-bundle/model-experience/kv-cache-effect:
   en: 25f20eda0e696067
   zh: 378c4a15a5704ba0
 /deepseek-ai-dsh-experimental-terminal-bundle/known-limitations-and-deferred-work:
-  en: 733d0915ef050bf3
-  zh: 5a063b82230c73a4
+  en: 7e2341b40b08997e
+  zh: 5250e5202bad8788
 /deepseek-ai-dsh-experimental-terminal-bundle/known-limitations-and-deferred-work/dev-note:
   en: 279d01435256cd2a
   zh: 83780964e5de2f54

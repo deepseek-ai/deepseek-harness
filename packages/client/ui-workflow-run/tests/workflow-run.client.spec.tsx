@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { Context } from '@deepseek-ai/cordis'
@@ -350,6 +351,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useTrajectory: selector => selector(panelTrajectory),
     useInput: () => { throw new Error('unused') },
     inputActions: {
+      insertQuote: () => false,
       captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
       insertText: () => false,
       setDraft: () => {},
@@ -361,6 +363,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     },
     useWorkspaces: selector => selector(panelWorkspace),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useTurnData: () => undefined,
     useDisclosure: () => { throw new Error('unused') },
     useGroupAction: () => { throw new Error('unused') },
@@ -368,7 +371,6 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     inspectCall: () => {},
     forkAt: () => {},
     loadImage: () => Promise.reject(new Error('not used')),
-    fileMentions: () => undefined,
     openSession,
     t: makeTranslate(zh),
   }
@@ -883,14 +885,14 @@ describe('WorkflowRunPanel', () => {
       byId: { ...listState().byId, [CHILD_ID]: { ...listState().byId[CHILD_ID]!, running: false } },
     })
     const openSession = vi.fn()
-    let statuses = new Map([[CHILD_ID, { running: true, pendingInteraction: undefined, completionUnread: false }]])
+    let statuses = new Map([[CHILD_ID, { running: true, pendingInteraction: undefined, completionUnread: false, completionFailed: false }]])
     const props: WorkflowRunPanelProps = { ...panelProps(data, sessions, openSession),
       useSessionStatus: select => select(statuses),
     }
     const view = render(<WorkflowRunPanel {...props} />)
     fireEvent.click(screen.getByRole('button', { name: '打开 worker' }))
     expect(openSession).toHaveBeenCalledWith({ parentSessionId: PARENT_ID, childSessionId: CHILD_ID, mode: 'one-shot' })
-    statuses = new Map([[CHILD_ID, { running: false, pendingInteraction: undefined, completionUnread: false }]])
+    statuses = new Map([[CHILD_ID, { running: false, pendingInteraction: undefined, completionUnread: false, completionFailed: false }]])
     view.rerender(<WorkflowRunPanel {...props} />)
     expect(screen.queryByRole('button', { name: '打开 worker' })).toBeNull()
   })
@@ -938,6 +940,7 @@ describe('plugin lifecycle', () => {
     ctx.provide('sessions', sessions)
     const openSession = vi.fn(async () => {})
     ctx.provide('uiWorkspace', { openSession } as never)
+    ctx.provide('uiSession.sessionStatus', createSnapshotStore(new Map()) as never)
     const conversationEvents = new UiConversation(ctx, ctx.sessions).events
     ctx.slots.register({
       name: 'root',

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Editor de configuración de complementos",
+    "description": "Guarde la configuración del complemento y aplique los cambios a la configuración en ejecución actual."
+  }
+}

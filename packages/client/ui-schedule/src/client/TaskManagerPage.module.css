@@ -34,15 +34,23 @@
   --dsh-scrollbar-thumb-border: 2px;
 }
 
-/* The Plugins page's centered column: the same 960px cap and
-   clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
-   share one content frame at every width. */
+/* Matches the Plugins page's 960px column and responsive inline insets. */
 .pageContent {
-  max-width: 960px;
+  max-width: calc(960px + 2 * clamp(24px, 4vw, 48px));
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
+}
+
+@media (max-width: 767px) {
+  .pageContent {
+    padding-inline: 20px;
+  }
 }
 
 /* Page title and creation actions. */
@@ -87,14 +95,53 @@
   white-space: nowrap;
 }
 
-/* The Plugins toolbar's Add-plugin step: a 32px capsule with the 13px label. */
-.newButton {
+/* Header actions use the standard-control radius at their compact page height. */
+.headerAction {
   height: 32px;
   font-size: 13px;
   line-height: 20px;
   padding: 0 12px;
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-md);
 }
+
+/* The existing Plugins page's adjacent creation menu. */
+.createGroup { display: inline-flex; align-items: stretch; }
+.createPrimary { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.createMore {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+  border-radius: 0 var(--dsw-radius-md) var(--dsw-radius-md) 0;
+  border-left: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 30%, transparent);
+}
+.createMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
+.targetMenu { width: 320px; max-width: calc(100vw - 48px); }
+.targetMenu [role='menuitem'] { height: 72px; box-sizing: border-box; gap: 10px; padding: 6px 12px; }
+.targetMenuItem { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+.targetMenuDescription {
+  display: -webkit-box;
+  max-height: 36px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.workspaceMenu { width: 320px; max-width: calc(100vw - 48px); }
+.workspaceMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
+.workspaceMenuItem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.workspaceMenuItem > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.workspaceMenuPath { line-height: 18px; }
+.taskEditor { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 20px; }
+.editorField { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
+.editorField > h3 { margin: 0; font: inherit; }
+.editorField input::placeholder,
+.instruction::placeholder { color: var(--dsw-alias-label-secondary); }
+.hostSessionFooter { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px var(--detail-gutter); font-size: 13px; }
+.hostSessionFooter button { min-width: 0; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; }
+.hostSessionEmpty { color: var(--dsw-alias-label-tertiary); }
 
 /* The mock's `.list-tools`: the one row of filter tabs, 8px between chips and
    20px between the groups, with the list 14px below. */
@@ -113,9 +160,7 @@
   gap: 8px 12px;
 }
 
-/* The mock's `.tab`: the filter chip's 28px box, 10px sides, 14px radius, and
-   the mock's 14px label. The selected chip takes the mock's `--hover` fill at
-   the chip's own weight instead of the atom's bordered capsule. */
+/* Filter chips use the compact-control radius and retain a stable footprint. */
 .filterTab {
   display: inline-flex;
   flex: none;
@@ -123,7 +168,7 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
@@ -133,8 +178,10 @@
   cursor: pointer;
 }
 
-.filterTab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .filterTab:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .filterTabActive {
@@ -146,20 +193,43 @@
    neutral hairline, the 10px radius, and the mock's `--muted` leading icon. The
    mock brightens the border on hover and takes the brand stroke on focus
    rather than drawing a ring around the control. */
-.searchField {
+.searchTools {
+  --task-search-height: 36px;
   display: flex;
   align-items: center;
-  height: 36px;
-  margin: 0 0 16px;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.catalogMore {
+  width: var(--task-search-height);
+  height: var(--task-search-height);
+  padding: 0;
+}
+
+.catalogMore[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.searchField {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  height: var(--task-search-height);
+  margin: 0;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-tertiary);
   transition: border-color 0.15s;
 }
 
-.searchField:hover {
-  border-color: var(--dsw-alias-border-l2);
+@media (hover: hover) {
+  .searchField:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .searchField:focus-within {
@@ -188,7 +258,7 @@
 }
 
 .searchField input::placeholder {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .searchField input:focus-visible {
@@ -219,7 +289,9 @@
 /* The mock's `#rule-list`: the catalog notices and the rows share one column
    with no box of their own. */
 .list {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 
 /* The Plugins page's `.cards` column: 2px between rows. */
@@ -242,13 +314,15 @@
   width: 100%;
   height: auto;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   text-align: left;
   white-space: normal;
 }
 
-.row:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rowGlyph {
@@ -314,12 +388,22 @@
   color: var(--dsw-alias-label-caption);
 }
 
-.endedRow:hover .rowTitle,
+@media (hover: hover) {
+  .endedRow:hover .rowTitle {
+    color: inherit;
+  }
+}
+
 .endedRow.selectedRow .rowTitle {
   color: inherit;
 }
 
-.endedRow:hover .rowSummary,
+@media (hover: hover) {
+  .endedRow:hover .rowSummary {
+    color: var(--dsw-alias-label-tertiary);
+  }
+}
+
 .endedRow.selectedRow .rowSummary {
   color: var(--dsw-alias-label-tertiary);
 }
@@ -336,7 +420,7 @@
   gap: 9px;
   margin: 0 0 20px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-sidebar-fill);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -346,6 +430,20 @@
 .notice p {
   flex: 1;
   margin: 0;
+}
+
+.conflictNotice {
+  align-items: center;
+}
+
+/* Wrap the review action below its message in narrow detail panes. */
+.conflictNotice p {
+  flex-basis: 20em;
+  min-width: 0;
+}
+
+.conflictNotice > button {
+  margin-left: auto;
 }
 
 /* The centered state every panel without content shares: empty, deleted,
@@ -386,6 +484,14 @@
 .emptyGlyph {
   margin-bottom: 12px;
   color: var(--dsw-alias-label-caption);
+}
+
+.emptyIllustration {
+  flex: none;
+  width: 110px;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 12px;
 }
 
 /* The mock's `.empty h3 + .btn`: the empty state's action keeps the mock's 16px
@@ -457,7 +563,7 @@
   margin-right: calc(6px - var(--detail-gutter));
 }
 
-/* The mock's `.detail-heading`: the name control is the first content of the
+/* The mock's `.detail-heading`: the task name is the first content of the
    scrolling rule view, directly above the next-run line and with no separator
    of its own between them. */
 .detailHeader {
@@ -467,33 +573,8 @@
   margin-bottom: 4px;
 }
 
-/* The mock's `.edit-name`: the stored task name as one borderless line that
-   underlines only on hover and focus. The detail pane's primary text at 500 weight. */
-.editName {
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 500;
-}
-
-.editName:hover {
-  box-shadow: 0 1px var(--dsw-alias-border-l3);
-}
-
-.editName:focus {
-  box-shadow: 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-}
-
-/* An ended task's stored name as plain text on the control's step, padded to
-   the control's 32px height so the header keeps one figure. */
+/* The mock's `.edit-name` as plain text: the stored task name in the detail
+   pane's primary text at 500 weight, padded to a 32px line. */
 .readonlyName {
   flex: 1;
   min-width: 0;
@@ -555,6 +636,8 @@
   padding: 0 var(--detail-gutter);
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
+
+.createTitle { margin: 0; font: inherit; font-weight: 500; }
 
 .detailTabs {
   display: flex;
@@ -637,6 +720,7 @@
   min-height: 0;
   overflow: auto;
   padding: 24px var(--detail-gutter) 28px;
+  padding-right: max(0px, calc(var(--detail-gutter) - var(--detail-scrollbar-space, 0px)));
   scrollbar-gutter: stable;
   --dsh-scrollbar-width: 9px;
   --dsh-scrollbar-thumb-border: 2px;
@@ -654,7 +738,6 @@
   margin: 24px var(--detail-gutter) 0;
 }
 
-.recordsPanel:not([hidden]),
 .deliveryHistory {
   display: flex;
   flex: 1;
@@ -692,8 +775,10 @@
   cursor: pointer;
 }
 
-.retentionInfo:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .retentionInfo:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .retentionInfo:focus-visible {
@@ -704,7 +789,7 @@
 .retentionRule {
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -716,35 +801,13 @@
   margin-top: 6px;
 }
 
-/* The mock puts the border on the rows group, not on the card that carries the
-   `运行时间` heading. */
-.ruleCard {
-  margin-top: 28px;
-}
-
-/* The mock's `.automation-detail .form-section h3`: the `运行时间` heading is
-   13px tertiary ink, regular weight, and the mock's 20px leading. The 6px
-   lead-in nudges it off the card's rounded edge, as the hint below. */
-.ruleCard h3 {
-  margin: 0 0 8px 10px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 400;
-}
-
 .ruleRows {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
-}
-
-/* Escape-key guard around a dropdown: the wrapper takes no box of its own, so
-   the menu keeps its flex position while the guard sees the portaled list. */
-.menuGuard {
-  display: contents;
+  border-radius: var(--dsw-radius-lg);
 }
 
 /* The searchable zone inventory is intentionally shorter than a general menu:
@@ -775,10 +838,7 @@
   min-height: 48px;
 }
 
-/* The Escape guard is `display: contents`, so a menu row is the last DOM child
-   only through that wrapper; both selectors reach the rendered last row. */
-.ruleRows > :last-child,
-.ruleRows > :last-child > .ruleRowMenu {
+.ruleRows > :last-child {
   border-bottom: 0;
 }
 
@@ -832,12 +892,14 @@
   min-width: 0;
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   transition: background 0.15s;
 }
 
-.ruleValue:not(:disabled):hover .ruleValueFace {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .ruleValue:not(:disabled):hover .ruleValueFace {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The trigger's own ring would box the row label as well; the value face
@@ -856,8 +918,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
-.ruleValue:disabled {
+/* A disabled value stays readable: tertiary rather than dimmed ink. A held
+   editor keeps the enabled tone for the length of one brief request. */
+.ruleValue:disabled:not(.editorHeld *) {
   color: var(--dsw-alias-label-tertiary);
   cursor: default;
 }
@@ -876,7 +939,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: var(--dsw-radius-md);
   outline: none;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -897,30 +960,13 @@
   padding: 6px 0;
 }
 
-/* The monthly date grid reads as a calendar month: seven fixed columns on the
-   weekday pills' 4px gap, right-aligned under the row like the weekday pills. */
-.ruleMonthDays {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(36px, max-content));
-  justify-content: flex-end;
-  gap: 4px;
-  padding: 6px 0;
-}
-
-/* Stretched pills would keep their day number on the left edge, so each
-   centers its number in its cell. */
-.ruleMonthDays > * {
-  justify-self: stretch;
-  justify-content: center;
-}
-
 .ruleInput {
   flex: 0 1 58%;
   min-width: 0;
   padding: 5px 8px;
   margin-right: 0;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -929,28 +975,19 @@
   transition: background 0.15s;
 }
 
-.ruleInput:not(:disabled):hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .ruleInput:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
-/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
-.ruleInput:disabled {
+.ruleInput:disabled:not(.editorHeld *) {
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The elapsed-interval row keeps the quantity and its unit on one right-aligned
-   line, and the quantity sits in the settings font-size stepper pill
-   (ui-theme FontSizeRow.module.css `.stepper`): a 36px 18px-radius module-fill
-   pill whose right-edge arrow column shows on hover or focus, with the unit
-   word outside the pill. */
-.ruleInterval {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
+/* The repeat interval and the month day sit in the settings font-size stepper
+   pill (ui-theme FontSizeRow.module.css `.stepper`): a 36px 18px-radius
+   module-fill pill whose right-edge arrow column shows on hover or focus. */
 .ruleIntervalStepper {
   position: relative;
   display: inline-flex;
@@ -958,7 +995,7 @@
   justify-content: center;
   min-width: 72px;
   height: 36px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
 }
 
@@ -987,8 +1024,10 @@
   appearance: none;
 }
 
-.ruleIntervalInput:not(:disabled):hover {
-  background: transparent;
+@media (hover: hover) {
+  .ruleIntervalInput:not(:disabled):hover {
+    background: transparent;
+  }
 }
 
 .ruleRows .ruleIntervalInput:focus-visible {
@@ -1004,9 +1043,18 @@
   opacity: 0;
 }
 
-.ruleIntervalStepper:hover .ruleIntervalArrows,
+@media (hover: hover) {
+  .ruleIntervalStepper:hover .ruleIntervalArrows {
+    opacity: 1;
+  }
+}
+
 .ruleIntervalStepper:focus-within .ruleIntervalArrows {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .ruleIntervalArrows { opacity: 1; }
 }
 
 .ruleIntervalArrow {
@@ -1023,19 +1071,15 @@
   cursor: pointer;
 }
 
-.ruleIntervalArrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .ruleIntervalArrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
-.ruleIntervalArrow:disabled {
+.ruleIntervalArrow:disabled:not(.editorHeld *) {
   color: var(--dsw-alias-label-caption);
   cursor: default;
-}
-
-.ruleIntervalUnit {
-  flex: none;
-  color: var(--dsw-alias-label-primary);
-  font-size: 14px;
 }
 
 /* The Date and Time rows open their picker from a read-only value button, which
@@ -1058,20 +1102,6 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The 6px lead-in matches the card heading above, off the rounded edge. */
-.ruleHint {
-  margin: 8px 0 0 10px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* The cron hint doubles as the row's rejection line, so its unreadable-expression
-   state takes the save failure's error color in place of a second message. */
-.ruleHintError {
-  color: var(--dsw-alias-state-error-primary);
-}
-
 /* The mock's `.automation-detail .instruction`: the editable instruction box on
    the panel's 12px padding, 10px radius, and 24px line rhythm, with the neutral
    `--border` hairline that only the hover state brightens. The mock inherits the
@@ -1091,7 +1121,7 @@
   margin: 0;
   padding: 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
   outline: 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -1107,22 +1137,14 @@
   --dsh-scrollbar-track-margin: 12px;
 }
 
-.instruction:hover {
-  border-color: var(--dsw-alias-border-l2);
+@media (hover: hover) {
+  .instruction:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .instruction:focus {
   border-color: var(--dsw-alias-state-business-primary);
-}
-
-/* An ended task's stored instruction reads as plain text: no box and no edit
-   affordance, on the field's own 14px/24px step. */
-.readonlyPrompt {
-  margin: 0;
-  font-size: 14px;
-  line-height: 24px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 /* Delivery records follow the design mock: the clock glyph owns its own column
@@ -1137,7 +1159,7 @@
   gap: 12px;
   margin: 0 -8px;
   padding: 14px 8px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   font-size: 14px;
   line-height: 22px;
 }
@@ -1206,12 +1228,6 @@
   font-weight: 500;
 }
 
-.confirmTitle {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 /* Instruction text sits in the row's text column at the mock's 13px/22px and
    shows two lines until its toggle expands it. */
 .savedPrompt {
@@ -1252,8 +1268,10 @@
   cursor: pointer;
 }
 
-.savedPromptToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .savedPromptToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .savedPromptToggle:focus-visible {
@@ -1273,30 +1291,10 @@
   flex-shrink: 0;
 }
 
-/* The original-Session control is a seat inside the strip's action cluster, so
-   it keeps the strip's own figure and never scrolls with the detail body. */
-.detailContext {
-  display: flex;
-  flex: none;
-  align-items: center;
-  min-width: 0;
-  max-width: 200px;
-}
-
-/* A disabled entry passes the pointer to this wrapper, whose tooltip names the
-   compact icon; the wrapper keeps the disabled cursor. */
-.detailContext:has(> button:disabled) {
-  cursor: not-allowed;
-}
-
-.detailContext > button:disabled {
-  pointer-events: none;
-}
-
-/* The staged-edit bar: it appears under the detail tab strip only while the
-   Run time draft differs from the stored task. */
+/* Save and discard remain below the shared editor's scrolling view. */
 .saveFooter {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   align-items: center;
   justify-content: flex-end;
@@ -1311,87 +1309,36 @@
   font-size: 13px;
 }
 
-.saveFooter > :last-child {
-  margin-right: -8px;
-}
-
 .saveNotice {
-  margin-right: auto;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* One staged save's localized failure: it can name the task name, the
-   instruction, or a timing row, so it leads the bar that submits all three and
-   keeps that bar's gutter. */
+/* The localized reason an edit, a run, or a manual create did not take effect. */
 .saveFailure {
   flex-shrink: 0;
   margin: 0;
-  padding: 12px var(--detail-gutter) 0;
+  padding: 12px 0 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 1.6;
 }
 
-.linkedSession {
-  display: flex;
-  flex: 0 1 auto;
-  max-width: 100%;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  /* The strip's icon buttons are 28px `sm` capsules (14px), so this pill keeps
-     the same corner. */
-  border-radius: 14px;
-  text-align: left;
-}
-
-.linkedSession:focus-visible {
-  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-}
-
-/* The notice keeps its own line under the strip and above the staged save bar. */
+/* The linked-Session notice keeps its own line under the rule card. */
 .detailNotice {
   flex-shrink: 0;
   margin: 0;
-  padding: 0 var(--detail-gutter) 6px;
+  padding: 0 0 6px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   overflow-wrap: anywhere;
   background: var(--dsw-alias-bg-base);
-}
-
-.linkedSessionLabel {
-  flex-shrink: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-}
-
-.linkedSessionTarget {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* The strip shows the control's label; the Session's own name stays in the DOM as
-   the control's accessible description, while the visible button carries the
-   hover title. */
-.linkedSessionName {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  font-size: 12px;
 }
 
 .confirmDialog {
@@ -1416,6 +1363,25 @@
 
 .deleteButton {
   color: var(--dsw-alias-state-error-primary);
+  /* The outlined confirmation button keeps its border in the danger colour so
+     the destructive action reads as a bordered control, not bare text. */
+  --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
+}
+
+/* The instruction only identifies the task here, so a long one stays a
+   three-line excerpt instead of growing the dialog. */
+.confirmPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .page :focus-visible {
@@ -1424,9 +1390,9 @@
 }
 
 /* Text fields match :focus-visible on pointer focus too, so the page ring
-   would flash on every click into them; their own underline and border cues
-   already mark focus, so they opt out of the ring. */
-.page .editName:focus-visible,
+   would flash on every click into them; their own border cues already mark
+   focus, so they opt out of the ring. */
+.page .editorField input:focus-visible,
 .page .instruction:focus-visible {
   outline: none;
 }
@@ -1465,6 +1431,7 @@
 
   /* The mock narrows the title strip's gap at this width and closes the
      actions' group gap between its icon buttons. */
+
   .detailTabsBar {
     gap: 16px;
   }
@@ -1472,4 +1439,158 @@
   .detailActions {
     gap: 0;
   }
+}
+
+/* Touch devices take a 16px step on this page's text fields: iOS Safari zooms
+   the visual viewport for a focused field under that size and leaves the page
+   pannable after the keyboard closes, so the compact 13-14px steps above read
+   as a page wider than the screen. A fine pointer keeps those steps. */
+@media (pointer: coarse) {
+  .searchField input,
+  .editorField input,
+  .instruction,
+  .ruleInput,
+  .zoneSearch {
+    font-size: 16px;
+  }
+}
+
+/* Recommended tasks under the empty Enabled and All views: a two-column grid,
+   one column below 600px of content width. The heading starts on the tiles'
+   12px inset. */
+.recommendations {
+  container-type: inline-size;
+  margin-top: 8px;
+}
+
+.recommendationsHeading {
+  margin: 0 0 6px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.recommendationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (max-width: 600px) {
+  .recommendationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.recommendation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  height: auto;
+  padding: 12px;
+  border-radius: var(--dsw-radius-lg);
+  text-align: left;
+  white-space: normal;
+}
+
+/* Tiles take the empty illustration's background. Glyphs draw in the blue
+   accent, and each glyph's main shape takes a 16% tint of that blue, which
+   stays visible against the tile in both themes. */
+.tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-illustration-background);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tile [data-fill] {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+
+.tileGlyph {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.tilePlus {
+  display: none;
+  flex: none;
+}
+
+.recommendation:focus-visible .tileGlyph {
+  display: none;
+}
+
+.recommendation:focus-visible .tilePlus {
+  display: block;
+}
+
+@media (hover: hover) {
+  .recommendation:hover .tileGlyph {
+    display: none;
+  }
+
+  .recommendation:hover .tilePlus {
+    display: block;
+  }
+}
+
+.recommendationContent,
+.recommendationDetails {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recommendationContent {
+  flex: 1;
+}
+
+.recommendationTitle {
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.recommendationDescription {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.recommendationWhen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.whenGlyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.list:not(:has(.recommendations)) > .empty {
+  flex: 1;
+  justify-content: center;
+  min-height: 280px;
+  box-sizing: border-box;
 }

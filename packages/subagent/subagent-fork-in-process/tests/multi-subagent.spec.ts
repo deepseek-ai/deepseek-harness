@@ -3,13 +3,14 @@ import { mountLocalActivations, startTestActivation as start } from '../../subag
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as fork from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -29,7 +30,7 @@ async function setup(script: Script) {
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   await ctx.plugin(fork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
 
@@ -40,7 +41,8 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
 describe('multi-subagent coexistence (spawn + fork on one context)', () => {
   it('both providers register and coexist', async () => {
     const { ctx } = await setup([])
-    expect(ctx.subagents.list().sort()).toEqual(['fork', 'spawn'])
+    expect(ctx.subagents.getProvider('fork')).toBeDefined()
+    expect(ctx.subagents.getProvider('spawn')).toBeDefined()
   })
 
   it('the same parent drives a spawn child AND a fork child, then keeps working', async () => {

@@ -21,6 +21,7 @@ function seams(openStream: TunnelSeams['openStream']): TunnelSeams {
   return {
     directFetch: () => Promise.reject(new Error('fixture has no direct fetch')),
     bootPayload: () => ({}),
+    packageAssets: () => bytes(1, 2, 3),
     openStream,
     streamFailure: error => ({
       code: 'fixture-stream-failed',
@@ -63,6 +64,22 @@ describe('worker tunnel unary authentication', () => {
     if (frame?.t !== 'res' || frame.body === undefined) throw new Error('direct retry did not return one body')
     expect(new TextDecoder().decode(frame.body)).toBe('direct answer')
     expect(directFetch).toHaveBeenCalledOnce()
+  })
+})
+
+describe('worker tunnel package assets', () => {
+  it('answers GET /__assets__ with the package-asset archive and refuses other methods', async () => {
+    const { server, frames } = harness()
+    server.serve(seams(async () => (async function *(): AsyncGenerator { yield undefined })()))
+
+    server.handleMessage({ t: 'req', id: 1, method: 'GET', url: 'http://localhost/__assets__', headers: {} })
+    server.handleMessage({ t: 'req', id: 2, method: 'POST', url: 'http://localhost/__assets__', headers: {} })
+
+    await vi.waitFor(() => { expect(frames).toHaveLength(2) })
+    expect(frames[0]).toMatchObject({ t: 'res', id: 1, status: 200, headers: { 'content-type': 'application/x-tar', 'cache-control': 'no-store' } })
+    if (frames[0]?.t !== 'res' || frames[0].body === undefined) throw new Error('archive response carried no body')
+    expect([...new Uint8Array(frames[0].body)]).toEqual([1, 2, 3])
+    expect(frames[1]).toMatchObject({ t: 'res', id: 2, status: 405, headers: { allow: 'GET' } })
   })
 })
 

@@ -1,3 +1,4 @@
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Boots the shipped Web composition over the built dist this lane already uses
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
@@ -9,10 +10,11 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { canonicalPath, writableRoots } from '@deepseek-ai/dsh-sandbox'
-import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { auditStartupEntries, composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 // These imports carry the tools/sandboxPolicy/approval Context merges.
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
@@ -34,7 +36,7 @@ const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
 const HEADLESS_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/headless/cordis.patch.yml')
 const AUTO_PROVIDER = 'shipped-auto-review-test'
 const AUTO_MODEL = 'same-route'
-const AUTO_CALL_ID = ToolCallId('shipped-auto-review-denied-delete')
+const AUTO_CALL_ID = brandString<ToolCallId>('shipped-auto-review-denied-delete')
 const AUTO_RAW_REASON = `  direct user authorized inspection only\nTEST_ONLY_SECRET_${'x'.repeat(16_384)}  `
 const AUTO_FINAL_TEXT = 'SHIPPED_AUTO_REVIEW_REJECTION_OBSERVED'
 const AUTO_CHILD_AUTHORIZED = 'AUTO_CHILD_AUTHORIZED'
@@ -47,12 +49,13 @@ const AUTO_PARENT_ADJUST = 'AUTO_PARENT_ADJUST'
 /** Identify the one-shot Auto Review request and check its request-only outer input. */
 function isAutoReviewRequest(options: GenerateOptions): boolean {
   if (options.system?.startsWith('REVIEW_POLICY\n') !== true) return false
-  expect(options.messages).toHaveLength(1)
-  const message = options.messages[0]
-  expect(message).toMatchObject({ role: 'user', content: [{ type: 'text' }] })
-  expect(message?.content).toHaveLength(1)
-  expect(message).not.toHaveProperty('id')
-  expect(message).not.toHaveProperty('source')
+  expect(options.messages.length).toBeGreaterThanOrEqual(2)
+  for (const message of options.messages) {
+    expect(message).toMatchObject({ role: 'user', content: [{ type: 'text' }] })
+    expect(message.content).toHaveLength(1)
+    expect(message).not.toHaveProperty('id')
+    expect(message).not.toHaveProperty('source')
+  }
   return true
 }
 
@@ -150,21 +153,19 @@ interface ChildScriptState {
   phase: number
 }
 
-/** Parse the fixed review request sections emitted by the production plugin. */
+/** Parse the history items and pending action emitted by the production plugin. */
 function childReviewSections(options: GenerateOptions): Record<string, unknown> {
-  const block = options.messages[0]?.content[0]
-  if (block?.type !== 'text') throw new Error('shipped child review request has no text body')
-  const labels = ['ENVIRONMENT', 'PROJECT_INSTRUCTIONS', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
-  const sections: Record<string, unknown> = {}
-  for (const [index, label] of labels.entries()) {
-    const prefix = `${label}\n`
-    const start = block.text.indexOf(prefix)
-    if (start < 0) throw new Error(`shipped child review request is missing ${label}`)
-    const next = labels[index + 1]
-    const end = next === undefined ? block.text.length : block.text.indexOf(`\n\n${next}\n`, start)
-    sections[label] = JSON.parse(block.text.slice(start + prefix.length, end)) as unknown
+  const items = options.messages.slice(1).map((message) => {
+    const block = message.content[0]
+    if (block?.type !== 'text') throw new Error('shipped child review message has no text body')
+    return JSON.parse(block.text) as Record<string, unknown>
+  })
+  const call = items.at(-1)
+  if (call?.kind !== 'tool-call') throw new Error('shipped child review request does not end with its pending call')
+  return {
+    FILTERED_HISTORY: items.slice(0, -1).filter(item => item.kind !== 'tool-schema'),
+    PENDING_ACTION: { name: call.name, arguments: JSON.parse(call.arguments as string) as Record<string, unknown> },
   }
-  return sections
 }
 
 /** One native tool-call completion in the provider-neutral stream vocabulary. */
@@ -173,7 +174,7 @@ function toolChunks(
   name: string,
   args: Readonly<Record<string, unknown>>,
 ): StreamChunk[] {
-  const callId = ToolCallId(id)
+  const callId = brandString<ToolCallId>(id)
   const argumentsJson = JSON.stringify(args)
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -305,7 +306,7 @@ class ShippedChildAutoAdapter extends LlmAdapter {
         throw new Error('continuable child id was not observed before parent adjustment')
       }
       return toolChunks('parent-adjust', 'send_message', {
-        agent_id: this.continuableChildId,
+        agent: this.continuableChildId,
         message: [
           AUTO_CHILD_ADJUSTED,
           `Replace the earlier no-deletion restriction: permanently delete exactly ${this.continuableDeletePath}.`,
@@ -463,44 +464,48 @@ function assertLeanChildRecord(agent: Agent): void {
 }
 
 /**
- * The catalog the shipped Web composition puts in front of the model, minus the
- * ripgrep-dependent pair below. The absences are deliberate, not incidental
- * gaps: the `cordis_*` toolset executes model-written JavaScript that no
- * sandbox row confines, `mcp_*` servers spawn outside `ctx.shell`, and `ralph`
- * runs unsupervised rounds whose completion is a worker self-report.
- * `web_fetch` is present because public-address enforcement and one-shot
- * approval now confine its model-selected request target. The composition
- * Agent Note owns the rationale and its sources.
+ * The shipped Standard catalog, minus the ripgrep-dependent pair below.
+ * Runtime inspection is read-only. Generated-code execution tools, external
+ * MCP servers, and ralph are not enabled in this preset.
  */
 const EXPECTED_TOOLS = [
   'ask_user_question',
   'bash',
+  'cordis_inspect',
   'create_goal',
   'edit',
   'exit_plan_mode',
   'get_goal',
-  'interrupt_agent',
   'job_kill',
   'job_list',
   'job_output',
   'list_agents',
+  'list_subagent_models',
+  'office_convert',
+  'office_recalculate',
+  'office_render',
+  'plugin_manager',
   'present',
   'read',
   'read_image',
   'schedule_create',
-  'schedule_delete',
+  'schedule_edit',
   'schedule_list',
-  'schedule_update',
+  'schedule_view',
   'send_message',
   'skill',
   'subagent',
   'subagent_fork',
+  'team_task_create',
+  'team_task_get',
+  'team_task_list',
+  'team_task_update',
   'todo_write',
   'update_goal',
+  'wait_agent',
   'web_fetch',
   'web_search',
   'workflow',
-  'working_directory',
   'write',
 ]
 
@@ -527,9 +532,11 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   const ctx = scaffold.ctx
   expect(ctx.llm.listProviders().some(provider => provider.id === 'deepseek-messages')).toBe(false)
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
-  const index = await fetch(`http://127.0.0.1:${String(ctx.webServer.port)}`, {
+  const index = await scaffold.hostFetch('/', {
     headers: { 'accept-encoding': 'gzip' },
   })
+  expect(index.status).toBe(200)
+  expect(index.headers.get('content-type')).toContain('text/html')
   expect(index.headers.get('content-encoding')).toBe('gzip')
   expect(index.headers.get('vary')).toContain('Accept-Encoding')
   await index.body?.cancel()
@@ -590,10 +597,12 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  // The directory tool is global; the deployment's default preset supplies the agent's remaining tools.
-  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual(['working_directory'])
+  // Conditional Team tools are global; presets supply the remaining registrations.
+  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual([
+    'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
+  ])
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-composition'),
+    sessionId: brandString<SessionId>('shipped-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
   try {
@@ -631,7 +640,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   expect(headlessRows.some(row => row.id === 'auto-review')).toBe(false)
 
   const commandHandle = await scaffold.ctx.agents.create({
-    sessionId: SessionId('shipped-command-catalog'),
+    sessionId: brandString<SessionId>('shipped-command-catalog'),
     meta: { cwd: scaffold.workspaceCwd },
     agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   })
@@ -651,7 +660,7 @@ it('ships PTC with run_code but without the general workflow SDK binding', async
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
   const ctx = scaffold.ctx
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-ptc-composition'),
+    sessionId: brandString<SessionId>('shipped-ptc-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'ptc').then(() => undefined),
   })
   try {
@@ -669,7 +678,7 @@ it('lets a preset producer reach the background-job registry', async () => {
   scaffold = await launchWebScaffold()
   const ctx = scaffold.ctx
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-background-job'),
+    sessionId: brandString<SessionId>('shipped-background-job'),
     meta: { cwd: scaffold.workspaceCwd },
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
@@ -678,9 +687,9 @@ it('lets a preset producer reach the background-job registry', async () => {
     // `tool-bash` is a preset row and `tasks` is a host registry; the producer
     // resolves it with `ctx.get`, so a registry hidden behind a preset realm
     // fails here — with every task control still listed in the catalog above.
-    const started = await ctx.tools.execute({
+    const started = await executeModelToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-bash-background'),
+      callId: brandString<ToolCallId>('shipped-bash-background'),
       name: 'bash',
       arguments: {
         command: 'printf SHIPPED_BACKGROUND_OK',
@@ -700,9 +709,9 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The controller reads what the producer started: same registry, one
     // owner. A per-preset registry would list nothing here even on success.
-    const listed = await ctx.tools.execute({
+    const listed = await executeToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-task-list'),
+      callId: brandString<ToolCallId>('shipped-task-list'),
       name: 'job_list',
       arguments: {},
       agent: handle.agent,
@@ -713,9 +722,9 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.
-    const collected = await ctx.tools.execute({
+    const collected = await executeToolFixture(ctx, {
       signal,
-      callId: ToolCallId('shipped-task-output'),
+      callId: brandString<ToolCallId>('shipped-task-output'),
       name: 'job_output',
       arguments: { job_id: jobId, wait: true },
       agent: handle.agent,
@@ -748,7 +757,7 @@ it('routes one browser-authored Auto request through the same model and asks the
   const created = await remote<{ sessionId: string }>(scaffold, 'session/create', {
     request: { cwd: scaffold.workspaceCwd },
   })
-  const sessionId = SessionId(created.sessionId)
+  const sessionId = brandString<SessionId>(created.sessionId)
   await remote(scaffold, 'session/selectModel', {
     request: { sessionId, provider: AUTO_PROVIDER, model: AUTO_MODEL },
   })
@@ -789,7 +798,8 @@ it('routes one browser-authored Auto request through the same model and asks the
     .filter(block => block.type === 'text')
     .map(block => block.text)
     .join('') ?? ''
-  expect(reviewInput).toContain('PENDING_ACTION')
+  expect(reviewInput).toContain('ENVIRONMENT')
+  expect(reviewInput).toContain('"kind": "tool-schema"')
   expect(reviewInput).toContain(requestId)
   expect(reviewInput).toContain(targetPath)
   expect(approvalReasons).toEqual([`Auto review denied tool "bash": ${AUTO_RAW_REASON}`])
@@ -810,7 +820,7 @@ it('routes one browser-authored Auto request through the same model and asks the
     event.type === 'tool/result'
       && event.data.message.toolCallId === AUTO_CALL_ID
   ))
-  expect(result?.data.error).toBeUndefined()
+  expect(result?.data.error).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
   const durableModelResult = JSON.stringify(result?.data.message)
   expect(durableModelResult).toContain('the user rejected tool \\"bash\\"')
   expect(durableModelResult).not.toContain('direct user authorized inspection only')
@@ -845,7 +855,7 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
   const created = await remote<{ sessionId: string }>(scaffold, 'session/create', {
     request: { cwd: scaffold.workspaceCwd },
   })
-  const parentId = SessionId(created.sessionId)
+  const parentId = brandString<SessionId>(created.sessionId)
   adapter.setParent(parentId)
   await remote(scaffold, 'session/selectModel', {
     request: { sessionId: parentId, provider: AUTO_PROVIDER, model: AUTO_MODEL },
@@ -982,11 +992,11 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
       return found
     }
     expect(historyRole(review('subagent', AUTO_PARENT_AUTHORIZED), AUTO_PARENT_AUTHORIZED))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('subagent', AUTO_PARENT_CONTINUABLE), AUTO_PARENT_CONTINUABLE))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('send_message', AUTO_PARENT_ADJUST), AUTO_PARENT_ADJUST))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_AUTHORIZED), AUTO_CHILD_AUTHORIZED))
       .toBe('direct-parent-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_CONTINUABLE), AUTO_CHILD_CONTINUABLE))
@@ -1023,7 +1033,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
     expect(warnings.join('\n')).toContain('preset "auto" is already registered')
 
     const handle = await ctx.agents.create({
-      sessionId: SessionId('shipped-auto-init-rollback'),
+      sessionId: brandString<SessionId>('shipped-auto-init-rollback'),
       meta: { cwd: scaffold.workspaceCwd },
       setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
     })
@@ -1034,9 +1044,9 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
       // contribution performs no review, so success proves the failed shipped
       // integration left no pre-execute listener behind. It is not supported
       // Auto execution behavior.
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
-        callId: ToolCallId('shipped-auto-init-rollback-write'),
+        callId: brandString<ToolCallId>('shipped-auto-init-rollback-write'),
         name: 'write',
         arguments: { file_path: targetPath, content: 'INITIALIZATION_ROLLED_BACK\n' },
         agent: handle.agent,
@@ -1064,7 +1074,7 @@ it('withdraws Auto on shipped Loader unload and does not restore migrated live s
   const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.id === 'auto-review')
   if (autoEntry === undefined) throw new Error('shipped Auto review Loader entry is missing')
   const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-auto-hot-plug'),
+    sessionId: brandString<SessionId>('shipped-auto-hot-plug'),
     meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
     setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
   })

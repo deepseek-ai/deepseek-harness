@@ -1,0 +1,10 @@
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
+
+# PTC mode exposes the pre-apply_patch tool set, as the Web ptc preset does.
+- id: tool-fs
+  config:
+    applyPatch: false

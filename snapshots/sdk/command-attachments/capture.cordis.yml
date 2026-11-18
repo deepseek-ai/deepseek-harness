@@ -1,0 +1,14 @@
+- id: llm-replay
+  config:
+    providers:
+      - id: snapshot-command-images
+        name: DeepSeek
+        models:
+          - id: deepseek-flash
+            inputModalities: [text, image]
+
+- insert:
+    - id: command-attachment-request-capture
+      name: '../manual-compact/capture-requests.mjs'
+      config:
+        path: !!js dshHomePath('command-attachment-requests.jsonl')

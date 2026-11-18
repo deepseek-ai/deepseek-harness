@@ -45,6 +45,19 @@ it('refuses an edit shadowed by a higher home layer', async () => {
   expect(ctx.agentDefaultModel.currentSelection().model).toBe('home')
 }, 15_000)
 
+it('reads current overlay files for edits in a startup-only profile', async () => {
+  const { ctx, profile, overlayPath } = await fixture({ hmr: false, overlay: '[]\n' })
+  writeFileSync(overlayPath, JSON.stringify([{ id: 'default-model', config: { provider: 'test', model: 'overlay' } }]))
+  const before = readFileSync(profile.patchPath, 'utf8')
+  await expect(ctx.settings.update('default-model', { model: 'profile' })).rejects.toThrow('overridden')
+  expect(readFileSync(profile.patchPath, 'utf8')).toBe(before)
+  expect(ctx.agentDefaultModel.currentSelection().model).toBe('overlay')
+  rmSync(overlayPath)
+  await expect(ctx.settings.update('default-model', { model: 'profile' })).rejects.toThrow(`failed to read overlay ${overlayPath}`)
+  expect(readFileSync(profile.patchPath, 'utf8')).toBe(before)
+  expect(ctx.agentDefaultModel.currentSelection().model).toBe('overlay')
+}, 15_000)
+
 it('serializes concurrent writes and refuses stale revisions after external changes', async () => {
   const { ctx, profile } = await fixture()
   const revision = ctx.settings.describe().find(row => row.ns === 'first')!.revision
@@ -70,9 +83,9 @@ it('preserves configuration expressions while editing a different live field', a
   await ctx.fiber.dispose()
   const restored = await start()
   const entry = [...restored.loader.entries()].find(row => row.options.id === 'first')!
-  expect((entry.fiber!.config as { ordinary: string }).ordinary).toBe('expression-value')
+  expect((entry.fiber!.effectiveConfig as { ordinary: string }).ordinary).toBe('expression-value')
   const second = [...restored.loader.entries()].find(entry => entry.options.id === 'second')!
-  expect((second.fiber!.config as { ordinary: string }).ordinary).toBe('untouched-expression')
+  expect((second.fiber!.effectiveConfig as { ordinary: string }).ordinary).toBe('untouched-expression')
   expect(restored.settings.describe().find(row => row.ns === 'first')!.value).toEqual({ count: 4, list: [] })
 })
 

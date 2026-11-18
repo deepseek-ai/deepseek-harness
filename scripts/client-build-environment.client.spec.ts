@@ -29,6 +29,8 @@ const roots: string[] = []
 const dshBuildWorkflows = [
   'build-exe-for-python-sdk.yml',
   'ci.yml',
+  'ci-python.yml',
+  'ci-windows.yml',
   'e2e.yml',
   'release.yml',
   'release-publish.yml',
@@ -139,6 +141,40 @@ describe('client build environment', () => {
       DSH_CLIENT_VERSION: '1.2.3',
     })
     expect(repositoryCommitHash('/unused', { DSH_CLIENT_COMMIT_HASH: COMMIT_HASH })).toBe(COMMIT_HASH.slice(0, 7))
+  })
+
+  it.each([undefined, 'true', 'false'])('isolates local branding while retaining repository metadata (dirty=%s)', (dirty) => {
+    const parent = {
+      DSH_BUILD_CLIENT_PROFILE: 'official',
+      DSH_CLIENT_BUILD_PROFILE: 'official',
+      DSH_CLIENT_TITLE: 'DeepSeek Harness',
+      DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7),
+      DSH_CLIENT_VERSION: '1.2.3',
+      DSH_CLIENT_GIT_DIRTY: dirty,
+      DSH_CLIENT_EXTRA: 'inherited',
+    }
+    const local = resolveClientBuildEnvironment(parent, 'local')
+    expect(local).toEqual({
+      DSH_CLIENT_BUILD_PROFILE: 'local',
+      DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7),
+      DSH_CLIENT_VERSION: '1.2.3',
+      ...(dirty === 'true' ? { DSH_CLIENT_GIT_DIRTY: 'true' } : {}),
+    })
+    expect(clientBuildProcessEnvironment(parent, local)).toEqual(local)
+    expect(resolveClientBuildEnvironment({ ...parent, DSH_BUILD_CLIENT_PROFILE: 'local' })).toEqual(local)
+    expect(resolveClientBuildEnvironment({ ...parent, ...local }, 'official')).toEqual({
+      DSH_CLIENT_BUILD_PROFILE: 'official',
+      DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7),
+      DSH_CLIENT_TITLE: 'DeepSeek Harness',
+      DSH_CLIENT_VERSION: '1.2.3',
+    })
+  })
+
+  it('requires source metadata for an explicit local build', () => {
+    expect(() => { resolveClientBuildEnvironment({}, 'local') }).toThrow(/DSH_CLIENT_COMMIT_HASH/)
+    expect(() => {
+      resolveClientBuildEnvironment({ DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7) }, 'local')
+    }).toThrow(/DSH_CLIENT_VERSION/)
   })
 
   it('owns repository version, commit, and dirty metadata for complete builds', () => {

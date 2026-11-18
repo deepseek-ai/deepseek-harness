@@ -2,7 +2,7 @@
 /** Bottom Inspector lifetime and shortcuts through the production slot renderer. */
 import { afterEach, expect, it } from 'vitest'
 import { act } from '@testing-library/react'
-import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import ShortcutsService from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
@@ -25,7 +25,7 @@ async function setup() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   locale.setLocale('en')
-  await runtime.ctx.plugin(ShortcutsService).await()
+  await runtime.ctx.plugin(ShortcutsService, syncedConfig({})).await()
   await expect.poll(() => runtime.ctx.shortcuts.config.getSnapshot().status).toBe('ready')
   await runtime.declare({ 'shell.bottom': { kind: 'single', scope: 'root' } })
   const plugin = { inject: ['locale', 'shortcuts', 'slots'], apply: (ctx: typeof runtime.ctx) => { registerInspectorPage(ctx, sourceId) } }
@@ -50,7 +50,7 @@ it('opens on Mod+Shift+Period without a Session or Sidebar and retains the ifram
   expect(press(window, { ctrlKey: false }).defaultPrevented).toBe(false)
   expect(body.container.querySelector('iframe')).toBeNull()
   expect(press().defaultPrevented).toBe(true)
-  const frame = body.view.getByTitle('NodeJS Inspector')
+  const frame = body.view.getByTitle('NodeJS inspector')
   expect(frame.getAttribute('src')).toBe('inspector/devtools/devtools_app.html?disableLocaleInfoBar=true&clientSourceId=client-page')
   expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer')
   expect(frame.getAttribute('name')).toBe('dsh-nodejs-inspector')
@@ -62,7 +62,7 @@ it('opens on Mod+Shift+Period without a Session or Sidebar and retains the ifram
   press()
   expect(body.container.querySelector('section')?.hidden).toBe(true)
   press()
-  expect(body.view.getByTitle('NodeJS Inspector')).toBe(frame)
+  expect(body.view.getByTitle('NodeJS inspector')).toBe(frame)
   expect(body.container.querySelector('section')?.hidden).toBe(false)
 })
 
@@ -70,8 +70,8 @@ it('resizes with the owned pointer, bounds the height, and retains it across col
   const { body } = await setup()
   press()
   const panel = body.container.querySelector('section')!
-  const frame = body.view.getByTitle('NodeJS Inspector')
-  const divider = body.view.getByRole('separator', { name: 'Resize NodeJS Inspector panel' })
+  const frame = body.view.getByTitle('NodeJS inspector')
+  const divider = body.view.getByRole('separator', { name: 'Resize NodeJS inspector panel' })
   let captured: number | undefined
   Object.assign(divider, {
     setPointerCapture: (id: number) => { captured = id },
@@ -113,7 +113,7 @@ it('resizes with the owned pointer, bounds the height, and retains it across col
   press()
   press()
   expect(height()).toBe(20)
-  expect(body.view.getByTitle('NodeJS Inspector')).toBe(frame)
+  expect(body.view.getByTitle('NodeJS inspector')).toBe(frame)
 })
 
 it('resizes the horizontal divider with arrow keys and Home or End', async () => {
@@ -137,7 +137,7 @@ it('routes frame input through the effective binding and restores opener focus',
   try {
     opener.focus()
     press(opener)
-    const frame = body.view.getByTitle<HTMLIFrameElement>('NodeJS Inspector')
+    const frame = body.view.getByTitle<HTMLIFrameElement>('NodeJS inspector')
     const document = frame.contentDocument!
     frame.focus()
     expect(press(document).defaultPrevented).toBe(true)
@@ -168,7 +168,7 @@ it('keeps modal arbitration and updates locale without replacing the iframe', as
     expect(body.container.querySelector('iframe')).toBeNull()
   } finally { modal.remove() }
   press()
-  const frame = body.view.getByTitle('NodeJS Inspector')
+  const frame = body.view.getByTitle('NodeJS inspector')
   act(() => { locale.setLocale('zh') })
   expect(body.view.getByTitle('NodeJS 诊断')).toBe(frame)
   act(() => { body.view.getByRole('button', { name: '收起' }).click() })
@@ -178,7 +178,7 @@ it('keeps modal arbitration and updates locale without replacing the iframe', as
 it('removes the command and frame on unload and starts a fresh closed panel on reload', async () => {
   const { runtime, locale, provider, body, plugin } = await setup()
   press()
-  const frame = body.view.getByTitle('NodeJS Inspector')
+  const frame = body.view.getByTitle('NodeJS inspector')
   await provider.dispose()
   expect(runtime.ctx.shortcuts.catalog.getSnapshot().find(row => row.id === ID)).toBeUndefined()
   expect(frame.isConnected).toBe(false)
@@ -186,5 +186,18 @@ it('removes the command and frame on unload and starts a fresh closed panel on r
   await runtime.mount(plugin)
   expect(body.container.querySelector('iframe')).toBeNull()
   press()
-  expect(body.view.getByTitle('NodeJS Inspector')).not.toBe(frame)
+  expect(body.view.getByTitle('NodeJS inspector')).not.toBe(frame)
+})
+
+it('uses Japanese panel and shortcut labels through the production registration', async () => {
+  const { runtime, locale, body } = await setup()
+  act(() => {
+    locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
+    locale.setLocale('ja')
+  })
+  press()
+  expect(body.view.getByRole('button', { name: '折りたたむ' })).toBeTruthy()
+  expect(body.view.getByTitle('NodeJS インスペクター')).toBeTruthy()
+  expect(body.container.querySelector('section')?.getAttribute('aria-label')).toBe('NodeJS インスペクター')
+  expect(runtime.ctx.shortcuts.catalog.getSnapshot().find(row => row.id === ID)?.label).toBe('NodeJS インスペクターの表示切り替え')
 })

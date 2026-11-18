@@ -5,7 +5,7 @@
  */
 
 import { grantArgs as landlockGrantArgs } from '@deepseek-ai/node-addon-system/landlock-run'
-import { writableRoots } from '@deepseek-ai/dsh-sandbox'
+import { workspaceWritableRoots, writableRoots } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 
 /**
@@ -17,7 +17,7 @@ export function bwrapProfileArgs(policy: SandboxPolicy): string[] {
   const args = ['--ro-bind', '/', '/', '--dev', '/dev', '--unshare-pid', '--proc', '/proc', '--die-with-parent']
   if (policy.mode === 'workspace-write') {
     args.push('--tmpfs', '/tmp')
-    args.push('--bind', policy.workspaceRoot, policy.workspaceRoot)
+    for (const root of workspaceWritableRoots(policy)) args.push('--bind', root, root)
   }
   return args
 }
@@ -30,7 +30,7 @@ export function bwrapProfileArgs(policy: SandboxPolicy): string[] {
 export function landlockProfileArgs(policy: SandboxPolicy): string[] {
   const readWrite = ['/dev/null']
   if (policy.mode === 'workspace-write') {
-    readWrite.push('/tmp', policy.workspaceRoot)
+    readWrite.push('/tmp', ...workspaceWritableRoots(policy))
   }
   return landlockGrantArgs({ readOnly: ['/'], readWrite })
 }
@@ -42,9 +42,11 @@ function sbplString(path: string): string {
 
 /**
  * Build the sandbox-exec arguments and SBPL profile for one policy. The
- * writable roots come from the shared {@link writableRoots} helper (canonical,
- * deduplicated) so the Seatbelt grant and the in-process fs fence
- * (`@deepseek-ai/dsh-fs-sandbox`) can never drift apart.
+ * workspace-owned writable roots (workspace plus explicit extra directories)
+ * come from the shared {@link writableRoots} helper (canonical, deduplicated)
+ * so the Seatbelt grant and the in-process fs fence
+ * (`@deepseek-ai/dsh-fs-sandbox`) can never drift apart; the helper adds the
+ * documented Seatbelt temp areas.
  * @param policy - file-effect policy to express as an SBPL profile.
  * @returns sandbox-exec arguments before the trailing separator and command argv.
  */

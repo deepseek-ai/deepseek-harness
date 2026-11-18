@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Schnittstelle zur Betriebsgenehmigung",
+    "description": "Zeigt Aktionen an, deren Genehmigung noch aussteht, und führt Benutzerauswahlen zu laufenden Aufgaben zurück."
+  }
+}

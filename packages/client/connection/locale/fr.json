@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "connexion",
+    "description": "Établissez des communications client authentifiées et gérez le cycle de vie des connexions."
+  }
+}

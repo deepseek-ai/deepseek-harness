@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub の変更リクエスト",
+    "description": "ホスト上の GitHub CLI を使って、forge レジストリ向けに GitHub の変更リクエストを読み取ります。"
+  }
+}

@@ -3,14 +3,19 @@
 // Orphaned lineage degrades to root level; cycles fail soft and emit as roots.
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
+import type { SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { SessionSummary } from '../../types.ts'
 
 /** Host list summary enriched with the latest Session Controller title projection. */
 export interface TitledSessionSummary extends SessionSummary {
   title?: string
-  /** Current host-computed projection values for list consumers. */
-  projectionValues?: Readonly<Partial<SessionProjectionMap>>
+  /**
+   * The row's summary projection values, never the full projection set. A
+   * connected Session's client store may hold more values from its
+   * control/follow baseline; those are outside the list contract and must not
+   * be read here.
+   */
+  projectionValues?: Readonly<Partial<SessionProjectionSummaryValues>>
 }
 
 /** One flattened session-list row with lineage depth. */
@@ -30,8 +35,11 @@ export interface SessionListEntry {
   /** Format classification supplied by the Host list. */
   formatStatus?: SessionSummary['formatStatus']
   cwd?: string
-  /** Current host-computed projection values for list consumers. */
-  projectionValues?: Readonly<Partial<SessionProjectionMap>>
+  /**
+   * The row's summary projection values, never the full projection set; see
+   * `TitledSessionSummary.projectionValues`.
+   */
+  projectionValues?: Readonly<Partial<SessionProjectionSummaryValues>>
   /** Lineage indent depth: root = 0; the UI just multiplies by the indent width. */
   depth: number
 }
@@ -52,7 +60,8 @@ export function flattenLineage(
   const children = new Map<SessionId, TitledSessionSummary[]>()
   const roots: TitledSessionSummary[] = []
   for (const s of summaries) {
-    if (s.parentSessionId !== undefined && byId.has(s.parentSessionId)) {
+    // Historical ordinary forks may retain a parent id without being subagents.
+    if (s.origin === 'subagent' && s.parentSessionId !== undefined && byId.has(s.parentSessionId)) {
       const list = children.get(s.parentSessionId) ?? []
       list.push(s)
       children.set(s.parentSessionId, list)

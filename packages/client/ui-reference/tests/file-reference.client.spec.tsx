@@ -1,23 +1,52 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { FileReference, FolderReference } from '../src/client/FileReference.tsx'
 import { en } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
 type Props = ComponentProps<typeof FileReference>
+type Presence = ReturnType<Props['usePathPresence']>
 
-function props(openFile: Props['openFile']): Props {
+function presenceHook(presence: Record<string, Presence>): Props['usePathPresence'] {
+  const hook = (path: string) => presence[path]
+  return hook as Props['usePathPresence']
+}
+
+const PRESENT = presenceHook({ 'docs/a b.md': 'present', 'docs/': 'present' })
+
+function props(openFile: Props['openFile'], usePathPresence = PRESENT): Props {
   return {
     node: { id: 'file', start: 0, end: 14, data: { path: 'docs/a b.md', label: 'a b.md' } },
-    raw: '@"docs/a b.md"', interactive: true, openFile, t: makeTranslate(en),
+    raw: '@"docs/a b.md"', interactive: true, openFile, usePathPresence, t: makeTranslate(en),
+    useContextMenu: contextMenuHook(), sessionId: brandString<SessionId>('original'),
+    resolveFilePath: path => `/workspace/${path}`,
   } as Props
 }
 
 describe('FileReference', () => {
+  it('keeps the original spelling until the Host confirms the path exists', () => {
+    const openFile = vi.fn()
+    const folder = { id: 'folder', start: 0, end: 6, data: { path: 'docs/', label: 'docs' } } as const
+    for (const presence of [undefined, 'absent'] as const) {
+      const usePathPresence = presenceHook({ 'docs/a b.md': presence, 'docs/': presence })
+      const view = render(<>
+        <FileReference {...props(openFile, usePathPresence)} />
+        <FolderReference {...props(openFile, usePathPresence)} node={folder} raw="@docs/" />
+      </>)
+      expect(view.container.textContent).toBe('@"docs/a b.md"@docs/')
+      expect(view.container.querySelector('[data-ref-chip]')).toBeNull()
+      view.unmount()
+    }
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
   it('opens the decoded path and leaves summaries and folders non-interactive', () => {
     const openFile = vi.fn()
     const input = props(openFile)
@@ -54,4 +83,27 @@ describe('FileReference', () => {
     expect(view.queryByRole('dialog')).toBeNull()
     expect(view.getByRole('button', { name: 'a b.md' })).toBeTruthy()
   })
+})
+
+it('declares workspace-relative targets for pointer and keyboard gestures and leaves previews inert', () => {
+  const open = vi.fn()
+  const input = props(vi.fn())
+  let root = '/first'
+  const resolveFilePath = vi.fn((path: string) => `${root}/${path}`)
+  const view = render(<FileReference {...input} useContextMenu={contextMenuHook(open)} resolveFilePath={resolveFilePath} />)
+  expect(resolveFilePath).not.toHaveBeenCalled()
+  root = '/workspace'
+  const chip = view.getByRole('button', { name: 'a b.md' })
+  chip.getBoundingClientRect = () => new DOMRect(20, 30, 100, 20)
+  fireEvent.contextMenu(chip, { clientX: 40, clientY: 50 })
+  fireEvent.keyDown(chip, { key: 'F10', shiftKey: true })
+  expect(open.mock.calls).toEqual([
+    [{ kind: 'file', value: { sessionId: 'original', path: '/workspace/docs/a b.md' } }, { x: 40, y: 50 }],
+    [{ kind: 'file', value: { sessionId: 'original', path: '/workspace/docs/a b.md' } }, { x: 20, y: 50 }],
+  ])
+  expect(input.openFile).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(chip)
+  view.rerender(<FileReference {...input} useContextMenu={contextMenuHook(open)} interactive={false} />)
+  expect(fireEvent.contextMenu(view.getByText('a b.md'))).toBe(true)
+  expect(open).toHaveBeenCalledTimes(2)
 })

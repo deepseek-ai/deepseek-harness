@@ -1,0 +1,7 @@
+version: 1
+scenario: present-after-closing-reply
+profile: web
+composition: web-default
+recording: authored
+header:
+  class: web-default

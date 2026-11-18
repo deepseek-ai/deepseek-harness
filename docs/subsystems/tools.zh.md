@@ -30,7 +30,7 @@ interface ToolDefinition extends ToolSchema {
   /**
    * Run one accepted call and return only its canonical lossless-JSON value.
    * Async work must observe or forward `exec.signal` and settle only after its
-   * owned work reaches quiescence. The registry preserves caller cancellation
+   * owned work reaches quiescence. The executor preserves caller cancellation
    * through around-dispatch signal replacement and does not abandon this
    * promise, but it cannot hard-kill same-process code.
    * @param args - losslessly snapshotted, frozen model arguments.
@@ -49,12 +49,12 @@ interface ToolDefinition extends ToolSchema {
    */
   projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined
   /**
-   * Synchronous last-mile transform for model-facing content. The registry
+   * Synchronous last-mile transform for model-facing content. The executor
    * snapshots this callback when execution starts and invokes it exactly once
    * for every normalized outcome, including pipeline failures that bypass
    * `tools/post-execute`, immediately before lossless materialization.
    * Returning `undefined` preserves the content; every other result field
-   * remains registry-owned. The callback must be total and must not throw.
+   * remains executor-owned. The callback must be total and must not throw.
    * @param exec - immutable execution identity and arguments.
    * @param result - complete normalized outcome before materialization.
    * @returns replacement content, or `undefined` to preserve it.
@@ -177,9 +177,140 @@ interface ToolRestriction {
 }
 ```
 
+## 条件准入 — 步骤拥有的准入集合
+
+注册可以携带 `when` 条件。AgentLoop 为每个拟议步骤以捕获的模型选择调用一次 `ctx.tools.resolve()`；返回的集合决定该步骤的工具声明、执行器分区以及批次中的每次调用，包括 PTC 程序的子调用。`ctx.tools.executable()` 在执行时应用集合，没有集合时排除条件注册。同名替换或新的限制会阻止尚未开始的调用使用已准入的注册，步骤的批次结束后循环释放集合。
+
+```ts type-equiv
+/** Inputs for a tool's step-time activation condition. */
+interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+```
+
+```ts type-equiv
+/** Lifecycle-owned conditions for a registered tool. */
+interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+```
+
+```ts type-equiv
+/** One step's admitted registrations, also used by nested PTC calls. */
+interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+```
+
+## 执行器与原始调用批次
+
+`ctx.tools.execute()` 把完整的原始模型调用批次委托给最近作用域的执行器。服务在每个批次开始时选择当前提供者；提示词组装仅返回模型输入。`agent` 在独立服务调用中不存在；`log` 在模型步骤之外的程序调用（例如初始化钩子）中不存在。有 Agent 而没有 `log` 时，调用仍受该 Agent 的工具作用域约束，但不记录根调用／结果事件。工具自身的事件仍可使用 Agent 的 Session。
+
+```ts type-equiv
+/** Model-call schemas produced by an executor. */
+type ToolModelInput = Pick<ToolProviderResult, 'schemas' | 'knownNames'>
+```
+
+```ts type-equiv
+/** Raw model calls, with optional Agent ownership and model-step logging. */
+interface ToolBatchInput {
+  readonly calls: readonly ToolCallBlock[]
+  readonly signal: AbortSignal
+  /**
+   * Positive integer overriding the executor's concurrency limit for this batch.
+   * Applies to concurrency-safe root calls; program subcall limits remain separate.
+   * Undefined uses the executor's configured limit.
+   */
+  readonly maxParallelToolCalls?: number
+  /**
+   * Owning Agent supplies scoped tools and execution context, including outside a turn.
+   * Undefined for standalone calls outside an Agent, such as a service invocation.
+   */
+  readonly agent?: Agent
+  /**
+   * Step admission for every call in the batch, including program subcalls.
+   * Undefined admits only unconditional registrations.
+   */
+  readonly toolSet?: ResolvedToolSet
+  /**
+   * Committed model step receiving root call/result events; requires `agent`.
+   * Undefined when `agent` is absent or for calls outside a model response, such
+   * as session initialization hooks. Without `log`, root call/result events are
+   * omitted while `agent`, when provided, still supplies scope and execution context.
+   */
+  readonly log?: {
+    readonly turn: number
+    readonly step: number
+  }
+}
+```
+
+```ts type-equiv
+/** One settled result correlated with its original model call. */
+interface ToolCallResult {
+  readonly callId: ToolCallId
+  readonly result: ToolExecutionResult
+}
+```
+
+```ts type-equiv
+/** Model-ordered outcomes and context accepted for the next step. */
+interface ToolBatchResult {
+  readonly results: readonly ToolCallResult[]
+  readonly additionalContexts: readonly UserMessage[]
+  readonly concluded: boolean
+}
+```
+
+```ts type-equiv
+/** A plugin owns argument parsing, dispatch, scheduling, cancellation, and logging. */
+interface ToolExecutor {
+  /** Guidance registered and disposed with this executor; absent means no executor-owned sections. */
+  readonly sections?: readonly ToolPromptSection[]
+  /**
+   * Describe the model's callable tools.
+   * @param tools - currently visible capability definitions, after scoped restrictions.
+   * @returns schemas and names used to validate tool ordering.
+   */
+  describe(tools: readonly ToolDefinition[]): ToolModelInput
+  /**
+   * Execute a complete batch. With log, commit root call/result events to the
+   * Agent's Session; without log, omit those events. Tool-owned events may still
+   * use the owning Agent's Session. Return
+   * one outcome per input call in input order, including skipped calls on abort.
+   * Never settle while started work is still running. Internal failures reject
+   * with ToolBatchExecutionError after draining, preserving committed outcomes
+   * and context; callers must stop dependent work and repair missing log results.
+   * An explicit maxParallelToolCalls takes precedence over executor configuration.
+   * @param input - original calls, cancellation, optional concurrency override, Agent and logging step.
+   * @returns settled results, deferred context, and whether a success concludes the turn.
+   */
+  execute(input: ToolBatchInput): Promise<ToolBatchResult>
+}
+```
+
 ## 执行：可扩展的 waterfall（瀑布式事件）加单调策略
 
-`ctx.tools.execute()` 接受由调用方拥有且包含必需 readonly `signal` 的 `ToolExecutionInput`，将其解析后的 JSON 参数一次性物化为流水线拥有的 `ToolExecution`，然后让调用依次经过 `tools/pre-execute`（可重排的 allow/deny/ask waterfall）→ 已注册的单调 guard → `tools/execute`（环绕分派包装层）→ `projectContent` → `tools/post-execute`（检查/替换结果）→ 可选且由定义拥有的 `finalizeContent` → `tools/result`（不可变的权威结果）。只有 `tools/execute` 视图可以替换必需的 signal。最终产出为 `ToolExecutionResult`。
+内置执行器把解析后的 `ToolExecutionInput` 交给共享 `ToolExecutionPipeline`。流水线负责参数快照、执行身份、策略瀑布、工具分发和最终结果通知，每次返回一个 `ToolExecutionResult`。自定义执行器可以独立实现这些行为；公开的 `ToolExecutor` 只要求工具描述和批次执行方法。
 
 ```ts type-equiv
 /** Opaque call identity that permits correlation without exposing mutable execution state. */
@@ -188,8 +319,8 @@ type ToolExecutionToken = symbol & { readonly [toolExecutionTokenBrand]: true }
 
 ```ts type-equiv
 /**
- * Caller-supplied description of one tool call. {@link ToolRuntime.execute}
- * adds the registry-owned token to form a pipeline {@link ToolExecution};
+ * Parsed input to the shared invocation pipeline. The pipeline
+ * adds its own token to form a {@link ToolExecution};
  * callers do not choose that token.
  */
 interface ToolExecutionInput {
@@ -206,14 +337,16 @@ interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
+  readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
    * mode sets this on SDK sub-dispatches so commit-style observers can wait for
    * the outer `run_code` outcome without receiving its live mutable execution.
    * The token also marks the call as a transport sub-dispatch rather than a
-   * model-direct call: under `mode: 'ptc'`, only calls WITH a parent may
+   * model-direct call: with the PTC executor selected, only calls with a parent may
    * execute a native tool name — a model-direct call (no parent) is denied as
-   * `UNKNOWN_TOOL` before the policy pipeline. See {@link ToolRuntime.execute}.
+   * `UNKNOWN_TOOL` before the policy pipeline.
    */
   readonly parent?: ToolExecutionToken
   /** Required caller-owned cancellation for this invocation. */
@@ -225,7 +358,7 @@ interface ToolExecutionInput {
 
 ```ts type-equiv
 /**
- * Runtime context handed to a tool implementation after the registry has
+ * Runtime context handed to a tool implementation after the executor has
  * accepted a {@link ToolExecution}. {@link deferContext} attaches context to
  * this execution's own result — a composite tool ferries nested-dispatch
  * context back to the outer result, and a leaf tool may mint a fresh
@@ -294,16 +427,16 @@ interface PtcDispatchLog {
 
 ```ts type-equiv
 /**
- * One pending tool call inside the registry pipeline. Parsed arguments cross
+ * One pending tool call inside the executor pipeline. Parsed arguments cross
  * one lossless-JSON materialization boundary before policy and are deep-frozen;
- * call identity, the caller signal, and the registry-assigned {@link token} are
- * readonly. The registry freezes the complete object before `tools/result`
+ * call identity, the caller signal, and the executor-assigned {@link token} are
+ * readonly. The executor freezes the complete object before `tools/result`
  * observers run.
  */
 interface ToolExecution extends ToolExecutionInput {
   /** Root model-requested call, resolved for every root and nested execution. */
   readonly rootCallId: ToolCallId
-  /** Registry-assigned identity shared with nested calls only as their opaque `parent` token. */
+  /** Executor-assigned identity shared with nested calls only as their opaque `parent` token. */
   readonly token: ToolExecutionToken
 }
 ```
@@ -312,7 +445,7 @@ interface ToolExecution extends ToolExecutionInput {
 /**
  * Around-dispatch view of a {@link ToolExecution}. A `tools/execute` wrapper
  * may replace the signal for its delegated lifetime, but it cannot remove it.
- * The registry fuses every replacement with the captured caller signal.
+ * The executor fuses every replacement with the captured caller signal.
  */
 interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
   /** Cancellation signal visible to the next wrapper or tool body. */
@@ -322,7 +455,7 @@ interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
 
 `ToolExecutionToken` 是不透明的运行时 `Symbol`，仅用于身份比较。策略执行前，`execute()` 会物化并冻结参数、拒绝非 JSON 输入并分配 token。身份字段、调用方必需的 signal 和可选的 parent token 均保持 readonly。`ToolDispatchExecution` 包装层可以替换 signal 但不能移除；注册表会在调用工具函数体前重新融合调用方的 signal。最终观察者接收冻结的执行身份。
 
-`ToolGuard` 是感知作用域的最终预分派策略。其返回类型有意不包含 allow 结果：`undefined` 保留 waterfall 的决策，而返回的 reason 只能缩减权限，因此后续监听器无法撤销它。
+`ToolGuard` 是感知作用域的最终预分派策略。其返回类型有意不包含 allow 结果：`undefined` 保留 waterfall 的决策，而返回的 reason 或 `ToolGuardDenial` 只能缩减权限，因此后续监听器无法撤销它。拒绝中可选的 `info` 会成为失败结果的结构化错误身份。
 
 ```ts type-equiv
 /**
@@ -331,9 +464,19 @@ interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
  * returning `undefined` leaves it unchanged. Because guards have no allow
  * result, listener ordering cannot turn a denial back into permission.
  * @param execution - the identity-protected call after extensible pre-execute policy completed.
- * @returns a final denial reason, or `undefined` to leave the call allowed.
+ * @returns a final denial reason, a denial with structured error identity, or `undefined` to leave the call allowed.
  */
-type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
+type ToolGuard = (execution: Readonly<ToolExecution>) => string | ToolGuardDenial | undefined
+```
+
+```ts type-equiv
+/** A guard denial: the model-facing reason and optional structured error identity recorded on the result. */
+interface ToolGuardDenial {
+  /** Model-facing reason rendered as the failed call's content. */
+  readonly reason: string
+  /** Structured error identity persisted beside the reason. */
+  readonly info?: ToolErrorInfo
+}
 ```
 
 ```ts type-equiv
@@ -389,7 +532,7 @@ interface ToolErrorInfo {
 }
 ```
 
-结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError`、可选结构化 `error` 和展示 `meta`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。
+结果仅承载产出。调用身份保留在不可变的 `ToolExecution` 上，后者伴随结果经过每个钩子，并出现在持久化的 `tool/call` / `tool/result` 会话事件上，因此包装层无法创建第二个相互矛盾的身份。规范的 `value` 仅存在于执行期间：循环只持久化 `content`、`error` 和 `meta`，`tool/ptc-dispatch` 则存储子调用渲染后的 `content`、`isError`、可选结构化 `error` 和展示 `meta`。回放可以重现展示，却无法重建规范的中间值。可选的 `ToolErrorInfo.reason` 保留面向用户的原始详情，不将其加入模型可见内容。注册表会在以下情况设置 `info`：抛出的是 `HarnessError`（取其 `name` 和 `code`）、pre-execute 的 `deny` 自带 `info`，以及注册表自己生成的取消结果（`AbortError`，code 为 `ABORTED` 或 `ABORTED_BEFORE_DISPATCH`）；已开始的工具主体在取消后抛出 signal 的 reason 或 name 为 `AbortError` 的 `Error` 时，结果保留其 message，并带上 `AbortError` 与 `ABORTED`，`tools/execute` 包装器在调用方取消后抛出这类值时也得到同样的标识，工具主体尚未开始时为 `ABORTED_BEFORE_DISPATCH`；`tools/execute` 包装器也可能返回带 `info` 的结果，例如超时策略的 `TOOL_TIMEOUT`。审批未授予的 `ask` 会变成 name 为 `ApprovalError` 的拒绝（该 name 标识注册表的拒绝，并不对应可抛出的类），code 为 `APPROVAL_REJECTED`、`APPROVAL_CANCELLED` 或 `APPROVAL_UNAVAILABLE`。guard 拒绝或 post-execute block 只有自带 `info` 时才会携带它；其他抛出值产生的 `error` 不含 `info`。
 
 成功时，注册表会快照并校验函数体返回值，将其冻结，然后调用纯渲染器，并为原生与嵌套调用执行可选的展示元数据投影器。注册表会在 `tools/result` 之前另行物化持久展示字段；无效值、渲染器/投影器失败或非 JSON 展示都会转为 JSON 安全的 `isError`。因此，最终实时观察者能看到精确的执行期值，以及可安全用于后续持久追加的字段。
 
@@ -417,17 +560,18 @@ type PreToolDecision =
 ```ts type-equiv
 /**
  * Post-dispatch decision: accept, replace one projection, attach context for the
- * next request, or block by turning corrective feedback into an error result.
+ * next request, or block by turning corrective feedback into an error result
+ * whose optional `info` is its structured error identity.
  */
 type PostToolDecision =
   | { kind: 'accept'; content?: ContentBlock[]; value?: never; additionalContexts?: UserMessage[] }
   | { kind: 'accept'; value: JsonValue; content?: never; additionalContexts?: UserMessage[] }
-  | { kind: 'block'; feedback: ContentBlock[]; additionalContexts?: UserMessage[] }
+  | { kind: 'block'; feedback: ContentBlock[]; info?: ToolErrorInfo; additionalContexts?: UserMessage[] }
 ```
 
 调用 `next()` 获取默认决策，或直接返回一个决策以短路。前置策略可以 deny 或 ask；只有 `allowed-once` 才继续执行，而未授权、缺少审批通道或服务、或无 agent 的请求都会变为拒绝。拒绝可以附带结构化身份与用户可见详情，而不改变其模型可见原因。Guard 仍可施加最终拒绝。参数不可被改写，因为历史记录、审计、UI 和执行必须保持一致。
 
-后置策略可以替换内容或值，但不能同时替换两者。替换内容会保留规范值和现有元数据；替换值会重新校验并重新计算内容/元数据；阻止会移除值，并转为包含纠正反馈的 `isError`。内容替换是展示策略，而非保密策略；需要隐藏程序化值的监听器必须阻止或替换该值。`tools/result` 在归一化后接收冻结的执行和结果；观察者无法对其进行变换，观察者的失败也会被隔离。未知工具和抛出异常的工具都会变为结构化错误（`ToolNotFoundError` 映射为 `UNKNOWN_TOOL`），调用失败但不终止当前轮次。
+后置策略可以替换内容或值，但不能同时替换两者。替换内容会保留规范值和现有元数据；替换值会重新校验并重新计算内容/元数据；阻止会移除值，并转为包含纠正反馈的 `isError`。内容替换是展示策略，而非保密策略；需要隐藏程序化值的监听器必须阻止或替换该值。`tools/result` 在归一化后接收冻结的执行和结果；观察者无法对其进行变换，观察者的失败也会被隔离。未知工具和抛出异常的工具都会变为结构化错误（`ToolNotFoundError` 映射为 `UNKNOWN_TOOL`），调用失败但不终止当前轮次。工具主体所需的 Agent、服务或进行中的 turn 不存在时，抛出 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）。
 
 ## 已强制执行的原始 JSON Schema 子集
 
@@ -501,33 +645,21 @@ type ObjectJsonSchema = JsonSchemaNode & { type: 'object' }
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxtools--toolruntime"></a>
+<a id="ctxtools--toolsservice"></a>
 
-### `ctx.tools` — `ToolRuntime`
+### `ctx.tools` — `ToolsService`
 
-Tool registry and execution pipeline. Scoped registrations shadow globals; one visibility resolver feeds presentation, lookup, and dispatch.
+Concrete tool registry and scoped executor dispatcher.
 
 ```ts cordis-catalog
-/**
- * Present the calling scope's tools in `mode` instead of the deployment
- * default. Nearest scope on the chain wins, so a preset's standing
- * declaration covers every agent joined under it.
- *
- * Scoped only, and one declaration per scope: this is how an agent preset
- * composes PTC mode agents beside native ones in the same process, and a
- * process-global override would be the `mode` config field instead.
- * @param mode - the presentation the covered agents' models see.
- * @returns the exact disposer that restores the deployment default.
- */
-presentAs(mode: ToolPresentationMode): () => void
-
 /**
  * Register globally or in the calling agent scope. Scoped tools shadow
  * globals; duplicates within one layer and the reserved `run_code` name fail.
  * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
+ * @param options - optional step-time activation condition.
  * @returns the exact disposer that unregisters the tool.
  */
-register(definition: ToolDefinition): () => void
+register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void
 
 /**
  * Restrict global tools for the calling agent scope. Empty filters, unknown
@@ -539,60 +671,82 @@ register(definition: ToolDefinition): () => void
 restrict(filter: ToolRestriction): () => void
 
 /**
- * Register a monotonic guard after the extensible `tools/pre-execute`
- * waterfall. A plain-context guard applies globally; one registered through
- * `agent.ctx` applies only to that agent. Any matching guard may deny by
- * returning a reason, while no guard can force-allow a call another guard
- * denied. The exact effect disposer is returned for ordered ownership and
- * HMR cleanup.
- * @param guard - synchronous check; a returned string denies the execution.
- * @returns the exact disposer that unregisters the guard.
- */
-guard(guard: ToolGuard): () => void
-
-/**
  * Look up a tool as one scope sees it (scoped
  * shadows global; a restricted-away global reads as absent). Presenters pass
  * the calling agent so the rendered card matches the definition that
  * actually executed.
  * @param name - the tool name as registered.
  * @param scope - the viewing scope (the agent); omitted = the global view.
+ * @param toolSet - step admission; omit only to inspect registered definitions.
  * @returns the definition the scope resolves, or undefined when none is visible.
  */
-get(name: string, scope?: ScopeKey): ToolDefinition | undefined
+get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+
+/**
+ * Resolve the definition a call may execute. With a step's admitted set, the
+ * set decides; without one, conditional registrations are unavailable.
+ * @param name - the tool name as registered.
+ * @param scope - the calling agent; omitted = the global view.
+ * @param toolSet - step admission, or omitted for a call outside a model step.
+ * @returns the executable definition, or undefined when the call must fail as `UNKNOWN_TOOL`.
+ */
+executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+
+/**
+ * Resolve conditions once for this step without changing shared registrations.
+ * Cancellation or a rejected condition publishes no partial selection. Removed
+ * registrations cannot be restored by a late condition result.
+ * @param context - preparing agent, captured model selection, and cancellation.
+ * @returns the complete selection; the caller disposes it after its tool batch settles.
+ */
+async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>
+
+/**
+ * Read the visible capability definitions for descriptions and program bindings.
+ * @param scope - viewing Agent or preset; omitted selects the global view.
+ * @param toolSet - step admission; omit only to inspect registered definitions.
+ * @returns definitions after scoped shadowing and restrictions, limited to the step's admission when given.
+ */
+definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[]
 
 /**
  * Project visible definitions onto the allowlisted model-facing schema fields,
  * excluding execution and presentation callbacks.
  * @param scope - the viewing scope (the agent); omitted = the global view.
+ * @param toolSet - step admission, or omitted for registered-definition inspection.
  * @returns one deep-cloned schema per visible tool.
  */
-schemas(scope?: ScopeKey): ToolSchema[]
+schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]
 
 /**
- * Classify a pending call through the caller's visible tool definition. Only
- * an exact `true` is parallel; unknown, hidden, undeclared, invalid, or
- * throwing classifiers are exclusive.
- * @param exec - call name, parsed arguments, and optional agent scope.
- * @returns the fail-closed scheduling mode.
+ * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
+ * Rendering any executor-owned section requires the viewing scope's selection to remain available.
+ * @param executor - initialized provider owned by the contributing plugin.
+ * @returns the effect disposer. Unloading leaves the selection unavailable until it is replaced.
  */
-executionMode(exec: ToolExecutionInput): ToolExecutionMode
+setExecutor(executor: ToolExecutor): () => void
 
 /**
- * Execute through pre-policy, guards, around-dispatch, post-policy,
- * definition-owned content finalization, and final notification. Tool and
- * listener failures resolve as materialized error results; an invisible tool
- * reports `UNKNOWN_TOOL`. The returned outcome is the same lossless, frozen
- * snapshot final observers receive. Cancellation
- * arriving after entry and before final result materialization skips a
- * not-yet-started body with `ABORTED_BEFORE_DISPATCH` or replaces a
- * successful started outcome with `ABORTED`; already-started work is still
- * drained and may retain a tool-owned structured error.
- * @param exec - the typed same-process call input. The registry assigns its
- *   correlation token before policy begins.
- * @returns the materialized final result.
+ * Delegate a raw call batch to its Agent's provider or the deployment default.
+ * Select at dispatch; accepted batches settle through that provider even if it unloads.
+ * @param input - original calls, optional owning Agent, and optional logging step.
+ * @returns the selected executor's settled batch; unavailable selections reject.
  */
-async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>
+async execute(input: ToolBatchInput): Promise<ToolBatchResult>
+
+/**
+ * Register a monotonic denial in the calling scope.
+ * @param guard - evaluated after extensible pre-execute policy by the shared pipeline.
+ * @returns the effect disposer that removes this guard.
+ */
+guard(guard: ToolGuard): () => void
+
+/**
+ * Check global and inherited guards after pre-execute policy and approval resolve.
+ * @param exec - invocation whose guards are checked before dispatch.
+ * @returns the first denial with its optional structured identity, or undefined when no guard denies.
+ */
+checkGuards(exec: ToolExecution): ToolGuardDenial | undefined
 ```
 
 Types: [ScopeKey](scope.zh.md)
@@ -607,22 +761,19 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 #### `tools/change` — emit
 
-A tool was registered or unregistered, or a scoped restriction changed (the available tool set changed — possibly for one scope only). An UNFILTERED registry-subject notification, deliberately not scope-filtered dispatch: a global change concerns every agent's next assembly, so a scoped listener subscribing here sees every change, not just its own scope's.
+A tool was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent's next assembly.
 
 ```ts cordis-catalog
 /**
- * A tool was registered or unregistered, or a scoped restriction changed
- * (the available tool set changed — possibly for one scope only). An
- * UNFILTERED registry-subject notification, deliberately not scope-filtered
- * dispatch: a global change concerns every agent's next assembly, so a
- * scoped listener subscribing here sees every change, not just its own
- * scope's.
+ * A tool was registered or unregistered, or a scoped restriction changed.
+ * Unfiltered registry notification: scoped listeners receive changes from every
+ * scope because a global contribution can affect every agent's next assembly.
  * @mode emit
  */
 'tools/change'(): void
 ```
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/events.ts)
 
 <a id="toolsexecute--waterfall"></a>
 
@@ -641,12 +792,12 @@ Around-dispatch waterfall for timeout, retry, or metrics. `next()` returns a nor
  * @param exec - the allowed call about to dispatch (name, parsed arguments, caller agent, signal).
  * @mode waterfall
  */
-'tools/execute'(this: Scoped<ToolRuntime>, exec: ToolDispatchExecution, next: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult>
+'tools/execute'(this: Scoped<ToolsService>, exec: ToolDispatchExecution, next: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult>
 ```
 
 Types: [Scoped](scope.zh.md)
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/events.ts)
 
 <a id="toolspost-execute--waterfall"></a>
 
@@ -666,12 +817,12 @@ Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts
  * @param result - the dispatch outcome a listener may accept, replace, or block.
  * @mode waterfall
  */
-'tools/post-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>
+'tools/post-execute'(this: Scoped<ToolsService>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>
 ```
 
 Types: [Scoped](scope.zh.md)
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/events.ts)
 
 <a id="toolspre-execute--waterfall"></a>
 
@@ -690,12 +841,12 @@ Allow, deny, cancel, or ask before dispatch. `next()` delegates to allow; `cance
  * @param exec - the pending call (name, parsed arguments, caller agent).
  * @mode waterfall
  */
-'tools/pre-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision>
+'tools/pre-execute'(this: Scoped<ToolsService>, exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision>
 ```
 
 Types: [Scoped](scope.zh.md)
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/events.ts)
 
 <a id="toolsptc-dispatch-log--waterfall"></a>
 
@@ -717,12 +868,12 @@ Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` su
  * @param dispatch - the parent execution, sub-call identity, and the settled content to log.
  * @mode waterfall
  */
-'tools/ptc-dispatch-log'(this: Scoped<ToolRuntime>, dispatch: PtcDispatchLog, next: () => Promise<ContentBlock[]>): Promise<ContentBlock[]>
+'tools/ptc-dispatch-log'(this: Scoped<ToolsService>, dispatch: PtcDispatchLog, next: () => Promise<ContentBlock[]>): Promise<ContentBlock[]>
 ```
 
 Types: [ContentBlock](llm-streaming.zh.md) · [Scoped](scope.zh.md)
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tool-executor-ptc/src/runtime-types.ts`](../../packages/core/tool-executor-ptc/src/runtime-types.ts)
 
 <a id="toolsresult--emit"></a>
 
@@ -738,10 +889,10 @@ Observe the frozen, lossless-JSON final outcome. Listener failures are contained
  * @param result - a deep-frozen snapshot of the final returned result.
  * @mode emit
  */
-'tools/result'(this: Scoped<ToolRuntime>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined
+'tools/result'(this: Scoped<ToolsService>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined
 ```
 
 Types: [Scoped](scope.zh.md)
 
-Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/events.ts)
 <!-- END GENERATED cordis-surface -->

@@ -8,7 +8,8 @@
  * makes a reload safe.
  */
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
-import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { RemoteError, syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SyncedConfigValues } from '@deepseek-ai/dsh-client-config/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -31,9 +32,11 @@ import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
-import { en, zh } from '../src/client/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 import type { textFace } from '../src/client/face.ts'
 import type { TextStore } from '../src/client/store.ts'
+import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../src/defaults.ts'
+import type { DocumentPreviewConfig } from '../src/types.ts'
 import { FILE, SESSION, TAB_ID, byteResult, createResources, page } from './fixtures.client.ts'
 
 interface Recorded {
@@ -43,10 +46,13 @@ interface Recorded {
   store?: unknown
   inject?: unknown
   component: unknown
+  children?: Record<string, unknown>
 }
 
-async function boot() {
+async function boot(values: SyncedConfigValues = { office: OFFICE_DEFAULTS, excel: EXCEL_DEFAULTS }) {
   const ctx = new Context()
+  ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
+  ctx.provide('contextMenus', { open: vi.fn() } as never)
   ctx.provide('resources', createResources())
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   const tabs = new SidebarRightTabRegistry(ctx)
@@ -74,7 +80,7 @@ async function boot() {
   ctx.provide('locale', locale as never)
   ctx.provide('remote', { workspaceFiles: { read, readBytes } } as never)
   ctx.provide('remote.workspaceFiles', { read, readBytes } as never)
-  const fiber = ctx.plugin({ inject: [...inject], apply })
+  const fiber = ctx.plugin({ inject: [...inject], apply }, syncedConfig<DocumentPreviewConfig>(values))
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
   return { ctx, tabs, registered, dictionaries, fiber, read, readBytes }
@@ -85,7 +91,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')
     expect(tabs.get(TEXTPREVIEW_KIND)?.id).toBe(TEXTPREVIEW_ID)
-    expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en })
+    expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     // The seat key is the implementation's id, not the kind: an extension may
     // take the kind over, and the seat must still find this body.
     expect(registered.map(entry => [entry.name, entry.key, entry.locale, entry.component])).toEqual([
@@ -102,8 +108,24 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
     ])
+    expect(Object.keys(registered[0]!.children!)).toEqual([
+      'sidebar.right.tab.document', 'sidebar.right.tab.document.actions',
+      'sidebar.right.tab.document.unpreviewable', 'sidebar.right.tab.document.action',
+    ])
     expect(registered[0]?.store).toBeDefined()
     expect(typeof registered[0]?.inject).toBe('function')
+  })
+
+  it('hands the synced Excel limits to the spreadsheet body, and the schema defaults while none arrived', async () => {
+    const excel = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel'
+    const limits = { ...EXCEL_DEFAULTS, maxCells: 7 }
+    const synced = await boot({ office: { ...OFFICE_DEFAULTS, maxReaders: 2 }, excel: limits })
+    const injected = synced.registered.find(entry => entry.key === excel)?.inject as () => unknown
+    expect(injected()).toEqual({ limits })
+    await synced.fiber.dispose()
+    const absent = await boot({})
+    const fallback = absent.registered.find(entry => entry.key === excel)?.inject as () => unknown
+    expect(fallback()).toEqual({ limits: EXCEL_DEFAULTS })
   })
 
   it('takes every registration back when the plugin is disposed', async () => {

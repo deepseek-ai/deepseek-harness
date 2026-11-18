@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Browser provider registry",
+    "description": "Register browser automation providers by name, with one provider per name."
+  }
+}

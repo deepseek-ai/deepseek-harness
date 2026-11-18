@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subprocessos SSH",
+    "description": "Forneça subprocessos e terminais por meio do auxiliar SSH POSIX compartilhado."
+  }
+}

@@ -49,7 +49,7 @@ kind: "package-reference"
 | `presets` | `workspace-write`、`danger-full-access` | 预设名称 → 沙箱／审批捆绑的表 |
 | `defaultPreset` | 推断 | 固定到新会话的预设；组合默认值不匹配任何预设时必填 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-permission-presets)是每个受支持字段及其 JSDoc 的穷尽式真源。`custom` 保留给推导出的非预设状态，`auto` 则保留给 Auto review integration。挂载需要具有约束能力的 bash 执行器（会报告 `sandboxMode` 的执行器）与审批服务。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-permission-presets)是每个受支持字段及其 JSDoc 的穷尽式真源。`custom` 保留给推导出的非预设状态，`auto` 则保留给 Auto review integration。挂载需要具有约束能力的 bash 执行器（会报告 `sandboxMode` 的执行器）、审批服务和 Agent 注册表。
 
 ### 切换预设
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 
 ### 会话默认值
 
-`permission` 设置命名空间为未来会话持有 `defaultPreset`，且只接受配置预设。创建会话时读取它，将其应用于沙箱模式与审批策略，并把应用的预设记录为一次 `permission/preset` 选择。之后的设置变更绝不会改变现有会话。恢复的 seed（包括由 `session/end-seed` 明确标记的空 seed）会保留其有效权限，并只接收缺失的持久事实，而不会接收最新用户默认值；持久化的 `auto` 身份在发布前必须存在 live Auto 注册并通过准入。
+`permission` 设置命名空间为未来会话持有 `defaultPreset`，且只接受配置预设。创建 Agent 时读取它，将其应用于 Session 的沙箱模式与审批策略，并把应用的预设记录为一次 `permission/preset` 选择。之后的设置变更绝不会改变现有会话。恢复的 seed（包括由 `session/end-seed` 明确标记的空 seed）会保留其有效权限，并只接收缺失的持久事实，而不会接收最新用户默认值；持久化的 `auto` 身份在发布前必须存在 live Auto 注册并通过准入。
 
 -----
 
@@ -86,17 +86,17 @@ kind: "package-reference"
 
 ### 读取侧与 `custom`
 
-`current(session)` 读取必需的 `permissions` 投影；该单元在组合默认值（`ctx.shell.sandboxMode` 与审批配置）之上折叠三个全量值旋钮事件。host 状态还会保留 `session/end-seed` 是否已经出现，使会话固定无需重扫日志即可区分显式为空的恢复 seed 与真正的新会话。仍匹配的最近选择在共享捆绑时胜出，已记录的 Auto 选择在 `never` 审批策略下也匹配；否则配置表中的第一个匹配项胜出；否则返回推导出的 `CUSTOM_PRESET`。投影 key 缺失时会显式失败。
+`current(session)` 读取必需的 `permissions` 投影；该单元在组合默认值（`ctx.shell.sandboxMode` 与审批配置）之上折叠三个全量值旋钮事件。host 状态还会保留 `session/end-seed` 是否已经出现，使会话固定无需重扫日志即可区分显式为空的恢复 seed 与真正的新会话。仍匹配的最近选择在共享捆绑时胜出，已记录的 Auto 选择在 `never` 审批策略下也匹配；否则配置表中的第一个匹配项胜出；否则返回推导出的 `CUSTOM_PRESET`。该服务在激活期间取得状态读取句柄。
 
 `optionOf(name)` 返回配置条目、存活的 Auto 条目或仅供显示的 `custom` 条目。只有名称不匹配这三者时才抛错；已撤回的 Auto 条目不可用。
 
 ### 会话固定与空白复用
 
-挂载时会固定所有存活与未来的会话：真正全新的会话获得配置默认预设与两个旋钮事实，而 seed 会话或部分初始化的会话保留其有效旋钮值，只补充缺失的持久事实。投影自有的 seed 标记让该判断与旋钮值共用同一份增量状态。存储的 `auto` 身份在 Auto integration 缺失或拒绝准入时无法发布；服务既不会改写它，也不会静默推导为 Full access。
+挂载时会固定所有存活与未来 Agent 的 Session：真正全新的会话获得配置默认预设与两个旋钮事实，而 seed 会话或部分初始化的会话保留其有效旋钮值，只补充缺失的持久事实。投影自有的 seed 标记让该判断与旋钮值共用同一份增量状态。服务在投影注册开始前安装 `agent/created` 监听器，因此激活期间的创建会失败，而不会跳过权限固定。`prepend: true` 使权限固定先于普通创建观察者执行，后者可以读取已记录的权限事实。后来使用 `prepend` 的监听器可能更早执行，不能假定权限已固定。读取句柄尚未就绪时，Agent 创建回滚；调用方必须等待插件激活完成后再创建或恢复 Agent。只创建 Session 而不创建 Agent 时，不会初始化权限。存储的 `auto` 身份在 Auto integration 缺失或拒绝准入时无法发布；服务既不会改写它，也不会静默推导为 Full access。
 
 ### 目录、投影与可选命令
 
-该服务要求 `ctx.sessionProjections`，并注册一个只含 `currentValue` 的 `permissions` 投影。进程级 `catalog()` Remote 返回一份完整的可选快照。注册或移除 Auto 会发出无 payload 的 `permission-presets/catalog-changed` 通知，因此客户端先订阅再重新读取目录；该过程不会追加 Session 事件、发布 Session 投影帧或改变 Session 序列。`/permission` 命令仅在组合了 `ctx.commands` 注册表时注册。派生当前预设或固定初始选择的调用会在投影 key 缺失时显式失败。
+该服务要求 `ctx.sessionProjections`，并等待 `permissions` 注册完成；其客户端视图只含 `currentValue`。进程级 `catalog()` Remote 返回一份完整的可选快照。注册或移除 Auto 会发出无 payload 的 `permission-presets/catalog-changed` 通知，因此客户端先订阅再重新读取目录；该过程不会追加 Session 事件、发布 Session 投影帧或改变 Session 序列。`/permission` 命令仅在组合了 `ctx.commands` 注册表时注册。派生当前预设或固定初始选择的调用使用保留的投影句柄。
 
 </details>
 

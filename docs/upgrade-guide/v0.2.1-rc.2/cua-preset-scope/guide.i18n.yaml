@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/cua-preset-scope/guide.md
+/:
+  en: 36d6b79b48c08dd5
+  zh: 814caece159e9b0e
+/cua-defaults-to-ptc-session-scopes:
+  en: a53b6884785bdf56
+  zh: 7d27fc9b029e0e3e
+/cua-defaults-to-ptc-session-scopes/change:
+  en: dac96a29e3751249
+  zh: d48cb030f43c07e4
+/cua-defaults-to-ptc-session-scopes/migration:
+  en: f3d82fe45e41c712
+  zh: e55e424f5a2c096a

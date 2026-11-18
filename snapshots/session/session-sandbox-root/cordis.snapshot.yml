@@ -43,10 +43,20 @@
 - id: sandbox-policy
   name: '@deepseek-ai/dsh-sandbox-policy'
   config:
-    mode: workspace-write
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
     workspaceRoot: /tmp
 
+- id: headless-runner
+  inject: [headlessStartup]
+  config:
+    task: !!js ctx.headlessStartup.task
+    sessionId: !!js ctx.headlessStartup.sessionId
+    json: !!js ctx.headlessStartup.json
+    permissionMode: workspace-write
+
 - insert:
+    - id: session-write-grant
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/session-write-grant.ts'
     - id: llm-replay
       name: '@deepseek-ai/dsh-llm-replay'
       config:

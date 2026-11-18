@@ -25,7 +25,7 @@ import {
   writeLinuxStartupError,
 } from './runner-protocol.ts'
 import type {
-  LinuxLaunchFiles,
+  LinuxLaunchRequest,
   SerializedRunnerError,
   WindowsRunnerResult,
   WindowsStartRequest,
@@ -43,7 +43,7 @@ type RunnerHost = Pick<NodeJS.Process, 'env' | 'exitCode' | 'connected' | 'cwd' 
 
 /** Injectable operations used by the protocol-owner tests. */
 export interface SpawnRunnerInternals {
-  execve(file: string, argv: string[], env: Record<string, string>, control?: 'pipe'): never
+  execve: ReturnType<typeof loadLinuxExecve>
   loadWin32ProcessBindings(): CurrentTokenProcessBindings
   spawnCurrentTokenJobProcess: typeof spawnCurrentTokenJobProcess
   closeFileDescriptor(fileDescriptor: number): void
@@ -56,7 +56,7 @@ export interface SpawnRunnerInternals {
 
 const defaultInternals: SpawnRunnerInternals = {
   /* v8 ignore next -- source/built/packaged subprocess smoke executes this only in a replaceable child process. */
-  execve: (file, argv, env, control) => loadLinuxExecve()(file, argv, env, control),
+  execve: (...args) => loadLinuxExecve()(...args),
   loadWin32ProcessBindings,
   spawnCurrentTokenJobProcess,
   closeFileDescriptor: closeSync,
@@ -133,27 +133,24 @@ function linuxPathNotFoundError(program: string): NodeJS.ErrnoException {
 function execLinuxFile(
   file: string,
   argv: string[],
-  env: Record<string, string>,
+  request: LinuxLaunchRequest,
   internals: SpawnRunnerInternals,
-  control?: 'pipe',
 ): never {
   try {
-    return control === undefined ? internals.execve(file, argv, env) : internals.execve(file, argv, env, control)
+    return internals.execve(file, argv, request.env, request.control, request.pipeFds)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOEXEC') throw error
-    return control === undefined
-      ? internals.execve('/bin/sh', ['/bin/sh', file, ...argv.slice(1)], env)
-      : internals.execve('/bin/sh', ['/bin/sh', file, ...argv.slice(1)], env, control)
+    return internals.execve('/bin/sh', ['/bin/sh', file, ...argv.slice(1)], request.env, request.control, request.pipeFds)
   }
 }
 
 function execLinuxTarget(
-  request: { cwd: string; env: Record<string, string>; control?: 'pipe' },
+  request: LinuxLaunchRequest,
   argv: string[],
   internals: SpawnRunnerInternals,
 ): never {
   const program = argv[0] as string
-  if (program.includes('/')) return execLinuxFile(program, argv, request.env, internals, request.control)
+  if (program.includes('/')) return execLinuxFile(program, argv, request, internals)
   const path = request.env.PATH ?? '/usr/bin:/bin'
   let permissionFailure: Error | undefined
   for (const directory of path.split(':')) {
@@ -162,7 +159,7 @@ function execLinuxTarget(
       : `${request.cwd}${request.cwd.endsWith('/') ? '' : '/'}${directory}`
     const candidate = `${root}${root.endsWith('/') ? '' : '/'}${program}`
     try {
-      return execLinuxFile(candidate, argv, request.env, internals, request.control)
+      return execLinuxFile(candidate, argv, request, internals)
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'EACCES') {
@@ -400,14 +397,19 @@ class WindowsJobRunner {
     if (!this.resultStarted) {
       this.resultStarted = true
       try {
-        await sendMessage(this.host, { type: 'error', error: serializeRunnerError(error) })
-        this.resultDelivered = true
-      } catch {
+        await this.deliverRunnerError(error)
+      } catch (_parentDisconnected) {
         // The disconnected parent observes runner infrastructure failure.
       }
     }
     this.releaseOwnedJob()
     this.finish(127)
+  }
+
+  /** Send `error` as the runner result and record its delivery; rejects when the parent is gone. */
+  private async deliverRunnerError(error: unknown): Promise<void> {
+    await sendMessage(this.host, { type: 'error', error: serializeRunnerError(error) })
+    this.resultDelivered = true
   }
 
   private releaseOwnedJob(): void {
@@ -416,12 +418,24 @@ class WindowsJobRunner {
     const api = this.api
     if (api === undefined) return
     if (this.jobHandle !== undefined) {
-      try { this.internals.terminateJob(api, this.jobHandle, 1) } catch { /* Continue to kill-on-close. */ }
-      try { this.internals.closeHandleChecked(api, this.jobHandle, 'ordinary process Job cleanup') } catch { /* Best effort after failure. */ }
+      try {
+        this.internals.terminateJob(api, this.jobHandle, 1)
+      } catch (_jobTerminateFailed) {
+        // Closing the Job handle below still kills its processes on close.
+      }
+      try {
+        this.internals.closeHandleChecked(api, this.jobHandle, 'ordinary process Job cleanup')
+      } catch (_handleCloseFailed) {
+        // Every caller finishes the runner next, and runner exit releases the handle.
+      }
       this.jobHandle = undefined
     }
     if (this.processHandle !== undefined) {
-      try { this.internals.closeHandleChecked(api, this.processHandle, 'ordinary direct process cleanup') } catch { /* Best effort after failure. */ }
+      try {
+        this.internals.closeHandleChecked(api, this.processHandle, 'ordinary direct process cleanup')
+      } catch (_handleCloseFailed) {
+        // Every caller finishes the runner next, and runner exit releases the handle.
+      }
       this.processHandle = undefined
     }
   }
@@ -473,16 +487,19 @@ export async function reportSpawnRunnerFailure(
   host: RunnerHost = process,
 ): Promise<void> {
   if (selection === WINDOWS_RUNNER_SELECTION) {
-    try { await sendMessage(host, { type: 'error', error: serializeRunnerError(error) }) } catch { /* No transport remains. */ }
+    try {
+      await sendMessage(host, { type: 'error', error: serializeRunnerError(error) })
+    } catch (_parentDisconnected) {
+      // No IPC transport remains; the parent observes exit code 127.
+    }
     host.exitCode = 127
     if (host.connected) host.disconnect()
     return
   }
   if (selection !== undefined) {
     try {
-      const files: LinuxLaunchFiles = linuxLaunchFilesFromLocator(selection)
-      writeLinuxStartupError(files, { type: 'error', error: serializeRunnerError(error) })
-    } catch {
+      writeLinuxStartupError(linuxLaunchFilesFromLocator(selection), { type: 'error', error: serializeRunnerError(error) })
+    } catch (_startupErrorUnwritable) {
       // The parent will report an unconsumed request or missing runner result.
     }
   }

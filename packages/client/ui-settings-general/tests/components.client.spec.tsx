@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { allowAllAccess, bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
+import { DesktopChannelRow, DesktopChannelToast } from '../src/client/DesktopChannelRow.tsx'
+import { DesktopChannelSource } from '../src/client/desktop-channel-source.ts'
+import type { DesktopChannelChangeResult, DesktopChannelState } from '../src/types.ts'
 import { DeveloperToolsRow } from '../src/client/DeveloperToolsRow.tsx'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -43,6 +47,7 @@ const kit = {
   useSessions: unusedHook, useSessionStatus,
   usePanelInfo, useSessionRetainInfo: () => undefined, useResource, useWorkspaces: unusedHook,
   ...allowAllAccess,
+  useContextMenu: contextMenuHook(),
 }
 
 describe('Desktop collapsed update badge', () => {
@@ -68,6 +73,12 @@ describe('Desktop collapsed update badge', () => {
     state = { failed: false, opening: false, presentation: { phase: 'error', failure: 'install' } }
     view.rerender(<DesktopUpdateBadge {...props} />)
     expect(screen.getByRole('img', { name: en['desktop.update.retry'] })).toBeTruthy()
+    state = { failed: false, opening: false, presentation: { phase: 'idle', configurationError: 'format' } }
+    view.rerender(<DesktopUpdateBadge {...props} />)
+    expect(screen.getByRole('img', { name: en['desktop.channel.unavailable'] })).toBeTruthy()
+    state = { ...state, presentation: { phase: 'idle' } }
+    view.rerender(<DesktopUpdateBadge {...props} />)
+    expect(screen.queryByRole('img')).toBeNull()
     for (const value of ['connecting', 'disconnected'] as const) {
       connection = value
       view.rerender(<DesktopUpdateBadge {...props} />)
@@ -309,4 +320,116 @@ describe('Host release change confirmation', () => {
     prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: undefined })
     expect(screen.getByRole('dialog').textContent).toContain('Service0.2.1UnknownPage0.2.1Unknown')
   })
+})
+
+
+it('shows channel load errors and waits for an explicit selection to settle', async () => {
+  let state: { state?: DesktopChannelState; failed: boolean; pending?: 'stable' } = { failed: false }
+  const pending = Promise.withResolvers<undefined>()
+  const select = vi.fn(() => pending.promise)
+  const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
+  const view = render(<DesktopChannelRow {...props} />)
+  const control = screen.getByRole('button', { name: 'Update channel' })
+  expect(control.hasAttribute('disabled')).toBe(true)
+  state = { failed: true }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(screen.getByRole('alert').textContent).toBe(en['desktop.channel.readError'])
+  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', changing: false, error: 'format' } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.textContent).toContain('Configuration unavailable')
+  fireEvent.click(control)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
+  expect(select).toHaveBeenCalledWith('stable')
+  state = { ...state, pending: 'stable' }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.textContent).toBe('Stable')
+  expect(control.getAttribute('aria-busy')).toBe('true')
+  pending.resolve(undefined)
+  state = { failed: false, state: { channel: 'stable', packagedChannel: 'nightly', changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.textContent).toBe('Stable')
+  fireEvent.click(control)
+  fireEvent.keyDown(document, { key: 'Escape' })
+  await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
+  fireEvent.click(control)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Development' }))
+  await waitFor(() => { expect(select).toHaveBeenLastCalledWith('nightly') })
+  state = { failed: false, state: { channel: 'nightly', packagedChannel: 'nightly', changing: true } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.hasAttribute('disabled')).toBe(true)
+  state = { ...state, state: { ...state.state!, changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  await waitFor(() => { expect(control.textContent).toBe('Development') })
+})
+
+it('keeps the failure toast after Settings unmounts and rolls back the remounted selector', async () => {
+  const state: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', changing: false }
+  const reply = Promise.withResolvers<DesktopChannelChangeResult>()
+  const source = new DesktopChannelSource({ get: async () => state, set: () => reply.promise, subscribe: () => () => {} })
+  const useChannel = bindSnapshotSelector(source.store)
+  const select = (channel: 'nightly' | 'stable') => source.select(channel)
+  const row = render(<DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={select} />)
+  const toast = render(<DesktopChannelToast openConfiguration={() => {}} {...kit} t={t} useChannel={useChannel}
+    dismiss={(sequence) => { source.dismissNotice(sequence) }} />)
+  try {
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Development') })
+    fireEvent.click(screen.getByRole('button', { name: 'Update channel' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
+    expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Stable')
+    expect(screen.getByRole('button', { name: 'Update channel' }).getAttribute('aria-busy')).toBe('true')
+    row.unmount()
+    reply.resolve({ kind: 'failed', state, reason: 'permission' })
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('Could not save: permission denied') })
+    render(<DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={select} />)
+    expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Development')
+  } finally { source.dispose(); toast.unmount() }
+})
+
+it('dismisses a successful channel toast after its display lifetime', async () => {
+  vi.useFakeTimers()
+  const dismiss = vi.fn()
+  const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
+    failed: false, notice: { sequence: 7, outcome: 'applied' },
+  })
+  const view = render(<DesktopChannelToast openConfiguration={() => {}} {...kit} t={t}
+    useChannel={bindSnapshotSelector(store)} dismiss={dismiss} />)
+  try {
+    expect(screen.getByRole('alert').textContent).toBe('Update channel changed')
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(dismiss).toHaveBeenCalledWith(7)
+  } finally { view.unmount(); vi.useRealTimers() }
+})
+
+
+it('keeps the settings-file notification for ten seconds with a details action', async () => {
+  vi.useFakeTimers()
+  const dismiss = vi.fn()
+  const openConfiguration = vi.fn()
+  const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
+    failed: false, notice: { sequence: 8, outcome: 'configuration' },
+  })
+  const view = render(<DesktopChannelToast {...kit} t={t} useChannel={bindSnapshotSelector(store)}
+    dismiss={dismiss} openConfiguration={openConfiguration} />)
+  try {
+    expect(screen.getByRole('alert').querySelector('svg')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }))
+    expect(openConfiguration).toHaveBeenCalledOnce()
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(dismiss).not.toHaveBeenCalled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(dismiss).toHaveBeenCalledWith(8)
+  } finally { view.unmount(); vi.useRealTimers() }
+})
+
+it('uses the concise Chinese configuration error for the settings notification', () => {
+  expect(zh['desktop.channel.result.configuration']).toBe('配置文件异常，更新已暂停')
+})
+
+it('labels uncertain settings saves without claiming they were not written', () => {
+  expect(zh['desktop.channel.result.uncertain']).toBe('设置保存异常')
+})
+
+it('does not describe a saved selection that failed to apply as unsaved', () => {
+  expect(zh['desktop.channel.result.apply']).toBe('设置保存异常')
+  expect(en['desktop.channel.result.apply']).toBe('Settings save error')
 })

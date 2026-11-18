@@ -4,6 +4,7 @@ param([Parameter(Mandatory)][string]$Installer, [Parameter(Mandatory)][string]$P
     [Parameter(Mandatory)][string]$RegistryKey, [Parameter(Mandatory)][string]$OutputDirectory,
     [Parameter(Mandatory)][string]$Language, [Parameter(Mandatory)][string]$PackageName)
 $ErrorActionPreference = 'Stop'
+$copy = (Get-Content (Join-Path $PSScriptRoot "../installer/locales/$Language.json") -Encoding UTF8 -Raw | ConvertFrom-Json).uninstaller
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
 [InstallerCapture]::Initialize()
@@ -69,12 +70,12 @@ try {
         if ($mode -eq 'home-inside') { $env:DSH_HOME = Join-Path $userDataPath 'home' } else { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue }
         $process = Start-Process -FilePath $uninstaller -ArgumentList $arguments -PassThru -WindowStyle ($(if ($mode -eq 'interactive') { 'Normal' } else { 'Hidden' }))
         if ($mode -eq 'interactive') {
-            $welcomeText = if ($Language -eq 'ENGLISH') { 'Welcome' } else { -join [char[]]@(0x6B22, 0x8FCE) }
+            $welcomeText = $copy.welcome
             $welcome = Wait-Text $welcomeText
             $window = [InstallerCapture]::TopLevel($welcome)
             [void][InstallerCapture]::SaveNative($window, (Join-Path $OutputDirectory 'uninstall-welcome.png'), $false)
             [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
-            $finishedText = if ($Language -eq 'ENGLISH') { 'has been uninstalled' } else { -join [char[]]@(0x5DF2, 0x4ECE, 0x4F60) }
+            $finishedText = $copy.finished
             [void](Wait-Text $finishedText)
             [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
         }

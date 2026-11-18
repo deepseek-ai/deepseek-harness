@@ -58,7 +58,7 @@ Status: rejected — 下列每一项替换在证据上都未达到净简化门�
 
 **SQLite 与存储：**
 
-- **以 `better-sqlite3` 承担三个 SQLite 后端**：三者全部使用内置 `node:sqlite`，且是双重有意为之——它是 [Node 引擎下限](../../implemented/process/2026-07-06-node-engine-floor.zh.md)的把关依据，也能在单文件可执行体内工作，原生 addon 反而会让打包复杂化。不存在任何手写的迁移或 busy 重试循环。
+- **以 `better-sqlite3` 承担三个 SQLite 后端**：三者全部使用内置 `node:sqlite`，且是双重有意为之——它在 [受支持的 Node 范围](../../implemented/process/2026-10-15-node-24-runtime-floor.zh.md)内可用，也能在单文件可执行体内工作，原生 addon 反而会让打包复杂化。不存在任何手写的迁移或 busy 重试循环。
 
 **仓库工具链：**
 

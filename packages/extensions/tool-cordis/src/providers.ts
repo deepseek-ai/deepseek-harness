@@ -1,7 +1,8 @@
 /** First-party Host inspect providers registered by the Cordis tool package. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { HostCordisInspectProviderRegistration } from '@deepseek-ai/dsh-cordis-host-runner'
+import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
+import { InspectError, type HostCordisInspectProviderRegistration } from '@deepseek-ai/dsh-cordis-host-runner'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EVENT_API, queryEventApi, queryServiceApi } from './api-catalog.ts'
 import { queryLiveConfig } from './config.ts'
@@ -28,6 +29,9 @@ const CONFIG_INPUT: JsonValue = {
 }
 const CONFIG_OUTPUT = {
   description: 'One directory page of live entries with patch ids, Config status, total, and nextOffset, or one entry\'s projected JSON Schema with shared definitions, omission acceptance, and projection limitations.',
+} as const
+const RUNTIME_OUTPUT = {
+  description: 'Object whose version field is the exact running DSH version.',
 } as const
 const HOST_EVENTS = EVENT_API.filter(event => !event.name.startsWith('cordis/'))
 
@@ -62,6 +66,14 @@ export function hostInspectProviders(ctx: Context): HostCordisInspectProviderReg
       CONFIG_INPUT,
       CONFIG_OUTPUT,
     ),
+    registration(
+      'Runtime',
+      'Running DSH version, the version that plugin engines.dsh ranges and DSH peer dependencies are checked against.',
+      'getVersion',
+      () => ({ version: getDshRuntimeVersion() }),
+      undefined,
+      RUNTIME_OUTPUT,
+    ),
     {
       manifest: {
         id: 'Tool',
@@ -74,7 +86,7 @@ export function hostInspectProviders(ctx: Context): HostCordisInspectProviderReg
         }],
       },
       query(method, _input, context) {
-        if (method !== 'listTools') throw new Error(`unknown Tool inspect method "${method}"`)
+        if (method !== 'listTools') throw new InspectError(`unknown Tool inspect method "${method}"`, 'INSPECT_METHOD_NOT_FOUND')
         return Promise.resolve({ tools: ctx.tools.schemas(context.agent) } as unknown as JsonValue)
       },
     },
@@ -101,7 +113,7 @@ function registration(
       }],
     },
     async query(requested, input) {
-      if (requested !== method) throw new Error(`unknown ${id} inspect method "${requested}"`)
+      if (requested !== method) throw new InspectError(`unknown ${id} inspect method "${requested}"`, 'INSPECT_METHOD_NOT_FOUND')
       return await query(input)
     },
   }

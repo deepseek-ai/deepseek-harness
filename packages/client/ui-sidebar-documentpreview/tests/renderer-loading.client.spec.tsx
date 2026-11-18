@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
-import type { OfficeToPdfGeneration } from '@deepseek-ai/dsh-office-to-pdf/types'
+import type { OfficeKitGeneration } from '@deepseek-ai/dsh-office-kit/types'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
 import type { DocumentContent } from '../src/client/document/contract.ts'
 import { TextPreview, type TextPreviewProps } from '../src/client/TextPreview.tsx'
@@ -27,9 +27,11 @@ it('lets a non-Office renderer load content, report its version, and reload thro
   const custom: DocumentPreviewDefinition = {
     id: 'custom-viewer', extensions: ['md'], binaryExtensions: ['md'], title: () => 'Custom', loading: 'renderer',
   }
+  const initialRead = Promise.withResolvers<{ text: string; version: string }>()
+  const reloadedRead = Promise.withResolvers<{ text: string; version: string }>()
   const read = vi.fn<(signal: AbortSignal) => Promise<{ text: string; version: string }>>()
-    .mockResolvedValueOnce({ text: 'Custom content v1', version: 'v1' })
-    .mockResolvedValueOnce({ text: 'Custom content v2', version: 'v2' })
+    .mockReturnValueOnce(initialRead.promise)
+    .mockReturnValueOnce(reloadedRead.promise)
   function CustomBody({ content }: { content: DocumentContent }) {
     const [file, setFile] = useState<{ text: string; version: string; revision: number }>()
     const request = content.kind === 'renderer' ? content : undefined
@@ -55,7 +57,11 @@ it('lets a non-Office renderer load content, report its version, and reload thro
   const useDocumentPreviews: TextPreviewProps['useDocumentPreviews'] = selector => selector([custom])
   const view = render(<TextPreview {...h.props()} renderSlot={renderSlot} useDocumentPreviews={useDocumentPreviews} />)
   expect(read).toHaveBeenCalledTimes(1)
-  expect(await screen.findByText('Custom content v1')).toBeTruthy()
+  expect(screen.getByText('Loading custom content')).toBeTruthy()
+  expect(h.instance.getSnapshot().byTab[TAB_ID]?.version).toBeUndefined()
+  // Resolving inside act waits for the DOM commit and the version-reporting effect.
+  await act(async () => { initialRead.resolve({ text: 'Custom content v1', version: 'v1' }) })
+  expect(screen.getByText('Custom content v1')).toBeTruthy()
   expect(h.instance.getSnapshot().byTab[TAB_ID]?.version).toBe('v1')
   act(() => { h.instance.actions.toggledAutoRefresh(TAB_ID) })
   h.setVersion('v2')
@@ -63,7 +69,9 @@ it('lets a non-Office renderer load content, report its version, and reload thro
   expect(screen.getByText('changed')).toBeTruthy()
   expect(read).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'reloadNow' }))
-  expect(await screen.findByText('Custom content v2')).toBeTruthy()
+  expect(screen.getByText('Loading custom content')).toBeTruthy()
+  await act(async () => { reloadedRead.resolve({ text: 'Custom content v2', version: 'v2' }) })
+  expect(screen.getByText('Custom content v2')).toBeTruthy()
   expect(read).toHaveBeenCalledTimes(2)
   expect(h.instance.getSnapshot().byTab[TAB_ID]?.version).toBe('v2')
   expect(screen.queryByText('changed')).toBeNull()
@@ -78,7 +86,7 @@ const definition: DocumentPreviewDefinition = {
 type Result = Awaited<ReturnType<ReadOfficeDocument>>
 const result = (version = 'v1', missingFonts: readonly string[] = []): Result => ({ ok: true, value: {
   absolutePath: ABSOLUTE_PATH, version, data: new TextEncoder().encode(`PDF ${version}`),
-  offset: 0, eof: true, missingFonts, generation: 'engine' as OfficeToPdfGeneration,
+  offset: 0, eof: true, missingFonts, generation: 'engine' as OfficeKitGeneration,
 } })
 
 function setup() {

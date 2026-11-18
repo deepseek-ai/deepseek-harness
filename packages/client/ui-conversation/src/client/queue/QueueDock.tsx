@@ -1,3 +1,4 @@
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Context } from '@deepseek-ai/cordis'
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -10,7 +11,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { QueueAction } from '@deepseek-ai/dsh-api-session-controller/types'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { UserTextFacts } from '../index.ts'
 import { NS } from '../locales.ts'
 import css from './QueueDock.module.css'
@@ -23,7 +24,7 @@ const QUEUE_TEXT_FACTS: Readonly<Partial<UserTextFacts>> = {
 
 function textOf(content: InboxState['next-turn'][number]['content']): string | null {
   if (!content.every(block => block.type === 'text')) return null
-  return content.map(block => block.text).join('')
+  return extractTextContent(content)
 }
 
 /** Queue operations injected by the session-scoped registration. */
@@ -228,8 +229,9 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                         </span>
                       )}
                       <span className={css.preview}>{renderFactorySlot('conversation.user.text', {
-                        text: row.content.filter(block => block.type === 'text').map(block => block.text).join(''),
-                        facts: QUEUE_TEXT_FACTS, interactive: false, ellipsis: true,
+                        text: extractTextContent(row.content),
+                        facts: QUEUE_TEXT_FACTS,
+                        interactive: false, ellipsis: true,
                       })}</span>
                     </>
                   )}
@@ -345,7 +347,9 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                   </span>
                 )}
                 <span className={css.preview}>{renderFactorySlot('conversation.user.text', {
-                  text: submission.text, facts: QUEUE_TEXT_FACTS, interactive: false, ellipsis: true,
+                  text: submission.text,
+                  facts: QUEUE_TEXT_FACTS,
+                  interactive: false, ellipsis: true,
                 })}</span>
                 <span className={css.status} role="status">{t('queue.sending')}</span>
                 {queueMutable && <div className={css.actions}>

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -23,6 +23,85 @@ async function withDirectory(action: (directory: string) => Promise<void>): Prom
 }
 
 describe('Desktop local packaging configuration', () => {
+  it('loads file-owned compression and defaults to fast Windows archive compression', async () => {
+    expect(resolveWindowsPackageSettings({}).compressionLevel).toBe(3)
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=3\n')
+      const selected = loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: '0' }, directory)
+      expect(resolveWindowsPackageSettings(selected).compressionLevel).toBe(3)
+    })
+  })
+
+  it.each(['3', '7'])('applies an explicit Windows workflow compression override %s', async (value) => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=5\n')
+      const selected = loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: value }, directory)
+      expect(resolveWindowsPackageSettings(selected).compressionLevel).toBe(Number(value))
+      const unchanged = loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: '' }, directory)
+      expect(resolveWindowsPackageSettings(unchanged).compressionLevel).toBe(5)
+    })
+  })
+
+  it.each(['0', '5', '7', '9'])('retains explicit Windows file compression %s outside the workflow', async (value) => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), `DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=${value}\n`)
+      expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', {}, directory)).compressionLevel).toBe(Number(value))
+    })
+  })
+
+  it('keeps the legacy builder override below the file-owned Windows setting', () => {
+    expect(resolveWindowsPackageSettings({ ELECTRON_BUILDER_COMPRESSION_LEVEL: '7' }).compressionLevel).toBe(7)
+    expect(resolveWindowsPackageSettings({ ELECTRON_BUILDER_COMPRESSION_LEVEL: '7', DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: '3' }).compressionLevel).toBe(3)
+  })
+
+  it.each(['test', 'production'])('uses the same Windows compression defaults and overrides for %s', async (preset) => {
+    await withDirectory(async (directory) => {
+      await mkdir(join(directory, 'presets'))
+      const path = join(directory, 'presets', `${preset}.env`)
+      const parent = { DSH_PACKAGING_CONFIG_DIR: directory, DSH_PACKAGING_PRESET: preset }
+      await writeFile(path, `DSH_DESKTOP_AUTO_UPDATE_ENV=${preset}\n`)
+      const load = (environment: NodeJS.ProcessEnv) => resolveWindowsPackageSettings(
+        loadDesktopPackageEnvironment('win32', environment, directory, { unsigned: true }),
+      ).compressionLevel
+      expect(load(parent)).toBe(3)
+      await writeFile(path, `DSH_DESKTOP_AUTO_UPDATE_ENV=${preset}\nDSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL=9\n`)
+      expect(load(parent)).toBe(9)
+      expect(load({ ...parent, PACKAGE_WINDOWS_COMPRESSION_LEVEL: '3' })).toBe(3)
+      expect(load({ ...parent, PACKAGE_WINDOWS_COMPRESSION_LEVEL: '7' })).toBe(7)
+    })
+  })
+
+  it.each([' ', '0', '5', '9', '-1', '10', '3.5', '03', 'fast'])('rejects invalid workflow compression %j before reading settings', (value) => {
+    expect(() => loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: value }, 'missing-settings'))
+      .toThrow('PACKAGE_WINDOWS_COMPRESSION_LEVEL')
+  })
+
+  it('rejects a Windows compression override for macOS before reading settings', () => {
+    expect(() => loadDesktopPackageEnvironment('darwin', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: '3' }, 'missing-settings'))
+      .toThrow('PACKAGE_WINDOWS_COMPRESSION_LEVEL')
+  })
+  it.each(['', '-1', '10', '3.5', '03', 'fast'])('rejects invalid compression %j before preparation', (value) => {
+    const selected = { ...RELEASE, DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: value }
+    expect(() => { validateDesktopPackageEnvironment(selected, WINDOWS, { unsigned: true }) })
+      .toThrow('COMPRESSION_LEVEL')
+  })
+
+  it.each(['', ' ', 'relative/cache'])('rejects invalid package caches before any signing mode %j', (directory) => {
+    for (const target of [WINDOWS, MACOS]) {
+      for (const options of [{ unsigned: true }, { prepareOnly: true }, {}]) {
+        expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_PACKAGE_CACHE_DIR: directory }, target, options) })
+          .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR')
+      }
+    }
+  })
+
+  it('preserves the machine package cache when loading a release file', async () => {
+    await withDirectory(async (directory) => {
+      await writeFile(join(directory, '.env.windows'), '')
+      expect(loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_PACKAGE_CACHE_DIR: directory }, directory))
+        .toEqual({ DSH_DESKTOP_PACKAGE_CACHE_DIR: directory })
+    })
+  })
   it('selects macOS local defaults while excluding inherited release settings and retaining build networking', () => {
     const parent = {
       PATH: 'build-tools', HTTPS_PROXY: 'http://proxy.example:8080', DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com',
@@ -50,6 +129,25 @@ describe('Desktop local packaging configuration', () => {
       await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY=2\n')
       expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', parent, directory)).signatureCacheConcurrency).toBe(2)
     })
+  })
+
+  it('takes pack concurrency from the Windows file without inheriting ambient tuning', async () => {
+    await withDirectory(async (directory) => {
+      const parent = { DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: '8' }
+      await writeFile(join(directory, '.env.windows'), '')
+      expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', parent, directory)).packConcurrency).toBe(4)
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=2\n')
+      expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', parent, directory)).packConcurrency).toBe(2)
+    })
+  })
+
+  it.each(['', '0', '-1', '1.5', 'Infinity', '01', '9007199254740992'])('rejects invalid pack concurrency %s', (value) => {
+    expect(() => resolveWindowsPackageSettings({ DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value })).toThrow('PACK_CONCURRENCY')
+    for (const options of [{ unsigned: true }, { prepareOnly: true }]) {
+      expect(() => {
+        validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value }, WINDOWS, options)
+      }).toThrow('PACK_CONCURRENCY')
+    }
   })
 
   it.each(['1', '2', '4', '8'])('accepts cache concurrency %s', (value) => {
@@ -251,5 +349,42 @@ it('skips Apple credentials but still requires signing credentials for unnotariz
     expect(() => {
       validateDesktopPackageEnvironment({ ...environment, CSC_KEY_PASSWORD: undefined }, MACOS, { skipNotarization: true })
     }).toThrow(/CSC_KEY_PASSWORD/u)
+  })
+})
+
+it('takes ZIP compression from the Mac file instead of ambient release settings', async () => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL=5\n')
+    const loaded = loadDesktopPackageEnvironment('darwin', { DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: '9' }, directory)
+    expect(loaded.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL).toBe('5')
+    await writeFile(join(directory, '.env.macos'), '')
+    expect(loadDesktopPackageEnvironment('darwin', { DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL: '9' }, directory))
+      .not.toHaveProperty('DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL')
+  })
+})
+
+it.each(['', 'relative-cache'])('rejects invalid build cache paths during preflight (%s)', (cache) => {
+  expect(() => { validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_PACKAGE_CACHE_DIR: cache }, MACOS, { unsigned: true }) })
+    .toThrow('DSH_DESKTOP_PACKAGE_CACHE_DIR must be a nonempty absolute directory')
+})
+
+it.each(['3', '7'])('applies the workflow ZIP choice %s over the Mac file setting', async (level) => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), 'DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL=5\n')
+    const loaded = loadDesktopPackageEnvironment('darwin', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, directory)
+    expect(loaded.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL).toBe(level)
+  })
+})
+
+it.each(['', '3', '7'])('rejects Mac workflow ZIP choice %j on Windows before reading settings', (level) => {
+  expect(() => loadDesktopPackageEnvironment('win32', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, 'missing-settings'))
+    .toThrow('PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL requires macOS')
+})
+
+it.each(['', '0', '9', 'invalid'])('rejects unsupported workflow ZIP choice %j', async (level) => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.macos'), '')
+    expect(() => loadDesktopPackageEnvironment('darwin', { PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: level }, directory))
+      .toThrow('workflow ZIP compression must be 3 or 7')
   })
 })

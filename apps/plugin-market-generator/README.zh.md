@@ -9,7 +9,7 @@
 编写来源列表，每行一个条目。生成器忽略空行和以 `#` 开头的行。
 
 ```text
-# npm packages: every non-deprecated bundle version is listed
+# npm packages: every bundle version that is neither deprecated nor private is listed
 @scope/dsh-example
 dsh-another-plugin
 # Git repositories: release tags and the default branch are listed
@@ -39,13 +39,15 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 | `--timeout-ms <n>` | `60000` | 单个请求或 Git 命令的时限。 |
 | `-h`、`--help` | | 打印这些选项和退出状态。 |
 
-所有来源都读取成功时退出状态为 0，有来源无法读取时为 1，参数无效或列表无效时为 2。索引格式会拒绝的列表行属于无效列表，例如 `http:` URL、带凭据、查询或片段的 URL、路径段少于两个的 URL，以及 tarball URL。无法读取的来源保留其上一次成功的结果，因此临时故障不会把插件从索引中移除；生成器仍会报告该失败。
+设置 `GITHUB_TOKEN` 以采集 `github_stars`。生成器会去掉令牌首尾的空白；令牌未设置或为空白时，会跳过 GitHub 指标请求并省略该指标。令牌仅用于 GitHub API 的 Authorization 请求头，不会写入索引、缓存或诊断消息。npm 周下载量不需要该令牌。
+
+所有来源都读取成功时退出状态为 0，有来源无法读取时为 1，参数无效或列表无效时为 2。索引格式会拒绝的列表行属于无效列表，例如 `http:` URL、带凭据、查询或片段的 URL、路径段少于两个的 URL，以及 tarball URL。无法读取的来源保留其上一次成功的结果，因此临时故障不会把插件从索引中移除；生成器仍会报告该失败。指标获取失败时会发出警告并省略不可用的值，包括此前输出中已有的计数。只有所有来源都读取成功时，指标获取失败才仍返回退出状态 0；离线时回退到缓存的来源结果仍返回 1。
 
 ## 列出的内容
 
-每个包成为一个插件，带有一个或多个版本。只有 `package.json` 声明了 `dsh.bundle`、且其 `patch` 是一个文件路径或文件路径列表的版本才会列出。
+每个包成为一个插件，带有一个或多个版本。只有 `package.json` 声明了 `dsh.bundle`、其 `patch` 是一个文件路径或文件路径列表、且没有设置 `"private": true` 的版本才会列出。默认分支上的 `package.json` 设置了 `"private": true` 的 Git 包不会列出，它在各个标签上的版本也不列出。
 
-- **npm 包**：注册表文档中未弃用、声明了组合包（bundle）且有发布时间的每个版本。版本只取自注册表文档；生成器只下载最高列出版本的 tarball，用于读取展示字段。该 tarball 的 `package.json` 必须与所请求的包名和版本一致。
+- **npm 包**：注册表文档中未弃用、未设为私有、声明了组合包（bundle）且有发布时间的每个版本。版本只取自注册表文档；生成器只下载最高列出版本的 tarball，用于读取展示字段。该 tarball 的 `package.json` 必须与所请求的包名和版本一致。
 - **Git 仓库**：生成器按以下顺序在默认分支上查找组合包：
   1. 根 `package.json` 声明了 `dsh.bundle`：仅使用根包；
   2. `package.json` 的 `workspaces` 或 `pnpm-workspace.yaml` 的 `packages` 匹配到声明了 `dsh.bundle` 的包：使用这些包。每个 glob 段可以是字面名称、含 `*` 的名称或 `**`；生成器忽略否定 glob，并报告未匹配任何内容的 glob；
@@ -59,11 +61,13 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 
 `metadata.keywords` 是用于发现插件的可选字符串数组。按约定使用 npm `package.json` 的 `keywords`；索引生成器可以补充或调整它。本参考生成器原样复制最高列出版本 manifest 的 `keywords`，包括空字符串、重复值和空数组。字段缺省时省略；如果值不是数组，或数组包含任何非字符串成员，则发出警告并省略整个字段，但保留该包。
 
+生成器从 GitHub 仓库 API 读取可选的 `github_stars`，从 npm 的 `downloads/point/last-week` 端点读取可选的 `npm_weekly_downloads`。Git 包的 GitHub 计数取自实际 Git 来源仓库，npm 包则取自作者在 manifest 中声明的仓库。生成器不验证 npm 包声明的仓库归属或与包源码的对应关系，因此 star 数不代表可信度或质量。npm 计数仅对公共 npm 来源发起请求，不对自定义注册表或仅有 Git 来源的包发起请求。周下载量指 npm 的 `last-week` 返回的时间窗口，不是上游的 30 天总量。可用的计数（包括零）写入插件的 `metadata.sortKeys`；根级 `metadata.sortKeys` 仅声明至少有一个插件提供值的指标，初始顺序为降序；没有可用指标时，省略根级 `metadata`。获取失败和无效计数会产生警告并省略该指标，不会丢弃插件或使运行失败。
+
 多个来源产生相同包名时，列表中靠前的来源生效。
 
 ## 缓存与重复运行
 
-每次运行时，生成器读取每个 npm 来源的注册表文档和每个 Git 仓库的引用（ref）。结果按不可变的输入缓存：npm 插件按注册表、图标阈值、包和列出版本的集合缓存；Git 仓库按默认分支提交和发布标签缓存；每个 Git 包按提交和目录缓存。因此 Git 运行只拉取其包尚未缓存的提交。生成器以原子方式写入缓存文件，并重建损坏的或索引格式会拒绝的缓存文件。输出是确定性的：条目按列表顺序排列，索引文件和图标文件只在内容变化时才重写，因此上游没有变化时再次运行生成器不会改动输出。
+每次运行时，生成器读取每个 npm 来源的注册表文档和每个 Git 仓库的引用（ref）。结果按不可变的输入缓存：npm 插件按注册表、图标阈值、包和列出版本的集合缓存；Git 仓库按默认分支提交和发布标签缓存；每个 Git 包按提交和目录缓存。因此 Git 运行只拉取其包尚未缓存的提交。生成器以原子方式写入缓存文件，并重建损坏的或索引格式会拒绝的缓存文件。已启用的指标在这些缓存之外于每次运行时刷新，同一仓库或包共享请求，并遵循配置的并发和超时限制。指标获取失败时绝不复用陈旧计数。包数据和指标响应不变时，输出是确定性的：条目按列表顺序排列，索引文件和图标文件只在内容变化时才重写，因此上游没有变化时再次运行生成器不会改动输出。
 
 ## 安全
 
@@ -73,6 +77,8 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 
 ## 限制
 
+- 请求受 GitHub 令牌权限和 API 速率限制约束；请求被拒绝或受到速率限制时，会发出警告并省略受影响的计数。
+- 已缓存包数据不表示运行可以离线完成：每次运行仍会请求来源文档或引用以及已启用的指标。指标 API 无法访问时，输出会移除这些计数，不复用陈旧值；来源获取失败遵循上述退出状态规则。
 - Git 服务器必须允许按 SHA 拉取提交，GitHub、GitLab 和 Gitea 都允许。服务器拒绝时，生成器按名称拉取标签和默认分支；如果某个引用在列出之后移动了，这一步会失败。
 - 生成器不使用 `.npmrc` 中的注册表令牌；只支持公开或无需认证的注册表。
 - Git 从不提示输入凭据。需要凭据的仓库必须能通过凭据助手或 ssh agent 读取。

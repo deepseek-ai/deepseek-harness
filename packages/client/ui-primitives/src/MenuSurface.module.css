@@ -47,3 +47,19 @@
   background: var(--dsw-alias-bg-base);
   pointer-events: none;
 }
+
+/* Opacity on the container would prevent its material from blurring the page.
+ * Enter animations release their compositing layers so nested menus can blur too. */
+.surface[data-menu-phase='enter'] > *,
+.backing[data-menu-phase='enter'] { animation: dsh-context-menu-in var(--dsh-menu-enter) ease-out; }
+.surface[data-menu-phase='dismiss'] > *,
+.backing[data-menu-phase='dismiss'],
+.surface[data-menu-phase='replace'] > *,
+.backing[data-menu-phase='replace'] { animation: dsh-context-menu-out var(--dsh-menu-dismiss) ease-in both; }
+.surface[data-menu-phase='replace'] > *,
+.backing[data-menu-phase='replace'] { animation-duration: var(--dsh-menu-replace); }
+@keyframes dsh-context-menu-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dsh-context-menu-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .surface[data-menu-phase] > *, .backing[data-menu-phase] { animation-duration: 0ms; }
+}

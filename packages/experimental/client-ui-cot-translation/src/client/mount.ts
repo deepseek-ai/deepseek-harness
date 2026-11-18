@@ -14,7 +14,7 @@ import type { CotTranslationPreferences, CotTranslationSnapshot } from '../prefe
 import { TranslationBody, type TranslationBodyInjected } from './TranslationBody.tsx'
 import { TranslationSettings } from './TranslationSettings.tsx'
 import { TranslationPreferencesForm } from './preferences-form.ts'
-import { en, NS, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh } from './locales.ts'
 
 /** Services required to mount the optional Remote and UI contributions. */
 export const inject = ['remote', 'slots', 'locale', 'configForms']
@@ -80,7 +80,7 @@ async function registerUi(ctx: Context, lifetime: AbortController): Promise<void
   }
   const scope = ctx.configForms.get<CotTranslationPreferences>('cot-translation')
   ctx.effect(() => scope.subscribe(invalidate))
-  ctx.effect(() => ctx.locale.register(NS, { en, zh }))
+  ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
   const form = new TranslationPreferencesForm(scope)
   ctx.effect(() => () => { form.dispose() })
   const injected = (sessionId: SessionId): TranslationBodyInjected => ({

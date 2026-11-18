@@ -25,13 +25,17 @@ This package is the Web GUI's feedback surface: the Like/Dislike pair in the fin
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-conversation` and `ui-commands`; the Like/Dislike pair then appears in the action row of each turn's closing assistant message, between copy and branch, and Feedback in the composer menu opens the same dialog. Mounting `session-log-export` also adds Feedback to the Session Header's more-actions menu. A recorded rating shows the filled glyph and stays visible without hover. Like and Dislike both open the dialog: seven category chips and a detail box are optional, and Submit records the selected judgment with whatever was filled in before the toast thanks the user; the conversation log travels with every feedback event. Clicking the recorded rating retracts it without opening the dialog. A bare `/feedback`, picked from the menu or typed and sent without text, opens the same dialog for the Session; `/feedback <text>` keeps the Host command path and its acknowledgement row.
+Mount this plugin alongside `ui-conversation` and `ui-commands`; the Like/Dislike pair then appears in the action row of each turn's closing assistant message, between copy and branch, and Feedback in the composer menu opens the same dialog. Mounting `session-log-export` also adds Feedback to the Session Header's more-actions menu. The rating glyphs use 16px boxes at the default content font size, matching the adjacent completion actions while retaining fixed 1px outline strokes. A recorded rating shows the filled glyph and stays visible without hover. Like and Dislike both open the dialog: seven category chips and a detail box are optional, and Submit records the selected judgment with whatever was filled in before the toast thanks the user; the conversation log travels with every feedback event. Clicking the recorded rating retracts it without opening the dialog. A bare `/feedback`, picked from the menu or typed and sent without text, opens the same dialog for the Session; `/feedback <text>` keeps the Host command path and its acknowledgement row.
 
 ### Failures
 
 A rating or list-load failure shows inline in the row; a submission failure shows in a warning toast while the dialog stays open so the draft can be corrected. Only finalized messages reach the message entry — an interruption-frozen partial carries no `messageId` and therefore no feedback controls.
 
+Access: the rating buttons render only while the current Peer may call `messageFeedback/put` on the Session; the `/feedback` decoration has no Client check, and the Host refuses a submission without access.
+
 -----
+
+The feedback dialog uses the shared modal heading spacing. Category chips form a tight group, details follow as a separate field, and the submit action has a larger separation than the gaps within either input group.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation

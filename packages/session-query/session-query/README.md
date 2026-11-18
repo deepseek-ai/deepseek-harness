@@ -25,13 +25,14 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use `ctx.sessionQuery` from application code when you need to read or search session history without touching the session service or a storage backend directly. The service is provided by a concrete backend plugin — the shipped composition mounts `@deepseek-ai/dsh-session-query-sqlite` ([README](../session-query-sqlite/README.md)) — so this package is never mounted alone. Everything below is available on `ctx.sessionQuery` once a backend is composed.
+Use `ctx.sessionQuery` from application code when you need to read or search session history without touching the session service or a storage backend directly. The service is provided by a concrete backend plugin — the shipped composition mounts `@deepseek-ai/dsh-session-query-sqlite` ([README](../session-query-sqlite/README.md)) — so this package is never mounted alone. The query operations below are available on `ctx.sessionQuery` once a backend is composed.
 
 ### What you can do
 
 | Operation | What you get |
 |---|---|
 | `listSessions()` | Every logical session, newest first, with `live` and `persisted` availability flags and optional `formatStatus` |
+| `getListMetadata(session)` | Whether a live or prepared Session has no turn, and its latest human-authored prompt time |
 | `readSession(id)` | The complete replay-validated raw event log, without making the session live |
 | `filterSessions(filters)` | Sessions matching ANDed metadata and availability predicates |
 | `filterEvents(id, filters)` | Semantic event documents matching metadata and literal-text predicates |
@@ -92,6 +93,7 @@ The decision history lives in the [unified service decision](../../../.agents/no
 | [`src/index.ts`](src/index.ts) | Service definition: the abstract `SessionQueryEngine`, concrete reads, config validation |
 | [`src/corpus.ts`](src/corpus.ts) | Live-preferred corpus resolution, optional persistence binding, batch projections |
 | [`src/observation.ts`](src/observation.ts) | Live-preferred point observations with a bounded revision-keyed prepared-Session cache |
+| [`src/list-metadata.ts`](src/list-metadata.ts) | Session-list blankness and human-prompt recency projection definition |
 | [`src/cold-read.ts`](src/cold-read.ts) | Handle-based cold log read with in-memory interrupted-turn closers |
 | [`src/types.ts`](src/types.ts) | Public records, filters, requests, and page types |
 | [`src/config.ts`](src/config.ts) | Inherited config and the closed `SessionQueryError` taxonomy |
@@ -105,9 +107,18 @@ The decision history lives in the [unified service decision](../../../.agents/no
 
 `SessionCorpus` binds optional `ctx.sessionPersistence` through a fiber and resolves each read live-first: a known live target is snapshotted without consulting persistence; otherwise the session is listed, read completely through a short-lived read handle, and re-checked for a live attachment before cloning. A cold log whose writer crashed mid-turn is balanced in memory with `interruptedTurnClosers` — persistence is never mutated by a read. Header compatibility is asserted between listed and loaded observations. Batch title reads run one metadata listing and bounded-concurrency reads, isolating per-session failures while cancellation rejects the whole batch.
 
+<a id="session-list-metadata"></a>
+### Session-list metadata
+
+The service registers the `sessionListMetadata` projection for Session blankness and the latest human-authored prompt time when it starts, and its disposal releases that registration; it therefore requires `sessionProjections`. `getListMetadata(session)` reads the projection synchronously for a live or prepared Session. The Session API and optional [listing tools](../tool-session-list/README.md) read it through `ctx.sessionQuery`.
+
 ### Observation cache
 
 `observeSession` builds point observations without a listing preflight. A live observation fixes its cut as the current log length and materializes `events` on first read, so header-, cursor-, or projection-only consumers never copy the log; the log only appends, so a late first read still yields exactly that prefix. The cold path stats the stored session first and consults its own bounded cache keyed by the persistence instance and the `stat` revision: an unchanged revision reuses the restored unpublished Session without re-reading the log; a changed revision, or a replaced persistence instance, reloads through the handle seam and replaces the entry. The cache holds `preparedSessionCacheSize` entries with least-recently-used eviction, entries pinned by active observation leases are never evicted, and a session that goes live mid-read retries the live path.
+
+A cold `SessionObservation` reports `persistedEventCount` to separate the stored prefix from the in-memory interrupted-turn repairs in `events`. Fork callers keep those repairs in the child's suffix. A live observation omits the field, since a live log carries no read-time repairs.
+
+`inspectSession(id, read, signal?)` prepares a cold Session without publishing or resuming it and calls a synchronous domain getter at a fresh live or prepared cut. The getter may read its owned projection or resolve policy; it must not mutate or retain the Session. The observation is released after the getter returns or throws; callers retain only the returned data. Preparation uses the observation cache and validates persisted history.
 
 ### Reads and traces
 

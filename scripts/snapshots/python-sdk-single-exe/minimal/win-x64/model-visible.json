@@ -33,19 +33,6 @@
             "file_path"
           ]
         }
-      },
-      {
-        "name": "working_directory",
-        "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "cd": {
-              "type": "string",
-              "description": "Existing directory to enter. Omit to read the current directory."
-            }
-          }
-        }
       }
     ],
     "messages": [
@@ -58,7 +45,7 @@
           },
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\"."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n</system-reminder>"
           }
         ]
       }
@@ -98,19 +85,6 @@
             "file_path"
           ]
         }
-      },
-      {
-        "name": "working_directory",
-        "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "cd": {
-              "type": "string",
-              "description": "Existing directory to enter. Omit to read the current directory."
-            }
-          }
-        }
       }
     ],
     "messages": [
@@ -123,7 +97,7 @@
           },
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\"."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n</system-reminder>"
           }
         ]
       },
@@ -182,19 +156,6 @@
             "file_path"
           ]
         }
-      },
-      {
-        "name": "working_directory",
-        "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "cd": {
-              "type": "string",
-              "description": "Existing directory to enter. Omit to read the current directory."
-            }
-          }
-        }
       }
     ],
     "messages": [
@@ -207,7 +168,7 @@
           },
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\"."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n</system-reminder>"
           }
         ]
       },

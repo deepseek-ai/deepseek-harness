@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { parseAnsiLines, type AnsiLine } from './ansi.ts'
 import { headTailCap } from './head-tail-cap.ts'
-import { useCopyFeedback } from './use-copy-feedback.ts'
+import { useClipboardCopy } from './use-clipboard-copy.ts'
 import { Pill } from './Pill.tsx'
 import { StateDot, type StateDotState } from './StateDot.tsx'
 import css from './TerminalBlock.module.css'
@@ -204,7 +204,7 @@ export function TerminalBlock({
   const [expanded, setExpanded] = useState(false)
   // The raw output (or the caller's override), never the rendered tree: the
   // prompt line and the status pill are chrome the user did not run.
-  const { copied, onCopy } = useCopyFeedback(copyText ?? text)
+  const { copied, onCopy } = useClipboardCopy(copyText ?? text)
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
 
@@ -236,9 +236,9 @@ export function TerminalBlock({
       data-running={running ? '' : undefined}
       data-body={body ? '' : undefined}
     >
-      <div className={css.header}>
+      <div className={css.header} data-terminal-banner="">
         <div className={css.prompt}>
-          {showState && <span className={css.runStateLabel}>{state.label}</span>}
+          {showState && <span className={css.runStateLabel} data-terminal-state-label="">{state.label}</span>}
           {commandLines.map((line, index) => (
             <div key={index} className={css.promptLine}>
               {/* One dot for the card, on the first row: the exit status the
@@ -252,7 +252,7 @@ export function TerminalBlock({
                   command is enough), so repeating the label down the rows would
                   assert a directory per line that nothing here knows. Later
                   rows keep a bare `$` to stay aligned as prompts. */}
-              <span className={css.cwd}>
+              <span className={css.cwd} data-terminal-prompt="">
                 {index > 0 || cwd === undefined ? '$' : promptLabel(cwd, home)}
               </span>
               <CommandText className={css.command} text={line} label={copy.commandLine(index + 1)} />
@@ -269,7 +269,7 @@ export function TerminalBlock({
       {body && (empty
         ? <div className={css.empty}>{copy.noOutput}</div>
         : (
-          <div className={css.output}>
+          <div className={css.output} data-terminal-output="">
             {(capped ? lines.slice(0, headLines) : lines).map((line, index) => (
               <div key={index} className={css.line}>{renderLine(line)}</div>
             ))}

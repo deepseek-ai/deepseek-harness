@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getStaticModules } from '@deepseek-ai/dsh-client-web/src/seed.ts'
+import { PLATFORM_MODULES } from '@deepseek-ai/dsh-client-web/src/platform.ts'
 import { afterAll, describe, expect, it, onTestFinished } from 'vitest'
 import { MODULES_PACKAGE } from '../src/assembly/modules.ts'
 import { WEB_PROFILE_BUNDLES, bundleRoster, webApp } from '../src/assembly/bundle-roster.ts'
@@ -17,7 +17,7 @@ describe('webApp (the real web profile)', () => {
     expect(WEB_PROFILE_BUNDLES).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
     const names = webApp.rows.map(row => row.name)
     expect(new Set(names).size).toBe(names.length)
-    const known = new Set([...names, ...Object.keys(getStaticModules())])
+    const known = new Set([...names, ...PLATFORM_MODULES])
     const dangling = webApp.rows.flatMap(row => row.inject.filter(target => !known.has(target)).map(target => `${row.name} -> ${target}`))
     expect(dangling).toEqual([])
     expect(bundleRoster(WEB_PROFILE_BUNDLES, undefined, profileScope('web')).rows).toEqual(webApp.rows)
@@ -73,6 +73,31 @@ class Scratch {
 describe('bundleRoster on a scratch installation', () => {
   const scratch = new Scratch()
   afterAll(() => { rmSync(scratch.root, { recursive: true, force: true }) })
+
+  it('resolves a bundle that registers its own browser entry', () => {
+    const linked = new Scratch()
+    onTestFinished(() => { rmSync(linked.root, { recursive: true, force: true }) })
+    const bundle = join(linked.root, 'workspace', 'bundle')
+    mkdirSync(bundle, { recursive: true })
+    writeFileSync(join(bundle, 'package.json'), JSON.stringify({
+      name: '@t/self', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } },
+    }))
+    writeFileSync(join(bundle, 'cordis.patch.yml'), "- insert:\n    - name: '@t/self'\n")
+    mkdirSync(join(linked.root, 'app', 'node_modules', '@t'), { recursive: true })
+    symlinkSync(bundle, join(linked.root, 'app', 'node_modules', '@t', 'self'), 'junction')
+    expect(linked.roster(['@t/self'])).toEqual(['@t/self'])
+  })
+
+  it('resolves an anchor bundle and its browser entry before a same-named dependency', () => {
+    const anchored = new Scratch()
+    onTestFinished(() => { rmSync(anchored.root, { recursive: true, force: true }) })
+    writeFileSync(anchored.anchor, JSON.stringify({
+      name: '@t/self', dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web' } },
+    }))
+    writeFileSync(join(anchored.root, 'app', 'cordis.patch.yml'), "- insert:\n    - name: '@t/self'\n")
+    anchored.bundle('@t/self', '- insert: []\n')
+    expect(anchored.roster(['@t/self'])).toEqual(['@t/self'])
+  })
 
   it('resolves a linked bundle dependency before an unrelated ancestor package', () => {
     const linked = new Scratch()

@@ -18,41 +18,25 @@ Status: implemented
 
 | 命令 | 职责 | 步骤 | 调度 | client build record |
 |---|---|---|---|---|
-| `pnpm run build:artifacts` | 产出 `build` 的全部产物；包 project 照常完整类型检查，不检查两个聚合根程序 | native → host-src → host-bundle → desktop-bundle → client-src → client-bundle → web | 一条线性链 | 开始时删除，全部通过后写入 |
-| `pnpm run build:check` | 只类型检查两个聚合根程序 | host-check、client-check | 两步并发，无前置步骤 | 不读写 |
+| `pnpm run build:artifacts` | 产出 `build` 的全部产物；包 project 照常完整类型检查，不检查Host 与 Client 聚合程序 | [产物顺序](../../../../docs/development.zh.md#typescript-project-layout) | 依赖顺序 | 开始时删除，全部通过后写入 |
+| `pnpm run build:check` | 只类型检查Host 与 Client 聚合程序 | host-check、client-check | Host 与 Client 检查并发，无前置步骤 | 不读写 |
 | `pnpm run build` | `build:artifacts` 与 `build:check` 的全部步骤 | 下文依赖图 | run-gates 调度器并发执行 | 开始时删除，全部通过后写入 |
 
 `build:check` 不检测、不重建、也不校验 `build:artifacts` 的产物；前置产物缺失或过期时，由编译器自身的诊断（例如 TS6305、TS2307）报告，任何命令都不增加前置检查、守卫或回退逻辑。`build:artifacts` 产出的产物与 record 和 `build` 相同，并取代 `--artifacts-only`；该参数与 `compile-referenced-projects.ts` 的 `libraries` 模式已删除，Python executable builder 使用 `--build-artifacts`。`build:official` 仍是 `tsx scripts/build.ts --profile official`，执行完整的 `build`。
 
 ### 步骤与依赖
 
-| 步骤 | 命令 | `build` 中的 `needs` |
-|---|---|---|
-| native | `pnpm run build:native-system` | — |
-| host-src | `node --max-old-space-size=4096 <tsc> -b <tsconfig.host.json 的 references>` | native |
-| host-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE host`（运行 Typert） | host-src |
-| desktop-bundle | `pnpm --filter @deepseek-ai/dsh-desktop run bundle` | host-bundle |
-| client-src | `<tsc> -b <tsconfig.client.json 的 references>` | desktop-bundle |
-| client-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE client` | client-src |
-| web | `pnpm run build:web` | client-bundle |
-| host-check | `node --max-old-space-size=4096 <tsc> -p tsconfig.host.json` | host-src |
-| client-check | `<tsc> -p tsconfig.client.json` | client-src |
+[先生成顺序](2026-10-18-source-first-metadata-builds.zh.md)在包编译前准备元数据。[开发指南](../../../../docs/development.zh.md#typescript-project-layout)与 `buildGates()` 负责当前步骤图；每个 aggregate 检查在自己的包声明就绪后开始。
 
-```text
-native → host-src ─┬─ host-check ───────────────────────────────────────────────────────┐
-                   └─ host-bundle → desktop-bundle → client-src ─┬─ client-check ───────┤ → record
-                                                                 └─ client-bundle → web ┘
-```
-
-- client-src 必须在 host-bundle 之后：Client 包导入 `@deepseek-ai/dsh-*/remote`，其类型 `lib/typert.remote-client.d.ts` 由 Typert 写出：这些 scope 在 Host tsdown 中生成，typecheck scope 经 `scripts/generate-typert.ts` 生成。host-check 不读取 Typert 输出，干净的串行构建一直在 Host tsdown 之前完成 Host 聚合检查。
-- 产物链保留 native → host-src 与 desktop-bundle → client-src 这两条非数据依赖；只有两个 check 步骤并行挂接到链上。
+- Client 编译读取仅源码元数据阶段生成的 Remote 声明。Desktop 打包仍在 Client 编译之前；改变该非数据依赖需要单独的证据。
+- 产物链保留 native → host-src 与 desktop-bundle → client-src 这两条非数据依赖；aggregate 检查在包编译后挂接；native 与元数据生成可以并行。
 - [`compile-referenced-projects.ts`](../../../../scripts/compile-referenced-projects.ts) 拥有包库步骤列表 `libraryBuildSteps`、references 参数构造 `referencedProjectsCompilerArgs`（相对路径传参，避开 Windows 命令行长度上限）与聚合检查参数 `aggregateCheckArgs`。vendor 发布演练（`host-libraries`）与 CI benchmark（`--noCheck`）串行执行同一步骤列表。
 - check 步骤使用 project mode（`tsc -p`）：它读取 references 已有的声明而不编译任何 reference，incremental 状态写入聚合配置已有的 `tsconfig.{host,client}.tsbuildinfo`。`build` 与 `build:check` 使用同一条命令，因此诊断相同。
 
 ### 调度、失败与输出
 
 - [`scripts/build.ts`](../../../../scripts/build.ts) 拥有步骤表与三个范围，执行复用 [`scripts/run-gates.ts`](../../../../scripts/run-gates.ts) 的 `runAggregate`：每个步骤是一个带 `needs` 的 gate，shell-free 启动、按步骤缓冲输出、fail-fast 进程树终止、Windows `taskkill` 与宿主信号转发都沿用 run-gates 的实现。`build:artifacts` 为 `tsx scripts/build.ts --scope artifacts`，`build:check` 为 `--scope check`，`build` 不带 `--scope`，把两者作为一张图执行；`--profile` 只适用于产生产物的范围，与 `--scope check` 同用时参数解析失败。
-- 并发上限取 `DSH_GATE_CONCURRENCY`，未设置时为可用 CPU 数；依赖图宽度最多为 3（host-check 尚未结束时，client-check 与 client-bundle 可能已开始）。master 串行参考 lane 设置 `DSH_GATE_CONCURRENCY=1`，`build` 在那里按拓扑顺序串行执行，符合[串行参考决策](2026-07-21-serial-cross-platform-ci-reference.zh.md)，无需修改 workflow。
+- 并发上限取 `DSH_GATE_CONCURRENCY`，未设置时采用仓库 worker 预算；aggregate 检查可与后续产物步骤重叠。master 串行参考 lane 设置 `DSH_GATE_CONCURRENCY=1`，`build` 在那里按拓扑顺序串行执行，符合[串行参考决策](2026-07-21-serial-cross-platform-ci-reference.zh.md)，无需修改 workflow。
 - 缺省（本地）时，失败步骤的所有依赖方记为 skipped，正在运行的步骤和与失败无关的步骤继续运行到结束；执行集合只取决于各步骤的结果，因此一次运行报告所有相互独立的类型错误。`DSH_GATE_FAIL_FAST=1`（所有构建型 PR lane 已设置）时，第一个失败终止其余正在运行步骤的进程树，所有未完成步骤记为 skipped。
 - 失败步骤打印 `== FAILED <步骤> ==`、命令、退出原因与该步骤完整的缓冲输出，结尾汇总列出 failed 与 skipped 步骤；成功步骤只打印 PASS 行，`DSH_GATE_VERBOSE=1` 打印全部输出。任一步骤 failed 或 skipped 时退出码为 1，且不写 client build record。所有步骤继承 `clientBuildProcessEnvironment` 选定的公开 Client 环境。
 - CI 中 `build` 本身是外层 run-gates 的一个 gate；外层 fail-fast 终止会转发到内层调度。`check:node-compat` 与 `check:ci:lint:contracts-ready` 已使用同样的嵌套。
@@ -63,11 +47,11 @@ native → host-src ─┬─ host-check ─────────────
 |---|---|---|
 | `build`、`build:official`、`Makefile` `build`、`scripts/publish-npm-baseline.ts`、`apps/desktop/scripts/package-target.ts`、`scripts/dev-bundle-registry.ts`、`release-publish.yml`、`sandbox.yml`、`e2e.yml` 与 `release.yml` 的非 PR 分支 | `build` / `build:official` | 有 |
 | `test:web`、`test:web:refresh`、`test:web:perf`、`test:web:stress`、`apps/desktop` `test:updates:local`、`test:bench` / `build:bench` | `build`；`build:bench` 运行 `build:native-system`、`build:lib` 与 benchmark tsdown | 有 |
-| `typecheck`（pre-push hook 运行它） | `build.ts --scope typecheck`：host-src 与 host-typert（不打包、只读源码的 Typert 生成 `generate-typert.ts`）并行 → client-src，各 face 包编译后运行 `tsc -b tsconfig.{host,client}.json`；不含任何 bundle | 有 |
+| `typecheck`（pre-push hook 运行它） | `build.ts --scope typecheck`：host-typert（只读源码的 Typert 生成 `generate-typert.ts`）→ 包编译，各 face 包编译后运行 `tsc -b tsconfig.{host,client}.json`；不含任何 bundle | 有 |
 | `dev:web`（[`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)）、`dev:desktop`（`apps/desktop/scripts/dev.ts`） | `build:artifacts` | 启动前无；`dev:web` 启动后的 `tsc -b tsconfig.client.json --watch` 持续检查 Client 聚合根程序 |
-| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | Host 包编译与不打包的 Typert 生成并行（`compile-referenced-projects.ts host-contracts`），不含任何 bundle | 无 |
+| `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | 仅源码 Typert 生成后进行 Host 包编译（`compile-referenced-projects.ts host-contracts`），不含任何 bundle | 无 |
 | CI node 24 / snapshots and artifacts（`check:ci:consumers`）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
-| CI node-compat 22.19 | `build:artifacts`（经 run-gates） | 无 |
+| CI node-compat 24.9 | `build:artifacts`（经 run-gates） | 无 |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | 无 |
 | `e2e.yml`、`release.yml` 的 PR 演练 | `pnpm run build:artifacts --profile official` | 无 |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | 无 |
@@ -114,7 +98,7 @@ wall 中位数从 249.4 s 降到 172.1 s（−77.3 s，−31%）。各步骤单�
 | 包源码类型错误 | host-src / client-src | 不报告（读取已有声明） | host-src / client-src | 报告 | 报告 |
 | 只属于聚合根程序的测试、脚本、benchmark、website 类型错误 | 不报告 | host-check / client-check | host-check / client-check | 报告 | consumers、windows-build |
 | 包 tsconfig 配置错误 | host-src / client-src | 不报告（`tsc -p` 不校验被引用 project 的 tsconfig 选项与语法） | host-src / client-src | 报告 | 报告 |
-| Typert 分析错误 | host-bundle | 不报告 | host-bundle | 报告（经 host-typert） | 报告 |
+| Typert 分析错误 | host-typert | 不报告 | host-typert | 报告（经 host-typert） | 报告 |
 | 前置产物缺失 | — | 编译器诊断（TS6305、TS2307） | — | — | — |
 
 负对照：在只属于 Host 聚合根程序的 `scripts/pnpm-invocation.spec.ts` 中加入类型错误（TS2322）后，`build:artifacts` 以 0 退出；`build:check` 以 1 退出，其中 Host 聚合检查失败、Client 聚合检查通过；`build` 以 1 退出，9 个步骤中 8 个通过、1 个失败，且不写 client build record。在临时 fixture 中，被引用 project 的 tsconfig 含无效 `target`、JSON 语法错误或未知编译选项时，`tsc -p` 以 0 退出，`tsc -b` 分别报告 TS6046、TS5092 与 TS1012、TS5023 并以 1 退出；被引用 project 缺少 `composite` 时，两者都报告 TS6306。
@@ -150,8 +134,8 @@ CI 证据：PR #6005 上，两个运行并发 `pnpm run build` 的必需 lane �
 
 开发迭代可以用 `build:artifacts` 跳过两个聚合根程序（冷启动比 master 的 `build` 快 51.6%），在声明完成前用 `build:check` 或 `build` 补齐检查。`build` 保持完整：Host 聚合检查不在关键路径上，Client 聚合检查与 Client bundle、web 并行，冷启动比 master 快 46.7%（含无损提速 Note 的改动，2 个样本的中位数）。代价是更高的内存峰值、并发争用带来的少量额外 CPU、默认更少的成功输出，以及多个开发与前置命令不检查测试类型（见上文取舍）。
 
-删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。typecheck scope 与 lint 类前置步骤不打包即生成 Typert 约定（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）；产物 scope 仍在 Host tsdown 中生成。
+删除或改变 consumers 与 windows-build 两个必需 lane 的 `build`，必须先把两个聚合检查转交另一处阻塞型 owner。typecheck scope 与 lint 类前置步骤不打包即生成 Typert 约定（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）；产物 scope 采用[先生成元数据的顺序](2026-10-18-source-first-metadata-builds.zh.md)。
 
-[Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)描述的“Client 编译前先完成 Host 与 Remote 产物”由 client-src 对 host-bundle 的依赖保证。
+host-src 依赖 host-typert，因此生成的 Remote 声明先于包编译。[Typert Remote 方法调用](../architecture/2026-08-02-typert-remote-method-calls.zh.md)说明生成的贡献。
 
 验证：`scripts/build.spec.ts` 覆盖类型剥离检查、已删除参数与非法范围的拒绝、`--profile` 与 `--scope check` 的冲突、范围选择、步骤依赖与环境；`compile-referenced-projects.spec.ts` 覆盖 project mode 只检查聚合程序、缺失声明的诊断，以及 `tsc -b --dry` 接受 `tsc -p` 写出的 tsbuildinfo；失败传播、输出缓冲与进程树终止沿用 run-gates 的调度实现及其测试；`run-gates.spec.ts`、`ci-workflow.spec.ts`、`preview-workflow.spec.ts`、`build-exe-for-python-sdk.spec.ts`、`dev-web.spec.ts` 与 `tests/ci-release-selfhosted.spec.ts` 固定各调用方的命令。

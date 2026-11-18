@@ -11,7 +11,7 @@ import { BrowserTitle } from '../src/client/view/BrowserTitle.tsx'
 import type { BrowserInjected } from '../src/client/browser/BrowserController.ts'
 import { BROWSER_ID, BROWSER_KIND } from '../src/client/definition.tsx'
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 import { createBrowserStore } from '../src/client/browser/store.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { DesktopBrowserBridge, DesktopBrowserLeaseId } from '../src/types.ts'
@@ -125,7 +125,7 @@ describe('ui-sidebar-browser apply', () => {
     expect(definition?.title('sidebar://browser')).toBe('type.label')
     expect(definition?.guide?.map(entry => [entry.order, entry.title(), entry.description?.()]))
       .toEqual([[30, 'guide.title', 'guide.description']])
-    expect(dictionaries.get('sidebarBrowser')).toEqual({ zh, en })
+    expect(dictionaries.get('sidebarBrowser')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     expect(dictionaries.get('sidebarBrowser')).toMatchObject({
       zh: { 'guide.description': '浏览网页' },
       en: { 'guide.description': 'Browse web pages' },

@@ -40,7 +40,7 @@ describe.skipIf(!built)('built index parsing (plain node)', () => {
       const ctx = new Context()
       try {
         await ctx.plugin(Manager)
-        await ctx.plugin(PluginMarket, { indexes: Object.keys(bodies) })
+        await ctx.plugin(PluginMarket, { indexes: Object.keys(bodies), detailCacheDir: '/nonexistent/plugin-market-detail-cache' })
         const query = { sort: { kind: 'index' }, offset: 0, limit: 10 }
         const valid = await ctx.pluginMarket.search('https://m.example/valid.json', query)
         const invalid = await ctx.pluginMarket.search('https://m.example/invalid.json', query).catch(error => error)

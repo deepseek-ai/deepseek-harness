@@ -9,35 +9,38 @@
   en: 02bd72c12ada3218
   zh: 331b3a38b3ddfc6e
 /deepseek-ai-dsh-client-ui-chat/summary:
-  en: fba5b2fb8080e2dd
-  zh: 32c337123b7dfbcb
+  en: 4f2d50107db6c4f8
+  zh: ea7ccfcce8f1849e
 /deepseek-ai-dsh-client-ui-chat/table-of-contents:
-  en: 41cd21266011d571
-  zh: 3172d1a2acbb27b7
+  en: 5ee429751fcbeb4f
+  zh: 981a37018b6cae3a
 /deepseek-ai-dsh-client-ui-chat/reference-previews:
-  en: aa6b1abec265bf1b
-  zh: 7260ce78afba2584
+  en: c07a50787d77a7cd
+  zh: 70ee4e32d664e88e
 /deepseek-ai-dsh-client-ui-chat/hidden-chat-rows:
-  en: cbf1f0a2205046a5
-  zh: 2e59d0815351349f
+  en: 8ca277dc7fed699f
+  zh: 167478dba50f3904
 /deepseek-ai-dsh-client-ui-chat/command-and-failure-rows:
-  en: 41dcd70e14ebe9cc
-  zh: ededead572b59037
+  en: 384a3d7363818b34
+  zh: feebd24a46446644
+/deepseek-ai-dsh-client-ui-chat/inherited-history-divider:
+  en: a191f90e9a64f6fe
+  zh: 8e91b8660f9baa18
 /deepseek-ai-dsh-client-ui-chat/turn-token-usage:
-  en: bb20da372b144302
-  zh: 75a8c5ab7ec8d665
+  en: d363057b5c0b2571
+  zh: 0f6fe864d9673576
 /deepseek-ai-dsh-client-ui-chat/completed-turn-footer:
-  en: b4cd36e7ab91281e
-  zh: 8ccf412b9dde61d5
+  en: 382821ca3ffa60dd
+  zh: 9840ffa07c13082a
 /deepseek-ai-dsh-client-ui-chat/turn-process-folding:
-  en: 4cd7c81d70d2f365
-  zh: 18eca6d16e44b6c2
+  en: 7cc6692b879aa500
+  zh: e924733c88b526c9
 /deepseek-ai-dsh-client-ui-chat/grouped-rendering:
-  en: 81d7ca7595c34d39
-  zh: 29eb8248c75e9ea6
+  en: 535345a2de07109e
+  zh: 39580c340f5ae558
 /deepseek-ai-dsh-client-ui-chat/scroll-ownership:
-  en: 284737900cb75668
-  zh: 12e0844082ff79ce
+  en: dd0f7df1af16d9a6
+  zh: 5ff892b8c57edabf
 /deepseek-ai-dsh-client-ui-chat/model-experience:
   en: c17b4dd43a61c569
   zh: f7414309810c3a08
@@ -45,8 +48,8 @@
   en: 15a7151ff9268f15
   zh: 6eae68c718be579b
 /deepseek-ai-dsh-client-ui-chat/known-limitations-and-deferred-work:
-  en: 811787a5d2feaa90
-  zh: 3f1697bbc1fc7691
+  en: b3b03e8e2fe371a1
+  zh: c5eb8b7205e0e880
 /deepseek-ai-dsh-client-ui-chat/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

@@ -2,7 +2,7 @@
 
 import type { AttachmentId, ImageVariantId } from './brand.ts'
 
-export type { AttachmentId } from './brand.ts'
+export type { AttachmentId, ImageVariantId } from './brand.ts'
 
 /** Raster image formats accepted by the version-one attachment path. */
 export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
@@ -106,10 +106,16 @@ export type PromptContentPart =
     readonly name?: string
   }
 
-/** Host prompt content whose file receipts are resolved and whose image bytes await admission. */
+/**
+ * Host prompt content whose upload receipts are resolved. An image part
+ * carries encoded bytes awaiting admission, or references an image this
+ * service already stored for an upload the same Session staged, with
+ * `encodedBytes` holding the byte length of that upload.
+ */
 export type AttachmentAdmissionPart =
   | PromptContentPart
   | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
+  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef; readonly encodedBytes: number }
 
 /** Host-admitted prompt content with every attachment represented by its durable reference. */
 export type AdmittedPromptContentPart =

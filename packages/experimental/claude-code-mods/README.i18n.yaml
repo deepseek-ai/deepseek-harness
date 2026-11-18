@@ -9,8 +9,8 @@
   en: bf54b493565f1624
   zh: 6f28a518f7b0dea8
 /deepseek-ai-dsh-experimental-claude-code-mods/summary:
-  en: 4ddb71e280b6b328
-  zh: e4775593fd7f232c
+  en: 2b8cee860a1ada68
+  zh: 185cf00e144270dc
 /deepseek-ai-dsh-experimental-claude-code-mods/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -24,8 +24,8 @@
   en: 2b04be6b58e61a74
   zh: f4854198d8999d11
 /deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/which-members-your-mod-can-call:
-  en: bf4f9f971aeb1d17
-  zh: 83804163ca9039d5
+  en: 563ff4127a48a194
+  zh: 2acf06dfcfcc6457
 /deepseek-ai-dsh-experimental-claude-code-mods/use-this-package/test-a-mod:
   en: 5848fccf79f41e0a
   zh: 62bb20c4d7e4d8c2
@@ -36,8 +36,8 @@
   en: 7b48e62da7d73a85
   zh: a7f8e46cecb726cf
 /deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/the-chain:
-  en: 5330d8f5a6c9b992
-  zh: 8f6d167642a1c263
+  en: 655859f9ac0f0d25
+  zh: 19ed5070afcb5841
 /deepseek-ai-dsh-experimental-claude-code-mods/understand-the-implementation/mapping-onto-the-harness:
   en: 955ed36f58b0a5c4
   zh: 65b2f0ddc1154be4
@@ -54,8 +54,8 @@
   en: 2e9d6b50a26a5e10
   zh: d884e62e639cad69
 /deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/what-the-model-sees:
-  en: 6a1d174d923e84f2
-  zh: a27f777d11741880
+  en: e1c5629d5b180116
+  zh: e511bac4e978e640
 /deepseek-ai-dsh-experimental-claude-code-mods/model-experience/prompt-context-and-submitted-prompts/what-the-model-sees/framing-of-a-prompt-a-mod-submits:
   en: f521d5aba5ab7027
   zh: 5aa721441103f9a7
@@ -69,8 +69,8 @@
   en: fe8166c6d3eb962a
   zh: 5f8fe74778a78166
 /deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides/what-the-model-sees:
-  en: 5b4aa2a1ec36106b
-  zh: c28c286f2a04d716
+  en: 71a9604f6d265e08
+  zh: f085a2c072047676
 /deepseek-ai-dsh-experimental-claude-code-mods/model-experience/tool-outcomes-a-mod-decides/token-effect:
   en: cbf27f737c6254e6
   zh: 333cbb22f97f8955
@@ -78,8 +78,8 @@
   en: ca31263f47f654d9
   zh: 17d55e6641705627
 /deepseek-ai-dsh-experimental-claude-code-mods/known-limitations-and-deferred-work:
-  en: 99aaa73c8ef9c609
-  zh: 46fab480bd2b1706
+  en: cc4549135479157c
+  zh: 9df405977614fcb1
 /deepseek-ai-dsh-experimental-claude-code-mods/known-limitations-and-deferred-work/dev-note:
   en: 4d1e26f4cc9c3c1c
   zh: d80209b56c56b11c

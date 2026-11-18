@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server — `node:https` once `tls` names a certificate and key — where other plugins register named routes, upgrade routes, index startup inputs, and one fallback handler. It knows no harness concepts and serves no files — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback handler. It serves browsers only; Electron loads dist over `file://` and carries fetch over an IPC bridge.
+Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server — `node:https` once `tls` names a certificate and key — where other plugins register named routes, upgrade routes, index startup inputs, and one fallback. It serves no files — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback. It serves browsers only; Electron loads dist over `file://` and carries fetch over an IPC bridge.
 
 ## Table of Contents
 
@@ -58,17 +58,27 @@ Set `compression: 'gzip'` to wrap eligible socket-backed responses without chang
 
 ### Registering routes
 
-`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. HTTP matching is exact over the whole table, then longest prefix, then the fallback handler; upgrades match exactly and unmatched connections are closed.
+WebServer events use the emitting WebServer as their Cordis subject. Ordinary listeners receive events only from the same `webServer` isolation; `{ global: true }` explicitly opts out. This applies to request handling, page injection, and entry-URL collection. Custom emitters must pass their WebServer instance as the subject too.
+
+`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. HTTP matching is exact over the whole table, then longest prefix, then the fallback; upgrades match exactly and unmatched connections are closed.
+
+A named route may give `resource(request, peer?)` instead of `handler`: a function from a Fetch `Request` to a `Response`. After admission, only `GET` and `HEAD` reach it; other methods receive 405 with `Allow: GET, HEAD`, without reading the body. The resource receives the admitted Peer, if any, and the client headers; its URL resolves the request target against a placeholder origin, leaving the client authority in `host`. Responses use backpressure and the same gzip handling as handlers; `HEAD` sends no body, and disconnect aborts `request.signal` and cancels the body. `readResource(request, peer)` dispatches in process with its explicitly admitted Peer: it checks no cookie, Host, or Origin, but a resolved `deny` returns 403. It follows HTTP match order, returns 404 for handlers or an unclaimed fallback, and 405 for non-GET/HEAD reads; HEAD reads return no body.
+
+HTTP requests pass through `webserver/request(request, response, next)` before route lookup. A listener owns the response or awaits `next()`; the request-error handler contains middleware failures. After matching, HTTP and upgrade routes resolve `auth`, either a fixed policy or a synchronous selector over request facts. `required` is the default and requires a live Peer; `anonymous` removes the credential requirement; `deny` returns 403 without dispatch. For other policies, synchronous `webserver/authorize(request, policy)` takes the first decision. Without a decision, `anonymous` allows and `required` returns 503. HTTP and upgrade admission refusals carry `Cache-Control: no-store`. Connection supplies source checks and ordered credential verification; its source checks also apply to anonymous routes. HTTP handlers receive `(req, res, peer?)`, upgrades `(req, socket, head, peer?)`, and resources keep their Peer parameter. In-process reads do not emit this event.
+
+Admitted upgrades pass through `webserver/upgrade(req, socket, head, peer, next)` before their registered protocol handler. The waterfall carries the already selected Peer, or `undefined` for anonymous admission; denied requests never enter it. A listener handles the Socket itself or awaits `next()` to delegate. WebServer awaits synchronous or asynchronous protocol handlers and contains rejected middleware or handlers by logging and destroying that Socket. Provider-specific Socket limits and credential cleanup belong to listeners, not to WebServer or Gateway.
+
+`webserver/entry-url(baseUrl, entries)` synchronously collects complete entry URLs for a supplied server base URL. Listeners append `{ label, url, open }` entries. WebApp emits it after readiness. WebApp owns ordered printing and the first eligible browser handoff. This event neither authenticates requests nor changes the listener or advertised-address configuration.
 
 ### The fallback seat
 
-`registerFallback(handler)` claims the one handler for every request no named route matches. A second registration throws; while no fallback is registered the server answers 404. In the shipped Web composition the [SPA dist server](../frontend-static/README.md) owns the seat and calls `renderIndex` on every index response it renders.
+`registerFallback(handler)` or an object containing `handler` or `resource` and optional `auth` claims the one responder for unmatched requests. A bare handler still defaults to `required` admission. A second registration throws; an unclaimed seat returns 404. In the shipped Web composition the [SPA dist server](../frontend-static/README.md) owns the seat, selects authenticated index access and anonymous assets, and calls `renderIndex` for index responses.
 
-Index startup inputs are two layers. `collectIndexInjections()` gathers a fresh injection table — one `webserver/index-inject` emit per call, each subscriber pushing its current rows — and `renderIndex(html)` renders those rows into the index.html body before applying the raw `tapIndex(transform)` transforms in registration order. A `script-preload` row renders an advisory classic-script preload link. Static deployments carry the same rows in their boot payload. `applyIndexTaps(html)` applies only the raw transforms; it is the escape hatch for markup no row expresses.
+Index startup inputs are two layers, computed for the Peer the page speaks for. `collectIndexInjections(peer)` gathers a fresh injection table — one `webserver/index-inject` emit per call, passing `peer` to each subscriber, which pushes its current rows — and `renderIndex(html, peer)` renders those rows into the index.html body before applying the raw `tapIndex(transform)` transforms in registration order. A `script-preload` row renders an advisory classic-script preload link. Static deployments carry the same rows in their boot payload. `applyIndexTaps(html)` applies only the raw transforms; it is the escape hatch for markup no row expresses.
 
 ### Behavior under failure
 
-A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic, and unusable TLS material rejects it too, naming the config field and the resolved path but never the file's contents. An HTTP request whose handler throws is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-handler exception or upgraded-socket transport error logs a warning and destroys its socket.
+A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic, and unusable TLS material rejects it too, naming the config field and the resolved path but never the file's contents. An HTTP request whose handler or resource throws is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-handler exception or upgraded-socket transport error logs a warning and destroys its socket.
 
 -----
 
@@ -80,7 +90,7 @@ A listen failure (for example EADDRINUSE) rejects plugin initialization with the
 
 ### Design concept
 
-The package is a plain route registry with no harness vocabulary: `WebServer` extends Cordis `Service` and holds three route tables plus the fallback slot, the raw index-tap list, and the `webserver/index-inject` event the index renderer gathers rows through. Index rendering composes two layers per response: `renderIndex` renders the fresh injection table, including advisory `script-preload` rows, into the body, then applies the raw taps in registration order; `applyIndexTaps` runs the taps alone. The upgrade handler owns the protocol handshake and connection contents; the webserver only delivers the raw socket and request. `host`, `port`, and `protocol` getters and `getOrigin()` expose composition-time facts other plugins adapt to (for example the directory-picker chooser), and an explicit `tls: null` normalizes to an unset listener, so `protocol` has a single source.
+`WebServer` extends Cordis `Service` and owns matching, route admission, response delivery, and index rendering. Connection supplies source/credential decisions through an event rather than a WebServer dependency on a concrete authentication implementation. Index rendering gathers fresh `webserver/index-inject` rows, renders them, then applies raw taps. The upgrade handler owns protocol negotiation and connection contents after admission. Listener getters and `getOrigin()` expose configuration-derived transport facts; explicit `tls: null` means an HTTP listener.
 
 ### Matching and lifecycle
 
@@ -127,7 +137,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define where the server is intentionally minimal. They are current package constraints, not a task backlog.
 
 - **No certificate lifecycle** — `tls` serves the PEM files present at activation: the carrier never provisions, renews, or watches them, and it applies Node's default TLS policy. Replacing a certificate takes a reload.
-- **No server-wide authentication or origin policy** — route owners such as `dsh-client-connection` enforce their own request policy. Binding a non-loopback address still exposes unprotected routes and static assets to that network.
+- **Credential and source policy need an authorization listener** — the carrier enforces route declarations but verifies no credentials itself. Without a decision, authenticated routes return 503 and anonymous routes remain reachable; an active Connection listener applies source checks to both.
 - **Socket options are fixed** — config selects the bind host and port, while backlog and other socket settings remain internal until a deployment needs them.
 
 <a id="dev-note"></a>

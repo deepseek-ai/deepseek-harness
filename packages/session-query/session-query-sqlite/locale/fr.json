@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Requêtes et recherches conversationnelles",
+    "description": "Interrogez les enregistrements de session et effectuez une recherche en texte intégral pour SQLite lorsqu'elle est activée dans la configuration."
+  }
+}

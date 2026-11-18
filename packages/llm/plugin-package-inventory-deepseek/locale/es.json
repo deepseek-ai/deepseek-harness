@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Informes de lista de complementos",
+    "description": "Se envía una lista de los paquetes de complementos activos actualmente con la solicitud del modelo oficial API."
+  }
+}

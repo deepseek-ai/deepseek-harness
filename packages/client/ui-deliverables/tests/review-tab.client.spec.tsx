@@ -8,7 +8,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SidebarRightTabActions } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceDiffHunk } from '@deepseek-ai/dsh-workspace-changes/types'
 import {
@@ -24,13 +24,14 @@ import { hunkRows, MAX_RENDERED_LINES, renderedHunks, splitRows } from '../src/c
 import { changesReviewDefinition } from '../src/client/review-definition.ts'
 import { createReviewStore } from '../src/client/review-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-const SESSION = SessionId('viewed')
+const SESSION = brandString<SessionId>('viewed')
 const TAB = 'tab-1' as TabId
 const COORDINATES = { sessionId: SESSION, seq: 5, turn: 2 }
 const ADDRESS = changesReviewAddress(COORDINATES)
@@ -160,7 +161,7 @@ describe('ReviewTab', () => {
       loadChangesSummary: vi.fn<ReviewInjected['loadChangesSummary']>(() => Promise.resolve()),
       loadChangesDiff: vi.fn<ReviewInjected['loadChangesDiff']>(() => Promise.resolve()),
       reloadPresentedHost: vi.fn<ReviewInjected['reloadPresentedHost']>(() => Promise.resolve()),
-      openChanged: vi.fn<ReviewInjected['openChanged']>(() => Promise.resolve(null)),
+      openChanged: vi.fn<ReviewInjected['openChanged']>(() => Promise.resolve({ kind: 'opened' })),
     }
     const sessions: SessionListState = {
       ids: [SESSION],
@@ -172,7 +173,7 @@ describe('ReviewTab', () => {
     const runtime = {
       renderSlot: renderFileActions,
       useTabInfo: () => ({
-        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-1' },
+        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-1', isFloating: false },
         tab: { id: TAB, kind: 'changes-review', contentId: options.address ?? ADDRESS, title: 'Review', visible: true, navigation, signal: aborter.signal, actions: tabActions },
       }),
       sessionId: SESSION,

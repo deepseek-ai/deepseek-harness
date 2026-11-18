@@ -7,13 +7,13 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-compaction-image-offload/projection'
 import z from '@deepseek-ai/schemastery'
-import { assembleAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { LlmImageRequestPricing, LlmRuntime, Message, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type {
   EpochHeader,
   Session,
   SessionEvent,
+  SessionSeq as SessionSeqType,
   SessionLogOffset as SessionLogOffsetType,
 } from '@deepseek-ai/dsh-session'
 import {
@@ -23,48 +23,34 @@ import {
   SessionLogOffset,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
-// Type-only: activates the `ctx.sessionProjections` Context declaration.
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {
+  ContextPressureProjection,
   TokenMeasurement,
   TokenMeasurementBaseline,
   TokenMeterConfig,
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
-import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
+import type { ContextPressureState } from './usage-projection.ts'
+import { estimateMessage, estimateToolsTokens } from './estimate.ts'
+import { advanceMeasurement, measurementProjectionDefinition } from './measurement-projection.ts'
+import type { MeasurementState } from './measurement-projection.ts'
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
 
 export type * from './types.ts'
-// Module-edge re-export: forces the emitted index.d.ts to import the
-// projection-unit modules, so their SessionProjectionStateMap augmentations load
-// in aggregate programs that only import the package root.
-export type * from './usage-projection.ts'
-export type * from './breakdown-projection.ts'
 
-/**
- * Raw anchor facts captured at the latest successful call; the baseline is
- * derived per measurement so the anchored surface reprices under the same
- * route pricing as the current surface it is compared with.
- */
-interface MeasurementAnchor {
-  readonly header: EpochHeader | undefined
-  /** Priced surface immediately before the anchored assistant message commits. */
-  readonly nodes: readonly MeterSurfaceNode[]
-  /** Fixed-heuristic price of the call's provider output. */
-  readonly assistantTokens: number
-  /** Provider usage of the call, when it reported one under a known header. */
-  readonly usage: TokenUsage | undefined
-}
-
+/** Rebuildable positional prices, excluded from projection checkpoints. */
 interface ReplayState {
   consumedEvents: SessionLogOffsetType
-  header: EpochHeader | undefined
   surface: MeterSurfaceNode[]
-  stepStart: { turn: number; step: number } | undefined
-  anchor: MeasurementAnchor | undefined
+  header: { seq: SessionSeqType | null; value: EpochHeader } | undefined
+  anchorHeader: { seq: SessionSeqType | null; value: EpochHeader } | undefined
+  anchorNodes: readonly MeterSurfaceNode[]
+  /** Preserve synchronous construction-time reads before registration completes. */
+  pendingMeasurement: MeasurementState
 }
 
 /** Sum disjoint provider usage buckets without double-counting reasoning output. */
@@ -106,20 +92,39 @@ export class TokenMeter extends Service {
   static inject = ['sessionProjections']
 
   private readonly states = new WeakMap<Session, ReplayState>()
+  private measurementProjectionHandle: ProjectionHandle<MeasurementState> | undefined
+  private contextPressureProjectionHandle!: ProjectionHandle<ContextPressureState>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')
     validateConfigKeys(config)
+  }
 
-    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    ctx.sessionProjections.register(contextPressureProjectionDefinition)
-    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    this.measurementProjectionHandle = await ctx.sessionProjections.register(measurementProjectionDefinition)
+    await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+    this.contextPressureProjectionHandle = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
+    await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.
     ctx.on('session/event', (session) => {
       if (this.states.has(session)) this._sync(session)
     })
+  }
+
+  /**
+   * Read the latest logged provider prompt size and route capacity.
+   * @param session - Session whose committed usage and request capacity are read.
+   * @returns context pressure; fields remain absent until their source events are recorded.
+   */
+  contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'> {
+    const { pressureTokens, contextWindow } = this.contextPressureProjectionHandle.stateOf(session)
+    return {
+      ...pressureTokens === undefined ? {} : { pressureTokens },
+      ...contextWindow === undefined ? {} : { contextWindow },
+    }
   }
 
   /**
@@ -144,28 +149,28 @@ export class TokenMeter extends Service {
    * @returns a detached deeply immutable pressure and surface measurement.
    */
   measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement {
-    const state = this._sync(session)
+    const { prices: state, measurement } = this._sync(session)
     const header = requestHeader === undefined
-      ? state.header
+      ? this._cachedHeader(state, measurement.headerSeq)
       : canonicalHeader(requestHeader)
     const pricing = this._routeImagePricing(header)
     const fileText = this._fileRequestText()
     const surface = priceSurface(state.surface, pricing, fileText)
-    const anchor = state.anchor
+    const anchor = measurement.anchor
 
     let baseline: TokenMeasurementBaseline
     let surfaceDeltaTokens: number
-    if (anchor !== undefined && optionalHeaderEquals(anchor.header, header)) {
+    if (anchor !== null && optionalHeaderEquals(this._cachedHeader(state, anchor.headerSeq), header)) {
       // Matching headers share one route, so the anchored snapshot reprices
       // under the same pricing as the current surface and the signed delta
       // compares like with like.
-      const anchorSurfaceTokens = priceSurface(anchor.nodes, pricing, fileText).surfaceTokens
+      const anchorSurfaceTokens = priceSurface(state.anchorNodes, pricing, fileText).surfaceTokens
         + anchor.assistantTokens
       const estimatedAnchorTokens = estimateToolsTokens(header) + anchorSurfaceTokens
       const usage = anchor.usage
       // Signed heuristic deltas remain conservative only from an anchor
       // that is at least as large as the matching full heuristic price.
-      baseline = usage !== undefined && usageTokens(usage) >= estimatedAnchorTokens
+      baseline = usage !== null && usageTokens(usage) >= estimatedAnchorTokens
         ? { kind: 'usage', tokens: usageTokens(usage), usage }
         : { kind: 'estimated', tokens: estimatedAnchorTokens }
       surfaceDeltaTokens = surface.surfaceTokens - anchorSurfaceTokens
@@ -215,127 +220,76 @@ export class TokenMeter extends Service {
     return estimateMessage(message)
   }
 
-  /** Catch one session's fold up to the current durable tail. */
-  private _sync(session: Session): ReplayState {
+  /** Resolve one of the two header payloads retained by the rebuildable price cache. */
+  private _cachedHeader(state: ReplayState, seq: SessionSeqType | null): EpochHeader | undefined {
+    if (seq === null) return undefined
+    if (state.header?.seq === seq) return state.header.value
+    return state.anchorHeader?.value
+  }
+
+  /** Catch rebuildable prices up to the current durable tail. */
+  private _sync(session: Session, useProjection = true): { prices: ReplayState; measurement: MeasurementState } {
     let state = this.states.get(session)
     if (state === undefined) {
       state = {
         consumedEvents: SessionLogOffset(0),
-        header: undefined,
         surface: [],
-        stepStart: undefined,
-        anchor: undefined,
+        header: undefined,
+        anchorHeader: undefined,
+        anchorNodes: [],
+        pendingMeasurement: measurementProjectionDefinition.init(),
       }
       this.states.set(session, state)
     }
-
+    const projected = useProjection ? this.measurementProjectionHandle?.stateOf(session) : undefined
     while (state.consumedEvents < session.seq) {
-      // Contiguous session seqs index the durable log; existing Session history read, migration deferred.
+      // Cold price caches may replay resident history.
       // oxlint-disable-next-line typescript/no-non-null-assertion, typescript/no-deprecated
       const event = session.eventAt(SessionSeq(state.consumedEvents))!
+      const next = projected !== undefined
+        ? undefined
+        : measurementProjectionDefinition.apply(state.pendingMeasurement, event)
+      const measurement = next ?? projected
+      if (measurement?.invalidSeq === event.seq) {
+        // Match the original assistant validation order before committing any prices.
+        if (event.type === 'assistant/message') planSurfaceTokens(state.surface, event)
+        advanceMeasurement(measurement, event)
+      }
       this._foldEvent(state, event)
+      if (next !== undefined) state.pendingMeasurement = next
       state.consumedEvents = SessionLogOffset(state.consumedEvents + 1)
     }
-    return state
+    if (projected !== undefined && (projected.headerSeq !== (state.header?.seq ?? null)
+      || (projected.anchor !== null && projected.anchor.headerSeq !== (state.anchorHeader?.seq ?? null)))) {
+      // A checkpoint reference must match the original journal. Discard the
+      // rebuildable cache and use the same calculation from the beginning.
+      this.states.delete(session)
+      return this._sync(session, false)
+    }
+    // An initialized registration supplies `projected`; earlier reads keep the same pure fold locally.
+    return { prices: state, measurement: projected ?? state.pendingMeasurement }
   }
 
-  /**
-   * Run every fallible step — surface plan and anchor validation — before
-   * mutating replay state, so a malformed event remains unread on every
-   * retry instead of half-applying.
-   */
+  /** Update only discardable positional prices and the pre-assistant view. */
   private _foldEvent(state: ReplayState, event: SessionEvent): void {
-    let nextHeader = state.header
-    let nextStepStart = state.stepStart
-    let nextAnchor = state.anchor
-
-    switch (event.type) {
-      case 'image/offload': {
-        const offloaded = new Map(event.data.targets.map(target => [target.seq, new Set(target.imageIndexes)]))
-        state.surface = state.surface.map((node) => {
-          const indexes = offloaded.get(node.seq)
-          if (indexes === undefined) return node
-          return {
-            ...node,
-            images: node.images.map((image, index) => (indexes.has(index) ? { ...image, offloaded: true as const } : image)),
-          }
-        })
-        break
-      }
-      case 'request/header':
-        nextHeader = canonicalHeader(event.data.header)
-        break
-      case 'step/start':
-        if (state.stepStart !== undefined) {
-          throw new Error(
-            `token meter: step/start at seq ${event.seq} arrived before turn ${state.stepStart.turn}/step ${state.stepStart.step} ended`,
-          )
+    if (event.type === 'request/header') state.header = { seq: event.seq, value: canonicalHeader(event.data.header) }
+    if (event.type === 'image/offload') {
+      const offloaded = new Map(event.data.targets.map(target => [target.seq, new Set(target.imageIndexes)]))
+      state.surface = state.surface.map((node) => {
+        const indexes = offloaded.get(node.seq)
+        if (indexes === undefined) return node
+        return {
+          ...node,
+          images: node.images.map((image, index) => (indexes.has(index) ? { ...image, offloaded: true as const } : image)),
         }
-        nextStepStart = { ...event.data }
-        break
-      case 'step/end':
-        if (state.stepStart === undefined
-          || state.stepStart.turn !== event.data.turn
-          || state.stepStart.step !== event.data.step) {
-          throw new Error(`token meter: step/end at seq ${event.seq} has no matching step/start event`)
-        }
-        nextStepStart = undefined
-        break
-      default:
-        break
+      })
     }
-
-    const plan = isSurfaceEvent(event)
-      ? planSurfaceTokens(state.surface, event)
-      : undefined
-
+    const plan = isSurfaceEvent(event) ? planSurfaceTokens(state.surface, event) : undefined
     if (event.type === 'assistant/message') {
-      const stepStart = state.stepStart
-      if (stepStart === undefined
-        || stepStart.turn !== event.data.turn
-        || stepStart.step !== event.data.step) {
-        throw new Error(`token meter: assistant/message at seq ${event.seq} has no matching step/start event`)
-      }
-
-      // assistant/message is surface-mandatory at every append/seed boundary.
-      // oxlint-disable-next-line typescript/no-non-null-assertion
-      const eventTokens = plan!.tokens
-      // The loop admits prompts and user messages after step/start; retries may
-      // replace them before succeeding. Only the pre-assistant surface is priced
-      // by this call. Provider output stays separate from durable output rewrites.
-      if (event.data.usage !== undefined && nextHeader !== undefined) {
-        nextAnchor = {
-          header: nextHeader,
-          nodes: [...state.surface],
-          assistantTokens: this._estimateProviderAssistant(event),
-          usage: event.data.usage,
-        }
-      } else {
-        nextAnchor = {
-          header: nextHeader,
-          nodes: [...state.surface],
-          assistantTokens: eventTokens,
-          usage: undefined,
-        }
-      }
+      state.anchorNodes = [...state.surface]
+      state.anchorHeader = state.header
     }
-
-    state.header = nextHeader
-    state.stepStart = nextStepStart
-    if (plan !== undefined) {
-      commitSurfaceTokens(state.surface, plan)
-    }
-    state.anchor = nextAnchor
-  }
-
-  /**
-   * Reassemble provider output from the message's exact embedded stream.
-   */
-  private _estimateProviderAssistant(
-    event: SessionEvent<'assistant/message'>,
-  ): number {
-    const providerContent = assembleAssistantStream(event.data.stream).blocks()
-    return providerContent.length === 0 ? 0 : estimateContent(providerContent) + ROLE_OVERHEAD
+    if (plan !== undefined) commitSurfaceTokens(state.surface, plan)
   }
 }
 

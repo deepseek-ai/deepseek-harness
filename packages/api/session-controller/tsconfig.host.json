@@ -9,6 +9,7 @@
     "src/index.ts",
     "src/types.ts",
     "src/remote-events.ts",
+    "src/session-resource.ts",
     "src/agent.ts",
     "src/assistant-stream.ts",
     "src/catalog.ts",
@@ -16,13 +17,25 @@
     "src/control.ts",
     "src/file-references.ts",
     "src/history.ts",
+    "src/history/controller.ts",
+    "src/history/listener.ts",
+    "src/history/assistant-stream.ts",
+    "src/state/controller.ts",
+    "src/state/listener.ts",
+    "src/web/controller.ts",
     "src/list.ts",
     "src/media-references.ts",
-    "src/model-selection-projection.ts",
     "src/archived-session-gate.ts",
-    "src/skill-catalog.ts"
+    "src/skill-catalog.ts",
+    "src/continuation.ts"
   ],
   "references": [
+    {
+      "path": "../gateway/tsconfig.host.json"
+    },
+    {
+      "path": "../../util/timeout"
+    },
     {
       "path": "../../../vendor/cordis"
     },
@@ -115,6 +128,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../util/brand"
     }
   ]
 }

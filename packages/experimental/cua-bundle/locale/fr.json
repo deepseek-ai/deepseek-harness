@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Utilisation de l'ordinateur",
+    "description": "Permet à l’agent de contrôler directement les applications de votre ordinateur.",
+    "detail": "docs/DETAIL.md"
+  }
+}

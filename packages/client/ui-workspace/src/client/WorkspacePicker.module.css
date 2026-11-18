@@ -15,6 +15,27 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.menuStatus {
+.menuStatus,
+.pathSuffix {
   color: var(--dsw-alias-label-secondary);
+}
+
+/* A same-titled Workspace row: the title shrinks first and the path suffix
+ * keeps at least the leading segments that tell the rows apart. */
+.disambiguated {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title,
+.pathSuffix {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pathSuffix {
+  flex: none;
+  max-width: 75%;
 }

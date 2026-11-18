@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { dump } from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parsePersistenceSnapshot } from './persistence-changes.ts'
-import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, schemaDigest } from './persistence-schema-model.ts'
 import type { PersistenceRoot, PersistenceSchemaInventory, PersistenceType, SchemaNode } from './persistence-schema-model.ts'
 import { loadPersistenceReleases, runPersistenceReleases } from './persistence-releases.ts'
 import type { PersistenceReleaseManifest, PersistenceReleaseRecord } from './persistence-releases.ts'
@@ -108,14 +108,14 @@ function fixture(): Fixture {
   writeFileSync(join(directory, 'manifest.json'), JSON.stringify(manifest))
   for (const [index, record] of records.entries()) {
     saveRecord(directory, record)
-    writeFileSync(join(directory, record.tag + '.schema.json'), JSON.stringify(snapshots[index]))
+    writeFileSync(join(directory, record.tag + '.schema.json'), encodePersistenceSnapshot(snapshots[index]!))
     writeFileSync(join(directory, record.tag + '.i18n.yaml'), 'schemaVersion: 1\n')
   }
   return { root, directory, manifest, records, snapshots }
 }
 
 function replaceSnapshot(fixture: Fixture, index: number, snapshot: PersistenceSchemaInventory): void {
-  writeFileSync(join(fixture.directory, TAGS[index]! + '.schema.json'), JSON.stringify(snapshot))
+  writeFileSync(join(fixture.directory, TAGS[index]! + '.schema.json'), encodePersistenceSnapshot(snapshot))
 }
 
 describe('pinned persistence releases', () => {
@@ -148,7 +148,7 @@ describe('pinned persistence releases', () => {
     expect(archive.entries[1]!.differences).toEqual([expect.objectContaining({ root: 'event:example/value', kind: 'type-changed', requiresCompatibilityReview: true })])
     expect(archive.entries[2]!.roots).toEqual(archive.entries[1]!.roots)
     expect(archive.entries[2]!.differences).toEqual([])
-    expect(() => parsePersistenceSnapshot(data.snapshots[1])).toThrow('surface metadata')
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot(data.snapshots[1]!))).toThrow('surface metadata')
   })
 
   it.each(['.md', '.zh.md', '.i18n.yaml', '.schema.json'])('rejects a missing manifest release companion %s', (suffix) => {
@@ -369,7 +369,7 @@ describe('release facts', () => {
     const data = fixture()
     const snapshotPath = join(data.directory, TAGS[2] + '.schema.json')
     const snapshot = readFileSync(snapshotPath, 'utf8')
-    writeFileSync(snapshotPath, snapshot.replace('"formatVersion":1', '"formatVersion":3'))
+    writeFileSync(snapshotPath, snapshot.replace('"formatVersion": 1', '"formatVersion": 3'))
     const corrupt = directoryBytes(data.directory)
     expect(() => runPersistenceReleases(['--write'], data.root)).toThrow('normalization version')
     expect(directoryBytes(data.directory)).toEqual(corrupt)

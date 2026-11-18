@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -34,6 +34,9 @@ import {
   createDetachedRuns,
   DEFAULT_HOOK_TIMEOUT_MS,
   DEFAULT_STDERR_SUMMARY_MAX_CHARS,
+  HOOK_BLOCKED,
+  HOOK_DENIED,
+  HOOK_ERROR_NAME,
   mergeHookOutputs,
   runHook,
   selectHookGroups,
@@ -44,7 +47,7 @@ import { parseCodexConfig, type CodexHookConfig } from './config.ts'
 /* jscpd:ignore-end */
 
 export const name = 'hooks-codex'
-export const inject = ['shell', 'sessionProjections', 'workingDirectory']
+export const inject = ['shell', 'agents', 'workingDirectory']
 
 /** Plugin config: where the Codex hooks.json lives + the model name for payloads. */
 export interface Config {
@@ -204,7 +207,7 @@ export function apply(ctx: Context, config: Config): void {
     const payload = {
       ...base(agent, 'UserPromptSubmit', model),
       turn_id: String(turn),
-      prompt: blocksToText(messages.flatMap(message => message.content)),
+      prompt: extractTextContent(messages.flatMap(message => message.content)),
     }
     const merged = await runPoint('UserPromptSubmit', '', payload, {
       agent, turn, plainStdoutAsContext: true, signal,
@@ -229,7 +232,7 @@ export function apply(ctx: Context, config: Config): void {
     const turn = lastTurn(ctx, exec.agent)
     const merged = await runPoint('PreToolUse', exec.name, preToolPayload(ctx, exec, model), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
     /* jscpd:ignore-end */
-    if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook' }
+    if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook', info: { name: HOOK_ERROR_NAME, code: HOOK_DENIED } }
     return next()
   })
 
@@ -240,7 +243,12 @@ export function apply(ctx: Context, config: Config): void {
     const merged = await runPoint('PostToolUse', exec.name, postToolPayload(ctx, exec, result, model), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
     const context = contextFrom(merged)
     if (merged.decision === 'deny') {
-      return { kind: 'block', feedback: [{ type: 'text', text: merged.reason ?? 'blocked by PostToolUse hook' }], ...context ? { additionalContexts: [context] } : {} }
+      return {
+        kind: 'block',
+        feedback: [{ type: 'text', text: merged.reason ?? 'blocked by PostToolUse hook' }],
+        info: { name: HOOK_ERROR_NAME, code: HOOK_BLOCKED },
+        ...context ? { additionalContexts: [context] } : {},
+      }
     }
     // Context alone is not a veto: DELEGATE, then fold our context onto the
     // downstream decision (a downstream block carries it too).
@@ -276,17 +284,11 @@ export function apply(ctx: Context, config: Config): void {
 // --- Codex DIALECT payloads: snake_case, model on every event, turn_id on
 // turn-scoped events. ---
 
-// These small payload helpers intentionally remain next to the dialect shape;
-// sharing them would pull bridge-only agent/LLM dependencies into hook-protocol.
+// Shared hook-protocol code has no Agent dependency, so turn lookup stays in the bridge.
 /* jscpd:ignore-start */
 function lastTurn(ctx: Context, agent: Agent | undefined): number {
   if (!agent) return 0
-  /* v8 ignore next -- agent-present hook points run inside AgentLoop, which owns this projection. */
-  return ctx.sessionProjections.stateOf(agent.session, 'turnBoundary')?.lastTurn ?? 0
-}
-
-function blocksToText(content: ContentBlock[]): string {
-  return content.filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text').map(b => b.text).join('')
+  return ctx.agents.turnBoundaryOf(agent.session).lastTurn
 }
 /* jscpd:ignore-end */
 
@@ -326,5 +328,5 @@ function preToolPayload(ctx: Context, exec: ToolExecution, model: string): Recor
 }
 
 function postToolPayload(ctx: Context, exec: ToolExecution, result: ToolExecutionResult, model: string): Record<string, unknown> {
-  return { ...turnBase(ctx, exec.agent, 'PostToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId, tool_response: blocksToText(result.content) }
+  return { ...turnBase(ctx, exec.agent, 'PostToolUse', model), tool_name: exec.name, tool_input: { command: commandOf(exec.arguments) }, tool_use_id: exec.callId, tool_response: extractTextContent(result.content) }
 }

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Computer use",
+    "description": "Allow the agent to directly control applications on your computer.",
+    "detail": "docs/DETAIL.md"
+  }
+}

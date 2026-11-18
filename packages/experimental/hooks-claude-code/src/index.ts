@@ -12,8 +12,8 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { readFileSync } from 'node:fs'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { Agent, PreStepDecision, TurnBoundaryProjection } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -31,6 +31,9 @@ import {
   createDetachedRuns,
   DEFAULT_HOOK_TIMEOUT_MS,
   DEFAULT_STDERR_SUMMARY_MAX_CHARS,
+  HOOK_BLOCKED,
+  HOOK_DENIED,
+  HOOK_ERROR_NAME,
   mergeHookOutputs,
   runHook,
   selectHookGroups,
@@ -43,9 +46,9 @@ import type { SubagentRunId } from '@deepseek-ai/dsh-subagent'
 import { parseClaudeCodeConfig, type ClaudeCodeHookConfig } from './config.ts'
 
 export const name = 'hooks-claude-code'
-// `shell` runs hooks and `sessionProjections` supplies turn numbers; the rest
+// `shell` runs hooks and `agents` supplies turn numbers; the rest
 // are read opportunistically via ctx.get so a deployment can omit them.
-export const inject = ['shell', 'sessionProjections', 'workingDirectory']
+export const inject = ['shell', 'agents', 'workingDirectory']
 
 /** Plugin config: where the CC hook config lives + substitution roots. */
 export interface Config {
@@ -244,7 +247,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
     const turn = lastTurn(ctx, exec.agent)
     const merged = await runPoint('PreToolUse', exec.name, preToolPayload(exec), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
-    if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook' }
+    if (merged.decision === 'deny') return { kind: 'deny', reason: merged.reason ?? 'blocked by PreToolUse hook', info: { name: HOOK_ERROR_NAME, code: HOOK_DENIED } }
     if (merged.decision === 'ask') return { kind: 'ask', ...merged.reason !== undefined ? { reason: merged.reason } : {} }
     return next()
   })
@@ -255,7 +258,12 @@ export function apply(ctx: Context, config: Config): void {
     const merged = await runPoint('PostToolUse', exec.name, postToolPayload(exec, result), { ...exec.agent ? { agent: exec.agent } : {}, turn, signal: exec.signal })
     const context = contextFrom(merged)
     if (merged.decision === 'deny') {
-      return { kind: 'block', feedback: [{ type: 'text', text: merged.reason ?? 'blocked by PostToolUse hook' }], ...context ? { additionalContexts: [context] } : {} }
+      return {
+        kind: 'block',
+        feedback: [{ type: 'text', text: merged.reason ?? 'blocked by PostToolUse hook' }],
+        info: { name: HOOK_ERROR_NAME, code: HOOK_BLOCKED },
+        ...context ? { additionalContexts: [context] } : {},
+      }
     }
     // Our hooks did not block. DELEGATE so a later listener can still block/replace,
     // then fold our context onto its decision (a downstream block carries it too).
@@ -317,13 +325,7 @@ const SUBAGENT_TYPE = 'general-purpose'
 /** The last open turn number in the agent's log, or 0 without an agent. */
 function lastTurn(ctx: Context, agent: Agent | undefined): number {
   if (!agent) return 0
-  const boundary = ctx.sessionProjections.stateOf(agent.session, 'turnBoundary') as TurnBoundaryProjection
-  return boundary.lastTurn
-}
-
-/** Flatten content blocks to the text a hook payload carries (the common case). */
-function blocksToText(content: ContentBlock[]): string {
-  return content.filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text').map(b => b.text).join('')
+  return ctx.agents.turnBoundaryOf(agent.session).lastTurn
 }
 
 function base(agent: Agent | undefined, event: string): Record<string, unknown> {
@@ -340,13 +342,13 @@ function sessionStartPayload(agent: Agent, source: string): Record<string, unkno
   return { ...base(agent, 'SessionStart'), source }
 }
 function promptPayload(agent: Agent, content: ContentBlock[]): Record<string, unknown> {
-  return { ...base(agent, 'UserPromptSubmit'), prompt: blocksToText(content) }
+  return { ...base(agent, 'UserPromptSubmit'), prompt: extractTextContent(content) }
 }
 function preToolPayload(exec: ToolExecution): Record<string, unknown> {
   return { ...base(exec.agent, 'PreToolUse'), tool_name: exec.name, tool_input: exec.arguments, tool_use_id: exec.callId }
 }
 function postToolPayload(exec: ToolExecution, result: ToolExecutionResult): Record<string, unknown> {
-  return { ...base(exec.agent, 'PostToolUse'), tool_name: exec.name, tool_input: exec.arguments, tool_use_id: exec.callId, tool_response: blocksToText(result.content) }
+  return { ...base(exec.agent, 'PostToolUse'), tool_name: exec.name, tool_input: exec.arguments, tool_use_id: exec.callId, tool_response: extractTextContent(result.content) }
 }
 function stopPayload(agent: Agent): Record<string, unknown> {
   return { ...base(agent, 'Stop'), stop_hook_active: false }

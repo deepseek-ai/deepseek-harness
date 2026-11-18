@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de conversação do subagente",
+    "description": "Visualize e acesse conversas de agentes filhos, com suporte para conversas contínuas e @quotes."
+  }
+}

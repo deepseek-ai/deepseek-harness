@@ -17,16 +17,28 @@ const SESSION_ACTION_EXPECTED = join(EXPECTED, 'session-actions.expected.md')
 const SESSION_SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
 const SESSION_TITLE = 'Session action extension'
 
-async function openInventory(page: Page, url: string) {
+/** Load the page on the Plugins page, which reports this page's client synchronization. */
+async function openPlugins(page: Page, url: string) {
   await page.goto(url, { waitUntil: 'load' })
-  await openSettings(page, 'zh')
-  const dialog = page.getByRole('dialog', { name: '设置' })
-  await dialog.getByRole('button', { name: '内置插件', exact: true }).click()
-  await dialog.getByRole('searchbox', { name: '搜索插件' }).waitFor()
-  return dialog
+  await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+  await page.locator('[data-plugin-body]').waitFor({ timeout: 10_000 })
 }
 
-it('places dynamic Session menu rows by order among the shipped ones and removes them with their fiber', async () => {
+/** Open the Models settings page's add-provider card and return its API key field, a page-local draft. */
+async function openDraft(page: Page) {
+  await openSettings(page, 'zh')
+  const dialog = page.getByRole('dialog', { name: '设置' })
+  await dialog.getByRole('button', { name: '模型', exact: true }).click()
+  const add = dialog.getByRole('button', { name: '添加模型提供商', exact: true })
+  await expect.poll(() => add.isEnabled(), { timeout: 10_000 }).toBe(true)
+  await add.click()
+  await dialog.getByLabel('提供商', { exact: true }).selectOption('minimax-cn')
+  const draft = dialog.getByRole('textbox', { name: 'API 密钥', exact: true })
+  await draft.waitFor({ timeout: 10_000 })
+  return draft
+}
+
+it('keeps ordered legacy Session menu rows before Archive and removes them with their fiber', async () => {
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   onTestFinished(() => scaffold.close())
   const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd)
@@ -42,21 +54,75 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     const row = page.getByRole('treeitem').filter({ has: page.getByText(SESSION_TITLE, { exact: true }) })
     await row.waitFor({ timeout: 20_000 })
+    // Static library styles follow their module dependencies: dockkit imports primitives, so primitives install first.
+    const styleOwners = await page.evaluate(() => [...document.head.querySelectorAll('style[data-plugin]')].map(style => style.getAttribute('data-plugin')))
+    const primitives = styleOwners.flatMap((owner, index) => owner === '@deepseek-ai/dsh-client-ui-primitives' ? [index] : [])
+    const dockkit = styleOwners.indexOf('@deepseek-ai/dsh-client-ui-dockkit')
+    expect(primitives.length).toBeGreaterThan(0)
+    expect(dockkit).toBeGreaterThan(Math.max(...primitives))
     const trigger = row.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
 
+    const trailing = row.locator('[data-session-trailing]')
+    const observations: { stage: string; icons: string[]; time: boolean; pinned: boolean; actions: boolean }[] = []
+    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean, target = row,
+      timeVisible = iconsVisible): Promise<void> => {
+      const icons = target.locator('[data-session-trailing]')
+      const actions = target.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
+      const time = target.locator('[class*="time"]')
+      await expect.poll(() => icons.first().isVisible()).toBe(iconsVisible)
+      await expect.poll(() => time.isVisible()).toBe(timeVisible)
+      await expect.poll(() => actions.isVisible()).toBe(actionsVisible)
+      observations.push({
+        stage,
+        icons: await icons.filter({ visible: true }).evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')!)),
+        time: await time.isVisible(),
+        pinned: await target.getByRole('img', { name: 'Pinned', exact: true }).isVisible(),
+        actions: await actions.isVisible(),
+      })
+    }
+    await expect.poll(() => trailing.count()).toBe(2)
+    expect(await trailing.evaluateAll(elements => elements.map(element => element.getAttribute('data-session-trailing'))))
+      .toEqual([sessionId, sessionId])
+    await page.mouse.move(0, 0)
+    await observe('resting', true, false)
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(true)
+    await observe('dark', true, false)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(false)
+    const titleWidth = await row.locator('[class*="title"]').evaluate(element => element.getBoundingClientRect().width)
     await row.hover()
-    await trigger.focus()
+    await observe('hover', false, true)
+    await page.mouse.move(0, 0)
+    await observe('pointer-left', true, false)
+    await row.click()
+    await expect.poll(() => page.locator('[data-composer-input][contenteditable="true"]')
+      .evaluate(element => element === document.activeElement)).toBe(true)
+    await row.click()
+    await page.mouse.move(0, 0)
+    expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
+    await observe('clicked-current-row', true, false)
+    expect(await row.locator('[data-slot="sidebar.session.row.leading"]').evaluate(element => element.tagName)).toBe('SPAN')
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Tab')
+    expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
+    await observe('focus', false, true)
+    await page.keyboard.press('Tab')
+    expect(await row.evaluate(element => element.querySelector('button') === document.activeElement)).toBe(true)
     await trigger.click()
+    await observe('menu-open', false, true)
     const menu = page.getByRole('menu')
     await menu.waitFor()
-    expect(await menu.getByRole('separator').count()).toBe(1)
+    expect(await menu.getByRole('separator').count()).toBe(3)
+    const exportRow = menu.getByRole('menuitem', { name: 'Export session', exact: true })
+    expect(await exportRow.locator('..').getByRole('separator').isVisible()).toBe(true)
     await compareOrRefreshGolden(
       SESSION_ACTION_EXPECTED,
       await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd),
       webSnapshotMode(),
     )
 
-    await menu.getByRole('menuitem', { name: 'Export session' }).click()
+    await exportRow.press('Enter')
     await expect.poll(() => menu.count()).toBe(0)
     expect(await page.evaluate(() => ({
       action: document.documentElement.dataset.sessionAction,
@@ -64,20 +130,97 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
       title: document.documentElement.dataset.sessionActionTitle,
     }))).toEqual({ action: 'fixture.export-session', id: sessionId, title: SESSION_TITLE })
 
+    await page.getByRole('button', { name: 'Account menu', exact: true }).focus()
+    await page.mouse.move(0, 0)
+    await observe('blur', true, false)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
+    await page.mouse.move(0, 0)
+    await observe('narrow', true, false)
+    const bounds = await row.evaluate((element) => {
+      const title = element.querySelector('[class*="title"]')!.getBoundingClientRect()
+      const icons = [...element.querySelectorAll('[data-session-trailing]')].map(icon => icon.getBoundingClientRect())
+      return {
+        titleRight: title.right, firstIconLeft: icons[0]!.left, lastIconRight: icons.at(-1)!.right,
+        rowRight: element.getBoundingClientRect().right,
+      }
+    })
+    expect(bounds.titleRight).toBeLessThanOrEqual(bounds.firstIconLeft)
+    expect(bounds.lastIconRight).toBeLessThanOrEqual(bounds.rowRight)
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    const touchPage = await browser.newPage({
+      viewport: { width: 390, height: 844 }, locale: 'en-US', isMobile: true, hasTouch: true,
+    })
+    try {
+      const touchConsole = watchConsole(touchPage)
+      await touchPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await touchPage.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
+      const touchRow = touchPage.getByRole('treeitem').filter({ has: touchPage.getByText(SESSION_TITLE, { exact: true }) })
+      const touchTrigger = touchRow.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
+      await touchTrigger.waitFor()
+      expect(await touchPage.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false)
+      await observe('touch', true, true, touchRow, false)
+      expect(await touchRow.getByRole('button', { name: 'Archive session', exact: true }).isVisible()).toBe(false)
+      expect(await touchRow.getByRole('button', { name: 'Pin session', exact: true }).isVisible()).toBe(false)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menu').waitFor()
+      await observe('touch-menu-open', true, true, touchRow, false)
+      await touchPage.keyboard.press('Escape')
+      await observe('touch-menu-closed', true, true, touchRow, false)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menuitem', { name: 'Pin session', exact: true }).tap()
+      await touchRow.getByRole('button', { name: 'Unpin session', exact: true }).waitFor()
+      await observe('touch-pinned', true, true, touchRow, false)
+      const touchBounds = await touchRow.evaluate((element) => {
+        const title = element.querySelector('[class*="title"]')!.getBoundingClientRect()
+        const resting = element.querySelector('[class*="rowResting"]')!.getBoundingClientRect()
+        const actions = element.querySelector('[class*="rowActions"]')!.getBoundingClientRect()
+        return { titleRight: title.right, restingLeft: resting.left, restingRight: resting.right,
+          actionsLeft: actions.left, actionsRight: actions.right, rowRight: element.getBoundingClientRect().right }
+      })
+      expect(touchBounds.titleRight).toBeLessThanOrEqual(touchBounds.restingLeft)
+      expect(touchBounds.restingRight).toBeLessThanOrEqual(touchBounds.actionsLeft)
+      expect(touchBounds.actionsRight).toBeLessThanOrEqual(touchBounds.rowRight)
+      await touchTrigger.tap()
+      await touchPage.getByRole('menuitem', { name: 'Archive session', exact: true }).tap()
+      await expect.poll(() => touchRow.count()).toBe(0)
+      expect(scaffold.ctx.workspaceRegistry.archivedSessionIds.includes(sessionId)).toBe(true)
+
+      await page.getByRole('button', { name: 'View options', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }).click()
+      await row.click()
+      await page.getByRole('alert').filter({ hasText: 'Archived sessions cannot be opened' }).waitFor()
+      await page.mouse.move(0, 0)
+      expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
+      await observe('clicked-archived-row', true, false)
+      await scaffold.ctx.workspaceRegistry.unarchiveSession(sessionId)
+      await observe('touch-unarchived', true, true, touchRow, false)
+      expect(touchConsole.pageErrors).toEqual([])
+    } finally {
+      await touchPage.close()
+    }
     scaffold.ctx.loader.remove(entryId)
     await expect.poll(() => page.evaluate(
       () => document.documentElement.dataset.liveDisposals,
     )).toBe('1')
+    await expect.poll(() => trailing.count()).toBe(0)
+    await expect.poll(() => row.locator('[class*="title"]').evaluate(element => element.getBoundingClientRect().width))
+      .toBeGreaterThan(titleWidth)
+    await compareOrRefreshGolden(
+      join(EXPECTED, 'session-trailing.expected.json'),
+      JSON.stringify(observations, null, 2),
+      webSnapshotMode(),
+    )
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'Copy Session ID']
+    const remainingNames = ['Pin session', 'Rename', 'Mark as unread', 'Fork session', 'Copy Session ID', 'Archive session']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
       expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
     }
-    expect(await menu.getByRole('separator').count()).toBe(0)
+    expect(await menu.getByRole('separator').count()).toBe(2)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await menu.getByRole('menuitem', { name: 'Copy Session ID', exact: true }).click()
     await expect.poll(() => menu.count()).toBe(0)
@@ -86,7 +229,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     expect(console.pageErrors).toEqual([])
     await assertFixtureInventory(EXPECTED, [
       'bootstrap-rebuild.expected.md', 'enabled.expected.md', 'recovered.expected.md',
-      'session-actions.expected.md',
+      'session-actions.expected.md', 'session-trailing.expected.json',
     ])
   } finally {
     await browser.close()
@@ -106,8 +249,9 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
     const other = await otherContext.newPage()
     const consoles = [watchConsole(page), watchConsole(other)]
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-live'))
-    await openInventory(page, scaffold.authenticatedUrl)
-    const otherInventory = await openInventory(other, scaffold.authenticatedUrl)
+    await openPlugins(page, scaffold.authenticatedUrl)
+    await openPlugins(other, scaffold.authenticatedUrl)
+    const draft = await openDraft(other)
     let entryId: string | undefined
     const toggle = async () => {
       if (entryId === undefined) entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
@@ -134,9 +278,8 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
     }
     await compareOrRefreshGolden(join(EXPECTED, 'enabled.expected.md'), await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd), webSnapshotMode())
 
-    // The inventory filter is page-owned state that live composition must preserve.
-    const draft = otherInventory.getByRole('searchbox', { name: '搜索插件' })
-    await draft.fill('unfinished-filter')
+    // An unsaved Settings field is page-owned state that live composition must preserve.
+    await draft.fill('unfinished-draft')
     await toggle()
     for (const target of [page, other]) {
       await expect.poll(() => live(target).count()).toBe(0)
@@ -145,7 +288,7 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
       expect((await dataset(target)).liveHits).toBe('1')
       expect(await target.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(0)
     }
-    expect(await draft.inputValue()).toBe('unfinished-filter')
+    expect(await draft.inputValue()).toBe('unfinished-draft')
     await toggle()
     for (const target of [page, other]) {
       await live(target).waitFor()
@@ -154,21 +297,13 @@ it('synchronizes two pages, disposes effects and restores an offline page from t
       expect(await target.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(1)
     }
 
-    const disconnected = other.waitForEvent('requestfailed', request => request.url().includes('/plugins/events'))
-    await otherContext.setOffline(true)
-    // Chromium offline emulation leaves established SSE sockets open. Cycling this
-    // fixture's transport plugin closes them without replacing the Host or profile.
+    // Restarting the Host transport ends every plugin-events stream; each page reopens it and reconciles from the
+    // new baseline, so a later change still reaches both pages.
     const transport = [...scaffold.ctx.loader.entries()].find(entry => entry.options.name === '@deepseek-ai/dsh-client-hmr')!.fiber!
-    const reconnected = page.waitForResponse(response => response.url().includes('/plugins/events') && response.status() === 200)
     await transport.restart()
-    await disconnected
-    await reconnected
     await toggle()
-    await expect.poll(() => live(page).count()).toBe(0)
-    expect(await live(other).count()).toBe(1)
-    await otherContext.setOffline(false)
-    await expect.poll(() => live(other).count(), { timeout: 20_000 }).toBe(0)
-    expect(await draft.inputValue()).toBe('unfinished-filter')
+    for (const target of [page, other]) await expect.poll(() => live(target).count(), { timeout: 20_000 }).toBe(0)
+    expect(await draft.inputValue()).toBe('unfinished-draft')
     expect(navigations).toBe(0)
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)
     for (const console of consoles) expect(console.pageErrors).toEqual([])
@@ -184,7 +319,7 @@ it('keeps a failed client download local and retries without changing Host enabl
   try {
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-live-retry'))
-    await openInventory(page, scaffold.authenticatedUrl)
+    await openPlugins(page, scaffold.authenticatedUrl)
     const bundle = (url: URL) => url.pathname.startsWith('/plugins/') && url.search.includes('@fixture/live-client/client.js')
     await page.route(bundle, route => route.abort())
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
@@ -221,9 +356,9 @@ it('recovers an uncreated client entry with rebuilt factory code without navigat
   try {
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-factory-rebuild'))
-    const inventory = await openInventory(page, scaffold.authenticatedUrl)
-    const draft = inventory.getByRole('searchbox', { name: '搜索插件' })
-    await draft.fill('unfinished-filter')
+    await openPlugins(page, scaffold.authenticatedUrl)
+    const draft = await openDraft(page)
+    await draft.fill('unfinished-draft')
     let navigations = 0
     page.on('framenavigated', () => { navigations++ })
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
@@ -235,7 +370,7 @@ it('recovers an uncreated client entry with rebuilt factory code without navigat
     await page.getByText('动态插件 r1 已启用', { exact: true }).waitFor()
     await expect.poll(() => failure.count()).toBe(0)
     await compareOrRefreshGolden(join(EXPECTED, 'recovered.expected.md'), await captureStableAria(page, '[data-live-client]', scaffold.workspaceCwd), webSnapshotMode())
-    expect(await draft.inputValue()).toBe('unfinished-filter')
+    expect(await draft.inputValue()).toBe('unfinished-draft')
     expect(await page.locator('style[data-plugin="@fixture/live-client"]').count()).toBe(1)
     expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBe('1')
     expect(scaffold.ctx.loader.resolve(entryId).fiber?.state).toBe(2)
@@ -255,9 +390,9 @@ it('reports bootstrap rebuilds without remounting the settings page or navigatin
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
     const console = watchConsole(page)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-client-bootstrap-rebuild'))
-    const inventory = await openInventory(page, scaffold.authenticatedUrl)
-    const draft = inventory.getByRole('searchbox', { name: '搜索插件' })
-    await draft.fill('unfinished-filter')
+    await openPlugins(page, scaffold.authenticatedUrl)
+    const draft = await openDraft(page)
+    await draft.fill('unfinished-draft')
     const originalInput = await draft.elementHandle()
     let navigations = 0
     page.on('framenavigated', () => { navigations++ })
@@ -268,11 +403,12 @@ it('reports bootstrap rebuilds without remounting the settings page or navigatin
     scaffold.ctx.clientModules.rebuilt('@deepseek-ai/dsh-client-modules')
     const failure = page.locator('[data-client-sync-failure]')
     await failure.getByText(/replacing bootstrap module .* requires a page reload/).waitFor()
-    await failure.getByRole('button', { name: '重试本页面同步' }).click()
+    // The Settings dialog holding the draft covers the Plugins page, so the retry is dispatched to its button.
+    await failure.getByRole('button', { name: '重试本页面同步' }).dispatchEvent('click')
     await failure.getByText(/replacing bootstrap module .* requires a page reload/).waitFor()
     await compareOrRefreshGolden(join(EXPECTED, 'bootstrap-rebuild.expected.md'), await captureStableAria(page, '[data-client-sync-failure]', scaffold.workspaceCwd), webSnapshotMode())
     expect(await originalInput!.evaluate(input => input.isConnected)).toBe(true)
-    expect(await draft.inputValue()).toBe('unfinished-filter')
+    expect(await draft.inputValue()).toBe('unfinished-draft')
     expect(scaffold.ctx.loader.ctx.fiber.uid).toBe(host)
     expect(navigations).toBe(0)
     expect(console.pageErrors).toEqual([])
@@ -290,7 +426,7 @@ it('removes the client UI and resources while Host cleanup is still pending', as
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
-    await openInventory(page, scaffold.authenticatedUrl)
+    await openPlugins(page, scaffold.authenticatedUrl)
     let navigations = 0
     page.on('framenavigated', () => { navigations++ })
     const entryId = await scaffold.ctx.loader.create({ name: '@fixture/live-client' })

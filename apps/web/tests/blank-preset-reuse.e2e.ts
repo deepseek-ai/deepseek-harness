@@ -4,10 +4,11 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A preset these blank Sessions recorded that the deployment no longer declares. */
 const UNDECLARED = 'liangshen'
@@ -69,14 +70,16 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   function liveComposition(sessionId: SessionId) {
     const agent = scaffold.ctx.agents.get(sessionId)
     if (agent === undefined) return undefined
+    const projections = scaffold.ctx.sessionProjections.snapshot(agent.session).values
     return {
       mounted: scaffold.ctx.agentPresets.composedPreset(agent.ctx),
-      projected: scaffold.ctx.sessionProjections.stateOf(agent.session, 'agentPreset'),
-      plan: scaffold.ctx.sessionProjections.stateOf(agent.session, 'plan'),
+      projected: projections.agentPreset,
+      plan: projections.plan,
     }
   }
 
   async function storedSelections(sessionId: SessionId): Promise<unknown[]> {
+    await scaffold.ctx.sessionPersistence.flush()
     const handle = await scaffold.ctx.sessionPersistence.open(sessionId, 'read')
     try {
       const { events } = await handle.read()
@@ -89,7 +92,7 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   }
 
   it('reuses a blank recorded under an undeclared preset under the default when startup connects its Workspace', async () => {
-    const stale = SessionId('blank-undeclared')
+    const stale = brandString<SessionId>('blank-undeclared')
     await storeBlank(stale, 'undeclared', UNDECLARED)
 
     const page = await openPage()
@@ -103,7 +106,7 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   })
 
   it('restores a saved blank under the preset it recorded', async () => {
-    const picked = SessionId('blank-picked')
+    const picked = brandString<SessionId>('blank-picked')
     await storeBlank(picked, 'picked', 'minimal')
 
     const page = await openPage(picked)
@@ -113,7 +116,7 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   })
 
   it('restores a saved blank under the default once its recorded preset is undeclared', async () => {
-    const saved = SessionId('saved-undeclared')
+    const saved = brandString<SessionId>('saved-undeclared')
     await storeBlank(saved, 'saved-undeclared', UNDECLARED)
 
     const page = await openPage(saved)

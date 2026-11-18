@@ -1,0 +1,5 @@
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - !!js process.getBuiltinModule('node:path').join(process.cwd(), 'broken-skills')
+    watch: false

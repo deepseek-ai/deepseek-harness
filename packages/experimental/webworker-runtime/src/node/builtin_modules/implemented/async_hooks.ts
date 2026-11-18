@@ -29,9 +29,10 @@
  * itself back over whoever came after it. The three slots are separate for the same reason — a restored
  * copy pushed onto the folding stack could unwind another boundary's entry.
  *
- * A snapshot with no stores at all is `undefined`, and the hook layer then wraps
- * nothing: a callback registered outside every boundary keeps inheriting the
- * enclosing boundary rather than being masked to `undefined`. `__snapshotAll` is
+ * A snapshot with no stores or explicit contexts is `undefined`, and the hook layer
+ * then wraps nothing: a callback registered outside every boundary keeps inheriting
+ * the enclosing boundary. Explicit empty contexts retain their `undefined` stores,
+ * so deferred callbacks cannot inherit unrelated work. `__snapshotAll` is
  * the transformer-facing counterpart and always captures every instance, including
  * the ones reading `undefined`, because a resumed frame must see exactly what it
  * saw at its pause point.
@@ -209,13 +210,14 @@ export class AsyncLocalStorage<T> {
   /**
    * Copy every live instance's current store. Not part of the Node face: this is
    * the shim's own mechanism, kept in the class so the overlay stays private.
-   * @returns the snapshot, or undefined when no instance has a store.
+   * @returns the snapshot, or undefined when no instance has a store or explicit context.
    */
   static captureContext(): AsyncContextSnapshot | undefined {
     let captured: CapturedStore[] | undefined
     for (const instance of instances) {
       const store = instance.getStore()
-      if (store === undefined) continue
+      if (store === undefined && instance.overlay === undefined && instance.resumed === undefined
+        && instance.ambients.length === 0 && instance.entries.length === 0) continue
       captured ??= []
       captured.push({ instance, store })
     }
@@ -284,8 +286,8 @@ export type AmbientSnapshot = readonly CapturedStore[]
 
 /**
  * Copy every live instance's current store.
- * @returns the snapshot, or undefined when no instance has a store (the hook
- * layer then wraps nothing and callbacks inherit the stack top).
+ * @returns the snapshot, or undefined when no instance has a store or explicit
+ * context (the hook layer then wraps nothing and callbacks inherit the stack top).
  */
 export function captureAsyncContext(): AsyncContextSnapshot | undefined {
   return AsyncLocalStorage.captureContext()

@@ -1,16 +1,66 @@
 /**
- * Program evaluation, output capture, and host binding proxies over the process channel.
+ * Output capture, result encoding, and host binding proxies over the process channel.
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect } from 'node:util'
-import type { DoneMessage, ReplyMessage, ProgramBootData, ProgramToHost } from './protocol.ts'
+import { inspect, types, type InspectOptions } from 'node:util'
+import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
+import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
-import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
+import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
-const capturedObjectCreate = Object.create
-const capturedObjectDefineProperty = Object.defineProperty
+const { isNativeError, isProxy } = types
+const {
+  create: capturedObjectCreate,
+  defineProperty: capturedObjectDefineProperty,
+  getOwnPropertyDescriptor: capturedObjectGetOwnPropertyDescriptor,
+  getPrototypeOf: capturedObjectGetPrototypeOf,
+  is: capturedObjectIs,
+} = Object
+const capturedOwnKeys = Reflect.ownKeys
+
+/** Text and the original JSON data associated with one binding result. */
+export interface BindingInspection {
+  /** Detached data used to detect changes before selecting the text. */
+  snapshot: PtcJsonValue
+  /** Host-authored text for direct inspection of the unchanged value. */
+  text: string
+}
+
+/** Compare data properties without invoking accessors or traversing model-created proxies. */
+function matchesInspection(value: object, snapshot: PtcJsonValue, images: Pick<WeakMap<object, string>, 'get'>): boolean {
+  const pending: [unknown, PtcJsonValue][] = [[value, snapshot]]
+  let size = 1
+  while (size > 0) {
+    const pair = pending[--size] as [unknown, PtcJsonValue]
+    const current = pair[0]
+    const original = pair[1]
+    if (capturedObjectIs(current, original)) continue
+    if (current === null || typeof current !== 'object' || original === null || typeof original !== 'object'
+      || isProxy(current) || images.get(original) !== undefined
+      || capturedObjectGetPrototypeOf(current) !== capturedObjectGetPrototypeOf(original)) return false
+    const keys = capturedOwnKeys(current)
+    if (keys.length !== capturedOwnKeys(original).length) return false
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index] as string | symbol
+      const actual = capturedObjectGetOwnPropertyDescriptor(current, key) as PropertyDescriptor
+      const expected = capturedObjectGetOwnPropertyDescriptor(original, key)
+      if (!expected || !('value' in actual) || actual.enumerable !== expected.enumerable) return false
+      const slot = capturedObjectCreate(null) as PropertyDescriptor
+      slot.value = [actual.value, expected.value as PtcJsonValue]
+      slot.configurable = true
+      capturedObjectDefineProperty(pending, size++, slot)
+    }
+  }
+  return true
+}
+
+/** Node formatting options shared with the runtime-owned Image hook. */
+export interface ImageInspectOptions extends InspectOptions {
+  /** Primitive token retained by Node when passing options to a formatter in another VM context. */
+  ptcImageCollector?: symbol
+}
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -18,12 +68,6 @@ function defineBindingErrorField(error: Error, key: string, value: string): void
   attributes.enumerable = true
   attributes.value = value
   capturedObjectDefineProperty(error, key, attributes)
-}
-
-/** Program messages and host replies transported by the private process channel. */
-export interface BootstrapPort {
-  postMessage(message: ProgramToHost): void
-  on(event: 'message', listener: (message: ReplyMessage) => void): void
 }
 
 /**
@@ -38,11 +82,10 @@ export interface PatchableStream {
 
 /**
  * Ordered text capture under the shared outer JSON-byte budget, delivered to
- * a sink as each item lands (the real sink streams text over the port eagerly,
+ * a sink as each item lands (the real sink sends text to the host eagerly,
  * so captured output survives a mid-run termination). It includes the log
  * array syntax and string escaping in its accounting. Once exhausted it emits
- * the fitting prefix and reports the limit once; the host turns that condition
- * into an explicit `output-limit` run failure.
+ * the fitting prefix and reports truncation once; execution continues.
  */
 export class LogBuffer {
   private bytes = 2 // JSON serialization of the empty logs array: []
@@ -89,32 +132,80 @@ export class LogBuffer {
     this.sink(text)
   }
 
-  /** Remaining exact JSON-byte budget for the completion value or failure message. */
-  remainingOutputBytes(): number {
-    return this.maxBytes - this.bytes
-  }
+  /** Discard further output after the host exhausts the combined text and image budget. */
+  discard(): void { this.truncated = true }
+
+  /** Whether captured text has exceeded the shared output budget. */
+  get overflowed(): boolean { return this.truncated }
 }
 
-/** The five console methods the shim captures, in the seam's level vocabulary. */
-const CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'] as const
-
 /**
- * A `console` replacement whose five leveled methods render their arguments
- * `util.inspect`-style (matching real console formatting closely enough for
- * a model to recognize its own output) into the buffer. Only these five
- * exist — the program gets a deliberately small console, not Node's full
- * console API.
+ * Render arguments without depth, array-length or string-length previews and emit registered images in order.
  * @param logs - the buffer every rendered line is pushed into.
- * @returns the five-method console object handed to the program.
+ * @param images - Image identities owned by the execution process.
+ * @param emitImage - Emits a registered image in the current evaluation.
+ * @param inspections - Process-owned text associated with original binding result identities.
+ * @returns The program's inspect function and its matching Image collection hook.
+ * @throws If object formatting fails; preceding arguments remain visible.
  */
-export function makeConsoleShim(logs: Pick<LogBuffer, 'push'>): Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void> {
-  const render = (args: unknown[]): string =>
-    args.map(arg => typeof arg === 'string' ? arg : inspect(arg, INSPECT_OPTIONS)).join(' ')
-  const shim = Object.create(null) as Record<(typeof CONSOLE_LEVELS)[number], (...args: unknown[]) => void>
-  for (const level of CONSOLE_LEVELS) {
-    shim[level] = (...args: unknown[]) => { logs.push(render(args)) }
+export function makeInspect(
+  logs: Pick<LogBuffer, 'push' | 'overflowed'>, images: Pick<WeakMap<object, string>, 'get'>, emitImage: (id: string) => void,
+  inspections?: Pick<WeakMap<object, BindingInspection>, 'get'>,
+): {
+  inspect: (...args: unknown[]) => void
+  collectImage: (image: object, options: ImageInspectOptions) => void
+} {
+  const collectors = new Map<symbol, string[]>()
+  const programInspect = (...args: unknown[]): void => {
+    const pending: string[] = []
+    const flush = (): void => {
+      if (pending.length === 0) return
+      logs.push(pending.join(' ') + '\n')
+      pending.length = 0
+    }
+    for (const arg of args) {
+      if (logs.overflowed) break
+      const inspection = arg !== null && typeof arg === 'object' ? inspections?.get(arg) : undefined
+      if (inspection !== undefined && matchesInspection(arg as object, inspection.snapshot, images)) {
+        flush()
+        if (inspection.text.length > 0) logs.push(inspection.text.endsWith('\n') ? inspection.text : inspection.text + '\n')
+        continue
+      }
+      const directImage = arg !== null && typeof arg === 'object' ? images.get(arg) : undefined
+      if (directImage !== undefined) {
+        flush()
+        emitImage(directImage)
+        continue
+      }
+      const nested: string[] = []
+      const collector = Symbol()
+      const options: ImageInspectOptions = {
+        depth: null, maxArrayLength: null, maxStringLength: null,
+        ptcImageCollector: collector,
+      }
+      collectors.set(collector, nested)
+      try {
+        pending.push(typeof arg === 'string' ? arg : inspect(arg, options))
+      } catch (error: unknown) {
+        flush()
+        throw error
+      } finally {
+        collectors.delete(collector)
+      }
+      if (nested.length === 0) continue
+      flush()
+      for (const id of nested) emitImage(id)
+    }
+    flush()
+    if (args.length === 0) logs.push('\n')
   }
-  return shim
+  return {
+    inspect: programInspect,
+    collectImage(image, options) {
+      const id = images.get(image)
+      if (id !== undefined && options.ptcImageCollector !== undefined) collectors.get(options.ptcImageCollector)?.push(id)
+    },
+  }
 }
 
 /**
@@ -147,25 +238,22 @@ export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: Patch
   return () => { stream.write = original }
 }
 
-/** Bounded inspect options: deep enough to be useful, bounded so a pathological value cannot explode the rendering. */
-const INSPECT_OPTIONS = { depth: 4, maxArrayLength: 100, maxStringLength: 10_000 } as const
-
 /**
- * Prepare the program's completion value for the done message. Only lossless
- * JSON crosses, and a value that does not fit the remaining combined outer
- * budget reports `output-limit`; the host revalidates hostile traffic and
+ * Prepare the program's completion value for the run result. Only lossless
+ * JSON crosses, and a value that does not fit even without captured output
+ * reports `output-limit`; the host revalidates hostile traffic and
  * remains authoritative for native pipe writes the program shim cannot observe.
  *
  * @param value - the program's completion value.
- * @param remainingOutputBytes - exact bytes left after captured logs.
+ * @param availableBytes - bytes available to the completion or diagnostic.
  * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
- * @returns the done-message fragment: `{}` for `undefined`, else a flat wire `{ value }`.
+ * @returns the result fragment: `{}` for `undefined`, else a flat wire `{ value }`.
  */
 export function prepareCompletion(
   value: unknown,
-  remainingOutputBytes: number,
-  maxOutputBytes: number = remainingOutputBytes,
-): Omit<DoneMessage, 'type'> {
+  availableBytes: number,
+  maxOutputBytes: number = availableBytes,
+): ProgramResult {
   if (value === undefined) return {}
   let snapshot: ReturnType<typeof snapshotPtcJsonValue>
   try {
@@ -177,59 +265,44 @@ export function prepareCompletion(
     return prepareFailure(
       'invalid-output',
       'program completion must be lossless JSON',
-      remainingOutputBytes,
-      maxOutputBytes,
+      availableBytes,
     )
   }
-  if (jsonValueBytesUpTo(snapshot, remainingOutputBytes) === undefined) {
-    return outputLimit(maxOutputBytes)
+  if (jsonValueBytesUpTo(snapshot, availableBytes) === undefined) {
+    return { error: { kind: 'output-limit', message: `completion value exceeded ${maxOutputBytes} bytes` } }
   }
   return { value: encodePtcJsonWire(snapshot) }
 }
 
-/** Build the fixed overflow fragment without carrying rejected variable bytes. */
-function outputLimit(maxOutputBytes: number): Omit<DoneMessage, 'type'> {
-  return { error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } }
-}
-
-/** Admit one bounded failure message or replace it with the fixed overflow diagnostic. */
+/** Truncate diagnostic text while preserving its failure kind. */
 function prepareFailure(
   kind: 'exception' | 'invalid-output',
   message: string,
-  remainingOutputBytes: number,
-  maxOutputBytes: number,
-): Omit<DoneMessage, 'type'> {
-  if (jsonStringBytesUpTo(message, remainingOutputBytes) === undefined) return outputLimit(maxOutputBytes)
-  return { error: { kind, message } }
+  availableBytes: number,
+): ProgramResult {
+  const retained = truncateJsonStringBytes(message, availableBytes)
+  return { error: { kind, message: retained }, ...retained !== message ? { outputTruncated: true } : {} }
 }
 
 /**
- * Prepare a thrown program value without sending an unbounded stack or
- * string across the process channel.
+ * Prepare a thrown program value, including cross-realm errors, without sending
+ * an unbounded stack or string across the process channel.
  * @param error - the value thrown by the program.
- * @param remainingOutputBytes - exact bytes left after captured logs.
- * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
- * @returns a bounded exception or fixed output-limit fragment.
+ * @param availableBytes - bytes available to the completion or diagnostic.
+ * @returns a bounded exception preserving its kind and indicating truncated diagnostics.
  */
 export function prepareException(
   error: unknown,
-  remainingOutputBytes: number,
-  maxOutputBytes: number = remainingOutputBytes,
-): Omit<DoneMessage, 'type'> {
+  availableBytes: number,
+): ProgramResult {
   let message: string
   try {
-    const detail: unknown = error instanceof CapturedError ? error.stack ?? error.message : error
+    const detail: unknown = isNativeError(error) ? error.stack ?? error.message : error
     message = typeof detail === 'string' ? detail : String(detail)
   } catch {
     message = 'program threw an unrenderable value'
   }
-  return prepareFailure('exception', message, remainingOutputBytes, maxOutputBytes)
-}
-
-/** One awaited binding call's settlement handles, keyed by call id in the pending map. */
-export interface PendingCall {
-  resolve(value: unknown): void
-  reject(error: Error): void
+  return prepareFailure('exception', message, availableBytes)
 }
 
 /** Constructor type for one program-visible binding rejection class. */
@@ -258,166 +331,58 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
 }
 
 /**
- * Build each declared error class once so calls and `instanceof` share constructor identity.
- * @param data - binding namespace declarations from the boot payload.
- * @returns constructors keyed by their owning namespace global.
- */
-export function makeBindingErrorClasses(
-  data: Pick<ProgramBootData, 'namespaces'>,
-): Map<string, BindingErrorConstructor> {
-  const classes = new Map<string, BindingErrorConstructor>()
-  for (const namespace of data.namespaces) {
-    if (namespace.errorClass) classes.set(namespace.global, makeBindingErrorClass(namespace.errorClass))
-  }
-  return classes
-}
-
-/**
- * Route host replies into the pending-call map: each reply settles its call
- * at most once, and a reply for an unknown id (stray, or a duplicate answer
- * to an id already settled) is ignored. Shared wiring between
- * {@link runProgram} and the tests that exercise {@link makeNamespaces}
- * standalone.
- * @param port - the port whose `message` events carry the replies.
- * @param pending - the id-keyed map of unsettled binding calls.
- */
-export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCall>): void {
-  port.on('message', (message: ReplyMessage) => {
-    const entry = pending.get(message.id)
-    if (!entry) return
-    pending.delete(message.id)
-    if (message.ok) {
-      const value = decodePtcJsonWire(message.value)
-      if (value === undefined) entry.reject(new CapturedError('binding resolution must be lossless JSON'))
-      else entry.resolve(value)
-    } else {
-      entry.reject(new CapturedError(message.message))
-    }
-  })
-}
-
-/**
- * Build the binding namespace objects the program sees: one null-prototype global per
- * namespace, each declared name an own enumerable async function that bridges over the port
- * (`__proto__`/`constructor`/`toString` are ordinary keys, never prototype collisions).
- * Lossy arguments reject before posting; clone failures and host failure
- * replies reject only the corresponding call.
- *
- * @param data - the boot payload's namespace declarations (globals + names).
- * @param port - the port binding calls are posted to.
- * @param pending - the id-keyed map each posted call parks its handles in.
- * @param nextId - the shared mutable id counter (program-issued correlation ids).
- * @param errorClasses - Namespace constructors shared with program globals, resolved for each invocation.
- * @returns one namespace object per declaration, in declaration order.
+ * Build null-prototype binding globals with namespace-specific rejection classes.
+ * @param data - Namespace declarations injected into the program.
+ * @param host - Evaluation-scoped remote binding calls.
+ * @param errorClasses - Constructors shared with program globals, resolved per invocation.
+ * @param inspections - Required process-owned inspection text indexed by decoded result identity.
+ * @param decodeImage - Optional decoder for host-issued images; image tokens are rejected when absent.
+ * @param isImage - Optional recognition of decoded images; omission restricts inspection snapshots to JSON data.
+ * @returns One namespace object per declaration.
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
-  port: BootstrapPort,
-  pending: Map<number, PendingCall>,
-  nextId: { value: number },
-  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
+  host: Pick<HostMethods, 'invoke'>,
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
+  inspections: Pick<WeakMap<object, BindingInspection>, 'set'>,
+  decodeImage?: (wire: PtcImageWire) => PtcJsonValue,
+  isImage?: (value: object) => boolean,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
     for (const name of names) {
       Object.defineProperty(namespace, name, {
         enumerable: true,
-        value: (args: unknown): Promise<unknown> => {
+        value: async (args: unknown): Promise<unknown> => {
           const errorClass = errorClasses.get(global)
-          let detached: ReturnType<typeof snapshotPtcJsonValue>
           try {
-            detached = snapshotPtcJsonValue(args)
-          } catch {
-            detached = undefined
-          }
-          if (detached === undefined) {
-            return Promise.reject(bindingFailure(errorClass, name, 'binding arguments must be lossless JSON'))
-          }
-          return new Promise((resolve, reject) => {
-            const id = nextId.value
-            pending.set(id, {
-              resolve,
-              reject: (error) => {
-                reject(bindingFailure(errorClass, name, error.message))
-              },
-            })
-            try {
-              port.postMessage({ type: 'call', id, global, name, args: encodePtcJsonWire(detached) })
-              nextId.value += 1
-            } catch (error: unknown) {
-              pending.delete(id)
-              const message = `binding call could not be sent: ${error instanceof CapturedError ? error.message : String(error)}`
-              reject(bindingFailure(errorClass, name, message))
+            let detached: ReturnType<typeof snapshotPtcJsonValue>
+            try { detached = snapshotPtcJsonValue(args) } catch {
+              // Model-defined getters can fail while arguments are detached.
+              detached = undefined
             }
-          })
+            if (detached === undefined) throw new CapturedError('binding arguments must be lossless JSON')
+            const resolution: unknown = await host.invoke(global, name, encodePtcJsonWire(detached))
+            if (resolution === null || typeof resolution !== 'object' || Array.isArray(resolution) || !('value' in resolution)) {
+              throw new CapturedError('binding resolution must be lossless JSON')
+            }
+            const inspection = 'inspection' in resolution ? resolution.inspection : undefined
+            if (inspection !== undefined && typeof inspection !== 'string') throw new CapturedError('binding resolution must be lossless JSON')
+            const result = decodePtcJsonWire(resolution.value, decodeImage)
+            if (result === undefined) throw new CapturedError('binding resolution must be lossless JSON')
+            if (inspection !== undefined) {
+              if (result === null || typeof result !== 'object') throw new CapturedError('binding inspection requires an object or array')
+              const snapshot = snapshotPtcJsonValue(result, isImage)
+              if (snapshot === undefined) throw new CapturedError('binding inspection requires lossless JSON data')
+              inspections.set(result, { snapshot, text: inspection })
+            }
+            return result
+          } catch (error: unknown) {
+            throw bindingFailure(errorClass, name, error instanceof CapturedError ? error.message : String(error))
+          }
         },
       })
     }
     return namespace
   })
-}
-
-/**
- * Run one strict async-function body, allowing top-level `await` and `return`, and post exactly
- * one terminal {@link DoneMessage}; a thrown program error becomes its `error` field.
- * @param port - host message port or test double.
- * @param data - the boot payload the host sent.
- * @param streams - stdout/stderr objects captured as program logs.
- * @returns after posting the done message.
- */
-export async function runProgram(
-  port: BootstrapPort,
-  data: ProgramBootData,
-  streams: { stdout: PatchableStream; stderr: PatchableStream },
-): Promise<void> {
-  const logs = new LogBuffer(
-    data.maxOutputBytes,
-    (text) => { port.postMessage({ type: 'log', text }) },
-    () => { port.postMessage({ type: 'output-limit' }) },
-  )
-  captureStreamWrites(logs, streams.stdout)
-  captureStreamWrites(logs, streams.stderr)
-
-  const pending = new Map<number, PendingCall>()
-  wireReplies(port, pending)
-
-  const nextId = { value: 1 }
-  const errorClasses = makeBindingErrorClasses(data)
-  const namespaces = makeNamespaces(data, port, pending, nextId, errorClasses)
-  const errorClassParameters: string[] = []
-  const errorClassValues: BindingErrorConstructor[] = []
-  for (const namespace of data.namespaces) {
-    if (!namespace.errorClass) continue
-    errorClassParameters.push(namespace.errorClass.name)
-    const errorClass = errorClasses.get(namespace.global)
-    /* v8 ignore next -- makeBindingErrorClasses covers every declaration in the same data. */
-    if (!errorClass) throw new CapturedError(`missing binding error class for ${namespace.global}`)
-    errorClassValues.push(errorClass)
-  }
-  const consoleShim = makeConsoleShim(logs)
-
-  let done: DoneMessage
-  try {
-    // The async function constructor, reached through an instance because
-    // `AsyncFunction` is not a global. The program body is strict-mode.
-    /* v8 ignore next -- the arrow exists only to reach the AsyncFunction constructor; it is never invoked. */
-    const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (...fnArgs: unknown[]) => Promise<unknown>
-    const fn = new AsyncFunction(
-      ...data.namespaces.map(namespace => namespace.global),
-      ...errorClassParameters,
-      'console',
-      `'use strict';\n${data.code}`,
-    )
-    const value = await fn(...namespaces, ...errorClassValues, consoleShim)
-    done = {
-      type: 'done',
-      ...prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes),
-    }
-  } catch (error: unknown) {
-    done = {
-      type: 'done',
-      ...prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes),
-    }
-  }
-  port.postMessage(done)
 }

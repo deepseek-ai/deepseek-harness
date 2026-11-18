@@ -82,7 +82,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 持久状态与步骤边界追加
 
-本包持久化一条仅记日志、整值替换的事件 `plan/mode`，最后一条已记录值即为状态。没有轮次开启时，模式变更会立即追加；轮次开启期间，它保持待生效，直到下一个被接受的轮内 pre-step——agent 运行时唯一的追加点——且追加失败不能阻塞轮次。`set`/`get` 服务方法及其确切返回状态见 [`src/index.ts`](src/index.ts)，并读取已注册的 `plan` 投影；注册表或 key 缺失时，第一次依赖它们的访问会显式失败。
+本包持久化一条仅记日志、整值替换的事件 `plan/mode`，最后一条已记录值即为状态。没有轮次开启时，模式变更会立即追加；轮次开启期间，它保持待生效，直到下一个被接受的轮内 pre-step——agent 运行时唯一的追加点——且追加失败不能阻塞轮次。`set`/`get` 服务方法及其确切返回状态见 [`src/index.ts`](src/index.ts)，并通过激活期间取得并保留的 `plan` 投影句柄读取状态。
 
 ### `/plan` 命令
 
@@ -90,11 +90,13 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 退出工具
 
-`exit_plan_mode` 在计划模式未激活时仍保持注册，因此进入或离开只改变提示词段落，绝不改变请求的工具目录。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道，或评审等待期间服务重载，调用都会以拒绝方式失败，`/plan off` 仍是手动退路。
+`exit_plan_mode` 采用渐进式披露：从已选计划状态首次为激活的步骤起准入，并在会话剩余部分保持准入，因此首次进入计划模式时它与指引一起出现，之后的切换只改变指引；原生与 PTC 执行使用同一准入集合。计划模式未提交时调用以 `PlanModeError` `PLAN_NOT_ACTIVE` 失败，没有前导 `#` 标题的计划在评审前以 `ToolArgsError` 失败。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道（`ToolContextUnavailableError`），或评审等待期间服务重载（`PLAN_REVIEW_INTERRUPTED`），调用都会以拒绝方式失败，`/plan off` 仍是手动退路。[`src/error.ts`](src/error.ts) 列出 `PlanModeError` 的 code。
 
 ### 会话投影单元
 
-组合了 `ctx.sessionProjections` 时，本包通过可选注入注册 `plan` 单元。该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。plan-mode 读取要求该单元与 `turnBoundary` 单元存在；注册表或任一 key 缺失时都会显式失败。
+本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配、`/plan` 命令与 `exit_plan_mode` 会以 `PlanModeError` `PLAN_STATE_UNAVAILABLE` 明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
+
+该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。状态读取使用保留的句柄，注销后仍然可用。
 
 ### 源码地图
 
@@ -102,6 +104,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`ctx.planMode` 服务、`plan:policy` 段落、`/plan` 命令、`exit_plan_mode` 工具 |
 | [`src/types.ts`](src/types.ts) | `plan` 投影 key 声明与 `PlanProjection` 协议值 |
+| [`src/error.ts`](src/error.ts) | `PlanModeError` 及其封闭 code 联合类型 |
 | [`src/client.ts`](src/client.ts) | types 出口的客户端命名空间再导出 |
 
 审批意图携带发起工具调用的标识，让 Web 客户端在审批关闭后重新打开同一份计划。完整 Markdown 保留在已有的原生调用或 PTC dispatch 日志中。
@@ -164,15 +167,15 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### 模型看到什么
 
-[`exit_plan_mode` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plan-mode) 在两种状态下均可用；在计划模式之外执行会失败，而计划模式内经批准的评审返回规范的 `{ approved: true }` 值，并渲染既有的确认文本。拒绝仍是携带评审反馈的失败调用。放弃评审返回 `{ approved: false }`，渲染一条说明用户将自行回复的文本，并结束当前轮次，不再发起模型请求。
+[`exit_plan_mode` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plan-mode) 从会话首次进入计划模式起提供；此前的调用返回 `UNKNOWN_TOOL`，离开计划模式后的调用会以计划模式之外不可用而失败。模式内获批的评审返回规范值 `{ approved: true }` 并渲染现有确认文本。拒绝仍是以 `PLAN_REVISION_REQUESTED` 失败并携带评审反馈的调用。放弃评审返回 `{ approved: false }`，渲染一条说明用户将自行回复的文本，并结束当前轮次，不再发起模型请求。
 
 #### Token 影响
 
-稳定 schema 的成本取决于 ToolRuntime 模式，每次传入的 plan 参数与评审结果都会保留在对话历史中。
+schema 从首次进入计划模式起按 ToolRuntime 模式计入开销；每份计划参数与评审结果保留在对话历史中。
 
 #### KV Cache 影响
 
-模式转换不改变工具目录；plan 参数与评审结果按常规方式扩展对话。
+首次进入计划模式时，退出工具通过路由的工具更新协议新增；`in-history` 与 `addition-only` 路由在已缓存历史之后记录这次新增，不支持工具更新的路由会重新发送一次变化后的声明列表。之后的模式切换不改变工具列表。计划参数与评审结果正常扩展对话。
 
 ## 已知限制与延期工作
 
@@ -184,7 +187,7 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 - **引导而非强制**——计划模式只通过文本约束；需要强制限制的部署要分别配置沙箱模式与审批策略。
 - **待生效选择只存在于进程内**——某轮最后一个被接受的 pre-step 之后作出的选择，若进程在另一个被接受的轮内 pre-step 之前退出就会丢失；UI 必须重新应用它。
 - **没有创建时 plan 选项**——fork 的 agent 继承已记录的计划状态，新 spawn 的 agent 则从未激活开始。
-- **存活的子级无法打开评审**——由另一个存活 agent 所有的子级调用 `exit_plan_mode` 会失败，并被要求把尚未解决的决策包含进最终结果；仅有持久化 fork 谱系并不能阻止恢复为运行时根的会话打开该评审。
+- **Subagent 无法打开评审**——来源为 subagent 的 Session 调用 `exit_plan_mode` 会失败，并被要求把尚未解决的决策包含进最终结果；历史普通 fork 即使保留父级元数据也可以打开评审。
 - **只有一个专用评审渲染器**——只有 Web UI 具备 `plan-review` 呈现；其他交互提供方通过其通用选项流程呈现同一请求。
 
 <a id="dev-note"></a>

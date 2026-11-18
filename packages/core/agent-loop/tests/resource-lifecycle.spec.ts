@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { setImmediate } from 'node:timers/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,9 +8,10 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -27,18 +29,17 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   const loop = await ctx.plugin(AgentLoop, { agents: [] })
   const failed = []
   for (let index = 0; index < failures; index++) {
-    const handle = await ctx.agents.create({ sessionId: SessionId(`failed-cleanup-${index}`) })
+    const handle = await ctx.agents.create({ sessionId: brandString<SessionId>(`failed-cleanup-${index}`) })
     const error = new Error(`teardown failure ${index}`)
     vi.spyOn(handle.agent, 'cancel').mockImplementation(() => { throw error })
     failed.push({ handle, error })
   }
   let ownerCtx!: Context
   const owner = await ctx.plugin(Object.assign((inner: Context) => { ownerCtx = inner }, { inject: ['agents'] }))
-  const { agent } = await ownerCtx.agents.create({ sessionId: SessionId('pending-cleanup') })
+  const { agent } = await ownerCtx.agents.create({ sessionId: brandString<SessionId>('pending-cleanup') })
   const aborted = Promise.withResolvers<undefined>()
   let workExited = false
   let scopeDisposedBeforeWorkExit = false
-  let projectionPresentAtWorkExit = false
   let scopeDisposed = false
   let abortHandled = 0
   const controller = new AbortController()
@@ -57,8 +58,6 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   const work = agent.runMaintenance(async (signal) => {
     signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
     await release.promise
-    projectionPresentAtWorkExit = projections.stateOf(agent.session, 'inbox') !== undefined
-      && projections.stateOf(agent.session, 'turnBoundary') !== undefined
     workExited = true
   })
   const disposal = loop.dispose()
@@ -71,11 +70,12 @@ it.each([0, 1, 2])('retains Agent resources until all work exits with %i failed 
   await Promise.all([disposal, ownerDisposal])
   for (const { handle, error } of failed) await expect(handle.dispose()).rejects.toBe(error)
   expect(scopeDisposedBeforeWorkExit).toBe(false)
-  expect(projectionPresentAtWorkExit).toBe(true)
   expect(scopeDisposed).toBe(true)
   expect(abortHandled).toBe(1)
-  expect(projections.stateOf(agent.session, 'inbox')).toBeUndefined()
-  expect(projections.stateOf(agent.session, 'turnBoundary')).toBeUndefined()
+  // The released inbox unit keeps this Session's last row; a Session created after the unload gets none.
+  expect(projections.checkpoint(agent.session)).toHaveProperty('inbox')
+  expect(projections.checkpoint(ctx.sessions.create())).not.toHaveProperty('inbox')
+  expect(projections.checkpoint(agent.session).turnBoundary).toBeDefined()
   expect(ctx.agents.get(agent.id)).toBeUndefined()
   expect(ctx.sessions.get(agent.session.id)).toBeUndefined()
 })
@@ -97,7 +97,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
   await ctx.plugin(SubagentSpawn)
   await ctx.plugin(ToolSubagent, { provider: 'spawn' })
   ctx.jobs.attachController('resource-lifecycle')
-  const parentId = SessionId('background-parent')
+  const parentId = brandString<SessionId>('background-parent')
   const childCancelObserved = Promise.withResolvers<undefined>()
   ctx.on('agent/created', ({ agent }) => {
     const cancel = agent.cancel.bind(agent)
@@ -117,9 +117,9 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
     await release.promise
     return next()
   })
-  const started = await ctx.tools.execute({
+  const started = await executeToolFixture(ctx, {
     agent: parent, signal: new AbortController().signal,
-    callId: ToolCallId('background-start'), name: 'subagent',
+    callId: brandString<ToolCallId>('background-start'), name: 'subagent',
     arguments: { description: 'child', prompt: 'wait' },
   })
   expect(started.isError).toBe(false)
@@ -157,7 +157,7 @@ it.each([false, true])('releases the Agent scope after cancel failure with scope
   await ctx.plugin(AgentLoop, { agents: [] })
   let ownerCtx!: Context
   const owner = await ctx.plugin(Object.assign((inner: Context) => { ownerCtx = inner }, { inject: ['agents'] }))
-  const handle = await ownerCtx.agents.create({ sessionId: SessionId('failed-owner-cleanup') })
+  const handle = await ownerCtx.agents.create({ sessionId: brandString<SessionId>('failed-owner-cleanup') })
   let scopeDisposed = false
   handle.agent.ctx.effect(() => () => { scopeDisposed = true })
   const failure = new Error('teardown failure')

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
+import Storage, { StorageError, storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
+import type { KvUnit, StorageBackend } from '@deepseek-ai/dsh-storage'
 import { apply, defineDomain, descriptorOf, DomainFacility, domainTable } from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import type { DomainChanged } from '../src/events.ts'
@@ -25,11 +26,11 @@ const bareSpec = defineDomain({
   tables: { rows: domainTable<string, Item>(itemSchema) },
 })
 
-/** Boot a context with the storage hub, one memory backend, and a facility over it. */
-async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Config> }) {
+/** Boot a context with the storage hub, one KV backend, and a facility over it. */
+async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Config>; backend?: StorageBackend }) {
   const ctx = new Context()
   await ctx.plugin(Storage)
-  const backend = new MemoryStorageBackend(options?.pool)
+  const backend = options?.backend ?? new MemoryStorageBackend(options?.pool)
   ctx.storage.backend.register('memory', backend)
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {}, ...options?.config })
   ctx.storage.mount('domain', facility)
@@ -131,6 +132,7 @@ describe('DomainFacility.open', () => {
           loadAll: async () => ({ tables: {}, global: null }),
           putRecord: async () => {},
           deleteRecord: async () => {},
+          deleteRecords: async () => {},
           setGlobal: async () => {},
           close: async () => {},
         }),
@@ -275,6 +277,75 @@ describe('KvTable writes', () => {
     await expect(table.delete('a')).resolves.toBe(false)
   })
 
+  it('deleteMany removes the existing keys in one write slot and reports the count', async () => {
+    const { facility, changes } = await harness()
+    const domain = await facility.open(spec)
+    const table = domain.table('items')
+    await table.put('a', { label: 'x', count: 1 })
+    await table.put('b', { label: 'y', count: 2 })
+    await table.put('c', { label: 'z', count: 3 })
+    const seen = changes.length
+    await expect(table.deleteMany(['a', 'c', 'missing', 'a'])).resolves.toBe(2)
+    expect([...table.entries()]).toEqual([['b', { label: 'y', count: 2 }]])
+    expect(changes.slice(seen)).toEqual([
+      { domain: 'demo', table: 'items', key: 'a', operation: 'deleted' },
+      { domain: 'demo', table: 'items', key: 'c', operation: 'deleted' },
+    ])
+    // A batch without existing keys is a no-op: no backend write and no event.
+    await expect(table.deleteMany(['ghost'])).resolves.toBe(0)
+    expect(changes).toHaveLength(seen + 2)
+  })
+
+  it('applies the whole batch to memory before announcing it', async () => {
+    const { ctx, facility } = await harness()
+    const domain = await facility.open(spec)
+    const table = domain.table('items')
+    await table.put('a', { label: 'x', count: 1 })
+    await table.put('b', { label: 'y', count: 2 })
+    const observed: string[][] = []
+    ctx.on('domain/changed', () => { observed.push([...table.keys()].sort()) })
+    await table.deleteMany(['a', 'b'])
+    // Every listener run sees the committed batch state, not a prefix of it.
+    expect(observed).toEqual([[], []])
+  })
+
+  it('calls the backend batch primitive exactly once per deleteMany', async () => {
+    const inner = new MemoryStorageBackend()
+    let batches = 0
+    let singles = 0
+    const counting: StorageBackend = {
+      close: () => inner.close(),
+      kv: {
+        open: async (descriptor) => {
+          const kv = inner.kv
+          if (kv === undefined) throw new Error('memory backend is missing its kv facet')
+          const unit = await kv.open(descriptor)
+          return {
+            loadAll: () => unit.loadAll(),
+            putRecord: (table, key, value) => unit.putRecord(table, key, value),
+            deleteRecord: async (table, key) => {
+              singles += 1
+              return unit.deleteRecord(table, key)
+            },
+            deleteRecords: async (table, keys) => {
+              batches += 1
+              return unit.deleteRecords(table, keys)
+            },
+            setGlobal: value => unit.setGlobal(value),
+            close: () => unit.close(),
+          }
+        },
+      },
+    }
+    const { facility } = await harness({ backend: counting })
+    const table = (await facility.open(spec)).table('items')
+    await table.put('a', { label: 'x', count: 1 })
+    await table.put('b', { label: 'y', count: 2 })
+    await expect(table.deleteMany(['a', 'b', 'missing'])).resolves.toBe(2)
+    expect(batches).toBe(1)
+    expect(singles).toBe(0)
+  })
+
   it('emits domain/changed per durable write, in order, with tombstones and global marker', async () => {
     const { facility, changes } = await harness()
     const domain = await facility.open(spec)
@@ -315,6 +386,71 @@ describe('durability failure', () => {
     // The chain survives rejections: the next write lands cleanly with no residue.
     await table.update('a', c => ({ ...c, count: c.count + 1 }))
     expect(table.get('a')).toEqual({ label: 'x', count: 2 })
+  })
+
+  it('leaves every record in place when a batch delete fails durability', async () => {
+    const pool = new MemoryMediaPool()
+    const { facility, changes } = await harness({ pool })
+    const table = (await facility.open(spec)).table('items')
+    await table.put('a', { label: 'x', count: 1 })
+    await table.put('b', { label: 'y', count: 2 })
+    const seen = changes.length
+
+    pool.failNextWrites = 1
+    await expect(table.deleteMany(['a', 'b'])).rejects.toThrow(/injected/)
+
+    expect([...table.entries()]).toEqual([
+      ['a', { label: 'x', count: 1 }],
+      ['b', { label: 'y', count: 2 }],
+    ])
+    expect(pool.media.get('demo')!.tables.get('items')!.get('b')).toEqual({ label: 'y', count: 2 })
+    expect(changes).toHaveLength(seen)
+
+    // The write chain keeps serving after a rejected batch.
+    await table.put('c', { label: 'z', count: 3 })
+    expect(table.get('c')).toEqual({ label: 'z', count: 3 })
+  })
+
+  it('quarantines the domain after a batch reports unknown-state', async () => {
+    const inner = new MemoryStorageBackend()
+    const poisoned: StorageBackend = {
+      close: () => inner.close(),
+      kv: {
+        open: async (descriptor) => {
+          const kv = inner.kv
+          if (kv === undefined) throw new Error('memory backend is missing its kv facet')
+          const unit: KvUnit = await kv.open(descriptor)
+          return {
+            loadAll: () => unit.loadAll(),
+            putRecord: (table, key, value) => unit.putRecord(table, key, value),
+            deleteRecord: (table, key) => unit.deleteRecord(table, key),
+            deleteRecords: () => Promise.reject(new StorageError('unknown-state', 'unknown-state injected by the test')),
+            setGlobal: value => unit.setGlobal(value),
+            close: () => unit.close(),
+          }
+        },
+      },
+    }
+    const { facility } = await harness({ backend: poisoned })
+    const domain = await facility.open(spec)
+    const table = domain.table('items')
+    await table.put('a', { label: 'x', count: 1 })
+
+    // A later job queued before the failure surfaces is rejected too.
+    const failing = table.deleteMany(['a'])
+    const queued = table.put('b', { label: 'y', count: 2 })
+    await expect(failing).rejects.toMatchObject({ code: 'unknown-state' })
+    await expect(queued).rejects.toMatchObject({ code: 'unknown-state' })
+    // Synchronous reads and later chain jobs see the quarantined domain.
+    expect(() => table.get('a')).toThrow(/unknown-state/)
+    expect(() => [...table.keys()]).toThrow(/unknown-state/)
+    expect(() => table.size).toThrow(/unknown-state/)
+    await expect(table.deleteMany(['missing'])).rejects.toMatchObject({ code: 'unknown-state' })
+    await expect(table.put('c', { label: 'z', count: 3 })).rejects.toMatchObject({ code: 'unknown-state' })
+    await expect(domain.global.set({ theme: 'dark' })).rejects.toMatchObject({ code: 'unknown-state' })
+    expect(() => domain.global.get()).toThrow(/unknown-state/)
+    // Releasing the domain stays possible.
+    await expect(domain.close()).resolves.toBeUndefined()
   })
 
   it('keeps serving initial when the first global set fails durability', async () => {

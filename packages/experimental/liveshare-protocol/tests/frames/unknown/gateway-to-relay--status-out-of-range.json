@@ -1,0 +1,5 @@
+{
+  "dir": "gateway->relay",
+  "note": "an answer whose status is outside the HTTP range the frame accepts",
+  "frame": { "type": "share-rpc-res", "id": 7, "status": 700 }
+}

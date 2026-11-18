@@ -1,0 +1,3 @@
+- insert:
+    - id: fixture-forge-extension
+      name: '@fixture/forge-extension'

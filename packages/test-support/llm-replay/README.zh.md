@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-llm-replay` 从已记录的 Session JSONL fixture（测试前置数据）回放模型流，让快照测试无需 API 密钥即可运行真实 agent。每个 parent 与 subagent 会话按首次调用顺序取得各自的已记录脚本，而同一会话内的调用会独立推进。`replay.override.json` 伴随文件表示持久 settlement 无法重建的分片前失败、取消、挂起与注入重试。需要以固定模型输出确定性测试真实 loop 行为时，可在 ACP（Agent Client Protocol）、headless 与 Web 浏览器场景中使用本包。
+`dsh-llm-replay` 从已记录的 Session JSONL fixture（测试前置数据）回放模型流，让快照测试无需 API 密钥即可运行真实 agent。每个 parent 与 subagent 会话按首次调用顺序取得各自的已记录脚本，而同一会话内的调用会独立推进。`replay.override.json` 伴随文件提供所选 fixture 中缺失的场景行为，包括失败、取消、挂起、重试和对保留程序的人工改写。需要以固定模型输出确定性测试真实 loop 行为时，可在 ACP（Agent Client Protocol）、headless 与 Web 浏览器场景中使用本包。
 
 ## 目录
 
@@ -78,6 +78,8 @@ parent agent 委托给进程内 subagent 的场景会为每个 Session 记录一
 当回放在带有 `ctx.deepseekLlmApiExtensions` 的组合中服务 `deepseek-official` 时，它会在选择有效脚本条目后、产生首个分片前准备并接受这些字段。这与实时适配器的 2xx 后提交点一致，因此持久接受水位与 SDK 事件通知在录制和回放中行为相同。回放提供合成 `{ messages: [] }` 基础 body：它证明接受副作用，而非准备后的字段字节。
 
 有两种失败模式无法仅根据持久 Assistant settlement 重建：任何 chunk 之前的纯 throw 没有携带异常的 stream member，而 cancel/hang 需要的是不终止语义，不能用有限前缀回放。需要这些行为的场景可提供可选伴随文件（`<scenario>/replay.override.json`）：它用裸 `ReplayEntry[]` 替换派生脚本，或用 `{ patches: [{ at, entry }] }` 增补——保留所有派生调用，只替换指定的从 0 开始计数的调用索引；当 `at` 等于派生长度时，则在注入瞬态异常后的重试位置追加。有前缀分片的 `throw` 条目会接受 DeepSeek 请求扩展；零分片 throw 默认表示 2xx 前未接受，也可设 `accepted: true` 表示 2xx 后无分片失败。`hang` 条目可以指定 `readyFile`，回放在等待取消前写入它，使外部 driver 可以确定性取消。
+
+固定在历史录制或已停用工具录制上的场景，可以用 authored override 调整程序以遵循当前执行说明，同时保留原 Session。将调整后的场景标为 `recording: authored`。普通成功脚本直接从所选 Session 派生。
 
 ### 可能出什么问题
 

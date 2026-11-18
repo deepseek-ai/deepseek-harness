@@ -3,10 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { binaryDocumentPath, DocumentPreviewRegistry } from '../src/client/document/registry.ts'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { apply } from '../src/client/excel/index.ts'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
-import { en, zh } from '../src/client/excel/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/excel/locales.ts'
 
 it('registers complete binary reads and removes the slot and locale on disposal', async () => {
   const ctx = new Context()
@@ -18,7 +18,7 @@ it('registers complete binary reads and removes the slot and locale on disposal'
   ctx.provide('documentPreviews', registry)
   ctx.provide('locale', { register: registerLocale, bind: () => makeTranslate(en) } as never)
   ctx.provide('slots', { inject: (_name: string, callback: () => () => void) => callback(), register } as never)
-  const limits = Config({}).excel
+  const limits = EXCEL_DEFAULTS
   const fiber = ctx.plugin({ apply: (scope) => { apply(scope, limits) } })
   try {
     await fiber.await()
@@ -28,7 +28,7 @@ it('registers complete binary reads and removes the slot and locale on disposal'
       expect(candidate.title()).toBe('Spreadsheet')
       expect(binaryDocumentPath(registry.getSnapshot(), path)).toBe(/\.(xlsx|xls)$/iu.test(path))
     }
-    expect(registerLocale).toHaveBeenCalledWith('sidebarExcel', { zh, en })
+    expect(registerLocale).toHaveBeenCalledWith('sidebarExcel', { zh, en, ja, es, fr, de, ru, pt })
     expect(register).toHaveBeenCalledOnce()
     expect(register.mock.calls[0]![1]).toBe(LazyExcelBody)
     const options = register.mock.calls[0]![0] as { inject: () => unknown }

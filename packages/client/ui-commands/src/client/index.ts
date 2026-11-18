@@ -18,7 +18,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { CommandUiRuntime } from './service.ts'
 import type { PopupSelectInjected } from './PopupSelectView.tsx'
 import { PopupSelectView } from './PopupSelectView.tsx'
-import { en, zh, type CommandKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type CommandKey } from './locales.ts'
 
 export { CommandUiRuntime } from './service.ts'
 export { CommandDirectory } from './directory.ts'
@@ -28,7 +28,7 @@ export type { PopupSelectDeps, PopupSpec, PopupState, TokenSegment } from './pop
 export type { PopupSelectInjected, PopupSelectViewProps } from './PopupSelectView.tsx'
 export type {
   ActionSpec, CommandContribution, CommandDecoration, CommandUiContract, CommandUiSpec, PopupSearchLabels, PopupSelectSpec,
-  SelectConfirmation, SelectOption, SelectOptionGroup, PopupSearchMode,
+  SelectConfirmation, SelectOption, SelectOptionGroup,
 } from './contract.ts'
 export type { CommandKey } from './locales.ts'
 
@@ -56,7 +56,7 @@ export const inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands',
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-commands: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-commands: dictionaries')
   ctx.plugin(CommandUiRuntime)
   ctx.inject(['slots', 'commandUi', 'sessions'], (scope: ClientContext) => {
     const command = scope.commandUi

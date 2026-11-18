@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/cordis-timer-wrappers/guide.md
+/:
+  en: a1e092dfacd2aed8
+  zh: 838448e5bf0f9d93
+/timer-wrapper-return-types-and-disposal:
+  en: 8b8de9b0fc2e3fc3
+  zh: ffa20b7ffa7540ef
+/timer-wrapper-return-types-and-disposal/change:
+  en: 3d607c2a17936a5a
+  zh: 1c90b9bce38e4186
+/timer-wrapper-return-types-and-disposal/migration:
+  en: 569f590747c713c5
+  zh: f38f7af763209b94

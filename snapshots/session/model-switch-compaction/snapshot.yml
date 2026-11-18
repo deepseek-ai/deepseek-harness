@@ -1,0 +1,12 @@
+version: 1
+scenario: model-switch-compaction
+profile: headless
+composition: model-switch-compaction
+recording: authored
+platform: posix
+header:
+  class: model-switch-compaction
+  pin: true
+  toolSchemasSource: compaction-recovery
+  changes: 1
+  promptChanges: 1

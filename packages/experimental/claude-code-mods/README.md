@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Run [Claude Code mods](https://code.claude.com/docs/en/plugins/mods/overview) inside agent runs: wrap a mod's `register(on, options)` with `defineMod`, mount it as a plugin after this bridge, and its hooks guard tool calls, rewrite prompts, add commands and tools, read session facts, and draw a band above the prompt through the same `$`, `e`, `next` chain. The bridge requires `dsh-working-directory`, and each `$` call rides a composed harness service. It is an alpha interface-compatibility demonstration: an unserved event is reported at load, an unserved `$` member fails naming the gap, and [the compatibility page](../../../docs/subsystems/claude-code-mods.md) lists every difference.
+Run [Claude Code mods](https://code.claude.com/docs/en/plugins/mods/overview) inside agent runs: wrap a mod's `register(on, options)` with `defineMod`, mount it as a plugin after this bridge, and its hooks guard tool calls, rewrite prompts, add commands and tools, read session facts, and draw a band above the prompt through the same `$`, `e`, `next` chain. The bridge requires `dsh-working-directory` and `dsh-agent`, and each `$` call rides a composed harness service. It is an alpha interface-compatibility demonstration: an unserved event is reported at load, an unserved `$` member fails naming the gap, and [the compatibility page](../../../docs/subsystems/claude-code-mods.md) lists every difference.
 
 ## Table of Contents
 
@@ -87,7 +87,7 @@ The band is one instance per session, drawn by the first mod in load order whose
 | `$.command` | `register`, `run`, `list` | `ctx.commands`, scoped to the agent whose event is running |
 | `$.tool` | `register`, `call`, `list` | `ctx.tools`; a registered tool is named `mcp__<plugin>__<tool>`; contexts a tool defers to the next request are injected into the session |
 | `$.prompt` | `submit` | `agent.followup()` as a `user`-sourced message, framed as a message from the mod unless `asUser`; the `prompt.submit` it raises carries `origin: { kind: 'plugin', name }` |
-| `$.session` | `id`, `cwd`, `root`, `model`, `turns`, `messages`, `usage`, `version` | the agent's Session and the `turnBoundary` and `contextPressure` projections; `cwd` reports the committed current directory through `ctx.workingDirectory`; `root` keeps the original project |
+| `$.session` | `id`, `cwd`, `root`, `model`, `turns`, `messages`, `usage`, `version` | the agent's Session, `agents.turnBoundaryOf()`, and optional `tokenMeter.contextPressure()`; `cwd` reports the committed current directory through `ctx.workingDirectory`; `root` keeps the original project |
 | `$.state` | `get`, `set` | memory held for the session, addressed by the `{ plugin, key }` a mod names; a read during `ui.render` subscribes the band |
 | `$.store` | `get`, `set`, `delete`, `keys` | the `claude_code_mods` storage domain, one JSON object per plugin, 4 MiB |
 | `$.clock` | `now`, `sleep`, `after`, `every` | timers owned by the session whose event scheduled them; `sleep` rejects when the event is cancelled |
@@ -118,6 +118,8 @@ A call whose service is not composed rejects with the missing service's package 
 ### The chain
 
 [`chain.ts`](src/chain.ts) runs one event through the selected hooks, outermost first, with the engine behavior at the bottom. Each hook's `next` delegates beneath once: a second call returns the first run, and a run a hook started is awaited before the hook's own answer settles. A hook that throws, times out, or settles without a result is skipped and reported once per failure kind, the result from beneath stands when it had already called `next`, and a `.catch` handler may answer in its place. The budget clock counts only the hook's own running time: it pauses inside `next` and inside every `$` call except `$.clock.sleep`. [`engine.ts`](src/engine.ts) owns the registry, per-session `$.state`, timers keyed by session and mod, and the two dispatch directions: an engine event reaches every selected hook, while a `$` call raised by one mod reaches only the mods loaded before it.
+
+The bridge cancels detached calls when its fiber begins unloading, before dependent mod disposers wait for their timer callbacks. Provider cleanup then removes registrations and drains the remaining work.
 
 ### Mapping onto the harness
 
@@ -161,7 +163,7 @@ A call whose service is not composed rejects with the missing service's package 
 
 #### What the model sees
 
-Strings a `prompt.submit` hook adds to `e.context` become text blocks after the prompt as typed, inside the human's own message; a rewritten `text` replaces the prompt's text blocks. `$.prompt.submit({ text })` queues a `user`-sourced message: the text alone with `asUser: true`, otherwise framed as below with the plugin name and the text filled in.
+Strings a `prompt.submit` hook adds to `e.context` become text blocks after the prompt as typed, inside the human's own message; a rewritten `text` replaces the prompt's text blocks. `$.prompt.submit({ text })` queues a `user`-sourced message: the text alone with `asUser: true`, otherwise framed as below with the plugin name and the text filled in. With [Auto review](../auto-review/README.md#headless-supervision), these user-sourced submissions have user instruction authority, including hook context and framed submissions without `asUser: true`.
 
 ##### Framing of a prompt a mod submits
 
@@ -182,7 +184,7 @@ Append-only: added context and submitted prompts follow the reusable request pre
 
 #### What the model sees
 
-A `{ deny: reason }` answer renders `Error: <reason>` as the tool result. A `{ result }` answer renders through the tool's own presenter when the tool is mod-registered or the value satisfies the tool's output schema, and as an error-shaped result carrying the text otherwise. A result rewritten after `next` replaces the tool's content text. A dropped prompt ends the turn as `blocked` with no model-visible message. A mod that holds a `tool.call` (Blast Radius) delays the result until a button decides; the model sees only the outcome.
+A `{ deny: reason }` answer renders `Error: <reason>` as the tool result. A `{ result }` answer renders through the tool's own presenter when the tool is mod-registered or the value satisfies the tool's output schema, and as an error-shaped result carrying the text otherwise. A deny records `ModDenied` with `MOD_DENIED`, an error-shaped answer records `ModAnswered` with `MOD_ANSWERED`, and a call to a mod-registered tool that no `tool.call` hook answers fails with `ModUnansweredError` and `MOD_UNANSWERED`. A result rewritten after `next` replaces the tool's content text. A dropped prompt ends the turn as `blocked` with no model-visible message. A mod that holds a `tool.call` (Blast Radius) delays the result until a button decides; the model sees only the outcome.
 
 #### Token effect
 
@@ -203,10 +205,10 @@ These limits describe where a Claude Code mod behaves differently through this b
 - **Unserved events** — `tool.check`, `tool.describe`, `turn.step`, the other `prompt.*` events, `command.describe`, `config.*`, `session.compact`, `session.receive`, `session.send`, `session.append`, `session.attach`, `session.detach`, `session.measure`, `agent.*`, `plugin.register`, `engine.create`, and `telemetry.*` register, never fire, and are named in a warning at load; `classic.*` names are refused at `register` like any unknown event.
 - **Unserved `$` namespaces** — `$.model`, `$.agent`, `$.config`, `$.settings`, `$.mcp`, `$.audio`, `$.telemetry`, `$.turn`, `$.ui.notice`, `$.ui.blit`, `$.ui.copy`, `$.fs.ancestors`, `$.process.spawn`, and `$.session.repo`, `send`, `append`, `authorize`, `compact`, `surfaces` reject with `no implementation`. `$.model.complete` waits on a logged side-request event so a mod's model call stays reconstructable from the Session log.
 - **`tool.call` runs after the permission decision** — Claude Code runs mod `tool.call` hooks before its permission check; here the harness `tools/pre-execute` waterfall, including approval, settles first. A hook that rewrites the arguments it passes to `next`, or names another tool, is skipped with a report (the argument case names the [pre-tool input rewrite proposal](../../../.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.md)), because the logged call runs as logged.
-- **One process, many sessions** — a mod's module-level variables and `$.env.set` writes are shared by every session and plugin in the process, where Claude Code runs one session per process; keep per-session values in `$.state`. `session.start` and `session.end` fire for root agents only.
+- **One process, many sessions** — a mod's module-level variables and `$.env.set` writes are shared by every session and plugin in the process, where Claude Code runs one session per process; keep per-session values in `$.state`. `session.start` and `session.end` fire for root Agents only. Root classification excludes Session `origin: 'subagent'` and requires the exact live instance when the Agent registry is mounted.
 - **No sandbox, no static analysis, no hot reload** — the hooks module runs in-process with Node's globals and the process's full authority (its environment, network, filesystem, and tools); the `$`-only access rule, `claude plugin validate`, type generation, `--plugin-dir` watching, and the in-session mod authoring flow are not implemented. Mount only mods you would run as a plugin. Mounting a mod again re-runs `register` on the same evaluated module, so module-level variables keep their values.
 - **`turn.complete` text** — the `{ text }` a hook returns reaches the host log, not a line under the answer; `durationMs` counts from the turn's `turn/start`.
-- **`$.session.usage`** — `window` is `0` and `percent` absent until the route's context window and a provider usage report are known through the token meter; `rateLimits` is always empty. `$.fs.stat` reports `mtimeMs: 0`.
+- **`$.session.usage`** — `window` is `0` and `percent` absent until the route's context window and a provider usage report are known through the token meter; without the token-meter service, token counts are absent and `window` is `0`. `rateLimits` is always empty. `$.fs.stat` reports `mtimeMs: 0`.
 - **`plugin.json` and `hooks.json`** — not read; `defineMod` carries the identity, and a plugin's settings hooks need `@deepseek-ai/dsh-hooks-claude-code`.
 
 <a id="dev-note"></a>

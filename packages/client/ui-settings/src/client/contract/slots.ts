@@ -12,9 +12,30 @@
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotFactoryMap {
+    /**
+     * One `settings.section` entry, rendered wherever a surface shows that
+     * page: the Settings panel and the Plugins page. Props: `id` (the entry's
+     * id) and `close` (the surface's leave action, passed to the entry).
+     * Registered by the settings shell, which therefore declares
+     * `settings.section`.
+     */
+    'settings.section.view': {
+      scope: 'root'
+      props: SettingsSectionViewProps
+      children: { 'settings.section': { kind: 'list'; scope: 'root' } }
+    }
+  }
+
   interface SlotMap {
     /** Optional sidebar account launcher; opens the shell-owned settings panel. */
     'settings.launcher': { kind: 'single'; scope: 'root'; owner: SettingsLauncherOwnerProps }
+    /**
+     * Optional content anchored above the launcher row at the launcher row's
+     * full width. The row takes no height, so the content floats over the
+     * sidebar list; the shell hides it in the rail without unmounting it.
+     */
+    'settings.notice': { kind: 'single'; scope: 'root'; owner: SettingsNoticeOwnerProps }
 
     /**
      * The sidebar-foot trigger row content: icon + label, supplied as slot
@@ -44,26 +65,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'settings.close': { kind: 'single'; scope: 'root'; owner: SettingsHeaderOwnerProps }
     /**
-     * One settings page per list entry. Registrant options carry the nav
+     * One settings page per list entry, rendered through the
+     * `settings.section.view` Factory. Settings lists every entry in its
+     * navigation; the Plugins page also shows an entry on the listed bundle row
+     * (or bundle) whose module is the registering package, when that row (or
+     * bundle) registers no configuration of its own. Registrant options carry the nav
      * identity: `id` (section key, drives `only` filtering), `order` (nav
-     * position), `label` (registrant-localized display text — the registrant
-     * re-registers with fresh text on locale change, so the shell never
-     * subscribes locale state; the ledger bump doubles as the shell's
-     * re-render trigger). Sections render inside the panel content column.
+     * position), `label` (registrant-localized display text, usually a thunk
+     * that each projection re-reads on locale change). An entry renders
+     * wherever a caller renders `settings.section.view` with its id.
      * (`settings.general.item`, declared by ui-settings-general's General
      * entry, is typed in the locale package — the common dependency of every
      * item registrant; the shell neither declares nor renders it.)
      */
     'settings.section': { kind: 'list'; scope: 'root'; owner: SettingsSectionOwnerProps }
     /**
-     * One page inside the Plugins settings section. The section owner renders
-     * localized entry labels as tabs and mounts each contribution inside its
-     * corresponding tab panel. Options: `id` (tab key), `order` (tab order),
-     * and `label` (registrant-localized tab text). Declared at runtime by the
-     * feature that owns the Plugins section; the type lives here so inventory
-     * and configuration plugins collaborate without depending on one another.
+     * Optional navigation icons addressed by the matching settings.section id.
+     * The registration id must equal the target section's id; unmatched ids
+     * never render. The icon's label option is not displayed.
+     * The shell owns the button and label and keeps its default glyph when
+     * no icon is registered for that id.
      */
-    'settings.plugins.tab': { kind: 'list'; scope: 'root'; owner: SettingsPluginsTabOwnerProps }
+    'settings.section.icon': { kind: 'list'; scope: 'root'; inline: true; owner: SettingsSectionIconOwnerProps }
     /**
      * Root-scoped onboarding steps contributed by settings features. The
      * shell mounts one ordered step at a time; the active registrant either
@@ -98,10 +121,12 @@ export interface SettingsGeneralItemOwnerProps {
   children?: never
 }
 
-/** Owner share of a Plugins tab (the section supplies nothing). */
-export interface SettingsPluginsTabOwnerProps {
-  /** Marker field: tab owner props are intentionally empty. */
-  children?: never
+/** Caller props of the `settings.section.view` Factory. */
+export interface SettingsSectionViewProps {
+  /** The `settings.section` entry id to render. */
+  id: string
+  /** The rendering surface's leave action. */
+  close: () => void
 }
 
 /** Owner share of the trigger content seat: the sidebar column state. */
@@ -124,8 +149,16 @@ export interface SettingsHeaderOwnerProps {
  * onboarding coordinator's `openSection`/`complete` precedent, inverted.
  */
 export interface SettingsSectionOwnerProps {
-  /** Close the settings panel (the shell owns the open state). */
+  /** Leave the page: close the settings panel, or on the Plugins page return to the view the page was opened from. */
   close: () => void
+}
+
+/** Icon presentation supplied by the settings navigation row. */
+export interface SettingsSectionIconOwnerProps {
+  /** Requested square edge in pixels. */
+  size: number
+  /** Whether this section is selected. */
+  active: boolean
 }
 
 /** Owner share of the currently active settings-backed onboarding step. */
@@ -140,6 +173,12 @@ export interface SettingsOnboardingOwnerProps {
   openSection: (id: string) => void
 }
 
+/** Settings navigation for the row above the launcher row. */
+export interface SettingsNoticeOwnerProps {
+  /** @param sectionId - section to open; absent uses the shell's default section. */
+  openSettings: (sectionId?: string) => void
+}
+
 /** Sidebar launcher geometry and settings navigation. */
 export interface SettingsLauncherOwnerProps {
   /** Whether the sidebar shows labels. */
@@ -148,8 +187,8 @@ export interface SettingsLauncherOwnerProps {
   settingsOpen: boolean
   /** Effective Settings key labels and accessible combination; omitted when unbound. */
   settingsShortcut?: { readonly keys: readonly string[]; readonly aria?: string | undefined }
-  /** Open the settings panel. */
-  openSettings: () => void
+  /** @param sectionId - section to open; absent uses the shell's default section. */
+  openSettings: (sectionId?: string) => void
   /** @param id - registered onboarding editor to open explicitly. */
   openOnboarding: (id: string) => void
 }

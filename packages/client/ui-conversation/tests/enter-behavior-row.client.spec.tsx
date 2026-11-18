@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { EnterBehaviorRow } from '../src/client/settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowProps } from '../src/client/settings/EnterBehaviorRow.tsx'
@@ -47,6 +48,7 @@ function mount() {
     useResource,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useBusyEnter: bindSnapshotSelector(policy.busyEnter),
     setBusyEnter,
     t: makeTranslate(en),

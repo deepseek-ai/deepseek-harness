@@ -39,6 +39,9 @@
       "path": "../../session/session-persistence-jsonl"
     },
     {
+      "path": "../../session/session-title"
+    },
+    {
       "path": "../../api/session-controller/tsconfig.host.json"
     },
     {
@@ -46,6 +49,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/time"
     },
     {
       "path": "../../workspace/workspace"

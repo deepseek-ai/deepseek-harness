@@ -13,8 +13,7 @@ const base = '@deepseek-ai/dsh-base'
 const core = '@deepseek-ai/dsh-core'
 const candidate = '@deepseek-ai/dsh-candidate'
 const candidateDir = 'packages/core/candidate'
-const profile = 'packages/boot/app-boot/src/profile.ts'
-const catalog = 'packages/boot/app-boot/src/official-bundle-packages.ts'
+const profile = 'packages/util/official-bundles/src/bundles.ts'
 const patch = 'packages/bundle/base/cordis.patch.yml'
 
 function pkg(root: string, directory: string, name: string, fields: Record<string, unknown> = {}): void {
@@ -29,10 +28,10 @@ function pkg(root: string, directory: string, name: string, fields: Record<strin
 }
 
 function profiles(root: string, optional: string[] = [], onDemand: string[] = []): void {
-  write(root, catalog, `export const ON_DEMAND_BUNDLES = ${JSON.stringify(onDemand)}\n`)
   write(root, profile, `export const PROFILE_TEMPLATES = ${JSON.stringify(Object.fromEntries(
     ['web', 'acp', 'headless', 'sdk', 'sdk-minimal'].map(name => [name, { bundles: [base] }]),
-  ))}\nexport const DEFAULT_PROFILE_BUNDLES = ['${base}']\nexport const OPTIONAL_BUNDLES = ${JSON.stringify(optional)}\n`)
+  ))}\nexport const DEFAULT_PROFILE_BUNDLES = ['${base}']\nexport const OPTIONAL_BUNDLES = ${JSON.stringify(optional)}\n`
+    + `export const ON_DEMAND_BUNDLES = ${JSON.stringify(onDemand)}\n`)
 }
 
 function fixture(): string {
@@ -142,7 +141,7 @@ describe('product package use', () => {
     const root = fixture()
     pkg(root, candidateDir, candidate)
     const children = [{ name: candidate }]
-    if (!initial) write(root, 'packages/boot/app-boot/src/included.yml', children)
+    if (!initial) write(root, 'packages/util/official-bundles/src/included.yml', children)
     write(root, patch, [{ insert: [{ name: core }, {
       name: 'cordis:include', disabled: true, config: { path: './included.yml', ...(initial ? { initial: children } : {}) },
     }] }])
@@ -162,12 +161,12 @@ describe('product package use', () => {
   it('applies Include patches before collecting runtime mounts and uses files ahead of initial entries', () => {
     const root = fixture()
     pkg(root, candidateDir, candidate)
-    write(root, 'packages/boot/app-boot/src/included.yml', [{ id: 'child', name: candidate }])
+    write(root, 'packages/util/official-bundles/src/included.yml', [{ id: 'child', name: candidate }])
     write(root, patch, [{ insert: [{ name: core }, { name: 'cordis:include', config: {
       path: './included.yml', initial: [{ name: candidate }], patches: [{ id: 'child', disabled: true }],
     } }] }])
     expect(failures(root)).toContain('no product runtime use')
-    write(root, 'packages/boot/app-boot/src/included.yml', [])
+    write(root, 'packages/util/official-bundles/src/included.yml', [])
     expect(failures(root)).toContain('no product runtime use')
   })
 

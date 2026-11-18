@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-08-mcp-on-demand-tool-loading.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-08-mcp-on-demand-tool-loading.md
+/agent-note-on-demand-mcp-tool-loading:
+  en: f3ae8820249277c7
+  zh: e93dfdb03fbf1788
+/agent-note-on-demand-mcp-tool-loading/problem:
+  en: 8b6051ee3006e42d
+  zh: b54399f1a65c6751
+/agent-note-on-demand-mcp-tool-loading/decision:
+  en: d6ad94daf6a36798
+  zh: c243547d88d752be
+/agent-note-on-demand-mcp-tool-loading/alternatives-considered:
+  en: eb073fc5dfd6692d
+  zh: 51e842eae3fe7c61
+/agent-note-on-demand-mcp-tool-loading/testing:
+  en: 22966b6f3a05d7bd
+  zh: 1bf76080026d447f
+/agent-note-on-demand-mcp-tool-loading/consequences:
+  en: 2a4e348e3e43fe78
+  zh: c7fdb56494f2bef3

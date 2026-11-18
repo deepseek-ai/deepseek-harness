@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Anbieter von Stdio-Sprachservern",
+    "description": "Stellen Sie über Unterprozesse und JSON-RPC eine Verbindung zu Sprachservern her, öffnen Sie Dateien nach Bedarf und führen Sie Codeabfragen aus."
+  }
+}

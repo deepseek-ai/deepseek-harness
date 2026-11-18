@@ -14,7 +14,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ComposerBlock } from './composer-blocks.ts'
 import type { DraftAttachmentId, InputActions, InputNotice, InputState } from './input.ts'
@@ -25,10 +25,21 @@ import type { ConversationSnapshot } from './snapshot.ts'
 import type { ViewTab } from './views.ts'
 import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode } from './user-text.ts'
 
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    /** Session Header More menu, independent of Session-row and title context actions. */
+    sessionHeader: { readonly sessionId: SessionId }
+  }
+}
+
 /** Browser-owned draft attachment that has not crossed the durable Host boundary. */
 export type ComposerAttachment = ComposerImageAttachment | ComposerFileAttachment
 
-/** Browser-owned image, base64-encoded into the prompt at send time. */
+/**
+ * Browser-owned image. An ordinary Session's draft uploads it to the Host as
+ * soon as it is added, and the prompt cites the receipt; a subagent
+ * continuation's draft base64-encodes it into the prompt at send time.
+ */
 export interface ComposerImageAttachment {
   kind: 'image'
   id: DraftAttachmentId
@@ -47,11 +58,17 @@ export interface ComposerFileAttachment {
   file: File
 }
 
-/** Upload lifecycle of one picked file draft (files upload on pick, not on send). */
+/**
+ * Upload lifecycle of one draft that uploads when it is added, not on send:
+ * every file draft, and every image draft of an ordinary Session. A failed
+ * upload the Host refused keeps the attachment refusal `reason`, because
+ * retrying the same bytes cannot succeed.
+ */
 export type DraftFileUpload =
   | { readonly status: 'uploading'; readonly loaded: number; readonly total?: number }
   | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId; readonly file: FileAttachmentRef }
-  | { readonly status: 'error'; readonly message: string }
+  | { readonly status: 'ready'; readonly receiptId: FileUploadReceiptId }
+  | { readonly status: 'error'; readonly message: string; readonly reason?: string }
 
 /** Per-draft upload states keyed by draft attachment id. */
 export type DraftFileUploads = Readonly<Record<string, DraftFileUpload>>
@@ -74,6 +91,13 @@ export interface ComposerAttachmentsOwnerProps {
   uploads: DraftFileUploads
   /** Restart one failed file upload. */
   onRetryFile: (id: DraftAttachmentId) => void
+  /**
+   * Explain one upload the Host refused; such a draft cannot be retried and
+   * stays until it is removed.
+   * @param reason - the refusal `reason` the failed upload carries.
+   * @returns localized text naming the limit or the way out.
+   */
+  uploadFailureText: (reason: string) => string
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
 }
@@ -109,7 +133,7 @@ export type MessageImageLoader = ((attachment: ImageAttachmentRef) => Promise<st
 export interface MessageImagesOwnerProps {
   /** Durable references or submission-echo previews in source order. */
   images: readonly MessageImageSource[]
-  /** Session-authorized image URL loader for the durable arm. */
+  /** Gateway-authorized image URL loader for the durable arm. */
   loadImage: MessageImageLoader
   /** Horizontal placement inside the owning record. */
   align: 'start' | 'end'
@@ -187,6 +211,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.images.content': {
       scope: 'root'
       props: MessageImagesContentInput
+      inject: { readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions }
       locale: 'conversation'
     }
   }
@@ -219,13 +244,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         hideChrome: boolean
       }
     }
-    /** Optional replacement for one Session breadcrumb title. */
+    /** Optional replacement for one Session breadcrumb title; overlays must portal because the title area clips overflow. */
     'conversation.session.header.lineage': {
       kind: 'single'
       scope: 'session'
       owner: ConversationHeaderLineageOwnerProps
     }
-    /** Title-adjacent Session actions in ascending order. */
+    /** Title-adjacent Session actions in ascending order; overflow is clipped and faded before the utilities, so overlays must portal. */
     'conversation.session.header.actions': {
       kind: 'list'
       scope: 'session'
@@ -254,46 +279,85 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderCornerOwnerProps
     }
+    /** Rows of the View tab row's More menu; the header shows More only while this list has registrations. */
+    'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
     'conversation.view': { kind: 'list'; scope: 'session'; owner: ConvViewOwnerProps }
-    /** Selector-routed replacements for the current Session's resident composer. */
+    /**
+     * Selector-routed replacements for the current Session's resident composer; fixed overlays must
+     * portal to the document body because the docked composer contains them.
+     */
     'conversation.composer': { kind: 'chain'; scope: 'session'; owner: ComposerChainProps }
     /** Workspace picker shown by the blank-session Hero. */
     'conversation.hero.workspace': { kind: 'single'; scope: 'root'; owner: EmptyWorkspaceOwnerProps }
+    /** Layers wrapping the Conversation scroll body; `hero` reports a blank, standalone home. */
+    'conversation.hero.frame': { kind: 'hoc'; scope: 'root'; owner: HeroFrameOwnerProps }
     /** Brand mark shown before the blank-session headline. */
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
     /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
     'conversation.hero.options': { kind: 'list'; scope: 'session' }
-    /** Full-width entries above the composer card. */
+    /**
+     * Full-width entries above the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
-    /** Floating entries rendered inside the resident composer card. */
+    /**
+     * Floating entries rendered inside the resident composer card; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.input.overlay': { kind: 'list'; scope: 'session' }
-    /** Ambient entries below the composer card. */
+    /**
+     * Ambient entries below the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.composer.dock': { kind: 'list'; scope: 'session' }
-    /** Compact controls at the left of the composer tool row. */
+    /**
+     * Compact controls at the left of the composer tool row; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.left': { kind: 'list'; scope: 'session' }
-    /** Compact controls before the composer submit action. */
+    /**
+     * Compact controls before the composer submit action; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.right': { kind: 'list'; scope: 'session' }
-    /** Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action. */
+    /**
+     * Compact action after the model selector; it can expand across the toolbar while retaining the
+     * editor and submit action, and fixed overlays must portal to the document body because the
+     * docked composer contains them.
+     */
     'conversation.input.activity': { kind: 'single'; scope: 'session'; owner: InputActivityOwnerProps }
-    /** Resident composer body, including the no-Session inert state. */
+    /**
+     * Resident composer body, including the no-Session inert state; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe'; owner: ComposerBarOwnerProps }
-    /** Optional draft-attachment rail and drop target. */
+    /**
+     * Optional draft-attachment rail and drop target; fixed overlays must portal to the document
+     * body because the docked composer contains them.
+     */
     'conversation.input.attachments': {
       kind: 'single'
       scope: 'session-maybe'
       owner: ComposerAttachmentsOwnerProps
     }
-    /** Plan control inside the composer tool row. */
+    /**
+     * Plan control inside the composer tool row; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.plan': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
-    /** Current-session permission control inside the composer tool row. */
+    /**
+     * Current-session permission control inside the composer tool row; fixed overlays must portal
+     * to the document body because the docked composer contains them.
+     */
     'conversation.input.permission': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
     /**
      * Model selector inside the composer tool row. When expanded controls cannot
      * share a line, the row sets --dsh-composer-model-text-display to none and
      * --dsh-composer-model-icon-display to block for an occupant's compact display.
+     * Fixed overlays must portal to the document body because the docked composer contains them.
      */
     'conversation.input.model': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
   }
@@ -308,6 +372,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.composer': { kind: 'chain'; scope: 'session' }
         'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
         'conversation.input.dock': { kind: 'list'; scope: 'session' }
+        'conversation.hero.frame': { kind: 'hoc'; scope: 'root' }
         'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
@@ -422,10 +487,54 @@ export interface ConversationSessionInjected {
   openView: (view: string, focus: string) => void
 }
 
+/** One customizable View tab listed in the More menu. */
+export interface ConversationViewActionEntry {
+  /** View id. */
+  readonly id: string
+  /** Resolved View label. */
+  readonly label: string
+  /** False while the View is manually unpinned. A pinned View still enters More when the header's width budget cannot hold it. */
+  readonly pinned: boolean
+  /** Whether this View is selected in this Session, independently of its pin state. */
+  readonly active?: boolean
+}
+
+/** Owner share of the View tab row's More menu rows. */
+export interface ConversationViewActionsOwnerProps {
+  /** Views outside the header in registration order. */
+  readonly entries: readonly ConversationViewActionEntry[]
+  /**
+   * Select a View in this Session without changing its pin state.
+   * @param id - Listed View id.
+   */
+  readonly onOpen: (id: string) => void
+  /**
+   * Pin or unpin a View in every Session.
+   * @param id - Listed View id.
+   * @param pinned - Whether the View is manually pinned; the width budget can still fold it into More.
+   */
+  readonly onPinnedChange: (id: string, pinned: boolean) => void
+  /** Close the More menu. */
+  readonly onDismiss: () => void
+}
+
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
+  /** Open the clicked title's actions. */
   /** Package-owned View roster source bound only for the Conversation header. */
-  readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
+  readonly hooks: {
+    readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
+    /** Ids of unpinned View tabs held in memory and shared by every Session until plugin reload. */
+    readonly entryPins: ObservableSnapshot<readonly string[]>
+    /** Whether `conversation.session.header.views.actions` has registrations. */
+    readonly entryActions: ObservableSnapshot<boolean>
+  }
+  /**
+   * Pin or unpin one View tab in every Session; Chat is ignored.
+   * @param id - View id.
+   * @param pinned - Whether the View is manually pinned; the width budget can still fold it into More.
+   */
+  setPinned: (id: string, pinned: boolean) => void
   /** Select a Session through the Session Controller. */
   open: (sessionId: SessionId) => void
   /** Select and activate one registered Conversation View. */
@@ -436,6 +545,8 @@ export interface ConversationSessionHeaderInjected {
 export interface ComposerBarOwnerProps {
   /** Hero uses centered placement; composer uses the active bottom placement. */
   variant: 'hero' | 'composer'
+  /** Conversation content occurrence rendering this composer; an unaddressed document paste reaches the main one. */
+  occurrence: ConversationContentInputProps['variant']
   /** A feature-owned reason that makes message input inert while leaving model selection live. */
   blocked?: { readonly reason: string }
   /** Lock all message actions while preserving the resident composer surface. */
@@ -449,8 +560,33 @@ export interface ComposerBarOwnerProps {
   accessory?: ReactNode
 }
 
+/** One composer's entry in the document-level paste route. */
+export interface ComposerFileIntakeTarget {
+  /** Composer card containing every control of this composer. */
+  readonly card: HTMLElement
+  /** Conversation content occurrence rendering the composer. */
+  readonly occurrence: ConversationContentInputProps['variant']
+  /** Whether a routed paste may enter now; a refusing composer is skipped, and when no composer accepts the browser keeps the event. */
+  readonly accepts: () => boolean
+  /**
+   * Add one routed paste through the composer's intake validation.
+   * @param files - pasted browser files in clipboard order.
+   * @param directories - members of `files` the clipboard entry API identified as directories.
+   */
+  readonly add: (files: readonly File[], directories?: ReadonlySet<File>) => void
+}
+
+/**
+ * Join the document-level paste route shared by every composer of the plugin instance.
+ * @param target - the registering composer.
+ * @returns the disposer leaving the route; the last disposer removes the route's document listeners.
+ */
+export type ComposerFileIntake = (target: ComposerFileIntakeTarget) => () => void
+
 /** Package-private operations injected into the resident composer bar. */
 export interface ComposerBarInjected {
+  /** Document paste routing across mounted composers. */
+  registerFileIntake: ComposerFileIntake
   keyboard: ComposerKeyboard | undefined
   /**
    * Register one picked batch; resolves to the rejection copy or null. Where
@@ -466,6 +602,11 @@ export interface ComposerBarInjected {
   retryFileUpload: ((id: DraftAttachmentId) => void) | undefined
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
+  /**
+   * Submit empty input to retry the displayed failed generation.
+   * @param failureSeq - sequence of the displayed failed turn/end.
+   */
+  retry: ((failureSeq: SessionSeq) => void) | undefined
   hooks: {
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>
@@ -474,7 +615,7 @@ export interface ComposerBarInjected {
      * and the primary Send button use while the addressed agent is busy.
      */
     busyEnter: ObservableSnapshot<BusyEnterBehavior>
-    /** Live per-draft upload states for file-kind drafts. */
+    /** Live per-draft upload states for drafts that upload when added. */
     fileUploads: ObservableSnapshot<DraftFileUploads>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
@@ -517,7 +658,13 @@ export interface ComposerChainProps {
   pendingInteraction: SessionPendingInteraction | undefined
 }
 
-/** Presentation props supplied to the blank-session brand mark. */
+/** Conversation state exposed to scroll-body frame layers. */
+export interface HeroFrameOwnerProps {
+  /** Whether the body shows the blank home of a standalone, non-embedded Conversation. */
+  hero: boolean
+}
+
+/** Brand-mark presentation selected by the blank home. */
 export interface HeroBrandMarkOwnerProps {
   /** Requested square edge in pixels. */
   size: number
@@ -574,11 +721,13 @@ export type ConversationHeaderProps =
 /** Full props of the strict Session header. */
 export type ConversationSessionHeaderSlotProps =
   PropsRuntime<'conversation.session.header'>
+  & PropsRenderFactories
   & PropsRenderSlots<
     'conversation.session.header.lineage'
     | 'conversation.session.header.actions'
     | 'conversation.session.header.utilities'
     | 'conversation.session.header.corner'
+    | 'conversation.session.header.views.actions'
   >
   & PropsStore<ConversationStore>
   & InjectFace<ConversationSessionHeaderInjected>

@@ -1,13 +1,8 @@
 import { defineProperty, hyphenate } from '@deepseek-ai/cosmokit'
 import { Context } from './context.ts'
 import { Fiber } from './fiber.ts'
+import { Service } from './service.ts'
 import { createCallable, joinPrototype, symbols, type Tracker } from './utils.ts'
-
-declare module './context.ts' {
-  interface Intercept {
-    logger: LoggerService.Intercept
-  }
-}
 
 /** Logger method name and severity category. */
 export type LoggerType = 'error' | 'info' | 'warn' | 'debug'
@@ -21,8 +16,8 @@ export type Formatter = (value: any, exporter: Exporter, message: Message) => an
 /** Numeric severity used when exporters decide whether to emit a message. */
 export const enum LoggerLevel {
   ERROR = 0,
-  INFO = 1,
-  WARN = 2,
+  WARN = 1,
+  INFO = 2,
   DEBUG = 3,
 }
 
@@ -143,7 +138,9 @@ export class Logger {
       if (args.length === 1 && args[0] instanceof Error) {
         if (args[0].cause) {
           this[type](args[0].cause)
-        } else if (isAggregateError(args[0])) {
+        } else if (isAggregateError(args[0]) && args[0].errors.length) {
+          // An aggregate with no members has nothing to flatten; it is logged
+          // as itself, like any other error.
           args[0].errors.forEach(error => this[type](error))
           return
         }
@@ -192,6 +189,8 @@ export interface LoggerService extends Record<LoggerType, LoggerMethod> {
  * directly to log with the current fiber-derived name.
  */
 export class LoggerService {
+  declare [symbols.metadata]: LoggerService.Intercept
+
   bufferSize = 1000
   buffer: Message[] = []
   ctx!: Context
@@ -214,8 +213,12 @@ export class LoggerService {
       colors: 3,
       export: (message) => {
         self.buffer.push(message)
-        if (self.buffer.length > self.bufferSize) {
-          self.buffer = self.buffer.slice(-self.bufferSize)
+        // for better performance
+        const overflow = self.buffer.length - self.bufferSize
+        if (overflow === 1) {
+          self.buffer.shift()
+        } else if (overflow > 1) {
+          self.buffer.splice(0, overflow)
         }
       },
     })
@@ -237,21 +240,10 @@ export class LoggerService {
     }, 'ctx.logger.exporter()')
   }
 
-  private _resolveConfig(): LoggerService.Intercept {
-    let intercept = this.ctx[symbols.intercept]
-    const configs: LoggerService.Intercept[] = []
-    while ('logger' in intercept) {
-      if (Object.hasOwn(intercept, 'logger')) {
-        configs.unshift(intercept['logger'])
-      }
-      intercept = Object.getPrototypeOf(intercept)
-    }
-    return Object.assign({}, ...configs)
-  }
-
   [symbols.invoke](name?: string): Logger {
-    const config = this._resolveConfig()
-    const fiber = ((this.ctx as any)[symbols.shadow] ?? this.ctx).fiber
+    const caller = (this as any)[symbols.caller] as Context | undefined
+    const config: LoggerService.Intercept = Service.prototype[Service.resolveIntercept].call(this)
+    const fiber = (caller ?? this.ctx).fiber
     name ??= config.name
     name ??= hyphenate(fiber.name)
     return new Logger({

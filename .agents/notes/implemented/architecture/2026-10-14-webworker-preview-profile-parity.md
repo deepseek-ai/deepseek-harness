@@ -23,7 +23,7 @@ Measured: with no bundle enabled, the two compositions differ in only one of 188
 The served launch path (apps/cli, app-boot) carries no Preview-specific code; the webworker packages reproduce it:
 
 - **packer**
-  - Package roster = `PROFILE_TEMPLATES[profile].bundles` + `OPTIONAL_BUNDLES` + the rows named in those bundles' patch files; the bundle packages themselves also enter the image (patches, locale, and icon through the publish view). Both tables are read from app-boot, the same source the Plugins page uses.
+  - Package roster = `PROFILE_TEMPLATES[profile].bundles` + `OPTIONAL_BUNDLES` + the rows named in those bundles' patch files; the bundle packages themselves also enter the image (patches, locale, and icon through the publish view). Both tables are read from `@deepseek-ai/dsh-official-bundles`, the same source the Plugins page uses.
   - The image carries a manifest-only `node_modules/@deepseek-ai/dsh/package.json` (a verbatim copy of `apps/cli/package.json`) as the installation anchor, and the image manifest names it in `installation`.
   - The image carries no composed configuration and no `config/cordis.yml`; the image manifest records the `profile` the Worker boots.
   - The image carries a home patch, `home/cordis.patch.yml`: for each row the runtime's `PLATFORM_ENTRY_CONFIG` names (`session-persistence-jsonl`), the config the template's bundle layers compose with the required fields over it (`compression: none`). A patch replaces a row's whole config, so the composed fields stay; the bundle files read at pack time are the ones in the image.
@@ -61,7 +61,7 @@ The Worker's structural stubs throw errors carrying `ERR_FEATURE_UNAVAILABLE_ON_
 ### Watching and Client plugin delivery
 
 - Worker `fs.watch` and `fs.watchFile` listeners run in the async context where the watcher was created, as Node delivers watch events from the watch handle, not in the context of the code whose write produced the event. HMR's configuration watcher therefore runs outside the writer's HMR transaction, and a configuration write made inside a transaction does not make the follow-up reload fail as a nested transaction.
-- The browser half of `@deepseek-ai/dsh-client-hmr` reads `/plugins/events` through the page's `__DSH_TRANSPORT__.fetch` when a shell provides one (the Worker preview tunnel), otherwise through `EventSource`. The Client plugins of a bundle enabled in the Preview therefore mount without a page reload.
+- The browser half of `@deepseek-ai/dsh-client-hmr` follows the `pluginEvents/follow` Remote stream over the Remote carrier the page's Connection provides, including the Worker preview tunnel. The Client plugins of a bundle enabled in the Preview therefore mount without a page reload.
 
 ## Alternatives considered
 
@@ -81,7 +81,7 @@ The Worker's structural stubs throw errors carrying `ERR_FEATURE_UNAVAILABLE_ON_
 
 ## Consequences
 
-The Preview boots the composition the served Web deployment boots. With no bundle enabled, the Worker composition differs from the served Web composition only by the jsonl platform override, and enabling any bundle skips no patch. The Plugins page and Settings → Built-in plugins list every `OPTIONAL_BUNDLES` entry with its title and icon and no metadata error. Switching each of the 11 optional bundles on and then off returns `applied` both times; after enabling, every enabled row it changes is active, and after disabling, the plugin list returns to its prior rows. Enabling session-titles disables `@deepseek-ai/dsh-session-title-first-prompt-llm` (row `session-title-llm`) and enables `@deepseek-ai/dsh-session-title-all-prompts-llm`, as in the served Web deployment; enabling inspector-profile runs Session Inspector and starts the NodeJS Inspector degraded. Degradation requires `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`, so a served `dsh web` runs the full Inspector.
+The Preview boots the composition the served Web deployment boots. With no bundle enabled, the Worker composition differs from the served Web composition only by the jsonl platform override, and enabling any bundle skips no patch. The Plugins page lists every `OPTIONAL_BUNDLES` entry with its title and icon and no metadata error. Switching each of the 11 optional bundles on and then off returns `applied` both times; after enabling, every enabled row it changes is active, and after disabling, the plugin list returns to its prior rows. Enabling session-titles disables `@deepseek-ai/dsh-session-title-first-prompt-llm` (row `session-title-llm`) and enables `@deepseek-ai/dsh-session-title-all-prompts-llm`, as in the served Web deployment; enabling inspector-profile runs Session Inspector and starts the NodeJS Inspector degraded. Degradation requires `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`, so a served `dsh web` runs the full Inspector.
 
 Size (MiB, measured): the base image is 9.20 (12.79 with pack-time composition and eager chunks, −28%) including 11 optional bundles, plus 5 lazy tar archives totaling 4.45 (pdf 2.88, excel 1.39, terminal 0.13, frontmatter 0.05, Inspector bottom panel 0.00). The base image contains no lazily loaded chunk, and the page fetches an archive only when it requests the chunk.
 

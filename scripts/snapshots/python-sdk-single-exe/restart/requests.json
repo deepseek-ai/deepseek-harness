@@ -12,20 +12,18 @@
           },
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n</system-reminder>"
           }
         ]
       }
     ],
     "toolNames": [
-      "cordis_inspect_list",
-      "cordis_inspect_query",
+      "cordis_inspect",
       "job_kill",
       "job_list",
       "job_output",
       "subagent",
-      "workflow",
-      "working_directory"
+      "workflow"
     ]
   },
   {
@@ -41,20 +39,18 @@
           },
           {
             "type": "text",
-            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+            "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n</system-reminder>"
           }
         ]
       }
     ],
     "toolNames": [
-      "cordis_inspect_list",
-      "cordis_inspect_query",
+      "cordis_inspect",
       "job_kill",
       "job_list",
       "job_output",
       "subagent",
-      "workflow",
-      "working_directory"
+      "workflow"
     ]
   }
 ]

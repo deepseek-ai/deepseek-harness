@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /** Document extension registration and dispatch through the production Sidebar and Slot renderer. */
+import { contextMenuHook, syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { byteResult } from './fixtures.client.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +39,12 @@ afterEach(async () => {
 
 async function boot() {
   const rt = await SlotTestRuntime.create()
+  rt.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   runtime = rt
+  rt.ctx.provide('contextMenus', { register: () => () => {}, open: vi.fn(), active: createSnapshotStore(null) } as never)
+  rt.slots.provideRoot({ props: {
+    useContextMenu: contextMenuHook((target, point) => { rt.ctx.contextMenus.open(target, point) }),
+  } })
   rt.ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   rt.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn(), panelInfo: rt.panelInfo } as never)
   rt.ctx.provide('shortcuts', { register: () => () => {}, catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} } } as never)
@@ -50,7 +56,7 @@ async function boot() {
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await rt.sessions.add({ id: SESSION })
-  await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView' }).ready
+  await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView', facets: { conversation: true } }).ready
   await rt.mount({ inject: [...resourcesInject], apply: resourcesApply })
   const read = vi.fn<WorkspaceFilesReadRemote['workspaceFiles']['read']>().mockImplementation(async (_sessionId, _path, range) => ({
     ok: true,
@@ -65,7 +71,7 @@ async function boot() {
     },
   }))
   await rt.mount({ inject: [...sidebarInject], apply: sidebarApply })
-  await rt.mount({ inject: [...inject], apply })
+  await rt.mount({ inject: [...inject], apply }, syncedConfig({}))
   const view = rt.renderSlot('rightbar', { width: 600, viewportWidth: 1440, canShow: true })
   const open = (name: string): void => {
     act(() => { rt.ctx.sidebarRight.openResource('dsh-resource://file/session/documents/' + name) })

@@ -4,7 +4,9 @@ import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime, { createUserMessage, INVALID_CREDENTIAL_CODE } from '@deepseek-ai/dsh-llm'
-import AttachmentStore, { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import AttachmentStore from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
@@ -17,6 +19,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -30,7 +33,7 @@ declare module '@deepseek-ai/dsh-llm' {
 const configurations = new WeakMap<Context, Awaited<ReturnType<typeof liveConfig>>>()
 const KEY_REF = credentialRef('DEEPSEEK_API_KEY')
 const IMAGE_REF: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png',
   bytes: 3,
   width: 1,
@@ -81,7 +84,7 @@ class StaticAttachmentStore extends AttachmentStore {
     _signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     return Promise.resolve({
-      variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`),
+      variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`),
       attachment: ref,
       data: Uint8Array.of(1, 2, 3),
       mediaType: ref.mediaType,
@@ -128,6 +131,7 @@ async function boot(dir: string, config: object): Promise<Harness> {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(StaticAttachmentStore)
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
+  await ctx.plugin(DeepSeekAuth)
   configurations.set(ctx, await liveConfig(ctx, LlmDeepSeek, config))
   return { ctx }
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Proteção de edição de arquivos",
+    "description": "Peça à IA para ler o arquivo antes de editá-lo e reconfirme o conteúdo se o arquivo for alterado."
+  }
+}

@@ -7,12 +7,11 @@ import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { finalAssistantOutput } from './assistant-output.ts'
 import { epochStopReason } from './lifecycle.ts'
-import type { ActivationObserver } from './lifecycle.ts'
 import { SubagentError } from './error.ts'
 import type { StructuredAttachment } from './structured.ts'
-import type { SubagentResult, SubagentRun } from './types.ts'
+import type { SubagentResult, SubagentRun, SubagentRunId } from './types.ts'
 
-/** Process-local slots shared through uninterrupted continuable parent links. */
+/** Process-local capacity shared by every member of a subagent tree. */
 export class ActivationPool {
   private readonly slots = new Set<symbol>()
 
@@ -40,37 +39,30 @@ export class ActivationPool {
  * The manager owns admission, execution handles, and resource release.
  */
 interface ActivationBase {
-  /** Shared capacity for this Activation and all its managed descendants. */
-  readonly pool: ActivationPool
   /** Return this epoch's slot after its handle has finished disposal. */
   readonly releaseSlot: () => void
   /** The durable child this Activation is an epoch of. */
   readonly childId: SessionId
-  readonly parent: Agent
+  /** Unique identity shared by this residency epoch's start/end event pair. */
+  readonly runId: SubagentRunId
+  /** Provider recorded at creation, retained across cold resumes. */
+  readonly provider: string
+  /** Exact live subagent tree root owning this instance and its shared capacity. */
+  readonly root: Agent
+  /** Verified creation ancestors, from subagent tree root to direct creator. */
+  readonly ancestors: readonly SessionId[]
+  /** Slash-separated names from the root; undefined when this child or a creator below the root has no name. */
+  readonly path: string | undefined
   readonly delivery: 'parent' | 'caller'
   readonly result: PromiseWithResolvers<SubagentResult>
   /** Published synchronously before teardown; subsequent callers share this transaction. */
   closing: Promise<void> | undefined
   /**
-   * Exact live Agent ancestry observed when this Activation materialized.
-   * Weak membership preserves host-scope identity across an intermediate
-   * ancestor leaving the registry without retaining that ancestor's runtime.
+   * Whether local input was accepted or external startup completed, including
+   * any required catalog publication. Until then, teardown owes the parent no
+   * settlement notice, even if this epoch's start event was already published.
    */
-  readonly ancestry: WeakSet<Agent>
-  /**
-   * Session ids of the child Activations this one owns. Because one Session has
-   * at most one live Activation, the id identifies the live child without
-   * another runtime-incarnation reference. Non-empty blocks settlement.
-   */
-  readonly ownedChildren: Set<SessionId>
-  /** The lifecycle observer that emits this epoch's start and terminal edges. */
-  readonly observer: ActivationObserver
-  /**
-   * Whether any delivery to this child was ever accepted. A materialization
-   * rolled back before its first acceptance is a child the caller was told does
-   * not exist, so its teardown owes the parent no settlement account.
-   */
-  announced: boolean
+  accepted: boolean
 }
 
 /** Resources retained only for the selected execution kind. */
@@ -82,8 +74,14 @@ export type ActivationResource =
     readonly structured: StructuredAttachment | undefined
     /** Latest live failure not superseded by a later committed turn ending. */
     failureAt: SessionLogOffset | undefined
-    /** Renewed when local settlement must recheck input or owned children. */
+    /** Renewed when local settlement must recheck input. */
     poke: PromiseWithResolvers<void>
+    /**
+     * Whether this child's settlement notice omits its closing text: true while
+     * the child's last logged tool call was a message to its direct parent and
+     * no input was claimed since.
+     */
+    omitClosingText: boolean
   }
   | {
     readonly kind: 'external'

@@ -13,6 +13,8 @@ export const NS = 'reference'
  * bucketing they name is the one shared {@link relativeTime} in ui-primitives.
  */
 export const zh = {
+  'menu.addToChat': '添加到对话',
+  'menu.addToChatFailed': '无法添加文件，请返回对话后重试',
   'section.files': '文件与文件夹',
   'section.subagents': '子智能体',
   'section.sessions': '对话',
@@ -42,6 +44,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
+  'menu.addToChat': 'Add to chat',
+  'menu.addToChatFailed': 'Couldn’t add file. Return to the chat and try again.',
   'section.files': 'Files & folders',
   'section.subagents': 'Subagents',
   'section.sessions': 'Sessions',
@@ -58,3 +62,129 @@ export const en = {
   'time.months': '{n}mo',
   'time.years': '{n}y',
 } satisfies Record<ReferenceKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'menu.addToChat': 'チャットに追加',
+  'menu.addToChatFailed': 'ファイルを追加できませんでした。チャットに戻って再試行してください。',
+  'section.files': 'ファイルとフォルダ',
+  'section.subagents': 'サブエージェント',
+  'section.sessions': 'セッション',
+  'candidate.noCwd': '（cwdなし）',
+  'crumb.root': 'ワークスペース',
+  'fileOpen.title': 'ファイルを開けませんでした',
+  'fileOpen.failed': '「{path}」を開けませんでした。再試行するか、このメッセージを閉じてください。',
+  'fileOpen.close': '閉じる',
+  'fileOpen.retry': '再試行',
+  'time.now': '今',
+  'time.minutes': '{n}分',
+  'time.hours': '{n}時間',
+  'time.days': '{n}日',
+  'time.months': '{n}か月',
+  'time.years': '{n}年',
+} satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  'menu.addToChat': 'Añadir al chat',
+  'menu.addToChatFailed': 'No se pudo añadir el archivo. Vuelve al chat e inténtalo de nuevo.',
+  'section.files': 'Archivos y carpetas',
+  'section.subagents': 'Subagentes',
+  'section.sessions': 'Sesiones',
+  'candidate.noCwd': '(sin cwd)',
+  'crumb.root': 'Espacio de trabajo',
+  'fileOpen.title': 'No se pudo abrir el archivo',
+  'fileOpen.failed': 'No se pudo abrir "{path}". Inténtalo de nuevo o cierra este mensaje.',
+  'fileOpen.close': 'Cerrar',
+  'fileOpen.retry': 'Reintentar',
+  'time.now': 'ahora',
+  'time.minutes': '{n}min',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+  'time.months': '{n}mo',
+  'time.years': '{n}y',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  'menu.addToChat': 'Ajouter au chat',
+  'menu.addToChatFailed': 'Impossible d’ajouter le fichier. Revenez au chat et réessayez.',
+  'section.files': 'Fichiers et dossiers',
+  'section.subagents': 'Sous-agents',
+  'section.sessions': 'Séances',
+  'candidate.noCwd': '(pas de cwd)',
+  'crumb.root': 'Espace de travail',
+  'fileOpen.title': "Impossible d'ouvrir le fichier",
+  'fileOpen.failed': "Impossible d'ouvrir \"{path}\". Réessayez ou fermez ce message.",
+  'fileOpen.close': 'Fermer',
+  'fileOpen.retry': 'Réessayer',
+  'time.now': 'maintenant',
+  'time.minutes': '{n}min',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+  'time.months': '{n}mo',
+  'time.years': '{n}y',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  'menu.addToChat': 'Zum Chat hinzufügen',
+  'menu.addToChatFailed': 'Datei konnte nicht hinzugefügt werden. Kehren Sie zum Chat zurück und versuchen Sie es erneut.',
+  'section.files': 'Dateien und Ordner',
+  'section.subagents': 'Subagenten',
+  'section.sessions': 'Sitzungen',
+  'candidate.noCwd': '(kein CWD)',
+  'crumb.root': 'Arbeitsbereich',
+  'fileOpen.title': 'Datei konnte nicht geöffnet werden',
+  'fileOpen.failed': '„{path}“ konnte nicht geöffnet werden. Versuchen Sie es erneut oder schließen Sie diese Nachricht.',
+  'fileOpen.close': 'Schließen',
+  'fileOpen.retry': 'Erneut versuchen',
+  'time.now': 'jetzt',
+  'time.minutes': '{n}min',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+  'time.months': '{n}mo',
+  'time.years': '{n}y',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  'menu.addToChat': 'Добавить в чат',
+  'menu.addToChatFailed': 'Не удалось добавить файл. Вернитесь в чат и повторите попытку.',
+  'section.files': 'Файлы и папки',
+  'section.subagents': 'Субагенты',
+  'section.sessions': 'Сессии',
+  'candidate.noCwd': '(без КДВ)',
+  'crumb.root': 'Рабочая область',
+  'fileOpen.title': 'Не удалось открыть файл',
+  'fileOpen.failed': 'Не удалось открыть «{path}». Попробуйте еще раз или закройте это сообщение.',
+  'fileOpen.close': 'Закрыть',
+  'fileOpen.retry': 'Повторить',
+  'time.now': 'сейчас',
+  'time.minutes': '{n}мин',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+  'time.months': '{n}mo',
+  'time.years': '{n}y',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  'menu.addToChat': 'Adicionar ao chat',
+  'menu.addToChatFailed': 'Não foi possível adicionar o arquivo. Volte ao chat e tente novamente.',
+  'section.files': 'Arquivos e pastas',
+  'section.subagents': 'Subagentes',
+  'section.sessions': 'Sessões',
+  'candidate.noCwd': '(sem cwd)',
+  'crumb.root': 'Espaço de trabalho',
+  'fileOpen.title': 'Não foi possível abrir o arquivo',
+  'fileOpen.failed': 'Não foi possível abrir “{path}”. Tente novamente ou feche esta mensagem.',
+  'fileOpen.close': 'Fechar',
+  'fileOpen.retry': 'Tentar novamente',
+  'time.now': 'agora',
+  'time.minutes': '{n}min',
+  'time.hours': '{n}h',
+  'time.days': '{n}d',
+  'time.months': '{n} mês',
+  'time.years': '{n}s',
+} satisfies Record<keyof typeof en, string>

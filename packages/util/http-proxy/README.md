@@ -34,6 +34,7 @@ Plain `fetch()` is proxied, and so is any SDK that reaches `globalThis.fetch` �
 | You are writing | Use |
 |---|---|
 | A plain request, or an SDK that reaches `globalThis.fetch` | nothing — the global dispatcher already routes it |
+| A call that needs its own transport choice, such as HTTP/1.1 only | `createRouteDispatcher(env, { allowH2: false })`, use it as `dispatcher`, close it when done |
 | A call that must branch on whether this request is proxied | `proxyRouteFor(url)` |
 | An SDK that takes a proxy URL of its own | `proxyRouteFor(url)`, and pass `route.proxy` |
 | A spawn whose environment you build yourself | apply `proxyEnvironmentForChild()` to it (`undefined` means remove) |
@@ -41,7 +42,7 @@ Plain `fetch()` is proxied, and so is any SDK that reaches `globalThis.fetch` �
 
 `proxyRouteFor` answers with the transport that answer assumed, not just the answer: its proxied arm carries the dispatcher already routing by this policy. A caller that read the policy and then built its own transport could have an unmount land between the two and send the request somewhere its branch never cleared.
 
-Constructing `new Agent(...)` and passing it as `dispatcher` overrides the global one and silently bypasses the proxy. `verify-no-bare-dispatcher` rejects that outside this package. One call site legitimately owns its transport — `web-fetch-http` pins a request to addresses it validated, which is per-request state a process-wide dispatcher cannot hold — and says so with a `proxy-exempt:` comment on the line.
+Constructing `new Agent(...)` and passing it as `dispatcher` overrides the global one and silently bypasses the proxy. `verify-no-bare-dispatcher` rejects that outside this package. A call site that legitimately owns its transport, because it carries per-request state a process-wide dispatcher cannot hold, says so with a `proxy-exempt:` comment on the line.
 
 That gate cannot see inside an SDK, so each outbound call site carries an `egress.spec.ts` that drives its actual transport through a fake proxy and checks the observed route. Every new outbound call site must include that transport test. Telemetry asserts its direct-route exception. These tests detect dependency changes that alter routing without changing the call site.
 
@@ -64,6 +65,8 @@ A proxy value the package cannot use — a SOCKS or PAC URL, an unparseable stri
 
 **One resolution, one matcher.** `proxyForUrl()` and the installed dispatcher must never disagree about a URL, or `dsh-web-fetch-http` would pin a connection the dispatcher meant to tunnel. The dispatcher is therefore an `Agent` whose per-origin `factory` calls `proxyForUrl()` itself, so there is no second parser to drift from the first. undici's `EnvHttpProxyAgent` cannot serve here: with no `HTTPS_PROXY` present it reuses the HTTP proxy for `https:`, which would tunnel a scheme this package keeps direct after refusing the URL the user named for it.
 
+**HTTP/2 is the caller's choice.** undici negotiates HTTP/2 by default, and an idle h2 session then raises an informational `UND_ERR_INFO` error that callers treating every uncaught exception as fatal turn into a process exit. `installProxyFromEnvironment` and `createRouteDispatcher` accept `allowH2: false` for a caller that cannot tolerate that event, and neither changes the default for other outbound requests.
+
 **A child inherits the user's own values, and the resolved policy for what they left unset.** A scheme the user named in either casing reaches a child exactly as they wrote it, so a SOCKS proxy `curl` uses is never replaced by an HTTP one named for another scheme. A scheme they named in neither casing carries the resolved value instead, because otherwise the child's routing diverges from its parent's: Node's `NODE_USE_ENV_PROXY` does not read `ALL_PROXY`. The bypass list is always the resolved one — it only ever adds the loopback entries, so nothing the user wrote is lost. The cost of one routing answer for parent and child alike is that `curl` also sees the `https:` proxy this package derives from the HTTP one. One exception protects the child itself: when a value it receives is one this package refused — a SOCKS URL kept for `curl` — the `NODE_USE_ENV_PROXY` flag is withheld, because Node parses `HTTP_PROXY` and `HTTPS_PROXY` under that flag before running the program and exits on such a value. A child Node then connects directly, as this process already reported for that scheme, instead of failing to start.
 
 ### Source map
@@ -72,7 +75,7 @@ A proxy value the package cannot use — a SOCKS or PAC URL, an unparseable stri
 |---|---|
 | `src/policy.ts` | Resolution and bypass matching; a diagnostic names the variable, never its value. Imports no transport, so it stays loadable where undici is absent. |
 | `src/install.ts` | The global dispatcher, the active-policy record, the route, and the child environment. Imports undici dynamically. |
-| `src/index.ts` | The package face: four functions and one type. |
+| `src/index.ts` | The package face: five functions and two types. |
 
 ### Bypass matching
 
@@ -106,7 +109,7 @@ These limits define when the package is a poor fit. They are current package con
 
 - **No SOCKS, PAC, or operating-system proxy detection** — only `http(s)://` proxy URLs from the environment. A macOS or Windows system-proxy setting is not read, so a user who only toggled it in a proxy application must still export the variables; a SOCKS URL is reported and that scheme stays direct rather than borrowing another scheme's proxy.
 - **No custom certificate authority** — a TLS-intercepting corporate proxy needs `NODE_EXTRA_CA_CERTS` set on the process before launch, which this package neither sets nor validates.
-- **A spawned child honors the policy only on a new enough runtime, and only when every value it inherits is one Node accepts** — it reads the published environment through Node's `NODE_USE_ENV_PROXY` (22.21+, 24+), and the engines range admits 22.19 and 22.20, where such a child stays direct. A user whose environment also names a SOCKS or otherwise refused proxy leaves every child Node direct: the flag is withheld so the child can start at all. A child also matches bypass entries with Node's own `NO_PROXY` rules, which differ from this package's in their separators and IPv4-range support. Nothing in this process depends on a Node version: every in-process request reaches the global dispatcher.
+- **A spawned child honors the policy only on a new enough runtime, and only when every value it inherits is one Node accepts** — it reads the published environment through Node's `NODE_USE_ENV_PROXY` (22.21+, 24+); a child launched with an older Node stays direct. A user whose environment also names a SOCKS or otherwise refused proxy leaves every child Node direct: the flag is withheld so the child can start at all. A child also matches bypass entries with Node's own `NO_PROXY` rules, which differ from this package's in their separators and IPv4-range support. Nothing in this process depends on a Node version: every in-process request reaches the global dispatcher.
 - **Telemetry is direct by design** — the OTLP exporter posts through `node:http`, which no global dispatcher reaches. Routing it would need either an `http.Agent` whose `proxyEnv` option post-dates the lowest supported Node, or the SDK's `fetch` transport, which has no compression while the shipped profile enables gzip. Telemetry is the one channel whose loss costs the user nothing, so it stays where it was; `DSH_TELEMETRY_MODE=DISABLED` turns it off.
 - **Model-authored programs receive no proxy settings** — the Node ptc-runtime process and workflow worker do not inherit a proxy URL that may contain `user:password`. Their direct requests need their own configuration and remain subject to the execution sandbox.
 - **The regression gate sees source, not dependencies** — `verify-no-bare-dispatcher` parses `packages/*/*/src` and `apps/*/src`; tests, scripts, and the internals of a third-party SDK are outside it. That is why every outbound call site also carries an `egress.spec.ts`.

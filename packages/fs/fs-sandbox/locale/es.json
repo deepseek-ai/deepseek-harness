@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Acceso a la zona de pruebas de archivos",
+    "description": "Limite el alcance de escritura y edición de archivos de acuerdo con el modo de permiso actual."
+  }
+}

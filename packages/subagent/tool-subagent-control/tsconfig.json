@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -25,6 +28,15 @@
     },
     {
       "path": "../subagent"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../team/agent-team"
     }
   ]
 }

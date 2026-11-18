@@ -16,6 +16,7 @@ import {
 } from './scaffold.ts'
 import {
   connectFreshWorkspace, expandOwningTurnProcess, expandTurnProcesses, newEnglishPage, REPO_ROOT, saveFailureShot,
+  showSessionPanel,
 } from './support.ts'
 
 const MODE = webSnapshotMode()
@@ -172,7 +173,8 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     await page.setViewportSize({ width: 1280, height: 800 })
 
     await member.click()
-    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: /^Task message received/ }).click()
+    await page.getByText(`Agent lead sent a message: ${CHILD_PROMPT}`, { exact: true }).waitFor({ timeout: 15_000 })
 
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     await sessions.getByRole('treeitem', { name: /Use the workflow tool exactly/ }).click()
@@ -218,10 +220,10 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     await page.getByText(CHILD_PROMPT, { exact: false }).waitFor()
     expect(await page.getByRole('button', { name: /^Open Reply with exactly the word/ }).count()).toBe(0)
 
-    await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
-    const catalog = page.getByRole('tree', { name: 'Subagent sessions' })
-    await catalog.getByRole('treeitem', { name: /snapshot-flow child 1/ }).click()
-    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
+    const catalog = (await showSessionPanel(page)).getByRole('tree', { name: 'Subagent sessions' })
+    await catalog.getByRole('treeitem', { name: /snapshot-flow child 1/ }).press('Enter')
+    await page.getByRole('button', { name: /^Task message received/ }).click()
+    await page.getByText(`Agent lead sent a message: ${CHILD_PROMPT}`, { exact: true }).waitFor({ timeout: 15_000 })
     expect(await page.locator('[data-composer-input][contenteditable="true"]').count()).toBe(1)
   }, 60_000)
 

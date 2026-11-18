@@ -1,7 +1,6 @@
 /**
  * Compile and bundle package projects without repeating aggregate test and script typechecks.
- * Contract steps replace the Host bundle with the bundle-free Typert pass for consumers that read
- * only declarations.
+ * Source-only Typert generation precedes compilation; contract steps omit runtime bundles.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
@@ -49,7 +48,7 @@ export function runPnpmCommand(root: string, args: readonly string[]): void {
  * @param root - Repository root containing the aggregate tsconfig.
  * @param face - Independent compiler face whose package projects are emitted.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns Arguments for `process.execPath`, including the heap limit the Host face needs.
+ * @returns Arguments for `process.execPath`, including an 8 GiB old-space heap limit for the Host face.
  * @throws If the aggregate configuration is invalid, has no references, or can emit files.
  */
 export function referencedProjectsCompilerArgs(
@@ -95,7 +94,7 @@ export function referencedProjectsCompilerArgs(
  * @returns Arguments for `process.execPath`, run from the repository root.
  */
 export function aggregateCheckArgs(face: 'host' | 'client'): string[] {
-  return [...hostHeapArgs(face), fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-p', `tsconfig.${face}.json`]
+  return ['--max-old-space-size=8192', fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-p', `tsconfig.${face}.json`]
 }
 
 /**
@@ -106,11 +105,11 @@ export function aggregateCheckArgs(face: 'host' | 'client'): string[] {
  * @returns Arguments for `process.execPath`, run from the repository root.
  */
 export function aggregateBuildArgs(face: 'host' | 'client'): string[] {
-  return [...hostHeapArgs(face), fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-b', `tsconfig.${face}.json`]
+  return ['--max-old-space-size=8192', fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-b', `tsconfig.${face}.json`]
 }
 
 function hostHeapArgs(face: 'host' | 'client'): string[] {
-  return face === 'host' ? ['--max-old-space-size=4096'] : []
+  return face === 'host' ? ['--max-old-space-size=8192'] : []
 }
 
 /**
@@ -147,7 +146,7 @@ function compilerStep(
 // Typert reads workspace packages only from source (generate-typert.ts
 // rejects build outputs), so it needs no compiled package. It runs under tsx's
 // ESM hook rather than through `pnpm exec`, whose startup would lengthen the
-// critical path before Client compilation.
+// critical path before package compilation.
 function typertStep(): LibraryStep {
   return {
     id: 'host-typert',
@@ -166,16 +165,19 @@ function pnpmStep(id: LibraryStepId, label: string, args: readonly string[], nee
 
 /**
  * List the package-library build steps in Host, Desktop, then Client dependency order.
- * Host bundling runs Typert, whose Remote declarations Client compilation imports.
+ * Source-only Typert generation supplies declarations before any package compilation.
+ * Client compilation waits for Host and Desktop bundling because split compiler faces
+ * rewrite shared lib/types files consumed by those bundles.
  * @param root - Repository root containing the compiler and bundle configurations.
- * @param faces - `host` lists Host compilation and bundling, which produce the Typert outputs; `all` adds Desktop and Client.
+ * @param faces - `host` lists Typert generation, Host compilation, and bundling; `all` adds Desktop and Client.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns The ordered steps; each step needs its predecessor.
+ * @returns Steps with explicit compiler and bundle dependencies.
  * @throws If an aggregate configuration is invalid.
  */
 export function libraryBuildSteps(root: string, faces: 'host' | 'all', mode: CompilationMode = 'checked'): LibraryStep[] {
   const host: LibraryStep[] = [
-    compilerStep(root, 'host', mode, []),
+    typertStep(),
+    compilerStep(root, 'host', mode, ['host-typert']),
     pnpmStep('host-bundle', 'Host bundle', ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'host'], ['host-src']),
   ]
   if (faces === 'host') return host
@@ -188,19 +190,18 @@ export function libraryBuildSteps(root: string, faces: 'host' | 'all', mode: Com
 }
 
 /**
- * List the bundle-free package steps that produce every declaration the type checkers, oxlint, and
- * documentation checks read: Host compilation and the Typert pass, which writes the generated
- * Typert declarations from source without bundling, run independently; Client compilation, which
- * imports both, needs the two. Unlike {@link libraryBuildSteps}, no step writes runnable bundles.
+ * List bundle-free metadata generation and package compilation steps.
+ * Source-only Typert generation supplies declarations before Host compilation; Client
+ * compilation follows the Host declarations. No step writes runtime bundles.
  * @param root - Repository root containing the compiler configurations.
- * @param faces - `host` lists Host compilation and the Typert pass; `all` adds Client compilation.
+ * @param faces - `host` lists the Typert pass and Host compilation; `all` adds Client compilation.
  * @returns The steps in report order.
  * @throws If an aggregate configuration is invalid.
  */
 export function contractSteps(root: string, faces: 'host' | 'all'): LibraryStep[] {
-  const host = [compilerStep(root, 'host', 'checked', []), typertStep()]
+  const host = [typertStep(), compilerStep(root, 'host', 'checked', ['host-typert'])]
   if (faces === 'host') return host
-  return [...host, compilerStep(root, 'client', 'checked', ['host-src', 'host-typert'])]
+  return [...host, compilerStep(root, 'client', 'checked', ['host-src'])]
 }
 
 function runStep(root: string, step: LibraryStep): void {
@@ -209,7 +210,7 @@ function runStep(root: string, step: LibraryStep): void {
   if (result.status !== 0) throw stepFailure(step, result.status ?? result.signal)
 }
 
-function runStepConcurrently(root: string, step: LibraryStep): Promise<void> {
+function runStepAsync(root: string, step: LibraryStep): Promise<void> {
   return new Promise((settle, fail) => {
     const child = spawn(step.command, step.args, { cwd: root, stdio: 'inherit' })
     child.once('error', fail)
@@ -227,7 +228,7 @@ function stepFailure(step: LibraryStep, exit: number | NodeJS.Signals | null): E
 /**
  * Emit package libraries serially in Host, Desktop, then Client dependency order.
  * @param root - Repository root containing the compiler and bundle configurations.
- * @param hostOnly - Stop after Host compilation and bundling, which produce the Typert outputs.
+ * @param hostOnly - Stop after Typert generation, Host compilation, and bundling.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
  * @throws If any compiler or bundler fails.
  */
@@ -236,18 +237,13 @@ export function buildLibraryArtifacts(root: string, hostOnly: boolean, mode: Com
 }
 
 /**
- * Compile Host package projects and, concurrently, write the generated Typert declarations
- * without bundling. Both steps run to completion even when the other fails.
- * @param root - Repository root containing the compiler configuration; the Typert pass runs there.
- * @returns A promise that settles after both steps exit.
- * @throws The failed step's error, or an `AggregateError` naming both steps when both fail.
+ * Generate Typert declarations from source, then compile Host package projects.
+ * @param root - Repository root containing the compiler configuration and source contributors.
+ * @returns a promise that settles after generation and compilation exit.
+ * @throws the first failed step's error; dependent compilation does not start after generation fails.
  */
 export async function buildHostContracts(root: string): Promise<void> {
-  const results = await Promise.allSettled(contractSteps(root, 'host').map(step => runStepConcurrently(root, step)))
-  const failures: unknown[] = []
-  for (const result of results) if (result.status === 'rejected') failures.push(result.reason)
-  if (failures.length === 1) throw failures[0]
-  if (failures.length > 1) throw new AggregateError(failures, 'compile-referenced-projects: host compiler and Host Typert both failed')
+  for (const step of contractSteps(root, 'host')) await runStepAsync(root, step)
 }
 
 if (import.meta.main) {

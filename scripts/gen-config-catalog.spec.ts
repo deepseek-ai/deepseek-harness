@@ -62,6 +62,44 @@ afterEach(() => {
 })
 
 describe('shared config schema catalog', () => {
+  it.each([false, true])('checks imported object fields and spread overrides (invalid=%s)', (invalid) => {
+    const { root, write } = fixture(`
+import Schema from '@deepseek-ai/schemastery'
+export interface BrowserConfig {
+  /** Shared switch. */
+  enabled: boolean
+  /** Provider-owned nested fields. */
+  nested: { /** Current nested setting. */ current: string }
+}
+export const Fields = { enabled: Schema.boolean(), nested: Schema.object({ retired: Schema.string() }) ${invalid ? ', hidden: Schema.string()' : ''} }
+export const Shared = Schema.object(Fields)
+`)
+    write('packages/test/provider/src/index.ts', `
+import Schema from '@deepseek-ai/schemastery'
+import { Fields, type BrowserConfig } from '@test/runtime/config'
+export type Config = BrowserConfig
+export const Config = Schema.object({ ...Fields, nested: Schema.object({ current: Schema.string() }) })
+export function apply(ctx: unknown, config: Config): void {}
+`)
+    if (invalid) expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden'")
+    else expect(new Set(collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')?.schemaKeys))
+      .toEqual(new Set(['enabled', 'nested', 'nested.current']))
+  })
+
+  it('rejects recursive field spreads and dynamic object factories', () => {
+    const { root, write } = fixture()
+    const source = (fields: string) => `
+import Schema from '@deepseek-ai/schemastery'
+export interface Config { /** Visible field. */ enabled: boolean }
+${fields}
+export function apply(ctx: unknown, config: Config): void {}
+`
+    write('packages/test/provider/src/index.ts', source('const Fields = { ...Fields }; export const Config = Schema.object(Fields)'))
+    expect(() => collectConfigCatalog(root)).toThrow('cyclic schema object alias')
+    write('packages/test/provider/src/index.ts', source('const fields = () => ({}); export const Config = Schema.object({ ...fields() })'))
+    expect(() => collectConfigCatalog(root)).toThrow('object literal or const alias')
+  })
+
   it('collects every branch through a renamed named import from a public source subpath', () => {
     const { root } = fixture()
     const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
@@ -86,6 +124,51 @@ export function apply(ctx: unknown, config: Config): void {}
       .toEqual(new Set(['mode', 'headless', 'endpoint']))
   })
 
+  it.each([false, true])('checks fields spread from an imported object schema (undeclared field: %s)', (invalid) => {
+    const { root, write } = fixture(`
+import Schema from '@deepseek-ai/schemastery'
+export interface SharedOptions {
+  /** Maximum result count. */
+  limit: number
+}
+export const Shared = Schema.object({ limit: Schema.number(), ${invalid ? 'hidden: Schema.string(),' : ''} })
+`)
+    write('packages/test/provider/src/index.ts', `
+import Schema from '@deepseek-ai/schemastery'
+import { Shared as SharedConfig, type SharedOptions } from '@test/runtime/config'
+export interface Config extends SharedOptions {
+  /** Signature selected for a source build. */
+  sourceSigning: string
+}
+export const Config = Schema.object({ ...SharedConfig.dict, sourceSigning: Schema.string() })
+export function apply(ctx: unknown, config: Config): void {}
+`)
+    if (invalid) expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden'")
+    else expect(new Set(collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')?.schemaKeys))
+      .toEqual(new Set(['limit', 'sourceSigning']))
+  })
+
+  it.each(['SharedConfig.dict', 'unknownFields'])('rejects a spread without an object schema: %s', (spread) => {
+    const { root, write } = fixture()
+    write('packages/test/provider/src/index.ts', `
+import Schema from '@deepseek-ai/schemastery'
+import { Shared as SharedConfig, type BrowserConfig } from '@test/runtime/config'
+export type Config = BrowserConfig
+export const Config = Schema.object({ ...${spread} })
+export function apply(ctx: unknown, config: Config): void {}
+`)
+    expect(() => collectConfigCatalog(root)).toThrow('object schema')
+  })
+
+  it('rejects a recursive object-schema dict spread', () => {
+    const { root } = fixture(`
+import Schema from '@deepseek-ai/schemastery'
+export interface BrowserConfig { mode: string }
+export const Shared = Schema.object({ ...Shared.dict, mode: Schema.string() })
+`)
+    expect(() => collectConfigCatalog(root)).toThrow('cyclic schema alias')
+  })
+
   it('rejects a schema field absent from the shared config type', () => {
     const { root } = fixture(sharedSchema.replace('headless: Schema.boolean()', 'headless: Schema.boolean(), hidden: Schema.string()'))
     expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden' but config type 'Config' declares no such member")
@@ -95,6 +178,31 @@ export function apply(ctx: unknown, config: Config): void {}
     const { root } = fixture(sharedSchema.replace('export const Shared = Schema.union', 'export const Shared = Base\nconst Base = Schema.union'))
     const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
     expect(new Set(provider?.schemaKeys)).toEqual(new Set(['mode', 'headless', 'endpoint']))
+  })
+
+  it.each([false, true])('checks a class Config imported from a sibling module (invalid field: %s)', (invalid) => {
+    const { root, write } = fixture()
+    write('packages/test/provider/src/config.ts', `
+import Schema from '@deepseek-ai/schemastery'
+export interface Config {
+  /** Maximum result count. */
+  limit: number
+}
+export const Config = Schema.object({ ${invalid ? 'hidden' : 'limit'}: Schema.number() })
+`)
+    write('packages/test/provider/src/index.ts', `
+import { Config } from './config.ts'
+export default class Provider {
+  static Config = Config
+  constructor(ctx: unknown, config: Config) {}
+}
+`)
+    if (invalid) {
+      expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden' but config type 'Config' declares no such member")
+    } else {
+      const provider = collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')
+      expect(provider?.schemaKeys).toEqual(['limit'])
+    }
   })
 
   it('rejects type-only imports used as runtime schemas', () => {

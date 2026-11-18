@@ -14,8 +14,7 @@ import { isAgentPresetEntry, isCordisGroupEntry, loadCordisYaml } from './cordis
 import { PRODUCT_PACKAGE_POLICY, type ProductPackagePolicy } from './product-package-policy.ts'
 import { collectRuntimeLocalSourceSpecifiers, collectRuntimeSourceSpecifiers } from './verify-client-packages.ts'
 
-const PROFILE_SOURCE = 'packages/boot/app-boot/src/profile.ts'
-const ON_DEMAND_SOURCE = 'packages/boot/app-boot/src/official-bundle-packages.ts'
+const PROFILE_SOURCE = 'packages/util/official-bundles/src/bundles.ts'
 const PROFILES = ['acp', 'web', 'headless', 'sdk', 'sdk-minimal']
 const PICKER_SOURCE = 'packages/host/directory-picker-auto/src/index.ts'
 const DYNAMIC_MOUNTS: Readonly<Record<string, readonly string[]>> = {
@@ -180,7 +179,7 @@ export function verifyProductUse(
       const content: unknown = existsSync(filename) ? loadCordisYaml(readFileSync(filename, 'utf8')) : row.config.initial
       configs.add(filename)
       if (!Array.isArray(content)) { failures.push(`${display(filename)}: Include requires an entry array or initial entries`); continue }
-      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {})
+      const entries = applyEntryPatches(content as EntryOptions[], row.config.patches as PatchOptions[] | undefined, () => {}).data
       scanEntries(entries, filename, reach, new Set([...stack, filename]))
     }
   }
@@ -188,11 +187,9 @@ export function verifyProductUse(
   const profileFile = ts.createSourceFile(profilePath, readFileSync(profilePath, 'utf8'), ts.ScriptTarget.Latest, true)
   const templates = literalDeclaration(profileFile, 'PROFILE_TEMPLATES')
   const fallback = stringList(literalDeclaration(profileFile, 'DEFAULT_PROFILE_BUNDLES'), PROFILE_SOURCE)
-  const catalogPath = resolve(root, ON_DEMAND_SOURCE)
-  const catalogFile = ts.createSourceFile(catalogPath, readFileSync(catalogPath, 'utf8'), ts.ScriptTarget.Latest, true)
   const optionals = [
     ...stringList(literalDeclaration(profileFile, 'OPTIONAL_BUNDLES'), PROFILE_SOURCE),
-    ...stringList(literalDeclaration(catalogFile, 'ON_DEMAND_BUNDLES'), ON_DEMAND_SOURCE),
+    ...stringList(literalDeclaration(profileFile, 'ON_DEMAND_BUNDLES'), PROFILE_SOURCE),
   ]
   if (!isRecord(templates)) throw new Error(`${PROFILE_SOURCE}: PROFILE_TEMPLATES must be a literal object`)
   for (const name of PROFILES) if (!isRecord(templates[name])) failures.push(`${PROFILE_SOURCE}: missing shipped ${name} profile`)
@@ -264,7 +261,7 @@ function validCategory(path: string, category: ProductPackagePolicy['category'])
     case 'sdk': return path === 'packages/sdk/client'
     case 'build': return path === 'packages/typert/generator'
     case 'web-distribution': return path === 'packages/client/web' || path === 'packages/client/ui-dockkit'
-    case 'declarations': return path === 'packages/util/package-manifest'
+    case 'declarations': return path === 'packages/util/package-manifest' || path === 'packages/client/config'
     default: return assertNever(category)
   }
 }

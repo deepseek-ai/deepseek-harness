@@ -34,6 +34,9 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../session/session-projection"
     }
   ]
 }

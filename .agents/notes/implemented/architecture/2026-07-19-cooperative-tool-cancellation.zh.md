@@ -32,7 +32,7 @@ Status: implemented
 
 `ABORTED_BEFORE_DISPATCH` 携带 `{ name: 'AbortError' }` 和模型可见文本 `Error: tool call aborted before dispatch`。凡取消阻止工具主体调用时都使用该结果，包括进入时已中止、前置策略或审批期间取消、包装层信号已中止、包装层在委托前返回的成功结果被调用方取消抢先，以及轮次取消后 agent loop（智能体循环）跳过的同批调用。
 
-`ABORTED` 携带模型可见文本 `Error: tool call aborted`，并且只在工具主体已经调用后使用，包括工具主体完成后环绕包装层或后置策略监听器等待期间发生的取消。拒绝、包装层失败、工具失败或后置策略失败比通用取消更具体。timeout-policy 自身拥有的超时仍为 `TOOL_TIMEOUT`，成功结果被取消替换前延后附加的上下文仍会保留。
+`ABORTED` 携带模型可见文本 `Error: tool call aborted`，并且只在工具主体已经调用后使用，包括工具主体完成后环绕包装层或后置策略监听器等待期间发生的取消。已开始的工具主体抛出 signal 的 reason，或不具备 `HarnessError` 身份、name 为 `AbortError` 的 `Error` 时，结果保留该 message，并携带 `{ name: 'AbortError', code: 'ABORTED' }`。`tools/execute` 包装层在调用方取消后抛出这类值时按同样方式归类，工具主体尚未开始时为 `ABORTED_BEFORE_DISPATCH`。拒绝、其他包装层失败、其他工具失败或后置策略失败比通用取消更具体。timeout-policy 自身拥有的超时仍为 `TOOL_TIMEOUT`，成功结果被取消替换前延后附加的上下文仍会保留。
 
 ### 进入时已中止会在物化后短路
 
@@ -46,7 +46,7 @@ Status: implemented
 
 ## 验证
 
-[`execution-signal-types.spec.ts`](../../../../packages/core/tools/tests/execution-signal-types.spec.ts) 证明必填的精确信号类型、观察者与工具的只读视图、环绕调度可替换但不可删除的视图，以及 `defineTool()` 推断。[`tools.spec.ts`](../../../../packages/core/tools/tests/tools.spec.ts) 覆盖进入时已中止的物化与阶段跳过、策略和包装层竞态、工具主体调用分类、调用方信号融合、错误优先级、上下文保留和完全停稳。[`tool-calls.spec.ts`](../../../../packages/core/agent-loop/tests/tool-calls.spec.ts) 与 [`contract-regressions.spec.ts`](../../../../packages/core/agent-loop/tests/contract-regressions.spec.ts) 覆盖为未调度的同批调用补齐持久化结果。[`ptc.spec.ts`](../../../../packages/core/tools/tests/ptc.spec.ts) 和第一方集成测试覆盖显式转发，[`timeout-policy.spec.ts`](../../../../packages/guard/timeout-policy/tests/timeout-policy.spec.ts) 保持超时归属。
+[`execution-signal-types.spec.ts`](../../../../packages/core/tools/tests/execution-signal-types.spec.ts) 证明必填的精确信号类型、观察者与工具的只读视图、环绕调度可替换但不可删除的视图，以及 `defineTool()` 推断。[`tools.spec.ts`](../../../../packages/core/tools/tests/tools.spec.ts) 覆盖进入时已中止的物化与阶段跳过、策略和包装层竞态、工具主体调用分类、调用方信号融合、错误优先级、上下文保留和完全停稳。[`tool-calls.spec.ts`](../../../../packages/core/agent-loop/tests/tool-calls.spec.ts) 与 [`contract-regressions.spec.ts`](../../../../packages/core/agent-loop/tests/contract-regressions.spec.ts) 覆盖为未调度的同批调用补齐持久化结果。[`ptc.spec.ts`](../../../../packages/core/tool-executor-ptc/tests/ptc.spec.ts) 和第一方集成测试覆盖显式转发，[`timeout-policy.spec.ts`](../../../../packages/guard/timeout-policy/tests/timeout-policy.spec.ts) 保持超时归属。
 
 任何注册表测试都无法证明任意第三方同进程代码会观察信号或在有界时间内停止。各能力的测试仍需在拥有相应副作用的边界证明取消与完全停稳。
 

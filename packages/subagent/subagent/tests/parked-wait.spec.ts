@@ -7,10 +7,11 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { NO_START_CAPABILITIES, type SubagentActivation } from '../src/index.ts'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { managerState } from './manager-internals.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function message(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -33,7 +34,7 @@ async function setup() {
     prepareContinuable: () => Promise.resolve({}),
   })
   const { agent: parent } = await ctx.agents.create({
-    sessionId: SessionId('parked-wait-root'),
+    sessionId: brandString<SessionId>('parked-wait-root'),
     agentOptions: { provider: 'mock', model: 'mock' },
   })
 
@@ -54,7 +55,7 @@ async function setup() {
       label: 'child task',
       delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent: owner, prompt: [{ type: 'text', text: 'child task' }] },
+      parent: owner, prompt: [{ type: 'text', text: 'child task' }],
     })
     starts.push(started)
     return started
@@ -104,7 +105,7 @@ describe('completion around parked child inboxes', () => {
       const finishMaintenance = gate()
       const maintenance = track(second.runMaintenance(async () => { await finishMaintenance.promise }))
       let settled = false
-      const waiting = track(ctx.subagents.waitForChildren(parent).then((value) => { settled = true; return value }))
+      const waiting = track(ctx.subagents.waitForTreeWork(parent).then((value) => { settled = true; return value }))
       // Drain the already queued idle observations while maintenance stays gated.
       await setImmediate()
 
@@ -167,7 +168,7 @@ describe('completion around parked child inboxes', () => {
       const rejected = outcome === 'rollback' ? expect(started).rejects.toThrow('preparation rejected') : undefined
       await preparing.promise
       let settled = false
-      const waiting = track(ctx.subagents.waitForChildren(parent).then((value) => { settled = true; return value }))
+      const waiting = track(ctx.subagents.waitForTreeWork(parent).then((value) => { settled = true; return value }))
       await setImmediate()
       expect(settled).toBe(false)
       expect(managerState(ctx).resident.size).toBe(1)
@@ -213,7 +214,7 @@ describe('completion around parked child inboxes', () => {
       })
       let resultSettled = false
       void started.result.then(() => { resultSettled = true })
-      const waiting = track(ctx.subagents.waitForChildren(parent))
+      const waiting = track(ctx.subagents.waitForTreeWork(parent))
       await joinedResult.promise
       child.inject(message('context for a future turn'))
       await expect(waiting).resolves.toBe(true)
@@ -235,7 +236,7 @@ describe('completion around parked child inboxes', () => {
       const finishMaintenance = gate()
       const maintenance = track(parked.runMaintenance(async () => { await finishMaintenance.promise }))
       let settled = false
-      const waiting = track(ctx.subagents.waitForChildren(parent).then((value) => { settled = true; return value }))
+      const waiting = track(ctx.subagents.waitForTreeWork(parent).then((value) => { settled = true; return value }))
       await setImmediate()
 
       const creating = gate()

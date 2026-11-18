@@ -6,7 +6,7 @@ English | [中文](2026-06-24-web-capability-seam.zh.md)
 
 ## Problem
 
-The harness needs model-facing web tools without binding the model contract to one vendor's API shape. Search is the immediate pressure point: supporting both Exa search and Perplexity search from the start — two deliberately different provider shapes (Exa returns a flat `results[]` of `{title, url, highlights, publishedDate}`; Perplexity returns a generated answer plus citations) — is what proves the normalized web contract does not just mirror one vendor. Fetch is a separate operation: an anonymous public HTTP(S) fetch backend has transport, security, redirect, decoding, and size-limit concerns that are not the same as provider-backed search.
+The harness needs model-facing web tools without binding the model contract to one vendor's API shape. Search is the immediate pressure point: search APIs return deliberately different formats (Exa returns a flat `results[]` of `{title, url, highlights, publishedDate}`, Perplexity returns a generated answer plus citations, and the DeepSeek Search API returns a flat `results[]` with snippets and summaries), and the normalized web contract must accept each of them without mirroring one vendor. The seam was designed against the Exa and Perplexity formats; neither provider ships, and a plugin can register one. Fetch is a separate operation: an anonymous public HTTP(S) fetch backend has transport, security, redirect, decoding, and size-limit concerns that are not the same as provider-backed search.
 
 The model-facing API must stay stable while backends change. A search provider swap should not change how the model asks for a query, and a fetch implementation swap should not change how the model asks for a URL. Conversely, a provider package should not expose its own model-facing tool schema just because it has extra provider-specific knobs.
 
@@ -19,7 +19,7 @@ There is also a provider-selection question. Existing `tool-bash` and `tool-fs` 
 Web access is a first-class capability seam following [the capability-seam Agent Note](2026-06-13-capability-seams.md):
 
 1. `@deepseek-ai/dsh-web` (`packages/web/web`) owns `ctx.web`, provider registration, provider selection, shared request/result vocabulary, and web-specific errors.
-2. Provider packages implement concrete backends and register capabilities with `ctx.web`, for example `@deepseek-ai/dsh-web-search-exa`, `@deepseek-ai/dsh-web-search-perplexity`, `@deepseek-ai/dsh-web-search-deepseek`, and `@deepseek-ai/dsh-web-fetch-http`.
+2. Provider packages implement concrete backends and register capabilities with `ctx.web`, for example `@deepseek-ai/dsh-web-search-deepseek`, `@deepseek-ai/dsh-web-deepseek-api`, and `@deepseek-ai/dsh-web-fetch-http`.
 3. `@deepseek-ai/dsh-tool-web` (`packages/web/tool-web`) owns the model-facing `web_search` and `web_fetch` tool schemas, prompt sections, argument validation, result formatting, and tool-owned presentation over `ctx.web`.
 
 Providers do not register tools. Providers register capabilities. `dsh-tool-web` is the only owner of model-facing names, descriptions, prompt guidance, JSON schemas, and presentation.
@@ -32,9 +32,9 @@ Search and fetch are separate tools but one web-access seam. `ctx.web` owns prov
 - A tool is never unregistered merely because its selected provider is missing, misconfigured, missing credentials, ambiguous, or temporarily unavailable.
 - The provider is resolved at execution time, and a structured `WebError` is returned when the selected capability cannot run.
 
-This keeps the model schema stable without making plugin load order, credential state, or HMR timing part of the model-facing contract. If web search is enabled but no usable search provider exists, `web_search` remains visible and execution fails with a structured `WebError` such as `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. If a provider appears after `dsh-tool-web`, the next execution can use it without changing the schema. If a provider disappears mid-call, execution fails with a structured `WebError` instead of silently choosing another provider or falling through to `UNKNOWN_TOOL`.
+This keeps the model schema stable without making plugin load order, credential state, or HMR timing part of the model-facing contract. If web search is enabled but no usable search provider exists, `web_search` remains visible and execution fails with a structured `WebError` such as `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. `dsh-tool-web` narrows this per model request: it [withholds `web_search` or `web_fetch` while the selected provider reports that the request's operation cannot authenticate](2026-09-27-web-search-offered-by-provider-readiness.md). If a provider appears after `dsh-tool-web`, the next execution can use it without changing the schema. If a provider disappears mid-call, execution fails with a structured `WebError` instead of silently choosing another provider or falling through to `UNKNOWN_TOOL`.
 
-The seam deliberately exposes no observation surface — no registry-change event and no aggregated capability-status query. Unavailability is a fact a caller observes by executing: `search()`/`fetch()` resolve the provider at call time and throw the structured `WebError` that names what failed. [The observation-surface Agent Note](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md) records that judgment: derived-on-call selection and enablement-based registration leave no consumer that needs a change signal or an availability probe distinct from executing and routing the error, and a future provider-status panel reintroduces the smallest signal or query it actually consumes.
+The seam deliberately exposes no availability observation — no aggregated capability-status query and no per-provider availability report. Unavailability is a fact a caller observes by executing: `search()`/`fetch()` resolve the provider at call time and throw the structured `WebError` that names what failed. [The observation-surface Agent Note](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md) records that judgment: derived-on-call selection and enablement-based registration leave no consumer that needs a change signal or an availability probe distinct from executing and routing the error, and a future provider-status panel reintroduces the smallest signal or query it actually consumes. Provider pickers consume registration, not availability: `listProviders()` and the Remote method `web/listProviders` list every registered provider with its optional `title` and `description` (including unavailable providers), and the payload-free `web/providers-changed` event fires after each registry mutation. The [web provider selection decision](2026-10-29-web-provider-selection.md) records why registration is observable while availability is not.
 
 ## Package topology
 
@@ -43,11 +43,9 @@ The three-package Service Definition / Service Provider / Consumer split follows
 The dependency direction mirrors bash and filesystem:
 
 ```text
-@deepseek-ai/dsh-tool-web  --depends on-->  @deepseek-ai/dsh-web  <--depends on--  @deepseek-ai/dsh-web-search-exa
+@deepseek-ai/dsh-tool-web  --depends on-->  @deepseek-ai/dsh-web  <--depends on--  @deepseek-ai/dsh-web-search-deepseek
         consumer                                 interface                       implementation
-                                                                 <--depends on--  @deepseek-ai/dsh-web-search-perplexity
-                                                                                  implementation
-                                                                 <--depends on--  @deepseek-ai/dsh-web-search-deepseek
+                                                                 <--depends on--  @deepseek-ai/dsh-web-deepseek-api
                                                                                   implementation
                                                                  <--depends on--  @deepseek-ai/dsh-web-fetch-http
                                                                                   implementation
@@ -57,9 +55,7 @@ At runtime, provider packages register capabilities with `ctx.web`; `tool-web` r
 
 ```mermaid
 flowchart LR
-  exa["@deepseek-ai/dsh-web-search-exa"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
-  perplexity["@deepseek-ai/dsh-web-search-perplexity"] -->|registerSearchProvider| web
-  deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web
+  deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
   deepseekApi["@deepseek-ai/dsh-web-deepseek-api"] -->|registerSearchProvider / registerFetchProvider| web
   fetchLocal["@deepseek-ai/dsh-web-fetch-http"] -->|registerFetchProvider| web
   toolWeb["@deepseek-ai/dsh-tool-web"] -->|search/fetch| web
@@ -67,9 +63,9 @@ flowchart LR
   toolWeb -->|ctx.tools.register| webFetch["tool: web_fetch"]
 ```
 
-`@deepseek-ai/dsh-web` depends only on Cordis and low-level harness support. It declares `ctx.web`, provider interfaces, request/result types, the provider availability contract, and error codes. It does not import tool, agent, session, LLM, or provider packages.
+`@deepseek-ai/dsh-web` depends only on Cordis and low-level harness support, including the Typert protocol for its Remote method. It declares `ctx.web`, provider interfaces, request/result types, the provider availability contract, and error codes. It does not import tool, agent, session, LLM, or provider packages.
 
-Provider packages depend only on `dsh-web` and Cordis. They own credentials, endpoints, wire mapping, parsing, and `WebError` translation, using platform `fetch`. Each provider injects the shared service and registers a backend; only `dsh-web` owns the `ctx.web` key. Provider-private protocol shapes do not create dependencies on `ctx.llm` or a Cordis HTTP service.
+Provider packages depend on `dsh-web`, Cordis, and their credential/configuration helpers. They own credentials, endpoints, wire mapping, parsing, and `WebError` translation, using platform `fetch`. Each provider injects the shared service and registers a backend; only `dsh-web` owns the `ctx.web` key. Provider-private protocol shapes do not create dependencies on `ctx.llm` or a Cordis HTTP service.
 
 `@deepseek-ai/dsh-tool-web` depends on `@deepseek-ai/dsh-web`, `@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-system-prompt`, and Cordis. It never imports concrete provider packages.
 
@@ -78,16 +74,22 @@ Provider packages depend only on `dsh-web` and Cordis. They own credentials, end
 `ctx.web` is a provider registry plus a provider-selecting execution API. The registry half stays close to `LlmRuntime`: a `Map<id, provider>` per capability kind, `registerSearchProvider` / `registerFetchProvider` methods that return disposers, duplicate ids that throw `WebError`, and execution-time resolution that throws when the selected provider is absent or unusable. The authoritative signatures live in `packages/web/web/src/types.ts`; the seam's shape:
 
 ```ts
-import type { WebFetchRequest, WebFetchResult, WebSearchRequest, WebSearchResult } from '@deepseek-ai/dsh-web'
+import type {
+  WebFetchRequest, WebFetchResult, WebProviderInfo, WebProviderList, WebSearchRequest, WebSearchResult,
+} from '@deepseek-ai/dsh-web'
 
 interface WebSearchProvider {
   readonly id: string
+  readonly title?: string
+  readonly description?: WebProviderInfo['description']
   available(): boolean
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
 }
 
 interface WebFetchProvider {
   readonly id: string
+  readonly title?: string
+  readonly description?: WebProviderInfo['description']
   available(): boolean
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
 }
@@ -95,6 +97,7 @@ interface WebFetchProvider {
 interface WebRuntime {
   registerSearchProvider(provider: WebSearchProvider): () => void
   registerFetchProvider(provider: WebFetchProvider): () => void
+  listProviders(): WebProviderList
 
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
@@ -131,17 +134,14 @@ The "single provider auto-selects" rule is for tests, demos, and simple deployme
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
-    searchProvider: exa
+    searchProvider: deepseek-search-api
     fetchProvider: http
-
-- id: web-search-exa
-  name: '@deepseek-ai/dsh-web-search-exa'
-
-- id: web-search-perplexity
-  name: '@deepseek-ai/dsh-web-search-perplexity'
 
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
+
+- id: web-deepseek-api
+  name: '@deepseek-ai/dsh-web-deepseek-api'
 
 - id: web-fetch-http
   name: '@deepseek-ai/dsh-web-fetch-http'
@@ -150,9 +150,9 @@ The "single provider auto-selects" rule is for tests, demos, and simple deployme
   name: '@deepseek-ai/dsh-tool-web'
 ```
 
-Operational overrides feed the same explicit selection path: `DSH_WEB_SEARCH_PROVIDER=perplexity` is equivalent to config `searchProvider: perplexity`, not a hidden priority chain inside `dsh-tool-web`.
+Operational overrides feed the same explicit selection path: `DSH_WEB_SEARCH_PROVIDER=deepseek-search-api` is equivalent to config `searchProvider: deepseek-search-api`, not a hidden priority chain inside `dsh-tool-web`.
 
-Each search or fetch reads the configured id when it runs, so a saved settings change selects another provider for the next operation without remounting `dsh-web`. The Web search settings switch relies on this to move both capabilities to the [DeepSeek Search and Fetch APIs](../feature/2026-10-15-deepseek-search-fetch-api.md) at once.
+Each search or fetch reads the configured id when it runs, so a saved settings change selects another provider for the next operation without remounting `dsh-web`. The Search and Fetch menus on the Web search and fetch settings page rely on this to switch each capability's provider independently, including the [DeepSeek Search and Fetch APIs](../feature/2026-10-15-deepseek-search-fetch-api.md); the [web provider selection decision](2026-10-29-web-provider-selection.md) owns the shipped defaults.
 
 `ctx.web.search()` and `ctx.web.fetch()` resolve the provider at execution time using the selection rules above. If the selected capability is unavailable, they throw `WebError` with a structured code such as `WEB_PROVIDER_UNAVAILABLE`, `WEB_PROVIDER_CONFIGURED_MISSING`, `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`, or `WEB_PROVIDER_AMBIGUOUS`. If no provider is explicitly configured and no usable provider exists, the execution error is the generic `WEB_PROVIDER_UNAVAILABLE` case; there is deliberately no diagnostic summary of every unavailable provider.
 
@@ -168,8 +168,8 @@ The `web_search` model-facing tool is small. The only model-facing argument is:
 
 - `dsh-tool-web` owns the value and puts it on `WebSearchRequest.maxResults`.
 - `ctx.web` passes the request through to the selected provider unchanged.
-- A provider applies `maxResults` at the request layer when its API supports it (Exa's `numResults`), as a cost/latency optimization.
-- `ctx.web` enforces the bound on the result: if a provider returns more than `maxResults` sources — because its API has no result-count control (Perplexity) or ignored the hint — the seam truncates `sources[]` to `maxResults` and sets `WebSearchResult.truncated` to `true` before returning. This makes the bound a single cross-provider guarantee the model-facing layer can rely on, rather than something each provider must remember to honor.
+- A provider applies `maxResults` at the request layer when its API supports it (the DeepSeek Search API's `count`), as a cost/latency optimization.
+- `ctx.web` enforces the bound on the result: if a provider returns more than `maxResults` sources — because its API has no result-count control or ignored the hint — the seam truncates `sources[]` to `maxResults` and sets `WebSearchResult.truncated` to `true` before returning. This makes the bound a single cross-provider guarantee the model-facing layer can rely on, rather than something each provider must remember to honor.
 
 The seam request carries no provider-specific controls — no Perplexity model selection, search recency, domain filters, Exa `livecrawl`, Exa `type`, regional hints, generated-answer budgets, or search depth. Such a field is added only when it has provider-neutral semantics that both the tool schema and selected providers can honor honestly.
 
@@ -190,19 +190,20 @@ interface WebSearchSource {
   readonly url: string
   readonly title?: string
   readonly snippet?: string
+  readonly summary?: string
   readonly publishedAt?: string
 }
 ```
 
-`content` is optional provider-generated answer text, search context, or summary. `sources[]` is the portable citation shape. A source always has a URL; title, snippet, and `publishedAt` are optional because not every provider returns them. `title` is not required: Perplexity-style citations may provide only URLs, and forcing adapters to invent titles would make the seam lie. `dsh-tool-web` renders a `title ?? hostname(url)`-style fallback label for display. `publishedAt` is an optional publication/crawl timestamp as an ISO-8601 string — Exa returns it as `publishedDate` on each result and Perplexity returns a `date` on search results, so it is real provider data, not derived; the seam carries it as a string and leaves date parsing to the consumer.
+`content` is optional provider-generated answer text, search context, or summary. `sources[]` is the portable citation shape. A source always has a URL; title, snippet, summary, and `publishedAt` are optional because not every provider returns them. `snippet` is a short excerpt for display, and `summary` is a longer excerpt for model reading whose length the consumer bounds. `title` is not required: Perplexity-style citations may provide only URLs, and forcing adapters to invent titles would make the seam lie. `dsh-tool-web` renders a `title ?? hostname(url)`-style fallback label for display. `publishedAt` is an optional publication/crawl timestamp as an ISO-8601 string — the DeepSeek Search API returns it as a nullable `date` on each result, Exa as `publishedDate`, and Perplexity as `date`, so it is real provider data, not derived; the seam carries it as a string and leaves date parsing to the consumer.
 
-Exa search maps each entry of the provider's flat `results[]` into a `WebSearchSource`: `url` ← `url`, `title` ← `title`, `snippet` ← the first `highlights[]` entry (an entry with no highlight has no portable snippet and is dropped), `publishedAt` ← `publishedDate`. Exa returns no provider-generated answer, so `content` is omitted. Perplexity search maps `choices[0].message.content` to `content` and prefers the structured top-level `search_results[]` for `sources[]` — `url` ← `url`, `title` ← `title`, `snippet` ← `snippet` (often empty), `publishedAt` ← `date` — falling back to the URL-only `citations[]` array only when `search_results` is absent (those sources carry just a `url`). If a provider returns fewer structured fields than the seam supports, the adapter omits those optional fields.
+The DeepSeek Search API provider maps each entry of the response's `results[]` into a `WebSearchSource`: `url` ← `url`, `title` ← `title`, `snippet` ← `snippet`, `summary` ← `summary`, `publishedAt` ← `date`, omitting empty values. It returns no provider-generated answer, so `content` is omitted. If a provider returns fewer structured fields than the seam supports, the adapter omits those optional fields.
 
 Full page retrieval remains the job of `web_fetch(url)`. Search snippets are discovery context, not fetched page bodies.
 
 ## Fetch request and result schema
 
-The `web_fetch` implementation is an anonymous public HTTP(S) fetch provider, `http`. It fetches bytes from a concrete URL, resolves and pins public destinations, applies the transport hygiene below, decodes textual content, and returns only the minimal model-useful result: final URL, status code, body, and truncation. It carries no browser cookies, editor credentials, git credentials, internal auth tokens, or implicit access to private services.
+The `web_fetch` implementation is an anonymous HTTP(S) fetch provider, `http`. It fetches bytes from a concrete URL, applies the transport hygiene below, decodes textual content, and returns only the minimal model-useful result: final URL, status code, body, and truncation. It carries no browser cookies, editor credentials, git credentials, or internal auth tokens. It does not restrict destination addresses.
 
 The seam request stays smaller than OpenCode's model-facing tool:
 
@@ -238,14 +239,12 @@ The provider owns safe resource retrieval: URL validation, HTTP transport, redir
 The fetch provider's resource controls:
 
 - Only `http:` and `https:` URLs are accepted; credentials in URLs are rejected.
-- A literal address or the complete result of one hostname lookup must contain only globally reachable unicast IPv4 or IPv6 destinations. IPv6 resolution also discovers the active DNS64 prefix and rejects NAT64 addresses that translate to non-public IPv4. Loopback, private, link-local, carrier-grade NAT, multicast, reserved, transition, translation, and private IPv4-mapped IPv6 addresses are rejected.
-- The request retains that validated address set in an Undici lookup callback instead of resolving the hostname again. The original hostname remains the HTTP Host and TLS SNI value, while DNS rebinding cannot replace the connection destination after validation.
 - Maximum URL length, response byte cap, decoded body character cap, timeout, and redirect hop cap are enforced.
 - Abort signals propagate through network fetches and expensive decoding.
-- Only same-origin redirects are followed automatically; each followed hop performs a fresh public-address lookup and pins its own connection. A cross-origin redirect fails with `WEB_REDIRECT_BLOCKED`, requiring a fresh tool call and fresh public-address validation. (Claude Code's WebFetch uses this same model — it does not auto-follow a cross-host redirect; it returns the redirect target to the model for a fresh call.)
+- Only same-origin redirects are followed automatically; each followed hop repeats URL validation. A cross-origin redirect fails with `WEB_REDIRECT_BLOCKED`, requiring a fresh tool call. (Claude Code's WebFetch uses this same model — it does not auto-follow a cross-host redirect; it returns the redirect target to the model for a fresh call.)
 - Requests carry an explicit product user agent rather than silently impersonating a browser.
 
-The provider rejects an entire DNS answer set when any address is not public instead of silently filtering the unsafe members. This fail-closed rule prevents connection-family selection or fallback from reaching an address that did not satisfy the public-network policy.
+Requests use the process-wide dispatcher, so the installed outbound proxy policy and the system resolver decide the connection. Loopback, private-network, and cloud metadata destinations are reachable.
 
 ## Tool consumer behavior
 
@@ -285,7 +284,7 @@ Tool execution lets these errors flow through `ToolRuntime.execute()`, which alr
 
 ## Testing
 
-Each layer is pinned at its own boundary: the registry/selection/truncation/abort contract and the `WebError` codes in `dsh-web`; per-provider request/response mapping over recorded fixtures (Perplexity fixtures include URL-only citations so the optional source fields stay honest) plus a self-skipping with-key smoke per real provider; real local-HTTP behavior in `web-fetch-http`; and enablement-driven registration, structured execution errors, and result formatting through the real tool registry in `dsh-tool-web`. A real-Loader smoke guards the two export shapes ([postmortem 0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md)): `dsh-web` is a default-exported service, while the providers and `tool-web` are namespace plugins where a stray `export default` would drop `inject`.
+Each layer is pinned at its own boundary: the registry/selection/truncation/abort contract and the `WebError` codes in `dsh-web`; per-provider request/response mapping over recorded fixtures plus a self-skipping with-key smoke per real provider; real local-HTTP behavior in `web-fetch-http`; and enablement-driven registration, structured execution errors, and result formatting through the real tool registry in `dsh-tool-web`. A real-Loader smoke guards the two export shapes ([postmortem 0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md)): `dsh-web` is a default-exported service, while the providers and `tool-web` are namespace plugins where a stray `export default` would drop `inject`.
 
 ## Alternatives considered
 
@@ -295,7 +294,7 @@ This matches the most flexible provider-plugin systems: every provider can expos
 
 ### Put provider dispatch directly in `dsh-tool-web`
 
-This resembles OpenCode's local web search: one stable `websearch` tool dispatches to Exa or Parallel internally. It is acceptable for a small product path but wrong as a harness foundation. The tool package would own provider selection, credentials, request mapping, transport, response parsing, and presentation, making it hard to add Exa and Perplexity without baking their differences into the tool schema.
+This resembles OpenCode's local web search: one stable `websearch` tool dispatches to Exa or Parallel internally. It is acceptable for a small product path but wrong as a harness foundation. The tool package would own provider selection, credentials, request mapping, transport, response parsing, and presentation, making it hard to add providers with different formats without baking their differences into the tool schema.
 
 ### Split search and fetch into two seams (`dsh-search`, `dsh-fetch`)
 
@@ -313,29 +312,25 @@ Rejected for the first version. Those providers often return extracted or summar
 
 Rejected for the seam. `prompt` turns fetch into LLM summarization and couples public-web retrieval to a model provider. The harness seam should fetch and decode deterministically; `dsh-tool-web` can later offer summaries as a presentation mode without making `ctx.web` depend on `ctx.llm`.
 
-### Validate DNS and then call an ordinary fetch
+### Restrict fetch to public addresses
 
-Rejected because an ordinary fetch resolves the hostname again when it opens the connection. An attacker can return a public address during validation and a private address during the second lookup. Passing the validated answer set through the connection's lookup callback closes that rebinding interval while preserving hostname-based HTTP and TLS behavior.
-
-### Block private-looking hostname strings without pinning resolved addresses
-
-Rejected because hostname syntax does not establish the connection destination: an arbitrary public-looking name can resolve to loopback, a private range, or a cloud metadata address. Address classification belongs after resolution, and every address available to connection fallback must pass it.
+Rejected. Resolving each hostname, rejecting any non-public answer, and pinning the connection to the validated set does not confine the model, which reaches the same networks through mounted shell tools, and it refuses every page on hosts whose DNS answers with non-public addresses, such as TUN-mode proxies with fake-IP DNS. Deployments that must keep the model away from private destinations need network confinement, a `tools/pre-execute` policy, or no fetch tool.
 
 ### Require per-call approval before public fetches
 
-Rejected for the shipped presets. Public-address validation blocks SSRF destinations, while per-call confirmation would interrupt ordinary browsing without controlling public data egress reliably: a model can reach the same public network through mounted shell tools. Deployments that require a dedicated confirmation step can add a `tools/pre-execute` policy or disable `web_fetch`.
+Rejected for the shipped presets. Per-call confirmation would interrupt ordinary browsing without controlling data egress reliably: a model can reach the same networks through mounted shell tools. Deployments that require a dedicated confirmation step can add a `tools/pre-execute` policy or disable `web_fetch`.
 
 ## Consequences
 
-**The search schema is deliberately thin.** Exa and Perplexity both expose useful provider-specific controls; a control is added only once it can be defined provider-neutrally and enforced honestly by both tool registration and provider execution.
+**The search schema is deliberately thin.** Search APIs expose useful provider-specific controls, such as Exa's `livecrawl`, Perplexity's search recency, and the DeepSeek Search API's `localization`; a control is added only once it can be defined provider-neutrally and enforced honestly by both tool registration and provider execution.
 
-**Perplexity citations can be sparse.** A citation may be only a URL. Making `title` and `snippet` optional keeps the seam truthful but means `tool-web` renders fallback labels.
+**Citations can be sparse.** A Perplexity-style citation may be only a URL. Making `title` and `snippet` optional keeps the seam truthful but means `tool-web` renders fallback labels.
 
 **Stable tool registration defers misconfiguration to execution.** Keeping the tool visible is correct when the product enabled web access, but product apps that expect web search should surface the structured `WEB_PROVIDER_CONFIGURED_MISSING` / `WEB_PROVIDER_CONFIGURED_UNAVAILABLE` / `WEB_PROVIDER_AMBIGUOUS` failures loudly so users do not discover setup problems only after the model calls the tool.
 
 **Provider state can change after startup.** A tool can be visible in the request assembled at step start and lose its provider before execution. The execution path resolves again and fails with a structured error.
 
-**Fetch is a network boundary, not just a read-only tool.** Public-address validation and connection pinning prevent `web_fetch` from reaching non-public destinations, but a model can still disclose data through a public URL and fetched text remains untrusted model input. The shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation.
+**Fetch is a network boundary, not just a read-only tool.** `web_fetch` reaches any destination the host can, including loopback and private-network services, a model can disclose data through a URL, and fetched text remains untrusted model input. The shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation.
 
 **Large web content can damage context quality.** Providers enforce byte/character caps and report `truncated`; `tool-web` formats bounded model output with clear continuation or follow-up guidance.
 
@@ -343,7 +338,7 @@ Rejected for the shipped presets. Public-address validation blocks SSRF destinat
 
 - A `pdf` `WebFetchBody` kind: the `http` provider decodes text-extractable PDFs (best-effort, capped, `truncated`) into a `{ kind: 'pdf'; content; pageCount? }` arm, and `tool-web` renders it. This is fetch, not `web_extract` — PDF retrieval is a concrete HTTP 200 plus deterministic local decoding, not provider-side extraction of a non-HTTP resource. Adding it is a coordinated change across `dsh-web` (declare the arm), the provider (decode + narrow "binary rejection" to "reject binary except text-extractable PDF"; scanned/image PDFs needing OCR stay out of scope), and `tool-web` (render). The closed `WebFetchBody` union makes the consumer side fail to compile until the new arm is handled.
 - Provider-backed extraction as a separate `web_extract` capability, rather than widening `web_fetch` silently.
-- Provider-neutral search controls beyond `query` and `maxResults`, once Exa and Perplexity can both honor them honestly.
+- Provider-neutral search controls beyond `query` and `maxResults`, once the registered providers can honor them honestly.
 
 ## Open questions
 

@@ -15,4 +15,5 @@
   - text: 已完成 $ pnpm add mirrored-package
   - button "复制"
   - text: Installed from the registry pnpm names
+  - paragraph: 完整日志：{{cwd}}/.dsh-home/profiles/scaffold/.plugin-manager/logs/operation-{{suffix}}/pnpm.log
   - button "立即启用"

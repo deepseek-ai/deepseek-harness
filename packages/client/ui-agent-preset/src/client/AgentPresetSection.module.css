@@ -1,21 +1,23 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 720px;
   color: var(--dsw-alias-label-primary);
 }
 
 .title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 
 .intro {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--dsw-alias-label-tertiary);
+  line-height: 22px;
 }
 
 /* Cards, not rows: a preset is a thing you pick, and the description is the
@@ -26,18 +28,15 @@
   gap: 10px;
 }
 
-/* Group-to-group breathing room: the section's 12px gap plus 20px reads the
-   two rosters as separate blocks (32px total). */
+/* Separate the two rosters by 32px, including the section gap. */
 .group + .group {
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .groupHead {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -61,16 +60,17 @@
 }
 
 
-.card:hover:not(.cardActive) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .card:hover:not(.cardActive) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The default preset reads as selected exactly like the Appearance cubes:
-   platform fill + the bluish-400 border (static token — the bluish-400 step
-   has no alias-layer name). */
+   platform fill + the selected border. */
 .cardActive {
   background: var(--dsw-alias-bg-module-platform);
-  border-color: var(--dsw-static-neutral-bluish-400);
+  border-color: var(--dsw-alias-border-selected);
 }
 
 /* Mode selection is off, not the preset itself: mute only the selectable
@@ -81,8 +81,10 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
-.cardBroken:hover {
-  border-color: var(--dsw-alias-state-error-primary);
+@media (hover: hover) {
+  .cardBroken:hover {
+    border-color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 .brokenBadge {
@@ -127,9 +129,14 @@
 /* Focusing the card reveals it too: a broken card keeps its place in the tab
    order (`aria-disabled`, not `disabled`), so this is the keyboard path to a
    reason the card face no longer shows. */
-.brokenBadge:hover .brokenTip,
 .cardMain:focus-visible .brokenTip {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .brokenBadge:hover .brokenTip {
+    opacity: 1;
+  }
 }
 
 .cardMain[aria-disabled='true'] {
@@ -153,6 +160,18 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (hover: none) {
+  .cardBrokenReason {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
 }
 
 /* The card body is the control that picks the preset. */
@@ -213,12 +232,10 @@
 /* Bounded to four lines. A preset publishes its own description, so one long
    one would otherwise stretch every card in its grid row. Clamping is CSS
    alone: the whole text stays in the DOM for assistive
-   tech, and the card offers it on hover when it is actually cut off. The
-   description does not grow to fill the card — `-webkit-line-clamp` on a
-   flex-stretched box leaves the clamp height and the box height disagreeing,
-   so auto margins center the text between the header and footer instead. */
+   tech, and the card offers it on hover when it is actually cut off.
+   Descriptions start below their headings; spare height remains below them. */
 .cardDesc {
-  margin-block: auto;
+  margin: 0;
   font-size: 13px;
   line-height: 1.55;
   color: var(--dsw-alias-label-secondary);
@@ -228,6 +245,12 @@
   overflow: hidden;
   /* A user-authored description may carry an unbreakable path or URL. */
   overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .cardDesc {
+    -webkit-line-clamp: unset;
+  }
 }
 
 .cardId {
@@ -267,9 +290,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.helpButton:hover,
 .helpButton:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .helpButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Icon-only actions: the label rides `data-tip` so the row stays quiet until
@@ -287,9 +315,11 @@
   align-items: center;
 }
 
-.iconButton:hover {
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-bg-layer-1);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:focus-visible {
@@ -315,9 +345,14 @@
   transition: opacity .12s;
 }
 
-.iconButton:hover::after,
 .iconButton:focus-visible::after {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .iconButton:hover::after {
+    opacity: 1;
+  }
 }
 
 .dialog {
@@ -370,11 +405,19 @@
   cursor: pointer;
 }
 
-.creatorButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .creatorButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .creatorButton:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

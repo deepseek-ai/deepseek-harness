@@ -1,10 +1,12 @@
 - banner:
   - navigation "Session hierarchy": Use only Cordis tools. First
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
@@ -14,6 +16,7 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Called tools" [expanded]
+- button "Context injection runtime-context"
 - button "Think I will inspect the current Session's dynamic Cordis Plugins before defining the snapshot Package."
 - button "Inspect plugins 0 dynamic plugins"
 - button "Think No dynamic Plugins are present, so I will define the requested Host and Client Package."

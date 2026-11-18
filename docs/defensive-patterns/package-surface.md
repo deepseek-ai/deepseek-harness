@@ -78,6 +78,8 @@ A `package.json` `exports` map uses only the standard key set, in which every ke
 
 - Standard keys, each with one meaning repo-wide, across `packages/*/*/package.json` and `apps/*/package.json`: `.` (the package entry), `./package.json` (toolchain access, not a semantic export), `./src/*` (source passthrough for tests and tools, whose documented status is still open), `./client` (the browser entry, paired with the `dsh.client` declaration), `./types` (the type entry), `./typert` (the typert type runtime), `./remote` (the `@Remote` call surface), `./locale/*.json` (locale resources), `./cordis.patch.yml` (the bundle patch layer declared by `dsh.bundle`). Counts are not listed here because they rot on the next package; the recompute command below prints them.
 - Keys outside that set (`./brand` in 5 packages, `./worker` in 4, `./startup`, `./runner`, and `./protocol` in 2 each, plus many one-off keys) have no documented meaning; they are pending review, not a pattern to copy.
+- `dsh-tools` additionally exposes `./pipeline` for reusable invocation stages and batch scheduling. Its main and pipeline bundles share runtime chunks to preserve error-class identity; workspace constraints check the export targets and publication files.
+- `dsh-tool-executor-ptc` exposes `./run-code` for the shared program-tool factory, explicit runtime and call limits, and private callable tool definitions. Workspace constraints check its export targets and publication files.
 - Judged condition: does a change add an export key outside the standard set?
 - Exception: none by default; a new key changes the owning document and the check first, with the domain owner's confirmation.
 - Recompute the distribution:
@@ -150,7 +152,7 @@ Restating a required-devDependency package list or the field rules on this page 
 Internal dependency syntax follows the package family: `@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` use `workspace:*`, every other internal package uses `workspace:~`, and `workspace:^` has retired. The same dependency name is written the same way in every workspace, and a mismatch is a hard scan failure rather than a warning a reviewer can waive. The uniform syntax keeps one resolution path and prevents duplicate instances of a dependency and the resolution differences that follow them.
 
 - Judged by `workspaceRange()` in [verify-package-dependencies.ts](../../scripts/verify-package-dependencies.ts): the `@deepseek-ai/dsh` and `@deepseek-ai/dsh-*` families get `workspace:*`, every other internal package gets `workspace:~`; the scan walks the managed manifests and compares every declaration of the same dependency name.
-- Boundary: a same-namespace package that is not a workspace member declares an ordinary third-party range and is outside the family rule — `@deepseek-ai/libreoffice-kit` is declared `^0.1.5` in `apps/desktop-host/package.json` (dependencies), `packages/bundle/web-app/package.json` (devDependencies), `packages/document/office-to-pdf/package.json` (dependencies), and `packages/skill/skill-office/package.json` (dependencies).
+- Boundary: a same-namespace package that is not a workspace member declares an ordinary third-party range and is outside the family rule — `@deepseek-ai/libreoffice-kit` is declared `0.2.3` in `packages/bundle/web-app/package.json` (devDependencies) and `packages/document/office-kit/package.json` (dependencies).
 - Distribution is not restated here; the recompute command below prints the current counts of `workspace:*`, `workspace:~`, `workspace:^`, and any exact-range declaration outside the family rule.
 - Exception: the scan decides mechanically; a genuine exception means changing the scan and the policy file with the domain owner's confirmation and the reason on the change.
 - Recompute:
@@ -166,7 +168,7 @@ Each family in its form, with the non-member exception left as an ordinary versi
   "dependencies": {
     "@deepseek-ai/dsh-base": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/libreoffice-kit": "^0.1.5"
+    "@deepseek-ai/libreoffice-kit": "0.2.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-typert-registry": "workspace:*"

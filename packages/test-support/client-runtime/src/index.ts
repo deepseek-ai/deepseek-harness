@@ -1,7 +1,8 @@
 /**
  * jsdom slot test runtime: a real small runtime — Cordis `Context`, the
- * renderer-owned `SlotRegistry`, the `ui-session` adapter, and the UI renderer — assembled around
- * test-owned session/workspace doubles and a fail-loud file-upload stub, so feature specs exercise
+ * renderer-owned `SlotRegistry`, the `ui-session` adapter, the
+ * `ui-session-status` table, and the UI renderer — assembled around
+ * test-owned session/workspace doubles and fail-loud file-upload and reading-mark stubs, so feature specs exercise
  * declaration, registration, scope, store, inject, rendering, updates, and
  * disposal without hand-building the machinery per suite.
  *
@@ -28,6 +29,9 @@ import { createSlotRenderer as createRenderer } from '@deepseek-ai/dsh-client-ui
 import {
   apply as applyUiSession, inject as uiSessionInject,
 } from '@deepseek-ai/dsh-client-ui-session/client'
+import {
+  apply as applySessionStatus, inject as sessionStatusInject,
+} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -57,9 +61,11 @@ export {
 export type {
   FixtureSnapshot, SessionBehaviorOverrides, SessionFixture, SessionFixtureSnapshot, Stabilizer,
 } from './fixtures.ts'
+export { contextMenuHook } from './context-menu.ts'
+export { syncedConfig } from './synced-config.ts'
 export { makeTranslate } from './translate.ts'
-export { allowAllAccess, allowAllAccessPlugin } from './access.ts'
-export type { AccessStandardProps } from './access.ts'
+export { allowAllAccess, allowAllAccessPlugin, StaticRemoteAccess, staticAccessPlugin } from './access.ts'
+export type { AccessStandardProps, StaticAccessPlugin } from './access.ts'
 export { usePinnedBrowserLanguages } from './locale-env.ts'
 
 /**
@@ -127,6 +133,8 @@ export interface FeatureHandle {
 export interface TestFileUpload {
   /** Test-supplied upload behavior; the default rejects every call. */
   upload: (sessionId: SessionId, ...args: unknown[]) => Promise<unknown>
+  /** Test-supplied image upload behavior; the default rejects every call. */
+  uploadImage: (sessionId: SessionId, ...args: unknown[]) => Promise<unknown>
 }
 
 /**
@@ -259,10 +267,15 @@ export class SlotTestRuntime {
     this.workspaces = new TestWorkspaces(this.stabilizer)
     this.fileUpload = {
       upload: () => Promise.reject(new Error('client test runtime: file upload is not stubbed')),
+      uploadImage: () => Promise.reject(new Error('client test runtime: image upload is not stubbed')),
     }
     ctx.provide('sessions', this.sessions)
     ctx.provide('workspaces', this.workspaces)
     ctx.provide('fileUpload', this.fileUpload as never)
+    this.remote.provideNamespaces({ sessionStatus: {
+      follow: (signal: AbortSignal) => idleReadingStream(signal),
+      mark: () => Promise.reject(new Error('client test runtime: reading mark is not stubbed')),
+    } })
     this.disposeWorkspaceSource = slots.provideRoot({ hooks: { workspaces: this.workspaces.list } })
     this.disposePanelInfoSource = slots.provideRoot({ hooks: { panelInfo: this.panelInfo } })
     // Capturing install: the production renderer does the rendering; the
@@ -289,6 +302,7 @@ export class SlotTestRuntime {
     const runtime = new SlotTestRuntime(ctx, ctx.get('slots') as SlotRegistry)
     await ctx.plugin(allowAllAccessPlugin).await()
     await ctx.plugin({ inject: [...uiSessionInject], apply: applyUiSession }).await()
+    await ctx.plugin({ inject: [...sessionStatusInject], apply: applySessionStatus }).await()
     return runtime
   }
 
@@ -297,15 +311,16 @@ export class SlotTestRuntime {
    * so a missing provider fails loud instead of suspending the fiber forever
    * (deliberate load-order suspension tests use `ctx.plugin` directly).
    * @param plugin - plugin value (function, class, or `{ inject, apply }` object).
+   * @param config - the plugin's `apply` config, such as a {@link syncedConfig} object for a Client face with synced fields.
    * @returns handle owning the fiber's explicit disposal.
    */
-  async mount(plugin: Plugin): Promise<FeatureHandle> {
+  async mount(plugin: Plugin, config?: unknown): Promise<FeatureHandle> {
     const required = Object.keys(Inject.resolve((plugin as { inject?: Inject }).inject))
     const missing = required.filter(name => this.ctx.get(name) === undefined)
     if (missing.length > 0) {
       throw new Error(`mount would suspend: missing service(s) ${missing.join(', ')} — provide() them first`)
     }
-    const fiber = this.ctx.plugin(plugin)
+    const fiber = this.ctx.plugin(plugin, config)
     await this.stabilizer(async () => {
       await fiber.await()
     })
@@ -483,4 +498,11 @@ export class SlotTestRuntime {
     await this.stabilizer(() => this.ctx.fiber.dispose())
     localStorage.clear()
   }
+}
+
+/** Empty reading baseline held open until the stream generation is cancelled. */
+async function *idleReadingStream(signal: AbortSignal): AsyncGenerator<{ readonly type: 'baseline'; readonly items: readonly [] }> {
+  yield { type: 'baseline', items: [] }
+  signal.throwIfAborted()
+  await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
 }

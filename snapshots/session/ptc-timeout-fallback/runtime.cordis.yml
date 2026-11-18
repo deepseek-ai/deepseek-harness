@@ -1,0 +1,6 @@
+- id: ptc-runtime
+  config:
+    executionMode: vm-script
+    scriptPersistence: true
+    timeoutMs: 10000
+    stopGraceMs: 1000

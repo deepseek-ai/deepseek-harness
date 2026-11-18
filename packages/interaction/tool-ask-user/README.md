@@ -61,7 +61,7 @@ Send one or more questions with ids unique within the call; the answer echoes th
 
 ### What the model gets back
 
-An answer returns one item per question. `selected` holds option labels; `custom` supplements a multi-select answer or replaces a single-select choice. A skipped item has empty `selected` and no `custom`.
+An answer returns one item per question. `selected` holds option labels; `custom` supplements a multi-select answer or replaces a single-select choice. A skipped item has empty `selected` and no `custom`; both tool descriptions tell the model how to handle it.
 
 For a finite timed call, `{ "pending": true, "callId": "…" }` means the foreground wait ended without an answer. The question remains answerable, and the model may continue independent work. A later answer arrives as a user message identified by `kind`, `tool`, and `callId`. Web chat pairs its questions and answers; other consumers receive compact JSON text.
 
@@ -71,7 +71,7 @@ For a finite timed call, `{ "pending": true, "callId": "…" }` means the foregr
 
 ### When the call fails
 
-Legacy and `timeout: -1` calls wait for an answer or cancellation; without an accepting answerer, they return an error. A finite timed call without an answerer returns pending at its deadline. Cancellation and a caller that is not the exact live runtime root also return errors. A live child agent is rejected with `DELEGATED_CALLER` and must include the unresolved decision in its final result.
+Legacy and `timeout: -1` calls wait for an answer or cancellation; without an accepting answerer, they return an error. A finite timed call without an answerer returns pending at its deadline. Cancellation and a caller that is not the exact live runtime root also return errors. A timed call rejects an out-of-range `timeout` and a repeated question id with `ToolArgsError` `INVALID_ARGS`, and a missing calling agent with `ToolContextUnavailableError`. A live child agent is rejected with `DELEGATED_CALLER` and must include the unresolved decision in its final result.
 
 -----
 

@@ -1,12 +1,34 @@
 /**
- * Time vocabulary shared by the wire boundaries that accept a caller's zone.
- * Validation and canonicalization only: this library formats nothing and owns
- * no failure vocabulary — each boundary declares and throws its own refusal.
+ * Time vocabulary shared by the boundaries that accept a caller's zone or a
+ * wall-clock selector, elapsed span, or bounded Cron/RRULE recurrence.
+ *
+ * The library validates, canonicalizes, parses, and renders one canonical instant
+ * format; it produces no model-facing text and owns no failure vocabulary. A refusal that carries a
+ * reason is a discriminated result, and each caller maps that reason onto its
+ * own domain code and diagnostic. `canonicalClientTimeZone` is the wire-boundary
+ * form and answers a name or `undefined`; `formatFourDigitYearInstant` and
+ * `resolveLocalInstant` take already-validated values and answer a string or
+ * epoch milliseconds directly; `Duration` holds a span in milliseconds with no
+ * implicit numeric conversion. Cron and RRule parse distinct recurrence types
+ * and compute occurrences from explicit times without task state or timers.
  * @module @deepseek-ai/dsh-util-time
  */
 
-/** Strict browser-zone profile: UTC or an IANA Area/Location-style identifier. */
-const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
+import { canonicalizeTimeZone } from './instant.ts'
+
+export { Duration } from './duration.ts'
+export {
+  MAX_FOUR_DIGIT_YEAR_MS,
+  MIN_FOUR_DIGIT_YEAR_MS,
+  canonicalizeTimeZone,
+  formatFourDigitYearInstant,
+  fourDigitYearEpoch,
+  isFourDigitYearInstant,
+  parseLocalCalendar,
+  parseOffsetInstant,
+  resolveLocalInstant,
+} from './instant.ts'
+export type { InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection } from './instant.ts'
 
 /**
  * Validate and canonicalize one caller-supplied IANA zone at a wire boundary.
@@ -18,16 +40,11 @@ const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
  * @returns the canonical zone, or `undefined` when the name is unusable.
  */
 export function canonicalClientTimeZone(value: string): string | undefined {
-  if (value.length === 0 || value.trim() !== value
-    || (value !== 'UTC' && !IANA_TIME_ZONE.test(value))) return undefined
-  try {
-    const canonical = new Intl.DateTimeFormat('en-US', { timeZone: value })
-      .resolvedOptions().timeZone
-    /* v8 ignore next -- Intl returns UTC or a canonical IANA Area/Location for accepted input. */
-    if (canonical !== 'UTC' && !IANA_TIME_ZONE.test(canonical)) return undefined
-    return canonical
-  } catch {
-    // Intl rejects unsupported zone names; the caller maps that parser rejection.
-    return undefined
-  }
+  const resolved = canonicalizeTimeZone(value)
+  return resolved.kind === 'accepted' ? resolved.timeZone : undefined
 }
+
+export { Cron, CRON_SEARCH_HORIZON_YEARS } from './cron.ts'
+export type { CronFields } from './cron.ts'
+export { RRule } from './rrule.ts'
+export type { RecurrenceOccurrence, RecurrenceRejection, RecurrenceResult } from './recurrence.ts'

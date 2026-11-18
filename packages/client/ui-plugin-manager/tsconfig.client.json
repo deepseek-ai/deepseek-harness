@@ -7,7 +7,13 @@
   },
   "references": [
     {
+      "path": "../../util/text-search"
+    },
+    {
       "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../util/official-bundles"
     },
     {
       "path": "../../../vendor/cordis"
@@ -32,6 +38,9 @@
     },
     {
       "path": "../ui-primitives"
+    },
+    {
+      "path": "../modules"
     },
     {
       "path": "../ui-renderer"

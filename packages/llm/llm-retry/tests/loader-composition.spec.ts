@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,11 +11,12 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LlmRuntime, { createUserMessage, LlmAdapter, LlmError, resolveRetryPolicy  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as retry from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 let root: string | undefined
 let context: Context | undefined
@@ -62,8 +64,10 @@ async function loadYaml(lines: readonly string[]): Promise<Context> {
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
+
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-llm-retry', retry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
@@ -94,6 +98,7 @@ describe('real Loader composition', () => {
       "- name: '@deepseek-ai/dsh-session-projection'",
       "- name: '@deepseek-ai/dsh-system-prompt'",
       "- name: '@deepseek-ai/dsh-tools'",
+      "- name: '@deepseek-ai/dsh-tool-executor-native'",
       "- name: '@deepseek-ai/dsh-agent'",
       "- name: '@deepseek-ai/dsh-llm-retry'",
       "- name: '@deepseek-ai/dsh-agent-loop'",
@@ -107,7 +112,7 @@ describe('real Loader composition', () => {
 
     const adapter = new TransientOnceAdapter()
     loaded.llm.registerAdapter(['mock'], adapter)
-    const agent = await loaded.agentLoop.create(SessionId('loader-retry'), { provider: 'mock', model: 'mock' })
+    const agent = await loaded.agentLoop.create(brandString<SessionId>('loader-retry'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'recover' }], source: { kind: 'user' } }))
     await agent.whenIdle()
 

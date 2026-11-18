@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import type { Readable, Writable } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { FsError, type FsTarget, type FsWriteIntent, type FsVersion } from '@deepseek-ai/dsh-fs'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import type {} from '@deepseek-ai/dsh-subprocess'
@@ -15,7 +16,7 @@ import type { SandboxExecutionPolicy, SandboxPolicy } from '@deepseek-ai/dsh-san
 import { z } from 'zod'
 import { SshRpcPeer, RemoteOperationError, SSH_MAX_PROCESS_HANDLES, SSH_MAX_TEXT_STREAMS, SSH_PROTOCOL_VERSION } from './protocol.ts'
 import { RemoteProcesses } from './helper-processes.ts'
-import { editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
+import { hunkSchema, moveOptionsSchema, versionGuardSchema, editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
 import type { SshTextStreamId } from './schemas.ts'
 
 const MAX_FRAME_BYTES = 64 * 1024 * 1024
@@ -87,8 +88,14 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
   }
   const policy = async (raw: unknown, signal: AbortSignal): Promise<SandboxExecutionPolicy> => {
     const parsed = policySchema.parse(raw)
+    const { sessionId, additionalWritableRoots: additional, ...fields } = parsed
     const target = await ctx.fs.resolve(parsed.workspaceRoot, { signal })
-    return { ...parsed, workspaceRoot: ctx.fs.processPath(target) } as SandboxExecutionPolicy
+    return {
+      ...fields,
+      workspaceRoot: ctx.fs.processPath(target),
+      ...additional === undefined ? {} : { additionalWritableRoots: additional },
+      ...sessionId === undefined ? {} : { sessionId: brandString<NonNullable<SandboxExecutionPolicy['sessionId']>>(sessionId) },
+    }
   }
   const asTarget = (raw: unknown): FsTarget => targetSchema.parse(raw) as FsTarget
   const peer = new SshRpcPeer(transport.input, transport.output, MAX_FRAME_BYTES, 128, async (method, raw, requestSignal) => {
@@ -242,6 +249,28 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
           ? undefined : z.object({ version: z.string() }).strict().parse(input.expected) as { version: FsVersion },
         signal, resolved,
       )
+    }
+    if (method === 'fs.patch' || method === 'fs.delete') {
+      const schema = z.object({ target: targetSchema, expected: versionGuardSchema.optional(), policy: policySchema }).strict()
+      if (method === 'fs.patch') {
+        const input = schema.extend({ hunks: z.array(hunkSchema) }).parse(raw)
+        return ctx.fs.patchText(asTarget(input.target), input.hunks,
+          input.expected as { version: FsVersion } | undefined, signal, await policy(input.policy, signal))
+      }
+      const input = schema.parse(raw)
+      return ctx.fs.deleteFile(asTarget(input.target), input.expected as { version: FsVersion } | undefined,
+        signal, await policy(input.policy, signal))
+    }
+    if (method === 'fs.move') {
+      const input = z.object({
+        source: targetSchema, destination: targetSchema, options: moveOptionsSchema, policy: policySchema,
+      }).strict().parse(raw)
+      const { hunks, expectedSource, expectedDestination } = input.options
+      return ctx.fs.moveFile(asTarget(input.source), asTarget(input.destination), {
+        ...(hunks === undefined ? {} : { hunks }),
+        ...(expectedSource === undefined ? {} : { expectedSource: { version: expectedSource.version as FsVersion } }),
+        ...(expectedDestination === undefined ? {} : { expectedDestination: expectedDestination as FsWriteIntent }),
+      }, signal, await policy(input.policy, signal))
     }
     throw new Error(`Unknown SSH helper operation: ${method}`)
   })

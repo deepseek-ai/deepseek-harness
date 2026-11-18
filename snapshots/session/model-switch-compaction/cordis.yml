@@ -1,0 +1,32 @@
+# The second request selects a smaller model before its header is committed.
+
+- id: agent-instructions
+  disabled: true
+
+- id: llm-deepseek
+  config:
+    models:
+      - id: deepseek-v4-flash
+        contextWindow: 100000
+        maxTokens: 1000
+      - id: deepseek-v4-pro
+        contextWindow: 8792
+        maxTokens: 1000
+
+- id: compaction-basic
+  config:
+    thresholdRatio: 0.8
+    headroomTokens: 1800
+    retainTokens: 20
+    maxTokens: 32
+
+- insert:
+    - id: compaction-working-directory
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
+    - id: model-switch-compaction-driver
+      name: './driver.mjs'
+
+# Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
+- id: tool-fs
+  config:
+    applyPatch: false

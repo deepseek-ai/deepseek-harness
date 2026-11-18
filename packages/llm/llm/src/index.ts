@@ -33,9 +33,9 @@ import type { ResolvedRetryPolicy } from './retry-policy.ts'
 import type { ProviderRequestId } from './brand.ts'
 import { callConfigEquals } from './call-config.ts'
 import type { ConfigureCall, LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
-import { HarnessError, INVALID_CREDENTIAL_CODE } from './error.ts'
+import { HarnessError } from './error.ts'
+import type { BuiltinLlmFailureCode } from './error.ts'
 import { normalizeLlmFailure } from './adapter-failure.ts'
-import { normalizeApiKey } from './api-key.ts'
 import {
   contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates,
 } from './content.ts'
@@ -44,11 +44,14 @@ import type { FileAttachmentRef, ImageAttachmentRef, ImageRequestTarget } from '
 export * from './attribution.ts'
 export * from './brand.ts'
 export * from './error.ts'
-export * from './api-key.ts'
-export * from './types.ts'
+export type * from './types.ts'
 export * from './content.ts'
 export * from './assistant-stream.ts'
-export * from './message.ts'
+export type * from './message.ts'
+export {
+  CONTEXT_SUMMARY_MAX_CHARS, boundContextSummary, createAssistantMessage, createDeveloperMessage, createMessage,
+  createSystemMessage, createToolResultMessage, createUserMessage, freezeMessage,
+} from './message.ts'
 export * from './retry-policy.ts'
 export { BlockAssembler } from './assembler.ts'
 export { callConfigEquals, isAgentLoopRequest, markAgentLoopRequest } from './call-config.ts'
@@ -92,6 +95,9 @@ export interface LlmErrorOptions extends ErrorOptions {
 /**
  * Typed error for LLM-related failures. Extends {@link HarnessError}, so the
  * `code` string (e.g. `AUTH`, `RATE_LIMIT`, `NO_ADAPTER`) is shared taxonomy.
+ * The constructor takes only a {@link BuiltinLlmFailureCode}; a failure from
+ * another provider, whose code may be any string, is re-raised through
+ * {@link LlmError.fromFailure}.
  */
 export class LlmError extends HarnessError {
   /** Serializable facts retained beside this live Error. */
@@ -99,10 +105,10 @@ export class LlmError extends HarnessError {
 
   /**
    * @param message - non-empty human-readable failure summary.
-   * @param code - non-empty stable provider-neutral machine code.
+   * @param code - built-in stable provider-neutral machine code.
    * @param options - optional cause and validated serializable provider facts.
    */
-  constructor(message: string, code: string, options?: LlmErrorOptions) {
+  constructor(message: string, code: BuiltinLlmFailureCode, options?: LlmErrorOptions) {
     if (typeof message !== 'string' || message.length === 0) throw new Error('LlmError message must be a non-empty string')
     if (typeof code !== 'string' || code.length === 0) throw new Error('LlmError code must be a non-empty string')
     if (options?.status !== undefined
@@ -128,41 +134,17 @@ export class LlmError extends HarnessError {
       ...options?.offloadImages === undefined ? {} : { offloadImages: options.offloadImages },
     })
   }
-}
 
-/**
- * Accept one supplied credential, or refuse it as unusable.
- *
- * A stored key arrives from the credentials seam, a `.env` line, or a shell
- * export, all of which pick up surrounding whitespace, so trimming is silent.
- * Anything else fails here rather than inside `fetch`, whose ByteString
- * refusal names a UTF-16 code point instead of the setting to change. The key
- * never enters the message: `ref` names where to fix it, and echoing any part
- * of a secret into a log or a UI is the failure this diagnosis avoids.
- *
- * Lives beside {@link LlmError} rather than in `./api-key.ts` so the predicate
- * module stays dependency-free; both adapters share this one diagnosis instead
- * of keeping near-identical local copies.
- * @param raw - the credential exactly as supplied.
- * @param pkg - the refusing package name, prefixed to the diagnostic.
- * @param ref - the credential reference the value resolved through.
- * @returns the trimmed, usable key.
- */
-export function assertUsableApiKey(raw: string, pkg: string, ref: string): string {
-  const checked = normalizeApiKey(raw)
-  if (checked.ok) return checked.value
-  // The Models page is named as the writer it usually is, not as the only one:
-  // the same value can arrive from a hand-edited .env or a shell export in a
-  // composition that mounts no credentials seam at all, where directing the
-  // user to a page that deployment does not serve would be a dead end.
-  throw new LlmError(
-    checked.reason === 'empty'
-      ? `${pkg}: the API key resolved from ${ref} is blank; set ${ref} to the raw key`
-        + ' (the web Models page writes it) or export it in the launching environment'
-      : `${pkg}: the API key resolved from ${ref} contains characters no HTTP header can carry;`
-        + ` set ${ref} to the raw key alone (the web Models page writes it)`,
-    INVALID_CREDENTIAL_CODE,
-  )
+  /**
+   * Raise an observed failure again with its own code, which any provider may have chosen.
+   * @param failure - the serializable failure, typically from a stream's terminal chunk.
+   * @param options - optional cause.
+   * @returns an error carrying the failure's message, code, and provider facts.
+   */
+  static fromFailure(failure: LlmFailure, options?: ErrorOptions): LlmError {
+    // The constructor validates the code at runtime; the built-in type constrains only codes raised here.
+    return new LlmError(failure.message, failure.code as BuiltinLlmFailureCode, { ...failure, ...options })
+  }
 }
 
 /** One model call whose config and adapter registration were resolved together. */
@@ -734,12 +716,16 @@ export class LlmRuntime extends TypertRemoteService {
       }
       seen.add(model.id)
       const inputModalities = this.detachedModalities(model.inputModalities)
+      const badge = model.badge
       return {
         provider: model.provider,
         id: model.id,
         name: model.name,
         ...model.description === undefined ? {} : { description: model.description },
         ...inputModalities === undefined ? {} : { inputModalities },
+        ...badge === undefined ? {} : {
+          badge: { text: typeof badge.text === 'string' ? badge.text : { ...badge.text }, tone: badge.tone },
+        },
       }
     })
   }

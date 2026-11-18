@@ -12,10 +12,13 @@
       "path": "../../packages/boot/app-boot"
     },
     {
+      "path": "../../packages/util/official-bundles"
+    },
+    {
       "path": "../../packages/util/home-paths"
     },
     {
-      "path": "../../packages/credentials/deepseek-account"
+      "path": "../../packages/account/deepseek-account"
     },
     {
       "path": "../../packages/api/gateway/tsconfig.host.json"
@@ -31,6 +34,18 @@
     },
     {
       "path": "../../packages/client/product-analytics/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/boot/plugin-manager"
+    },
+    {
+      "path": "../../packages/util/file-drag"
+    },
+    {
+      "path": "../../packages/client/ui-settings-general/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/client/ui-file-actions"
     }
   ],
   "exclude": [

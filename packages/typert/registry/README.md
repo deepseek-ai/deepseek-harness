@@ -51,7 +51,7 @@ Harness offline integrations register an ordinary `TYPERT_REMOTE` contribution w
 
 Remote calls resolve Host objects and scoped Contexts through `ctx.typert.lookups` and `ctx.typert.contexts`. `registerHost()` installs the Host wire declaration and its wire-to-Context resolver, while `configureHost()` replaces only that resolver. `registerClient()` installs the bidirectional Client adapter for the same merge-declared kind. Host-to-Client event sources carry their domain identity explicitly instead of projecting it back from a Context.
 
-`ctx.typert.resources` holds the default wire field of each resource kind declared in `TypertResourceMap`. The domain that owns a kind registers it with `register(kind, { field })` as a Cordis effect of the calling fiber; a second registration of one kind throws, and so does `global`, the built-in identity-less resource kind. `get(kind)` reads one declaration, and `entries()` lists every registered `{ kind, field }` in registration order. A lookup provider and a Host Context adapter may name the resource kind of their wire identity through `resource`, and a configured resolver keeps it. The Gateway reads all three when it resolves the resources of a non-owner call.
+`ctx.typert.resources` holds the default identity extraction of each resource kind declared in `TypertResourceMap`. The domain that owns a kind registers either `{ field }` or `{ resolve }`, never both, as a Cordis effect of the calling fiber; a second registration of one kind throws, and so does `global`, the built-in identity-less resource kind. A resolver is called once, as a plain function without a receiver, so it reads only its `{ args, parameters }` input; a declaration with neither member throws at registration. `get(kind)` reads one declaration, and `entries()` lists each `kind` with its field or resolver declaration in registration order. A lookup provider and a Host Context adapter may name the resource kind of their wire identity through `resource`, and a configured resolver keeps it. The Gateway reads all three when it resolves the resources of a non-owner call.
 
 -----
 
@@ -73,7 +73,7 @@ The registry is built on one principle: a contribution is one atomic, fiber-owne
 - `ctx.typert.remotes` — consumer-selected contributions mounted in the calling fiber.
 - `ctx.typert.lookups` — lookup providers plus composition-owned resolver overrides per key.
 - `ctx.typert.contexts` — Host Context providers and Client Context binders per scoped key.
-- `ctx.typert.resources` — the default wire field per resource kind.
+- `ctx.typert.resources` — the default field or resolver per resource kind.
 
 Each sub-registry publishes `TypertRegistryChange` events to subscribed listeners; a throwing listener is logged and does not stop later listeners.
 

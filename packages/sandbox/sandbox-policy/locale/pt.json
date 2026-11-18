@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Política de permissão de sandbox",
+    "description": "Determine os limites para cada operação com base no modo de permissão e no espaço de trabalho da sessão atual."
+  }
+}

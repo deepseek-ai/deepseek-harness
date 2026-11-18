@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Language server service",
+    "description": "Register language servers for definition, reference, implementation, and hover queries with consistent errors."
+  }
+}

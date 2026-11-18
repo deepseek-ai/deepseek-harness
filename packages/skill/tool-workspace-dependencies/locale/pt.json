@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dependências do espaço de trabalho",
+    "description": "Forneça caminhos absolutos para os tempos de execução Python, Node.js e pnpm incluídos."
+  }
+}

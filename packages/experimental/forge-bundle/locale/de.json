@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Änderungsanfragen und Arbeitsbäume",
+    "description": "Verknüpfte Änderungsanfragen neben der Unterhaltung verfolgen, GitHub-Pull-Requests ebenso wie GitLab-Merge-Requests: Prüfungen und Reviews ansehen, Code vergleichen und Feedback an den Agenten senden. Lokale Änderungen prüfen und Aufgaben mit separaten Arbeitsbäumen isolieren. GitHub-Funktionen erfordern eine installierte gh-CLI und eine Anmeldung auf dem Host. GitLab-Merge-Requests erfordern die auf dem Host installierte und angemeldete glab-CLI.",
+    "detail": "docs/DETAIL.de.md"
+  }
+}

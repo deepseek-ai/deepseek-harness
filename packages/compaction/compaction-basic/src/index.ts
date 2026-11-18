@@ -4,18 +4,20 @@
  * @module @deepseek-ai/dsh-compaction-basic
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { CompactionEngine, ManualCompactionError } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compaction'
-import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
-import { CONTEXT_WINDOW_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
 import type {} from '@deepseek-ai/dsh-compaction-tool-result-pruner'
+import { answeredRouteProjectionDefinition } from './answered-route.ts'
+import type { AnsweredRoute } from './answered-route.ts'
 import {
   resolveCompactSpec,
   resolveConfig,
@@ -28,7 +30,7 @@ import {
   selectCompactableRange,
 } from './region.ts'
 import { summarizeWithLlm } from './summarizer.ts'
-import type { SummarizationInput, SummaryResult } from './summarizer.ts'
+import type { SummarizationInput, SummaryResult, SummaryRoute } from './summarizer.ts'
 import type {
   BasicCompactionConfig,
   ModelCompactPolicyConfig,
@@ -45,15 +47,16 @@ export type {
   ResolvedTargetPolicy,
 } from './types.ts'
 
+/** Detach a route that names both provider and model; any other value is no route. */
+function completeRoute(route: { provider?: string; model?: string } | undefined): SummaryRoute | undefined {
+  if (route?.provider === undefined || route.provider.length === 0
+    || route.model === undefined || route.model.length === 0) return undefined
+  return { provider: route.provider, model: route.model }
+}
+
 /** Resolve the exact provider/model durably routed for the latest request. */
-function routedTarget(
-  session: Session,
-): Pick<LlmCallConfig, 'provider' | 'model'> | undefined {
-  const config = session.requestHeader()?.config
-  if (config === undefined || config.provider.length === 0 || config.model.length === 0) {
-    return undefined
-  }
-  return { provider: config.provider, model: config.model }
+function routedTarget(session: Session): SummaryRoute | undefined {
+  return completeRoute(session.requestHeader()?.config)
 }
 
 /**
@@ -62,20 +65,23 @@ function routedTarget(
  * the adapter's per-request default, which the adapter materializes when that
  * envelope omits one. No declared cap means no reservation.
  */
-function reservedCompletionTokens(agent: Agent, defaultMaxTokens: number | undefined): number {
-  const configured = agent.session.requestHeader()?.config.maxTokens
-  return configured ?? defaultMaxTokens ?? 0
+function reservedCompletionTokens(header: EpochHeader, defaultMaxTokens: number | undefined): number {
+  return header.config.maxTokens ?? defaultMaxTokens ?? 0
 }
 
-/** Resolve the conversation target used to select an optional policy override. */
+/**
+ * Resolve the route that summarizes the conversation and selects its policy
+ * override. The route that last answered already accepted this history; the
+ * latest header may name a route whose only request overflowed.
+ * @param agent - supplies the latest header and the live fallback options.
+ * @param answered - route recorded on the latest assistant message; `null` before the first one.
+ * @returns the first complete route among `answered`, the latest header, and the agent options.
+ */
 function conversationTarget(
   agent: Agent,
-): Pick<LlmCallConfig, 'provider' | 'model'> | undefined {
-  const routed = routedTarget(agent.session)
-  if (routed !== undefined) return routed
-  if (agent.options.provider === undefined || agent.options.provider.length === 0
-    || agent.options.model === undefined || agent.options.model.length === 0) return undefined
-  return { provider: agent.options.provider, model: agent.options.model }
+  answered: AnsweredRoute,
+): SummaryRoute | undefined {
+  return completeRoute(answered ?? undefined) ?? routedTarget(agent.session) ?? completeRoute(agent.options)
 }
 
 const thresholdRatioSchema = z.number()
@@ -111,7 +117,7 @@ const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
  * token meter.
  */
 export class BasicCompactionEngine extends CompactionEngine {
-  static inject = ['llm', 'tokenMeter', 'sessions']
+  static inject = ['llm', 'tokenMeter', 'sessions', 'sessionProjections']
 
   static Config: z<BasicCompactionConfig> = z.object({
     thresholdRatio: thresholdRatioSchema,
@@ -133,17 +139,25 @@ export class BasicCompactionEngine extends CompactionEngine {
   private readonly warnedPressureConfigTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
+  /** Registered at construction; `summarize()` awaits it, so no read precedes readiness. */
+  private readonly answeredRoute: Promise<ProjectionHandle<AnsweredRoute>>
 
   constructor(ctx: Context, config: BasicCompactionConfig = {}) {
     super(ctx)
     this.config = resolveConfig(config)
+    this.answeredRoute = this.ctx.sessionProjections.register(answeredRouteProjectionDefinition)
     if (this.config.auto) this._registerAutomaticCompaction()
   }
 
+  /** Fail plugin activation when the answered-route projection cannot register. */
+  protected async [Service.init](): Promise<void> {
+    await this.answeredRoute
+  }
+
   /**
-   * Register automatic between-step pressure and model-request overflow
-   * recovery. `compactIfNeeded` stays dynamically dispatched so subclass
-   * overrides are honored at event time.
+   * Register between-step pressure, model-switch pressure, and request-overflow
+   * recovery. Pre-step and overflow listeners dispatch through `compactIfNeeded`;
+   * model switches price the proposed header directly. All summaries use `summarize`.
    */
   private _registerAutomaticCompaction(): void {
     const { ctx } = this
@@ -178,6 +192,30 @@ export class BasicCompactionEngine extends CompactionEngine {
     ctx.on('agent/status', ({ agent, status }) => {
       if (status === 'idle') this.overflowRetries.delete(agent)
     })
+
+    // Prepend wraps routing listeners: await their final selection while the
+    // committed header still identifies the model that can summarize the history.
+    ctx.on('agent/request', async ({ agent, signal }, next) => {
+      const config = await next()
+      const previous = agent.session.requestHeader()
+      if (signal.aborted || previous === undefined || config.provider === '' || config.model === ''
+        || (previous.config.provider === config.provider && previous.config.model === config.model)) return config
+      try {
+        const header = { ...previous, config }
+        const result = await this.compactPressure(agent, header, signal, true)
+        if (result !== null) logResult(result, 'model switch')
+      } catch (error: unknown) {
+        signal.throwIfAborted()
+        const message = error instanceof Error ? error.message : String(error)
+        throw new LlmError(
+          `Cannot switch to ${config.provider}/${config.model}: context compaction failed: ${message}. `
+          + 'The previous request model is preserved; retry or select a model with a larger context window.',
+          'MODEL_SWITCH_COMPACTION_FAILED',
+          { cause: error },
+        )
+      }
+      return config
+    }, { prepend: true })
 
     // A successful response starts a fresh overflow-recovery sequence even
     // when tool calls continue the same turn into another request.
@@ -238,9 +276,12 @@ export class BasicCompactionEngine extends CompactionEngine {
    * Summarize the replayed conversation region through a direct one-shot
    * `ctx.llm.stream()` call whose prefix reuses the conversation's own system
    * prompt, tools, and messages so the provider's KV cache is not invalidated.
+   * Without a configured summary target the call goes to the route recorded
+   * on the latest assistant message, then the latest request header, then the
+   * agent options. A model selected for a later request is not used.
    * Override this sole hook for a template or remote summarizer.
    * @param input - replayed conversation prefix (system, tools, and leading messages) to condense.
-   * @param agent - supplies routed-model history, fallback model, and session id.
+   * @param agent - supplies the session history, fallback model, and session id.
    * @param signal - optional cancellation forwarded to the adapter.
    * @returns safe text summary blocks and the exact auxiliary call envelope and output.
    */
@@ -249,11 +290,11 @@ export class BasicCompactionEngine extends CompactionEngine {
     agent: Agent,
     signal?: AbortSignal,
   ): Promise<SummaryResult> {
-    const target = conversationTarget(agent)
+    const target = conversationTarget(agent, (await this.answeredRoute).stateOf(agent.session))
     const config = target === undefined
       ? this.config
       : resolveTargetPolicy(this.config, target)
-    return summarizeWithLlm(this.ctx, config, input, agent, signal)
+    return summarizeWithLlm(this.ctx, config, input, agent, target, signal)
   }
 
   /**
@@ -271,36 +312,36 @@ export class BasicCompactionEngine extends CompactionEngine {
     trigger: CompactionTrigger,
     signal: AbortSignal,
   ): Promise<CompactionResult | null> {
-    const target = routedTarget(agent.session)
-    if (target === undefined) return null
-    const policy = resolveTargetPolicy(this.config, target)
-    const meter = this.ctx.tokenMeter
-    let measurement = meter.measure(agent.session)
+    const header = agent.session.requestHeader()
+    if (header === undefined || routedTarget(agent.session) === undefined) return null
     switch (trigger) {
-      case 'context-overflow':
-        break
       case 'pressure':
-        break
+        return this.compactPressure(agent, header, signal, false)
+      case 'context-overflow': {
+        this.ctx.get('toolResultPruner')?.pruneSession(agent.session)
+        const measurement = this.ctx.tokenMeter.measure(agent.session)
+        const range = selectCompactableRange(agent.session, measurement, 0)
+        if (range === null) return null
+        return this.compactRegion(range.start, range.end, agent, signal)
+      }
       /* v8 ignore next -- closed-union exhaustiveness guard */
       default:
         assertNever(trigger, 'compaction trigger')
     }
+  }
 
-    // Pruning is optional so compaction-basic remains independently composable.
-    // Overflow always qualifies; pressure first resolves the routed model's
-    // capacity and checks its target-specific threshold.
+  /** Price the proposed header; switch checks require history below its threshold. */
+  private async compactPressure(
+    agent: Agent,
+    header: EpochHeader,
+    signal: AbortSignal,
+    requireBelowThreshold: boolean,
+  ): Promise<CompactionResult | null> {
+    const target = header.config
+    const policy = resolveTargetPolicy(this.config, target)
+    const meter = this.ctx.tokenMeter
+    let measurement = meter.measure(agent.session, header)
     const prune = this.ctx.get('toolResultPruner')
-
-    if (trigger === 'context-overflow') {
-      if (prune !== undefined) {
-        prune.pruneSession(agent.session)
-        measurement = meter.measure(agent.session)
-      }
-      const range = selectCompactableRange(agent.session, measurement, 0)
-      if (range === null) return null
-      return this.compactRegion(range.start, range.end, agent, signal)
-    }
-
     const info = await this.ctx.llm.resolveModelInfo(target.provider, target.model, signal)
     assertNoActiveCompaction(agent.session, 'automatic pressure compaction')
     const targetKey = `${target.provider}/${target.model}`
@@ -314,7 +355,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     const spec = resolveCompactSpec(
       policy,
       info.context.contextWindow,
-      reservedCompletionTokens(agent, info.defaultMaxTokens),
+      reservedCompletionTokens(header, info.defaultMaxTokens),
     )
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
@@ -322,7 +363,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     // summary range, then remeasure through the singleton replay fold.
     if (prune !== undefined) {
       prune.pruneSession(agent.session)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(agent.session, header)
     }
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
@@ -330,13 +371,14 @@ export class BasicCompactionEngine extends CompactionEngine {
     for (let attempt = 0; attempt <= spec.compactionRetries; attempt += 1) {
       const range = selectCompactableRange(agent.session, measurement, spec.retainTokens)
       if (range === null) {
-        /* v8 ignore else -- concrete replacement preserves a compactable checkpoint; subclass hooks cannot mutate it. */
-        if (result === null) return null
-        /* v8 ignore next -- paired with the defensive post-success branch above. */
-        break
+        if (result === null && !requireBelowThreshold) return null
+        throw new Error(
+          'no safe compaction range can reduce context below threshold '
+          + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,
+        )
       }
       result = await this.compactRegion(range.start, range.end, agent, signal)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(agent.session, header)
       if (measurement.totalTokens < spec.thresholdTokens) return result
     }
 

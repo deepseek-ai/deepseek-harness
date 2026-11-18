@@ -127,10 +127,16 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
 
       const terminalEntry = panel.locator('[data-sidebar-right-guide-entry="terminal"]')
       const shellMenu = terminalEntry.getByRole('button', { name: 'Choose shell', exact: true })
-      const titleBounds = await terminalEntry.getByText('New terminal', { exact: true }).boundingBox()
-      const arrowBounds = await shellMenu.boundingBox()
-      expect(arrowBounds!.x).toBeGreaterThanOrEqual(titleBounds!.x + titleBounds!.width)
-      expect(arrowBounds!.x - titleBounds!.x - titleBounds!.width).toBeLessThan(8)
+      // Sample both rectangles in one layout instead of crossing the panel's transition frames.
+      await expect.poll(() => terminalEntry.evaluate((entry) => {
+        const title = [...entry.querySelectorAll('span[aria-hidden="true"]')].find(element => element.textContent === 'New terminal')
+        const arrow = entry.querySelector('button[aria-label="Choose shell"]')
+        if (title === undefined || arrow === null) return null
+        const titleBounds = title.getBoundingClientRect()
+        const arrowBounds = arrow.getBoundingClientRect()
+        const gap = arrowBounds.left - titleBounds.right
+        return { ordered: gap >= 0, adjacent: gap < 8 }
+      })).toEqual({ ordered: true, adjacent: true })
       await shellMenu.click()
       await page.getByRole('menu').waitFor()
       expect(await panel.locator('[data-sidebar-terminal]').count()).toBe(0)
@@ -177,7 +183,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       expect(await paneAppearance()).toEqual([plainPane])
       await page.keyboard.press(`${primary}+Shift+,`)
       expect(await panel.locator('[data-dockkit-tab]').filter({ hasText: 'Files' }).count()).toBe(1)
-      expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
+      await expect.poll(() => panel.locator('[data-files-search-toggle]').getAttribute('aria-expanded')).toBe('true')
+      await expect.poll(() => panel.locator('[data-files-search]').evaluate(input => document.activeElement === input)).toBe(true)
+      // Once the reveal's glow has ended, the focused pane draws nothing of its own. file-browser.e2e.ts and the
+      // seat spec own the glow itself, so this waits for no marker rather than requiring the transient one.
+      await expect.poll(() => panel.locator('[data-dockkit-pane][data-sidebar-right-flash]').count()).toBe(0)
       expect(await paneAppearance()).toEqual([plainPane])
 
       await bind(page, primary, 'Toggle panel fullscreen', 'Workspace files')
@@ -254,12 +264,12 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
         await menuTab.click({ button: 'right' })
         await page.getByRole('menu').waitFor()
         expect(await page.getByRole('tooltip').count()).toBe(0)
-        expect(await page.getByRole('menuitem').getAttribute('aria-keyshortcuts')).toBeNull()
+        expect(await page.getByRole('menuitem', { name: 'Close', exact: true }).getAttribute('aria-keyshortcuts')).toBe(aria)
         if (attempt === 0) {
           await compareOrRefreshGolden(join(expected, 'tab-menu.expected.md'),
-            await captureStableAria(page, '[data-dockkit-tab-menu]', scaffold.workspaceCwd), mode)
+            await captureStableAria(page, '[data-context-menu][role="menu"]', scaffold.workspaceCwd), mode)
         } else {
-          await page.getByRole('menuitem').focus()
+          await page.getByRole('menuitem', { name: 'Close', exact: true }).focus()
         }
         await page.keyboard.press('Escape')
         await page.getByRole('menu').waitFor({ state: 'detached' })
@@ -282,9 +292,14 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
       await panel.getByRole('button', { name: 'Fullscreen', exact: true }).click()
       await panel.locator('[data-dockkit-split-button]').click()
       await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(2)
+      // Pane closure can leave the Split tooltip open beneath the stationary pointer.
+      await right.locator('[data-dockkit-split-button]').locator('..').hover()
+      await page.getByRole('tooltip', { name: 'Two panes is the limit', exact: true }).waitFor()
       await (closeFirst === 'left' ? left : right).getByRole('tab').focus()
       await page.keyboard.press(`${primary}+Shift+,`)
       await expect.poll(() => panel.getByRole('tab').count()).toBe(1)
+      await page.mouse.move(10, 10)
+      await expect.poll(() => panel.getByRole('tooltip').count()).toBe(0)
       expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => pane === document.activeElement)).toBe(true)
       expect(await paneAppearance()).toEqual([plainPane])
       await compareOrRefreshGolden(join(expected, 'guide-close.expected.md'),

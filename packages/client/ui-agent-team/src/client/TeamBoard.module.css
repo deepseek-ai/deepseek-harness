@@ -1,0 +1,135 @@
+/* Rows share the Session panel's columns: the glyph's center 14px from the row
+   start, text at 30px, and the chevron's center 14px from the row end. */
+.board {
+  min-width: 0;
+}
+
+/* Beside the section title, one line that clips before the title does. */
+.progress {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  min-width: 0;
+}
+
+.taskRow {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  text-align: left;
+  cursor: pointer;
+}
+
+.taskRow:focus-visible {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .taskRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.glyph,
+.chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task[data-expanded='true'] .taskRow {
+  align-items: flex-start;
+}
+
+.task[data-expanded='true'] .subject {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.task[data-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+.details {
+  padding: 0 6px 8px 30px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.owner {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.description + .owner {
+  margin-top: 6px;
+}
+
+.ownerLabel {
+  flex: none;
+}
+
+.ownerValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 6px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}

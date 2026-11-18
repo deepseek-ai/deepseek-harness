@@ -4,11 +4,11 @@
  * ObservableSnapshot half), and orchestration code calls the behavior verbs
  * below — nothing else. Widening this interface is the explicit act of
  * widening what features may do to a session (and what every test fixture
- * must stub); implementation-internal entry points (history staging, wire-frame
- * dispatch) stay on the class, invisible out here.
+ * must stub); implementation-internal wire-frame dispatch stays on the class,
+ * invisible out here.
  */
-import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -36,6 +36,11 @@ export interface BeginSubmissionInput {
   readonly text: string
   /** Ordered image previews and durable file metadata matching the upcoming prompt attachments. */
   readonly attachments: readonly PendingSubmissionAttachment[]
+  /**
+   * Called once when the Host accepted the prompt, in the same update that
+   * publishes the echo, whether the receipt or an Inbox row showed it first.
+   */
+  readonly onAccept?: () => void
   /** Settlement callback fired exactly once when the echo retires. */
   readonly onRetire?: (retirement: PendingSubmissionRetirement) => void
 }
@@ -66,18 +71,24 @@ export interface ISession {
   /** Host-computed projection values by key (the useProjection seat). */
   readonly projections: ProjectionsFace
   /**
-   * Register one local submission echo in `snapshot.pendingSubmissions`,
-   * synchronously, before the caller serializes and sends the prompt. The
-   * Chat echoes persist until durable admission; transcript identities also
-   * wait for the Inbox claim watermark so stale queue rows stay suppressed.
-   * Queued echoes retire on queue acceptance. Identified failures retire
-   * submissions that have not already reached durable admission.
+   * Register one local submission echo before the caller serializes and sends
+   * the prompt. The echo reconciles against Host events from then on, and
+   * enters `snapshot.pendingSubmissions` once the Host accepted the prompt:
+   * when {@link prompt} reports the receipt or an Inbox row carrying the
+   * request id arrives, whichever comes first. The Chat echoes persist until
+   * durable admission; transcript identities also wait for the Inbox claim
+   * watermark so stale queue rows stay suppressed. Queued echoes retire on
+   * queue acceptance. Identified failures retire submissions that have not
+   * already reached durable admission.
    * @param input - echo content and the optional settlement callback.
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
   beginSubmission(input: BeginSubmissionInput): SubmissionHandle
   /**
-   * Send a prompt into the session.
+   * Send a prompt into the session. The Host can hold the prompt at its
+   * admission stage, so the call can stay open; acceptance publishes the
+   * prompt's echo and moves a blank Session to engaging, before the call
+   * returns when an Inbox row carrying the request id arrives first.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
    * @param signal - optional caller cancellation for the complete admission round-trip.
@@ -91,12 +102,12 @@ export interface ISession {
     requestId?: SessionRequestId,
   ): Promise<RemoteResult<{ accepted: true }>>
   /**
-   * Resolve one durable image referenced by this session.
-   * @param attachmentId - opaque id found in the folded session log.
-   * @returns the authenticated reference and decoded bytes.
+   * Resolve one stored image using this Session's gateway permission scope.
+   * @param attachment - complete image reference from the folded session log.
+   * @returns the supplied reference after storage verification, and decoded bytes.
    */
   readAttachment(
-    attachmentId: AttachmentIdType,
+    attachment: ImageAttachmentRef,
   ): Promise<RemoteResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>>
   /**
    * Apply one edit, remove, or Steer action to a still-pending queue occurrence.
@@ -121,10 +132,18 @@ export interface ISession {
   /**
    * Extend history by at least 50 messages and two Turn starts, including a
    * partial Turn at the window's beginning. Stop at 500 messages or history
-   * exhaustion even when those minima cannot be met. Publish one prepend.
-   * @returns completion; failures land in snapshot.openState/loadingOlder.
+   * exhaustion even when those minima cannot be met. At most one page may be
+   * loading or awaiting consumption; live events remain independently visible.
+   * @param options - deferConsumption keeps the page unpublished until consumeOlder; omitted consumes before completion.
+   * @returns request completion; failures and no progress set snapshot.historyLoadStatus to error.
    */
-  loadOlder(): Promise<void>
+  loadOlder(options?: { deferConsumption?: boolean }): Promise<void>
+  /**
+   * Publish the prepared page synchronously if its generation and starting cursor still match.
+   * A terminal empty page may publish hasMore=false; an invalidated page is discarded.
+   * @returns whether a prepared page was published; false while loading, absent, or invalidated.
+   */
+  consumeOlder(): boolean
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the
    * turn-jump loader. Repeated calls while a jump is paging lower its shared

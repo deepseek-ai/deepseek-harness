@@ -1,9 +1,11 @@
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 // @vitest-environment jsdom
 import { useState, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, type RenderResult, within } from '@testing-library/react'
-import { AttachmentId, type FileAttachmentRef, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AttachmentId, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -26,11 +28,11 @@ import { SkillReference } from '../../ui-skill/src/client/SkillReference.tsx'
 afterEach(cleanup)
 
 const image: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png', bytes: 68, width: 640, height: 320, name: 'history.png',
 }
 const file: FileAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`), name: 'notes.txt', bytes: 23,
+  attachmentId: brandString<AttachmentId>(`sha256:${'b'.repeat(64)}`), name: 'notes.txt', bytes: 23,
 }
 const durable: UserContentAttachment = { type: 'image', image: { attachment: image } }
 const preview: UserContentAttachment = {
@@ -54,6 +56,7 @@ async function bench() {
   const openFile = vi.fn<(path: string) => void>()
   const openSkill = vi.fn<(name: string) => void>()
   await runtime.mount({ inject: ['slots'], apply: (ctx) => {
+    ctx.slots.provideRoot({ props: { useContextMenu: contextMenuHook() } })
     const userText = new UserTextRegistry(ctx)
     for (const rule of [
       sessionReferenceRule, fileReferenceRule, folderReferenceRule, skillReferenceRule,
@@ -74,9 +77,11 @@ async function bench() {
     }, UserText)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'text' }, PlainUserText)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'session' }, SessionReference)
+    // Every path mention in these units is Host-confirmed; ui-reference owns presence coverage.
+    const keyedHooks = { pathPresence: () => ({ getSnapshot: () => 'present' as const, subscribe: () => () => {} }) }
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'file', locale: 'reference',
-      inject: () => ({ openFile }) }, FileReference)
-    ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder' }, FolderReference)
+      inject: () => ({ openFile, resolveFilePath: (path: string) => path, keyedHooks }) }, FileReference)
+    ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder', inject: () => ({ keyedHooks }) }, FolderReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'skill', inject: () => ({ openSkill }) }, SkillReference)
     ctx.slots.inject('conversation.chat.user.images', () => ctx.slots.register({ name: 'conversation.chat.user.images' }, function ImageProbe(props) {
       imageCalls.push(props)
@@ -95,7 +100,7 @@ async function bench() {
   } })
   const owner = await mountContent()
   await runtime.sessions.add({ id: 'user-content' })
-  const session = runtime.sessions.retainFor(runtime.ctx, SessionId('user-content'))
+  const session = runtime.sessions.retainFor(runtime.ctx, brandString<SessionId>('user-content'))
   const captured: { seats?: RenderSeats; setContent?: (content: ReactNode) => void } = {}
   await runtime.root.declare({
     'conversation.approval.detail': { kind: 'single', scope: 'session' },
@@ -178,7 +183,7 @@ describe('user Content Factory', () => {
   it('reuses one prepared value in unrelated parents while nested images inherit each Session', async () => {
     const b = await bench()
     await b.runtime.sessions.add({ id: 'other-user-content' })
-    const other = b.runtime.sessions.retainFor(b.runtime.ctx, SessionId('other-user-content'))
+    const other = b.runtime.sessions.retainFor(b.runtime.ctx, brandString<SessionId>('other-user-content'))
     const content: UserContentData = Object.freeze({
       text: 'Already prepared', attachments: Object.freeze([preview]), extraBlocks: Object.freeze([]),
     })

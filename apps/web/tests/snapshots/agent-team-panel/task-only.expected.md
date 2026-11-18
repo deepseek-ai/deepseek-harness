@@ -1,0 +1,8 @@
+- region "Shared tasks":
+  - heading "Shared tasks" [level=2]
+  - text: 1 pending
+  - list:
+    - listitem:
+      - button "Pending Plan before delegation":
+        - img "Pending"
+        - text: Plan before delegation

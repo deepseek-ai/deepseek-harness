@@ -9,9 +9,9 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, recordFixture, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
 
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/ptc-round/session.v3.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/ui.expected.md', import.meta.url))
@@ -23,7 +23,7 @@ const MODE = webSnapshotMode()
 
 // Elicits the successful and failed sub-rows this scenario asserts.
 const PROMPT = 'Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt '
-  + 'catching its error in the program. Return an object with both outcomes. Then reply DONE and stop.'
+  + 'catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop.'
 
 describe('web e2e: PTC mode round renders nested sub-calls', () => {
   let scaffold: WebScaffold
@@ -58,7 +58,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-drive'))
     const requestStates: string[] = []
     if (MODE !== 'record') {
-      expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual([PROMPT])
+      expect(fixtureUserPrompts(await readFile(await selectedSessionFixture(FIXTURE), 'utf8'))).toEqual([PROMPT])
     }
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
@@ -273,6 +273,27 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     expect(await source.textContent()).toBe(args.code.endsWith('\n') ? args.code.slice(0, -1) : args.code)
     await page.getByRole('tab', { name: 'Summary', exact: true }).click()
     expect(await wrap.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it.skipIf(MODE === 'record')('renders the same recorded tool round in Japanese without translating model or tool data', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-japanese'))
+    await openSettings(page, 'en')
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+    await settings.getByRole('button', { name: 'English', exact: true }).click()
+    await page.getByRole('menuitem', { name: '日本語', exact: true }).click()
+    await page.getByRole('dialog', { name: '設定', exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByRole('tab', { name: 'チャット', exact: true }).click()
+    await page.getByText('DONE', { exact: true }).waitFor()
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('ja')
+    const row = page.locator('[data-subcalls] [data-sample="bash"]').first()
+    await expandOwningTurnProcess(page, row)
+    if (await row.getAttribute('aria-expanded') !== 'true') await row.click()
+    await row.locator('xpath=..').getByText('echo CODE_ROUND_OK', { exact: true }).waitFor()
+    const snapshot = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('../../../snapshots/web/ptc-round/ui-ja.expected.md', import.meta.url)), snapshot, MODE,
+    )
   })
 
   it.skipIf(MODE === 'record')('stayed clean: no page errors, no reconnect churn', () => {

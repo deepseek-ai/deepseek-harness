@@ -76,7 +76,9 @@ The plugin prepends an `agent/pre-step` listener that delegates first and append
 
 ### Main flow
 
-When an injection is due, the plugin samples the wall clock, derives the browser-zone policy from the open turn's `user-rpc` messages, resolves the display zone (request-local or fallback), and renders the three-line reading. Positive-interval scheduling scans raw durable session events for the latest plugin-attributed message — including one shadowed by compaction — so the schedule survives resume without a process-local cache. A reading records an entered step, not a completed or transmitted request; a later preparation failure can leave it in history.
+The pre-step listener is installed before awaiting projection registration. Steps arriving during activation wait for the reader; registration failure or owner disposal stops the request, and cancellation while waiting produces no reading.
+
+When an injection is due, the plugin samples the wall clock, derives the browser-zone policy, resolves the display zone (request-local or fallback), and renders the three-line reading. The private `timeContext` Projection stores message and injection times, the latest entered turn, and its distinct reported browser zones in encounter order. It retains zone facts from messages shadowed by compaction. Zone validation stays after rejection and refresh checks; replay does not invoke formatters or hooks. JSON checkpoints plus suffix replay match a full replay. Older-version cache rows rebuild from the full journal. A reading records an entered step, not a completed or transmitted request; a later preparation failure can leave it in history.
 
 </details>
 
@@ -133,6 +135,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when clock context is a poor fit. They are current package constraints.
 
+- **State and replay cost** — timestamps and the current turn number have fixed size. Zone state grows with distinct reported strings in the latest entered turn, not all messages; each new distinct zone copies that list. Formatters remain discardable process caches. The standard AgentLoop requests its latest entered turn. If a typed pre-step caller requests another turn, the original full-prefix synchronous scan includes later entered messages. Retiring this fallback requires limiting pre-step requests to the latest entered turn and updating callers together.
 - **Prompt guidance only** — browser-zone context guides natural-language interpretation but does not silently supply another tool's required zone field.
 - **Mixed turns ask** — if one open turn contains prompts from different browser zones, the model is told to clarify rather than guess which one owns an unqualified time.
 - **Fallback is not user authority** — the configured or process zone formats the clock when current-turn browser zones are missing or mixed, but the model-facing policy still says to clarify.

@@ -1,0 +1,53 @@
+/* A changed file's name, then its directory in smaller subdued type. */
+.label {
+  /* Keep the hidden accessible path inside the file's own scroll container. */
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* The name keeps its natural width; the directory takes only the space left, so it shortens first. */
+.parts {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.name {
+  flex: 0 1 auto;
+  color: var(--dsw-alias-label-primary);
+}
+
+.directory {
+  flex: 1 1 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.shortened {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tail {
+  flex: none;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

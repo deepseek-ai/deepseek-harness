@@ -29,11 +29,11 @@ Mount `dsh-session-projection` wherever client carriers need current values of l
 
 ### When to choose it
 
-Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. Skip it for host-only bookkeeping that no client reads: a unit without a `wire` block stays host-only. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject(['sessionProjections'], ...)`.
+Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. A unit without a `wire` block keeps its state host-only. Domain owners declare `sessionProjections` in their plugin dependencies and await registration before exposing synchronous service methods. Other plugins read those methods through the owning service.
 
 ### Define a projection unit
 
-A domain contributes one `ProjectionDefinition` per state key: a key, a state schema, an initial state, a synchronous fold `apply(state, event)`, an optional `wire` block that projects state to a client view, and a `stateVersion` that bumps whenever the state fields or fold semantics change:
+A domain contributes one `ProjectionDefinition` per state key: a key, a state schema, an initial state, a synchronous fold `apply(state, event)`, an optional `wire` block that projects state to a client view, and a `stateVersion` for checkpoint invalidation. Bump it when state fields or fold semantics change. An optional addition may retain the version only when absence preserves historical meaning and a regression test verifies that restoring an old checkpoint plus its suffix matches full replay; schema acceptance alone is insufficient:
 
 ```text
 const definition = {
@@ -55,18 +55,57 @@ const definition = {
 
 ### Register and read
 
-`register(definition)` installs the unit; registrants with the same key and `stateVersion` share its cells, while an incompatible version or invalid `stateVersion` throws. Registration is an effect on the calling fiber, so the last unload removes the key and its cached cells. The returned disposer can be yielded into a composite `ctx.effect()` on the same fiber to keep the unit available through dependent cleanup. Carriers read a consistent synchronous cut over every client-visible unit with `snapshot(session)` — `{ asOfSeq, values }`, where `asOfSeq` is the seq of the last event every value reflects — and subscribe to per-change notifications with `onChanged(listener)`. `stateOf(session, key)` reads one unit's live read-only host state without computing unrelated views.
+`await register(definition)` infers the host state type from `stateSchema`, installs the unit, and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, restores, and change notifications; `checkpoint(session)` keeps each Session's last cell of it, until the key registers again and the new unit refolds the log. The registry no longer advances that cell, but a retained handle read still advances it forward, and the checkpoint serves the advanced cell. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut, `onChanged(listener)` for one call per changed unit, and `onEventChanged(listener)` for one call per committed event that lists every client-visible unit whose view it changed.
 
 ```text
-const dispose = ctx.sessionProjections.register(definition)
+const todoProjectionHandle = await ctx.sessionProjections.register(definition)
+const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
-A domain that requires projected state declares `sessionProjections` as a Cordis service dependency; optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
+<a id="bind-several-states-to-one-session"></a>
+### Bind several states to one Session
+
+Call `handle.readerFor(session)` on an awaited registration handle to obtain a `() => S` callback. Calling it reads the current state without a Session argument. An owner composing several states passes a typed object of these callbacks to its runtime. New states add properties instead of constructor arguments; ordinary plugins still use domain-service methods.
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+Each reader captures the exact Session and delegates to the original handle's `stateOf(session)`, preserving readiness requirements, null and undefined values, state references, and synchronous failures. Creating a reader does not read state, prepare the Session, perform storage I/O, or create a state cache. Readers own no registration or disposal. The original handle keeps its disposal responsibility; a reader keeps reading the original unit after deregistration or version replacement. One handle can create readers for several Sessions independently. Registration and Session preparation remain the owner's responsibility; client snapshots remain separate.
+
+A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
+
+<a id="deprecated-plugin-compatibility"></a>
+### Deprecated plugin compatibility
+
+`register(definition)` keeps its public return type `Promise<ProjectionHandle<S>>`, but the runtime value is a callable thenable, not a native `Promise` (`typeof` is `"function"`; `instanceof Promise` is false). Awaiting it delivers the retained handle; calling it releases the registration through the original Cordis effect disposer. Calling the return value is deprecated; use `handle.dispose()` in new code. Use `Promise.resolve(registration)` when an API requires a native Promise or treats functions as callbacks, including Vitest Promise assertions. See the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-projection-handles/guide.md).
+
+Legacy synchronous `return register(...)`, `ctx.effect(() => register(...))`, and synchronous generator yields retain cleanup ownership. Returning the registration from an async function assimilates the thenable into a handle, which Cordis rejects as `Invalid effect`. Yielding it from an async generator also yields the handle: that effect fails with `Invalid effect` when disposed and never adopts the registration, while the plugin stays active and its fiber releases the registration on unload. Async plugins and effects await registration and return `void`; the owning fiber releases the registration automatically.
+
+Legacy `stateOf(session, key)` is deprecated and returns `unknown`. Reading a registered key materializes every registered unit at the Session cursor without producing unrelated wire views. An unregistered or fully released key returns `undefined`, while retained handles remain readable. Compatibility covers runtime calls; TypeScript consumers migrate their type declarations.
+
+The first legacy `stateOf(session, key)` read of each key logs one `ctx.logger.warn` deprecation warning per registry instance. Registration, calls to its result, handle methods, and owner cleanup do not warn.
+
+The registry's `cachedSnapshot(session, keys)` is deprecated. It views only cells another read already computed, may omit selected keys, and returns `undefined` when no selected client-visible cell exists; existing callers keep working. Use `snapshot(session, keys)` for complete values at the Session cursor, or the registration's `handle.stateOf(session)` for Host state. The persisted cache read `ctx.sessionProjectionCache.cachedSnapshot(header, keys)` is a separate method and is unchanged.
+
+Definitions install synchronously, and handle delivery remains asynchronous. Registration errors reject the returned value. When no caller observes a rejection before the current macrotask and its microtasks finish, the registry logs it as an error instead of leaving an unhandled rejection, and the plugin stays active; after a key conflict, its keyed reads return the other registrant's state; a rejection whose owner is no longer loading or active is dropped. New plugins await registration before exposing readers. Synchronous `try/catch` cannot catch asynchronous registration errors.
 
 ### Persisted checkpoints
 
-Every unit's state is checkpointed — client-visible and host-only alike — through `checkpoint(session)`, and the sibling [session-projection-cache](../session-projection-cache/README.md) persists those checkpoints so cold reads skip full log loads. Checkpoint watermarks use `SessionSeqCursor` (`-1` for an empty log), while replay starts use `SessionLogOffset`; `restoreFloor` and `restore` implement the read recipe without conflating an existing event with a log gap.
+Every unit's state is checkpointed — client-visible and host-only alike — through `checkpoint(session)`, and the sibling [session-projection-cache](../session-projection-cache/README.md) persists those checkpoints so cold reads skip full log loads. Checkpoint watermarks use `SessionSeqCursor` (`-1` for an empty log), while replay starts use `SessionLogOffset`; `restoreFloor` and `restore` implement the read recipe without conflating an existing event with a log gap. `restore` folds only live units, so its refreshed rows omit released units, and a write-back of them drops their stored rows.
+
+### Session summaries
+
+A Session summary is every registered client view except the keys whose non-nullish `SessionProjectionMap` entry carries the `SessionProjectionSummaryExcluded<T>` mark. `summaryKeys()` returns that set, derived from the live registrations and stable — the same instance — until a registration or its disposal changes the key table. A summary consumer passes it to the existing key-taking reads — `snapshot(session, keys)` for live Sessions, `viewCheckpoint(rows, keys)` for checkpoint rows, and `cachedSnapshot(header, keys)` through the persisted cache — which treat a set as already selected, so there is no summary-specific read face, no copy per read, and no second definition of the set. Because the registry derives it, a summary consumer cannot request an excluded key through the derived set; a complete face still serves an explicitly named key, which is how an opened Session keeps every value. A list row carries the summary projection and never the full projection.
+
+The mark decides the client view type; `wire.summary` decides the runtime key set, and omitting it means `true`. Declare `wire.summary: false` on a key whose map entry carries the mark so the two agree; the field is a plain boolean, not a type-level interlock. A nullable entry keeps `null` outside the wrapper (`SessionProjectionSummaryExcluded<TodoItem[]> | null`) so the pre-first-write value stays expressible. The keys currently marked are `turnOutline`, `sessionStats`, `todos`, `imageLimits`, `contextPressure`, and `contextBreakdown`: an outline grows with the whole log, no list row renders the stats, todo list, or context meter, and the image limits are one host-wide boot constant every Session shares.
+
+Summaries serve the Session list rows, which list Sessions without opening them. The `@` reference lists Sessions the same way but reads only its `title` and `subagent` label keys through the key-taking `snapshot(session, keys)` and `cachedSnapshot(header, keys)` faces. `snapshot(session, keys)` computes only the units it returns; without a key subset it computes every client-visible unit and no Host-only unit, so an opened Session receives every projected value, and `viewCheckpoint` likewise serves every wire key without a key subset.
 
 -----
 
@@ -87,11 +126,11 @@ The package is the Service Definition and drive role of a capability seam: the f
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionRegistry` service, `ProjectionDefinition`, snapshot and checkpoint machinery |
-| [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables |
+| [`src/types.ts`](src/types.ts) | The merge-extensible client `SessionProjectionMap` type table, plus the summary-exclusion mark and its derived view and summary types |
 
 ### Drive and checkpoint flow
 
-One committed event drives every registered unit in registration order; a client-visible unit whose raw view changes by `Object.is` notifies the change feed with its schema-validated view and the causing seq. The live drive retains its previous and current raw views; snapshots and cold reads remain complete independent reads. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
+One committed event drives every registered unit in registration order; a client-visible unit whose raw view changes by `Object.is` notifies each `onChanged` listener with its schema-validated view and the causing seq. After every unit has been driven, each `onEventChanged` listener receives one call with one `{ key, val }` entry per changed client-visible unit in registration order, where `val` is the schema-validated view, and the causing seq; an event that changes no client-visible view makes no event-level call. If a unit or an `onChanged` listener throws during the drive, event listeners still receive the changes made before the throw, and the error then propagates to the Session's listener containment. The live drive retains its previous and current raw views; snapshots and cold reads remain complete independent reads. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
 
 </details>
 
@@ -126,9 +165,11 @@ None; projections never assemble or send provider requests.
 
 These limits define where the projection registry needs care at scale. They are current package constraints, not a task backlog.
 
-- **Every tail page carries every client-visible key** — there is no per-key opt-out or lazy-key request shape yet; acceptable while values are UI-scale whole states, revisit if a domain's value grows large.
+- **Only a key-subset read omits keys; a tail page still carries every client-visible key and there is no lazy per-value request** — a summary omits exactly the keys whose `SessionProjectionMap` entry carries `SessionProjectionSummaryExcluded<T>` and whose registration declares `wire.summary: false`. The opt-out is per key, not per value: no read defers one large value.
 - **The unit table is process-wide, so key presence is not a per-session capability signal** — a key registered by any agent preset appears in every session's snapshot; a client must read the value rather than treat an absent key as absence of the feature.
 - **Eager drive touches every unit per event** — cheap by construction (whole-value rule and state/view reference gates), but a hot path would justify per-unit event-type prefilters.
+- **A released unit's checkpoint row stops advancing** — after the last registrant releases a key, `checkpoint(session)` keeps each Session's last cell until the key registers again. Outside graceful shutdown, events appended meanwhile leave the stored row behind the log, and cold listings serve that older value.
+- **A released predecessor keeps its definition referenced** — the registry holds the released unit's definition closures until the same key registers again, so a key that a reloaded plugin renames or stops registering keeps the old module referenced for the process lifetime. Cells are keyed weakly by Session and retain no Session.
 - **Registry cells live in memory only** — a restart rebuilds by folding the log on first touch; compositions that mount `dsh-session-projection-cache` seed that fold from persisted rows instead.
 - **Synchronous unit discipline is only partially mechanical** — `wire.viewSchema.parse` rejects a Promise-returning view, but an `apply` that blocks or reads torn non-session state is a review concern.
 

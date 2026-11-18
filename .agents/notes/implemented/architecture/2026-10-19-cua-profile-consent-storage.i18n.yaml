@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-cua-profile-consent-storage.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-cua-profile-consent-storage.md
+/agent-note-durable-computer-use-consent-within-one-profile:
+  en: b2aa270d586efd93
+  zh: 99606fa28dc4a752
+/agent-note-durable-computer-use-consent-within-one-profile/problem:
+  en: f2c70036a57ddb41
+  zh: 9bbbf3dd09d486f5
+/agent-note-durable-computer-use-consent-within-one-profile/decision:
+  en: 11622523090f5d88
+  zh: 1d0f8ad94645f069
+/agent-note-durable-computer-use-consent-within-one-profile/alternatives-considered:
+  en: 2af74afa3ecaf3b9
+  zh: 96f7f43c5d1150df
+/agent-note-durable-computer-use-consent-within-one-profile/consequences:
+  en: 66fe232589e46d64
+  zh: fc69831be76248d9

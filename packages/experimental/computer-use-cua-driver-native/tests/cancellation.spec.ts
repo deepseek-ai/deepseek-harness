@@ -1,4 +1,5 @@
 /** Provider unload owns screenshot admission as well as the native call. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,9 +9,10 @@ import { Context } from '@deepseek-ai/cordis'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import * as NativeProvider from '../src/index.ts'
 import { fixture, resetFixture } from './fixtures/cua-driver.ts'
@@ -54,7 +56,7 @@ it('aborts model admission on unload, restores caller cancellation, and closes t
   }
   ctx.llm.registerAdapter(['visual'], new BlockingModel())
   const harness = await mountAgentLoopTestHarness(ctx)
-  const agent = await harness.create(SessionId('native-admission'), { provider: 'visual', model: 'vision' })
+  const agent = await harness.create(brandString<SessionId>('native-admission'), { provider: 'visual', model: 'vision' })
   const fiber = ctx.plugin(NativeProvider)
   await fiber
   let dispatch: ToolExecution | undefined
@@ -63,8 +65,8 @@ it('aborts model admission on unload, restores caller cancellation, and closes t
     return next()
   })
   const controller = new AbortController()
-  const result = ctx.tools.execute({
-    agent, signal: controller.signal, callId: ToolCallId('native-admission'),
+  const result = executeToolFixture(ctx, {
+    agent, signal: controller.signal, callId: brandString<ToolCallId>('native-admission'),
     name: 'cua_driver_native__get_window_state', arguments: { pid: 9, window_id: 7 },
   })
   const admissionSignal = await resolving.promise

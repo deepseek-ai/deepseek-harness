@@ -206,7 +206,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .status {
@@ -231,8 +231,10 @@
   cursor: pointer;
 }
 
-.action:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .action:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .action:focus-visible {

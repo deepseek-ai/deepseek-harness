@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -33,13 +33,11 @@ import {
 } from '@deepseek-ai/dsh-storage-domain'
 import SessionProjectionCache from '../src/index.ts'
 import { checkpointRow, projectionCacheDomainSpec } from '../src/spec.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Declarations must match the shipped title unit's exactly (the repo-wide
 // compile face sees both).
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    title: string | null
-  }
   interface SessionProjectionMap {
     title: string | null
   }
@@ -110,7 +108,7 @@ async function harness(root: string) {
   const ctx = await storageHarness(root)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(titleUnit)
+  await ctx.sessionProjections.register(titleUnit)
   await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
   return { ctx, cache: ctx.sessionProjectionCache }
 }
@@ -151,7 +149,7 @@ afterEach(async () => {
 describe('checkpoint JSON preservation', () => {
   it('preserves opaque keys through StorageDomain read, put, and reopen', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-opaque-'))
-    const id = SessionId('opaque-fixture')
+    const id = brandString<SessionId>('opaque-fixture')
     const archived = await placeDoc(root, id, 'v7-opaque-session-doc.json')
     expect(archived.version).toBe(7)
     const ctx = await storageHarness(root)
@@ -206,11 +204,11 @@ describe('archived version recovery', () => {
 
     const { ctx, cache } = await harness(root)
     expect(cache.cachedSnapshot(
-      headerFor(SessionId(sid), record.identity),
+      headerFor(brandString<SessionId>(sid), record.identity),
       ['title'],
     )).toBeUndefined()
     expect(cache.cachedPredecessorTitle(
-      headerFor(SessionId(sid), record.identity),
+      headerFor(brandString<SessionId>(sid), record.identity),
     )).toEqual({
       asOfSeq: record.rows.title?.seq,
       values: { title: record.rows.title?.val },
@@ -222,7 +220,7 @@ describe('archived version recovery', () => {
     ) as { version: number }
     expect(migrated.version).toBe(projectionCacheDomainSpec.version)
 
-    await assertRewrite(ctx, root, SessionId(sid))
+    await assertRewrite(ctx, root, brandString<SessionId>(sid))
   })
 
   for (const [fixture, storedVersion] of [
@@ -232,7 +230,7 @@ describe('archived version recovery', () => {
   ] as const) {
     it(`opens ${fixture} without serving its unbound fold, then rewrites it current`, async () => {
       const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
-      const id = SessionId('fixture-session')
+      const id = brandString<SessionId>('fixture-session')
       const doc = await placeDoc(root, id, fixture)
       expect(doc.version).toBe(storedVersion)
 
@@ -279,7 +277,7 @@ describe('archived version recovery', () => {
     const { cache } = await harness(root)
     const listed = (id: string): SessionHeader => ({
       version: SESSION_FORMAT_VERSION,
-      id: SessionId(id),
+      id: brandString<SessionId>(id),
       createdAt: 10,
       cwd: '/work',
       isSeeded: false,
@@ -296,7 +294,7 @@ describe('archived version recovery', () => {
 
   it('refuses a lineage-less archive for a seeded caller (lifecycle mismatch, cold rebuild)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
-    const id = SessionId('fixture-seeded')
+    const id = brandString<SessionId>('fixture-seeded')
     const doc = await placeDoc(root, id, 'v5-lineageless-doc.json')
 
     const { cache } = await harness(root)
@@ -315,7 +313,7 @@ describe('archived version recovery', () => {
       version: projectionCacheDomainSpec.version,
       record: { identity: { createdAt: 'not-a-number' }, rows: 'not-an-object' },
     }))
-    const good = await placeDoc(root, SessionId('survivor'), 'v5-session-doc.json')
+    const good = await placeDoc(root, brandString<SessionId>('survivor'), 'v5-session-doc.json')
 
     const ctx = new Context()
     contexts.push(ctx)
@@ -324,7 +322,7 @@ describe('archived version recovery', () => {
     await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(titleUnit)
+    await ctx.sessionProjections.register(titleUnit)
     const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
     // The boot survives the broken record — this line rejecting IS the fixed bug.
     await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
@@ -344,12 +342,12 @@ describe('archived version recovery', () => {
     // The broken record reads as absent; its predecessor-stamped neighbor
     // remains available for a safe current rewrite.
     const cache = ctx.sessionProjectionCache
-    expect(cache.cachedSnapshot(headerFor(SessionId('broken'), { createdAt: 0 })))
+    expect(cache.cachedSnapshot(headerFor(brandString<SessionId>('broken'), { createdAt: 0 })))
       .toBeUndefined()
     expect(cache.cachedSnapshot(
-      headerFor(SessionId('survivor'), good.record.identity),
+      headerFor(brandString<SessionId>('survivor'), good.record.identity),
       ['title'],
     )).toBeUndefined()
-    await assertRewrite(ctx, root, SessionId('survivor'))
+    await assertRewrite(ctx, root, brandString<SessionId>('survivor'))
   })
 })

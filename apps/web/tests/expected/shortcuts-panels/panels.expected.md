@@ -21,5 +21,11 @@
   - button "Split" [disabled]
 - text: {{cwd}}/workspace
 - button "Reload"
-- list:
-  - listitem: Empty directory
+- button "Search files" [expanded]
+- complementary "Workspace files":
+  - button "Search settings"
+  - searchbox "Search files"
+  - button "Show hidden entries"
+  - paragraph
+  - list:
+    - listitem: Empty directory

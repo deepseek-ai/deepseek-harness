@@ -42,7 +42,7 @@ import type {} from '@deepseek-ai/dsh-plugin-manager/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InputTriggerServiceContract, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
-import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
@@ -52,7 +52,7 @@ import { SkillRow } from './SkillRow.tsx'
 import { SkillReference, type SkillReferenceInjected } from './SkillReference.tsx'
 import { skillReferenceRule } from './user-text-rules.ts'
 export type {} from './user-text-rules.ts'
-import { en, NS, zh, type SkillKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type SkillKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -84,7 +84,7 @@ export const inject = ['inputTriggers', 'sessions', 'slots', 'locale', 'remote',
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-skill: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-skill: dictionaries')
   ctx.uiConversation.userText.register(skillReferenceRule)
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
     { name: 'tool.call.toolview', key: 'skill', locale: NS },
@@ -173,9 +173,8 @@ export function apply(ctx: ClientContext): void {
       const skills = await fetchCatalog(session.sessionId).promise
       // Superseded keystroke: the shared fetch stays warm, this caller yields.
       if (signal.aborted) return []
-      // The same ranking as the command group of this menu: case-insensitive
-      // ordered subsequence, prefix hits first.
-      return rankByName(skills, query)
+      // The same filter as the command group of this menu, over names only.
+      return new TextSearchIndex(skills, skill => ({ fuzzy: [skill.name] })).search(query)
         .map(skill => ({
           name: skill.name,
           // The user-only marker rides the description (the menu's only

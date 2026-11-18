@@ -49,14 +49,16 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`fs/`](fs/README.md) | Filesystem capability family: seam, local impl, model-facing file tools, discovery tools |
 | [`lsp/`](lsp/README.md) | LSP capability family: seam, generic stdio provider, and the `lsp` tool |
 | [`skill/`](skill/README.md) | Skill capability family: provider registry, local provider, model-facing catalog/loader |
+| [`connector/`](connector/README.md) | Plugins connecting third-party services through existing capabilities |
 | [`compaction/`](compaction/README.md) | Compaction capability family: Service Definition + basic provider + command Consumer |
 | [`context/`](context/README.md) | Model-visible request context: workspace instructions, time context, references |
 | [`subagent/`](subagent/README.md) | Subagent capability family: provider-registry contract and model-facing delegation tools |
+| [`team/`](team/README.md) | Team coordination: shared task boards and model-facing task tools |
 | [`jobs/`](jobs/README.md) | Generic background-job runtime and model-facing job control tools |
 | [`experimental/`](experimental/README.md) | Capabilities under evaluation; [status and support policy](experimental/README.md#status) |
 | [`workflow/`](workflow/README.md) | Workflow seam, PTC process engine, and the model-facing `workflow` tool |
 | [`web/`](web/README.md) | Web capability family: seam, search/fetch providers, model-facing web tools |
-| [`document/`](document/README.md) | Shared Host Office-to-PDF conversion |
+| [`document/`](document/README.md) | Shared Host Office rendering, conversion, and recalculation, the Office tools, and Kit engine resolution |
 | [`attachment/`](attachment/README.md) | Durable attachment identity, validation, local content-addressed storage |
 | [`spill/`](spill/README.md) | Spill capability family: storage seam, local impl, tool-result spill policy |
 | [`todo/`](todo/README.md) | The model-facing `todo_write` tool |
@@ -70,6 +72,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`session-query/`](session-query/README.md) | Session retrieval family: logical corpus, bounded reads, lineage, semantic filtering, SQLite full-text search |
 | [`settings/`](settings/README.md) | User-settings seam + file-backed provider |
 | [`credentials/`](credentials/README.md) | Credential-reference and credential-record seam + env-over-`.env` provider + authorization flows that ask a human |
+| [`account/`](account/README.md) | DeepSeek account sign-in and Host-only request credentials |
 | [`storage/`](storage/README.md) | Non-session storage hub + backends + domain form |
 | [`workspace/`](workspace/README.md) | Workspace entity |
 | [`sdk/`](sdk/README.md) | Out-of-process SDK: JSON-RPC protocol and TypeScript client/server |
@@ -79,7 +82,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`host/`](host/README.md) | Web GUI host services, directory picking, application launch, plugin inventory, and product telemetry |
 | [`client/`](client/README.md) | Web-GUI browser half: shell, wire, object services, slots, `ui-*` plugins |
 | [`test-support/`](test-support/README.md) | Test infrastructure (testkits, replay, Loader smokes) |
-| [`util/`](util/README.md) | Low-level zero-dependency utilities shared across groups (`Branded<B>`, home/path helpers, timeout, retention) |
+| [`util/`](util/README.md) | Low-level utilities and data-only package lists shared across groups (`Branded<B>`, home/path helpers, timeout, retention, official bundle lists) |
 
 -----
 

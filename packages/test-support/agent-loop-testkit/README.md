@@ -1,5 +1,5 @@
 ---
-description: "Prerequisite mounting, production AgentLoop drivers, and explicit Inbox stubs for agent-loop tests."
+description: "Prerequisite mounting, production AgentLoop drivers, and explicit Agent stubs for agent-loop tests."
 kind: "package-library"
 ---
 
@@ -35,7 +35,8 @@ Use `mountAgentLoopTestHarness()` when the test covers durable Inbox events, pro
 
 ```ts
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
@@ -46,7 +47,7 @@ const ctx = new Context()
 await mountAgentLoopTestDependencies(ctx)
 // Register the test adapter and any load-order-sensitive plugins here.
 const harness = await mountAgentLoopTestHarness(ctx)
-const agent = await harness.create(SessionId('test-agent'))
+const agent = await harness.create(brandString<SessionId>('test-agent'))
 declare const message: UserMessage
 
 agent.inbox.append('next-turn', message)
@@ -57,14 +58,15 @@ The dependency helper forwards system-prompt and tool-registry configuration thr
 
 ### Build a structural Agent stub
 
-Use `createInboxStub()` when the test subject needs mutable pending lists but does not exercise durability, projection validation, live Inbox notifications, or the driver's claim policy. The stub implements the public queue operations with two process-local arrays and never writes to a Session. Use `unsupportedInbox()` when the test subject must not touch pending input; every mutation throws at the first unexpected dependency.
+Use `createInboxStub()` when the test subject needs mutable pending lists but does not exercise durability, projection validation, live Inbox notifications, or the driver's claim policy. The stub implements the public queue operations with two process-local arrays and never writes to a Session. Use `unsupportedInbox()` when the test subject must not touch pending input; every mutation throws at the first unexpected dependency. Use `unsupportedModel()` when the test does not read or change model selection; all its operations throw.
 
 ```ts
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const agent = {
   // ...
   inbox: createInboxStub(),
+  model: unsupportedModel(),
 }
 ```
 

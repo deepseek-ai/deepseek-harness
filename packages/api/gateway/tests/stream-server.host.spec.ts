@@ -226,6 +226,28 @@ describe('Remote stream mux server carrier lifecycle', () => {
     expect(String(closeEvent[1])).toBe('Remote stream failure could not be delivered')
   })
 
+  it('stops a stream at its next item after an earlier item failed to write', async () => {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => { release = resolve })
+    const produced: string[] = []
+    const entry = await startMux(async () => (async function *() {
+      await released
+      for (const value of ['first', 'second', 'third']) {
+        produced.push(value)
+        yield value
+        await new Promise<void>((resolve) => { setImmediate(resolve) })
+      }
+    })())
+    const client = await connect(entry.url)
+    client.send(openFrame('write-failure-next'))
+    await vi.waitFor(() => { expect(acceptedSocket(entry.mux)).toBeDefined() })
+    failWrites(acceptedSocket(entry.mux))
+    const closed = once(client, 'close')
+    release()
+    expect((await closed)[0]).toBe(1011)
+    expect(produced).toEqual(['first', 'second'])
+  })
+
   it('closes the carrier when the end frame cannot be written', async () => {
     const entry = await startMux(async () => (async function *(): AsyncIterable<never> {})())
     const client = await connect(entry.url)
@@ -287,8 +309,12 @@ describe('Remote stream mux server carrier lifecycle', () => {
     const client = await connect(entry.url)
     const serverSocket = acceptedSocket(entry.mux)
     const write = Promise.withResolvers<(error?: Error) => void>()
-    const writer = serverSocket as { send(data: unknown, callback: (error?: Error) => void): void }
-    const sending = vi.spyOn(writer, 'send').mockImplementation((_data, callback) => { write.resolve(callback) })
+    const writer = serverSocket as {
+      send(data: unknown, options: unknown, callback: (error?: Error) => void): void
+    }
+    const sending = vi.spyOn(writer, 'send').mockImplementation((_data, _options, callback) => {
+      write.resolve(callback)
+    })
     const connectionFailure = new Error('fixture terminal close failure')
     const cleanupFailure = new Error('fixture Peer close failure')
     const close = serverSocket.close.bind(serverSocket)
@@ -347,6 +373,170 @@ describe('Remote stream mux server carrier lifecycle', () => {
   })
 })
 
+describe('Remote stream mux server downlink order', () => {
+  /** Hold every server write until released, recording the frames in write order. */
+  function holdWrites(serverSocket: WebSocket): { written: string[]; release: () => void } {
+    const mutable = serverSocket as {
+      send(data: string, options: unknown, callback: (error?: Error) => void): void
+    }
+    const original = mutable.send.bind(serverSocket)
+    const written: string[] = []
+    const held: (() => void)[] = []
+    let holding = true
+    mutable.send = (data, options, callback): void => {
+      written.push(String((JSON.parse(data) as { value?: unknown }).value))
+      const write = (): void => { original(data, options, callback) }
+      if (holding) held.push(write)
+      else write()
+    }
+    return { written, release: () => { holding = false; for (const write of held.splice(0)) write() } }
+  }
+
+  /** A source that yields each pushed value until its stream is cancelled; pushes made while it waits wake it in push order. */
+  function pushSource(): { source: (signal: AbortSignal) => AsyncIterable<string>; push: (value: string) => void } {
+    const queue: string[] = []
+    let wake: (() => void) | undefined
+    return {
+      push: (value) => { queue.push(value); wake?.() },
+      source: async function *(signal) {
+        signal.addEventListener('abort', () => { wake?.() }, { once: true })
+        while (!signal.aborted) {
+          const value = queue.shift()
+          if (value !== undefined) yield value
+          else await new Promise<void>((resolve) => { wake = resolve })
+        }
+      },
+    }
+  }
+
+  it('writes frames of different streams in production order while an earlier write is still pending', async () => {
+    const sources = { a: pushSource(), b: pushSource() }
+    let opened = 0
+    const allOpen = Promise.withResolvers<undefined>()
+    const entry = await startMux(async (endpoint, _payload, _uplink, _peer, control) => {
+      if (++opened === 2) allOpen.resolve(undefined)
+      return sources[endpoint === 'fixture/a' ? 'a' : 'b'].source(control.signal)
+    })
+    const client = await connect(entry.url)
+    const frames = collectFrames(client)
+    client.send(openFrame('a', 'fixture/a'))
+    client.send(openFrame('b', 'fixture/b'))
+    await allOpen.promise
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    const held = holdWrites(acceptedSocket(entry.mux))
+    sources.a.push('a1')
+    await vi.waitFor(() => { expect(held.written).toEqual(['a1']) })
+    // The first write is still pending; stream a's next frame is produced before stream b's.
+    sources.a.push('a2')
+    sources.b.push('b1')
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    held.release()
+    await vi.waitFor(() => { expect(frames.map(frame => frame.value)).toEqual(['a1', 'a2', 'b1']) })
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('keeps every stream paused until the whole connection backlog drains', async () => {
+    const sources = { a: pushSource(), b: pushSource() }
+    let opened = 0
+    const allOpen = Promise.withResolvers<undefined>()
+    const entry = await startMux(async (endpoint, _payload, _uplink, _peer, control) => {
+      if (++opened === 2) allOpen.resolve(undefined)
+      return sources[endpoint === 'fixture/a' ? 'a' : 'b'].source(control.signal)
+    }, 2_000, 262_144, true, undefined, 1)
+    const client = await connect(entry.url)
+    const frames = collectFrames(client)
+    client.send(openFrame('a', 'fixture/a'))
+    client.send(openFrame('b', 'fixture/b'))
+    await allOpen.promise
+    // Both sources reach their first wait before anything is pushed.
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    const held = holdWrites(acceptedSocket(entry.mux))
+    sources.a.push('a1')
+    sources.b.push('b1')
+    sources.a.push('a2')
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    held.release()
+    await vi.waitFor(() => { expect(frames.map(frame => frame.value)).toEqual(['a1', 'b1', 'a2']) })
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('ends a cancelled stream at once while another stream keeps the connection backlog over its bound', async () => {
+    const sources = { a: pushSource(), b: pushSource() }
+    const ended = Promise.withResolvers<undefined>()
+    let opened = 0
+    const allOpen = Promise.withResolvers<undefined>()
+    const entry = await startMux(async (endpoint, _payload, _uplink, _peer, control) => {
+      if (++opened === 2) allOpen.resolve(undefined)
+      if (endpoint === 'fixture/a') return sources.a.source(control.signal)
+      return (async function *() {
+        try {
+          yield * sources.b.source(control.signal)
+        } finally {
+          ended.resolve(undefined)
+        }
+      })()
+    }, 2_000, 262_144, true, undefined, 1)
+    const client = await connect(entry.url)
+    client.send(openFrame('a', 'fixture/a'))
+    client.send(openFrame('b', 'fixture/b'))
+    await allOpen.promise
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    const held = holdWrites(acceptedSocket(entry.mux))
+    sources.a.push('a1')
+    sources.b.push('b1')
+    await vi.waitFor(() => { expect(held.written).toEqual(['a1']) })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    // a1 is still held and b1 queued behind it, so the backlog stays over its bound while stream b is cancelled.
+    client.send(JSON.stringify({ type: 'cancel', streamId: 'b' }))
+    await ended.promise
+    held.release()
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('fails a stream whose item cannot be encoded without queuing a frame for it', async () => {
+    const entry = await startMux(async () => (async function *() { yield 10n })())
+    const client = await connect(entry.url)
+    const frames = collectFrames(client)
+    client.send(openFrame('bigint'))
+    await vi.waitFor(() => {
+      expect(frames).toEqual([{
+        type: 'error', streamId: 'bigint',
+        error: { code: 'internal', message: 'api gateway: Remote stream item is not JSON serializable', details: {} },
+      }])
+    })
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('pauses every stream while the connection backlog exceeds its bound and resumes when it drains', async () => {
+    const source = pushSource()
+    const pulled: string[] = []
+    const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => (async function *() {
+      for await (const value of source.source(control.signal)) {
+        pulled.push(value)
+        yield value
+      }
+    })(), 2_000, 262_144, true, undefined, 1)
+    const client = await connect(entry.url)
+    const frames = collectFrames(client)
+    client.send(openFrame('bounded'))
+    await vi.waitFor(() => { expect(acceptedSocket(entry.mux)).toBeDefined() })
+    const held = holdWrites(acceptedSocket(entry.mux))
+    source.push('x1')
+    source.push('x2')
+    await vi.waitFor(() => { expect(held.written).toEqual(['x1']) })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    expect(pulled).toEqual(['x1'])
+    held.release()
+    await vi.waitFor(() => { expect(frames.map(frame => frame.value)).toEqual(['x1', 'x2']) })
+    client.close()
+    await once(client, 'close')
+  })
+})
+
 describe('Remote stream mux server Peer binding', () => {
   it('closes an upgrade at once when the admitted Peer scope is already disposed', async () => {
     const peer = await fixturePeer()
@@ -355,7 +545,7 @@ describe('Remote stream mux server Peer binding', () => {
     const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => {
       opened()
       return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    }, 2_000, 262_144, true, peer)
     const client = new WebSocket(entry.url)
     const closeEvent = await once(client, 'close')
     expect(closeEvent[0]).toBe(1001)
@@ -369,7 +559,7 @@ describe('Remote stream mux server Peer binding', () => {
     const entry = await startMux(async (_endpoint, _payload, _uplink, opened, control) => {
       seen.push(opened)
       return waitForAbort(control.signal)
-    }, 2_000, 262_144, peer)
+    }, 2_000, 262_144, true, peer)
     const client = await connect(entry.url)
     client.send(openFrame('bound'))
     await vi.waitFor(() => { expect(seen).toHaveLength(1) })
@@ -380,6 +570,78 @@ describe('Remote stream mux server Peer binding', () => {
     const closeEvent = await closed
     expect(closeEvent[0]).toBe(1001)
     expect(String(closeEvent[1])).toBe('peer left')
+  })
+})
+
+describe('Remote stream mux server compression', () => {
+  it('negotiates permessage-deflate by default and round-trips frames above the threshold both ways', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
+    const client = await connect(entry.url)
+    expect(client.extensions).toContain('permessage-deflate')
+    await roundTrip(client, 'compressed', 'x'.repeat(2_048))
+  })
+
+  it('negotiates no extension and still exchanges frames when compression is disabled', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink), 2_000, 262_144, false)
+    const client = await connect(entry.url)
+    expect(client.extensions).toBe('')
+    await roundTrip(client, 'plain', 'x'.repeat(2_048))
+  })
+
+  it('serves a client that offers no compression extension', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
+    const client = new WebSocket(entry.url, { perMessageDeflate: false })
+    await once(client, 'open')
+    expect(client.extensions).toBe('')
+    await roundTrip(client, 'uncompressed', 'x'.repeat(2_048))
+  })
+
+  it('compresses frames of 1,024 characters and leaves shorter frames uncompressed', async () => {
+    const entry = await startMux(async (_endpoint, _payload, uplink) => echoUplink(uplink))
+    const client = await connect(entry.url)
+    const writer = acceptedSocket(entry.mux) as {
+      send(data: string, options: { compress?: boolean }, callback: (error?: Error) => void): void
+    }
+    const sending = vi.spyOn(writer, 'send')
+    const frames = collectFrames(client)
+    const long = 'x'.repeat(2_048)
+    client.send(openFrame('threshold'))
+    client.send(itemFrame('threshold', long))
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'threshold', value: long })
+    })
+    client.send(itemFrame('threshold', 'short'))
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual({ type: 'item', streamId: 'threshold', value: 'short' })
+    })
+
+    expect(sending.mock.calls.find(([data]) => data.includes(long))?.[1]).toEqual({ compress: true })
+    expect(sending.mock.calls.find(([data]) => data.includes('"short"'))?.[1]).toEqual({ compress: false })
+    sending.mockRestore()
+    client.close()
+    await once(client, 'close')
+  })
+
+  it('keeps a socket alive while compressed frames are written without a Pong', { timeout: 20_000 }, async () => {
+    const stop = Promise.withResolvers<undefined>()
+    // A 500 ms interval leaves a 1 s activity window, so thread-pool deflate
+    // latency cannot trip the two-interval termination before a write lands.
+    const entry = await startMux(async () => steadyItems(stop.promise, 'x'.repeat(2_048)), 500)
+    const client = await connect(entry.url, false)
+    const terminated = vi.spyOn(acceptedSocket(entry.mux), 'terminate')
+    const items = vi.fn()
+    client.on('message', items)
+    client.send(openFrame('liveness'))
+    try {
+      await pings(client, 4)
+      expect(terminated).not.toHaveBeenCalled()
+      expect(items).toHaveBeenCalled()
+    } finally {
+      stop.resolve(undefined)
+    }
+    // The weakening is bounded: after the compressed downlink stops, the
+    // missing Pongs terminate the socket.
+    await vi.waitFor(() => { expect(terminated).toHaveBeenCalledOnce() }, { timeout: 5_000 })
   })
 })
 
@@ -589,10 +851,17 @@ async function startMux(
   open: RemoteStreamOpener,
   heartbeatIntervalMs = 2_000,
   streamInboxBytes = 262_144,
+  compression = true,
   peer?: PeerScope,
+  streamOutboxBytes = 1_048_576,
 ): Promise<RunningMux> {
   const admitted = peer ?? await fixturePeer()
-  const mux = new RemoteStreamMuxServer(open, mapFailure, heartbeatIntervalMs, streamInboxBytes)
+  const mux = new RemoteStreamMuxServer(open, mapFailure, {
+    heartbeatIntervalMs,
+    streamInboxBytes,
+    streamOutboxBytes,
+    compression,
+  })
   const http = createServer()
   http.on('upgrade', (request, socket, head) => { mux.handleUpgrade(request, socket, head, admitted) })
   await new Promise<void>((resolve, reject) => {
@@ -646,6 +915,22 @@ function collectFrames(client: WebSocket): Record<string, unknown>[] {
   return frames
 }
 
+/** Echo `value` through one fresh logical stream, then close the carrier. */
+async function roundTrip(client: WebSocket, streamId: string, value: string): Promise<void> {
+  const frames = collectFrames(client)
+  client.send(openFrame(streamId))
+  client.send(itemFrame(streamId, value))
+  await vi.waitFor(() => {
+    expect(frames).toEqual([{ type: 'item', streamId, value }])
+  })
+  client.send(endFrame(streamId))
+  await vi.waitFor(() => {
+    expect(frames.at(-1)).toEqual({ type: 'end', streamId })
+  })
+  client.close()
+  await once(client, 'close')
+}
+
 /** Count the text frames the mux has already dispatched, so a test can wait for the Host to hold them. */
 function countMessages(serverSocket: WebSocket): { count: number } {
   const received = { count: 0 }
@@ -655,9 +940,9 @@ function countMessages(serverSocket: WebSocket): { count: number } {
 
 function failWrites(serverSocket: WebSocket): void {
   const mutable = serverSocket as {
-    send(data: unknown, callback: (error?: Error) => void): void
+    send(data: unknown, options: unknown, callback: (error?: Error) => void): void
   }
-  mutable.send = (_data, callback): void => {
+  mutable.send = (_data, _options, callback): void => {
     callback(new Error('fixture ws write failure'))
   }
 }
@@ -678,11 +963,11 @@ async function *echoUplink(uplink: AsyncIterable<unknown>): AsyncIterable<unknow
   for await (const value of uplink) yield value
 }
 
-/** Yield an item every few milliseconds until `stop` settles. */
-async function *steadyItems(stop: Promise<undefined>): AsyncIterable<string> {
+/** Yield `value` every few milliseconds until `stop` settles. */
+async function *steadyItems(stop: Promise<undefined>, value = 'item'): AsyncIterable<string> {
   const stopped = stop.then(() => true)
   while (!await Promise.race([stopped, new Promise<false>((resolve) => { setTimeout(() => { resolve(false) }, 5) })])) {
-    yield 'item'
+    yield value
   }
 }
 

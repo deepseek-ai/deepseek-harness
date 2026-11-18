@@ -3,10 +3,16 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { c as createTar } from 'tar'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { main } from '../src/cli.ts'
 import { generate, type GenerateOptions } from '../src/generate.ts'
+import { metricReader } from '../src/metrics.ts'
 import { onCleanup, scratch } from './support.ts'
+
+vi.mock('../src/metrics.ts', async original => ({
+  ...await original<typeof import('../src/metrics.ts')>(),
+  metricReader: vi.fn(() => async (entry: import('../src/generate.ts').GeneratedEntry) => entry),
+}))
 
 /** Pack a package directory the way npm does: every file under `package/`. */
 async function pack(files: Record<string, string | Uint8Array>): Promise<Buffer> {
@@ -87,12 +93,13 @@ function options(registryUrl: string, cacheDir: string, lines: string[], warning
   }
 }
 
-it('lists every non-deprecated bundle version from the registry document and reads display fields from the highest tarball', async () => {
+it('lists every bundle version from the registry document that is neither deprecated nor private and reads display fields from the highest tarball', async () => {
   const packages: Packages = {
     'dsh-a': {
       '0.9.0': { time: '2026-01-01T00:00:00.000Z' },
       '1.0.0': { time: '2026-02-01T00:00:00.000Z', manifest: { ...BUNDLE, keywords: ['old'], engines: { dsh: '>=0.2.0' }, peerDependencies: { '@deepseek-ai/dsh': '9' } } },
       '1.1.0': { time: '2026-03-01T00:00:00.000Z', manifest: { ...BUNDLE, deprecated: 'broken' } },
+      '1.1.5': { time: '2026-03-15T00:00:00.000Z', manifest: { ...BUNDLE, private: true } },
       '1.2.0': {
         time: '2026-04-01T00:00:00.000Z',
         manifest: {
@@ -117,6 +124,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
     },
     'dsh-b': { '1.0.0': { time: '2026-06-02T00:00:00.000Z', manifest: { ...BUNDLE, author: 'Bob' }, tarball: await pack({ 'package.json': bundleManifest('dsh-b', '1.0.0') }) } },
     'plain-lib': { '1.0.0': { time: '2026-06-01T00:00:00.000Z' } },
+    'dsh-private': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: { ...BUNDLE, private: true } } },
     'dsh-imposter': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE, tarball: await pack({ 'package.json': bundleManifest('dsh-other', '1.0.0') }) } },
     'dsh-tampered': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE, tarball: await pack({ 'package.json': bundleManifest('dsh-tampered', '1.0.0') }), integrity: 'sha512-AAAA' } },
     'dsh-unsigned': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE } },
@@ -129,7 +137,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
   const server = await registry(packages)
   const cacheDir = scratch()
   const warnings: string[] = []
-  const lines = ['dsh-a', 'dsh-b', 'plain-lib', 'dsh-imposter', 'dsh-tampered', 'dsh-unsigned', 'dsh-huge', 'dsh-bomb', 'dsh-no-tarball', 'dsh-unpublished', 'dsh-missing']
+  const lines = ['dsh-a', 'dsh-b', 'plain-lib', 'dsh-private', 'dsh-imposter', 'dsh-tampered', 'dsh-unsigned', 'dsh-huge', 'dsh-bomb', 'dsh-no-tarball', 'dsh-unpublished', 'dsh-missing']
   const first = await generate(options(server.url, cacheDir, lines, warnings))
   const npm = { type: 'npm', registry: server.url }
   expect(first.index).toMatchObject({ format: 1, title: 'Test Market', description: 'For tests' })
@@ -160,8 +168,9 @@ it('lists every non-deprecated bundle version from the registry document and rea
   expect(warnings).toEqual(expect.arrayContaining([
     'dsh-a: dsh-a@1.3.0 skipped: DSH range "workspace:>=1" is not a valid SemVer range',
     'dsh-a@2.0.0-rc.1: locale file locale/x_y.json ignored: its name is not a language id',
-    'plain-lib: no published version declares dsh.bundle',
-    'dsh-unpublished: no published version declares dsh.bundle',
+    'plain-lib: no published version that is neither deprecated nor private declares dsh.bundle',
+    'dsh-private: no published version that is neither deprecated nor private declares dsh.bundle',
+    'dsh-unpublished: no published version that is neither deprecated nor private declares dsh.bundle',
   ]))
 
   // Unchanged version lists come from the cache; a failing source keeps its last result for the same registry only.
@@ -255,4 +264,58 @@ it('writes the index and icons once, keeps the cache beside the input, and remov
   expect((JSON.parse(readFileSync(other, 'utf8')) as { description: string }).description).toBe('D')
   writeFileSync(list, 'http://example.com/o/r\n')
   expect(await main(['--input', list, '--output', other, '--title', 'T'])).toBe(2)
+})
+
+it('refreshes optional metrics outside source caches and keeps plugins on metric outages', async () => {
+  const server = await registry({ '@scope/dsh-a': { '1.0.0': {
+    time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE,
+    tarball: await pack({ 'package.json': bundleManifest('@scope/dsh-a', '1.0.0', { repository: 'github:team/plugins', keywords: ['tools'] }) }),
+  } } })
+  const actual = await vi.importActual<typeof import('../src/metrics.ts')>('../src/metrics.ts')
+  const network = globalThis.fetch
+  let unavailable = false
+  const metricUrls: string[] = []
+  const authorization: [string, string | null][] = []
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : input.toString()
+    authorization.push([url, new Headers(init?.headers).get('authorization')])
+    if (url.startsWith('https://registry.npmjs.org/')) return network(url.replace('https://registry.npmjs.org/', server.url), init)
+    if (!url.startsWith('https://api.')) return network(input, init)
+    metricUrls.push(url)
+    if (unavailable) return new Response('', { status: 503 })
+    return Response.json(url.includes('github.com') ? { stargazers_count: 0 } : { downloads: 42 })
+  })
+  onCleanup(() => { fetch.mockRestore() })
+  const warnings: string[] = []
+  const token = 'test-only-integration-token'
+  const opts = { ...options(server.url, scratch(), ['@scope/dsh-a'], warnings), registry: 'https://registry.npmjs.org/', recordRegistry: false, githubToken: token }
+  vi.mocked(metricReader).mockImplementationOnce(actual.metricReader)
+  const first = await generate(opts)
+  expect(first.failures).toEqual([])
+  expect(first.index.metadata?.sortKeys).toEqual(actual.METRIC_DECLARATIONS)
+  expect(first.index.plugins[0]?.metadata).toEqual({ keywords: ['tools'], sortKeys: { github_stars: 0, npm_weekly_downloads: 42 } })
+  expect(metricUrls).toContain('https://api.npmjs.org/downloads/point/last-week/%40scope%2Fdsh-a')
+  vi.mocked(metricReader).mockImplementationOnce(actual.metricReader)
+  const { githubToken: _token, ...withoutToken } = opts
+  const disabled = await generate(withoutToken)
+  expect(disabled.index.plugins[0]?.metadata).toEqual({ keywords: ['tools'], sortKeys: { npm_weekly_downloads: 42 } })
+  expect(disabled.index.metadata?.sortKeys).toEqual({ npm_weekly_downloads: actual.METRIC_DECLARATIONS.npm_weekly_downloads })
+  expect(metricUrls.filter(url => url.startsWith('https://api.github.com/'))).toHaveLength(1)
+  unavailable = true
+  vi.mocked(metricReader).mockImplementationOnce(actual.metricReader)
+  const second = await generate(opts)
+  expect(second.failures).toEqual([])
+  expect(second.index.plugins[0]?.metadata).toEqual({ keywords: ['tools'] })
+  expect(second.index).not.toHaveProperty('metadata')
+  expect(server.tarballs).toHaveLength(1)
+  expect(warnings.filter(message => message.includes('metric omitted'))).toHaveLength(2)
+  for (const [url, header] of authorization) {
+    expect(header).toBe(url.startsWith('https://api.github.com/') ? `Bearer ${token}` : null)
+  }
+  expect(JSON.stringify([first, disabled, second, warnings])).not.toContain(token)
+  for (const directory of ['last', 'results']) {
+    for (const name of readdirSync(join(opts.cacheDir, directory))) {
+      expect(readFileSync(join(opts.cacheDir, directory, name), 'utf8')).not.toContain(token)
+    }
+  }
 })

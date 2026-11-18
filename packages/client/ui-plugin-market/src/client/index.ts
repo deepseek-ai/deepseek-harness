@@ -1,6 +1,7 @@
 /**
  * Discover, browser half: the Plugins page tab that browses the plugin market indexes the user configures through the
- * `pluginMarket` Remote and installs an entry through the page's install dialog.
+ * `pluginMarket` Remote and installs an entry through the page's install dialog; entry pages show each version's
+ * detail document.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -11,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-plugin-manager/types'
 import type {} from '@deepseek-ai/dsh-plugin-market/types'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { DiscoverSection } from './DiscoverSection.tsx'
-import { en, zh, type PluginMarketLocaleKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type PluginMarketLocaleKey } from './locales.ts'
 import { DiscoverController } from './market-store.ts'
 
 export type { DiscoverFace, DiscoverState } from './market-store.ts'
@@ -28,21 +29,24 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'pluginMarket'
 
 /** Services the section reads. */
-export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket']
+export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket', 'remote.pluginRegistryProbe']
 
 /**
  * Contribute Discover to the Plugins page and keep it current on Host changes.
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plugin-market: dictionaries')
-  const controller = new DiscoverController(ctx)
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-plugin-market: dictionaries')
+  const controller = new DiscoverController(ctx, () => document.baseURI)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-market: controller')
   ctx.effect(() => {
     const disposers = [
       ctx.remote.$on('plugin-market/changed', () => { controller.sourcesChanged() }),
       ctx.remote.$on('plugin-manager/changed', () => { controller.bundlesChanged() }),
-      ctx.on('connection/reset', () => { controller.sourcesChanged() }),
+      ctx.on('connection/reset', () => {
+        controller.sourcesChanged()
+        controller.detailsReset()
+      }),
     ]
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-plugin-market: host invalidations')

@@ -28,6 +28,7 @@ The group splits into four families: durable storage (persistence seam, backends
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`message-quotes/`](message-quotes/README.md) | Quotation controls and Markdown blockquote rendering | — |
 | [`session-format/`](session-format/README.md) | Pure adjacent-format chain and artifact validation library | library — no ctx key |
 | [`session-format-v0-to-v1/`](session-format-v0-to-v1/README.md) | Frozen released-v0 decoder and identity migration into released v1 | library — no ctx key |
 | [`session-format-v1-to-v2/`](session-format-v1-to-v2/README.md) | Frozen released-v1 decoder and cardinality-changing Assistant-stream migration into released v2 | library — no ctx key |
@@ -45,7 +46,6 @@ The group splits into four families: durable storage (persistence seam, backends
 |---|---|---|
 | [`session-projection/`](session-projection/README.md) | Defines and drives projection units that fold committed events into whole current values | `ctx.sessionProjections` |
 | [`working-directory/`](working-directory/README.md) | Owns each Session's effective execution directory and user-context changes | `ctx.workingDirectory` |
-| [`tool-working-directory/`](tool-working-directory/README.md) | Reads or changes the active directory through one tool | `working_directory` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists projection checkpoints so cold reads skip full log loads | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times through the `sessionStats` unit | registers on `ctx.sessionProjections` |
 | [`session-turn-outline/`](session-turn-outline/README.md) | Serves the whole-log turn outline (turn, `turn/start` seq, prompt preview) through the `turnOutline` unit | registers on `ctx.sessionProjections` |

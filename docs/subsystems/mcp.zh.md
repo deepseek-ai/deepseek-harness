@@ -23,6 +23,8 @@
 
 MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服务器配置一个 `@deepseek-ai/dsh-mcp-client` 条目。每个随附 profile 都提供[工具注册表](tools.zh.md)，并统一挂载共享资源服务一次；用户只需配置客户端条目。调用方没有可见的已配置服务器时，在 native 或 PTC 模式下都不会获得 MCP 提示词文本或工具。
 
+Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.zh.md) 的 `ctx.mcpAccounts` 注册账号，使其显示在**插件**页面上。
+
 | 选择 | 配置维护位置 |
 |---|---|
 | 服务器身份、本地进程或 HTTP 端点、凭据和进程环境 | [客户端配置](../../packages/mcp/mcp-client/README.zh.md#use-this-package) |
@@ -38,7 +40,7 @@ MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服�
 <a id="responsibilities-and-scope"></a>
 ## 职责与作用域
 
-客户端是每服务器一个的连接插件，也是 Harness 工具注册表的消费者。它不发布共享的 `ctx.mcp` 服务。外部服务器实现 MCP 操作；SDK 拥有协议交换；客户端将发现的工具适配到 Harness 执行过程。
+客户端是每服务器一个的连接插件，也是 Harness 工具注册表的消费者。它不发布共享的 `ctx.mcp` 服务；管理器为其挂载的宿主全局服务器发布 `ctx.mcpManager`。外部服务器实现 MCP 操作；SDK 拥有协议交换；客户端将发现的工具适配到 Harness 执行过程。
 
 `mcp-resources` 拥有共享资源工具，并在调用方作用域中选择提供方。每个 MCP 客户端通过自己的连接提供资源操作。作用域中的首个提供方启用本地共享工具，移除最后一个提供方时移除这些工具；继承的提供方仍然可见。服务独立于任何单一客户端拥有这些工具注册。只要可见的客户端条目保持激活，连接失败就不会移除共享资源工具。
 
@@ -53,7 +55,7 @@ MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服�
 
 stdio 和 Streamable HTTP 都使用官方 SDK 的协商、发现、协议校验和取消机制。工具列表变化通过旧版通知或现代订阅触发发现。刷新失败时保留上一代工具；连接恢复遵循[客户端生命周期](../../packages/mcp/mcp-client/README.zh.md#use-this-package)。
 
-结果适配器为程序化调用方保留规范 MCP JSON，并准备普通工具内容。受支持的图像使用附件系统；不受支持的富内容产生明确的文本诊断。工具注册表仍决定策略失败和结果替换。[工具契约](tools.zh.md) 维护记录和最终呈现规则；[客户端结果参考](../../packages/mcp/mcp-client/README.zh.md#use-this-package) 维护 MCP 特有的投影细节。
+结果适配器为程序化调用方保留规范 MCP JSON，并准备普通工具内容。受支持的图像使用附件系统；不受支持的富内容产生明确的文本诊断。服务器 `isError` 结果与请求失败抛出 `McpToolError`，其 code 告诉调用方请求结果是否已知，例如 `MCP_TOOL_ERROR`、`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT`；客户端 README 列出全部 code。工具注册表仍决定策略失败和结果替换。[工具契约](tools.zh.md) 维护记录和最终呈现规则；[客户端结果参考](../../packages/mcp/mcp-client/README.zh.md#use-this-package) 维护 MCP 特有的投影细节。
 
 -----
 
@@ -84,7 +86,9 @@ type McpResourceRequest =
 /** One configured server's resource access, owned by its MCP connection plugin. */
 interface McpResourceProvider {
   /**
-   * Run an operation against one live connection generation.
+   * Run an operation against one live connection generation. The resource tools
+   * dispatch in parallel, so one provider may receive several concurrent requests;
+   * each must settle independently.
    * @param request - MCP resource method and parameters.
    * @param exec - caller identity and cancellation for this invocation.
    * @returns the protocol result as lossless JSON.
@@ -107,9 +111,11 @@ interface McpResourceProvider {
 
 - [MCP 包组](../../packages/mcp/README.zh.md) — 包入口。
 - [MCP 资源](../../packages/mcp/mcp-resources/README.zh.md) — 共享工具与资源提供方语义。
+- [MCP 管理器](../../packages/mcp/mcp-manager/README.zh.md) — 通过 Settings 配置与插件注册的服务器、状态及 Remote 操作。
 - [资源可见性参考](../../packages/mcp/mcp-resources/README.zh.md) — profile 统一挂载及由已配置服务器决定的可见性。
 - [第三方记忆服务器](../user/guide/mcp-memory.zh.md) — 产品配置指南。
 - [协议协商参考](../../packages/mcp/mcp-client/README.zh.md) — SDK 职责与兼容性决策。
+- [Computer Use MCP 服务器](../../packages/experimental/cua-mcp/README.zh.md) — DSH 作为 MCP stdio 服务器向其他 harness 提供 Computer Use 程序。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -118,6 +124,155 @@ interface McpResourceProvider {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxmcpaccounts--mcpaccounts"></a>
+
+### `ctx.mcpAccounts` — `McpAccounts`
+
+Shows each connector's MCP server account in the connector account registry.
+
+```ts cordis-catalog
+/**
+ * Show one connector's server account on its bundle page for as long as the returned disposer has not run. The
+ * account's key is `mcp:<server>`.
+ * @param registration - the server name, the bundle package, and the connector's text.
+ * @returns the registry's idempotent disposer, which withdraws the account.
+ * @throws when another account already uses the server or the package.
+ */
+register(registration: McpAccountRegistration): () => void
+```
+
+Source: [`packages/mcp/mcp-account/src/index.ts`](../../packages/mcp/mcp-account/src/index.ts)
+
+<a id="ctxmcpclienthost--mcpclienthost"></a>
+
+### `ctx.mcpClientHost` — `McpClientHost`
+
+Validates, mounts, probes, and authorizes MCP servers for the plugin that manages them.
+
+```ts cordis-catalog
+/**
+ * Resolve a server configuration and refuse what an instance would refuse when it starts.
+ * @param input - server configuration before defaults.
+ * @param path - configuration path naming the server; every failure message starts with it.
+ * @returns the resolved configuration.
+ * @throws when the server name, a field, a template token, the reconnect policy, or OAuth beside an Authorization
+ *   header is invalid.
+ */
+validate(input: ConfigInput, path: readonly string[]): Config
+
+/**
+ * Mount one server instance below the host. The instance registers its tools and holds its `serverName` until disposed.
+ * @param config - resolved server configuration, usually from {@link McpClientHost.validate}.
+ * @returns the instance's activation and disposal.
+ */
+mount(config: Config): McpServerInstance
+
+/**
+ * Probe a server without mounting it: resolve its templates, connect, list its tools, and close.
+ * @param config - resolved server configuration; its startup budget does not bound the probe.
+ * @param options - whole-probe budget, listing caps, and cancellation signal.
+ * @returns the connect and list outcome with the cleanup result.
+ * @throws for invalid options, malformed templates, or a missing required credentials provider.
+ */
+probe(config: Config, options?: McpProbeOptions): Promise<McpProbeResult>
+
+/**
+ * Create the explicit OAuth authorization owner of one server.
+ * @param config - resolved Streamable HTTP configuration with OAuth.
+ * @param changed - called after each change of the owner's attempt view.
+ * @returns the owner; its caller retires and disposes it.
+ */
+authorization(config: StreamableHttpConfig & { oauth: McpOAuthConfig }, changed: () => void): McpOAuthAuthorization
+```
+
+Source: [`packages/mcp/mcp-client/src/host.ts`](../../packages/mcp/mcp-client/src/host.ts)
+
+<a id="ctxmcpmanager--mcpservermanager"></a>
+
+### `ctx.mcpManager` — `McpServerManager`
+
+The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.
+
+```ts cordis-catalog
+/**
+ * Read configured and registered servers and retained runtime records without mounting or probing.
+ * @returns configured entries in document order, then registered entries, then retained records for removed entries.
+ */
+list(): McpManagedServerView[]
+
+/**
+ * Contribute one server for the calling plugin's lifetime. A registered
+ * entry is enabled while registered; its removal awaits the instance's
+ * unmount, so plugin disposal withdraws the server's tools before settling.
+ * @param name - server key and tool namespace, unique across configured and registered servers.
+ * @param entry - transport, endpoint, and budgets, validated like a configured entry.
+ * @returns an idempotent disposer that removes the registration.
+ * @throws when the name is taken, the entry is invalid, or the manager is disposed.
+ */
+register(name: string, entry: McpServerRegistration): () => void
+
+/**
+ * Stream server views for a management surface: the current list on
+ * subscription, then the complete list again after each status or entry change.
+ * @param signal - subscription lifetime; aborting ends only this stream.
+ * @returns coalesced server lists until the subscriber or the manager stops.
+ */
+@Remote({ mode: 'stream' }) async* watch(signal: AbortSignal): AsyncIterable<McpManagedServerView[]>
+
+/**
+ * Rebuild one server from its current entry: dispose the live instance (if
+ * any) and mount a fresh one with a fresh reconnect budget. Incomplete
+ * cleanup blocks replacement until the Host restarts.
+ * @param name - the configured or registered server key.
+ * @throws when the manager is disposed, no such entry exists, or cleanup is incomplete.
+ */
+@Remote async restart(name: string): Promise<void>
+
+/**
+ * Probe one server for a management surface; see {@link McpServerManager.probe}.
+ * @param name - the configured or registered server key.
+ * @param signal - caller cancellation.
+ * @returns the stage-classified probe outcome and independent cleanup result.
+ */
+@Remote('probe') probeFromClient(name: string, signal: AbortSignal): Promise<McpProbeResult>
+
+/**
+ * Probe one configured server without touching its live instance: resolve
+ * the entry's templates, connect, list tools, close. A disabled entry can be
+ * probed — that is how a management surface tests it before enabling.
+ * Configuration changes and manager disposal cancel the probe.
+ * @param name - the configured or registered server key.
+ * @param options - probe budget, listing caps, and abort signal.
+ * @returns the stage-classified probe outcome and independent cleanup result.
+ * @throws when the manager is disposed, the entry is absent or changing, cleanup is
+ * incomplete, options are invalid, or a required credentials provider is missing.
+ */
+async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
+
+/**
+ * Start explicit OAuth authorization, retaining the active grant until a successful commit.
+ * @param name - configured or registered OAuth entry, including disabled entries.
+ * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
+ */
+async startAuthorization(name: string): Promise<McpOAuthAttemptView>
+
+/**
+ * Cancel the selected attempt and drain its work; an admitted credential commit completes.
+ * @param name - managed entry.
+ * @param id - selected attempt; stale or absent attempts are ignored.
+ */
+async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
+
+/**
+ * Drain authorization, probes, and connections before deleting the local grant; retain client registration.
+ * A configuration change before deletion preserves the grant and rejects.
+ * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
+ */
+async signOut(name: string): Promise<void>
+```
+
+Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="ctxmcpresources--mcpresourceruntime"></a>
 
@@ -136,4 +291,32 @@ register(server: string, provider: McpResourceProvider): () => void
 ```
 
 Source: [`packages/mcp/mcp-resources/src/index.ts`](../../packages/mcp/mcp-resources/src/index.ts)
+
+<a id="mcp-manager-events"></a>
+
+### `mcp-manager/*` events
+
+<a id="mcp-managerstatus--parallel"></a>
+
+#### `mcp-manager/status` — parallel
+
+A managed server's connection status or authorization view changed; read `list()` for the current authorization view. Emitted while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.
+
+```ts cordis-catalog
+/**
+ * A managed server's connection status or authorization view changed;
+ * read `list()` for the current authorization view. Emitted while the
+ * manager is live and either the entry is configured or registered, or a
+ * runtime record remains. Removed entries may emit cleanup
+ * failures; `watch` and `list()` report removals.
+ * Lifecycle operations do not wait for listeners. Synchronous throws and
+ * returned promise rejections are logged without skipping other listeners.
+ * @param name - the configured `servers` key or registered name.
+ * @param status - the status now current for that server.
+ * @mode parallel
+ */
+'mcp-manager/status'(name: string, status: McpManagedServerStatus): void | Promise<void>
+```
+
+Source: [`packages/mcp/mcp-manager/src/types.ts`](../../packages/mcp/mcp-manager/src/types.ts)
 <!-- END GENERATED cordis-surface -->

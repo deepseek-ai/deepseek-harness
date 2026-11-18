@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "cache d'état de session",
+    "description": "État du cache généré à partir des journaux de session pour une lecture rapide grâce à des fonctionnalités telles que les listes de sessions."
+  }
+}

@@ -1,0 +1,105 @@
+/** Changes tab addresses, titles, the tab type definition, and the per-tab store. */
+import { describe, expect, it } from 'vitest'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import {
+  CHANGES_ID, CHANGES_KIND, changesAddress, changesDefinition, changesTitle, parseChangesAddress,
+} from '../src/client/changes-address.ts'
+import { createChangesStore } from '../src/client/changes-store.ts'
+import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+
+const SESSION = brandString<SessionId>('s/1')
+const URL = 'https://github.com/octo/demo/pull/7'
+
+describe('changes addresses', () => {
+  it('round-trip the Session and the source with each part percent-encoded', () => {
+    const local = changesAddress({ sessionId: SESSION, source: { kind: 'local' } })
+    const change = changesAddress({ sessionId: SESSION, source: { kind: 'change', url: URL } })
+    expect(local).toBe('dsh-resource://forge-changes/s%2F1/local')
+    expect(change).toBe(`dsh-resource://forge-changes/s%2F1/change/${encodeURIComponent(URL)}`)
+    expect(parseChangesAddress(local)).toEqual({ sessionId: SESSION, source: { kind: 'local' } })
+    expect(parseChangesAddress(change)).toEqual({ sessionId: SESSION, source: { kind: 'change', url: URL } })
+  })
+
+  it.each([
+    'dsh-resource://file/session/s/a.ts',
+    'dsh-resource://forge-changes//local',
+    'dsh-resource://forge-changes/s',
+    'dsh-resource://forge-changes/s/remote',
+    'dsh-resource://forge-changes/s/local/extra',
+    'dsh-resource://forge-changes/s/change',
+    'dsh-resource://forge-changes/s/change/',
+    'dsh-resource://forge-changes/s/change/a/b',
+    'dsh-resource://forge-changes/%E0%A4%A/local',
+  ])('reject %s', (address) => {
+    expect(parseChangesAddress(address)).toBeUndefined()
+  })
+
+  it('name the local view and a change request view by its number when the URL ends in one', () => {
+    const t = makeTranslate(zh)
+    expect(changesTitle({ kind: 'local' }, t)).toBe('本地变更')
+    expect(changesTitle({ kind: 'change', url: URL }, t)).toBe('#7 的变更')
+    expect(changesTitle({ kind: 'change', url: 'https://example.com/review' }, t)).toBe('变更')
+  })
+})
+
+describe('changesDefinition', () => {
+  it('claims and titles the addresses this package mints and leaves others named by their address', () => {
+    const definition = changesDefinition(makeTranslate(en))
+    expect(definition).toMatchObject({ id: CHANGES_ID, kind: CHANGES_KIND, keepMounted: true, patterns: ['dsh-resource://forge-changes/**'] })
+    const address = changesAddress({ sessionId: SESSION, source: { kind: 'change', url: URL } })
+    expect(definition.canOpen?.(address)).toBe(true)
+    expect(definition.title(address)).toBe('Changes in #7')
+    expect(definition.canOpen?.('dsh-resource://forge-changes/s/remote')).toBe(false)
+    expect(definition.title('dsh-resource://forge-changes/s/remote')).toBe('dsh-resource://forge-changes/s/remote')
+  })
+})
+
+describe('createChangesStore', () => {
+  it('seeds a tab on its first navigation, keeps its choices, and forgets it', () => {
+    const store = createChangesStore().create()
+    store.actions.navigated('tab-1', 1)
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({
+      scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
+    })
+    store.actions.scoped('tab-1', 'staged')
+    store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
+    store.actions.toggledSplit('tab-1')
+    store.actions.toggledWrap('tab-1')
+    store.actions.lensed('tab-1', 'interface')
+    store.actions.toggledTests('tab-1')
+    store.actions.filtered('tab-1', 'fixture/exports')
+    store.actions.navigated('tab-1', 2)
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({
+      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
+      hideTests: true, split: false, wrap: false, navigated: 2,
+    })
+    store.actions.navigated('tab-2', 1)
+    store.actions.forget('tab-1')
+    expect(Object.keys(store.getSnapshot().byTab)).toEqual(['tab-2'])
+    expect(() => { store.actions.toggledWrap('tab-1') }).toThrow('no changes state for tab "tab-1"')
+  })
+
+  it('shows all commits again after another scope or base, and leaves the test lens when test files hide', () => {
+    const store = createChangesStore().create()
+    const commits = { from: 'a'.repeat(40), to: 'b'.repeat(40) }
+    const tab = () => store.getSnapshot().byTab['tab-1']
+    store.actions.navigated('tab-1', 1)
+    store.actions.committed('tab-1', commits)
+    expect(tab()?.commits).toEqual(commits)
+    store.actions.based('tab-1', null)
+    expect(tab()?.commits).toBeNull()
+    store.actions.committed('tab-1', commits)
+    store.actions.scoped('tab-1', 'branch')
+    expect(tab()?.commits).toBeNull()
+
+    store.actions.lensed('tab-1', 'test')
+    store.actions.toggledTests('tab-1')
+    expect(tab()).toMatchObject({ lens: 'all', hideTests: true })
+    store.actions.lensed('tab-1', 'implementation')
+    store.actions.toggledTests('tab-1')
+    store.actions.toggledTests('tab-1')
+    expect(tab()).toMatchObject({ lens: 'implementation', hideTests: true })
+  })
+})

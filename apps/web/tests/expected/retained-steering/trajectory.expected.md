@@ -1,0 +1,38 @@
+- table:
+  - rowgroup:
+    - row "SYSTEM, Initial System Prompt":
+      - cell "SYSTEM"
+      - cell "Initial System Prompt"
+    - row "USER, Use the ask_user_question tool to ask me exactly one question with id \"checkpoint\", question \"Ready to continue?\", header \"Checkpoint\", and options labeled \"Yes\" and \"No\". After I answer, reply with one short sentence acknowledging my answer and stop.":
+      - cell "Turn 1 USER": USER
+      - cell "Use the ask_user_question tool to ask me exactly one question with id \"checkpoint\", question \"Ready to continue?\", header \"Checkpoint\", and options labeled \"Yes\" and \"No\". After I answer, reply with one short sentence acknowledging my answer and stop."
+    - 'row "CONTEXT, <system-reminder> The following information describes your current session: Current working directory: \"{{cwd}}/workspace\". Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"{{cwd}}/workspace\". Some platform te…"':
+      - cell "CONTEXT"
+      - 'cell "<system-reminder> The following information describes your current session: Current working directory: \"{{cwd}}/workspace\". Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"{{cwd}}/workspace\". Some platform te…"'
+    - 'row "CONTEXT, <system-reminder> A skill is a reusable set of task-specific instructions. The following skills are available in this session: <available_skills> dsh-doc: Use when a task needs facts about DeepSeek Harness (DSH) itself, such as how a feature, setting, plugin, agent preset, tool, or Cordis API of the running installation works; when the user asks to design, review, build, install, enable, or debug a DSH plugin, bundle, MCP connection, agent preset, plugin icon or detail page, or a DSH tool definition or skil…"':
+      - cell "CONTEXT"
+      - 'cell "<system-reminder> A skill is a reusable set of task-specific instructions. The following skills are available in this session: <available_skills> dsh-doc: Use when a task needs facts about DeepSeek Harness (DSH) itself, such as how a feature, setting, plugin, agent preset, tool, or Cordis API of the running installation works; when the user asks to design, review, build, install, enable, or debug a DSH plugin, bundle, MCP connection, agent preset, plugin icon or detail page, or a DSH tool definition or skil…"'
+    - 'row "CONTEXT, Time sampled while preparing turn 1, step 1: 2026-01-15T{{clock}}+{{clock}}[Asia/Shanghai] Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone. Elapsed since the preceding model-visible message: unavailable."':
+      - cell "CONTEXT"
+      - 'cell "Time sampled while preparing turn 1, step 1: 2026-01-15T{{clock}}+{{clock}}[Asia/Shanghai] Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone. Elapsed since the preceding model-visible message: unavailable."'
+    - row "Request 1, compaction":
+      - 'cell "Request #1"':
+        - 'button "Request #1"'
+      - cell
+    - 'row "USER, Interjection: include the word BANANA in your final reply."':
+      - cell "Turn 2 USER": USER
+      - 'cell "Interjection: include the word BANANA in your final reply."'
+    - row "USER, Also acknowledge this second message.":
+      - cell "USER"
+      - cell "Also acknowledge this second message."
+    - row "SYSTEM, Tools Updated":
+      - cell "SYSTEM"
+      - cell "Tools Updated"
+    - 'row "CONTEXT, Tool added: trajectory_order_probe"':
+      - cell "CONTEXT"
+      - 'cell "Tool added: trajectory_order_probe"'
+    - row "Request 2, ASSISTANT, Great, let's move forward. BANANA!":
+      - 'cell "Request #2 ASSISTANT"':
+        - 'button "Request #2"'
+        - text: ASSISTANT
+      - cell "Great, let's move forward. BANANA!"

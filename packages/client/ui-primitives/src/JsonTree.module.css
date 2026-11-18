@@ -1,11 +1,11 @@
 .root {
-  --json-tree-property: #881391;
-  --json-tree-string: #c41a16;
-  --json-tree-number: #1c00cf;
-  --json-tree-keyword: #1c00cf;
-  --json-tree-punctuation: #202124;
-  --json-tree-icon: #5f6368;
-  --json-tree-hover: rgb(60 64 67 / 4%);
+  --json-tree-property: var(--dsw-alias-json-tree-property);
+  --json-tree-string: var(--dsw-alias-json-tree-string);
+  --json-tree-number: var(--dsw-alias-json-tree-number);
+  --json-tree-keyword: var(--dsw-alias-json-tree-keyword);
+  --json-tree-punctuation: var(--dsw-alias-json-tree-punctuation);
+  --json-tree-icon: var(--dsw-alias-json-tree-icon);
+  --json-tree-hover: var(--dsw-alias-json-tree-hover);
 
   min-width: 0;
   overflow: auto;
@@ -15,16 +15,6 @@
   font: 12px/16px var(--ds-font-family-code);
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
-}
-
-:global(body[data-ds-dark-theme]) .root {
-  --json-tree-property: #5db0d7;
-  --json-tree-string: #f28b82;
-  --json-tree-number: #99c8ff;
-  --json-tree-keyword: #99c8ff;
-  --json-tree-punctuation: #e8eaed;
-  --json-tree-icon: #9aa0a6;
-  --json-tree-hover: rgb(232 234 237 / 5%);
 }
 
 .container {
@@ -43,9 +33,14 @@
   padding: 6px 8px 8px 14px;
 }
 
-.expandedTopLevel:has(> .topLevelBracket[data-json-root-row]:hover),
 .expandedTopLevel:has(> .topLevelBracket[data-json-root-row][data-json-copy-active]) {
   background: var(--json-tree-hover);
+}
+
+@media (hover: hover) {
+  .expandedTopLevel:has(> .topLevelBracket[data-json-root-row]:hover) {
+    background: var(--json-tree-hover);
+  }
 }
 
 .expandedTopLevelContainer {
@@ -75,7 +70,6 @@
   white-space: pre-wrap;
 }
 
-.row:not(.topLevelBracket):hover:not(:has(.row:hover))::after,
 .row:not(.topLevelBracket)[data-json-copy-active]::after,
 .row:has(> .expander:focus-visible)::after {
   position: absolute;
@@ -87,6 +81,20 @@
   background: var(--json-tree-hover);
   content: '';
   pointer-events: none;
+}
+
+@media (hover: hover) {
+  .row:not(.topLevelBracket):hover:not(:has(.row:hover))::after {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: var(--json-tree-row-height, 16px);
+    background: var(--json-tree-hover);
+    content: '';
+    pointer-events: none;
+  }
 }
 
 .row > span:not(.expander, .copySlot) {
@@ -182,8 +190,10 @@
   pointer-events: auto;
 }
 
-.stringToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .stringToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .stringToggle:focus-visible {
@@ -254,11 +264,17 @@
   padding-right: 24px;
 }
 
-.row:hover:not(:has(.row:hover)) > .copySlot,
 .row[data-json-copy-active] > .copySlot,
 .copySlot:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .row:hover:not(:has(.row:hover)) > .copySlot {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .actionButton {
@@ -277,8 +293,10 @@
   cursor: pointer;
 }
 
-.actionButton:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .actionButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .actionButton[aria-pressed='true'] {
@@ -326,8 +344,10 @@
   transform: rotate(90deg) scale(0.75);
 }
 
-.expander:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .expander:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .expander:focus-visible {
@@ -342,4 +362,10 @@
 
 .collapsedContent::after {
   content: '…';
+}
+
+@media (hover: none) {
+  .copySlot { opacity: 1; pointer-events: auto; }
+
+  .row:has(> .copySlot) { padding-right: 24px; }
 }

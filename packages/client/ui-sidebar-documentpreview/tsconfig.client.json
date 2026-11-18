@@ -7,10 +7,14 @@
   },
   "include": [
     "src/client",
-    "src/config.ts",
+    "src/defaults.ts",
+    "src/types.ts",
     "src/css-modules.d.ts"
   ],
   "references": [
+    {
+      "path": "../config"
+    },
     {
       "path": "../../api/gateway/tsconfig.client.json"
     },
@@ -45,6 +49,9 @@
       "path": "../ui-session"
     },
     {
+      "path": "../ui-sidebar-files"
+    },
+    {
       "path": "../ui-sidebar-right"
     },
     {
@@ -60,13 +67,16 @@
       "path": "../connection/tsconfig.client.json"
     },
     {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../document/office-to-pdf"
+      "path": "../../document/office-kit"
     },
     {
       "path": "../ui-settings/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-file-drag"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

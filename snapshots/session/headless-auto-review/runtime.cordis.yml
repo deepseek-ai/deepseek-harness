@@ -1,0 +1,16 @@
+# Auto stays opt-in; the reviewer is scripted while the main model replays its Session.
+- id: headless-runner
+  inject: [headlessStartup]
+  config:
+    task: !!js ctx.headlessStartup.task
+    sessionId: !!js ctx.headlessStartup.sessionId
+    json: !!js ctx.headlessStartup.json
+    permissionMode: auto
+    approvalPolicy: never
+
+- insert:
+    - id: auto-review
+      name: '@deepseek-ai/dsh-experimental-auto-review'
+    - id: headless-auto-review-fixture
+      name: '../../../packages/experimental/auto-review/tests/fixtures/headless-reviewer.ts'
+      config: {}

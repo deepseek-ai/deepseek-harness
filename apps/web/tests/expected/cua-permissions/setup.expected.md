@@ -1,0 +1,6 @@
+- dialog "使用 Computer Use 前需要设置":
+  - heading "使用 Computer Use 前需要设置" [level=2]
+  - button "关闭"
+  - paragraph: Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。
+  - button "稍后"
+  - button "前往设置"

@@ -1,0 +1,9 @@
+{
+  "bucket": "replace-with-bucket-1250000000",
+  "origin": "https://download-test.example.com",
+  "credentialsFile": "/absolute/path/to/packaging/secrets/cos-test.json",
+  "macOS": {
+    "signingIdentity": "REPLACE_WITH_DEVELOPER_ID_APPLICATION_IDENTITY",
+    "teamId": "XXXXXXXXXX"
+  }
+}

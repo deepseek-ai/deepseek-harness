@@ -4,13 +4,14 @@ param(
     [Parameter(Mandatory=$true)][ValidateSet('install','start','stop','status','uninstall')][string]$Action,
     [Parameter(Mandatory=$true)][string]$RunnerRoot,
     [string]$ConfigRoot,
+    [string]$NetworkRoot,
     [ValidateRange(1,1440)][int]$RestartMinutes = 1,
     [ValidateRange(1,999)][int]$RestartCount = 10
 )
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'This command requires PowerShell 7 on Windows.' }
-if ($Action -ne 'install' -and @('ConfigRoot','RestartMinutes','RestartCount').Where({ $PSBoundParameters.ContainsKey($_) }).Count) {
-    throw 'ConfigRoot, RestartMinutes and RestartCount apply only to install; reinstall to change them.'
+if ($Action -ne 'install' -and @('ConfigRoot','NetworkRoot','RestartMinutes','RestartCount').Where({ $PSBoundParameters.ContainsKey($_) }).Count) {
+    throw 'ConfigRoot, NetworkRoot, RestartMinutes and RestartCount apply only to install; reinstall to change them.'
 }
 if ($RunnerRoot -notmatch '^[A-Za-z]:[\\/]') { throw 'RunnerRoot must be an absolute local directory.' }
 $RunnerRoot = [IO.Path]::GetFullPath($RunnerRoot).TrimEnd('\','/')
@@ -30,25 +31,40 @@ if ($Action -eq 'install') {
     if (-not $ConfigRoot -or $ConfigRoot -notmatch '^[A-Za-z]:[\\/]') { throw 'Install requires an absolute ConfigRoot.' }
     $ConfigRoot = [IO.Path]::GetFullPath($ConfigRoot)
     $pwsh = Join-Path $PSHOME 'pwsh.exe'
-    & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'start-windows-packaging-runner.ps1') -RunnerRoot $RunnerRoot -ConfigRoot $ConfigRoot -CheckOnly
+    $startup = Join-Path $PSScriptRoot 'start-windows-packaging-runner.ps1'
+    if ($PSBoundParameters.ContainsKey('NetworkRoot')) {
+        if ($NetworkRoot -notmatch '^[A-Za-z]:[\\/]') { throw 'NetworkRoot must identify an existing absolute local directory.' }
+        if (-not (Test-Path -LiteralPath (Join-Path $ConfigRoot 'runner-network.json') -PathType Leaf)) { throw 'Owned network supervision requires runner-network.json.' }
+        $NetworkRoot = [IO.Path]::GetFullPath($NetworkRoot)
+        & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-windows-runner-network-process.ps1') -RunnerRoot $RunnerRoot -ConfigRoot $ConfigRoot -NetworkRoot $NetworkRoot -ReadinessScript $startup -StartScript $startup -CheckOnly
+    } else {
+        & $pwsh -NoProfile -File $startup -RunnerRoot $RunnerRoot -ConfigRoot $ConfigRoot -CheckOnly
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Runner preflight failed; no task was installed.' }
     if (Test-Path -LiteralPath $serviceDir) {
         if ((Get-Item -LiteralPath $serviceDir).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Task directory cannot be a link.' }
     } else {
         $null = New-Item -ItemType Directory -Path $serviceDir
     }
+    $compiler = Join-Path $env:SystemRoot 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+    if (-not (Test-Path -LiteralPath $compiler)) { throw 'Install requires the Windows .NET Framework 4.5+ compiler (Framework64/v4.0.30319/csc.exe).' }
+    $launcher = Join-Path $serviceDir 'launcher.exe'
+    & $compiler /nologo /target:winexe "/out:$launcher" (Join-Path $PSScriptRoot 'windows-runner-launcher.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Runner launcher compilation failed; verify .NET Framework 4.5+ is installed. No task was installed.' }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start-windows-packaging-runner.ps1') -Destination (Join-Path $serviceDir 'start.ps1')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-windows-runner-task.ps1') -Destination (Join-Path $serviceDir 'run.ps1')
-    @{ RunnerRoot = $RunnerRoot; ConfigRoot = $ConfigRoot; TaskName = $taskName; RestartCount = $RestartCount } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $serviceDir 'config.json') -Encoding utf8
+    foreach ($helper in @('windows-runner-network.ps1','run-windows-runner-network-process.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $helper) -Destination (Join-Path $serviceDir $helper)
+    }
+    @{ RunnerRoot = $RunnerRoot; ConfigRoot = $ConfigRoot; NetworkRoot = $NetworkRoot; TaskName = $taskName; RestartCount = $RestartCount } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $serviceDir 'config.json') -Encoding utf8
     Set-Content -LiteralPath (Join-Path $serviceDir 'attempts.txt') -Value '0'
-    $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -File "' + (Join-Path $serviceDir 'run.ps1') + '"'
-    $execution = New-ScheduledTaskAction -Execute $pwsh -Argument $arguments -WorkingDirectory $RunnerRoot
+    $execution = New-ScheduledTaskAction -Execute $launcher -Argument ('"' + $pwsh + '"') -WorkingDirectory $RunnerRoot
     $principal = New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited
     $trigger = @(
         (New-ScheduledTaskTrigger -AtLogOn -User $sid),
         (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes($RestartMinutes) -RepetitionInterval (New-TimeSpan -Minutes $RestartMinutes))
     )
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    $settings = New-ScheduledTaskSettingsSet -Priority 4 -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     $settings.Enabled = $false
     $null = Register-ScheduledTask -TaskName $taskName -TaskPath '\' -Action $execution -Principal $principal -Trigger $trigger -Settings $settings -Description "DSH packaging runner: $RunnerRoot; owner: $sid"
     Write-Output "Installed disabled task $taskName. Run start while logged in; reboot requires desktop login. Logs: $serviceDir"

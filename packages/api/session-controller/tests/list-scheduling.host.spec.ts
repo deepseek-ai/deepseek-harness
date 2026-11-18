@@ -2,16 +2,17 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, type Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionRecord } from '@deepseek-ai/dsh-session-query'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
-import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import SessionController from '../src/index.ts'
+import { createSessionTestController, TEST_IMAGE_LIMITS } from './test-remote.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiSessionList } from '../src/list.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Phase = 'live' | 'cold'
 interface Row {
@@ -48,7 +49,9 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
+  ctx.provide('attachments', { imageLimits: TEST_IMAGE_LIMITS } as never)
   const list = new ApiSessionList(ctx, workSliceMs)
+  await list.initialize()
   const clock = { now: 0 }
   const prepared = new Map<string, Session>()
   const agents = new Map<string, { status: Agent['status'] }>()
@@ -68,13 +71,13 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
     ctx.sessions.announce(session)
     const agent = { id: session.id, session, ctx, status: 'idle' as Agent['status'] }
     // Only registry lookup and status are consumed; no Agent execution occurs in this fixture.
-    const detachAgent = ctx.agents.enter(agent as Agent, undefined)
+    const detachAgent = ctx.agents.enter(agent as Agent)
     ctx.effect(() => detachAgent, 'list-scheduling.agent')
     agents.set(id, agent)
     detach.set(id, () => { detachAgent(); detachSession() })
   }
   const records: SessionRecord[] = rows.map((row) => {
-    const session = ctx.sessions.prepare(SessionId(row.id), {
+    const session = ctx.sessions.prepare(brandString<SessionId>(row.id), {
       meta: { createdAt: 100, ...(row.cwd === false ? {} : { cwd: resolve('list-scheduling-fixture') }) },
     })
     prepared.set(row.id, session)
@@ -82,7 +85,8 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
     return { header: session.header, live: row.phase === 'live', persisted: true }
   })
   const listSessions = vi.fn(async (_signal?: AbortSignal) => records)
-  ctx.provide('sessionQuery', { listSessions } as never)
+  const getListMetadata = () => ({ blank: true, lastPromptAt: null })
+  ctx.provide('sessionQuery', { listSessions, getListMetadata } as never)
   ctx.provide('sessionProjectionCache', {
     cachedSnapshot: (header: SessionRecord['header']) => {
       recordSummary('cold', header.id)
@@ -155,7 +159,7 @@ describe('Session-list work slices', () => {
     const get = h.ctx.sessions.get.bind(h.ctx.sessions)
     const lookup = vi.spyOn(h.ctx.sessions, 'get').mockImplementation((id) => {
       h.clock.now += 4
-      if (id === SessionId('first')) betweenRows(() => { controller.abort(reason) })
+      if (id === brandString<SessionId>('first')) betweenRows(() => { controller.abort(reason) })
       return get(id)
     })
     await expect(h.list.list(controller.signal)).rejects.toBe(reason)
@@ -190,8 +194,10 @@ describe('Session-list work slices', () => {
     h.ctx.provide('fileUploads', { registerAgentResolver: () => dispose } as never)
     h.ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'test', model: 'test' }) } as never)
     h.ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
-    new RemoteAccessService(h.ctx)
-    const controller = new SessionController(h.ctx, { nativeOpen: false, listWorkSliceMs: 4 }, { canOpenPath: () => false })
+    const controller = await createSessionTestController(h.ctx, {
+      nativeOpen: false, listWorkSliceMs: 4, canOpenPath: () => false,
+      defaultModelSelection: () => ({ provider: 'test', model: 'test' }), cwd: '/tmp',
+    })
     const yieldWork = vi.spyOn(scheduler, 'yield')
     const result = await controller.list({}, new AbortController().signal)
     expect(result.items).toHaveLength(3)
@@ -236,7 +242,7 @@ describe('Session-list work slices', () => {
       : [`${phase}:first`, `${phase}:middle`, `${phase}:last`])
     expect(h.listSessions).toHaveBeenCalledExactlyOnceWith(controller.signal)
     if (phase === 'live' && abortAt === 'first') {
-      expect(lookup).toHaveBeenCalledExactlyOnceWith(SessionId('first'))
+      expect(lookup).toHaveBeenCalledExactlyOnceWith(brandString<SessionId>('first'))
     }
   })
 
@@ -338,7 +344,7 @@ describe('Session-list work slices', () => {
       { sessionId: 'queued', agentAvailable: false, running: false },
       { sessionId: 'removed', agentAvailable: false, running: false },
     ])
-    expect(h.ctx.agents.get(SessionId('queued'))).toBeDefined()
-    expect(h.ctx.sessions.get(SessionId('removed'))).toBeUndefined()
+    expect(h.ctx.agents.get(brandString<SessionId>('queued'))).toBeDefined()
+    expect(h.ctx.sessions.get(brandString<SessionId>('removed'))).toBeUndefined()
   })
 })

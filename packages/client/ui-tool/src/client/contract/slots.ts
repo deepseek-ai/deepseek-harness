@@ -10,18 +10,13 @@ import type {
 import type { MessageImageLoader, MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { AskUserQuestionAnswerItem, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { ToolFileInjected } from '../tool/file-menu.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Keyed Tool call view dispatched by wire Tool name. Any name is allowed,
-     * including tools registered by your package. Register with
-     * `key: '<tool name>'`; a typo never renders.
-     *
-     * Registering an occupied key replaces its view; unclaimed keys use the
-     * generic row. The owner supplies the call identity and running
-     * or settled node through explicit phase props. Every stage supplies
-     * `name` and a lazy `args` view; preparing arguments may be incomplete.
+     * Key by wire name, including custom tools; a typo never renders. Unclaimed keys use the generic row.
+     * Use `key: '<tool name>'` to replace the view; phase data has `name` and lazy, possibly partial `args`.
      */
     'tool.call.toolview': {
       kind: 'keyed'
@@ -32,7 +27,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * Durable images of a settled image-bearing Tool call, rendered through
      * the attachment presentation plugin. The Tool layer never imports an
      * attachment implementation: a toolview declares this slot as a child and
-     * renders it with the image card's references plus the session-authorized
+     * renders it with the image card's references plus the Gateway-authorized
      * loader it received in its owner, and the attachment plugin fills the
      * gallery. Composing no attachment presentation plugin renders nothing,
      * which is why the image card keeps its own envelope text beside the
@@ -49,7 +44,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export interface ToolImagesOwnerProps {
   /** Durable references or submission-echo previews in result order. */
   images: readonly MessageImageSource[]
-  /** Session-authorized image URL loader for the durable arm. */
+  /** Gateway-authorized image URL loader for the durable arm. */
   loadImage: MessageImageLoader
   /** Horizontal placement inside the owning record. */
   align: 'start' | 'end'
@@ -69,7 +64,7 @@ export interface ToolCallCommonProps {
   home?: string | undefined
   /** Open an argument path at its optional requested line. */
   openFile: (path: string, options?: OpenFileOptions) => void
-  /** Chat-supplied, session-authorized loader for durable images; Tool views do not manage attachment URLs. */
+  /** Chat-supplied, Gateway-authorized loader for durable images; Tool views do not manage attachment URLs. */
   loadImage: MessageImageLoader
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
@@ -154,4 +149,4 @@ export type ToolHostInfoInjected = {
 export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
   & PropsRenderSlots<'tool.call.toolview'>
   & PropsLocale<'conversation'>
-  & InjectFace<ToolHostInfoInjected>
+  & InjectFace<ToolHostInfoInjected & ToolFileInjected>

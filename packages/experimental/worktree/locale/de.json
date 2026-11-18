@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Worktree-Dienst",
+    "description": "Erstellen Sie benannte Git-Arbeitsbäume und ändern Sie das Arbeitsverzeichnis der aktuellen Sitzung."
+  }
+}

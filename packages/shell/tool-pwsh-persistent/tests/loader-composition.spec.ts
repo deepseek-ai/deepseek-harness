@@ -1,5 +1,7 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { spawnSync } from 'node:child_process'
-import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { release, tmpdir, version } from 'node:os'
 import { join } from 'node:path'
@@ -8,8 +10,9 @@ import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -74,7 +77,7 @@ class PassthroughSandbox extends SandboxProvider {
 }
 
 async function agent(ctx: Context, cwd: string): Promise<Agent> {
-  const id = SessionId('persistent-pwsh-loader-agent')
+  const id = brandString<SessionId>('persistent-pwsh-loader-agent')
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
@@ -83,6 +86,7 @@ async function agent(ctx: Context, cwd: string): Promise<Agent> {
     id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     status: 'idle',
     ctx: scope.ctx,
@@ -110,6 +114,7 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
       "- name: '@deepseek-ai/dsh-agent'",
       "- name: '@deepseek-ai/dsh-system-prompt'",
       "- name: '@deepseek-ai/dsh-tools'",
+      "- name: '@deepseek-ai/dsh-tool-executor-native'",
       "- name: '@deepseek-ai/dsh-terminal'",
       "- name: '@deepseek-ai/dsh-test-sandbox'",
       "- name: '@deepseek-ai/dsh-session-projection'",
@@ -157,6 +162,7 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
       ['@deepseek-ai/dsh-agent', AgentRegistry],
       ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
       ['@deepseek-ai/dsh-tools', ToolRegistry],
+      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
       ['@deepseek-ai/dsh-terminal', TerminalSessionService],
       ['@deepseek-ai/dsh-test-sandbox', PassthroughSandbox],
       ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
@@ -214,9 +220,9 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
     const signal = new AbortController().signal
     const execute = (id: string, command: string) => {
       timeline.label(id)
-      return context!.tools.execute({
+      return executeToolFixture(context!, {
         signal,
-        callId: ToolCallId(id),
+        callId: brandString<ToolCallId>(id),
         name: 'pwsh',
         arguments: { command },
         agent: owner,

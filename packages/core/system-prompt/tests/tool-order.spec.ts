@@ -78,21 +78,14 @@ describe('SystemPrompt tool order', () => {
     expect(assembly.tools.map(t => t.description)).toEqual(['anchor', 'first', 'second'])
   })
 
-  it('canonicalizes BEFORE the assemble waterfall: listeners see the ordered list and own their own edits', async () => {
+  it('keeps ordered provider declarations outside presentation transforms', async () => {
     const ctx = await mount()
     ctx.systemPrompt.tools(() => ({ schemas: [tool('zulu'), tool('alpha')] }))
-    let seen: string[] | undefined
-    ctx.on('system-prompt/assemble', function (assembly, _context, next) {
-      seen = assembly.tools.map(t => t.name)
-      // A listener-appended tool is NOT re-sorted — same contract as sections:
-      // canonicalization applies to what the registry contributed, and a
-      // listener owns the determinism of what it emits.
-      assembly.tools.push(tool('aardvark'))
-      return next()
+    ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
+      expect(assembly).not.toHaveProperty('tools')
+      return { ...await next(), tools: [tool('aardvark')] }
     })
-    const assembly = await ctx.systemPrompt.assemble()
-    expect(seen).toEqual(['alpha', 'zulu'])
-    expect(names(assembly)).toEqual(['alpha', 'zulu', 'aardvark'])
+    expect(names(await ctx.systemPrompt.assemble())).toEqual(['alpha', 'zulu'])
   })
 
   it.each([

@@ -1,0 +1,12 @@
+# No-tool model response leaves permission persistence to the shipped profile.
+- id: agent-default-model
+  config:
+    provider: auto-shutdown
+    model: auto-shutdown
+
+- id: session-title
+  disabled: true
+
+- insert:
+    - id: auto-shutdown-llm
+      name: './auto-shutdown-llm.mjs'

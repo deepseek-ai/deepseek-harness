@@ -395,6 +395,7 @@ describe('translation scope discovery', () => {
 
   it.each([
     'packages/example/guide.md',
+    'packages/example/docs/DETAIL.md',
     'packages/example/CONTRIBUTING.md',
     'packages/example/BRAND_GUIDELINES.md',
     'other/tutorial.md',
@@ -406,7 +407,6 @@ describe('translation scope discovery', () => {
     'coverage/report/README.md',
     'python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-macos-arm64/README.md',
     'python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/README.md',
-    'python/sdk-runtime/src/deepseek_harness_runtime/runtime/macos-arm64/office-skills/office-docx/SKILL.md',
   ])('excludes non-source or non-README path %s', (file) => {
     expect(isTranslationScopeFile(file)).toBe(false)
   })

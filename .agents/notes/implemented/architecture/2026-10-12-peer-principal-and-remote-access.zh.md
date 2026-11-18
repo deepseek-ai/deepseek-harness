@@ -131,7 +131,7 @@ export function principalOf(invocation: RemoteInvocation | undefined): Principal
 
 ### 方法级访问控制
 
-资源类型与 `@Remote` 的 `resources` 读取函数在 `@deepseek-ai/dsh-typert-protocol`；资源种类在 typert 中与 lookups、Contexts 并列：`TypertResourceMap` 声明种类，`typert.resources` 保存每个种类的默认 wire 字段，lookup 与 Host Context adapter 声明其 wire 身份所属的资源种类。Gateway 把一次调用或一个转发事件解析为它访问的资源。判定、列表过滤与访问快照在新包 `@deepseek-ai/dsh-api-remote-access`（`packages/api/remote-access`），该包不读取任何参数字段。Gateway 与领域包对 remote-access 只做 type-only 依赖并 inject `remoteAccess`，值依赖只有 `dsh-typert-protocol`，不为 remote-access 新增 `package-dependency-policy` 条目。role、binding 与 policy 由业务包定义和注册，liveshare 为首个使用方。除内置的 `global` 外，remote-access 与 Gateway 中不出现任何资源种类名，符合 [`packages/api` 只承载通用编排](../../../../docs/defensive-patterns/remote-and-api.zh.md) 的评审规则。
+资源类型与 `@Remote` 的 `resources` 读取函数在 `@deepseek-ai/dsh-typert-protocol`；资源种类在 typert 中与 lookups、Contexts 并列：`TypertResourceMap` 声明种类，`typert.resources` 保存每个种类的默认 wire 字段或 resolver，lookup 与 Host Context adapter 声明其 wire 身份所属的资源种类。Gateway 把一次调用或一个转发事件解析为它访问的资源。判定、列表过滤与访问快照在新包 `@deepseek-ai/dsh-api-remote-access`（`packages/api/remote-access`），该包不读取任何参数字段。Gateway 与领域包对 remote-access 只做 type-only 依赖并 inject `remoteAccess`，值依赖只有 `dsh-typert-protocol`，不为 remote-access 新增 `package-dependency-policy` 条目。role、binding 与 policy 由业务包定义和注册，liveshare 为首个使用方。除内置的 `global` 外，remote-access 与 Gateway 中不出现任何资源种类名，符合 [`packages/api` 只承载通用编排](../../../../docs/defensive-patterns/remote-and-api.zh.md) 的评审规则。
 
 #### 与 RBAC 的对应
 
@@ -165,7 +165,7 @@ export interface TypertResourceMap {}
 //   @deepseek-ai/dsh-workspace/types: workspace: TypertResource<WorkspaceId>
 
 // Runtime registries in typert
-ctx.typert.resources.register(kind, { field }): TypertDisposer
+ctx.typert.resources.register(kind, { field } | { resolve }): TypertDisposer
 ctx.typert.lookups.register(key, { parameter, wire, resource?, … })   // resource: the kind its wire id names
 ctx.typert.contexts.registerHost(key, { wire, resource?, … })         // a TypertHostContextAdapter
 
@@ -213,11 +213,11 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 
 | 规则 | 内容 |
 |---|---|
-| 写法 | `@Remote({ name: 'page', resources: { session: (request) => request.address.kind === 'session' ? request.address.sessionId : request.address.childSessionId } })`；Context 方法写 `@RemoteScope('agent')`，由 Agent Context 的 `resource: 'session'` 得到会话资源，需要其他资源时写 `@RemoteScope('agent', { resources: { workspace: (request) => request.workspaceId } })`。多数方法不写 `resources`，由自动解析得到资源 |
+| 写法 | 方法必须手工点名资源时写 `@Remote({ name: 'prompt', resources: { session: (request) => request.sessionId } })`；`session/page` 与 `session/follow` 则依赖已注册的 `session` 默认 resolver；Context 方法写 `@RemoteScope('agent')`，由 Agent Context 的 `resource: 'session'` 得到会话资源，需要其他资源时写 `@RemoteScope('agent', { resources: { workspace: (request) => request.workspaceId } })`。多数方法不写 `resources`，由自动解析得到资源 |
 | 资源种类 | 资源种类由声明 id 类型的底层包合并：`session: TypertResource<SessionId>` 在 `@deepseek-ai/dsh-session/types`，`workspace: TypertResource<WorkspaceId>` 在 `@deepseek-ai/dsh-workspace/types`。session-controller 引用 commands 包，若在 session-controller 合并，commands 要引用 session-controller，形成 project reference 环。`global` 由 remote-access 内置，没有 id，不进 `TypertResourceMap`；typert 保留该名，`typert.resources.register('global', …)` 抛错 |
-| 默认字段与声明 | 拥有该种类的领域在控制器构造时登记默认 wire 字段：`SessionController` 构造函数调用 `typert.resources.register('session', { field: 'sessionId' })`，`WorkspaceController` 构造函数登记 `workspace` → `workspaceId`；同一种类重复登记即抛错。Agent、Session 与 `workspaceFileScope` lookup 声明 `resource: 'session'`，agent 包的 Agent Context 声明 `resource: 'session'` |
-| 解析优先级 | 对每个资源种类依次取：① 该方法 `resources` 中该种类的读取函数；② 声明了该种类 `resource` 的每个 lookup 参数贡献其 wire 身份，省略的可选 lookup 参数不贡献；Context 方法的 Context 声明了该种类 `resource` 时，其 wire 身份同样贡献；③ 该种类的默认字段：命名参数中有同名顶层参数就读它，否则读第一个对象参数的同名字段。默认字段只表示一个身份，读到数组即为非法值 |
-| 参数来源 | 资源解析与 `decide()` 的 `args` 读取经 Typert 编译类型校验后的命名参数：每个 JSON 参数由其 codec 解码一次，类型未声明的对象字段被移除，分派复用该值，因此调用方无法用未声明字段改变资源；lookup 参数与 Context 身份取 wire 身份，此时不解析 lookup、不激活 Agent |
+| 默认提取声明 | 资源所属领域登记 `{ field }` 或 `{ resolve }`，两者互斥。SessionController 登记 `resolveSessionResource`；WorkspaceController 登记 `workspaceId`。重复种类被拒绝；lookup 和 Host Context 的资源声明独立于默认规则 |
+| 解析优先级 | 每个种类依次采用方法显式 reader、lookup 与 Host Context 身份、注册的默认字段或 resolver。字段读取同名顶层参数或首个对象参数。resolver 在 lookup 解析前调用一次，接收已校验的命名 `args` 及有序参数描述。默认规则返回一个非空字符串或 undefined，数组非法 |
+| 参数来源 | 编译 codec 移除未声明的对象字段；SRC fallback 只检查 JSON 安全性，不移除字段。解析和分派使用相同的已校验值。Session resolver 拒绝同时包含 sessionId 与 address 的请求对象，即使两者相同。lookup 和 Context 身份在授权完成前保持 wire 值 |
 | 解析结果 | 各种类的资源合在一起即本次调用访问的资源；一个都没有即 `[global]`；解析出资源时只用这些资源，不附加 `global` |
 | 读取函数 | 以方法的位置参数调用：按描述符把命名参数映射回方法参数顺序（JSON 位为校验后的值，lookup 位为 wire 身份，取消参数位为调用的 signal）；返回一个 id、id 数组（每个都须被允许）或 `undefined`（该种类无资源） |
 | 非法值 | 读取函数抛错或返回空数组，或读到的值（含 Context 的 wire 身份）不是非空字符串即资源非法：Gateway 不询问 `decide()`，直接以 `remote-access/denied`（reason `resource-invalid`）拒绝调用 |
@@ -228,7 +228,7 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 
 #### 端点的资源
 
-下表列出 #3854 读者用到的端点及其资源来源。只有 `session/page` 与 `session/follow` 需要显式 `resources`，其余靠 lookup 的 `resource` 或默认字段：
+下表列出 #3854 读者用到的端点及其资源来源。Session 历史端点使用注册的 Session resolver；特殊方法可用显式 reader 覆盖默认规则：
 
 | 端点 | 资源 | 解析来源 | 方法内过滤 |
 |---|---|---|---|
@@ -241,15 +241,17 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 | `llm/listProviders` | `global` | 无资源 | 否 |
 | `commands/list` | session：`args.agentId`（Agent lookup 的 wire 字段） | Agent lookup `resource: 'session'` | 否 |
 | `goals/get` | session：`args.agentId` | Agent lookup `resource: 'session'` | 否 |
-| `session/attachment` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `skills/list` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `session/fork` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `session/prompt` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `session/cancel` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `session/projections` | session：`args.request.sessionId` | 默认字段 | 否 |
-| `session/page` | session：Session 地址读 `args.request.address.sessionId`；subagent 地址读 `args.request.address.childSessionId` | `resources` | 否 |
-| `session/follow` | 同上 | `resources` | 否 |
+| `session/attachment` | session：`args.request.sessionId` | 默认 resolver | 否：一条 Session 上的授权允许读取整个附件存储 |
+| `skills/list` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/fork` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/prompt` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/cancel` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/projections` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/page` | session：Session 地址读 `args.request.address.sessionId`；subagent 地址读 `args.request.address.childSessionId` | 默认 resolver | 否 |
+| `session/follow` | 同上 | 默认 resolver | 否 |
 | `remoteAccess/follow` | `global` | 无资源；remote-access 对任何 principal 放行 | 否 |
+
+对于 `session/attachment`，`sessionId` 指定 Gateway 检查的资源，不限制可读取哪张图片。该检查放行后，图片可以属于其他 Session 或不属于任何 Session，处理函数也不检查请求中的 Session 是否存在。policy 作者必须把此 action 视为整个附件存储的读取权限，具体规则见[图片访问规则](2026-10-23-store-scoped-image-reads.zh.md)。
 
 subagent 地址读取的是子会话转录，因此其资源是子会话。Client 在重连后会重新读取已知会话的 projections，其中包括 subagent 会话的父会话；没有该父会话授权的读者，其 projection 读取被拒。父会话的授权是否覆盖其 subagent 子会话由 policy 决定，即是否为子会话给出 binding；通用层不推导父资源。
 
@@ -392,7 +394,7 @@ const childPrompt = child => ({ action, args }) =>
 | 1 | 准入得到 Peer：网络路径由 Connection `admit()` 给出（`browserPeer`）；进程内路径由调用方传入。Gateway 在读取 wire payload 之前检查 `peer.signal` | 网络准入失败返回 HTTP 401 / 403（不进入 Gateway）；Peer 已 dispose：`gateway/peer-disposed` |
 | 2 | 解析端点并做参数字段集校验（`resolveDescriptor`、`assertExactArguments`），再按 Typert 编译类型校验 JSON 参数，每个参数解码一次 | `gateway/invocation-unavailable`、`gateway/ambiguous-endpoint`、`gateway/definition-unavailable`；字段多余或缺失：`gateway/arguments-invalid`；JSON 参数校验失败：`gateway/input-invalid`（owner 与非 owner 相同，先于访问检查） |
 | 3 | owner 直通：`principal.kind === 'owner'` 时直接进入第 5 步 | — |
-| 4 | 非 owner：Gateway 从第 2 步校验后的参数解析资源（`resources` 读取函数、其次 lookup 参数与 Context 声明的 `resource`、再次默认字段；lookup 与 Context 身份取 wire 身份，不解析 lookup 与 Context），再以校验后的参数为 `args` 询问 `remoteAccess.decide({ principal, action: endpoint, resources, args })`；资源非法时不询问 `decide()`，直接以 `resource-invalid` 拒绝；`deny` 结论变为抛出的错误 | `remote-access/denied`，details `{ action, reason }` |
+| 4 | 非 owner：Gateway 从第 2 步校验后的参数解析资源（`resources` 读取函数、其次 lookup 参数与 Context 声明的 `resource`、再次注册的默认字段或 resolver；lookup 与 Context 身份取 wire 身份，不解析 lookup 与 Context），再以校验后的参数为 `args` 询问 `remoteAccess.decide({ principal, action: endpoint, resources, args })`；资源非法时不询问 `decide()`，直接以 `resource-invalid` 拒绝；`deny` 结论变为抛出的错误 | `remote-access/denied`，details `{ action, reason }` |
 | 5 | 分派：`resolveReceiverContext`（可能激活 Agent）、lookup 解析（JSON 参数复用第 2 步的值）、调用方法 | 既有错误码不变，如 `gateway/lookup-not-found`、`gateway/context-not-found`、`gateway/input-invalid`、`gateway/service-unavailable`、`gateway/method-unavailable` 与业务错误 |
 
 鉴权（第 3–4 步）位于 lookup 与 Context 解析之前，未授权调用不会激活会话或产生其他副作用。Gateway 新增的错误码只有 `gateway/peer-disposed`；拒绝码 `remote-access/denied` 由 remote-access 声明。
@@ -446,7 +448,7 @@ export const REMOTE_ACCESS_SNAPSHOT_KEY = '__DSH_REMOTE_ACCESS__'
 
 | 行为 | 说明 |
 |---|---|
-| 首份快照 | `snapshotFor(principal)` 计算页面打开时的 baseline。remote-access 经 `webserver/index-inject` 为 webServer 渲染的每个 index 加入全局变量 `REMOTE_ACCESS_SNAPSHOT_KEY`，值为 owner baseline `{ type: 'baseline', owner: true }`。渲染非 owner 页面的业务包（例如 owner Host 上的 liveshare）在所有 index 注入行之后放置一条把该全局变量赋值为 `snapshotFor(principal)` 的语句；后写的赋值生效，Client 在挂载时读取该全局变量 |
+| 首份快照 | `snapshotFor(principal)` 计算页面打开时的 baseline。webServer 按页面所代表的 Peer 渲染 index，`webserver/index-inject` 把该 Peer 传给监听方；remote-access 为每个 index 加入全局变量 `REMOTE_ACCESS_SNAPSHOT_KEY`，值为 `snapshotFor(peer.principal)`，owner 页面因此得到 owner baseline `{ type: 'baseline', owner: true }`，为非 owner Peer 渲染的页面（例如 owner Host 上的 liveshare 读者页）得到该 principal 的 grant。Client 在挂载时读取该全局变量 |
 | 订阅 | 每个 Peer 订阅一条访问快照流，其 baseline 取代注入的快照 |
 | 计算 | 取该 principal kind 的 policy 的全部 binding，按资源相等归并；每个资源的 `actions` 为这些 binding 的 role 中、经与调用相同的判定（单个资源、不带 args，condition 以无 args 调用）放行的端点 action；只为至少放行一个端点 action 的资源给出 grant。判定与快照同源：同一 principal、action 与资源（不带参数）上，快照答案与 `decide()` 一致 |
 | 只含端点 action | `event:<name>` action 不进入快照；前端只据端点 action 决定入口显隐 |
@@ -600,7 +602,7 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 
 **拒绝原因只由 condition 给出。** 没有 binding 时没有 condition 可以给出原因，读者页面无法区分「分享已过期」「分享不允许写入」等情况；`explain` 只在结论已为拒绝后给出原因，不改变结论。
 
-**全局资源 resolver 注册表（领域包按字段名注册识别函数）。** 字段识别与方法分离，方法改签名时无人提醒，跨包同名字段也会被误认；资源解析采用方法上的默认约定加 per-method `resources`，领域包只登记自己种类的默认字段。
+**全局资源 resolver 注册表（领域包按字段名注册识别函数）。** 字段识别与方法分离，方法改签名时无人提醒，跨包同名字段也会被误认；资源解析采用方法上的默认约定加 per-method `resources`，领域包只登记自己种类的默认字段或 resolver。
 
 **按点路径声明资源（`'request.address.sessionId'`）。** 路径无法由类型推导约束；`resources` 读取函数的参数类型从被装饰方法推断，拼错即编译失败。
 
@@ -635,10 +637,10 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 | 鉴权顺序 | owner 调用任何方法照常分派且不读取 policy；没有 role 列出的方法对非 owner 以 `remote-access/denied`（`no-allow`）拒绝；访问检查早于 lookup，被拒调用不激活会话 | Gateway host spec |
 | policy 注册 | 每个非 owner principal kind 一个 policy，重复注册抛错；disposer 撤回后该 kind 以 `no-allow` 拒绝；随 fiber 撤回 | remote-access host spec |
 | 判定 | 每个资源都需要匹配的 binding（AND）；role 不含该 action、资源不相等或 condition 拒绝都不放行；拒绝原因按 condition > `explain` > `no-allow` 取；`explain` 不改变结论；condition 在调用时收到 args，在快照与列表过滤时不收；`bindings()`、condition 或 `explain()` 抛错以 `policy-failed` 拒绝，每个 policy 在两次 `invalidate()` 之间只记录一次日志，事件路径上 owner 流与共享事件源照常；`remoteAccess/follow` 对任何 principal 放行 | remote-access host spec、Gateway host spec |
-| 资源解析 | 默认字段（顶层或首个对象参数）得到对应资源；声明了该种类 `resource` 的 lookup 参数得到其 wire 身份；Context 方法从 args 中的 Agent Context 身份得到其 session 资源且不激活 Agent，另可经 `resources` 声明其他资源；`resources` 读取函数覆盖该种类，数组为多个资源，`undefined` 为无；都没有为 `[global]`；抛错、空数组或非非空字符串（含 Context 身份）为非法，Gateway 以 `resource-invalid` 拒绝且不询问 `decide()`；未声明 `resource` 的 Context 按普通规则解析；资源与 `args` 读取校验后的参数，未声明的嵌套字段不改变资源、condition 也读不到它，JSON 参数校验失败在访问检查前返回 `gateway/input-invalid` | Gateway host spec（gateway-access） |
-| 资源注册表 | `typert.resources` 每个种类登记一个默认字段，拒绝重复登记与 `global`，并随 fiber 撤回；配置的 lookup resolver 保留 provider 的 `resource`；Host Context adapter 保留其 `resource` | typert-registry spec |
+| 资源解析 | 默认字段或 resolver 得到一个资源，默认 resolver 返回数组为非法；声明了该种类 `resource` 的 lookup 参数得到其 wire 身份；Context 方法从 args 中的 Agent Context 身份得到其 session 资源且不激活 Agent，另可经 `resources` 声明其他资源；`resources` 读取函数覆盖该种类，数组为多个资源，`undefined` 为无；都没有为 `[global]`；抛错、空数组或非非空字符串（含 Context 身份）为非法，Gateway 以 `resource-invalid` 拒绝且不询问 `decide()`；未声明 `resource` 的 Context 按普通规则解析；资源与 `args` 读取校验后的参数，只有编译 codec 才移除未声明字段，JSON 参数校验失败在访问检查前返回 `gateway/input-invalid` | Gateway host spec（gateway-access） |
+| 资源注册表 | `typert.resources` 每个种类登记一个默认字段或 resolver，拒绝重复登记与 `global`，并随 fiber 撤回；配置的 lookup resolver 保留 provider 的 `resource`；Host Context adapter 保留其 `resource` | typert-registry spec |
 | 转发事件 | 非 owner 的 `$events` 流只在 `event:<name>` 于其资源上被授权时整条收到事件；未声明资源的事件按 `global` 判定；读取函数返回 `undefined` 的事件不送达非 owner，且不询问 `decide()`；owner 全部收到 | Gateway host spec（gateway-access） |
-| 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为渲染的每个 index 注入 owner baseline；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |
+| 首份快照 | `snapshotFor()` 返回 owner baseline 或该 principal 的 grant；remote-access 为每个 index 注入其所代表 Peer 的快照；Client 从注入的 baseline 起步并拒绝格式错误的快照 | remote-access host 与 client spec |
 | 类型推断 | `resources` 读取函数的参数类型从方法推断；lookup 位为 wire 类型；访问不存在的属性、参数多于方法参数与 `global` 键编译失败；binding 的资源种类与 role 不符编译失败 | typert-protocol spec、remote-access spec（类型测试） |
 | 列表过滤 | `session/list`、`session/search`、`session/control`、`workspace/follow` 对非 owner 只返回 `allows()` 为 true 的项；已下发工作区失去可见性时 `workspace/follow` 发送 `replace` 增量帧，访问恢复后该工作区重新出现；owner 结果不变 | session-controller / workspace-controller host spec |
 | 访问快照 | 快照中的允许集合与 Host 对同一 principal、action、资源（不带参数）的判定一致；只含端点 action；没有放行 action 的资源不出 grant，放行集合变空时推送 `remove`；`invalidate()` 与 policy 注册、撤回后推送增量；被变化结束的等待不残留 abort 监听器；卸载服务即结束所有打开的快照流；owner 只收 `{ owner: true }` | remote-access host spec |

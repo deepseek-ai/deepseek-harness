@@ -1,24 +1,47 @@
 /** Launch the Desktop profile through the Web application and report its URL to Electron. */
 
 import { delimiter, join } from 'node:path'
-import { inspect } from 'node:util'
+import { randomUUID } from 'node:crypto'
+import type { PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+import { formatFatalDiagnostic } from './fatal-diagnostic.ts'
 import { loadLayeredEnv, loadProfileDirectory, reportSkippedBundles } from '@deepseek-ai/dsh-app-boot'
 import { runProfile } from '@deepseek-ai/dsh/profile-boot'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
-import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import * as desktopOffice from './office.ts'
+import { localDragResource } from './file-drag.ts'
 
 import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
 import { installPlatformSessionPublisher } from './platform-session.ts'
-import { installOfficeEngineResolution } from './office-engine.ts'
+import { installOperationDiagnostics } from './operation-diagnostics.ts'
+import { DesktopAuthenticationEnd, receiveDesktopSecret } from './authentication.ts'
+import * as DesktopAuthentication from '@deepseek-ai/dsh-host-authentication-desktop'
 
 async function main(): Promise<void> {
+  const runId = randomUUID() as PluginOperationRunId
+  const authentication = receiveDesktopSecret(process)
+  if (process.connected) process.send?.({ type: 'starting', runId }, (error) => {
+    if (error !== null) authentication.dispose()
+  })
+  const send = (message: object): Promise<void> => new Promise((resolve, reject) => {
+    if (!process.connected || process.send === undefined) { resolve(); return }
+    process.send(message, (error) => { if (error === null) resolve(); else reject(error) })
+  })
+  let secret: string
+  try {
+    secret = await authentication.secret
+    authentication.signal.throwIfAborted()
+  } catch (error) {
+    if (!(error instanceof DesktopAuthenticationEnd)) throw error
+    if (error.kind === 'shutdown') await send({ type: 'shutdown-complete' })
+    if (process.connected) process.disconnect()
+    return
+  }
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
-  installOfficeEngineResolution(runtimeDir)
+  // Set before the launch-environment snapshot and profile evaluation; empty means the payload sits beside the runtime directory.
+  process.env.DSH_PRIMARY_RUNTIME = process.argv[4] || join(runtimeDir, '..', 'runtime', 'primary-runtime')
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)
@@ -41,24 +64,52 @@ async function main(): Promise<void> {
     }),
   })
   let stopping: Promise<void> | undefined
+  const dragReads = new Map<number, AbortController>()
+  const dragTasks = new Set<Promise<void>>()
   const control: {
     updateTasks?: ReturnType<typeof installDesktopUpdateTaskControl>
     quitInspection?: ReturnType<typeof installDesktopQuitInspection>
   } = {}
-  const send = (message: object): Promise<void> => new Promise((resolve, reject) => {
-    if (!process.connected || process.send === undefined) { resolve(); return }
-    process.send(message, (error) => { if (error === null) resolve(); else reject(error) })
-  })
   const stop = (): Promise<void> => stopping ??= (async () => {
+    for (const abort of dragReads.values()) abort.abort()
+    await Promise.allSettled(dragTasks)
     // Startup failure is reported by main; shutdown only owns a tree that booted.
     const running = await application.catch(() => undefined)
     await running?.shutdown.shutdown(0)
     await send({ type: 'shutdown-complete' })
     if (process.connected) process.disconnect()
+    // A handle a disposed plugin left open would otherwise keep the Host alive past the shell's graceful
+    // deadline; a startup failure keeps its own diagnostic exit.
+    if (running !== undefined) process.exit()
   })()
   process.on('message', (message: unknown) => {
     if (typeof message !== 'object' || message === null || !('type' in message)) return
     if (message.type === 'shutdown') { void stop(); return }
+    if (message.type === 'file-drag-cancel') {
+      if ('requestId' in message && typeof message.requestId === 'number') dragReads.get(message.requestId)?.abort()
+      return
+    }
+    if (message.type === 'file-drag-resource') {
+      if (!('requestId' in message) || typeof message.requestId !== 'number' || !Number.isSafeInteger(message.requestId)
+        || !('address' in message) || typeof message.address !== 'string') return
+      const { requestId, address } = message
+      const abort = new AbortController()
+      dragReads.set(requestId, abort)
+      const task = (async () => {
+        try {
+          if (stopping !== undefined) throw new Error('Host stopping')
+          const { ctx } = await application
+          const resource = await localDragResource(ctx, address, abort.signal)
+          await send({ type: 'file-drag-resource', requestId, resource })
+        } catch (error) {
+          if (!abort.signal.aborted) console.error(error)
+          await send({ type: 'file-drag-resource', requestId, resource: null, error: 'File drag resource unavailable' })
+        } finally { dragReads.delete(requestId) }
+      })().catch((error: unknown) => { console.error(error) })
+      dragTasks.add(task)
+      void task.finally(() => { dragTasks.delete(task) })
+      return
+    }
     if (message.type === 'quit-inspection') {
       if (!('requestId' in message) || !Number.isSafeInteger(message.requestId)) return
       const requestId = message.requestId
@@ -88,24 +139,34 @@ async function main(): Promise<void> {
       }
     })().catch((error: unknown) => { console.error(error) })
   })
+  const onAuthenticationEnd = (): void => { void stop() }
+  authentication.signal.addEventListener('abort', onAuthenticationEnd, { once: true })
+  if (authentication.signal.aborted) onAuthenticationEnd()
   process.once('disconnect', () => { void stop() })
   const { ctx } = await application
+  const canPublish = (): boolean => stopping === undefined && process.connected && !authentication.signal.aborted
+  if (!canPublish()) return
+  ctx.effect(() => () => {
+    authentication.signal.removeEventListener('abort', onAuthenticationEnd)
+    authentication.dispose()
+  }, 'desktop-host: authentication channel')
+  installOperationDiagnostics(ctx, record => send({ type: 'plugin-operation', record }), 32, runId)
   control.updateTasks = installDesktopUpdateTaskControl(ctx)
   control.quitInspection = installDesktopQuitInspection(ctx)
-  await ctx.plugin(desktopOffice, {
-    runtimeDir,
-    source: process.argv[4] ?? join(runtimeDir, '..', 'runtime', 'primary-runtime'),
-    root: join(resolveDshHome(), 'dsh-runtimes', 'dsh-primary-runtime'),
-  })
   installPlatformSessionPublisher(ctx, (session) => {
     if (process.connected) process.send?.({ type: 'platform-session', session })
   })
-  const url = ctx.connection.authenticatedUrl(`${ctx.webServer.protocol}//127.0.0.1:${String(ctx.webServer.port)}`)
-  if (process.connected) process.send?.({ type: 'ready', url, injections: ctx.webServer.collectIndexInjections() }, (error) => { if (error !== null) console.error(error) })
+  await ctx.plugin(DesktopAuthentication, { readSecret: () => secret }).await()
+  if (!canPublish()) return
+  const admission = ctx.connection.authentication.authenticate({
+    headers: { cookie: `dsh-desktop-session=${secret}` },
+  })
+  if ('rejection' in admission) throw new Error('Desktop authentication provider did not accept its startup credential')
+  const url = `${ctx.webServer.protocol}//127.0.0.1:${String(ctx.webServer.port)}/`
+  const injections = ctx.webServer.collectIndexInjections(admission.peer)
+  if (!canPublish()) return
+  process.send?.({ type: 'ready', url, injections }, (error) => { if (error !== null) console.error(error) })
 }
-
-/** Upper bound of the startup diagnostic carried over IPC; the head holds the message and stack. */
-const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024
 
 if (import.meta.main) {
   main().catch((error: unknown) => {
@@ -113,7 +174,7 @@ if (import.meta.main) {
     // The shell receives the complete inspected error here, not through stderr:
     // stderr bytes and this IPC message race, and the shell reports the first
     // failure it sees.
-    const diagnostic = inspect(error, { depth: 4, maxArrayLength: 50 }).slice(0, MAX_FATAL_DIAGNOSTIC_CHARS)
+    const diagnostic = formatFatalDiagnostic(error)
     if (process.connected) process.send?.({ type: 'fatal', message, diagnostic }, (error) => { if (error !== null) console.error(error) })
     console.error(error)
     process.exitCode = 1

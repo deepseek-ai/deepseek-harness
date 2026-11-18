@@ -1,15 +1,16 @@
 /** Developer field classification matches native admission and metadata preservation. */
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
 import { classifyPersistenceChange, parsePersistenceSnapshot } from './persistence-changes.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function toolAdditionSchema() {
-  const inventory = parsePersistenceSnapshot(JSON.parse(readFileSync(new URL('../docs/persistence-schema.json', import.meta.url), 'utf8')) as unknown)
+  const inventory = parsePersistenceSnapshot(readFileSync(new URL('../docs/persistence-schema.json', import.meta.url), 'utf8'))
   const before = inventory.roots.find(root => root.key === 'event:developer/message')!
   const nodes = [...structuredClone(before.schema.nodes)]
   const blockIndex = nodes.findIndex(node => node.kind === 'object' && node.properties.some((property) => {
@@ -61,7 +62,7 @@ describe('developer field compatibility', () => {
     for (const event of events) reader.decodeRow(sessionFormatCatalog.encodeCurrentEvent(event))
     const artifact = reader.finish()
     expect(artifact.events).toEqual(events)
-    const restored = Session.fromRestore(SessionId(header.id), artifact.events as SessionEvent[],
+    const restored = Session.fromRestore(brandString<SessionId>(header.id), artifact.events as SessionEvent[],
       artifact.header as unknown as SessionHeader, SessionLogOffset(0), 'detached')
     expect(restored.deriveMessages()).toEqual([message])
   })

@@ -1,5 +1,7 @@
-/** Author credit from merged pull requests in the same repository. */
+/** Author credit from merged pull requests in the same repository, or fixed points for listed logins. */
 const CAP_COUNT = 100
+/** Author points that replace merged-history credit, keyed by lowercase login. */
+export const FIXED_AUTHOR_POINTS = new Map([['turtle2099', 0.2]])
 
 /**
  * Convert merged PR count to author points, capped at 1.1.

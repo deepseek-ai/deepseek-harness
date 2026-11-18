@@ -12,12 +12,6 @@ declare global {
   }
 }
 
-const palette = window.matchMedia('(prefers-color-scheme: dark)')
-const syncPalette = (): void => { document.body.toggleAttribute('data-ds-dark-theme', palette.matches) }
-syncPalette()
-palette.addEventListener('change', syncPalette)
-window.addEventListener('pagehide', () => { palette.removeEventListener('change', syncPalette) }, { once: true })
-
 const container = document.getElementById('root')
 if (container === null) throw new Error('desktop welcome: missing React root')
 const root = createRoot(container)

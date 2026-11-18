@@ -41,6 +41,8 @@ With a roster composed, `agentPresets` carries one group per preset in roster or
 
 The inventory is a snapshot for display and diagnostics: a client can render the roster, flag failed entries, and detect changes by comparing snapshots. It cannot enable, disable, add, or remove plugins, and it carries no history — a fiber that already failed and was removed is absent. Because the service reads the Loader on every call, the answer always reflects the current composition rather than a cached view.
 
+Failed entries include the current startup diagnostic read from their Cordis fiber. Recovery removes it; inventory reads do not wait for loading entries or retain a separate error cache.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -75,11 +77,11 @@ Typert generates the Host and Client Remote artifacts exposed by `./typert` and 
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these when the inventory contract is not enough: how the Remote reaches clients, then the Loader it projects and the surface that renders it.
+Read these when the inventory contract is not enough: how the Remote reaches clients, then the Loader it projects and the page that reads it.
 
 - [Remote assembly](../../api/remotes/README.md) — how clients consume `pluginInventory/list` without importing the Host implementation.
 - [Cordis plugin loader](../../../vendor/loader/README.md) — the Loader whose entries this package projects.
-- [Plugin inventory settings surface](../../client/ui-settings-plugin-inventory/README.md) — the browser-side projection that renders the inventory.
+- [Plugin manager page](../../client/ui-plugin-manager/README.md) — the Web Plugins page, which reads the inventory for managed-profile status and startup diagnostics.
 
 -----
 

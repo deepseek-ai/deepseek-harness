@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Pesquisa de sessão",
+    "description": "Pergunte sobre trabalhos anteriores, como “Como corrigimos o vazamento do pool na semana passada?”, e o agente pesquisa suas sessões anteriores do mesmo diretório de trabalho para responder.",
+    "detail": "docs/DETAIL.md"
+  }
+}

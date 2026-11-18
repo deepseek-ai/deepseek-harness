@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { resolveWindowsPackageSettings } from '../scripts/windows-package-settings.mjs'
 
 async function withPreset(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-windows-preset-'))
@@ -31,6 +32,18 @@ it('loads unsigned public settings without requiring the signing secret file or 
     expect(prepared.DSH_PACKAGING_PRESET).toBe('test')
     expect(() => loadDesktopPackageEnvironment('win32', { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }))
       .toThrow(/cannot read/u)
+  })
+})
+
+it('loads pack concurrency from the public preset and rejects an invalid worker count', async () => {
+  await withPreset(async (root) => {
+    const env = { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: '8' }
+    const load = () => resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', env, root, { unsigned: true }))
+    expect(load().packConcurrency).toBe(4)
+    await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=2\n')
+    expect(load().packConcurrency).toBe(2)
+    await writeFile(join(root, 'presets/test.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=0\n')
+    expect(load).toThrow('PACK_CONCURRENCY')
   })
 })
 

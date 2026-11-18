@@ -3,11 +3,14 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionStore from '@deepseek-ai/dsh-session'
-import { LlmAttemptId, ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type LlmAttemptId, type ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
-import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
+import { HistoryController } from '../src/history/controller.ts'
+import { WebController } from '../src/web/controller.ts'
 import type { SessionFollowFrame, SessionPage, SessionWireEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import { createSessionTestRemote, installSessionReadTestServices } from './test-remote.ts'
 
@@ -50,9 +53,16 @@ function appendExtension(session: Session, type: string, data: unknown): Session
 async function harness(): Promise<{ ctx: Context }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
-  installSessionReadTestServices(ctx)
+  await installSessionReadTestServices(ctx)
   return { ctx }
+}
+
+/** Initialize the independent snapshot owner and Web aggregation for direct journal tests. */
+async function controllers(ctx: Context): Promise<{ history: HistoryController; web: WebController }> {
+  const history = new HistoryController(ctx)
+  return { history, web: new WebController(ctx, history, (observation) => { observation[Symbol.dispose]() }) }
 }
 
 /** Drain one Session follow until `count` event frames arrive. */
@@ -71,11 +81,11 @@ async function collect(
 
 /** Open follow and wait until its cursor is fixed before appending fixtures. */
 async function openFollow(
-  history: SessionHistoryController,
+  web: WebController,
   sessionId: SessionId,
   signal: AbortSignal,
 ): Promise<AsyncIterable<SessionFollowFrame>> {
-  const iterator = history.follow({
+  const iterator = web.follow({
     address: { kind: 'session', sessionId },
   }, signal)[Symbol.asyncIterator]()
   await expect(iterator.next()).resolves.toMatchObject({
@@ -105,9 +115,9 @@ describe('Session history raw journal', () => {
   it('opens an empty opted-in Assistant baseline before any live attempt exists', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -125,7 +135,7 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const originalObserve = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -135,14 +145,14 @@ describe('Session history raw journal', () => {
       return originalObserve(...args)
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
     const opening = iterator.next()
     await entered.promise
 
-    const attemptId = LlmAttemptId('buffered-opening-attempt')
+    const attemptId = brandString<LlmAttemptId>('buffered-opening-attempt')
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: { type: 'start', attemptId, revision: 1, turn: 1, step: 1 },
@@ -158,7 +168,7 @@ describe('Session history raw journal', () => {
     ctx.emit('agent/assistant-stream', {
       agent: { id: foreign.id, session: foreign, status: 'running', ctx } as Agent,
       frame: {
-        type: 'start', attemptId: LlmAttemptId('foreign-attempt'), revision: 1, turn: 1, step: 1,
+        type: 'start', attemptId: brandString<LlmAttemptId>('foreign-attempt'), revision: 1, turn: 1, step: 1,
       },
     })
     release.resolve(undefined)
@@ -180,8 +190,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId('live-follow-attempt')
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>('live-follow-attempt')
     const emit = (frame: AssistantStreamFrame): void => {
       ctx.emit('agent/assistant-stream', { agent, frame })
     }
@@ -195,7 +205,7 @@ describe('Session history raw journal', () => {
       time: 1, chunk: firstChunk,
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -247,8 +257,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId(`${session.id}:1`)
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>(`${session.id}:1`)
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: {
@@ -265,7 +275,7 @@ describe('Session history raw journal', () => {
       },
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -309,8 +319,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId('revision-gap-attempt')
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>('revision-gap-attempt')
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: {
@@ -327,7 +337,7 @@ describe('Session history raw journal', () => {
       },
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -349,8 +359,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId('dense-index-attempt')
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>('dense-index-attempt')
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: {
@@ -367,7 +377,7 @@ describe('Session history raw journal', () => {
       },
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -389,8 +399,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId('cached-baseline-attempt')
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>('cached-baseline-attempt')
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: {
@@ -400,12 +410,12 @@ describe('Session history raw journal', () => {
     })
 
     const firstAbort = new AbortController()
-    const firstIterator = history.follow({
+    const firstIterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, firstAbort.signal)[Symbol.asyncIterator]()
     const secondAbort = new AbortController()
-    const secondIterator = history.follow({
+    const secondIterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, secondAbort.signal)[Symbol.asyncIterator]()
@@ -429,9 +439,9 @@ describe('Session history raw journal', () => {
   it('opens an empty Assistant baseline before the target Agent emits frames', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -454,9 +464,9 @@ describe('Session history raw journal', () => {
     const target = ctx.sessions.create(undefined, { meta: { cwd: '/target' } })
     const other = ctx.sessions.create(undefined, { meta: { cwd: '/other' } })
     const otherAgent = { id: other.id, session: other, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: target.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -469,7 +479,7 @@ describe('Session history raw journal', () => {
       ctx.emit('agent/assistant-stream', {
         agent: otherAgent,
         frame: {
-          type: 'start', attemptId: LlmAttemptId('other-session-attempt'),
+          type: 'start', attemptId: brandString<LlmAttemptId>('other-session-attempt'),
           revision: 1, turn: 1, step: 1,
         },
       })
@@ -487,7 +497,7 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const observationStarted = Promise.withResolvers<undefined>()
     const releaseObservation = Promise.withResolvers<undefined>()
     const originalObserve = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
@@ -497,7 +507,7 @@ describe('Session history raw journal', () => {
       return await originalObserve(sessionId, options)
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -506,7 +516,7 @@ describe('Session history raw journal', () => {
       const opening = iterator.next()
       await observationStarted.promise
       const frame: AssistantStreamFrame = {
-        type: 'start', attemptId: LlmAttemptId('opening-cut-attempt'),
+        type: 'start', attemptId: brandString<LlmAttemptId>('opening-cut-attempt'),
         revision: 1, turn: 1, step: 1,
       }
       ctx.emit('agent/assistant-stream', { agent, frame })
@@ -537,8 +547,8 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
-    const attemptId = LlmAttemptId(`${session.id}:1`)
+    const { web } = await controllers(ctx)
+    const attemptId = brandString<LlmAttemptId>(`${session.id}:1`)
     ctx.emit('agent/assistant-stream', {
       agent,
       frame: {
@@ -555,7 +565,7 @@ describe('Session history raw journal', () => {
       return await originalObserve(sessionId, options)
     })
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
       assistantStream: true,
     }, abort.signal)[Symbol.asyncIterator]()
@@ -611,14 +621,14 @@ describe('Session history raw journal', () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const agent = { id: session.id, session, status: 'running', ctx } as Agent
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const iterator = history.follow({
+    const iterator = web.follow({
       address: { kind: 'session', sessionId: session.id },
     }, abort.signal)[Symbol.asyncIterator]()
     const opening = await iterator.next()
     expect(opening.value).not.toHaveProperty('assistantStream')
-    const attemptId = LlmAttemptId('durable-only-attempt')
+    const attemptId = brandString<LlmAttemptId>('durable-only-attempt')
 
     ctx.emit('agent/assistant-stream', {
       agent,
@@ -653,17 +663,17 @@ describe('Session history raw journal', () => {
   it('follows raw tool events and preserves result metadata without a Tools service', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const stream = await openFollow(history, session.id, abort.signal)
+    const stream = await openFollow(web, session.id, abort.signal)
     const collected = collect(stream, 2, abort)
     const call = session.append('tool/call', {
-      turn: 1, step: 1, callId: ToolCallId('raw-call'), name: 'custom', arguments: '{malformed',
+      turn: 1, step: 1, callId: brandString<ToolCallId>('raw-call'), name: 'custom', arguments: '{malformed',
     })
     const result = session.append('tool/result', {
       turn: 1, step: 1,
       message: createToolResultMessage({
-        callId: ToolCallId('raw-call'),
+        callId: brandString<ToolCallId>('raw-call'),
         content: [{ type: 'text', text: 'raw output' }],
         isError: false,
       }),
@@ -682,13 +692,13 @@ describe('Session history raw journal', () => {
   it('follows live results without rescanning Session history', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const stream = await openFollow(history, session.id, abort.signal)
+    const stream = await openFollow(web, session.id, abort.signal)
     const iterator = stream[Symbol.asyncIterator]()
 
     session.append('tool/call', {
-      turn: 1, step: 1, callId: ToolCallId('live-fast'), name: 'term', arguments: '{"cmd":"pwd"}',
+      turn: 1, step: 1, callId: brandString<ToolCallId>('live-fast'), name: 'term', arguments: '{"cmd":"pwd"}',
     })
     await expect(iterator.next()).resolves.toMatchObject({
       value: { type: 'event', event: { type: 'tool/call', data: { callId: 'live-fast' } } },
@@ -701,7 +711,7 @@ describe('Session history raw journal', () => {
       session.append('tool/result', {
         turn: 1, step: 1,
         message: createToolResultMessage({
-          callId: ToolCallId('live-fast'),
+          callId: brandString<ToolCallId>('live-fast'),
           content: [{ type: 'text', text: 'ok' }],
           isError: false,
         }),
@@ -719,16 +729,16 @@ describe('Session history raw journal', () => {
 
   it('serves raw call and result entries without parsing tool arguments', async () => {
     const { ctx } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const start = session.append('turn/start', { turn: 1 })
     const call = session.append('tool/call', {
-      turn: 1, step: 1, callId: ToolCallId('history-call'), name: 'custom', arguments: '{broken',
+      turn: 1, step: 1, callId: brandString<ToolCallId>('history-call'), name: 'custom', arguments: '{broken',
     })
     const result = session.append('tool/result', {
       turn: 1, step: 1,
       message: createToolResultMessage({
-        callId: ToolCallId('history-call'),
+        callId: brandString<ToolCallId>('history-call'),
         content: [{ type: 'text', text: 'failed raw output' }],
         isError: true,
       }),
@@ -760,7 +770,7 @@ describe('Session history raw journal', () => {
   ])('paginates $name in one contiguous Turn window', async ({ replies, beforeMessage, firstTurn, steering, minMessages = 50 }) => {
     const { ctx } = await harness()
     onTestFinished(() => ctx.fiber.dispose())
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const starts: SessionEvent[] = []
     const messages: SessionEvent[][] = []
@@ -818,7 +828,7 @@ describe('Session history raw journal', () => {
 
   it('counts only append-origin messages toward maxMessages and keeps each compaction summary with its replacement', async () => {
     const { ctx } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     const first = appendUserText(session, 'first prompt')
@@ -872,7 +882,7 @@ describe('Session history raw journal', () => {
 
   it('paginates a message with a large embedded stream without expanding physical records', async () => {
     const { ctx } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
     session.append('step/start', { turn: 1, step: 1 })
@@ -910,7 +920,7 @@ describe('Session history raw journal', () => {
 
   it('keeps an earlier declared source on the same message-aligned page', async () => {
     const { ctx } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
     const source = session.append('request/context', { provider: 'p', model: 'm' })
     const laterSource = session.append('request/context', { provider: 'p', model: 'm' })
@@ -931,9 +941,9 @@ describe('Session history raw journal', () => {
 
   it('keeps compact reasoning and tool-call runs nested in one attempt event', async () => {
     const { ctx } = await harness()
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const callId = ToolCallId('packed-call')
+    const callId = brandString<ToolCallId>('packed-call')
     const attempt = session.append('assistant/attempt', {
       turn: 1,
       step: 1,
@@ -955,16 +965,16 @@ describe('Session history raw journal', () => {
   it('follows a result after turn/end without reading the addressed Session log', async () => {
     const { ctx } = await harness()
     const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
-    const history = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+    const { web } = await controllers(ctx)
     const abort = new AbortController()
-    const stream = await openFollow(history, session.id, abort.signal)
+    const stream = await openFollow(web, session.id, abort.signal)
     const iterator = stream[Symbol.asyncIterator]()
 
     session.append('turn/start', { turn: 1 })
     await expect(iterator.next()).resolves.toMatchObject({
       value: { type: 'event', event: { type: 'turn/start' } },
     })
-    session.append('tool/call', { turn: 1, step: 1, callId: ToolCallId('c-late'), name: 'term', arguments: '{"cmd":"tail"}' })
+    session.append('tool/call', { turn: 1, step: 1, callId: brandString<ToolCallId>('c-late'), name: 'term', arguments: '{"cmd":"tail"}' })
     await expect(iterator.next()).resolves.toMatchObject({
       value: { type: 'event', event: { type: 'tool/call' } },
     })
@@ -979,7 +989,7 @@ describe('Session history raw journal', () => {
       const result = session.append('tool/result', {
         turn: 1, step: 1,
         message: createToolResultMessage({
-          callId: ToolCallId('c-late'),
+          callId: brandString<ToolCallId>('c-late'),
           content: [{ type: 'text', text: 'ok' }],
           isError: false,
         }),

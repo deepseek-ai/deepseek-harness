@@ -1,6 +1,9 @@
 - text: {{cwd}}/keyboard-project
 - button "Reload"
+- button "Search files"
 - button "Open in Finder"
 - button "More ways to open"
-- list:
-  - listitem: Empty directory
+- complementary "Workspace files":
+  - paragraph
+  - list:
+    - listitem: Empty directory

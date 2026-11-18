@@ -1,12 +1,15 @@
 /** Native SDK lifecycle and catalog behavior without desktop access. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as NativeProvider from '../src/index.ts'
 import { catalog, fixture, resetFixture } from './fixtures/cua-driver.ts'
 
@@ -20,6 +23,7 @@ beforeEach(async () => {
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
 })
 
 afterEach(async () => {
@@ -27,9 +31,9 @@ afterEach(async () => {
 })
 
 function execute(rawName: string, args: Record<string, unknown> = {}) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     name: `cua_driver_native__${rawName}`,
-    callId: ToolCallId('native-test'),
+    callId: brandString<ToolCallId>('native-test'),
     arguments: args,
     signal: new AbortController().signal,
   })
@@ -52,7 +56,7 @@ describe('Cua Driver native provider', () => {
   })
 
   it('rejects another provider before importing or creating a native runtime', async () => {
-    const release = ctx.computerUse.register(ComputerUseProviderName('another-driver'))
+    const release = ctx.computerUse.register(brandString<ComputerUseProviderName>('another-driver'))
     await expect(ctx.plugin(NativeProvider)).rejects.toThrow('already registered')
     expect(fixture.creates).toBe(0)
     expect(ctx.computerUse.providerName).toBe('another-driver')
@@ -95,6 +99,39 @@ describe('Cua Driver native provider', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'Error: background_unavailable' }])
   })
 
+  it.each([new Error('native helper unavailable'), 'native helper unavailable'])('classifies a native SDK call failure: %s', async (failure) => {
+    fixture.call = async () => { throw failure }
+    await ctx.plugin(NativeProvider)
+    const result = await execute('click', { pid: 9, window_id: 7 })
+    expect(result.error?.info).toEqual({ name: 'CuaDriverError', code: 'CUA_DRIVER_FAILED' })
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: native helper unavailable' }])
+  })
+
+  it('reports cancellation instead of a native failure once the caller cancels', async () => {
+    const called: PromiseWithResolvers<void> = Promise.withResolvers()
+    fixture.call = async (_name, _args, signal) => {
+      called.resolve()
+      await new Promise(resolve => signal?.addEventListener('abort', resolve, { once: true }))
+      throw new Error('native call interrupted')
+    }
+    await ctx.plugin(NativeProvider)
+    const controller = new AbortController()
+    const result = executeToolFixture(ctx, {
+      name: 'cua_driver_native__click', callId: brandString<ToolCallId>('native-cancel'), arguments: { pid: 9, window_id: 7 }, signal: controller.signal,
+    })
+    await called.promise
+    controller.abort(new Error('Stop clicking'))
+    expect((await result).error).toEqual({ message: 'Stop clicking', info: { name: 'AbortError', code: 'ABORTED' } })
+  })
+
+  it('classifies a native result that is not JSON', async () => {
+    fixture.rawJson = '{not json'
+    await ctx.plugin(NativeProvider)
+    const result = await execute('click', { pid: 9, window_id: 7 })
+    expect(result.error?.info).toEqual({ name: 'CuaDriverError', code: 'CUA_DRIVER_INVALID_RESULT' })
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: Cua Driver tool "click" returned a result that is not JSON' }])
+  })
+
   it('leaves an unrelated tool running when the native provider unloads', async () => {
     const started = Promise.withResolvers<AbortSignal>()
     const settled = Promise.withResolvers<boolean>()
@@ -109,8 +146,8 @@ describe('Cua Driver native provider', () => {
         return settled.promise
       },
     })
-    const result = ctx.tools.execute({
-      name: 'unrelated', callId: ToolCallId('unrelated'), arguments: {}, signal: controller.signal,
+    const result = executeToolFixture(ctx, {
+      name: 'unrelated', callId: brandString<ToolCallId>('unrelated'), arguments: {}, signal: controller.signal,
     })
     try {
       const signal = await started.promise
@@ -151,7 +188,7 @@ describe('Cua Driver native provider', () => {
         expect(ctx.tools.schemas()).toEqual([])
       })
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
-      expect(() => ctx.computerUse.register(ComputerUseProviderName('replacement'))).toThrow('already registered')
+      expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
       callSettled.resolve({ content: [{ type: 'text', text: 'late native completion' }] })
       await shutdownStarted.promise
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
@@ -221,6 +258,6 @@ describe('Cua Driver native provider', () => {
     expect(ctx.tools.schemas()).toEqual([])
     expect(ctx.computerUse.providerName).toBe('cua-driver-native')
     expect(fixture.destroys).toBe(0)
-    expect(() => ctx.computerUse.register(ComputerUseProviderName('replacement'))).toThrow('already registered')
+    expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
   })
 })

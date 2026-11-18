@@ -1,5 +1,6 @@
 /** Pure image-card derivation from raw result content and metadata. @module */
-import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall } from './raw-tool-call.ts'
 
@@ -8,7 +9,7 @@ import { parsedToolCall } from './raw-tool-call.ts'
  * durable references the attachment slot renders as a gallery.
  *
  * The bytes are not here. `attachmentId` is opaque and provider-owned, so a UI
- * resolves it to a session-authorized URL at render time; this model never parses
+ * resolves it to a Gateway-authorized URL at render time; this model never parses
  * it nor derives a path from it.
  */
 export interface ImageCardModel {

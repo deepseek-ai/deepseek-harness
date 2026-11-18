@@ -1,11 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
@@ -17,6 +17,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local/src/resolve.ts'
 import * as ptyLocal from '@deepseek-ai/dsh-terminal-bash'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -36,11 +37,12 @@ class PassthroughSandbox extends SandboxProvider {
 }
 
 function stubAgent(ctx: Context, rawId: string): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id)
   const agent: Agent = {
-    id, options: {}, session, inbox: unsupportedInbox(),
+    id, options: {}, session, model: unsupportedModel(),
+    inbox: unsupportedInbox(),
     status: 'idle',
     ctx: scope.ctx,
     send: () => {},
@@ -61,10 +63,10 @@ async function harness(
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
   await ctx.plugin(PassthroughSandbox)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode, workspaceRoot: root })
   await ctx.plugin(LocalSubprocessRuntime)
   const fiber = await ctx.plugin(ptyLocal, {
@@ -191,16 +193,21 @@ describe.skipIf(process.platform === 'win32')('terminal-bash real shell', () => 
       text: `bash -c 'exec </dev/tty; printf "%s" "$BASHPID" > "$1"; printf "WAITING\\n"; read -r answer; printf "ANSWER=%s\\n" "$answer"' dsh "${readerPidFile}"`,
       submit: true,
     })
-    await waitForOutput(waiting, 'WAITING')
     const result = await waiting.done
+    expect(result.waitReason).not.toBe('timeout')
+    expect(existsSync(readerPidFile), JSON.stringify(result)).toBe(true)
     const readerPid = Number(readFileSync(readerPidFile, 'utf8'))
     expect(readerPid).toBeGreaterThan(0)
     expect(result.waitReason).toBe(canReadLinuxProcessSyscall(readerPid) ? 'stdin_read' : 'inferred_idle')
+    // Kernel input-wait evidence can precede PTY output delivery; scrollback
+    // retains that output after the send settles. Match a line, not command echo.
+    const read = () => ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 100 }).text
+    await expect.poll(read, { timeout: 2_000 }).toMatch(/(?:^|\n)WAITING\n/)
 
     const answer = ctx.terminals.startSend(agent, created.sessionId, { text: 'accepted', submit: true })
     const answered = await answer.done
     expect(answered.waitReason).toBe('stdin_read')
-    expect(answered.viewport).toContain('ANSWER=accepted')
+    await expect.poll(read, { timeout: 2_000 }).toMatch(/(?:^|\n)ANSWER=accepted\n/)
     await ctx.terminals.kill(agent, created.sessionId)
   }, 20_000)
 

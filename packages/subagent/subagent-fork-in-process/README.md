@@ -55,7 +55,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What a fork delegation does
 
-One tool call creates a background child and returns its session id immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
+One tool call creates a background child and returns its name immediately. The child works in its own session; the parent receives its final answer in a completion notice. The child can also send messages through `send_message`. A rejected start leaves no published child. Programmatic callers such as workflows can await the activation result directly.
 
 -----
 
@@ -83,7 +83,7 @@ This backend supplies the balanced completed-turn prefix of the parent log as th
 
 ### Lifecycle binding
 
-The delegation tool creates a background activation and returns a stable child session id. Parent and child share the same messaging tool definitions and ordering; the parent id and return guidance follow inherited history in the initial task. Workflows await results with caller delivery and send no completion notice to the parent.
+The delegation tool creates a background activation and returns the child's name. Parent and child share the same messaging tool definitions and ordering; the parent's name in identity runtime context and the return guidance in the initial task both follow inherited history. Workflows await results with caller delivery and send no completion notice to the parent.
 
 </details>
 
@@ -109,7 +109,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The child receives the parent's balanced completed-turn prefix, then the new task content verbatim. It joins the parent's preset revision, which supplies persona and tools. Parent agent-local restrictions are not copied. An optional structured-output request adds a child-only tool; the parent's current in-flight turn is excluded.
+The child receives the parent's balanced completed-turn prefix, then the new task as a message from the parent agent: `Agent <parent name> sent a message: ` followed by the task content verbatim. It joins the parent's preset revision, which supplies persona and tools. Parent agent-local restrictions are not copied. An optional structured-output request adds a child-only tool; the parent's current in-flight turn is excluded.
 
 #### Token effect
 
@@ -117,13 +117,13 @@ Forking duplicates retained completed history into the child's request, which th
 
 #### KV Cache effect
 
-The child may reuse the inherited byte-identical prefix under the same provider and model. Structured output, generated-SDK, route changes, or historical descriptor overrides on cold resume can invalidate reuse before inherited history; later child history is append-only. Continuable messaging adds no child-only system-prompt section or tool schema; the parent id and return guidance follow inherited history in the initial user task ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
+The child may reuse the inherited byte-identical prefix under the same provider and model. Structured output, generated-SDK, route changes, or historical descriptor overrides on cold resume can invalidate reuse before inherited history; later child history is append-only. Continuable messaging adds no child-only system-prompt section or tool schema; the parent id and return guidance follow inherited history in the initial delegated task ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
 
 ### Parent tool result, indirectly
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent first receives the child session id, then a completion notice with its final answer. Child-authored messages arrive through `send_message`; the inherited prefix and internal work remain in the child session.
+Through `dsh-tool-subagent`, the parent first receives the child's name, then a completion notice with its final answer. Child-authored messages arrive through `send_message`; the inherited prefix and internal work remain in the child session.
 
 #### Token effect
 

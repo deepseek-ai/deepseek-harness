@@ -22,6 +22,7 @@ const PATTERNS = [
   'docs/**/*.md',
   'packages/*/*.md',
   'packages/*/*/*.md',
+  'packages/*/*/docs/*.md',
   'snapshots/**/system-prompt.expected.md',
   'packages/**/system-prompt.expected.md',
   'AGENTS.md',

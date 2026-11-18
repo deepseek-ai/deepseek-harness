@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "gateway de chamada remota",
+    "description": "Receba a chamada de interface do cliente e distribua-a ao serviço correspondente."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK 服务",
+    "description": "通过标准输入输出 JSON-RPC 为独立进程中的 SDK 客户端提供服务。"
+  }
+}

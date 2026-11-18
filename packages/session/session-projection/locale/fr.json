@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Résumé de l'état de la session",
+    "description": "Générez un titre, un statut et d'autres informations à partir du journal de session pour que d'autres fonctions puissent les lire."
+  }
+}

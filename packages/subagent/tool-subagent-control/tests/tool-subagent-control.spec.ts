@@ -1,16 +1,22 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentError } from '@deepseek-ai/dsh-subagent'
+import TeamService from '@deepseek-ai/dsh-agent-team'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -20,6 +26,7 @@ import * as tool from '../src/index.ts'
 import { parkParent } from './park-parent.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
+import { bindSubagentActivation } from '../../subagent/tests/manager-internals.ts'
 
 /** One scripted response that may wait on a caller-released gate before streaming. */
 interface GatedEntry {
@@ -69,11 +76,11 @@ async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  await ctx.plugin(tool)
+  const controlFiber = await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   if (park) parkParent(ctx, parent)
-  return { ctx, parent, adapter }
+  return { ctx, parent, adapter, controlFiber }
 }
 
 async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
@@ -92,9 +99,9 @@ function callTool(
   agent?: unknown,
   signal: AbortSignal = testToolSignal,
 ) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal,
-    callId: ToolCallId(`call-${++calls}`),
+    callId: brandString<ToolCallId>(`call-${++calls}`),
     name,
     arguments: args,
     ...agent !== undefined ? { agent: agent as never } : {},
@@ -114,13 +121,13 @@ describe('dsh-tool-subagent-control', () => {
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'send_message')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['agent_id', 'message'])
+    expect(Object.keys(props).sort()).toEqual(['agent', 'message'])
     // The continuable path has no Task, so the schema must not promise one.
     expect(schemas[0]!.description).not.toContain('job_output')
     expect(schemas[0]!.description).not.toContain('job id')
     expect(schemas[0]!.description).toContain('receives it at its next step')
-    expect(props.agent_id).toMatchObject({
-      description: 'The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.',
+    expect(props.agent).toMatchObject({
+      description: 'The name of another agent in your subagent tree, as shown by list_agents.',
     })
   })
 
@@ -140,7 +147,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'fork',
       label: 'fork child',
-      request: { prompt: [{ type: 'text', text: 'fork task' }], parent },
+      prompt: [{ type: 'text', text: 'fork task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -162,33 +169,179 @@ describe('dsh-tool-subagent-control', () => {
     const prompt = loaded.events[promptIndex]
     if (prompt?.type !== 'user/message') throw new Error('expected the initial fork task')
     const texts = prompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-    expect(texts[0]).toBe('fork task')
-    expect(texts[1]).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    expect(texts[1]).toContain(`send_message({ agent_id: ${JSON.stringify(parent.id)}`)
-    expect(texts[1]).not.toContain('report tool')
+    expect(texts.slice(0, 2)).toEqual(['Agent lead sent a message: ', 'fork task'])
+    expect(texts[2]).toContain('Your final answer is delivered automatically')
+    expect(texts[2]).not.toContain('send_message')
+    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('You are a subagent delegated by agent')
+    expect(loaded.events.some(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
+      && JSON.stringify(event.data.content).includes('You are a subagent delegated by agent'))).toBe(true)
+    expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
   })
 
-  it('JSON-encodes a caller-supplied parent id in the initial return instruction', async () => {
+  it('JSON-encodes identity ids in logged runtime context', async () => {
     const { ctx } = await setup([textResponse('child done')])
-    const parent = await ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'encoded parent',
-      request: { prompt: [{ type: 'text', text: 'encoded task' }], parent },
+      prompt: [{ type: 'text', text: 'encoded task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    const prompt = loaded.events.find(event => event.type === 'user/message'
-      && event.data.content.some(block => block.type === 'text' && block.text === 'encoded task'))
-    if (prompt?.type !== 'user/message') throw new Error('expected the encoded initial task')
-    const guidance = prompt.data.content.findLast(block => block.type === 'text')?.text ?? ''
+    const prompt = loaded.events.find(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
+      && event.data.content.some(block => block.type === 'text' && block.text.includes('You are a subagent delegated by agent')))
+    if (prompt?.type !== 'user/message') throw new Error('expected logged communication context')
+    const guidance = text(prompt.data)
 
-    expect(guidance).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    expect(guidance).toContain(`agent_id: ${JSON.stringify(parent.id)}`)
+    expect(started.name).toBe('agent-1')
+    expect(guidance).toContain('You are a subagent delegated by agent "lead".\nYour name is "agent-1".\n'
+      + 'The root agent of your collaboration tree is "lead".')
     expect(guidance).not.toContain(parent.id)
+    expect(guidance).not.toContain(started.childId)
+  })
+
+  it.each([
+    { name: 'send_message', instruction: 'use send_message to send a self-contained result to the agent that delegated you', other: 'Use list_agents' },
+    { name: 'send_message', instruction: 'To message other agents', other: 'Use list_agents' },
+    { name: 'list_agents', instruction: 'Use list_agents', other: 'To message other agents' },
+  ])('gates $name guidance "$instruction" independently in an agent scope', async ({ name, instruction, other }) => {
+    const { ctx, parent } = await setup([])
+    const { agent: child } = await ctx.agents.create({
+      sessionId: brandString<SessionId>('communication-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain(instruction)
+    expect(await communication()).toContain(other)
+    const off = child.ctx.tools.register(defineTool({
+      name, description: 'A different tool.', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
+      execute: () => Promise.resolve({}),
+    }))
+    expect(await communication()).not.toContain(instruction)
+    expect(await communication()).toContain(other)
+    expect(await communication()).toContain('You are a subagent delegated by agent "lead".\nYour name is "communication-child".')
+    off()
+    expect(await communication()).toContain(instruction)
+    child.ctx.tools.restrict({ deny: [name] })
+    const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
+    const filtered = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet }))
+    expect(filtered).not.toContain(instruction)
+    expect(filtered).toContain(other)
+    toolSet.dispose()
+  })
+
+  it('asks a delegated agent to report with send_message only while Team mode is off', async () => {
+    const { ctx, parent } = await setup([])
+    await ctx.plugin(TeamService)
+    const { agent: child } = await ctx.agents.create({
+      sessionId: brandString<SessionId>('team-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const report = 'When you finish, use send_message to send a self-contained result to the agent that delegated you.'
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    await ctx.agentTeams.setEnabled(parent, false)
+    expect(await communication()).toContain(report)
+    await ctx.agentTeams.setEnabled(parent, true)
+    const team = await communication()
+    expect(team).not.toContain(report)
+    expect(team).toContain('To message other agents')
+    await ctx.agentTeams.setEnabled(parent, false)
+    expect(await communication()).toContain(report)
+  })
+
+  it('keeps collaboration instructions when controls are mounted in an agent scope', async () => {
+    const { ctx, parent, controlFiber } = await setup([])
+    await controlFiber.dispose()
+    await parent.ctx.plugin(tool)
+    const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
+    expect(context).toContain('To message other agents')
+    expect(context).toContain('Use list_agents')
+  })
+
+  it('identifies independent roots and forks before their collaboration instructions', async () => {
+    const { ctx, parent } = await setup([])
+    const { agent: fork } = await ctx.agents.create({
+      sessionId: brandString<SessionId>('ordinary-fork'), meta: { parentSession: parent.id },
+    })
+    for (const agent of [parent, fork]) {
+      const built = await ctx.systemPrompt.assemble({ agent, scope: agent })
+      expect(built.contexts.find(context => context.name === 'subagent:identity')?.text).toBe(
+        'You are the root agent. Your name is "lead".\n\n'
+        + 'To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).\n'
+        + 'Use list_agents({}) to find your collaborator agents and their names.',
+      )
+    }
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({}))).not.toContain('To message other agents')
+  })
+
+  it.each([
+    new Error('root lookup failed'),
+    new SubagentError('root data is unreadable', 'PERSISTENCE_UNAVAILABLE'),
+  ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
+    const { ctx, parent } = await setup([])
+    const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => { throw error })
+    try {
+      await expect(ctx.systemPrompt.assemble({ agent: parent, scope: parent })).rejects.toBe(error)
+    } finally {
+      lookup.mockRestore()
+    }
+  })
+
+  it('retains the caller id when its subagent tree root is unavailable', async () => {
+    const { ctx, parent } = await setup([])
+    const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => {
+      throw new SubagentError('root is unavailable', 'UNAUTHORIZED')
+    })
+    try {
+      const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
+      expect(context).toContain(`Your agent id is ${JSON.stringify(parent.id)}.`)
+      expect(context).toContain('Your subagent tree root is unavailable. Continue independent work;')
+      expect(context).not.toContain('To message other agents')
+      expect(context).not.toContain('Use list_agents')
+    } finally {
+      lookup.mockRestore()
+    }
+  })
+
+  it('keeps required identity while both discovery and messaging are filtered', async () => {
+    const { ctx, parent } = await setup([])
+    ctx.systemPrompt.suppressRuntimeContext()
+    const available = await ctx.systemPrompt.assemble({ agent: parent, scope: parent })
+    expect(available.tools.find(tool => tool.name === 'list_agents')?.description)
+      .toContain('List your entire subagent tree')
+    expect(renderContextSnapshot(available)).toContain('Use list_agents')
+    expect(renderContextSnapshot(available)).toContain('To message other agents')
+    parent.ctx.tools.restrict({ deny: ['send_message', 'list_agents'] })
+    const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
+    const filtered = await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet })
+    expect(filtered.tools.some(tool => tool.name === 'list_agents')).toBe(false)
+    const context = renderContextSnapshot(filtered)
+    expect(context).toContain('You are the root agent. Your name is "lead".')
+    expect(context).not.toContain('Use list_agents')
+    expect(context).not.toContain('To message other agents')
+    toolSet.dispose()
+  })
+
+  it.each(['parent', 'caller'] as const)('keeps %s result delivery independent of messaging tools', async (delivery) => {
+    const { ctx, parent, adapter, controlFiber } = await setup([textResponse('child result')])
+    await controlFiber.dispose()
+    const followup = vi.spyOn(parent, 'followup')
+    const started = await ctx.subagents.startActivation({
+      delivery, provider: 'spawn', label: 'child task',
+      prompt: [{ type: 'text', text: 'child task' }], parent, signal: testToolSignal,
+    })
+    expect(await started.result).toMatchObject({ output: [{ type: 'text', text: 'child result' }] })
+    const childRequest = JSON.stringify(adapter.requests[0]!.messages)
+    expect(childRequest.includes('Your final answer is delivered automatically')).toBe(delivery === 'parent')
+    expect(childRequest).not.toContain('send_message')
+    expect(childRequest).not.toContain('You are a subagent delegated by agent')
+    expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
   it('lets a continuable child steer its direct parent with send_message', async () => {
@@ -200,7 +353,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -212,12 +365,12 @@ describe('dsh-tool-subagent-control', () => {
     })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: parent.id,
+      agent: 'lead',
       message: 'CHILD_FINDING',
     }, child)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`message delivered to agent ${parent.id}`)
+    expect(text(result)).toBe('message delivered to agent lead')
     expect(delivered).toHaveLength(1)
     expect(delivered[0]?.message.source).toEqual({
       kind: 'agent-message',
@@ -225,7 +378,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: started.childId,
     })
     expect(delivered[0]?.message.content).toEqual([
-      { type: 'text', text: `Agent ${started.childId} sent a message: ` },
+      { type: 'text', text: `Agent ${started.name} sent a message: ` },
       { type: 'text', text: 'CHILD_FINDING' },
     ])
 
@@ -239,18 +392,18 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.name,
       message: 'and then?',
     }, parent)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`message delivered to agent ${started.childId}`)
+    expect(text(result)).toBe('message delivered to agent agent-1')
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
@@ -262,7 +415,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: parent.id,
     })
     expect(followUp?.type === 'user/message' && followUp.data.content).toEqual([
-      { type: 'text', text: `Agent ${parent.id} sent a message: ` },
+      { type: 'text', text: 'Agent lead sent a message: ' },
       { type: 'text', text: 'and then?' },
     ])
   })
@@ -273,13 +426,13 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'also consider Y',
     }, parent)
     expect(result.isError).toBe(false)
@@ -288,13 +441,14 @@ describe('dsh-tool-subagent-control', () => {
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
-        && !block.text.startsWith('Your parent agent id is ')
+        && !block.text.startsWith('Your final answer is delivered automatically ')
         ? [block.text]
         : [])
       : [])
     expect(prompts).toEqual([
+      'Agent lead sent a message: ',
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'also consider Y',
     ])
   })
@@ -302,70 +456,98 @@ describe('dsh-tool-subagent-control', () => {
   it('reports a delivery failure as an errored, not-delivered result', async () => {
     const { ctx, parent } = await setup([])
     const result = await callTool(ctx, 'send_message', {
-      agent_id: 'no-such-child',
+      agent: 'no-such-child',
       message: 'hello?',
     }, parent)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('unavailable')
   })
 
-  it('rejects a caller that is not the child\'s durable direct parent', async () => {
+  it('rejects a caller outside the child\'s subagent tree', async () => {
     const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
-    const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
+    const stranger = await ctx.agentLoop.create(brandString<SessionId>('stranger'), { provider: 'mock', model: 'mock' })
 
     const result = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('another parent session')
+    expect(text(result)).toContain('not a member of this subagent tree')
   })
 
   it('fails loud when invoked without a calling agent', async () => {
     const { ctx } = await setup([])
-    const result = await callTool(ctx, 'send_message', { agent_id: 'x', message: 'y' })
+    const result = await callTool(ctx, 'send_message', { agent: 'x', message: 'y' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
-  it('unregisters with its plugin fiber (HMR safety)', async () => {
+  it.each([{}, { interrupt: true }, { interrupt: false }])('unregisters and reloads with config %j (HMR safety)', async (config) => {
     const ctx = new Context()
     contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    const fiber = await ctx.plugin(tool)
-    expect(ctx.tools.schemas().some(schema => schema.name === 'send_message')).toBe(true)
-    expect(ctx.tools.schemas().some(schema => schema.name === 'interrupt_agent')).toBe(true)
+    const fiber = await ctx.plugin(tool, config)
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('hmr-parent'), { provider: 'mock', model: 'mock' })
+    const { agent: child } = await ctx.agents.create({
+      sessionId: brandString<SessionId>('hmr-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain('You are a subagent delegated by agent')
+    const names = ['send_message', 'list_agents', 'wait_agent']
+    if (config.interrupt !== false) names.push('interrupt_agent')
+    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
+    if (config.interrupt === false) {
+      expect(ctx.tools.get('interrupt_agent')).toBeUndefined()
+      expect(typeof ctx.subagents.interrupt).toBe('function')
+    }
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
-    expect(ctx.tools.schemas().some(schema => schema.name === 'send_message')).toBe(false)
-    expect(ctx.tools.schemas().some(schema => schema.name === 'interrupt_agent')).toBe(false)
+    for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
+    expect(await communication()).not.toContain('You are a subagent delegated by agent')
+    const reloaded = await ctx.plugin(tool)
+    expect(await communication()).toContain('You are a subagent delegated by agent')
+    for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
+      expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    }
+    await reloaded.dispose()
+  })
+
+  it('defaults interruption on and rejects non-boolean configuration', () => {
+    expect(tool.Config({})).toEqual({ interrupt: true })
+    expect(tool.Config({ interrupt: false })).toEqual({ interrupt: false })
+    expect(() => tool.Config({ interrupt: 'false' } as never)).toThrow()
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'systemPrompt'])
     expect(typeof tool.apply).toBe('function')
   })
 })
 
 describe('dsh-tool-subagent-control interrupt_agent', () => {
-  it('registers interrupt_agent with the single agent_id parameter and current-turn wording', async () => {
+  it('registers interrupt_agent with the single agent parameter and current-turn wording', async () => {
     const { ctx } = await setup([])
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'interrupt_agent')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props)).toEqual(['agent_id'])
+    expect(Object.keys(props)).toEqual(['agent'])
     expect(schemas[0]!.description).toContain('stop its current work')
     expect(schemas[0]!.description).toContain('send_message')
   })
@@ -382,22 +564,22 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
     const queued = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'parked follow-up',
     }, parent)
     expect(queued.isError).toBe(false)
     const cancelSpy = vi.spyOn(child, 'cancel')
 
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: started.childId }, parent)
+    const result = await callTool(ctx, 'interrupt_agent', { agent: started.name }, parent)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`interrupt requested for agent ${started.childId}`)
+    expect(text(result)).toBe('interrupt requested for agent agent-1')
     expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' }, { keepInbox: true })
     releaseFirst.resolve(undefined)
     await child.whenIdle()
@@ -406,7 +588,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(child.inbox.nextStep).toHaveLength(1)
 
     const waking = await callTool(ctx, 'send_message', {
-      agent_id: started.childId,
+      agent: started.childId,
       message: 'wake up',
     }, parent)
     expect(waking.isError).toBe(false)
@@ -414,15 +596,16 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
-        && !block.text.startsWith('Your parent agent id is ')
+        && !block.text.startsWith('Your final answer is delivered automatically ')
         ? [block.text]
         : [])
       : [])
     expect(prompts).toEqual([
+      'Agent lead sent a message: ',
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'parked follow-up',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'wake up',
     ])
   })
@@ -439,7 +622,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -448,14 +631,14 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'grandchild',
-      request: { prompt: [{ type: 'text', text: 'grandchild work' }], parent: child },
+      prompt: [{ type: 'text', text: 'grandchild work' }], parent: child,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
     const grandchildAgent = ctx.agents.get(grandchild.childId)!
     const cancelSpy = vi.spyOn(grandchildAgent, 'cancel')
 
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: grandchild.childId }, parent)
+    const result = await callTool(ctx, 'interrupt_agent', { agent: grandchild.childId }, parent)
 
     expect(result.isError).toBe(false)
     expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' }, { keepInbox: true })
@@ -477,7 +660,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'target',
-      request: { prompt: [{ type: 'text', text: 'a' }], parent },
+      prompt: [{ type: 'text', text: 'a' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -485,22 +668,22 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'sibling',
-      request: { prompt: [{ type: 'text', text: 'b' }], parent },
+      prompt: [{ type: 'text', text: 'b' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
     const targetAgent = ctx.agents.get(target.childId)!
     const siblingAgent = ctx.agents.get(sibling.childId)!
-    const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
+    const stranger = await ctx.agentLoop.create(brandString<SessionId>('stranger'), { provider: 'mock', model: 'mock' })
     const cancelSpy = vi.spyOn(targetAgent, 'cancel')
 
-    const self = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, targetAgent)
+    const self = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, targetAgent)
     expect(self.isError).toBe(true)
     expect(text(self)).toContain('cannot interrupt itself')
-    const fromSibling = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, siblingAgent)
+    const fromSibling = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, siblingAgent)
     expect(fromSibling.isError).toBe(true)
     expect(text(fromSibling)).toContain('not a live descendant')
-    const fromStranger = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, stranger)
+    const fromStranger = await callTool(ctx, 'interrupt_agent', { agent: target.childId }, stranger)
     expect(fromStranger.isError).toBe(true)
     expect(text(fromStranger)).toContain('not a live descendant')
     expect(cancelSpy).not.toHaveBeenCalled()
@@ -517,15 +700,15 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'settled child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
 
-    const settled = await callTool(ctx, 'interrupt_agent', { agent_id: started.childId }, parent)
+    const settled = await callTool(ctx, 'interrupt_agent', { agent: started.childId }, parent)
     expect(settled.isError).toBe(false)
     expect(text(settled)).toBe(`interrupt requested for agent ${started.childId}`)
-    const unknown = await callTool(ctx, 'interrupt_agent', { agent_id: 'no-such-agent' }, parent)
+    const unknown = await callTool(ctx, 'interrupt_agent', { agent: 'no-such-agent' }, parent)
     expect(unknown.isError).toBe(false)
     // No cold resume: the settled target never rematerialized.
     expect(ctx.agents.get(started.childId)).toBeUndefined()
@@ -533,8 +716,9 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
 
   it('fails loud when invoked without a calling agent', async () => {
     const { ctx } = await setup([])
-    const result = await callTool(ctx, 'interrupt_agent', { agent_id: 'x' })
+    const result = await callTool(ctx, 'interrupt_agent', { agent: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 })

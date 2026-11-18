@@ -64,8 +64,8 @@
   "columnTransition": "none",
   "expanded": true,
   "mode": "fullscreen",
-  "panelContentWidth": 1680,
-  "panelOuterWidth": 1680,
+  "panelContentWidth": 1681,
+  "panelOuterWidth": 1681,
   "coversViewport": true,
   "resizeHandleWidth": 0,
   "expandedDirectories": [],
@@ -197,8 +197,8 @@
   "columnTransition": "none",
   "expanded": true,
   "mode": "fullscreen",
-  "panelContentWidth": 1680,
-  "panelOuterWidth": 1680,
+  "panelContentWidth": 1681,
+  "panelOuterWidth": 1681,
   "coversViewport": true,
   "resizeHandleWidth": 0,
   "expandedDirectories": [],
@@ -229,7 +229,7 @@
 }
 ```
 
-## B restored: normal mode and collapsed Files directory
+## B restored: normal mode and expanded Files directory
 
 ```json
 {
@@ -249,7 +249,9 @@
   "panelOuterWidth": 756,
   "coversViewport": false,
   "resizeHandleWidth": 8,
-  "expandedDirectories": [],
+  "expandedDirectories": [
+    "workspace"
+  ],
   "panes": [
     {
       "active": true,
@@ -417,15 +419,15 @@
     1000
   ],
   "columns": [
-    56,
-    711,
+    0,
+    767,
     0
   ],
   "columnTransition": "none",
   "expanded": true,
   "mode": "fullscreen",
-  "panelContentWidth": 767,
-  "panelOuterWidth": 767,
+  "panelContentWidth": 768,
+  "panelOuterWidth": 768,
   "coversViewport": true,
   "resizeHandleWidth": 0,
   "expandedDirectories": [],

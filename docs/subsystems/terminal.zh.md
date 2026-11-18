@@ -31,7 +31,7 @@ type TerminalSessionStatus =
 interface TerminalBackend {
   /** Stable type selected by {@link TerminalSpawnRequest.type}. */
   readonly type: string
-  /** Create an unpublished session or reject after cleaning partial resources; cleanup failure uses {@link TerminalBackendCleanupError}. */
+  /** Create an unpublished session or reject after cleaning partial resources; cleanup failure uses `TerminalBackendCleanupError`. */
   spawn(spec: TerminalBackendSpawnSpec): Promise<TerminalBackendSession>
 }
 ```

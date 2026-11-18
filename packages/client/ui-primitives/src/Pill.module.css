@@ -17,12 +17,24 @@
   cursor: pointer;
 }
 
-.interactive:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .interactive:hover:where(:not(:disabled):not(.active)) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .active {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-button-ghost-active-fill);
   box-shadow: inset 0 0 0 1px var(--dsw-alias-button-ghost-active-border);
+}
+
+.interactive:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.interactive:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
 }

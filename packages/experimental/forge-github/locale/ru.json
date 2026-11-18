@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Запросы на изменение GitHub",
+    "description": "Считывайте запросы на изменение GitHub для реестра forge через GitHub CLI на хосте."
+  }
+}

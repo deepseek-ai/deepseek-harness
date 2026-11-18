@@ -26,7 +26,7 @@
 import { setActiveModuleLoader, WorkerModuleLoader, type StaticModuleFactory } from './module-system/module-loader.ts'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
-import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
+import type { HostConnectionHandle, PeerScope } from '@deepseek-ai/dsh-client-connection'
 import type { AlsCausality } from './polyfill/async-context/als-runtime.ts'
 import { join } from './module-system/posix-path.ts'
 import { installProcessGlobal } from './node/globals/process.ts'
@@ -36,6 +36,7 @@ import { inflateImage, inflateImageStream } from './storage/image-gzip.ts'
 import { loadVfsImage, loadVfsOverlay, MemoryVfs } from './storage/memory.ts'
 import { setActiveVfs } from './storage/active.ts'
 import { setTextViewer } from './shell/process/xdg-open.ts'
+import { packPackageAssets } from './package-assets.ts'
 import {
   DEFAULT_ROOT, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_MANIFEST_PATH, LOWERING_VERSION,
 } from './image-layout.ts'
@@ -272,7 +273,8 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       const peer = connection.browserPeer
       tunnel.serve({
         directFetch: (request: Request) => handler.fetch(request, peer),
-        bootPayload: () => readBootPayload(ctx),
+        bootPayload: () => readBootPayload(ctx, peer),
+        packageAssets: () => packPackageAssets(mounted, root),
         openStream: (endpoint, payload, uplink, signal) =>
           typertGateway.wireStream.open(endpoint, payload, uplink, peer, signal),
         streamFailure: typertGateway.wireStream.failure,
@@ -441,7 +443,7 @@ function prepareProfile(
   const profile: ProfileContext = {
     name: loaded.name, dir: loaded.dir, patchPath: loaded.patchPath, installAnchor, cwd: root, home,
     startedBundles: loaded.layers.map(layer => layer.packageName),
-    overlays: [], telemetryDisabledEnv: env.DSH_TELEMETRY_DISABLED,
+    overlayPaths: [], telemetryDisabledEnv: env.DSH_TELEMETRY_DISABLED,
   }
   return { patches: appBoot.readProfilePatches(BIN_NAME, profile, loaded), profile, environment }
 }
@@ -452,14 +454,15 @@ function prepareProfile(
  * from the in-process webserver service, never from the API surface, because
  * the page has no Cordis tree yet.
  * @param ctx - Booted host context.
+ * @param peer - the browser Peer the page speaks for.
  * @returns Boot payload for `GET /__boot__`.
  */
-function readBootPayload(ctx: HostContext): { injections: unknown } {
-  const webServer = ctx.get('webServer') as { collectIndexInjections(): unknown } | undefined
+function readBootPayload(ctx: HostContext, peer: PeerScope): { injections: unknown } {
+  const webServer = ctx.get('webServer') as { collectIndexInjections(peer: PeerScope): unknown } | undefined
   if (webServer === undefined) {
     throw new Error('webworker host: no webServer service, so the page cannot receive its boot injections')
   }
-  return { injections: webServer.collectIndexInjections() }
+  return { injections: webServer.collectIndexInjections(peer) }
 }
 
 /**

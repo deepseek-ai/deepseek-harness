@@ -1,9 +1,9 @@
 // Shared IconActions chrome for user and assistant messages: copy
 // live, optional branch wiring, and an optional date-aware clock.
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import {
-  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, Tooltip, writeClipboard,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, Tooltip, useClipboardCopy,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -48,32 +48,7 @@ export function MessageIconActions({
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
   const reasonId = useId()
-  // Same success chrome as CodeBlock: a short check swap after the write,
-  // gated so re-clicks during the window neither re-copy nor stack timers.
-  const [copied, setCopied] = useState(false)
-  const copyPending = useRef(false)
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const copyEpoch = useRef(0)
-  useEffect(() => () => {
-    copyEpoch.current += 1
-    copyPending.current = false
-    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
-  }, [])
-  const onCopy = useCallback(() => {
-    if (copied || copyPending.current) return
-    const epoch = copyEpoch.current
-    copyPending.current = true
-    void writeClipboard(text).then((ok) => {
-      if (epoch !== copyEpoch.current) return
-      copyPending.current = false
-      if (!ok) return
-      setCopied(true)
-      copyTimer.current = window.setTimeout(() => {
-        copyTimer.current = null
-        setCopied(false)
-      }, 1000)
-    })
-  }, [copied, text])
+  const { copied, onCopy } = useClipboardCopy(text)
   const clockEl = time === undefined ? null : (
     <span className={clock === 'start' ? css.timeStart : css.timeEnd}>
       {formatMessageClock(time, t, day)}
@@ -89,7 +64,7 @@ export function MessageIconActions({
       </Tooltip>
       {extraActions}
       {onBranch !== undefined && (
-        <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom">
+        <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom" openOnClick={branchUnavailable}>
           {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}
           <button
             type="button"

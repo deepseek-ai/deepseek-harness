@@ -12,19 +12,21 @@ Open **Settings → Models**. The DeepSeek card exposes one API-key field; enter
 
 Keys are write-only. The page receives a redacted descriptor after saving, never the literal secret. The key is stored in `$DSH_HOME/.credentials.yaml`, while settings retain only its credential reference.
 
+With a key saved and the default endpoint, DeepSeek's models follow the list the DeepSeek API publishes. The list loads when the models are first needed, refreshes in the background about every ten minutes while they are in use, and falls back to the built-in models when it cannot load. Editing **Models** under **Customized settings** keeps your own list instead and stops following the published one; **Restore defaults** follows it again and reloads it. While the published list is in use, the card shows the built-in models, so a newly published model appears only in the model picker. The [API-key provider reference](../../../packages/llm/llm-deepseek-api-key/README.md) owns the listing, fallback, and gating rules.
+
 ## Add a third-party provider
 
 Choose **Add model provider**. The card opens on **Third-party model provider**: pick a provider dsh ships with — the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM — enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
 The authentication **?** explains saved-credential priority and environment fallbacks. Leave the key blank to use a saved credential or try the listed environment variables. A green hint identifies a detected environment variable. A yellow hint means no credential variable was detected; enter an API key or configure the listed variable. An unconfirmed hint means the status read failed. Detection does not validate the credential or test the connection. Provider-managed credential files, including AWS profiles and Google application-default credentials, are outside this check. Providers without native key authentication, such as `openai-codex`, show no key field unless the profile explicitly names a credential reference.
 
-A saved credential uses the placeholder **Leave blank to use saved credentials**, with no status text below the input. Environment fallback uses **Leave blank to use env as auth** and one detection hint while the input is empty. A nonempty input shows no authentication status text. Address configuration variables appear under **Base URL** and do not count as credentials.
+A saved credential displays a masked preview in the input and a green hint that the saved key will be used. The preview retains the identifier before the first hyphen or underscore, then five leading and four trailing key characters, only when at least eight middle characters stay hidden; otherwise the entire key and identifier become dots. Counts use Unicode code points. Saved keys have no eye button and cannot be revealed, copied, cut, or partially edited; typing or pasting replaces the whole key. Backspace or Delete stages whole-key removal. Press Backspace or Delete, then **Apply**, to remove the stored override and use environment authentication. Emptying a replacement also stages deletion of the saved key. **Cancel** preserves the saved key before saving. A refused deletion leaves settings unchanged. If the key is removed but settings fail, the warning reports that deletion cannot be undone; retry **Apply** to finish settings, or **Close** to leave the partial result. Clearing a shared credential affects every feature using the same reference. Without an environment credential, the provider has no authentication after clearing. Environment fallback uses **Leave blank to use env as auth** and one detection hint while the input is empty. A replacement draft shows a reminder to apply the new key. Pending removal names the environment variable used after applying, when the route declares one. Other nonempty inputs show no authentication status text. Address configuration variables appear under **Base URL** and do not count as credentials.
 
-A nonempty key input has an eye button. Select **Show secret** to check what you typed, and **Hide secret** to mask it again. Changing the input masks it again. Stored credentials remain write-only.
+An editable, nonempty key draft has an eye button. Select **Show secret** to check what you typed, and **Hide secret** to mask it again. Changing the input masks it again. Native password fields do not offer cut; select the draft and press Backspace to erase it, or reveal it before cutting. Stored credentials remain write-only.
 
 ## Add a custom model API
 
-Switch the card to **Custom model API** for a relay, a company gateway, a self-hosted server, or any provider absent from the installed catalog. Supply a lowercase Provider ID, base URL, API protocol, credential, and at least one model. The **API protocol** must be the one your gateway speaks, and the picker offers three: OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages, stored in the active profile's `cordis.patch.yml` as `openai-completions`, `openai-responses`, and `anthropic-messages`. A provider speaks one protocol, so a gateway that serves two needs two providers.
+Switch the card to **Custom model API** for a relay, a company gateway, a self-hosted server, or any provider absent from the installed catalog. Supply a lowercase Provider ID, base URL, API protocol, credential, and at least one model. The **API protocol** must be the one your gateway speaks, and the picker offers four: OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, and Gemini API, stored in the active profile's `cordis.patch.yml` as `openai-completions`, `openai-responses`, `anthropic-messages`, and `google-generative-ai`. A Gemini API base URL includes the API version, such as `https://gateway.example/v1beta`. A provider speaks one protocol, so a gateway that serves two needs two providers.
 
 ![The custom model API form: Provider ID, display name, base URL, API protocol, and API key](providers-custom-form.png)
 
@@ -32,13 +34,15 @@ The Provider ID is permanent because requests, saved sessions, model defaults, a
 
 ### Discover models
 
-Under **Model catalog**, choose **Fetch available models** to ask the endpoint which models it serves. The request uses the base URL, protocol, and key currently in the form, or a saved provider's stored key, and the reply opens a searchable picker: search, tick the models you want, and choose **Add selected**. Nothing is stored until you save or create the provider.
+Under **Model catalog**, choose **Fetch available models** to ask the endpoint which models it serves. The request uses the base URL, protocol, and key currently in the form, or a saved provider's stored key, and the reply opens a searchable picker: models already in the list start ticked, so search, tick the models to add, untick the ones to remove, and choose **Update list**. Configured models the endpoint does not list stay. Nothing is stored until you save or create the provider.
 
 Discovery reads the listing formats common gateways publish, but not every endpoint answers in one of them, so treat it as a convenience rather than a guarantee: when it fails or lists nothing, add the model ids by hand and they work just the same. A built-in provider is always answered from the installed catalog, even when its base URL points at a gateway, so fetch through a custom provider to see what the gateway really serves.
 
 ## Select a model
 
 Configured providers appear in the model picker. Selecting a model also makes it the default for new sessions. A session that has already sent a request retains the model recorded in its own log.
+
+To change a provider’s model order, edit it in **Settings → Models**, open **Customized settings**, and drag a model’s three-line handle. You can also focus the handle and press the up or down arrow key. **Apply** keeps the order; **Cancel** discards it. The model picker follows the saved order within that provider.
 
 If a saved default names a provider that was deleted, the composer displays **Select model** and blocks input until another model is selected.
 

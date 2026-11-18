@@ -1,0 +1,21 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../../client/ui-renderer" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../client/ui-primitives" },
+    { "path": "../creation-recommendations" },
+    { "path": "../action-cards" },
+    { "path": "../client-ui-action-cards" },
+    { "path": "../../client/store" }
+  ]
+}

@@ -10,7 +10,7 @@ import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE } from './support.ts'
+import { PLUGIN_TOGGLE_SETTLE_MS, ZH_BROWSER_LOCALE } from './support.ts'
 
 const NAME = 'e2e-hmr-addon'
 
@@ -139,10 +139,13 @@ export function apply(ctx) {
     const panel = await installThroughPage(`file:${v1}`)
     await traced(['start:v1'])
     const toggle = panel.getByRole('switch', { name: `启用 ${NAME}`, exact: true })
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
     await toggle.click()
     await traced(['stop:v1'])
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
     await toggle.click()
     await traced(['start:v1'])
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
     // Installing over the installed package is refused; the upgrade removes it first.
     const v2 = await version('v2')
     expect(await manager().installBundle(`file:${v2}`)).toMatchObject({ application: 'failed', error: { code: 'already-installed' } })
@@ -165,7 +168,7 @@ export function apply(ctx) {
     const panel = await openPanel()
     const toggle = panel.getByRole('switch', { name: `启用 ${NAME}`, exact: true })
     await toggle.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
     await toggle.click()
     await alertWith(page, 'e2e-hmr-missing-dependency').waitFor({ timeout: 10_000 })
     expect(await alertWith(page, 'e2e-hmr-missing-dependency').textContent()).not.toContain('重启')

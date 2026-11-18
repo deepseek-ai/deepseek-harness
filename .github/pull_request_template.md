@@ -1,21 +1,34 @@
+<!-- 本 PR 正文按 .agents/skills/dsh-pr-description/SKILL.md 填写。 -->
+
 ## Motivation
 
-<!-- 用一句话说明需要解决的问题，并以 Fixes #NN 或 Related #NN 引用同仓库 Issue。 -->
+<!-- 引用同仓库 Issue：Fixes #N 或 Refs #N。 -->
 
 ## Changes
 
-<!-- 高层次说明命令、配置、API、协议或持久化格式的变化；没有则写 None。 -->
-<!-- 高层次说明用户、模型或系统可观察行为的变化；没有则写 None。 -->
-
 ## Testing
 
-<!-- 每种测试方法添加一个条目。方法保持可见，将可复核证据放进对应的 Proof 区域。 -->
+<!-- 测试设计 -->
 
-- <!-- 说明命令或步骤，以及它覆盖的行为。 -->
+- <!-- 测试条目 -->
 
   <details>
   <summary>Proof</summary>
 
-  <!-- 提供测试输出、截图、录屏、日志或其他可复核证据。 -->
-
   </details>
+
+## AI Usage
+
+<!-- ai-declaration:start -->
+[![AI-DECLARATION: 待填级别](https://img.shields.io/badge/䷼%20AI--DECLARATION-待填级别-e5e7eb?labelColor=e5e7eb)](https://ai-declaration.md)
+
+**AI declaration** ([v0.1.2](https://ai-declaration.md/en/0.1.2)): `待填级别`
+<!-- ai-declaration:end -->
+
+| 阶段 | 级别 | AI 参与度 | 决策记录 |
+|:--|:--|--:|:--|
+| breakdown 问题拆解 | 待填级别 | ?% | 待填说明 |
+| design 方案设计 | 待填级别 | ?% | 待填说明 |
+| testing 验收测试 | 待填级别 | ?% | 待填说明 |
+| implementation 技术实现 | 待填级别 | ?% | 待填说明 |
+| review 评审处理 | n/a 暂不适用 | — | 尚无已处理的评审意见。 |

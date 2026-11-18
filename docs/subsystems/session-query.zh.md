@@ -382,12 +382,29 @@ Exact reads, filters, and traces are backend-independent concrete behavior. A ba
 
 ```ts cordis-catalog
 /**
+ * Read the metadata that summarizes one live or prepared Session in a Session list.
+ * @param session - live or prepared Session to summarize.
+ * @returns whether the Session has no turn, and its latest human-authored prompt time.
+ */
+getListMetadata(session: Session): SessionListMetadata
+
+/**
  * Observe one exact live or prepared Session without a persistence listing preflight.
  * @param sessionId - logical Session identity.
  * @param options - cancellation and projection selection for this read.
  * @returns a caller-owned observation lease.
  */
 observeSession( sessionId: SessionId, options: SessionObservationOptions = {}, ): Promise<SessionObservation>
+
+/**
+ * Inspect domain-owned state without attaching or resuming a cold Session.
+ * The getter runs synchronously after preparation and must not mutate or retain the Session.
+ * @param sessionId - logical Session identity.
+ * @param read - domain getter returning detached data.
+ * @param signal - preparation cancellation.
+ * @returns the getter's value at the current live or prepared cut.
+ */
+inspectSession<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T>
 
 /**
  * Search the live-preferred logical corpus and group by session.
@@ -505,7 +522,7 @@ async traceEvent(request: SessionEventTraceRequest, signal?: AbortSignal): Promi
 async readEvent(request: SessionEventReadRequest, signal?: AbortSignal): Promise<SessionEventWindow>
 ```
 
-Types: [SessionId](core.zh.md) · [SessionTitleSnapshot](session-title.zh.md)
+Types: [Session](session.zh.md) · [SessionId](core.zh.md) · [SessionTitleSnapshot](session-title.zh.md)
 
 Source: [`packages/session-query/session-query/src/index.ts`](../../packages/session-query/session-query/src/index.ts)
 <!-- END GENERATED cordis-surface -->

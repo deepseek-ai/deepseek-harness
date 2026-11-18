@@ -1,46 +1,33 @@
-/** Test-only driver that selects another model after the first step's tool call. */
+/** Test-only explicit initial selection and model switch after the first step's tool call. */
 
-import { installModelSelection } from '@deepseek-ai/dsh-agent'
-
-const SELECTED = { provider: 'deepseek-official', model: 'deepseek-v4-pro' }
-const selections = new WeakMap()
+const SELECTED = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' }
 
 export const name = 'model-switch-driver'
-export const inject = ['agents']
+export const inject = ['tools']
 
 /**
- * Install the real selection helper and change its input after `todo_write`.
+ * Record an explicit initial choice and a switch after `todo_write`.
  * @param {import('@deepseek-ai/cordis').Context} ctx - composition context.
  */
 export function apply(ctx) {
   ctx.on('agent/created', ({ agent }) => {
-    const selection = { current: undefined, assembled: undefined }
-    selections.set(agent.session, selection)
-    installModelSelection(agent.ctx, selection)
+    const initial = agent.model.current()
+    if (initial === undefined) throw new Error('model-switch driver requires an initial route')
+    agent.model.select(initial)
+    agent.model.select(initial)
   })
-  ctx.on('session/event', (session, event) => {
-    if (event.type !== 'todo/write') return
-    const selection = selections.get(session)
-    if (selection === undefined) throw new Error('model-switch driver requires an installed selection')
-    selection.current = SELECTED
-  })
-  // Headless also fixes the original selection. These root waterfalls make the
-  // driver authoritative; ending after step two avoids a reverse notice.
-  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-    const assembled = await next()
-    if (context.agent === undefined) return assembled
-    const selected = selections.get(context.agent.session)?.assembled
-    if (selected === undefined) return assembled
-    return {
-      ...assembled,
-      variables: { ...assembled.variables, provider: selected.provider, model: selected.model },
+  ctx.on('agent/pre-step', ({ modelSelection }, next) => {
+    if (modelSelection.model === SELECTED.model && modelSelection.reasoningEffort !== SELECTED.reasoningEffort) {
+      throw new Error('model-switch driver requires the explicit effort before the second step')
     }
+    return next()
   })
-  ctx.on('agent/request', async ({ agent }, next) => {
-    const resolved = await next()
-    const selected = selections.get(agent.session)?.assembled
-    if (selected === undefined) return resolved
-    const { reasoningEffort: _inheritedEffort, ...withoutInheritedEffort } = resolved
-    return { ...withoutInheritedEffort, ...selected }
+  ctx.on('tools/execute', async (exec, next) => {
+    const result = await next()
+    if (exec.name === 'todo_write' && !result.isError) {
+      if (exec.agent === undefined) throw new Error('model-switch driver requires a calling Agent')
+      exec.agent.model.select(SELECTED)
+    }
+    return result
   })
 }

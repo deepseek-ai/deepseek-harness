@@ -53,6 +53,44 @@ interface TokenSurfaceNode {
 
 Surface order is authoritative; replacement nodes can have higher durable seqs than later positional nodes. The snapshot is immutable and does not grow when the underlying replay fold advances.
 
+## `ContextPressureProjection`
+
+`ctx.tokenMeter.contextPressure(session)` synchronously reads the latest logged `pressureTokens` and `contextWindow`; the client projection also derives `projectedTokens` from surface changes. These display values do not price a new request; use `measure()` for request pricing.
+
+Source: [`packages/llm/token-meter/src/projection.ts`](../../packages/llm/token-meter/src/projection.ts)
+
+```ts type-equiv
+/**
+ * Approximate context occupancy for a status display.
+ *
+ * The fields, when present, are deliberately NOT one atomic request
+ * observation: each is a last-wins record of a different moment. Switching
+ * models can therefore pair a fresh capacity with the previous route's
+ * pressure until the next request reports usage. This is an intentional trade
+ * — the value is a user-facing reference, not a billing or gating input. See
+ * the token-meter README for the full rationale.
+ */
+interface ContextPressureProjection {
+  /**
+   * Provider-reported prompt size of the most recent request: uncached input
+   * plus cache reads and writes. Response output is excluded, so this does not
+   * grow as the current turn streams. Absent until a provider reports usage.
+   */
+  pressureTokens?: number
+  /**
+   * What the NEXT request's prompt would cost: {@link pressureTokens} plus the
+   * heuristic repricing of everything the surface gained or lost since that
+   * sample. Only the delta is estimated, so the figure stays anchored to the
+   * provider while still reacting the moment a compaction shadows a span —
+   * which `pressureTokens` alone cannot do, since compaction reports no usage
+   * of its own. Absent until a provider reports usage.
+   */
+  projectedTokens?: number
+  /** Newest recorded route capacity; absent when no adapter advertised one. */
+  contextWindow?: number
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -68,6 +106,13 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Replay owner for one service-wide estimator and isolated per-session folds.
 
 ```ts cordis-catalog
+/**
+ * Read the latest logged provider prompt size and route capacity.
+ * @param session - Session whose committed usage and request capacity are read.
+ * @returns context pressure; fields remain absent until their source events are recorded.
+ */
+contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'>
+
 /**
  * Measure current request pressure and surface through the durable tail.
  *

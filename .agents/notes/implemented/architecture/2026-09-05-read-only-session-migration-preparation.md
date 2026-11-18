@@ -102,7 +102,7 @@ No external caller can append before the handle exists. `append`, `flush`, and `
 
 ### Follow and Agent promotion
 
-`session.follow` opens history through the read path, restores the Session and projections, emits the opening snapshot, and then starts Agent promotion. Agent resume uses write open, so it waits for publication before the Agent accepts a new turn. History visibility and write readiness are separate timing points without introducing an unpublished append state.
+`session.follow` opens history through the read path, restores the Session and projections, starts Agent promotion from the separately retained Observation when the caller requests activation, and then delivers the opening snapshot. Agent resume uses write open, so it waits for publication before the Agent accepts a new turn. History visibility and write readiness are separate timing points without introducing an unpublished append state.
 
 ## Problem-to-solution mapping
 

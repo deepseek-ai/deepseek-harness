@@ -9,6 +9,8 @@
 /* oxlint-disable typescript/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { TimerService } from '@deepseek-ai/cordis-plugin-timer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   ApprovalRequestId, CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId,
@@ -20,9 +22,9 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as NodeHalf from '../src/index.ts'
 import * as ClientHalf from '../src/client/index.ts'
 
-const PLUGIN = 'dyn-1' as CordisDynamicPluginId
-const PACKAGE = 'pkg-1' as CordisDynamicPackageId
-const RUN = 'run-1' as CordisDynamicPluginRunId
+const PLUGIN = brandString<CordisDynamicPluginId>('dyn-1')
+const PACKAGE = brandString<CordisDynamicPackageId>('pkg-1')
+const RUN = brandString<CordisDynamicPluginRunId>('run-1')
 const AGENT = 's-1' as SessionId
 const USER_RUN = {
   agentId: AGENT, pluginId: PLUGIN, packageId: PACKAGE, mode: 'run' as const, hasClientHalf: true,
@@ -68,8 +70,7 @@ interface Bench {
 }
 
 /** Mount the browser half over a module table and a loader standing on real fibers. */
-async function boot(): Promise<Bench> {
-  const ctx = new Context()
+async function boot(ctx = new Context()): Promise<Bench> {
   await ctx.plugin(SlotRegistry)
   const factories = new Map<string, () => unknown>()
   const fibers = new Map<string, { fiber: unknown }>()
@@ -194,6 +195,49 @@ async function boot(): Promise<Bench> {
 }
 
 describe('browser half', () => {
+  it('installs the shared Timer and disposes scheduled work with its consumer', async () => {
+    const moduleLoader = Object.getOwnPropertyDescriptor(globalThis, '__ModuleLoader__')
+    const ctx = new Context()
+    vi.useFakeTimers()
+    try {
+      const bench = await boot(ctx)
+      expect(bench.ctx.timer).toBeInstanceOf(TimerService)
+      const timeout = vi.fn()
+      const interval = vi.fn()
+      const delayed = vi.fn()
+      const consumer = bench.ctx.plugin({
+        inject: ['timer'],
+        apply(ctx: Context) {
+          ctx.timeout(timeout, 20)
+          ctx.interval(interval, 20)
+          ctx.debounce(delayed, 40)()
+        },
+      })
+      await consumer
+      await vi.advanceTimersByTimeAsync(20)
+      expect(timeout).toHaveBeenCalledOnce()
+      expect(interval).toHaveBeenCalledOnce()
+      expect(delayed).not.toHaveBeenCalled()
+      await consumer.dispose()
+      await vi.advanceTimersByTimeAsync(40)
+      expect(interval).toHaveBeenCalledOnce()
+      expect(delayed).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+      expect(bench.ctx.timer).toBeInstanceOf(TimerService)
+      await bench.dispose()
+      expect(bench.ctx.get('timer')).toBeUndefined()
+      expect(bench.ctx.timeout).toBeUndefined()
+    } finally {
+      try {
+        await ctx.fiber.dispose()
+      } finally {
+        vi.useRealTimers()
+        if (moduleLoader) Object.defineProperty(globalThis, '__ModuleLoader__', moduleLoader)
+        else Reflect.deleteProperty(globalThis, '__ModuleLoader__')
+      }
+    }
+  })
+
   it('provides the load engine as the page run-state face', async () => {
     const bench = await boot()
     expect(bench.ctx.dynamicCordisRunner.getSnapshot()).toEqual([])
@@ -340,7 +384,7 @@ describe('browser half', () => {
 
   it('answers a run request after the surface approves it', async () => {
     const bench = await boot()
-    const request = 'rr-1' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-1')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,
@@ -373,7 +417,7 @@ describe('browser half', () => {
 
   it('drops the affordance when another page answers the request', async () => {
     const bench = await boot()
-    const request = 'rr-2' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-2')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,
@@ -397,7 +441,7 @@ describe('browser half', () => {
 
   it('exposes the refusal and the load observer on the face', async () => {
     const bench = await boot()
-    const request = 'rr-3' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-3')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,

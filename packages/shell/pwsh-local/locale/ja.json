@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ローカル PowerShell 実行",
+    "description": "ローカルの PowerShell でコマンド実行サービスを実装します。"
+  }
+}

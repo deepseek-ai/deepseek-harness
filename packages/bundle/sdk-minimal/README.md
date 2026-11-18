@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit coding-agent runtime. By default, the profile advertises a platform-selected persistent shell, `read_image`, and `working_directory`, persists sessions as uncompressed JSONL, and selects the model from the SDK initialization request. It supplies a complete Cordis tree and excludes `dsh-base`, Web, settings, managed credentials, telemetry, text file tools, workspace instructions, skills, jobs, and subagents. Its danger-full-access policy lets the shell modify any path available to the process, so use it only with an isolated workspace.
+Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit coding-agent runtime. By default, the profile advertises a platform-selected persistent shell and `read_image`, persists sessions as uncompressed JSONL, and selects the model from the SDK initialization request. It supplies a complete Cordis tree and excludes `dsh-base`, Web, settings, managed credentials, telemetry, text file tools, workspace instructions, skills, jobs, and subagents. Its danger-full-access policy lets the shell modify any path available to the process, so use it only with an isolated workspace.
 
 ## Table of Contents
 
@@ -38,7 +38,9 @@ Use `dsh plugin --profile sdk-minimal` to manage persistent external dependencie
 
 The profile mounts exactly one persistent shell stack: Bash on Linux and macOS, or PowerShell on Windows. Both stacks use a 300-second timeout and one owner-scoped terminal; the other platform's rows remain disabled.
 
-Like every shipped profile, it mounts [MCP resources](../../mcp/mcp-resources/README.md) once. Configure only [MCP client entries](../../mcp/mcp-client/README.md) to add servers. Clients mounted by another provider also count as configured. With no server configured in the caller's scope, MCP contributes no prompt text or tools and the default remains the shell, `read_image`, and `working_directory` tools.
+[Session checkpoints](../../session/session-checkpoint-policy/README.md) flush history before each model request, top-level tool execution, and agent step. Dispatch waits for the flush and stops if persistence fails, so the first model request also waits for native file-lock initialization. The final response still depends on background writes or successful shutdown; checkpoints do not make forced termination safe for unflushed events.
+
+Like every shipped profile, it mounts [MCP resources](../../mcp/mcp-resources/README.md) once. Configure only [MCP client entries](../../mcp/mcp-client/README.md) to add servers. Clients mounted by another provider also count as configured. With no server configured in the caller's scope, MCP contributes no prompt text or tools and the default remains the shell and `read_image` tools.
 
 -----
 
@@ -78,7 +80,7 @@ The bundle's single insert is the complete application tree: SDK stdio startup a
 
 #### What the model sees
 
-The system prompt is `DSH_SYSTEM_PROMPT` or `You are a helpful software engineer assistant.`. With no MCP server configured, the advertised tools are `read_image`, `working_directory`, and owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows. Required user context supplies the current directory. Optional runtime context, text file tools, workspace instructions, skills, jobs controls, and Harness identity are absent.
+The system prompt is `DSH_SYSTEM_PROMPT` or `You are a helpful software engineer assistant.`. With no MCP server configured, the advertised tools are `read_image` and owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows. Required user context supplies the current directory. Optional runtime context, text file tools, workspace instructions, skills, jobs controls, and Harness identity are absent.
 
 #### Token effect
 

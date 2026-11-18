@@ -6,7 +6,7 @@ English | [中文](2026-09-09-awaited-agent-creation.zh.md)
 
 ## Problem
 
-Shared presets install tools and prompt sections separately for each Agent. That installation can await plugin activation, and external SessionStart hooks can produce context asynchronously. A creator must know that these contributions have finished before the Agent's first model request.
+Agent-specific plugins can install tools asynchronously, and external SessionStart hooks can produce context asynchronously. A creator must know that these contributions have finished before the Agent's first model request.
 
 ## Decision
 
@@ -28,4 +28,6 @@ This decision owns asynchronous creation timing. The [scope runtime reference](.
 
 Creation latency includes asynchronous plugin and SessionStart work. Initializer failures become caller-visible creation failures, and cancellation relies on listeners settling cooperatively. Notifications already delivered cannot be undone; rollback pairs them with disposal notifications.
 
-Scoped installer tests verify rollback, lifecycle tests verify ordered completion and cancellation, and the SDK serial-created scenario verifies that asynchronous prompt context reaches the first request. Hook tests cover awaited context injection and subprocess disposal.
+Lifecycle tests verify initialization rollback, ordered completion and cancellation, and the SDK serial-created scenario verifies that asynchronous prompt context reaches the first request. Hook tests cover awaited context injection and subprocess disposal.
+
+Delegation tools use [shared preset registrations](../bug-fix/2026-10-25-shared-preset-delegation-tools.md); they do not require per-Agent installation. This event still owns asynchronous Agent initialization.

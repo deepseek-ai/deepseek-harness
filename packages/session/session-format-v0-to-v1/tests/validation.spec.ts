@@ -398,6 +398,32 @@ describe('released event and payload inventory', () => {
     expect(restoreV1(v1Header, [event]).events).toEqual([event])
   })
 
+  const descriptor = (data: SessionFormatJsonValue) => ({ type: 'subagent/descriptor', seq: 0, time: 1, data })
+
+  it.each([
+    { version: 1, provider: 'spawn', label: 'old child' },
+    { version: 1, provider: 'p', label: '', agentProvider: 'p', persona: 'x', toolFilter: { allow: ['read'] } },
+    { version: 2, mode: 'one-shot', provider: 'p', label: 'child' },
+    { version: 2, mode: 'continuable', provider: 'p', label: 'child', agentProvider: 'p', agentModel: 'm' },
+    { version: 2, mode: 'continuable', provider: 'p', label: '', agentModel: 'm', toolFilter: { deny: [''] } },
+    { version: 3, mode: 'continuable', provider: 'p', label: 'child', agentReasoningEffort: 'high' },
+  ])('migrates format v0 subagent descriptor %j unchanged', (data) => {
+    expect(restoreV0ToV1(v0Header, [descriptor(data)]).events).toEqual([descriptor(data)])
+  })
+
+  it.each([
+    [{ version: 1, mode: 'continuable', provider: 'p', label: 'child' }, 'unexpected member "mode"'],
+    [{ version: 1, provider: 'p' }, 'lacks required member "label"'],
+    [{ version: 1, provider: 'p', label: 'child', agentReasoningEffort: 'high' }, 'unexpected member "agentReasoningEffort"'],
+    [{ version: 2, mode: 'continuable', provider: 'p', label: 'child', agentReasoningEffort: 'high' }, 'unexpected member "agentReasoningEffort"'],
+    [{ version: 2, mode: 'one-shot', provider: 'p', persona: 'x' }, 'unexpected member "persona"'],
+    [{ version: 3, mode: 'continuable', provider: 'p', label: 'child', agentModel: 'm' }, 'agentProvider and agentModel must be paired'],
+  ])('refuses format v0 subagent descriptor %j as malformed', (data, message) => {
+    const restore = () => restoreV0ToV1(v0Header, [descriptor(data)])
+    expect(restore).toThrow(message)
+    expect(restore).not.toThrow(/unsupported descriptor version/)
+  })
+
   it('accepts every released nested union variant and optional member', () => {
     const sources: SessionFormatJsonValue[] = [
       { kind: 'user', rpcId: 'rpc-1', clientTimeZone: 'Asia/Shanghai' },
@@ -784,6 +810,31 @@ describe('released event and payload inventory', () => {
     ]
     for (const [index, [type, data]] of cases.entries()) {
       expect(() => { assertPayload(type, data) }, `${type}-${index}`).toThrow()
+    }
+  })
+
+  it('pins the released-log instant profile at its bounds and against every non-canonical spelling', () => {
+    // This migration reads released logs, so the accepted set is a compatibility
+    // promise: the four-digit-year bounds stay readable and each spelling that a
+    // regular expression alone would admit stays refused.
+    for (const acceptedAt of ['0001-01-01T00:00:00.000Z', '9999-12-31T23:59:59.999Z']) {
+      expect(
+        () => { assertPayload('schedule/change', { version: 1, operation: 'dispatch', id: 'x', acceptedAt }) },
+        acceptedAt,
+      ).not.toThrow()
+    }
+    for (const acceptedAt of [
+      '0000-01-01T00:00:00.000Z',
+      '2026-02-30T00:00:00.000Z',
+      '2026-08-31T00:00:00.0000Z',
+      '2026-08-31T00:00:00.000+00:00',
+      ' 2026-08-31T00:00:00.000Z',
+      '2026-08-31T00:00:00.000Z ',
+    ]) {
+      expect(
+        () => { assertPayload('schedule/change', { version: 1, operation: 'dispatch', id: 'x', acceptedAt }) },
+        acceptedAt,
+      ).toThrow(/must be a canonical UTC instant/)
     }
   })
 })

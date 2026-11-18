@@ -34,7 +34,7 @@ dsh --help                          # the launcher's own help
 <a id="profiles"></a>
 ## Profile
 
-profile 目录包含一个 `package.json`，其中记录树外插件依赖，以及 profile manifest（元数据清单）`dsh.profile`、其中按顺序排列的 `bundles` 列表；还包含一个 `cordis.patch.yml`，其中保存用户自己的 patch 层。在 YAML 中启用的 `dsh-hmr` 监视 profile manifest、profile 与 home 级 patch 文件，再通过统一串行重载重新组合所有层。未启用 HMR 时，更改在重启后生效。监听器注册期间发生的编辑与后续编辑使用相同的非致命重载错误报告。[插件管理器](../../packages/boot/plugin-manager/README.zh.md) 与 `dsh plugin` 共享包操作和 profile 写锁；更新依赖会保留已停用的组合包选择。CLI 包操作继承认证环境和终端描述符，支持交互式构建批准；service 调用保留清理后的环境并捕获诊断。
+profile 目录包含一个 `package.json`，其中记录树外插件依赖，以及 profile manifest（元数据清单）`dsh.profile`、其中按顺序排列的 `bundles` 列表；还包含一个 `cordis.patch.yml`，其中保存用户自己的 patch 层。在 YAML 中启用的 `dsh-hmr` 监视 profile manifest、profile 与 home 级 patch 文件以及每个 `--patch` overlay 文件，再通过统一串行重载重新组合所有层。未启用 HMR 时，更改在重启后生效；例外是 Config Editor 保存时会应用所有 patch 与 overlay 文件的当前内容。监听器注册期间发生的编辑与后续编辑使用相同的非致命重载错误报告。[插件管理器](../../packages/boot/plugin-manager/README.zh.md) 与 `dsh plugin` 共享包操作和 profile 写锁；更新依赖会保留已停用的组合包选择。CLI 包操作继承认证环境和终端描述符，支持交互式构建批准；service 调用保留清理后的环境并捕获诊断。
 
 安装和 profile 启动会按声明的 `engines.dsh` 范围（未声明时按 DSH peer 范围），检查与 `dsh --version` 显示值相同的运行时版本。不兼容插件需要用户明确确认精确版本豁免。[插件管理器的兼容性参考](../../packages/boot/plugin-manager/README.zh.md#version-compatibility-and-exemptions)说明 `version-exemptions`、`allow-version`、`revoke-version`、持久化规则与风险。
 
@@ -52,6 +52,12 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 ## 可选覆盖层
 
 `config/examples/` 交付 GitHub 评审 webhook、记忆 MCP 服务器与运行时 Cordis 工具的可选覆盖层。它们绝不属于默认 profile；设置与安全说明由[用户指南](../../docs/user/guide/index.zh.md)和[开发实战指南](../../docs/user/develop/practice/index.zh.md)负责。
+
+## 安装包内容
+
+发布 tarball 在 `lib/` 下携带打包后的运行时，在 `src/` 下携带 TypeScript 源码，在各自描述的文件旁携带声明映射与 JavaScript map，并在 `docs/` 下携带文档。只有 `prepack` 会暂存 `docs/`，`postpack` 又会删除这份副本，因此工作树里的读者看到的始终是检出当前的内容。
+
+`docs/` 包含文档网站的页面与全部升级指南，以及这些页面引用的资产。`docs/upgrade-guide/README.md` 在暂存时生成：它按每个 `v<T>` 目录升级前的版本对指南分组，列出每份指南的标题、中英文描述与相对路径。桌面应用在其 `app.asar` 内携带同样的 `docs/` 与 `src/`。生成的 `persistence-changes/` 记录、`i18n/` 规范与 `*.i18n.yaml` 一致性记录不发布。其中的页面保留仓库的相对链接，因此指向 `../packages/**` 或指向被排除的 `persistence-changes/` 记录的链接只在检出中可解析。
 
 ## 开发
 

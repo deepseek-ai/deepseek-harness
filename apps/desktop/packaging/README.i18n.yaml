@@ -15,44 +15,44 @@
   en: a6203dc2e690c7e1
   zh: 07b516549b8e3328
 /desktop-packaging/choose-a-build-path:
-  en: 17c6bcdefa05a8f8
-  zh: 4ee18f832276144d
+  en: 0b35c7471c09b27a
+  zh: cc4a382b99fc3210
 /desktop-packaging/release-versions:
-  en: 3f38ab26ee195b39
-  zh: f00eddafa8f3b9ca
+  en: bdee4adb7916e6cc
+  zh: 2880c3594ebab7ab
 /desktop-packaging/configuration-and-local-builds:
-  en: f5dc36baf414ecc5
-  zh: 8984741b356ac1d3
+  en: 5b4f0f80a117f202
+  zh: ff05be196c181087
 /desktop-packaging/windows-actions-packaging:
-  en: e1b101593f6f755e
-  zh: 121f225de399de1e
+  en: b39449c2f945cab9
+  zh: a742ba9efa282be8
 /desktop-packaging/macos-self-hosted-packaging:
-  en: a3af9523fdc60036
-  zh: 5e18d4740e9b7f57
+  en: b7c6668f451d2e16
+  zh: d3125c2bb6cf8e7b
 /desktop-packaging/unsigned-windows-test-installer:
-  en: 6843a0fdc03ead58
-  zh: 957f92fc8126e23e
+  en: f429bc0c280e2dfa
+  zh: 4adbcc9e906bdf80
 /desktop-packaging/local-macos-dmg-without-release-signing:
-  en: 2feaa0412247d81f
-  zh: 461dde8e13fd4734
+  en: 1146bbc11be43960
+  zh: 7c13543a0513c059
 /desktop-packaging/macos-release-signing-and-diagnostics:
-  en: 62c125856aa03c26
-  zh: 9fc00a43c8b1e8e2
+  en: a0b4aa1080ecf6fb
+  zh: 37d4b8934f89bee8
 /desktop-packaging/directory-builds-and-preparation:
-  en: 30d58517c9c2044f
-  zh: 16d26bdc923fc4ba
+  en: 5860c306375ddd63
+  zh: a76e3cdbbe25c79e
 /desktop-packaging/local-official-bundles-from-a-loopback-registry:
   en: b42f103358d0dfd7
   zh: a534164ad9eb00da
 /desktop-packaging/runtime-file-selection-and-installation-checks:
-  en: bfd89e1d139c5729
-  zh: 5d6cced5462ba13e
+  en: da4669b98c79ee48
+  zh: d007e87f13ff54d3
 /desktop-packaging/desktop-runtime-preparation:
-  en: a7aa3066e649ffe8
-  zh: 4334637910058c09
+  en: 84be38ab3136fff7
+  zh: bb4ed12ee0e1dfa0
 /desktop-packaging/installation-and-release-verification:
-  en: 0006b6b1ae4998f4
-  zh: 2bab6918b0c37b25
+  en: eb35eb973b796643
+  zh: c1c52311632b7296
 /desktop-packaging/dev-note:
-  en: b75c8458928b72b9
-  zh: 003ba4e17b4b5269
+  en: 691194744993dfaa
+  zh: e5798faf99546ff8

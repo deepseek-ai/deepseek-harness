@@ -19,6 +19,15 @@
   padding-top: 4px;
 }
 
+/* The docked composer reserves one statistics row before its readings
+   arrive, so the projections landing never change the composer height. The
+   row height matches the readings: a 20px secondary line plus 1px block
+   padding (ui-chat StatsPills `.pill`, ContextMeter `.trigger`). A minimum,
+   not a fixed height, so taller readings still size the row. */
+.root:not(.hero) > .dock {
+  min-height: calc(22px + var(--dsh-content-font-delta-secondary, 0px));
+}
+
 .hero .dock:empty {
   display: none;
 }
@@ -76,6 +85,12 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+@media (pointer: coarse) {
+  .card {
+    font-size: max(16px, var(--dsh-content-font-size, 14px));
+  }
+}
+
 /* No-workspace trigger state: an inset 1px dashed outline marks the card as a
    workspace picker rather than a live composer. Keeping the complete stroke
    inside the rounded box prevents clipped corner pixels from reading heavier. */
@@ -103,8 +118,10 @@
   pointer-events: none;
 }
 
-.cardWorkspaceTrigger:hover::after {
-  color: var(--dsw-alias-state-business-primary);
+@media (hover: hover) {
+  .cardWorkspaceTrigger:hover::after {
+    color: var(--dsw-alias-state-business-primary);
+  }
 }
 
 .accessory {
@@ -259,10 +276,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  /* 2px moved from the bottom pad to the top: the whole control row sits 2px
-     lower in the card (it read too high against the textarea) while the
-     controls' own centering stays untouched. */
-  padding: 2px 8px 6px;
+  padding: 4px 8px 8px;
   min-width: 0;
   /* Size container so the chips inside can collapse to icon-only when the
      card runs out of row width (PermissionSelect @container rule). Anonymous
@@ -315,13 +329,13 @@
   }
 }
 
-/* Attach circle (figma + control): 28px, selector fill, primary glyph. */
+/* The attachment and send controls share a diameter and vertical center. */
 .add {
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 999px;
   corner-shape: round;
@@ -330,8 +344,10 @@
   cursor: pointer;
 }
 
-.add:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+@media (hover: hover) {
+  .add:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .add:disabled {
@@ -362,8 +378,10 @@
   appearance: none;
 }
 
-.select:hover:not(:disabled) {
-  background-color: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .select:hover:not(:disabled) {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .select:disabled {
@@ -371,37 +389,59 @@
   cursor: default;
 }
 
-/* Primary send (figma IconButton 34:10465): 34px circle, #3964FE light /
-   #679EFE dark — the info-fill pair (500→400), NOT button-primary (ink);
-   white glyph; empty text = 0.4 opacity. */
+/* The send control keeps its semantic primary fill in both palettes. */
 .primary {
   display: grid;
   place-items: center;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-button-info-fill);
-  /* Static white, not the foreground token: the arrow stays white on the blue
+  /* On-color ink, not the foreground token: the arrow stays white on the blue
      fill in both themes (design 34:10465). */
-  color: #fff;
+  color: var(--dsw-alias-label-on-color);
   cursor: pointer;
   transition: background-color 100ms ease;
-  /* Opts out of the row's 2px downward shift (.row top pad): the send circle
-     keeps its original seat while the smaller chips sit lower. Transform, not
-     margin, so flex centering math is untouched. */
-  transform: translateY(-2px);
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-info-hover);
+/* Solid artwork uses a smaller footprint than the thin send arrow. */
+.continueIcon {
+  transform: scale(1.5);
+}
+
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-info-hover);
+  }
 }
 
 .primary:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Sending: the message waits for the Host to accept it. The circle keeps its
+   full fill rather than the disabled fade, and an arc turns where the arrow was. */
+.primary[data-sending]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.sendingSpinner {
+  animation: input-sending 800ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendingSpinner {
+    animation-duration: 2400ms;
+  }
+}
+
+@keyframes input-sending {
+  to { transform: rotate(360deg); }
 }
 
 .retry {

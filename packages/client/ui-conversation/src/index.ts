@@ -1,9 +1,9 @@
-/** Host registration for browser conversation preferences. */
+/** Browser conversation preferences. */
 import type {} from '@deepseek-ai/dsh-settings'
 
-import type { Volatile, Context } from '@deepseek-ai/cordis'
-import type { BusyEnterBehavior } from './submission-settings.ts'
+import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { ConversationConfig } from './types.ts'
 import { BUSY_ENTER_FIELD } from './submission-settings.ts'
 
 import { ConversationSettingsFields } from './submission-settings.ts'
@@ -13,18 +13,16 @@ export {
   DEFAULT_BUSY_ENTER_BEHAVIOR, type BusyEnterBehavior, type ConversationSettings,
 } from './submission-settings.ts'
 
-/** Runtime preferences projected to the browser. */
-export interface Config {
-  /** Enter key behavior while a turn is running. */
-  busyEnter: Volatile<BusyEnterBehavior>
-}
+/** Live preferences; the browser receives every field through its synced Config. */
+export type Config = ConversationConfig
 
 /** Live preferences projected to the browser. */
 export const Config = z.object({
   [BUSY_ENTER_FIELD]: ConversationSettingsFields[BUSY_ENTER_FIELD].volatile(),
+  maxConcurrentFileUploads: z.natural().min(1).default(2).volatile(),
 })
 
-/** Host preferences are consumed through the configuration form projection.
+/** Register browser conversation preferences.
  * @param ctx Plugin context used for optional settings presentation.
  */
 export function apply(ctx: Context): void {

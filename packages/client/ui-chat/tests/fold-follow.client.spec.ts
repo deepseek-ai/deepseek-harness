@@ -174,6 +174,45 @@ it('keeps the reader landing while reader movement awaits sampling', async () =>
   vi.advanceTimersByTime(500)
 })
 
+/** Stub the size observer so a test can mark the layout a following reader last saw painted. */
+function observePaint(): () => void {
+  let observe = (): void => {}
+  vi.stubGlobal('ResizeObserver', class implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { observe = () => { callback([], this) } }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  })
+  return () => { observe() }
+}
+
+it('takes content growth outside the batch since the last paint before animating a following reader', async () => {
+  const painted = observePaint()
+  const h = fixture({ earlier: 600, later: 0, top: 2_000, following: true })
+  painted()
+  // A row above the reader, such as a Turn's duration control, arrives with the commit that starts the batch.
+  h.grow(2_449)
+  h.viewport.motion.collapse(h.row, () => { h.row.hidden = true; h.grow(649) })
+  await Promise.resolve()
+  runFrameCount(1)
+  expect(h.list.scrollTop).toBe(2_049)
+  runFrames()
+  expect(h.reading.followingTail).toBe(true)
+})
+
+it('animates growth that arrives with the reader\'s own input', async () => {
+  const painted = observePaint()
+  const h = fixture({ earlier: 600, later: 0, top: 2_000, following: true })
+  painted()
+  h.grow(2_449)
+  h.viewport.motion.collapse(h.row, () => { h.row.hidden = true; h.grow(649) })
+  expect(h.reading.followInputFold(true)).toBe(true)
+  await Promise.resolve()
+  runFrameCount(1)
+  expect(h.list.scrollTop).toBe(2_000)
+  runFrames()
+})
+
 it('lands a tail batch on the committed content when it reaches past the estimate', async () => {
   const h = fixture(VISIBLE_ROW)
   // Content arriving with the hidden commit is not in the estimate; the landing reads the real floor.

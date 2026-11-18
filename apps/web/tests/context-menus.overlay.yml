@@ -1,0 +1,4 @@
+# Context gestures do not query the runner's native file associations.
+- id: session-controller
+  config:
+    nativeOpen: false

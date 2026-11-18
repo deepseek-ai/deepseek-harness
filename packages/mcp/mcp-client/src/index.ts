@@ -2,7 +2,9 @@
  * MCP client bridge plugin: connects to an external MCP server and registers
  * its tools on `ctx.tools` under server-qualified public names
  * (`mcp__<serverName>__<rawName>`). Each plugin instance connects to one MCP
- * server; load multiple instances in `cordis.yml` for multiple servers.
+ * server; load multiple instances in `cordis.yml` for multiple servers. A
+ * plugin that manages servers, such as the MCP manager, creates its own
+ * `McpClientHost` to validate, mount, probe, and authorize them.
  *
  * Namespace plugin (named exports, no default export). Lifecycle is
  * effect-scoped: disposal disconnects from the server, unregisters all tools,
@@ -13,31 +15,39 @@
  * @module @deepseek-ai/dsh-mcp-client
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { DEFAULT_MAX_INSTRUCTION_BYTES, RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
+import { resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
+import { hasOAuthWithAuthorizationHeader, StdioSchema, StreamableHttpSchema } from './config.ts'
+import type { ConfigInput } from './config.ts'
 import { registerServerContext } from './server-context.ts'
+import { registerStatusCell } from './status.ts'
+import { McpOAuthCredentials } from './oauth-credentials.ts'
+import type { McpOAuthConfig } from './oauth-options.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export { createMcpToolDefinition } from './tools.ts'
+export { McpLocalError, McpToolError } from './diagnostic.ts'
+export type { McpLocalErrorCode, McpToolErrorCode } from './diagnostic.ts'
 export type { McpResult, McpToolDefinitionOptions } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
+export type { ConfigInput } from './config.ts'
+export { McpClientHost } from './host.ts'
+export type { McpServerInstance } from './host.ts'
+export type { McpConnectionStatusHandle } from './status.ts'
+export type * from './types.ts'
+export type { McpOAuthAuthorization } from './oauth.ts'
+export type { McpOAuthConfig, McpOAuthConfigInput } from './oauth-options.ts'
+export type { McpProbeOptions } from './probe.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
 
 /** Services required by this plugin. */
 export const inject = ['tools']
-
-/** Default timeout for individual MCP tool calls and resource requests (ms). */
-const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
-
-/** Valid `serverName`, kept below the public tool-name budget. */
-const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 /**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
@@ -55,7 +65,7 @@ export interface StdioConfig {
   /**
    * Stable local namespace for this server's model-facing tool names
    * (`mcp__<serverName>__<rawName>`). Must match `[A-Za-z0-9_-]{1,32}` and be
-   * unique across live mcp-client instances.
+   * unique among live mcp-client instances in the same registration scope.
    */
   serverName: string
   /** Executable used to start the server. */
@@ -68,22 +78,34 @@ export interface StdioConfig {
   cwd: string
   /** Timeout per tool call or resource request in milliseconds. */
   toolCallTimeoutMs: number
+  /** Optional budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs?: number
+  /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
+  closeTimeoutMs: number
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
+  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
   maxInstructionBytes?: number
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** `on-demand` lists the server's tools for agents to load instead of registering them (default `eager`). */
+  toolLoading: 'eager' | 'on-demand'
+  /** Maximum characters of each tool's summary in an on-demand server's prompt catalog (default 160). */
+  catalogDescriptionMaxLength: number
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
 export interface StreamableHttpConfig {
+  /** Optional per-entry OAuth identity; passive connections never start browser authorization. */
+  oauth?: McpOAuthConfig
   /** Selects Streamable HTTP transport. */
   transport: 'streamable-http'
   /**
    * Stable local namespace for this server's model-facing tool names
    * (`mcp__<serverName>__<rawName>`). Must match `[A-Za-z0-9_-]{1,32}` and be
-   * unique across live mcp-client instances.
+   * unique among live mcp-client instances in the same registration scope.
    */
   serverName: string
   /** MCP endpoint URL. */
@@ -92,54 +114,29 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Timeout per tool call or resource request in milliseconds. */
   toolCallTimeoutMs: number
+  /** Optional budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs?: number
+  /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
+  closeTimeoutMs: number
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
+  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
   maxInstructionBytes?: number
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** `on-demand` lists the server's tools for agents to load instead of registering them (default `eager`). */
+  toolLoading: 'eager' | 'on-demand'
+  /** Maximum characters of each tool's summary in an on-demand server's prompt catalog (default 160). */
+  catalogDescriptionMaxLength: number
 }
 
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
-type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
-
-const Reconnect: z<ReconnectConfig> = z.object({
-  enabled: z.boolean().default(RECONNECT_DEFAULTS.enabled),
-  initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.initialDelayMs),
-  maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.maxDelayMs),
-  maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
-})
-
-export const Config = z.union([
-  z.object({
-    transport: z.const('stdio'),
-    serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
-    command: z.string().required(),
-    args: z.array(String).default([]),
-    env: z.dict(String).default({}),
-    cwd: z.string().default(''),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-    failOnStartupError: z.boolean().default(false),
-    maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
-  }),
-  z.object({
-    transport: z.const('streamable-http'),
-    serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
-    url: z.string().required(),
-    headers: z.dict(String).default({}),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-    failOnStartupError: z.boolean().default(false),
-    maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
-  }),
-]) as z<ConfigInput, Config>
+/** Validate one server's configuration and resolve its defaults. */
+export const Config = z.union([StdioSchema, StreamableHttpSchema]) as z<ConfigInput, Config>
 
 // ---- Plugin apply ----
 
@@ -152,15 +149,22 @@ export const Config = z.union([
  * @returns startup readiness after connection and initial tool discovery settle.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  if (hasOAuthWithAuthorizationHeader(config)) {
+    throw new Error('MCP OAuth and an Authorization header cannot be configured together')
+  }
+  const oauth = config.transport === 'streamable-http' && config.oauth !== undefined
+    ? new McpOAuthCredentials(ctx, config.oauth)
+    : undefined
   // Fail loud at load: reconnect misconfiguration (including programmatic
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
 
-  // Reserve the namespace next: a duplicate `serverName` fails THIS instance
-  // at load with an actionable error and leaves the earlier instance intact.
+  // Namespace reservations are scope-local; status belongs to the actual
+  // Fiber and survives its reloads and final disposal.
+  let status!: ReturnType<typeof registerStatusCell>
   ctx.effect(() => {
-    const owner = scopeOf(ctx) ?? ctx.root
+    const owner = scopeOf(ctx) ?? ctx[Context.root]
     let names = activeServerNames.get(owner)
     if (!names) {
       names = new Set()
@@ -172,14 +176,23 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       )
     }
     names.add(config.serverName)
-    return () => void names.delete(config.serverName)
+    status = registerStatusCell(ctx.fiber, (message, error) => {
+      ctx.logger.warn(`mcp-client(${config.serverName}): ${message}`)
+      if (!config.expandTemplates && !(config.transport === 'streamable-http' && config.oauth !== undefined)) ctx.logger.warn(error)
+    })
+    return () => {
+      if (ctx.fiber.uid === null) status.detach()
+      names.delete(config.serverName)
+    }
   }, 'mcp-client.serverName')
 
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
-  registerServerContext(ctx, config.serverName, connection)
+  if (!status.closure().closeConfirmed || status.closure().cleanupError !== undefined) {
+    throw new Error(`mcp-client(${config.serverName}): previous connection cleanup is incomplete; restart the Host`)
+  }
+  const connection = startConnection(ctx, config, reconnect, status, oauth)
   let stopping: Promise<void> | undefined
   const dispose = (): Promise<void> => stopping ??= connection.dispose()
   // Cordis announces unload before awaiting an unfinished apply(). Closing
@@ -190,12 +203,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return dispose()
   }, { global: true })
   ctx.effect(() => dispose, 'mcp-client.connection')
+  registerServerContext(ctx, config.serverName, connection)
 
   // Block plugin activation on the initial connection + tool discovery so
   // Cordis consumers observe the tools immediately after the fiber activates.
   // When failOnStartupError is true, a failed initial attempt rejects the
   // fiber (Cordis rolls it back); otherwise the error is logged and the
-  // supervisor enters its reconnect loop.
+  // supervisor applies its reconnect or credential-wait policy.
   const outcome = await connection.ready
   if (outcome.error !== undefined && config.failOnStartupError) {
     throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })

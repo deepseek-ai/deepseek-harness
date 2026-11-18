@@ -3,32 +3,41 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/time/README.md
 /:
-  en: 1816778111548561
-  zh: 460c67cc44e59372
+  en: e9fc634b58a500a1
+  zh: a0b98be02976e0cb
 /dsh-util-time:
   en: bc299a9b8fe7717f
   zh: 896661ee0c4edf25
 /dsh-util-time/summary:
-  en: f37c9eb6571622ac
-  zh: d782978ff11bd40f
+  en: ba3133430a3f11b7
+  zh: 8e3c6c74d1a9b064
 /dsh-util-time/table-of-contents:
-  en: cd2a60a905c978d6
-  zh: cc71d387d0cbd442
+  en: d152484eb41ac6b4
+  zh: f14f34fce35a8d90
 /dsh-util-time/use-this-package:
-  en: 1485e3ff508a8960
-  zh: 47ba622434bd2625
-/dsh-util-time/api:
-  en: cbb4b726e939fc03
-  zh: e9df4a7487433146
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/dsh-util-time/use-this-package/when-to-use-it:
+  en: 094e97351a65e8ea
+  zh: 519ff7be1121d9f4
+/dsh-util-time/use-this-package/entry-point:
+  en: 7ca7ddebcb6af6be
+  zh: 4702a29079d6b8a7
+/dsh-util-time/understand-the-implementation:
+  en: 402cdc78fc0f0dda
+  zh: 3ddbee420e1a70a6
+/dsh-util-time/further-exploration:
+  en: 8aa95ebdfd1f323e
+  zh: c6879eac9fa6e087
 /dsh-util-time/model-experience:
-  en: 02d997b5c1318f27
-  zh: 5c55d060adea756d
+  en: 3ea15a23d9901c72
+  zh: c39eb7d446dd13af
 /dsh-util-time/model-experience/kv-cache-effect:
-  en: f63edbd9621eee70
-  zh: 5e3982508b32b039
+  en: daf6e45a18c087b0
+  zh: e6714f1e65ed55ce
 /dsh-util-time/known-limitations-and-deferred-work:
-  en: 130db809b9a6db90
-  zh: 5b0b72ada5b131dd
+  en: 42d708c4ec711514
+  zh: cfa6ecca096baf82
 /dsh-util-time/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

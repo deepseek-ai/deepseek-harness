@@ -10,7 +10,7 @@ Session 数据一律经 Projection 读取与计算。客户端读投影值，而
 
 - 判定条件：客户端渲染的每个 Session 派生值都在渲染位置经投影读取取得，每个新增的会话内计算都注册为单元、其结果以已发布值的形式到达客户端。组件自己拉取 Session 数据、或读者按需触发一次计算，都属违规。
 - State 与 View：单元折叠 host 侧 State，并在其上声明客户端可见的 View，二者分工写在注册里。`ProjectionDefinition` 的字段与驱动它们的注册表归 [session-projection.zh.md](../subsystems/session-projection.zh.md#ctxsessionprojections--sessionprojectionregistry)。
-- 版本：`stateVersion` 从 1 起，只要序列化 state 字段或折叠语义变化就自增，兼容与否都一样。存在兼容改法时优先兼容，但版本仍要自增；同一 key 以不同 `stateVersion` 注册两次会抛错，而不是合并。
+- 版本：`stateVersion` 从 1 起。遵循[检查点版本规则](../../packages/session/session-projection/README.zh.md)：状态字段或折叠变化需要递增版本，但经过测试、保留历史含义且旧检查点加后缀恢复与全量回放一致的可选字段扩展除外。同一 key 以不同版本注册两次会抛错，而不是合并。
 - 计算策略：单元默认全量计算。收窄某个单元的计算范围需要对应领域专家确认，绝不能由实现者自行决定。
 - 边界：非完全 projection 渲染可用于某些 key 的界面可用性展示，例如在连接中的 Session 应答之前先画缓存块。它绝不参与对外可见结果的判定，那些结果等标准 projection 值。
 
@@ -24,7 +24,7 @@ function PlanChip({ useProjection }: PlanChipProps) {
 }
 
 // The computation is a registered unit; the registry drives it and publishes changes.
-const planDefinition: ProjectionDefinition<'plan'> = {
+const planDefinition: ProjectionDefinition<'plan', typeof emptyPlan> = {
   key: 'plan',
   stateVersion: 1,
   init: () => emptyPlan,
@@ -97,7 +97,7 @@ class SidebarSessionView implements Disposable {
   private readonly reference: SessionReference
 
   constructor(readonly id: SessionId, sessions: ISessions) {
-    this.reference = sessions.retain(id, { source: 'sidebarView' })
+    this.reference = sessions.retain(id, { source: 'sidebarView', facets: { conversation: true } })
     void this.reference.ready.catch((error: unknown) => { console.error('opening failed:', error) })
   }
 
@@ -124,6 +124,26 @@ export function reclaimIdle(): void {
 ```
 
 没有人能数清谁仍在使用该 Session，下一个新增的 Session 状态也会漏出枚举、永远不被回收。
+
+## 保留的摘录不会让来源字符串常驻内存
+
+Session 事件、工具结果的 `meta`，以及其他在 Session 生命周期内保留的值，若取自大型临时字符串（例如解码后的文件文本或命令输出）的摘录，都要先复制该摘录。在 V8 中，长度不少于 13 个字符的 `slice`、`substring`、`split` 片段或正则表达式捕获可能引用整个父字符串，拼接结果会引用其各个组成部分，而 `Session.append` 复制对象，不复制字符串存储。因此，`meta` 中保留的一行 200 个字符的文本可能让一个 16 MB 的文件一直留在内存中，直到 Session 关闭。
+
+- 判定条件：被保留的字符串是否可能是某个更大字符串的摘录，而该更大字符串本应被垃圾回收？摘录在保留之前用 `Buffer.from(text, 'utf16le').toString('utf16le')` 复制；测试丢弃一个分配在堆上的来源字符串、强制垃圾回收，并检查堆内存用量不随来源大小增长。
+- 边界：该规则适用于存活时间超过本次操作的摘录。来源本身被保留，或值来自 `JSON.parse`、`TextDecoder` 或 `Buffer#toString` 时，该规则不适用。`String()`、`slice(0)`、`trim()`、`'' + text` 和 `join` 可能返回输入字符串本身，不算复制。
+- 归口：截取摘录的代码负责复制；Session 在 append 时不复制字符串。
+
+返回行由 slice 拼成时，`read` 工具把它复制一次：
+
+```ts ignore-check
+const line = lineHasSlice ? Buffer.from(lineBuffer, 'utf16le').toString('utf16le') : lineBuffer
+```
+
+保留 slice 会把解码后的文件一并保留：
+
+```ts ignore-check
+const line = lineBuffer // may be a slice of the whole decoded file
+```
 
 ## 节点计算是增量的，流式发布是合批的
 

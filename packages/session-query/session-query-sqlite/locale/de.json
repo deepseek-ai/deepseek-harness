@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Konversationsabfragen und -suchen",
+    "description": "Fragen Sie Sitzungsdatensätze ab und stellen Sie eine Volltextsuche für SQLite bereit, wenn diese in der Konfiguration aktiviert ist."
+  }
+}

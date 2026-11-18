@@ -1,15 +1,22 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { JobId, JobOutcome } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
+import { remoteErrorOf, remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
+import type { InvocationDescriptor, InvocationParameterDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { describe, expect, it } from 'vitest'
+import { callResources } from '../../gateway/src/access.ts'
+import { resolveSessionResource } from '../../session-controller/src/session-resource.ts'
 import { JobController } from '../src/index.ts'
+
+/** The Typert registry {@link callResources} resolves against. */
+type Typert = Parameters<typeof callResources>[0]
 
 function producer(label = 'sleep 60') {
   let settle!: (outcome: JobOutcome) => void
@@ -45,6 +52,7 @@ async function harness(): Promise<{
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
   ctx.jobs.attachController('kill-test')
@@ -53,6 +61,18 @@ async function harness(): Promise<{
   const session = ctx.sessions.create()
   const agent = await registerAgent(ctx, session)
   return { ctx, session, agent, controller: ctx.jobController }
+}
+
+/**
+ * Install the Session Controller's own `session` resource default with the
+ * resolver it registers. Mounting the whole Session Controller would drag its
+ * entire dependency web into the job harness, while this registration is the
+ * one Host-side step that names the resource; the controller's own suite
+ * covers the rest of it.
+ * @param ctx - context holding the live Typert registry.
+ */
+function installSessionResolver(ctx: Context): void {
+  ctx.typert.resources.register('session', { resolve: resolveSessionResource })
 }
 
 function failureCode(run: () => unknown): string {
@@ -65,6 +85,87 @@ function failureCode(run: () => unknown): string {
   }
   throw new Error('expected a RemoteError failure')
 }
+
+/**
+ * The invocation the Gateway holds for one endpoint: these methods are direct
+ * and take only JSON arguments, so their wire parameters are the decorated
+ * ones in declaration order.
+ * @param wires - the method's JSON parameter wires, in order.
+ * @returns the invocation and parameters {@link callResources} reads.
+ */
+function invocationOf(wires: readonly string[]): Pick<InvocationDescriptor, 'invocation' | 'parameters'> {
+  return {
+    invocation: { kind: 'direct' },
+    parameters: wires.map((wire): InvocationParameterDescriptor => ({ name: wire, wire, source: 'json', codec: { mode: 'src-json' } })),
+  }
+}
+
+/**
+ * The resources the Gateway resolves for one call: the readers the live
+ * Service declares, the registry they resolve against, and the call's named
+ * arguments. `list` and `follow` take their cancellation signal after the
+ * request, so the caller passes it as the trailing positional argument.
+ * @param service - the mounted Remote Service.
+ * @param typert - the registry the Gateway resolves against.
+ * @param method - Remote method name.
+ * @param wires - the method's JSON parameter wires, in order.
+ * @param args - named arguments, the request included, plus the cancellation signal.
+ * @returns the resolved resources, or `undefined` when they are invalid.
+ */
+function resourcesOf(
+  service: JobController,
+  typert: Typert,
+  method: string,
+  wires: readonly string[],
+  args: Readonly<Record<string, unknown>>,
+): ReturnType<typeof callResources> {
+  const readers = remoteMethods(service).find(candidate => candidate.exportName === method || candidate.method === method)?.resources
+  return callResources(typert, readers, invocationOf(wires), args, NEVER)
+}
+
+const NEVER = new AbortController().signal
+
+describe('JobController Remote Session resources', () => {
+  const SESSION = { kind: 'session' } as const
+
+  it('names the Session of the request on the roster, the follow stream, and a kill', async () => {
+    // The production composition mounts the Session Controller beside this
+    // Service, so its default `session` resolver — not a reader on these
+    // methods — is the layer that names the resource. The assertions read the
+    // resource the Gateway resolves against, so losing that resolver here
+    // turns them global and fails them.
+    const { ctx, session, controller } = await harness()
+    installSessionResolver(ctx)
+    const jobId = 'bash-1' as JobId
+    const request = { sessionId: session.id, jobId }
+    expect(resourcesOf(controller, ctx.typert, 'list', ['request'], { request: { sessionId: session.id }, signal: NEVER }))
+      .toEqual([{ kind: SESSION.kind, id: session.id }])
+    expect(resourcesOf(controller, ctx.typert, 'follow', ['request'], { request, signal: NEVER }))
+      .toEqual([{ kind: SESSION.kind, id: session.id }])
+    expect(resourcesOf(controller, ctx.typert, 'kill', ['request'], { request }))
+      .toEqual([{ kind: SESSION.kind, id: session.id }])
+  })
+
+  it('resolves those endpoints to the global resource without a resolver', async () => {
+    // The counterpart above: the endpoints declare no reader of their own, so
+    // omitting the Session Controller's resolver leaves every call global.
+    const { ctx, session, controller } = await harness()
+    const request = { sessionId: session.id, jobId: 'bash-1' as JobId }
+    for (const [method, wires] of [['list', ['request']], ['follow', ['request']], ['kill', ['request']]] as const) {
+      expect(resourcesOf(controller, ctx.typert, method, wires, method === 'kill' ? { request } : { request, signal: NEVER }))
+        .toEqual([{ kind: 'global' }])
+    }
+  })
+
+  it('falls back to the global resource for a follow of an unowned job', async () => {
+    // An unowned job is observer-visible to any caller, so its request names
+    // no Session and the resolver has nothing to answer.
+    const { ctx, controller } = await harness()
+    installSessionResolver(ctx)
+    const args = { request: { jobId: 'bash-1' as JobId }, signal: NEVER }
+    expect(resourcesOf(controller, ctx.typert, 'follow', ['request'], args)).toEqual([{ kind: 'global' }])
+  })
+})
 
 describe('JobController.kill', () => {
   it('kills an owned running job without claiming the terminal report', async () => {

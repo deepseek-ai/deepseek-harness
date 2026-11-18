@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-26-malformed-charset-declaration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-26-malformed-charset-declaration.md
+/agent-note-malformed-charset-recovery-prefers-utf-8:
+  en: d8a759b84c36b308
+  zh: 3b6ff2eb5519afb1
+/agent-note-malformed-charset-recovery-prefers-utf-8/problem:
+  en: dce96445b3801a7f
+  zh: e026d26fa680556a
+/agent-note-malformed-charset-recovery-prefers-utf-8/decision:
+  en: ba74ad57757231ca
+  zh: 46999cd0100814ae
+/agent-note-malformed-charset-recovery-prefers-utf-8/alternatives-considered:
+  en: 9fafffb6a7a78a29
+  zh: ee1dcc27d0315e68
+/agent-note-malformed-charset-recovery-prefers-utf-8/consequences:
+  en: c8aad3cc3f02e81e
+  zh: 29d9313afd1c7b5b

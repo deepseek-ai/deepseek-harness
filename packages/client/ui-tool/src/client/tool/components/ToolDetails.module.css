@@ -180,6 +180,14 @@
   overflow-wrap: anywhere;
 }
 
+.root[data-compact] > .list > .item {
+  padding: 6px 10px;
+}
+
+.root[data-compact] .caption {
+  padding: 6px 10px 4px;
+}
+
 .description {
   margin: 6px 0;
   color: var(--dsw-alias-label-caption);
@@ -252,5 +260,7 @@
   cursor: pointer;
 }
 
-.path:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .path:hover { text-decoration: underline; }
+}
 .path:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }

@@ -52,3 +52,6 @@
   line-height: 1.5;
   white-space: normal;
 }
+
+.image[data-pan="available"] { cursor: grab; }
+.image[data-pan="active"] { cursor: grabbing; }

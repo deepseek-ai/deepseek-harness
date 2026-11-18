@@ -68,6 +68,9 @@
     },
     {
       "path": "../../util/workspace-path"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

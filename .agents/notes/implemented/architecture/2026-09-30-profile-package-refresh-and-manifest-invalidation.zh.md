@@ -113,5 +113,5 @@ binding 的 `getNearestParentPackageJSON` 只被 `package_json_reader` 自己调
 
 - 有 HMR 时，支持的包操作发布更新后的私有依赖，并在插件停止后移除不再需要的映射。没有 HMR 时，待生效的启动 bundle 停用会将后续发布延迟到重启，保留运行中插件的映射。
 - 在支持的线程内，package.json 配置读取使用更新后的字段；JSON 模块保留自己的重载行为。上述模块、loader 线程及 Worker 的独立限制仍然适用。
-- 包配置读取改由 JS 解析 package.json，需要与原生读取保持字段和错误语义一致；测试在 Node 22、24、26 上与原生读取逐项比较。
+- 包配置读取改由 JS 解析 package.json，需要与原生读取保持字段和错误语义一致；测试在 Node 24、26 上与原生读取逐项比较。
 - 依赖多个 Node internal 接口，Node 升级时需要重跑这些测试。

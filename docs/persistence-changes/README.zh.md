@@ -28,6 +28,8 @@ description: "审阅和维护已记录的会话持久化类型变更、对应 sc
 
 生成的[目录](../persistence-catalog.zh.md)提供可读声明和摘要；[schema 清单](../persistence-schema.json)包含规范化类型。根覆盖逻辑会话头、物理 JSONL 头行、事件封装以及每个仓库内声明的事件。被引用类型的变更会传递到每个受影响根的摘要。
 
+每个 `.schema.json` 文件存储一张节点表，键为节点子图摘要的前 16 位十六进制字符，每个根、类型或节点占一行。根和类型通过自身摘要定位其图，因此类型变更只改写变化的节点、其祖先节点以及受影响的摘要。生成器决定确切文本；校验器拒绝其他布局。
+
 每条带日期的记录有四个同目录文件：
 
 | 文件 | 职责 |
@@ -41,7 +43,7 @@ description: "审阅和维护已记录的会话持久化类型变更、对应 sc
 
 维护者通过 [`createPersistenceFinalizationCheckpoint`](../../scripts/persistence-finalization.ts) 捕获已确认格式，写入按版本命名的新检查点而不替换旧文件，并推进双语 `latestFinalizedVersion`。该函数要求当前 schema 与完整确认历史一致。提交前运行常规验证器。
 
-[记录模板](../../.agents/skills/dsh-doc/templates/persistence-change.md)定义人工编写的格式。创建记录时可以提供双语说明输入，由命令生成机器声明、快照、目录对和一致性记录。验证器从英文文件读取一次机器声明，并检查中文声明是否相同。声明列出每个受影响的根、其前驱记录、变更后摘要和兼容性决策。新根没有前驱；删除操作没有变更后 schema，并保留显式删除标记。
+[记录模板](../../.agents/skills/dsh-doc-writing/templates/persistence-change.md)定义人工编写的格式。创建记录时可以提供双语说明输入，由命令生成机器声明、快照、目录对和一致性记录。验证器从英文文件读取一次机器声明，并检查中文声明是否相同。声明列出每个受影响的根、其前驱记录、变更后摘要和兼容性决策。新根没有前驱；删除操作没有变更后 schema，并保留显式删除标记。
 
 <a id="compatibility-rules"></a>
 ## 兼容性规则

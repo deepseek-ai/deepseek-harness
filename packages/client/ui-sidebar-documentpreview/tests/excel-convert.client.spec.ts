@@ -3,10 +3,10 @@ import ExcelJS from 'exceljs'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { convertExcel } from '../src/client/excel/convert.ts'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { excelFixture, meetingMinutesFixture } from './excel-fixture.ts'
 
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 
 describe('Excel conversion', () => {
   it('keeps values, dates, cached formulas, styles, merges, dimensions, visibility, and frozen headings', async () => {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Armazenamento local de anexos",
+    "description": "Salve anexos como fotos na sessão e leia-os de acordo com o identificador de conteúdo."
+  }
+}

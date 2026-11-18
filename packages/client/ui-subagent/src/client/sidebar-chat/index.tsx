@@ -106,7 +106,7 @@ function subagentChatResourceProvider(sessions: ISessions): ResourceProvider<'su
       const address = parseSubagentChatAddress(resourceAddress)
       if (address === undefined) throw new Error(`ui-subagent: invalid chat resource address "${resourceAddress}"`)
       if (isAbortRequested(signal)) return
-      const reference = sessions.retain(address, { source: 'sidebarChat', signal })
+      const reference = sessions.retain(address, { source: 'sidebarChat', facets: { conversation: true }, signal })
       try {
         yield { ok: true, value: { address, reference } }
         await waitForAbort(signal)
@@ -136,10 +136,7 @@ export function ConversationSlotPanel({
     || session.running
   const shellPhase = active ? 'active' : session.promptAttempted ? 'engaging' : 'blank'
   const summaryBlank = useSessions(state => state.byId[sessionId]?.blank)
-  const parentAvailabilityPending = session.subagent?.address.mode === 'continuable'
-    && session.subagent.parentAvailable === undefined
   const settling = (shellPhase === 'blank' && session.openState === 'loading' && summaryBlank !== true)
-    || parentAvailabilityPending
   const hero = shellPhase === 'blank' && (session.openState === 'open' || summaryBlank === true)
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
   return renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero }, {

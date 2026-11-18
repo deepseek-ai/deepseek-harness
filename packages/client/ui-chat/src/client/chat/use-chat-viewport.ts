@@ -26,6 +26,8 @@ interface ViewportEvents {
   interact: () => void
   /** Any reading gesture, before paging ownership is consulted. */
   intent?: () => void
+  /** Recheck a prepared history page after an input or transition settles. */
+  history?: () => void
 }
 
 interface ViewportElements {
@@ -47,6 +49,21 @@ export interface FoldReader {
   readonly pending: () => boolean
 }
 
+/** A top-level row a closing shrink may keep still, measured before the rows close. */
+interface ShrinkAnchor {
+  readonly element: HTMLElement
+  /** Distance from the row's top to the end of the content last painted. */
+  readonly fromEnd: number
+}
+
+/** Layout measured at the first instant hide of a commit; only the size observation of that frame uses it. */
+interface ClosingLayout {
+  /** The first visible row, then the rows above it within one scrollport. */
+  readonly rows: readonly ShrinkAnchor[]
+  /** Content height without fold room when the rows were measured. */
+  readonly content: number
+}
+
 interface PagingPosition {
   readonly row: HTMLElement
   readonly position: ChatScrollPosition
@@ -64,9 +81,23 @@ export class ChatViewport {
   private turns: ReturnType<ChatSnapshot['navigation']['items']> = []
   private observation: { top: number; landing: ViewportLanding | null } = { top: 0, landing: null }
   private paging: PagingPosition | null = null
+  private historyPrepend: PagingPosition | null = null
   private reader: FoldReader | null = null
+  private historyEdge: HTMLElement | null = null
+  private historyHeight = 0
+  private historyScrolling = new Set<EventTarget>()
+  private historyPointer = false
+  private historyTouch = false
+  /** Rows measured before an instant close; see {@link ChatViewport.keepAboveClosing}. */
+  private closing: ClosingLayout | null = null
+  /** Discards a closing measurement that no size observation consumed by the end of its frame. */
+  private closingFrame: number | null = null
+  /** Content height without fold room at the latest size observation: the content that frame painted. */
+  private settledContent = 0
   /** The pending or running fold batch lands at the tail. */
   private tailRequested = false
+  /** The tail request came from the reader's own input rather than from a content change. */
+  private tailInput = false
   /** Switches the running batch to a tail landing; null while no batch runs. */
   private retarget: (() => void) | null = null
   /** Transition state and row callbacks owned by this viewport's attachment. */
@@ -75,6 +106,7 @@ export class ChatViewport {
     (active) => {
       if (this.elements !== null) this.elements.scroller.style.overflowAnchor = active ? 'none' : ''
     },
+    (element) => { this.measureClosing(element) },
   )
 
   /**
@@ -90,14 +122,26 @@ export class ChatViewport {
     const elements = { list, column, scroller, composer, spacer }
     this.elements = elements
     if (spacer !== null) spacer.style.height = ''
+    scroller.addEventListener('scroll', this.onHistoryScroll, { passive: true, capture: true })
+    scroller.addEventListener('pointerdown', this.onHistoryPointerDown, { passive: true, capture: true })
+    scroller.addEventListener('touchstart', this.onHistoryTouch, { passive: true, capture: true })
+    for (const type of ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'transitionend', 'transitioncancel']) {
+      scroller.ownerDocument.addEventListener(type, this.onHistoryRelease, true)
+    }
     scroller.addEventListener('scroll', this.onScroll, { passive: true })
     scroller.addEventListener('scrollend', this.onScrollEnd, { passive: true, capture: true })
     for (const type of READING_INTENTS) scroller.addEventListener(type, this.onIntent, { passive: true, capture: true })
     if (typeof ResizeObserver !== 'undefined') {
-      this.observer = new ResizeObserver(() => {
+      this.observer = new ResizeObserver((entries) => {
         if (this.elements !== elements) return
+        // Read while layout is still clean, before this callback writes room or scroll positions. Those writes
+        // leave the content height unchanged, so it is also the content this frame paints.
+        if (entries.some(entry => entry.target === elements.scroller)) this.historyHeight = elements.scroller.clientHeight
+        this.settledContent = elements.scroller.scrollHeight - this.spacerHeight()
+        this.keepAboveClosing()
         this.reclaimBelow()
         this.invalidate()
+        this.pruneHistoryScrolling()
         this.events?.resize()
       })
       this.observer.observe(column)
@@ -108,9 +152,22 @@ export class ChatViewport {
 
   /** Disconnect DOM resources and clear observations for the detached view. */
   detach(): void {
+    this.historyPrepend = null
     this.stopPreserving()
     this.motion.clear()
     if (this.elements !== null) this.elements.scroller.style.overflowAnchor = ''
+    this.dropClosing()
+    const scroller = this.elements?.scroller
+    scroller?.removeEventListener('scroll', this.onHistoryScroll, true)
+    scroller?.removeEventListener('pointerdown', this.onHistoryPointerDown, true)
+    scroller?.removeEventListener('touchstart', this.onHistoryTouch, true)
+    for (const type of ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'transitionend', 'transitioncancel']) {
+      scroller?.ownerDocument.removeEventListener(type, this.onHistoryRelease, true)
+    }
+    this.historyHeight = 0
+    this.historyScrolling.clear()
+    this.historyPointer = false
+    this.historyTouch = false
     this.elements?.scroller.removeEventListener('scroll', this.onScroll)
     this.elements?.scroller.removeEventListener('scrollend', this.onScrollEnd, true)
     for (const type of READING_INTENTS) this.elements?.scroller.removeEventListener(type, this.onIntent, true)
@@ -119,6 +176,7 @@ export class ChatViewport {
     this.elements = null
     this.events = null
     this.tailRequested = false
+    this.tailInput = false
     this.retarget = null
     this.turns = []
     this.observation = { top: 0, landing: null }
@@ -180,13 +238,16 @@ export class ChatViewport {
   /**
    * Land the pending or running fold batch at the tail instead of starting a separate scroll.
    * @param follow - follow controller whose native animation yields to the batch.
+   * @param input - whether the reader's own input requests the landing; a content change, such as a Turn
+   * ending, requests it in place of the immediate follow.
    * @returns whether a fold owns the tail movement.
    */
-  followInputFold(follow: ScrollFollow): boolean {
+  followInputFold(follow: ScrollFollow, input: boolean): boolean {
     // Rows still closing on CSS transitions after a batch have no batch to consume the request.
     if (this.elements === null || this.reader === null || !this.motion.inputActive()) return false
     this.interruptFollow(follow)
     this.tailRequested = true
+    this.tailInput ||= input
     this.retarget?.()
     return true
   }
@@ -246,11 +307,27 @@ export class ChatViewport {
       begin: (boxes) => {
         // Own input lands at the tail; otherwise an unsampled reading movement outranks follow intent.
         tail = this.tailRequested || (follow.active && !reader.pending())
+        const input = this.tailInput
         this.tailRequested = false
+        this.tailInput = false
         viewportTop = elements.scroller.getBoundingClientRect().top
         start = elements.scroller.scrollTop
         const originalRoom = this.spacerHeight()
         initialHeight = Math.max(elements.column.offsetHeight, elements.scroller.scrollHeight - originalRoom)
+        if (tail && !input) {
+          // The batch replaces the immediate follow of a reader pinned to the tail, following content that
+          // overflows with no fold room: content that grew outside the batch since that paint, such as a Turn's
+          // duration control, is taken before the first frame as following takes streaming growth, so the
+          // batch only animates its own rows.
+          const pinned = originalRoom === 0 && this.settledContent > elements.scroller.clientHeight
+            && follow.active && !reader.pending() && !follow.animating
+          const external = elements.scroller.scrollHeight - originalRoom - this.settledContent
+          if (external > 0.5 && pinned) {
+            elements.scroller.scrollTop = start + external
+            start = elements.scroller.scrollTop
+            this.observation = { top: start, landing: null }
+          }
+        }
         let above = 0
         const below: HTMLElement[] = []
         for (const box of boxes) {
@@ -338,6 +415,7 @@ export class ChatViewport {
       finish: (cancelled) => {
         this.retarget = null
         this.tailRequested = false
+        this.tailInput = false
         if (this.elements !== elements) return
         // Commit the final sibling margins while their fold transition override still applies.
         void elements.column.offsetHeight
@@ -405,8 +483,129 @@ export class ChatViewport {
     return null
   }
 
+  /**
+   * Measure, before the first row of a commit closes at once, the rows a following reader's shrink keeps
+   * still: the first row visible in the last painted layout, the rows after it that were on screen, and the
+   * rows above it within one scrollport.
+   * Rows above the closing rows keep their painted screen positions, which the commit did not move; the same
+   * commit can add rows between them and the closing rows, as a Turn's duration control does, so rows from
+   * the closing rows on are placed against the current end. Reads happen only when rows close, never on the
+   * following path's size observations. A measurement the same frame's size observation does not use is
+   * discarded after that frame.
+   * @param element - the first row of this commit to close.
+   */
+  private measureClosing(element: HTMLElement): void {
+    const elements = this.elements
+    const reader = this.reader
+    if (elements === null || reader === null || this.closing !== null || !element.isConnected) return
+    if (!reader.follow.active || reader.follow.animating || reader.pending()) return
+    if (this.paging !== null || this.motion.foldActive() || this.motion.inputActive()) return
+    const scroller = elements.scroller
+    const scrollHeight = scroller.scrollHeight
+    const height = scroller.clientHeight
+    // The commit has not moved the scroll position, so it is the painted one, within the follow threshold too.
+    const painted = scroller.scrollTop + height
+    const origin = scroller.getBoundingClientRect().top - scroller.scrollTop
+    const rows = (elements.column.querySelector(':scope > [data-slot="conversation.chat.flow"]') ?? elements.column).children
+    // End is the content end each row is placed against: painted for rows above the closing rows.
+    const end = (row: Element): number => row !== element && !row.contains(element)
+      && (element.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING) !== 0 ? painted : scrollHeight
+    const screen = (row: Element, offset: number): number => offset - origin - (end(row) - height)
+    let low = 0
+    let high = rows.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      const row = rows[middle] as Element
+      if (screen(row, row.getBoundingClientRect().bottom) > 0) high = middle
+      else low = middle + 1
+    }
+    let first = -1
+    for (let index = low; index < rows.length && first < 0; index++) {
+      const row = rows[index] as HTMLElement
+      const rect = row.getBoundingClientRect()
+      if (screen(row, rect.top) >= height) break
+      if (rect.height > 0 && !row.hasAttribute('hidden')) first = index
+    }
+    if (first < 0) return
+    const anchors: ShrinkAnchor[] = []
+    const add = (row: HTMLElement, rect: DOMRect): void => {
+      if (rect.height > 0 && !row.hasAttribute('hidden')) anchors.push({ element: row, fromEnd: end(row) - (rect.top - origin) })
+    }
+    add(rows[first] as HTMLElement, (rows[first] as HTMLElement).getBoundingClientRect())
+    // When the first visible row closes, the reader's eyes are on the rows that follow it on screen.
+    for (let index = first + 1; index < rows.length; index++) {
+      const row = rows[index] as HTMLElement
+      const rect = row.getBoundingClientRect()
+      if (screen(row, rect.top) >= height) break
+      add(row, rect)
+    }
+    for (let index = first - 1; index >= 0; index--) {
+      const row = rows[index] as HTMLElement
+      const rect = row.getBoundingClientRect()
+      if (screen(row, rect.bottom) <= -height) break
+      add(row, rect)
+    }
+    this.closing = { rows: anchors, content: scrollHeight - this.spacerHeight() }
+    if (typeof requestAnimationFrame === 'function') {
+      // This frame's size observation runs before the second callback; nothing later may use the measurement.
+      this.closingFrame = requestAnimationFrame(() => {
+        this.closingFrame = requestAnimationFrame(() => {
+          this.closingFrame = null
+          this.closing = null
+        })
+      })
+    }
+  }
+
+  private dropClosing(): void {
+    this.closing = null
+    if (this.closingFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.closingFrame)
+    this.closingFrame = null
+  }
+
+  /**
+   * Keep a following reader's content still after rows closed at once, for example work details at Turn
+   * completion: the first visible row keeps its screen position, or, when it closed, the first surviving row
+   * that followed it on screen, else the nearest surviving row above it. Room below fills the gap, at most half
+   * the scrollport; beyond that the content end stops at the scrollport's middle. Called from the size
+   * observation, after layout and before paint; only the observation of the frame that closed the rows uses
+   * the measurement, and only while the reader still follows the tail with no fold batch, native animation,
+   * unsampled movement, or paging writing positions.
+   */
+  private keepAboveClosing(): void {
+    const closing = this.closing
+    const elements = this.elements
+    const reader = this.reader
+    if (closing === null) return
+    this.dropClosing()
+    if (elements === null || reader === null || !reader.follow.active || reader.follow.animating || reader.pending()) return
+    if (this.paging !== null || this.motion.foldActive() || this.motion.inputActive()) return
+    const scroller = elements.scroller
+    const content = scroller.scrollHeight - this.spacerHeight()
+    // Growth in the same commit can outweigh the closed rows; nothing then shrank to compensate.
+    if (content >= closing.content - 0.5) return
+    const height = scroller.clientHeight
+    const origin = scroller.getBoundingClientRect().top - scroller.scrollTop
+    const cap = height / 2
+    let top = content + cap - height
+    for (const row of closing.rows) {
+      if (!row.element.isConnected || row.element.closest('[hidden]') !== null) continue
+      const rect = row.element.getBoundingClientRect()
+      if (rect.height === 0) continue
+      top = rect.top - origin - (height - row.fromEnd)
+      break
+    }
+    if (top + height - content > cap) top = content + cap - height
+    top = Math.max(0, top)
+    this.setSpacer(top === 0 ? 0 : Math.max(0, top + height - content))
+    if (scroller.scrollTop !== top) scroller.scrollTop = top
+    const metrics = scrollMetrics(scroller)
+    this.observation = { top: metrics.top, landing: { metrics, position: null, turn: this.latestTurn } }
+  }
+
   /** Clear fold reservations after a display-mode change, allowing the scroll range to shrink. */
   resetBelow(): void {
+    this.dropClosing()
     this.setSpacer(0)
     this.invalidate()
   }
@@ -598,13 +797,27 @@ export class ChatViewport {
     return metrics === null ? null : this.write(position.scrollTop, metrics, null)
   }
 
+  /** Capture a manual paging anchor without consulting automatic-consumption blockers. */
+  beginManualPaging(): void {
+    if (this.elements === null) return
+    if (this.elements.scroller.scrollTop <= 0.5) this.beginPaging()
+    else {
+      this.beginPreserving()
+      if (!this.preserving) this.beginPaging()
+    }
+  }
+
   /** Retain the first eligible transcript seat in DOM order; selection reads no geometry. */
   beginPaging(): void {
     this.stopPreserving()
-    const row = this.elements?.list.querySelector<HTMLElement>(
+    const row = this.pagingAnchor()
+    if (row !== null) this.retain(row)
+  }
+
+  private pagingAnchor(): HTMLElement | null {
+    return this.elements?.list.querySelector<HTMLElement>(
       '[data-chat-paging-anchor]:not(:empty):not([hidden]):not([hidden] *)',
-    )
-    if (row != null) this.retain(row)
+    ) ?? null
   }
 
   /**
@@ -619,18 +832,16 @@ export class ChatViewport {
     this.retain(row, position)
   }
 
-  private retain(row: HTMLElement, position?: ChatScrollPosition, groupTop?: number): PagingPosition | null {
+  private measurePaging(row: HTMLElement, position?: ChatScrollPosition, previousGroup?: PagingPosition['group']): PagingPosition | null {
     const elements = this.elements
     const key = row.dataset.chatAnchorKey
     if (elements === null || key === undefined) return null
-    const previous = this.paging?.group
-    if (previous != null) this.observer?.unobserve(previous.content)
     const top = row.getBoundingClientRect().top
     const body = row.closest<HTMLElement>('[data-step-process-body]')
     const content = body?.querySelector<HTMLElement>('[data-step-process-content]')
     const group = body === null || content == null ? null
-      : { body, content, top: groupTop ?? top - body.getBoundingClientRect().top }
-    this.paging = {
+      : { body, content, top: previousGroup?.top ?? top - body.getBoundingClientRect().top }
+    return {
       row, group,
       position: position ?? {
         anchorKey: key,
@@ -638,8 +849,19 @@ export class ChatViewport {
         scrollTop: elements.scroller.scrollTop,
       },
     }
-    if (group !== null) this.observer?.observe(group.content)
-    return this.paging
+  }
+
+  private retain(row: HTMLElement, position?: ChatScrollPosition): PagingPosition | null {
+    const paging = this.measurePaging(row, position)
+    if (paging === null) return null
+    this.retainPaging(paging)
+    return paging
+  }
+
+  private retainPaging(paging: PagingPosition): void {
+    this.stopPreserving()
+    this.paging = paging
+    if (paging.group !== null) this.observer?.observe(paging.group.content)
   }
 
   /** Release paging ownership and its content-size observation. */
@@ -661,24 +883,33 @@ export class ChatViewport {
    * @returns the actual landing, or null when no visible retained row remains.
    */
   preserve(): ViewportLanding | null {
-    let paging = this.paging
+    const paging = this.resolvePaging(this.paging)
+    if (paging === null) {
+      this.stopPreserving()
+      return null
+    }
+    if (paging !== this.paging) this.retainPaging(paging)
+    return this.applyPaging(paging)
+  }
+
+  private resolvePaging(paging: PagingPosition | null): PagingPosition | null {
     const elements = this.elements
     if (paging === null || elements === null) return null
     if (!elements.list.contains(paging.row)) {
       // Segmentation can remount the same semantic row under another group.
       const replacement = this.anchor(paging.position.anchorKey)
-      if (replacement === null) {
-        this.stopPreserving()
-        return null
-      }
-      paging = this.retain(replacement, paging.position, paging.group?.top)
+      if (replacement === null) return null
+      paging = this.measurePaging(replacement, paging.position, paging.group)
       if (paging === null) return null
     }
+    return paging.row.closest('[hidden]') !== null || paging.row.matches(':empty') ? null : paging
+  }
+
+  /** Restore the captured screen position; native anchoring already applied to this change needs no further correction. */
+  private applyPaging(paging: PagingPosition): ViewportLanding | null {
+    const elements = this.elements
+    if (elements === null) return null
     const { row, group, position } = paging
-    if (row.closest('[hidden]') !== null || row.matches(':empty')) {
-      this.stopPreserving()
-      return null
-    }
     if (group !== null && group.body.contains(row)) {
       const top = row.getBoundingClientRect().top - group.body.getBoundingClientRect().top
       const metrics = scrollMetrics(group.body)
@@ -748,6 +979,103 @@ export class ChatViewport {
     return landing
   }
 
+  /**
+   * Track the history control for request-distance checks.
+   * @param element - stable history control, or null when its view unmounts.
+   */
+  readonly setHistoryEdge = (element: HTMLDivElement | null): void => {
+    this.historyEdge = element
+  }
+
+  private pruneHistoryScrolling(): void {
+    for (const target of this.historyScrolling) {
+      if (!(target instanceof HTMLElement) || this.elements?.scroller.contains(target) !== true) {
+        this.historyScrolling.delete(target)
+      }
+    }
+  }
+
+  /**
+   * Confirm the actual history distance immediately before an automatic request.
+   * @returns whether the control is within two viewport heights.
+   */
+  confirmHistoryStart(): boolean {
+    const scroller = this.elements?.scroller
+    if (scroller === undefined || this.historyEdge === null || this.historyHeight <= 0) return false
+    const distance = scroller.getBoundingClientRect().top - this.historyEdge.getBoundingClientRect().bottom
+    return distance <= this.historyHeight * 2
+  }
+
+  /**
+   * Expose held input to history status copy.
+   * @returns whether a touch or pointer remains down.
+   */
+  get historyInputHeld(): boolean { return this.historyTouch || this.historyPointer }
+
+  /**
+   * Select consumption behavior from current input and motion state.
+   * @returns the blocker or positioning path for a prepared page.
+   */
+  historyConsumption(): 'motion' | 'touch' | 'pointer' | 'inner-scroll' | 'unavailable' | 'native' | 'preserve' | 'prepend' {
+    const elements = this.elements
+    if (elements === null) return 'unavailable'
+    if (this.historyTouch) return 'touch'
+    if (this.historyScrolling.size > 0
+      && (this.historyScrolling.size !== 1 || !this.historyScrolling.has(elements.scroller))) return 'inner-scroll'
+    if (this.motion.active() || this.reader?.follow.animating) return 'motion'
+    if (this.historyPointer) return 'pointer'
+    if (this.historyScrolling.size === 0) return elements.scroller.scrollTop <= 0.5 ? 'prepend' : 'preserve'
+    if (this.preserving || typeof CSS === 'undefined' || !CSS.supports('overflow-anchor', 'auto')) return 'unavailable'
+    return elements.scroller.scrollTop <= 0.5 ? 'prepend' : 'native'
+  }
+
+  /**
+   * Capture one top-edge prepend anchor without acquiring continuous scroll ownership.
+   * @returns whether an old paging row was captured.
+   */
+  beginHistoryPrepend(): boolean {
+    const row = this.pagingAnchor()
+    this.historyPrepend = row === null ? null : this.measurePaging(row)
+    return this.historyPrepend !== null
+  }
+
+  /** Clear an unapplied one-shot correction when its page was not consumed. */
+  cancelHistoryPrepend(): void { this.historyPrepend = null }
+
+  /**
+   * Correct a committed prepend once, then release positioning ownership.
+   * @returns the compensated landing for reading memory, or null when no anchor remains.
+   */
+  finishHistoryPrepend(): ViewportLanding | null {
+    const pending = this.historyPrepend
+    this.historyPrepend = null
+    const paging = this.resolvePaging(pending)
+    return paging === null ? null : this.applyPaging(paging)
+  }
+
+  private readonly onHistoryScroll = (event: Event): void => {
+    if (event.target === this.elements?.scroller || event.target instanceof HTMLElement
+      && event.target.hasAttribute('data-step-process-body')) {
+      this.historyScrolling.add(event.target)
+    }
+  }
+
+  private readonly onHistoryPointerDown = (): void => {
+    this.historyPointer = true
+    this.events?.history?.()
+  }
+  private readonly onHistoryTouch = (): void => {
+    this.historyTouch = true
+    this.events?.history?.()
+  }
+  private readonly onHistoryRelease = (event: Event): void => {
+    if (event.type === 'pointerup' || event.type === 'pointercancel') this.historyPointer = false
+    if (event.type === 'touchend' || event.type === 'touchcancel') {
+      this.historyTouch = typeof TouchEvent !== 'undefined' && event instanceof TouchEvent && event.touches.length > 0
+    }
+    this.events?.history?.()
+  }
+
   private readonly onScroll = (event: Event): void => {
     if (this.elements === null || event.target !== this.elements.scroller) return
     if (this.observation.landing !== null && this.elements.scroller.scrollTop === this.observation.top) return
@@ -761,6 +1089,8 @@ export class ChatViewport {
   }
 
   private readonly onScrollEnd = (event: Event): void => {
+    if (event.target !== null) this.historyScrolling.delete(event.target)
+    this.events?.history?.()
     if (event.target === this.elements?.scroller) {
       this.events?.scrollEnd(true)
       this.reclaimBelow()

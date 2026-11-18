@@ -114,7 +114,7 @@ function resourceLinkText(block: Extract<AcpContentBlock, { type: 'resource_link
  * writing; cancellation after a successful content-addressed write may leave an
  * unreachable object but never queues a late user message.
  * @param ctx - bridge context carrying attachment and model services.
- * @param route - selection pinned to the accepted prompt.
+ * @param route - Agent model selection current at prompt admission.
  * @param prompt - untrusted ACP prompt blocks in wire order.
  * @param imageEnabled - capability result advertised during initialization.
  * @param signal - admission cancellation signal.

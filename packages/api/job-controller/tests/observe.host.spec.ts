@@ -1,11 +1,13 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { JobController } from '../src/index.ts'
 import { observeJobOutput } from '../src/observe.ts'
@@ -136,7 +138,7 @@ describe('observeJobOutput', () => {
 
     const abortUnknown = new AbortController()
     await expect(collect(
-      observeJobOutput(ctx.jobs, { jobId: JobId('bash-999') }, OBSERVE, abortUnknown.signal),
+      observeJobOutput(ctx.jobs, { jobId: brandString<JobId>('bash-999') }, OBSERVE, abortUnknown.signal),
       1,
       abortUnknown,
     )).rejects.toThrow(/unknown job/)
@@ -215,6 +217,7 @@ describe('JobController', () => {
   async function controllerHarness() {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(TypertRegistry)
@@ -224,11 +227,12 @@ describe('JobController', () => {
   }
 
   async function liveOwner(ctx: Context, rawId: string): Promise<Agent> {
-    const session = ctx.sessions.create(SessionId(rawId))
+    const session = ctx.sessions.create(brandString<SessionId>(rawId))
     const owner: Agent = {
       id: session.id,
       options: {},
       session,
+      model: unsupportedModel(),
       inbox: unsupportedInbox(),
       status: 'idle',
       ctx,
@@ -247,6 +251,7 @@ describe('JobController', () => {
   it('waits for the job registry instead of serving without one', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TypertRegistry)
     ctx.plugin(JobController, {})

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PTC Werkzeugausführung",
+    "description": "Führt Tools über run_code-Programme aus und generiert SDK-Bindungen."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "stockage",
+    "description": "Gestion unifiée du backend de stockage et des méthodes d'accès aux données utilisées par les plug-ins."
+  }
+}

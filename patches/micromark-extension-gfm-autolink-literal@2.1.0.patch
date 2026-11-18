@@ -1,0 +1,198 @@
+diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
+index 904e27200ae4980183beda525d33feef70c2e7f7..1e05880bc1e7df0e05137811cd182f10872985df 100644
+--- a/dev/lib/syntax.js
++++ b/dev/lib/syntax.js
+@@ -16,6 +16,7 @@ const wwwPrefix = {tokenize: tokenizeWwwPrefix, partial: true}
+ const domain = {tokenize: tokenizeDomain, partial: true}
+ const path = {tokenize: tokenizePath, partial: true}
+ const trail = {tokenize: tokenizeTrail, partial: true}
++const astralPunctuation = {tokenize: tokenizeAstralPunctuation, partial: true}
+ const emailDomainDotTrail = {
+   tokenize: tokenizeEmailDomainDotTrail,
+   partial: true
+@@ -659,10 +660,15 @@ function tokenizePath(effects, ok) {
+       return effects.check(trail, ok, pathAtPunctuation)(code)
+     }
+ 
++    if (highSurrogate(code)) {
++      return effects.check(astralPunctuation, ok, pathAtPunctuation)(code)
++    }
++
+     if (
+       code === codes.eof ||
+       markdownLineEndingOrSpace(code) ||
+-      unicodeWhitespace(code)
++      unicodeWhitespace(code) ||
++      nonAsciiPunctuation(code)
+     ) {
+       return ok(code)
+     }
+@@ -762,11 +768,16 @@ function tokenizeTrail(effects, ok, nok) {
+       // So is whitespace.
+       code === codes.eof ||
+       markdownLineEndingOrSpace(code) ||
+-      unicodeWhitespace(code)
++      unicodeWhitespace(code) ||
++      nonAsciiPunctuation(code)
+     ) {
+       return ok(code)
+     }
+ 
++    if (highSurrogate(code)) {
++      return effects.check(astralPunctuation, ok, nok)(code)
++    }
++
+     return nok(code)
+   }
+ 
+@@ -932,6 +943,56 @@ function previousEmail(code) {
+   return !(code === codes.slash || gfmAtext(code))
+ }
+ 
++/**
++ * Non-ASCII punctuation or symbol, such as `。` or `，`, which ends a literal
++ * in CJK prose.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function nonAsciiPunctuation(code) {
++  return code !== codes.eof && code > 127 && unicodePunctuation(code)
++}
++
++/**
++ * Whether `code` is a UTF-16 high surrogate, which starts a character outside
++ * the BMP such as `😀`.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function highSurrogate(code) {
++  return code !== codes.eof && code >= 0xd800 && code <= 0xdbff
++}
++
++/**
++ * Check whether a surrogate pair is punctuation or a symbol.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeAstralPunctuation(effects, ok, nok) {
++  /** @type {number} */
++  let high
++
++  return start
++
++  /** @type {State} */
++  function start(code) {
++    high = /** @type {number} */ (code)
++    effects.consume(code)
++    return low
++  }
++
++  /** @type {State} */
++  function low(code) {
++    return code !== codes.eof && code >= 0xdc00 && code <= 0xdfff &&
++      /[\p{P}\p{S}]/u.test(String.fromCharCode(high, code))
++      ? ok(code)
++      : nok(code)
++  }
++}
++
+ /**
+  * @param {Code} code
+  * @returns {boolean}
+diff --git a/lib/syntax.js b/lib/syntax.js
+index dffbaf15146b34d3b3f634286629ccb148866f4c..60b1d5d43811b31592728b4539c5f4d43174dd35 100644
+--- a/lib/syntax.js
++++ b/lib/syntax.js
+@@ -19,6 +19,10 @@ const trail = {
+   tokenize: tokenizeTrail,
+   partial: true
+ };
++const astralPunctuation = {
++  tokenize: tokenizeAstralPunctuation,
++  partial: true
++};
+ const emailDomainDotTrail = {
+   tokenize: tokenizeEmailDomainDotTrail,
+   partial: true
+@@ -584,7 +588,10 @@ function tokenizePath(effects, ok) {
+     if (code === 33 || code === 34 || code === 38 || code === 39 || code === 41 || code === 42 || code === 44 || code === 46 || code === 58 || code === 59 || code === 60 || code === 63 || code === 93 || code === 95 || code === 126) {
+       return effects.check(trail, ok, pathAtPunctuation)(code);
+     }
+-    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
++    if (highSurrogate(code)) {
++      return effects.check(astralPunctuation, ok, pathAtPunctuation)(code);
++    }
++    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || nonAsciiPunctuation(code)) {
+       return ok(code);
+     }
+     effects.consume(code);
+@@ -665,9 +672,12 @@ function tokenizeTrail(effects, ok, nok) {
+     // `<` is an end.
+     code === 60 ||
+     // So is whitespace.
+-    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
++    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || nonAsciiPunctuation(code)) {
+       return ok(code);
+     }
++    if (highSurrogate(code)) {
++      return effects.check(astralPunctuation, ok, nok)(code);
++    }
+     return nok(code);
+   }
+ 
+@@ -816,6 +826,52 @@ function previousEmail(code) {
+   return !(code === 47 || gfmAtext(code));
+ }
+ 
++/**
++ * Non-ASCII punctuation or symbol, such as `。` or `，`, which ends a literal
++ * in CJK prose.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function nonAsciiPunctuation(code) {
++  return code !== null && code > 127 && unicodePunctuation(code);
++}
++
++/**
++ * Whether `code` is a UTF-16 high surrogate, which starts a character outside
++ * the BMP such as `😀`.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function highSurrogate(code) {
++  return code !== null && code >= 0xd800 && code <= 0xdbff;
++}
++
++/**
++ * Check whether a surrogate pair is punctuation or a symbol.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeAstralPunctuation(effects, ok, nok) {
++  /** @type {number} */
++  let high;
++  return start;
++
++  /** @type {State} */
++  function start(code) {
++    high = /** @type {number} */code;
++    effects.consume(code);
++    return low;
++  }
++
++  /** @type {State} */
++  function low(code) {
++    return code !== null && code >= 0xdc00 && code <= 0xdfff && /[\p{P}\p{S}]/u.test(String.fromCharCode(high, code)) ? ok(code) : nok(code);
++  }
++}
++
+ /**
+  * @param {Code} code
+  * @returns {boolean}

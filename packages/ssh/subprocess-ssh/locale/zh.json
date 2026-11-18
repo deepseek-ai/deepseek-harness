@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 子进程",
+    "description": "通过共享的 POSIX SSH 辅助程序提供子进程和终端。"
+  }
+}

@@ -4,8 +4,9 @@ import { SessionLogOffset, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session
 import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-agent/types'
-import type {} from '@deepseek-ai/dsh-tools/types'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { AskUserQuestionAnswerItem, AskUserQuestionItem, AskUserQuestionOption, PendingUserQuestion, SettledUserQuestion, UserQuestionProjectionView } from './types.ts'
 
@@ -77,7 +78,7 @@ const questionSchema = z.object({
 }))
 
 const pendingQuestionsSchema: z.ZodType<readonly PendingUserQuestion[]> = z.array(z.object({
-  callId: z.string().min(1).transform(ToolCallId),
+  callId: z.string().min(1).transform(brandString<ToolCallId>),
   questions: z.array(questionSchema).min(1),
   state: z.enum(['open', 'continued']),
 }).strict()).superRefine((active, context) => {
@@ -97,7 +98,7 @@ const answerSchema = z.object({
 }))
 
 const settledQuestionsSchema: z.ZodType<readonly SettledUserQuestion[]> = z.array(z.object({
-  callId: z.string().min(1).transform(ToolCallId),
+  callId: z.string().min(1).transform(brandString<ToolCallId>),
   answers: z.array(answerSchema),
 }).strict())
 
@@ -329,9 +330,3 @@ export const userQuestionProjectionDefinition = {
   wire: { viewSchema: projectionViewSchema, view: state => state.questions },
   stateVersion: 2,
 } satisfies ProjectionDefinition<'userQuestions', UserQuestionProjectionState>
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    userQuestions: UserQuestionProjectionState
-  }
-}

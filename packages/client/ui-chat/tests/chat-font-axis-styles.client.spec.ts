@@ -76,6 +76,13 @@ describe('chat flow font-size axis', () => {
     ]))
   })
 
+  it('the inherited-history caption glyph scales with its label', () => {
+    expect(declarationsFrom(read('MessageItem.module.css'), '.inheritedHistoryIcon')).toEqual(expect.arrayContaining([
+      'width: calc(14px + var(--dsh-content-font-delta, 0px))',
+      'height: calc(14px + var(--dsh-content-font-delta, 0px))',
+    ]))
+  })
+
   it('expanded bodies indent by 22px + delta so content stays under the shifted title start', () => {
     // The DisclosureRow title starts at leading (16 + delta) + gap 6; a fixed
     // 22px indent would misalign at every non-default size.
@@ -161,8 +168,8 @@ describe('chat flow font-size axis', () => {
     const empty = declarationsFrom(css, emptySelector)
     expect(empty).toContain('height: 0')
     expect(empty).not.toContain('display: none')
-    expect(css).toContain(`:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(${emptySelector})`)
-    expect(css).toContain(`~ :not([hidden]):not(${emptySelector})`)
+    expect(css).toContain(`:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.textInteraction):not(${emptySelector})`)
+    expect(css).toContain(`~ :not([hidden]):not(.textInteraction):not(${emptySelector})`)
   })
 
   it('the interrupted-turn tag stays fixed like the dense token variants', () => {

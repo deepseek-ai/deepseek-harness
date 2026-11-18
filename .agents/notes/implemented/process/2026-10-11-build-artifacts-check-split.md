@@ -18,41 +18,25 @@ Each command does only its own job.
 
 | Command | Responsibility | Steps | Scheduling | Client build record |
 |---|---|---|---|---|
-| `pnpm run build:artifacts` | Produces every artifact of `build`; package projects are fully type-checked as usual, the two aggregate root programs are not checked | native → host-src → host-bundle → desktop-bundle → client-src → client-bundle → web | One linear chain | Deleted at start, written after every step passes |
-| `pnpm run build:check` | Type-checks only the two aggregate root programs | host-check, client-check | Both steps concurrent, no prerequisite steps | Neither read nor written |
+| `pnpm run build:artifacts` | Produces every artifact of `build`; package projects are fully type-checked as usual, the Host and Client aggregate programs are not checked | [Artifact order](../../../../docs/development.md#typescript-project-layout) | Dependency order | Deleted at start, written after every step passes |
+| `pnpm run build:check` | Type-checks only the Host and Client aggregate programs | host-check, client-check | Host and Client checks concurrent, no prerequisite steps | Neither read nor written |
 | `pnpm run build` | Every step of `build:artifacts` and `build:check` | The dependency graph below | Concurrent through the run-gates scheduler | Deleted at start, written after every step passes |
 
 `build:check` neither detects, rebuilds, nor validates `build:artifacts` outputs; when prerequisite outputs are missing or stale, the compiler's own diagnostics (for example TS6305 and TS2307) report it, and no command adds prerequisite checks, guards, or fallbacks. `build:artifacts` produces the same artifacts and record as `build` and replaces `--artifacts-only`; that flag and the `libraries` mode of `compile-referenced-projects.ts` are removed, and the Python executable builder uses `--build-artifacts`. `build:official` remains `tsx scripts/build.ts --profile official` and runs the complete `build`.
 
 ### Steps and dependencies
 
-| Step | Command | `needs` in `build` |
-|---|---|---|
-| native | `pnpm run build:native-system` | — |
-| host-src | `node --max-old-space-size=4096 <tsc> -b <references of tsconfig.host.json>` | native |
-| host-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE host` (runs Typert) | host-src |
-| desktop-bundle | `pnpm --filter @deepseek-ai/dsh-desktop run bundle` | host-bundle |
-| client-src | `<tsc> -b <references of tsconfig.client.json>` | desktop-bundle |
-| client-bundle | `tsdown --config-loader native --env.DSH_BUILD_FACE client` | client-src |
-| web | `pnpm run build:web` | client-bundle |
-| host-check | `node --max-old-space-size=4096 <tsc> -p tsconfig.host.json` | host-src |
-| client-check | `<tsc> -p tsconfig.client.json` | client-src |
+[Source-first ordering](2026-10-18-source-first-metadata-builds.md) prepares metadata before package compilation. [Development](../../../../docs/development.md#typescript-project-layout) and `buildGates()` own the current step graph; each aggregate check starts after its own package declarations exist.
 
-```text
-native → host-src ─┬─ host-check ───────────────────────────────────────────────────────┐
-                   └─ host-bundle → desktop-bundle → client-src ─┬─ client-check ───────┤ → record
-                                                                 └─ client-bundle → web ┘
-```
-
-- client-src must follow host-bundle: Client packages import `@deepseek-ai/dsh-*/remote`, whose types `lib/typert.remote-client.d.ts` Typert writes, inside Host tsdown in these scopes and through `scripts/generate-typert.ts` in the typecheck scope. host-check reads no Typert output; clean serial builds have always finished the Host aggregate check before Host tsdown.
-- The artifact chain keeps the two non-data edges native → host-src and desktop-bundle → client-src; only the two check steps attach to the chain in parallel.
+- Client compilation reads generated Remote declarations from the source-only metadata pass. Desktop bundling remains before Client compilation; changing that non-data edge requires separate evidence.
+- The artifact chain keeps the two non-data edges native → host-src and desktop-bundle → client-src; aggregate checks attach after their package compilation; native and metadata generation may run together.
 - [`compile-referenced-projects.ts`](../../../../scripts/compile-referenced-projects.ts) owns the package-library step list `libraryBuildSteps`, the references argument construction `referencedProjectsCompilerArgs` (relative paths keep the command below Windows' command-line limit), and the aggregate-check arguments `aggregateCheckArgs`. The vendor release rehearsal (`host-libraries`) and CI benchmarks (`--noCheck`) run the same step list serially.
 - The check steps use project mode (`tsc -p`): it reads the declarations that references already emitted and compiles no reference, writing incremental state to the aggregates' existing `tsconfig.{host,client}.tsbuildinfo`. `build` and `build:check` run the same command, so their diagnostics are identical.
 
 ### Scheduling, failure, and output
 
 - [`scripts/build.ts`](../../../../scripts/build.ts) owns the step table and the three scopes and executes them through `runAggregate` from [`scripts/run-gates.ts`](../../../../scripts/run-gates.ts): each step is a gate with `needs`, and shell-free spawning, per-step buffered output, fail-fast process-tree termination, Windows `taskkill`, and host signal forwarding come from the run-gates implementation. `build:artifacts` is `tsx scripts/build.ts --scope artifacts`, `build:check` is `--scope check`, and `build` omits `--scope` and runs both as one graph; `--profile` applies only to artifact scopes, and combining it with `--scope check` fails argument parsing.
-- The concurrency limit is `DSH_GATE_CONCURRENCY`, defaulting to the available CPU count; the dependency graph is at most 3 wide (client-check and client-bundle can start while host-check is still running). Master serial reference lanes set `DSH_GATE_CONCURRENCY=1`, so `build` runs serially in topological order there, consistent with the [serial reference decision](2026-07-21-serial-cross-platform-ci-reference.md) and without workflow edits.
+- The concurrency limit is `DSH_GATE_CONCURRENCY`, using the repository worker budget by default; aggregate checks may overlap later artifact steps. Master serial reference lanes set `DSH_GATE_CONCURRENCY=1`, so `build` runs serially in topological order there, consistent with the [serial reference decision](2026-07-21-serial-cross-platform-ci-reference.md) and without workflow edits.
 - By default (locally), every dependent of a failed step is recorded as skipped, while running steps and steps unrelated to the failure run to completion; the executed set depends only on step outcomes, so one run reports every independent type error. With `DSH_GATE_FAIL_FAST=1` (set in every building PR lane), the first failure terminates the process trees of the other running steps and records every unfinished step as skipped.
 - A failed step prints `== FAILED <step> ==`, its command, the exit reason, and the step's complete buffered output, and the final summary lists failed and skipped steps; a passing step prints only its PASS line, and `DSH_GATE_VERBOSE=1` prints all output. The exit code is 1 when any step failed or was skipped, and the client build record is not written. Every step inherits the public Client environment selected by `clientBuildProcessEnvironment`.
 - In CI, `build` itself is one gate of an outer run-gates aggregate; outer fail-fast termination propagates to the inner scheduler. `check:node-compat` and `check:ci:lint:contracts-ready` already nest the same way.
@@ -63,11 +47,11 @@ native → host-src ─┬─ host-check ─────────────
 |---|---|---|
 | `build`, `build:official`, `Makefile` `build`, `scripts/publish-npm-baseline.ts`, `apps/desktop/scripts/package-target.ts`, `scripts/dev-bundle-registry.ts`, `release-publish.yml`, `sandbox.yml`, and the non-PR branches of `e2e.yml` and `release.yml` | `build` / `build:official` | Yes |
 | `test:web`, `test:web:refresh`, `test:web:perf`, `test:web:stress`, `apps/desktop` `test:updates:local`, `test:bench` / `build:bench` | `build`; `build:bench` runs `build:native-system`, `build:lib`, and the benchmark tsdown | Yes |
-| `typecheck` (run by the pre-push hook) | `build.ts --scope typecheck`: host-src beside host-typert (the bundle-free, source-only Typert pass `generate-typert.ts`) → client-src, with `tsc -b tsconfig.{host,client}.json` after each face's package compilation; no bundle | Yes |
+| `typecheck` (run by the pre-push hook) | `build.ts --scope typecheck`: host-typert (the source-only Typert pass `generate-typert.ts`) → package compilation, with `tsc -b tsconfig.{host,client}.json` after each face's package compilation; no bundle | Yes |
 | `dev:web` ([`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)), `dev:desktop` (`apps/desktop/scripts/dev.ts`) | `build:artifacts` | None before launch; after `dev:web` launches, its `tsc -b tsconfig.client.json --watch` keeps checking the Client aggregate root program |
-| Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Host package compilation beside the bundle-free Typert pass (`compile-referenced-projects.ts host-contracts`), without any bundle | None |
+| Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Source-only Typert generation before Host package compilation (`compile-referenced-projects.ts host-contracts`), without any bundle | None |
 | CI node 24 / snapshots and artifacts (`check:ci:consumers`), windows node 24 / build & observational (`check:ci:windows-blocking`) | `build` | Yes, the two required lanes |
-| CI node-compat 22.19 | `build:artifacts` (through run-gates) | None |
+| CI node-compat 24.9 | `build:artifacts` (through run-gates) | None |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | None |
 | PR rehearsals in `e2e.yml` and `release.yml` | `pnpm run build:artifacts --profile official` | None |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | None |
@@ -114,7 +98,7 @@ The serial branch sample overlapped other work on the host (742 s of foreign CPU
 | Package source type error | host-src / client-src | Not reported (reads existing declarations) | host-src / client-src | Reported | Reported |
 | Type error only in an aggregate root program's tests, scripts, benchmarks, or website | Not reported | host-check / client-check | host-check / client-check | Reported | consumers, windows-build |
 | Package tsconfig configuration error | host-src / client-src | Not reported (`tsc -p` does not validate referenced projects' tsconfig options or syntax) | host-src / client-src | Reported | Reported |
-| Typert analysis error | host-bundle | Not reported | host-bundle | Reported (through host-typert) | Reported |
+| Typert analysis error | host-typert | Not reported | host-typert | Reported (through host-typert) | Reported |
 | Missing prerequisite output | — | Compiler diagnostic (TS6305, TS2307) | — | — | — |
 
 Negative controls: after a type error (TS2322) is added to `scripts/pnpm-invocation.spec.ts`, which only the Host aggregate root program contains, `build:artifacts` exits 0; `build:check` exits 1 with the Host aggregate check failing and the Client aggregate check passing; `build` exits 1 with 8 of 9 steps passing and 1 failing, and writes no client build record. In a scratch fixture whose referenced project's tsconfig has an invalid `target`, a JSON syntax error, or an unknown compiler option, `tsc -p` exits 0, while `tsc -b` reports TS6046, TS5092 with TS1012, and TS5023 respectively and exits 1; when the referenced project lacks `composite`, both report TS6306.
@@ -150,8 +134,8 @@ CI evidence: on PR #6005 both required lanes that run the concurrent `pnpm run b
 
 Development iterations can skip the two aggregate root programs with `build:artifacts` (51.6% faster cold than master's `build`) and complete the checks with `build:check` or `build` before declaring work complete. `build` stays complete: the Host aggregate check is off the critical path, the Client aggregate check runs alongside the Client bundle and web, and a cold build is 46.7% faster than master (including the lossless speed-ups note's changes; medians of 2). The costs are a higher memory peak, a little extra CPU from concurrent contention, less passing output by default, and several development and prerequisite commands that do not check test types (see the trade-offs above).
 
-Removing or changing `build` in the two required lanes, consumers and windows-build, requires first transferring both aggregate checks to another blocking owner. The typecheck scope and the lint prerequisites generate Typert contracts without bundling ([local gate speed-ups](2026-10-12-local-gate-speedups.md)); the artifact scopes keep generating them inside Host tsdown.
+Removing or changing `build` in the two required lanes, consumers and windows-build, requires first transferring both aggregate checks to another blocking owner. The typecheck scope and the lint prerequisites generate Typert contracts without bundling ([local gate speed-ups](2026-10-12-local-gate-speedups.md)); artifact scopes use [source-first metadata ordering](2026-10-18-source-first-metadata-builds.md).
 
-client-src's dependency on host-bundle guarantees the "Host and Remote artifacts complete before Client compilation" ordering that [Typert Remote method calls](../architecture/2026-08-02-typert-remote-method-calls.md) describes.
+host-src depends on host-typert, so generated Remote declarations precede package compilation. [Typert Remote method calls](../architecture/2026-08-02-typert-remote-method-calls.md) describes the emitted contributions.
 
 Verification: `scripts/build.spec.ts` covers the type-stripping check, rejection of the removed flag and invalid scopes, the conflict between `--profile` and `--scope check`, scope selection, step dependencies, and the environment; `compile-referenced-projects.spec.ts` covers project mode checking only the aggregate program, the diagnostic for missing declarations, and `tsc -b --dry` accepting the tsbuildinfo that `tsc -p` writes; failure propagation, output buffering, and process-tree termination come from the run-gates scheduler and its tests; `run-gates.spec.ts`, `ci-workflow.spec.ts`, `preview-workflow.spec.ts`, `build-exe-for-python-sdk.spec.ts`, `dev-web.spec.ts`, and `tests/ci-release-selfhosted.spec.ts` pin each caller's command.

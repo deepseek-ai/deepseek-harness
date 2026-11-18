@@ -8,7 +8,9 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { scheduleDomain } from '../src/storage.ts'
-import { ScheduleId, createAtScheduleRecord } from '../src/domain.ts'
+import { createAtScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -17,21 +19,22 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function open(root: string) {
+async function open() {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-malformed-')); roots.push(root)
   const ctx = new Context(); contexts.push(ctx)
   await ctx.plugin(Storage)
   const backend = new JsonStorageBackend(root)
   ctx.storage.backend.register('json', backend)
   const facility = new DomainFacility(ctx, { backend: 'json' })
-  return { facility, backend }
+  return { root, facility, backend }
 }
 
 it('refuses an array-shaped tables map instead of opening an empty task catalog', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-malformed-')); roots.push(root)
+  const { root, facility, backend } = await open()
   const path = join(root, 'schedule.json')
   const task = {
     sessionId: 'session-1',
-    record: createAtScheduleRecord(ScheduleId('kept'), 'Keep me', '2099-01-01T00:00:00.000Z', 0, 'Keep me'),
+    record: createAtScheduleRecord(brandString<ScheduleId>('kept'), 'Keep me', '2099-01-01T00:00:00.000Z', 0, 'Keep me'),
     status: 'active',
   }
   // An array is `typeof 'object'`: an empty-domain read would let the first
@@ -43,8 +46,20 @@ it('refuses an array-shaped tables map instead of opening an empty task catalog'
   }, null, 2)}\n`
   await writeFile(path, text, 'utf8')
 
-  const { facility, backend } = await open(root)
   await expect(facility.open(scheduleDomain)).rejects.toMatchObject({ code: 'malformed-medium' })
+  expect(await readFile(path, 'utf8')).toBe(text)
+  await backend.close()
+})
+
+it('refuses a task document that fails the task schema instead of opening without it', async () => {
+  const { root, facility, backend } = await open()
+  const path = join(root, 'schedule.json')
+  const text = `${JSON.stringify({ unit: { name: 'schedule', version: 1 }, global: null, tables: { tasks: { kept: { sessionId: 'session-1', status: 'active' } } } }, null, 2)}\n`
+  await writeFile(path, text, 'utf8')
+
+  await expect(facility.open(scheduleDomain)).rejects.toMatchObject({
+    code: 'invalid-record', detail: { table: 'tasks', key: 'kept' },
+  })
   expect(await readFile(path, 'utf8')).toBe(text)
   await backend.close()
 })

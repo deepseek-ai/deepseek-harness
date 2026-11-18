@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "NodeJS-Inspektor",
+    "description": "Drücken Sie Strg/Befehl+Umschalt+. , um Chrome DevTools im unteren Bereich zum Entwickeln und Debuggen zu öffnen."
+  }
+}

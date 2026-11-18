@@ -49,14 +49,16 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`fs/`](fs/README.zh.md) | 文件系统能力系列：seam、本地实现、面向模型的文件工具、发现工具 |
 | [`lsp/`](lsp/README.zh.md) | LSP 能力系列：seam、通用 stdio 提供方和 `lsp` 工具 |
 | [`skill/`](skill/README.zh.md) | skill（技能）能力系列：提供方注册表、本地提供方、面向模型的目录／loader |
+| [`connector/`](connector/README.zh.md) | 通过现有能力接入第三方服务的插件 |
 | [`compaction/`](compaction/README.zh.md) | 压缩（compaction）能力系列：Service Definition + 基础提供方 + 命令 Consumer |
 | [`context/`](context/README.zh.md) | 模型可见请求上下文：workspace 指令、时间上下文、引用 |
 | [`subagent/`](subagent/README.zh.md) | subagent 能力系列：提供方注册表约定和面向模型的委托工具 |
+| [`team/`](team/README.zh.md) | Team 协调：共享任务板与面向模型的任务工具 |
 | [`jobs/`](jobs/README.zh.md) | 通用后台任务运行时和面向模型的作业控制工具 |
 | [`experimental/`](experimental/README.zh.md) | 仍在评估中的能力；[状态与支持策略](experimental/README.zh.md#status) |
 | [`workflow/`](workflow/README.zh.md) | 工作流 seam、PTC 进程引擎、面向模型的 `workflow` 工具 |
 | [`web/`](web/README.zh.md) | Web 能力系列：seam、搜索／获取提供方、面向模型的 Web 工具 |
-| [`document/`](document/README.zh.md) | 共享宿主 Office 到 PDF 转换 |
+| [`document/`](document/README.zh.md) | 共享宿主 Office 渲染、转换与重算、Office 工具与 Kit 引擎解析 |
 | [`attachment/`](attachment/README.zh.md) | 持久附件标识、校验、本地内容寻址存储 |
 | [`spill/`](spill/README.zh.md) | spill 能力系列：存储 seam、本地实现、工具结果 spill 策略 |
 | [`todo/`](todo/README.zh.md) | 面向模型的 `todo_write` 工具 |
@@ -70,6 +72,7 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`session-query/`](session-query/README.zh.md) | 会话检索系列：逻辑语料库、有界读取、血缘、语义过滤、SQLite 全文搜索 |
 | [`settings/`](settings/README.zh.md) | 用户设置 seam + 基于文件的提供方 |
 | [`credentials/`](credentials/README.zh.md) | 凭据引用与凭据记录 seam + 环境变量优先于 `.env` 的提供方 + 需要向人询问的授权流程 |
+| [`account/`](account/README.zh.md) | DeepSeek 账号登录与仅限 Host 的请求凭据 |
 | [`storage/`](storage/README.zh.md) | 非会话存储中枢 + 后端 + 领域形式 |
 | [`workspace/`](workspace/README.zh.md) | Workspace 实体 |
 | [`sdk/`](sdk/README.zh.md) | 进程外 SDK：JSON-RPC 协议与 TypeScript 客户端／服务器 |
@@ -79,7 +82,7 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`host/`](host/README.zh.md) | Web GUI 宿主服务、目录选择、应用启动、插件清单和产品遥测 |
 | [`client/`](client/README.zh.md) | web GUI 浏览器半侧：shell、协议层、对象服务、slot、`ui-*` 插件 |
 | [`test-support/`](test-support/README.zh.md) | 测试基础设施（testkit、回放、Loader 冒烟测试） |
-| [`util/`](util/README.zh.md) | 组间共享的低层零依赖工具（`Branded<B>`、home／路径辅助函数、超时、留存） |
+| [`util/`](util/README.zh.md) | 组间共享的低层工具与纯数据包列表（`Branded<B>`、home／路径辅助函数、超时、留存、官方组合包列表） |
 
 -----
 

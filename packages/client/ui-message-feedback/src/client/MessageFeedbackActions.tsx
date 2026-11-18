@@ -17,12 +17,17 @@ import type { MessageFeedbackActionProps } from './slots.ts'
 import css from './MessageFeedbackActions.module.css'
 
 /**
- * One message's feedback controls.
- * @param props - the owner's message identity, the injected verbs, and the
- * shared feedback hook.
- * @returns the rating buttons with any failure notice beside them.
+ * One message's feedback controls, rendered only while the current Peer may
+ * record message feedback in this Session.
+ * @param props - the owner's message identity, the injected verbs, the
+ * shared feedback hook, and the Session access Hook.
+ * @returns the rating buttons with any failure notice beside them, or nothing without access.
  */
-export function MessageFeedbackActions({
+export function MessageFeedbackActions(props: MessageFeedbackActionProps) {
+  return props.useAccess('messageFeedback/put') ? <FeedbackRatingButtons {...props} /> : null
+}
+
+function FeedbackRatingButtons({
   messageId, ensure, current, retract, openDialog, useFeedback, t,
 }: MessageFeedbackActionProps) {
   const item = useFeedback(view => view.items.get(messageId))

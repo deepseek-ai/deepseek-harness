@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
-import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
+import { compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools'
 
@@ -26,7 +28,7 @@ export function apply(ctx: Context): void {
     if (baseline === undefined) throw new Error('workspace baseline missing before snapshot compaction')
     const openTurn = agent.session.snapshotEvents().findLast(event => event.type === 'turn/start')
     if (openTurn?.type !== 'turn/start') throw new Error('workspace snapshot compaction has no open turn')
-    const compactionId = CompactionId('workspace-context-fixture')
+    const compactionId = brandString<CompactionId>('workspace-context-fixture')
     const content = [{ type: 'text' as const, text: 'Earlier context was compacted for this snapshot.' }]
     agent.session.append('compaction/start', { compactionId, turn: openTurn.data.turn })
     agent.session.append('compaction/summary', {

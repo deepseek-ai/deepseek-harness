@@ -32,6 +32,7 @@ it('keeps raw diagnostics out of error tooltips in both locales', () => {
     expect(desktopUpdateErrorSummary({ phase: 'error', failedOperation: 'install', preparationFailure: 'stop-failed',
       message: 'translated or changed copy', technicalDetails: 'private diagnostic' }, messages)).toBe(messages.updateStopFailed)
     for (const [preparationFailure, expected] of [
+      ['fullscreen-timeout', messages.updateFullscreenTimeout],
       ['tasks-changed', messages.updateTasksChanged], ['tasks-unavailable', messages.updateTasksUnavailable],
     ] as const) {
       expect(desktopUpdateErrorSummary({ phase: 'error', failedOperation: 'install', preparationFailure,
@@ -41,5 +42,20 @@ it('keeps raw diagnostics out of error tooltips in both locales', () => {
       .toBe(messages.updateInstallFailed)
     expect(desktopUpdateErrorSummary({ phase: 'error', failedOperation: 'install', message: 'internal failure',
       technicalDetails: 'private diagnostic' }, messages)).toBe(messages.updateInstallFailed)
+  }
+})
+
+it('offers actionable filesystem recovery without exposing paths in the indicator', () => {
+  for (const messages of [en, zh]) {
+    for (const [downloadFailure, expected] of [
+      ['space', messages.updateDownloadSpaceFailed],
+      ['permission', messages.updateDownloadPermissionFailed],
+      ['busy', messages.updateDownloadBusyFailed],
+    ] as const) {
+      const state: DesktopUpdateState = { phase: 'error', failedOperation: 'download', downloadFailure,
+        technicalDetails: '/private/cache/new.zip', message: 'write failed' }
+      expect(desktopUpdateErrorSummary(state, messages)).toBe(expected)
+      expect(presentDesktopUpdate(state)).toEqual({ phase: 'error', failure: `download-${downloadFailure}` })
+    }
   }
 })

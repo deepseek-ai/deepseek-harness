@@ -1,25 +1,38 @@
 /** Host reader of configured plugin market indexes for the Discover page and the `plugin_market` tool. */
 
+import { isAbsolute, join, resolve } from 'node:path'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import semver from 'semver'
 import { evaluatePluginCompatibility, getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import { marketInstallTarget, type MarketIndex, type MarketPlugin, type MarketVersion } from '@deepseek-ai/dsh-plugin-market-index'
+import { parseGitMarketIndexSource } from '@deepseek-ai/dsh-plugin-market-index/source'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
+// Also declares the `pluginManager` service this one reads bundles from.
+import { pinnedGitOrigin } from '@deepseek-ai/dsh-plugin-manager'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import {
+  DetailFailure, detailImageResponse, languageChain, NPM_FILE_SOURCES, npmFileSourceOrder, npmFiles,
+} from '@deepseek-ai/dsh-plugin-detail'
+import type { NpmFileSource } from '@deepseek-ai/dsh-plugin-detail/types'
+import { DetailReader, repositoryOf, type DetailLocation, type RepositoryLocation } from './detail.ts'
+import { repositoryFiles, type RepositoryFileOptions } from './detail-files.ts'
 import { normalizeIndexUrl } from './index-url.ts'
+import { RepositoryCache } from './repository-cache.ts'
 import { parseIndexInWorker } from './parse-thread.ts'
 import { MarketSearch } from './search.ts'
-// Type-only: the `pluginManager` service, `settings.update`, and the Loader's `loader/volatile-update` event.
-import type {} from '@deepseek-ai/dsh-plugin-manager'
+// Type-only: `settings.update`, the Loader's `loader/volatile-update` event, and the `connection` Fetch routes.
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type {
   MarketCompatibility, MarketIndexSummary, MarketInstallation, MarketListingEntry, MarketListingVersion, MarketQuery, MarketSearchResult,
+  PluginDetail,
 } from './types.ts'
 
 export type * from './types.ts'
+export { PluginMarketError, type PluginMarketErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -32,12 +45,28 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** Index URLs in display order; Settings and `setIndexes` write this field without remounting the service. */
   indexes: Volatile<string[]>
-  /** Deadline for one index fetch, including the body. */
+  /** Deadline for an HTTP index or detail file request, including its body. */
   fetchTimeoutMs: number
   /** Largest accepted index body in bytes. */
   maxBytes: number
-  /** Lifetime of a successfully read index document. */
+  /** Lifetime of a successfully read index document, a detail read result, and a repository's default-branch commit. */
   cacheTtlMs: number
+  /** Largest detail document in bytes. */
+  detailMaxBytes: number
+  /** Largest image beside a detail document in bytes. */
+  detailImageMaxBytes: number
+  /** Largest amount in bytes one Git command adds to a partial clone; a repository whose fetch adds more is not read. */
+  detailRepositoryMaxBytes: number
+  /** Largest total size of the partial clones; least recently used ones are deleted beyond it. */
+  detailCacheMaxBytes: number
+  /** Directory of the partial clones, relative to the profile directory; absent means `.plugin-market/repositories`. */
+  detailCacheDir?: string
+  /** Deadline for a Git index read and for each Git command used to read an index or plugin details. */
+  detailGitTimeoutMs: number
+  /** npm file CDNs read in order; a read's `npmFileSources` moves the CDNs it names first. */
+  detailNpmFileSources: NpmFileSource[]
+  /** Hosts serving the GitLab repository files API. */
+  detailGitlabHosts: string[]
 }
 
 /** The exact diagnostic of a failure, including a non-Error rejection. */
@@ -54,6 +83,12 @@ function causeChainOf(error: unknown, depth = 0): string {
     ? `${error.message}: ${causeChainOf(error.cause, depth + 1)}`
     : messageOf(error)
 }
+
+/** The Fetch route serving images beside detail documents. */
+const DETAIL_FILE_PATH = '/api/plugin-market/detail-file'
+
+/** Registries whose packages the public npm file CDNs serve. */
+const PUBLIC_REGISTRIES = new Set(['registry.npmjs.org', 'registry.npmmirror.com'])
 
 /** Largest page `search` returns. */
 const MAX_LIMIT = 100
@@ -76,10 +111,18 @@ export default class PluginMarket extends TypertRemoteService {
   static inject = ['pluginManager']
 
   static Config = z.object({
-    indexes: z.array(z.string().pattern(/^https?:\/\/\S+$/u)).default([]).volatile(),
+    indexes: z.array(z.string().pattern(/^(?:https?|git\+(?:https|ssh)):\/\/\S+$/u)).default([]).volatile(),
     fetchTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(15000),
     maxBytes: z.natural().min(1).default(128 * 1024 * 1024),
     cacheTtlMs: z.natural().default(600000),
+    detailMaxBytes: z.natural().min(1).default(1024 * 1024),
+    detailImageMaxBytes: z.natural().min(1).default(5 * 1024 * 1024),
+    detailRepositoryMaxBytes: z.natural().min(1).default(50 * 1024 * 1024),
+    detailCacheMaxBytes: z.natural().min(1).default(500 * 1024 * 1024),
+    detailCacheDir: z.string(),
+    detailGitTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(60000),
+    detailNpmFileSources: z.array(z.union(NPM_FILE_SOURCES)).min(1).default([...NPM_FILE_SOURCES]),
+    detailGitlabHosts: z.array(z.string()).default(['gitlab.com']),
   })
 
   private readonly lifetime = new AbortController()
@@ -87,10 +130,34 @@ export default class PluginMarket extends TypertRemoteService {
   private readonly pending = new Map<string, Promise<IndexDocument>>()
   private readonly errors = new Map<string, string>()
   private readonly entryId: string | undefined
+  private readonly repositories: RepositoryCache
+  private readonly details: DetailReader
 
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'pluginMarket')
     this.entryId = ctx.fiber.entry?.options.id
+    const profile = ctx.get('profileContext')
+    const cacheDir = profile === undefined
+      ? config.detailCacheDir
+      : resolve(profile.dir, config.detailCacheDir ?? join('.plugin-market', 'repositories'))
+    if (cacheDir === undefined || !isAbsolute(cacheDir)) throw new Error('plugin-market: detailCacheDir must be an absolute path when the service runs without a dsh profile')
+    const lifetime = this.lifetime.signal
+    this.repositories = new RepositoryCache({
+      dir: cacheDir, maxRepositoryBytes: config.detailRepositoryMaxBytes, maxCacheBytes: config.detailCacheMaxBytes,
+      // The URL forms repositories are read from, and ssh, which `url.<base>.insteadOf` or the retry after a refused http(s) fetch uses.
+      timeoutMs: config.detailGitTimeoutMs, ttlMs: config.cacheTtlMs, transports: ['https', 'http', 'ssh'], lifetime,
+      // Bounds how far a fetch overshoots `detailRepositoryMaxBytes`; directory walks cost little at this rate.
+      sizePollMs: 200,
+    })
+    this.details = new DetailReader(
+      { maxDocumentBytes: config.detailMaxBytes, maxImageBytes: config.detailImageMaxBytes, ttlMs: config.cacheTtlMs },
+      this.detailRepositoryOptions(),
+    )
+    ctx.inject(['connection'], (scope) => {
+      scope.effect(() => scope.connection.fetch.register({
+        path: DETAIL_FILE_PATH, methods: ['GET'], requestBody: 'buffered', fetch: request => this.serveDetailFile(request),
+      }), `plugin-market: ${DETAIL_FILE_PATH}`)
+    })
     ctx.on('loader/volatile-update', () => {
       const configured = new Set(this.sources().flatMap(source => source.error === undefined ? [source.url] : []))
       for (const url of [...this.cache.keys(), ...this.errors.keys()]) {
@@ -103,7 +170,7 @@ export default class PluginMarket extends TypertRemoteService {
     })
     ctx.effect(() => async () => {
       this.lifetime.abort(new Error('Plugin market disposed'))
-      await Promise.allSettled(this.pending.values())
+      await Promise.allSettled([...this.pending.values(), this.repositories.settled()])
     })
   }
 
@@ -200,6 +267,101 @@ export default class PluginMarket extends TypertRemoteService {
     return plugin === undefined ? undefined : (await this.annotator())(plugin)
   }
 
+  /**
+   * Read the long description of one listed version of a plugin market entry, from the version's source: the npm file
+   * CDNs for a public npm version, or its pinned Git commit. The Markdown file the package's locale `meta.detail` names
+   * in `language` comes first, then the package's README, then the README of the entry's `repository`, or for an npm
+   * version without one, of its `package.json` `repository`, at the default branch. An npm version from another
+   * registry has no readable package files, so only the entry's `repository` is read.
+   * @param url - a configured index URL.
+   * @param name - the plugin's package name.
+   * @param version - one listed version.
+   * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+   * @param options - `refresh` reads again instead of reusing a result cached for `cacheTtlMs`; `npmFileSources` names
+   *   npm file CDNs to ask first for an npm version, in order; configured CDNs it omits follow, and CDNs that are not
+   *   configured are not asked.
+   * @returns the document with its origin and image document id, or `none`.
+   * @throws {RemoteError} the failures of `search`, `plugin-market/unknown-plugin` for an unlisted plugin or version,
+   *   `plugin-market/invalid-query`, or `plugin-market/detail-unavailable`.
+   */
+  @Remote
+  async readEntryDetail(
+    url: string, name: string, version: string, language: string, options?: { refresh?: boolean; npmFileSources?: NpmFileSource[] },
+  ): Promise<PluginDetail> {
+    const languages = this.languages(language)
+    const plugin = (await this.document(url, false)).index.plugins.find(candidate => candidate.name === name)
+    const listed = plugin?.versions.find(candidate => candidate.version === version)
+    if (plugin === undefined || listed === undefined) {
+      throw new RemoteError('plugin-market/unknown-plugin', `${url} lists no ${name}@${version}`, { name, version })
+    }
+    const declared = plugin.repository
+    const found = declared === undefined ? undefined : repositoryOf(declared.url)
+    let repository: RepositoryLocation | undefined = found === undefined ? undefined : { ...found, directory: declared?.directory ?? '' }
+    const { source } = listed
+    let location: DetailLocation
+    if (source.type === 'git') {
+      const ref = repositoryOf(source.url)
+      /* v8 ignore next -- parseMarketIndex admits only https Git URLs with an owner and a project */
+      if (ref === undefined) return { status: 'none' }
+      const dir = source.path ?? ''
+      // A repository that names the source directory itself adds nothing to the source.
+      if (repository?.url === ref.url && repository.directory === dir) repository = undefined
+      location = { files: repositoryFiles(ref, source.commit, this.detailRepositoryOptions()), dir, repository }
+    } else if (source.registry === undefined || PUBLIC_REGISTRIES.has(new URL(source.registry).host)) {
+      location = this.npmLocation(name, version, repository ?? 'manifest', options?.npmFileSources ?? [])
+    } else {
+      location = { dir: '', repository }
+    }
+    return await this.readDetail(location, languages, options?.refresh === true)
+  }
+
+  private languages(language: string): string[] {
+    try {
+      return languageChain(language)
+    } catch (error) {
+      throw new RemoteError('plugin-market/invalid-query', messageOf(error), { field: 'language', reason: 'format' }, { cause: error })
+    }
+  }
+
+  private detailRepositoryOptions(): RepositoryFileOptions {
+    const { config } = this
+    return {
+      timeoutMs: config.fetchTimeoutMs, lifetime: this.lifetime.signal,
+      gitlabHosts: config.detailGitlabHosts.map(host => host.toLowerCase()), cache: this.repositories,
+    }
+  }
+
+  /** The detail location of a published npm version on the configured CDNs, the preferred ones first. */
+  private npmLocation(name: string, version: string, repository: RepositoryLocation | 'manifest', preferred: readonly string[]): DetailLocation {
+    const sources = npmFileSourceOrder(this.config.detailNpmFileSources, preferred)
+    return { dir: '', repository, files: npmFiles(name, version, sources, { timeoutMs: this.config.fetchTimeoutMs, lifetime: this.lifetime.signal }) }
+  }
+
+  private async readDetail(location: DetailLocation, languages: readonly string[], refresh: boolean): Promise<PluginDetail> {
+    try {
+      return await this.details.read(location, languages, refresh)
+    } catch (error) {
+      if (!(error instanceof DetailFailure)) throw error
+      throw new RemoteError('plugin-market/detail-unavailable', error.message, { reason: error.reason }, { cause: error })
+    }
+  }
+
+  /** Answer `GET ${DETAIL_FILE_PATH}?document=<id>&path=<destination>` with one image beside a read detail document. */
+  private async serveDetailFile(request: Request): Promise<Response> {
+    const params = new URL(request.url).searchParams
+    const document = params.get('document')
+    const path = params.get('path')
+    // Images stay cached as long as their document's result.
+    const cache = `private, max-age=${String(Math.floor(this.config.cacheTtlMs / 1000))}`
+    if (document === null || path === null) return detailImageResponse('invalid', cache)
+    try {
+      return detailImageResponse(await this.details.image(document, path), cache)
+    } catch (error) {
+      if (!(error instanceof DetailFailure)) throw error
+      return detailImageResponse(error.reason, cache)
+    }
+  }
+
   private async document(url: string, refresh: boolean, fetchedAt?: number): Promise<IndexDocument> {
     const source = this.sources().find(candidate => candidate.url === url)
     if (source === undefined) throw new RemoteError('plugin-market/unknown-index', `Not a configured index source: ${url}`, { url })
@@ -220,7 +382,7 @@ export default class PluginMarket extends TypertRemoteService {
 
   /**
    * The configured sources as written, each with the refusal that makes it unusable. Settings and profile files can
-   * write any http(s) string, so every use validates instead of the schema; an unusable source is listed with its error
+   * write a noncanonical address, so every use validates it. An unusable source is listed with its error
    * and never fetched, and a repeated URL counts once.
    */
   private sources(): { readonly url: string; readonly error?: string }[] {
@@ -262,9 +424,44 @@ export default class PluginMarket extends TypertRemoteService {
   }
 
   private async fetchIndex(url: string): Promise<MarketIndex> {
-    const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(this.config.fetchTimeoutMs)])
+    const git = url.startsWith('git+')
+    const timeoutMs = git ? this.config.detailGitTimeoutMs : this.config.fetchTimeoutMs
+    const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(timeoutMs)])
     const failed = (reason: string, cause?: unknown): RemoteError =>
       new RemoteError('plugin-market/fetch-failed', `Could not fetch ${url}: ${reason}`, { url, reason }, { cause })
+    const bytes = git ? await this.readGitIndex(url, signal, failed) : await this.fetchIndexBody(url, signal, failed)
+    const result = await parseIndexInWorker(bytes, url, this.lifetime.signal).catch((error: unknown) => {
+      throw failed(messageOf(error), error)
+    })
+    if (result.ok) return result.index
+    throw new RemoteError('plugin-market/invalid-index', `${url}: ${result.message}`, { url, path: result.path, reason: result.reason })
+  }
+
+  private async readGitIndex(url: string, signal: AbortSignal, failed: (reason: string) => RemoteError): Promise<Uint8Array> {
+    const { repository, ref, path } = parseGitMarketIndexSource(url)
+    let bytes: Uint8Array | undefined
+    try {
+      bytes = await this.repositories.readIndex(repository, ref, path, this.config.maxBytes, signal)
+    } catch (error) {
+      if (signal.aborted) throw failed(messageOf(signal.reason))
+      if (error instanceof DetailFailure) {
+        switch (error.reason) {
+          case 'denied': throw failed('Git could not read the repository. Check Host Git authentication, repository permissions, and the branch or commit')
+          case 'git-unavailable': throw failed('Git is unavailable on the Host')
+          case 'network': throw failed('Git could not connect to the repository')
+          case 'too-large': throw failed('The Git index file or repository exceeds its size limit')
+          default: break
+        }
+      }
+      throw failed('Git could not read the index file on the Host')
+    }
+    if (bytes === undefined) throw failed(`No regular index file at ${path}`)
+    return Uint8Array.from(bytes)
+  }
+
+  private async fetchIndexBody(
+    url: string, signal: AbortSignal, failed: (reason: string, cause?: unknown) => RemoteError,
+  ): Promise<Uint8Array> {
     let response: Response
     try {
       response = await fetch(url, { signal, redirect: 'error', headers: { accept: 'application/json' } })
@@ -275,12 +472,7 @@ export default class PluginMarket extends TypertRemoteService {
       await response.body?.cancel()
       throw failed(`HTTP ${String(response.status)}`)
     }
-    const bytes = await this.readBody(response, failed)
-    const result = await parseIndexInWorker(bytes, url, this.lifetime.signal).catch((error: unknown) => {
-      throw failed(messageOf(error), error)
-    })
-    if (result.ok) return result.index
-    throw new RemoteError('plugin-market/invalid-index', `${url}: ${result.message}`, { url, path: result.path, reason: result.reason })
+    return await this.readBody(response, failed)
   }
 
   /** Read the whole body, refusing it as soon as it exceeds `maxBytes`. */
@@ -316,11 +508,16 @@ export default class PluginMarket extends TypertRemoteService {
 function listingOf(
   plugin: MarketPlugin, bundles: readonly BundleInfo[], exemptions: Readonly<Record<string, readonly string[]>>, runtimeVersion: string,
 ): MarketListingEntry {
-  const versions = plugin.versions.map((version): MarketListingVersion => ({
-    ...version,
-    install: marketInstallTarget(plugin.name, version),
-    compatibility: compatibilityOf(plugin.name, version, exemptions, runtimeVersion),
-  }))
+  const bundle = bundles.find(candidate => candidate.name === plugin.name)
+  // A Git copy updates only to another commit of the repository directory it came from.
+  const origin = bundle?.update === 'git' && bundle.source !== undefined ? pinnedGitOrigin(bundle.source) : undefined
+  const installedVersion = bundle?.version
+  const versions = plugin.versions.map((version): MarketListingVersion => {
+    const install = marketInstallTarget(plugin.name, version)
+    const update = origin !== undefined && installedVersion !== undefined && semver.gt(version.version, installedVersion)
+      && pinnedGitOrigin(install.spec) === origin
+    return { ...version, install, compatibility: compatibilityOf(plugin.name, version, exemptions, runtimeVersion), update }
+  })
   const compatible = versions.filter(version => version.compatibility.compatible)
   const stable = plugin.versions.some(version => semver.prerelease(version.version) === null)
   const defaultVersion = compatible.find(version => !stable || semver.prerelease(version.version) === null)?.version
@@ -330,12 +527,11 @@ function listingOf(
     ...plugin,
     versions,
     ...defaultVersion === undefined ? {} : { defaultVersion },
-    installation: installationOf(plugin.name, measured, bundles),
+    installation: installationOf(bundle, measured),
   }
 }
 
-function installationOf(name: string, version: string, bundles: readonly BundleInfo[]): MarketInstallation {
-  const bundle = bundles.find(candidate => candidate.name === name)
+function installationOf(bundle: BundleInfo | undefined, version: string): MarketInstallation {
   // An on-demand catalog entry is listed before the profile installs it.
   if (bundle === undefined || (!bundle.installed && bundle.availability !== 'installation')) return { status: 'not-installed' }
   if (!bundle.installed) return { status: 'provided', ...bundle.version === undefined ? {} : { installedVersion: bundle.version } }

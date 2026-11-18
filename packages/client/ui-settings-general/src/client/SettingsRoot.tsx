@@ -1,14 +1,17 @@
 /**
  * Settings shell root: the sidebar-foot trigger row plus the centered modal
- * panel (figma 2552:26025, 760x500) with the section nav rail. The shell is
- * a pure composition face — slot-owned text (trigger label, panel title,
- * close label, sections) arrives from registrants through slots; accessible
- * names resolve from localized content (trigger: shell locale; dialog:
- * aria-labelledby the title node; close: visually-hidden slot text). Modal
- * open state and the active section id belong to the declared owner store;
- * the onboarding coordinator mounts exactly one ordered registrant while the
- * sessions-derived empty-Hero fact is active. Visible dialog chrome belongs
- * to the step, so a mounted-but-deciding step paints nothing here.
+ * panel with the section nav rail. In browsers below 768px the panel fills
+ * the viewport and the rail turns into a horizontal strip; Windows and macOS
+ * desktop windows retain the rail
+ * (SettingsRoot.module.css). The shell is a pure composition face —
+ * slot-owned text (trigger label, panel title, close label, sections) arrives
+ * from registrants through slots; accessible names resolve from localized
+ * content (trigger: shell locale; dialog: aria-labelledby the title node;
+ * close: visually-hidden slot text). Modal open state and the active section
+ * id belong to the declared owner store; the onboarding coordinator mounts
+ * exactly one ordered registrant while the sessions-derived empty-Hero fact
+ * is active. Visible dialog chrome belongs to the step, so a
+ * mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -30,17 +33,18 @@ const CONNECTING_MIN_VISIBLE_MS = 800
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
-  if (id === 'account') return <IconUserOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'models') return <IconDataOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'agent-presets') return <IconAgentPresetOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'plugins') return <IconPersonalizationOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'archived-sessions') return <IconArchiveOutlineMedium className={css.navIcon} size={16} />
-  return <IconSettingsOutlineMedium className={css.navIcon} size={16} />
+  if (id === 'account') return <IconUserOutlineMedium size={16} />
+  if (id === 'models') return <IconDataOutlineMedium size={16} />
+  if (id === 'agent-presets') return <IconAgentPresetOutlineMedium size={16} />
+  if (id === 'plugins') return <IconPersonalizationOutlineMedium size={16} />
+  if (id === 'archived-sessions') return <IconArchiveOutlineMedium size={16} />
+  return <IconSettingsOutlineMedium size={16} />
 }
 
 type PanelProps = {
   rows: readonly SettingsSectionRow[]
   renderSlot: SettingsRootComponentProps['renderSlot']
+  renderFactorySlot: SettingsRootComponentProps['renderFactorySlot']
   activeId: string | undefined
   onSelect: (id: string) => void
   onClose: () => void
@@ -51,7 +55,7 @@ type PanelProps = {
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's).
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ rows, renderSlot, renderFactorySlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
@@ -68,9 +72,12 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div ref={panel} tabIndex={-1} data-shortcut-modal="settings" className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        {/* The four seats stay direct children of the panel and take their
+            places from its grid: title and header share the first row, the
+            navigation and the active section the second. */}
+        <div className={css.navTitle} id={titleId} tabIndex={-1}
+          data-modal-autofocus={active === undefined ? '' : undefined}>{renderSlot('settings.header', {})}</div>
         <nav className={css.nav}>
-          <div className={css.navTitle} id={titleId} tabIndex={-1}
-            data-modal-autofocus={active === undefined ? '' : undefined}>{renderSlot('settings.header', {})}</div>
           <div className={css.navList}>
             {rows.map(row => (
               <button
@@ -79,25 +86,28 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 className={clsx(css.navCell, row.id === active && css.active)}
                 aria-current={row.id === active ? 'true' : undefined}
                 data-modal-autofocus={row.id === active ? '' : undefined}
+                onFocus={(event) => { event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}
                 onClick={() => { onSelect(row.id) }}
               >
-                {navIcon(row.id)}
+                <span className={css.navIcon} aria-hidden="true">
+                  {renderSlot('settings.section.icon', { size: 16, active: row.id === active }, {
+                    only: row.id, fallback: navIcon(row.id),
+                  })}
+                </span>
                 <span className={css.navLabel}>{row.label}</span>
               </button>
             ))}
           </div>
         </nav>
-        <div className={css.content}>
-          <div className={css.header}>
-            <div className={css.actions}>{renderSlot('settings.action', {})}</div>
-            <button type="button" className={css.close} onClick={onClose}>
-              <IconCloseOutlineRegular size={14} />
-              <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
-            </button>
-          </div>
-          <div className={css.options}>
-            {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
-          </div>
+        <div className={css.header}>
+          <div className={css.actions}>{renderSlot('settings.action', {})}</div>
+          <button type="button" className={css.close} onClick={onClose}>
+            <IconCloseOutlineRegular size={14} />
+            <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
+          </button>
+        </div>
+        <div className={css.options}>
+          {active !== undefined && renderFactorySlot('settings.section.view', { id: active, close: onClose })}
         </div>
       </div>
     </div>
@@ -111,7 +121,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
+    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, renderFactorySlot, t,
     useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts,
   } = props
   const { open, activeId } = useStore(state => state)
@@ -211,11 +221,17 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
     connectionIndicator = 'recovered'
   }
 
+  const openSettings = (sectionId?: string): void => {
+    if (sectionId === undefined) actions.open()
+    else actions.openSection(sectionId)
+  }
+
   return (
     <>
+      <div className={css.noticeRow} hidden={!wide}><div className={css.notice}>{renderSlot('settings.notice', { openSettings })}</div></div>
       <div className={clsx(css.triggerRow, !wide && css.railRow)}>
         {renderSlot('settings.launcher', {
-          wide, settingsOpen: open, openSettings: actions.open,
+          wide, settingsOpen: open, openSettings,
           ...(shortcut?.keys.length ? { settingsShortcut: { keys: shortcut.keys, aria: shortcut.aria } } : {}),
           openOnboarding: (id) => { close(); setRequestedOnboarding(id) },
         }, { fallback: <Tooltip disabled={open} label={t('trigger')} shortcutKeys={shortcut?.keys}>
@@ -247,6 +263,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         <SettingsPanel
           rows={rows}
           renderSlot={renderSlot}
+          renderFactorySlot={renderFactorySlot}
           activeId={activeId}
           onSelect={actions.select}
           onClose={close}

@@ -2,12 +2,13 @@
  * One opened JSON unit in `per-record` layout: the unit is a directory at
  * `dir`, holding one document per record under `<dir>/<table>/<key>.json`
  * plus `global.json` for the global slot. The directory is the state — this
- * unit holds NO in-memory state of its own: `loadAll` re-reads the tree and
- * every write is one durable file operation. The domain layer owns the live
+ * unit holds NO in-memory state of its own: `loadAll` re-reads the tree, each
+ * put or delete touches one durable document, and a batch delete renames its
+ * documents out of the readable set before unlinking them. The domain layer owns the live
  * in-memory tables (seeded by the open-time `loadAll`) and serializes writes
- * through its write chain, so this unit never mutates memory and needs no
- * rollback — a failed write simply leaves both the file and the domain's
- * memory unchanged.
+ * through its write chain. A rejected write leaves domain memory unchanged;
+ * a failed deletion restores its staged documents or quarantines the unit
+ * with `unknown-state` when restoration cannot be established.
  *
  * Per-record contract: a record document that is malformed or stamped with a
  * version outside the accepted set (the descriptor's current version plus
@@ -16,13 +17,13 @@
  * the record instead of migrating it. Record keys become path segments, so
  * they must be path-safe (`[a-zA-Z0-9_-]+`); an unsafe key rejects at write.
  *
- * Legacy bootstrap: when the new tree has no document path, a legacy
- * whole-unit file `<root>/<name>.json` (the pre-per-record layout) seeds
+ * Legacy bootstrap: when the new tree has no declared table directory or
+ * global document, a whole-unit file `<root>/<name>.json` seeds
  * per-record documents, provided its stored unit version is in the accepted
  * set — a legacy file stamped with any other version is left alone and reads
- * as the empty unit. Any new document path, including one whose contents are
- * unreadable or stale, suppresses the bootstrap for the whole unit. The
- * legacy file is never changed or deleted.
+ * as the empty unit. An existing declared table directory, even when empty,
+ * or a declared global document suppresses the bootstrap for the whole unit.
+ * The legacy file is never changed or deleted.
  * @module @deepseek-ai/dsh-storage-json/src/per-record-unit
  */
 
@@ -31,7 +32,7 @@ import { dirname, join } from 'node:path'
 import type { Dirent } from 'node:fs'
 import { StorageError } from '@deepseek-ai/dsh-storage'
 import type { KvUnit, KvUnitDescriptor } from '@deepseek-ai/dsh-storage'
-import { writeAtomic } from './atomic.ts'
+import { fsyncDirectory, writeAtomic } from './atomic.ts'
 import { parseRecord, serializeRecord } from './format.ts'
 import type { UnitState } from './format.ts'
 
@@ -81,13 +82,14 @@ async function loadPerRecordState(descriptor: KvUnitDescriptor, dir: string): Pr
     // Missing directory = empty unit; the legacy bootstrap below still runs
     // (the fresh-upgrade shape is exactly an absent new tree).
   }
-  const hasNewDocuments = entries === undefined
+  const hasNewState = entries === undefined
     ? false
     : (await Promise.all(entries.map(async (entry) => {
       if (entry.isDirectory()) {
         const records = state.tables.get(entry.name)
         if (records !== undefined) {
-          return loadTableRecords(records, versions, join(dir, entry.name))
+          await loadTableRecords(records, versions, join(dir, entry.name))
+          return true
         }
       }
       if (entry.name === 'global.json' && descriptor.hasGlobal) {
@@ -97,7 +99,7 @@ async function loadPerRecordState(descriptor: KvUnitDescriptor, dir: string): Pr
       }
       return false
     }))).some(Boolean)
-  if (!hasNewDocuments) await bootstrapLegacyUnit(descriptor, dir, state)
+  if (!hasNewState) await bootstrapLegacyUnit(descriptor, dir, state)
   return state
 }
 
@@ -107,7 +109,7 @@ function acceptedStamps(descriptor: KvUnitDescriptor): readonly number[] {
 }
 
 /**
- * Bootstrap an empty per-record tree from a legacy whole-unit file
+ * Bootstrap an unmaterialized per-record tree from a legacy whole-unit file
  * (`<root>/<name>.json`, the pre-per-record layout). Every declared-table
  * record is copied into a current-version document, while the legacy file is
  * retained unchanged. A missing, foreign (another unit's name), malformed,
@@ -158,12 +160,9 @@ async function bootstrapLegacyUnit(descriptor: KvUnitDescriptor, dir: string, st
 
 /**
  * Read one declared table's record documents into `records`.
- * @returns whether the directory contains any `.json` document path,
- * independently of key safety, readability, or stored version.
  */
-async function loadTableRecords(records: Map<string, unknown>, versions: readonly number[], dir: string): Promise<boolean> {
+async function loadTableRecords(records: Map<string, unknown>, versions: readonly number[], dir: string): Promise<void> {
   const files = await readdir(dir, { withFileTypes: true })
-  const hasDocuments = files.some(file => file.name.endsWith('.json'))
   const loaded = await Promise.all(files.map(async (file) => {
     if (!file.name.endsWith('.json')) return
     const key = file.name.slice(0, -'.json'.length)
@@ -174,7 +173,6 @@ async function loadTableRecords(records: Map<string, unknown>, versions: readonl
   for (const record of loaded) {
     if (record !== undefined) records.set(...record)
   }
-  return hasDocuments
 }
 
 /** Read one record document; a foreign (unreadable or stale) one reads as absent. */
@@ -188,12 +186,14 @@ async function readRecord(path: string, versions: readonly number[]): Promise<un
 
 /**
  * One opened `per-record`-layout unit. Stateless by design: the directory is
- * the medium, the domain layer owns the live memory, and each method here is
- * a single durable file operation. Write ordering belongs to the caller (the
- * domain layer's write chain), exactly like the `single`-layout unit.
+ * the medium and the domain layer owns the live memory. Replacements publish
+ * one document; deletions stage and sync their documents before cleanup.
+ * Write ordering belongs to the caller (the domain layer's write chain).
  */
 export class PerRecordJsonUnit implements KvUnit {
   private closed = false
+  /** Set when a failed batch could not restore its staged documents. */
+  private unusable: StorageError | undefined
   /** In-flight durable writes; close() drains them before releasing the unit. */
   private readonly inFlight = new Set<Promise<void>>()
 
@@ -222,10 +222,77 @@ export class PerRecordJsonUnit implements KvUnit {
   }
 
   /** Durably delete one record. Idempotent: a missing key is a no-op. */
-  async deleteRecord(table: string, key: string): Promise<void> {
+  deleteRecord(table: string, key: string): Promise<void> {
+    return this.deleteRecords(table, [key])
+  }
+
+  /**
+   * Durably delete many records as one batch. Documents are renamed out of the
+   * readable set first; only after the whole batch is staged are the staged
+   * copies unlinked. A failure while staging restores the documents it moved,
+   * so a rejection normally leaves the batch unapplied. If that restoration
+   * itself fails, the readable or durable state is unknown: the unit rejects with
+   * `unknown-state` and every later operation on it rejects, while `close`
+   * still releases it. Staged directory changes are synced before cleanup on
+   * POSIX, so a resolved deletion remains absent after a crash. Cleanup residue
+   * is not readable (`open` reads `*.json` documents only).
+   */
+  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
     this.assertOpen()
-    assertSafeKey(this.descriptor.name, key)
-    await this.tracked(rm(join(this.tableDir(table), `${key}.json`), { force: true }))
+    const dir = this.tableDir(table)
+    const unique = [...new Set(keys)]
+    for (const key of unique) assertSafeKey(this.descriptor.name, key)
+    // Track staging, restoration, and cleanup together so close() drains them.
+    await this.tracked(this.removeDocuments(dir, unique))
+  }
+
+  /**
+   * Remove one batch's documents under a single tracked promise.
+   * @param dir - Declared table directory.
+   * @param keys - Validated, de-duplicated record keys.
+   */
+  private async removeDocuments(dir: string, keys: readonly string[]): Promise<void> {
+    const staged: Array<{ from: string; to: string }> = []
+    try {
+      for (const key of keys) {
+        const from = join(dir, `${key}.json`)
+        const to = `${from}.deleting`
+        try {
+          await rename(from, to)
+        } catch (error: unknown) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+          throw error
+        }
+        staged.push({ from, to })
+      }
+      if (staged.length > 0) await fsyncDirectory(dir)
+    } catch (error: unknown) {
+      const restoreFailures: unknown[] = []
+      for (const { from, to } of staged) {
+        try {
+          await rename(to, from)
+        } catch (restoreError: unknown) {
+          restoreFailures.push(restoreError)
+        }
+      }
+      if (staged.length > 0) {
+        try {
+          await fsyncDirectory(dir)
+        } catch (restoreError: unknown) {
+          restoreFailures.push(restoreError)
+        }
+      }
+      if (restoreFailures.length === 0) throw error
+      this.unusable = new StorageError(
+        'unknown-state',
+        `unit '${this.descriptor.name}' could not restore a failed batch delete; its state is unknown`,
+        { cause: new AggregateError([error, ...restoreFailures], 'batch delete failed and restoration failed') },
+      )
+      throw this.unusable
+    }
+    // The renames already removed the batch from the readable set; unlinking is
+    // cleanup, and a failed unlink leaves an unreadable file rather than an entry.
+    await Promise.allSettled(staged.map(({ to }) => rm(to, { force: true })))
   }
 
   /**
@@ -269,6 +336,7 @@ export class PerRecordJsonUnit implements KvUnit {
     if (this.closed) {
       throw new StorageError('closed', `unit '${this.descriptor.name}' is closed`)
     }
+    if (this.unusable !== undefined) throw this.unusable
   }
   /* jscpd:ignore-end */
 
@@ -281,11 +349,10 @@ export class PerRecordJsonUnit implements KvUnit {
   }
 
   /** Durably replace one document, creating its parent directory. */
-  private writeDocument(path: string, value: unknown): Promise<void> {
-    return (async () => {
-      await mkdir(dirname(path), { recursive: true, mode: 0o700 })
-      await writeAtomic(path, serializeRecord(this.descriptor.version, value))
-    })()
+  private async writeDocument(path: string, value: unknown): Promise<void> {
+    const text = serializeRecord(this.descriptor.version, value)
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    await writeAtomic(path, text)
   }
 
   /** Track one durable write so close() drains it. */

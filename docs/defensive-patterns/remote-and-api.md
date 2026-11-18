@@ -84,7 +84,7 @@ The hand-written copy drifts from the generated type without failing a build, th
 
 The packages under `packages/api` — the controllers, `gateway`, and `remotes` — carry transport, call shape, Session lifecycle, and other generic orchestration. A business branch never aggregates there: a decision that depends on concrete business state, handling bound to one feature, or a per-feature filter belongs in its own package or module and reaches this layer as projected data or through a registration surface. The criterion is where the logic belongs, not where the file sits, so a branch that only makes sense for one feature is a defect even when the file holding it is generic.
 
-- Judged by: where the branch reads its condition. An `if` or `switch` over feature state, a per-feature filter, or a helper named for one feature inside `packages/api` is the defect; the same decision taken in the owning package and consumed here as projected data or a registered entry is not. The package census shows the impact: `packages/api` holds nine packages — `account-controller`, `gateway`, `job-controller`, `remotes`, `session-controller`, `settings-controller`, `terminal-controller`, `workspace-controller`, `workspace-files` — and `session-controller` is the largest at 34 `src` files (terminal-controller 12, gateway 11, workspace-controller 10, workspace-files 8, job-controller 8, remotes 4, settings-controller 3, account-controller 2).
+- Judged by: where the branch reads its condition. An `if` or `switch` over feature state, a per-feature filter, or a helper named for one feature inside `packages/api` is the defect; the same decision taken in the owning package and consumed here as projected data or a registered entry is not. The package census shows the impact: `packages/api` holds eight packages — `gateway`, `job-controller`, `remotes`, `session-controller`, `settings-controller`, `terminal-controller`, `workspace-controller`, `workspace-files` — and `session-controller` is the largest at 34 `src` files (terminal-controller 12, gateway 11, workspace-controller 10, workspace-files 8, job-controller 8, remotes 4, settings-controller 3).
 - Not covered: generic Session lifecycle, transport, and storage abstraction stay — `gateway` dispatch, `remotes` selection, and shared session-list and catalog reads are infrastructure, not business logic. [Business ownership](../api-gateway.md#business-ownership) states the same split from the Gateway side.
 - Exception: none by default. Adding a business branch here needs an independent-package review, and that review answers why the logic cannot live in the package that owns the feature.
 - Fix: move the decision into the owning package, publish its result as projected data or register it on a registry this layer already injects, and leave only the orchestration that reads it.
@@ -93,16 +93,18 @@ The owning package decides and registers its unit, and the controller only reads
 
 ```ts ignore-check
 // packages/workspace/<feature>/src/index.ts: the rule lives with the feature it serves.
-ctx.sessionProjections.register({
+export const durablePageProjectionDefinition = {
   key: 'durablePage',
   stateSchema: durablePageState,
   init: () => ({ durable: false }),
   apply: applyDurablePage,
   stateVersion: 1,
-})
+}
+await ctx.sessionProjections.register(durablePageProjectionDefinition)
 
 // packages/api/session-controller: generic orchestration reads the projected value.
-const { durable } = ctx.sessionProjections.stateOf(session, 'durablePage')
+const durablePage = await ctx.sessionProjections.register(durablePageProjectionDefinition)
+const { durable } = durablePage.stateOf(session)
 ```
 
 The wrong version decides the rule inside the shared layer:

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Harness development context",
+    "description": "Give the model the Harness source directory and Web URL without changing its system prompt."
+  }
+}

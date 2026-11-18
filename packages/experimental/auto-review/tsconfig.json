@@ -46,6 +46,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

@@ -16,6 +16,7 @@ import type { DesktopUpdatePresentation } from '../src/types.ts'
 const SELF = '@deepseek-ai/dsh-client-ui-settings-general'
 const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
 const it = createClientTest({ roster: webApp })
+const withoutSettingsAccess = createClientTest({ roster: webApp }, { access: action => action !== 'settings/describe' })
 /** The whole roster's first boot pays the cold module transform of every plugin package. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
 
@@ -24,21 +25,23 @@ function injectedOf(c: TestClient): SettingsRootInjected {
   return (entry.inject as () => SettingsRootInjected)()
 }
 
-/** The shell's child declarations (chrome, actions, sections, and onboarding overlays). */
+/** The slots this package declares, through the shell or the `settings.section.view` Factory. */
 const CHILD_SPECS = {
   'settings.launcher': { kind: 'single', scope: 'root' },
+  'settings.notice': { kind: 'single', scope: 'root' },
   'settings.trigger': { kind: 'single', scope: 'root' },
   'settings.header': { kind: 'single', scope: 'root' },
   'settings.action': { kind: 'list', scope: 'root' },
   'settings.close': { kind: 'single', scope: 'root' },
   'settings.section': { kind: 'list', scope: 'root' },
+  'settings.section.icon': { kind: 'list', scope: 'root', inline: true },
   'settings.onboarding': { kind: 'list', scope: 'root' },
 } as const
 const CHILD_NAMES = Object.keys(CHILD_SPECS) as Array<keyof typeof CHILD_SPECS>
 
 /**
  * Section ids the web-app roster registers, in nav order: this package, then
- * ui-settings-models, ui-settings-plugins, and ui-agent-preset. A plugin
+ * ui-settings-models, ui-plugin-manager, and ui-agent-preset. A plugin
  * adding a section changes this list.
  */
 const PRODUCT_SECTIONS: readonly string[] = ['general', 'models', 'plugins', 'agent-presets']
@@ -77,13 +80,18 @@ describe('ui-settings-general shell', () => {
   }, COLD_BOOT_TIMEOUT_MS)
 
   it('declares its services', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts', 'modules'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts', 'modules', 'remoteAccess'])
   })
 
   it('occupies sidebar.settings, declared by ui-sidebar, and declares every child slot', async ({ start }) => {
     const c = await start()
     expect(c.ctx.slots.entries('sidebar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
     for (const name of CHILD_NAMES) expect(c.ctx.slots.spec(name)).toEqual(CHILD_SPECS[name])
+  }, COLD_BOOT_TIMEOUT_MS)
+
+  withoutSettingsAccess('leaves sidebar.settings unoccupied while the current Peer may not read the settings description', async ({ start }) => {
+    const c = await start()
+    expect(c.ctx.slots.entries('sidebar.settings')).toEqual([])
   }, COLD_BOOT_TIMEOUT_MS)
 
   it('projects the section ledger: product sections in order, defaults for bare rows, stable snapshots', async ({ start }) => {
@@ -114,13 +122,13 @@ describe('ui-settings-general shell', () => {
     const { sections } = injectedOf(c).hooks
     await c.mock.streams.opened('account/watch', 1)
     expect(sections.getSnapshot().map(row => row.id)).toEqual(PRODUCT_SECTIONS)
-    c.mock.streams.push('account/watch', { status: 'credential-stored', attempt: null })
+    c.mock.streams.push('account/watch', { type: 'snapshot', state: { status: 'credential-stored', attempt: null } })
     await vi.waitFor(() => {
       expect(sections.getSnapshot().map(row => row.id)).toEqual(['account', ...PRODUCT_SECTIONS])
     })
-    c.mock.streams.push('account/watch', { status: 'credential-stored', attempt: null })
+    c.mock.streams.push('account/watch', { type: 'snapshot', state: { status: 'credential-stored', attempt: null } })
     await vi.waitFor(() => { expect(sections.getSnapshot().filter(row => row.id === 'account')).toHaveLength(1) })
-    c.mock.streams.push('account/watch', { status: 'signed-out', attempt: null })
+    c.mock.streams.push('account/watch', { type: 'snapshot', state: { status: 'signed-out', attempt: null } })
     await vi.waitFor(() => { expect(sections.getSnapshot().map(row => row.id)).toEqual(PRODUCT_SECTIONS) })
   })
 

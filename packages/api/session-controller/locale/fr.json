@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "interface de contrôle de session",
+    "description": "Fournit des fonctionnalités de lecture de session, de contrôle d’exécution et de mise à jour de statut aux clients."
+  }
+}

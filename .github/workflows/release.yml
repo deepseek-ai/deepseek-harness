@@ -30,7 +30,8 @@ jobs:
     name: Dependency layout
     # Persistent runners accept only trusted, credential-free rehearsals.
     runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+        || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
         && github.repository == 'deepseek-harness/deepseek-harness'
         && github.actor != 'dependabot[bot]'
         && ((github.event_name == 'push' && github.ref == 'refs/heads/master')
@@ -80,11 +81,20 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
-      - name: Verify dependency policy
-        run: pnpm run verify-package-dependencies
-
-      - name: Verify npm install layout
-        run: pnpm run verify-npm-install-layout
+      # The two verifications read different inputs (manifests versus an npm
+      # install in a scratch directory), so they run beside each other.
+      - name: Verify dependency policy and npm install layout
+        run: |
+          pnpm run verify-package-dependencies &
+          dependencies_pid=$!
+          pnpm run verify-npm-install-layout &
+          layout_pid=$!
+          dependencies_status=0
+          wait "$dependencies_pid" || dependencies_status=$?
+          layout_status=0
+          wait "$layout_pid" || layout_status=$?
+          if (( dependencies_status != 0 )); then exit "$dependencies_status"; fi
+          exit "$layout_status"
 
   pack:
     name: Pack npm tarballs

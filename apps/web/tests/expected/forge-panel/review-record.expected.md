@@ -1,0 +1,8 @@
+- region "R2–4":
+  - text: R2–4 · 在 aaaaaaa 上 lin 1 个月前
+  - button "lin 的评论操作"
+  - paragraph: 请核对边界条件
+  - button "回复…"
+  - button "添加到输入框"
+  - button "在 GitHub 中查看"
+  - button "解决讨论"

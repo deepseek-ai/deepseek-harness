@@ -2,7 +2,8 @@
 import type { EventEmitter } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
 import { WebContentsView, session, shell, type Session, type View, type WebFrameMain } from 'electron'
-import { mergePlatformCookies, platformClientHeaders, type PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
+import type { PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
+import { mergePlatformCookies, platformClientHeaders } from '@deepseek-ai/dsh-deepseek-account/client-metadata'
 import { desktopClientMetadata } from './client-metadata.ts'
 
 import { PLATFORM_IPC, type PlatformLocale } from './platform-ipc.ts'
@@ -51,9 +52,10 @@ export class DesktopPlatformView {
    * @param preload - bundled sandboxed Platform preload path.
    * @param getLocale - current resolved Desktop language.
    * @param platform - operating system this shell runs on, reported to Platform.
+   * @param blocked - Whether shell policy or an update prompt prevents opening a product view.
    */
   constructor(private readonly preload: string, private readonly getLocale: () => PlatformLocale,
-    private readonly platform: 'darwin' | 'win32') {}
+    private readonly platform: 'darwin' | 'win32', private readonly blocked: (owner: PlatformOwner) => boolean) {}
 
   /** @param next - private Host credentials; identity enrichment preserves an already open temporary document. */
   setSession(next: PlatformSession | null): void {
@@ -75,9 +77,11 @@ export class DesktopPlatformView {
    * @param page - explicit supported Platform page.
    * @param bounds - owned renderer rectangle.
    * @returns when loading finishes, or without a document when superseded or the owner closes or navigates.
+   * @throws When a shell update prompt blocks admission, including after storage cleanup.
    */
   async open(owner: PlatformOwner, page: 'usage' | 'top-up', bounds: PlatformBounds): Promise<void> {
     if (this.disposed) throw new Error('Platform view disposed')
+    if (this.blocked(owner)) throw new Error('Platform view blocked by update prompt')
     this.close()
     const account = this.account
     if (account === null) throw new Error('Platform account unavailable')
@@ -104,6 +108,7 @@ export class DesktopPlatformView {
     // Sanitize persisted authentication even after an unclean previous process exit.
     const failure = await this.cleanStorage(browserSession)
     if (generation !== this.generation) return
+    if (this.blocked(owner)) { this.close(); throw new Error('Platform view blocked by update prompt') }
     if (failure !== null) {
       this.close()
       throw failure.error

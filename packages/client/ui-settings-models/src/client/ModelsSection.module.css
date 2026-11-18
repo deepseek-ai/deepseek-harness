@@ -6,7 +6,7 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 720px;
   color: var(--dsw-alias-label-primary);
 }
@@ -42,12 +42,11 @@
 
 .rows {
   list-style: none;
-  /* Extra air between the title/intro block and the first provider card. */
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 /* Provider cards share the settings material; editors use the inset module fill. */
@@ -58,7 +57,7 @@
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .rowHead {
@@ -156,8 +155,10 @@
   color: var(--dsw-alias-label-primary-foreground);
 }
 
-.primaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
+@media (hover: hover) {
+  .primaryButton:hover:not(:disabled) {
+    background: var(--dsw-alias-button-primary-hover);
+  }
 }
 
 .secondaryButton,
@@ -167,13 +168,15 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.secondaryButton:hover:not(:disabled),
-.addButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+@media (hover: hover) {
+  .secondaryButton:hover:not(:disabled),
+  .addButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.secondaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+  .secondaryButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .dangerButton {
@@ -193,8 +196,10 @@
   cursor: pointer;
 }
 
-.dangerButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
+@media (hover: hover) {
+  .dangerButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+  }
 }
 
 /* Provider-row controls use the compact Button size. */
@@ -291,10 +296,16 @@
   cursor: help;
 }
 
-.helpButton:hover,
 .helpButton:focus-visible {
   color: var(--dsw-alias-label-primary);
   border-color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .helpButton:hover {
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-label-tertiary);
+  }
 }
 
 .linkButton {
@@ -313,9 +324,11 @@
   cursor: pointer;
 }
 
-.linkButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .linkButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .advancedHint {
@@ -329,6 +342,10 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.addBlock > .editorActions {
+  margin-top: 12px;
 }
 
 .addBlock {
@@ -432,12 +449,21 @@
   transition: transform 120ms ease;
 }
 
-.customized[open] > .customizedSummary::before {
+.customized[open] > .customizedSummary::before,
+.retryFold[open] > .customizedSummary::before {
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
-.customizedSummary:hover {
-  color: var(--dsw-alias-label-primary);
+/* The nested fold labels a part of the retry policy, so it reads at field-label weight. */
+.retryFold > .customizedSummary {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .customizedSummary:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .customizedBody {
@@ -448,10 +474,11 @@
 }
 
 .modelCatalog {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
+  gap: 12px;
+  padding-top: 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -477,9 +504,11 @@
 }
 
 .modelList {
+  --model-row-gap: 12px;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--model-row-gap);
 }
 
 .modelListHead {
@@ -490,6 +519,11 @@
 }
 
 .modelEntry {
+  container: model-row / inline-size;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 1fr) 28px 28px;
+  column-gap: 6px;
+  position: relative;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
   padding: 6px;
@@ -497,9 +531,109 @@
 
 .modelRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: 6px;
+}
+
+.modelName {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.modelNameLabel {
+  display: none;
+}
+
+@container model-row (max-width: 440px) {
+  .modelRow > .modelAdvanced {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modelRow {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .modelRow .modelName {
+    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 2px 4px 0;
+  }
+
+  .modelRow[data-expanded] .modelName {
+    display: flex;
+  }
+
+  .modelNameLabel {
+    display: block;
+  }
+}
+
+.modelDragHandle:not(:disabled) {
+  cursor: grab;
+}
+
+.modelEntry[data-dragging] {
+  opacity: 0.5;
+}
+
+.modelEntry[data-drop-target] {
+  z-index: 1;
+}
+
+.modelDragPreview {
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* Cover half the row gap plus the border's inward, pixel-rounded positioning edge. */
+.modelEntry::before,
+.modelEntry::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  height: calc(var(--model-row-gap) / 2 + 1px);
+}
+
+.modelEntry::before {
+  top: calc(-1 * (var(--model-row-gap) / 2 + 1px));
+}
+
+.modelEntry::after {
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 1px));
+}
+
+.modelEntry[data-drop-target='before']::before,
+.modelEntry[data-drop-target='after']::after {
+  height: 12px;
+  background:
+    linear-gradient(
+      55deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 0 / 5px 7px no-repeat,
+    linear-gradient(
+      125deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 5px / 5px 7px no-repeat,
+    linear-gradient(
+      var(--dsw-alias-state-business-primary) 0 0
+    ) 4px 5px / calc(100% - 4px) 2px no-repeat;
+}
+
+.modelEntry[data-drop-target='before']::before {
+  top: calc(-1 * (var(--model-row-gap) / 2 + 6px));
+}
+
+.modelEntry[data-drop-target='after']::after {
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 6px));
 }
 
 /* Square, label-free affordances: the row's own inputs carry the meaning, so
@@ -518,9 +652,11 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:disabled {
@@ -529,23 +665,62 @@
 }
 
 /* The delete glyph keeps the danger tint the rest of the section uses. */
-.iconButtonDanger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
+@media (hover: hover) {
+  .iconButtonDanger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 .modelAdvanced {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-column: 2 / 4;
+  grid-template-columns: subgrid;
+  row-gap: 16px;
+  padding: 16px 0 6px;
+}
+
+/* Retry-policy fields under the mode select: codes and count, then the folded backoff values. */
+.retryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Code checkboxes in as many even columns as fit. */
+.retryCodeChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 16px;
+}
+
+/* Custom error-code input beside its Add action. */
+.retryCodeAdd {
+  display: flex;
   gap: 8px;
-  padding: 8px 4px 2px;
+  margin-top: 8px;
+}
+
+/* One backoff column wide, so the count lines up with the delay fields below. */
+.retryCount {
+  width: max(112px, calc((100% - 16px) / 3));
+  max-width: 100%;
+}
+
+.retryBackoff {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  align-items: end;
+  gap: 12px 8px;
+  padding-top: 8px;
 }
 
 .modelField {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 4px;
+  gap: 6px;
 }
 
 .modelInputTypes {
@@ -558,7 +733,7 @@
 
 .modelInputTypes legend {
   padding: 0;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .modelInputChoices {
@@ -625,21 +800,24 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
+  gap: 6px;
+  height: 32px;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
+  margin-top: 4px;
 }
 
-.addModelButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .addModelButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .input {
@@ -669,7 +847,7 @@ select.input {
 }
 
 .input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .input:disabled {
@@ -679,6 +857,11 @@ select.input {
 
 .keyInput {
   position: relative;
+}
+
+.savedKeyInput .input::placeholder {
+  color: var(--dsw-alias-label-primary);
+  opacity: 1;
 }
 
 .keyInputFilled {
@@ -700,8 +883,10 @@ select.input {
   cursor: pointer;
 }
 
-.keyToggle:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .keyToggle:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .keyToggle:focus-visible {
@@ -740,12 +925,14 @@ select.input {
 }
 
 .deleteConfirm:not(:disabled) {
-  border-color: var(--dsw-alias-state-error-primary);
+  --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
   color: var(--dsw-alias-state-error-primary);
 }
 
-.deleteConfirm:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
+@media (hover: hover) {
+  .deleteConfirm:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+  }
 }
 
 /* Icon-button label seat: named for assistive tech and for the tests that
@@ -828,4 +1015,16 @@ select.input {
   font-size: 13px;
   line-height: 20px;
   text-align: center;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (pointer: coarse) {
+  .input {
+    font-size: 16px;
+  }
 }

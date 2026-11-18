@@ -1,6 +1,7 @@
 {
   "meta": {
-    "title": "Developer Tools",
-    "description": "Inspect and debug raw session data, grouped chat messages, and the NodeJS backend."
+    "title": "Developer tools",
+    "description": "For troubleshooting: view what DSH recorded for a session in Session log, inspect per-turn and per-step statistics in the Statistics tab, and debug the DSH backend in Chrome DevTools.",
+    "detail": "docs/DETAIL.md"
   }
 }

@@ -84,7 +84,7 @@ type SessionRemote = { list(): ...; rename(id: string): ... }   // hand-written 
 
 `packages/api` 下的包——各 controller、`gateway`、`remotes`——承载传输、调用形态、Session 生命周期等通用编排。业务分支绝不在其中聚合：依赖具体业务状态的判断、与单个功能绑定的处理、逐功能的过滤，都归独立包或模块，并作为投影数据或经注册面接入本层。判据是逻辑的归属，而不是文件的位置，所以只对一个功能成立的业务分支即使放在通用文件里也是缺陷。
 
-- 判定：分支的条件从哪里读取。在 `packages/api` 内对功能状态做 `if` 或 `switch`、写逐功能的过滤、或以某个功能命名的辅助方法，即为缺陷；同样的判断由归属包做出、在本层作为投影数据或注册条目消费，则不是。包普查是影响面的证据：`packages/api` 共 9 个包——`account-controller`、`gateway`、`job-controller`、`remotes`、`session-controller`、`settings-controller`、`terminal-controller`、`workspace-controller`、`workspace-files`——其中 `session-controller` 以 34 个 `src` 文件为最多（terminal-controller 12、gateway 11、workspace-controller 10、workspace-files 8、job-controller 8、remotes 4、settings-controller 3、account-controller 2）。
+- 判定：分支的条件从哪里读取。在 `packages/api` 内对功能状态做 `if` 或 `switch`、写逐功能的过滤、或以某个功能命名的辅助方法，即为缺陷；同样的判断由归属包做出、在本层作为投影数据或注册条目消费，则不是。包普查是影响面的证据：`packages/api` 共 8 个包——`gateway`、`job-controller`、`remotes`、`session-controller`、`settings-controller`、`terminal-controller`、`workspace-controller`、`workspace-files`——其中 `session-controller` 以 34 个 `src` 文件为最多（terminal-controller 12、gateway 11、workspace-controller 10、workspace-files 8、job-controller 8、remotes 4、settings-controller 3）。
 - 不覆盖：通用 Session 生命周期、传输与存储抽象留下——`gateway` 的分发、`remotes` 的选择、共享的会话列表与目录读取属于基础设施，不是业务逻辑。[业务所有权](../api-gateway.zh.md#business-ownership)从 Gateway 一侧给出同一个划分。
 - 例外：默认无例外。在此新增业务分支须走独立包评审，评审要回答这些逻辑为什么不能住在拥有该功能的包里。
 - 修法：把判断移进归属包，将其结果作为投影数据发布、或注册到本层本就注入的注册表上，这里只留下读取它的编排。
@@ -93,16 +93,18 @@ type SessionRemote = { list(): ...; rename(id: string): ... }   // hand-written 
 
 ```ts ignore-check
 // packages/workspace/<feature>/src/index.ts: the rule lives with the feature it serves.
-ctx.sessionProjections.register({
+export const durablePageProjectionDefinition = {
   key: 'durablePage',
   stateSchema: durablePageState,
   init: () => ({ durable: false }),
   apply: applyDurablePage,
   stateVersion: 1,
-})
+}
+await ctx.sessionProjections.register(durablePageProjectionDefinition)
 
 // packages/api/session-controller: generic orchestration reads the projected value.
-const { durable } = ctx.sessionProjections.stateOf(session, 'durablePage')
+const durablePage = await ctx.sessionProjections.register(durablePageProjectionDefinition)
+const { durable } = durablePage.stateOf(session)
 ```
 
 反例把这条规则的决定放进共享层：

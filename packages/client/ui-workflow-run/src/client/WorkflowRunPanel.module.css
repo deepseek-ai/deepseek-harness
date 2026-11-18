@@ -1,4 +1,6 @@
 .root {
+  --workflow-leading: calc(16px + var(--dsh-content-font-delta, 0px));
+  --workflow-indent: calc(var(--workflow-leading) + 6px);
   width: 100%;
   min-width: 0;
 }
@@ -147,7 +149,7 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  padding: 4px 0 0 16px;
+  padding: 4px 0 0 calc(8px + var(--workflow-indent));
 }
 
 .phase {
@@ -159,7 +161,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 0 0 0 16px;
+  padding: 0 0 0 var(--workflow-indent);
 }
 
 .memberRow,
@@ -189,10 +191,16 @@
   text-decoration: none;
 }
 
-.memberButton:hover .memberLabel,
 .memberButton:focus-visible .memberLabel {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .memberButton:hover .memberLabel {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
 }
 
 .dotSlot {
@@ -256,13 +264,6 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   padding: 0;
-}
-
-@media (max-width: 560px) {
-  .phaseList,
-  .members {
-    padding-left: 12px;
-  }
 }
 
 .headerContent {

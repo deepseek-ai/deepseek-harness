@@ -246,13 +246,13 @@ describe('best-effort config failure recovery', () => {
       await ctx.loader.await()
       const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'webserver')!
       expect(entry.options.config).toEqual({ value: 'invalid' })
-      expect(entry.fiber?.config).toEqual({ value: 1 })
+      expect(entry.fiber?.effectiveConfig).toEqual({ value: 1 })
       expect(ctx.get('validatedValue')).toBe(1)
 
       writeFileSync(join(dir, 'cordis.yml'), config(2))
       await include.refresh()
       await ctx.loader.await()
-      expect(entry.fiber?.config).toEqual({ value: 2 })
+      expect(entry.fiber?.effectiveConfig).toEqual({ value: 2 })
       expect(ctx.get('validatedValue')).toBe(2)
     } finally {
       await ctx.fiber.dispose()
@@ -293,7 +293,7 @@ describe('shipped builtins', () => {
       // implementation is stored under that symbol, so the root realm cannot
       // resolve the service and a second composition mounting the same rows
       // cannot collide with this one.
-      const rootKey = ctx.root[Context.isolate].demoRealmSvc
+      const rootKey = ctx[Context.root][Context.isolate].demoRealmSvc
       expect(rootKey).toBeDefined()
       expect(ctx.reflect.store[rootKey!]).toBeUndefined()
     } finally {

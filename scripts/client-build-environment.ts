@@ -38,6 +38,7 @@ const CLIENT_ARTIFACT_PATTERNS = [
   'packages/*/*/lib/client.js.map',
   'packages/*/*/lib/client.*.js',
   'packages/*/*/lib/client.*.js.map',
+  'packages/*/*/lib/assets/**/*',
 ] as const
 
 /** Public values embedded in one set of client artifacts. */
@@ -180,6 +181,8 @@ function clientBuildEnvironment(environment: NodeJS.ProcessEnv): ClientBuildEnvi
 
 /**
  * Resolve the exact public environment selected for a complete client build.
+ * Named profiles discard inherited public overrides. Local builds retain the supplied
+ * commit, version, and true dirty marker; repositoryClientBuildEnvironment supplies that metadata.
  * @param environment - parent process environment.
  * @param profile - explicit profile, or the non-public selector when omitted.
  * @returns the inherited public values when no profile is selected, otherwise the named profile.
@@ -189,22 +192,25 @@ export function resolveClientBuildEnvironment(
   profile: string | undefined = environment[CLIENT_BUILD_PROFILE_SELECTOR],
 ): ClientBuildEnvironment {
   if (profile === undefined) return clientBuildEnvironment(environment)
-  if (profile === 'official') {
+  if (profile === 'official' || profile === 'local') {
     const commitHash = environment[CLIENT_COMMIT_HASH_VARIABLE]
     const version = environment[CLIENT_VERSION_VARIABLE]
     if (commitHash === undefined) {
-      throw new Error(`${CLIENT_COMMIT_HASH_VARIABLE} is required for the official client build profile`)
+      throw new Error(`${CLIENT_COMMIT_HASH_VARIABLE} is required for the ${profile} client build profile`)
     }
     if (version === undefined) {
-      throw new Error(`${CLIENT_VERSION_VARIABLE} is required for the official client build profile`)
+      throw new Error(`${CLIENT_VERSION_VARIABLE} is required for the ${profile} client build profile`)
     }
     return {
       DSH_CLIENT_COMMIT_HASH: commitHash,
       DSH_CLIENT_VERSION: version,
-      ...OFFICIAL_CLIENT_BUILD_ENVIRONMENT,
+      ...(profile === 'official' ? OFFICIAL_CLIENT_BUILD_ENVIRONMENT : {
+        DSH_CLIENT_BUILD_PROFILE: 'local',
+        ...(environment.DSH_CLIENT_GIT_DIRTY === 'true' ? { DSH_CLIENT_GIT_DIRTY: 'true' } : {}),
+      }),
     }
   }
-  throw new Error(`unknown client build profile ${JSON.stringify(profile)}; expected "official"`)
+  throw new Error(`unknown client build profile ${JSON.stringify(profile)}; expected "official" or "local"`)
 }
 
 /**

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Medição de token",
+    "description": "Estime o uso de token do contexto do modelo para determinar o orçamento para funções como compactação."
+  }
+}

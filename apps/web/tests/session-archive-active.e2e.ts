@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -43,7 +44,7 @@ const WAIT_COMMAND = `node -e "const fs=require('node:fs'); fs.writeFileSync('st
  */
 function script(): ReplayEntry[] {
   const args = JSON.stringify({ command: WAIT_COMMAND, description: 'Wait a long time' })
-  const callId = ToolCallId('call_wait')
+  const callId = brandString<ToolCallId>('call_wait')
   const first: StreamChunk[] = [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
     { type: 'tool-call-delta', index: 0, id: callId, name: 'bash', argumentsDelta: args },
@@ -162,15 +163,14 @@ describe.skipIf(MODE === 'record')('web e2e: archiving a running Session stops i
     // A foreground Bash command is a registered job from its start, so the
     // Host reports it beside the turn; stopping the turn kills it.
     await expect.poll(() => dialog.getByRole('list', { name: 'Work that will be stopped' }).locator('li').allTextContents())
-      .toEqual(['The turn in progress', `1 background job: ${WAIT_COMMAND}`])
+      .toEqual([`1 background job: ${WAIT_COMMAND}`, 'The turn in progress'])
     // Asking is not archiving: the Host set is untouched, the turn and its
     // Bash child keep running, and the row stays in the sidebar.
     expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([])
     expect(scaffold.ctx.agents.get(sessionId)?.status).toBe('running')
     expect(await childAlive(cwd)).toBe(true)
     await expect.poll(() => sessionRow().count()).toBe(1)
-    // The Bash command is a running job while the dialog is open, by design.
-    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, { runningJobs: 'keep' })
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DIALOG_EXPECTED, snapshot, MODE)
 
     // Cancel keeps everything as it was.

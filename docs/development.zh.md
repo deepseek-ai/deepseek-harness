@@ -10,7 +10,7 @@
 
 ### 前置条件
 
-- Node.js 支持 22.19+ 与 24+。CI 覆盖 22.19、24 和 26；见 [Node 引擎下限 Agent Note](../.agents/notes/implemented/process/2026-07-06-node-engine-floor.zh.md)。
+- Node.js 要求 24.9 或更高版本。CI 覆盖 24.9、最新的 24 和 26；见 [Node 引擎下限 Agent Note](../.agents/notes/implemented/process/2026-10-15-node-24-runtime-floor.zh.md)。
 - 启用 Node.js TypeScript 类型剥离。仓库构建脚本用 tsdown 的 native 配置加载器加载 `tsdown.config.ts`，因此当 `NODE_OPTIONS` 含 `--no-experimental-strip-types` 或 Node.js 构建缺少 TypeScript 支持时会失败；`pnpm run build` 会先检查这一条件并指出原因。
 - 启用了 Corepack 的 pnpm。仓库在 `package.json` 中固定使用 `pnpm@11.28.5`；如果 `pnpm --version` 无法通过 Corepack 解析，请先运行 `corepack enable`。
 - Git 2.26 或更高版本；钩子设置会启用 Git 的 worktree 专属配置扩展。
@@ -70,18 +70,21 @@ pnpm run typecheck
 | `tsconfig.base.json` | 共享 compilerOptions 与源码 `paths` 映射。同时是各 vitest 配置让 vite-tsconfig-paths 指向的解析门面：它没有 `include`，因此其 `paths` 适用于任何 importer。 | 否 |
 | `tsconfig.base.client.json` | 浏览器编译设置（`jsx`、DOM lib、`types: []`），由 Client aggregate 和每个 `packages/client/*` 包 extends。 | 否 |
 
+Host 和 Client aggregate 类型检查为 Node 老生代堆设置 8 GiB 上限。这是单个编译进程的上限；并发构建步骤还需要额外内存。`pnpm run build:official --serial` 阻止构建步骤重叠，即使设置了 `DSH_GATE_CONCURRENCY` 也不例外；DSH 发布 workflow 使用此选项。
+
 Host 与 Client 保持两个 aggregate program，是因为两侧在相同键下以不同服务对 cordis `Context` 接口做声明合并；单一 program 同时看到两份合并会报冲突。这种冲突只存在于 `ts.Program` 内部——模块解析永远不会触发它——所以 solution 可以同时引用两个 aggregate，一个 paths 门面也可以横跨两侧。由此推出三条纪律：
 
 - `tsconfig.base.json` 永不添加 `include` 或 `files`：它们会泄漏进每个 extends 它的包项目，并收窄门面的全匹配范围。
 - 构造全仓 `ts.Program` 的脚本显式以 `tsconfig.host.json` 或 `tsconfig.client.json` 为种子——根 solution 永不作为种子，因为把两个 aggregate 展平进一个 program 会撞上 `Context` 合并冲突。
 - 新包只登记进一个 aggregate；只有上述拆分包同时携带两个 leaf 配置，共享 leaf 因两侧需要对同一份源码做类型检查而登记进两个 aggregate。包同时具有 Node loader 入口和 browser 入口并不构成拆分理由；普通 Client 插件的两份运行时产物都在 Client 构建阶段生成。
 
-拆分 Host/Client tsconfig 的包有六个：`api/remotes`、`api/gateway`、`api/session-controller`、`api/workspace-controller`、`client/connection` 与 `session-query/session-log-export`。`api/remotes` 的 Host 入口进入 Host Typert 图，而 Client 入口导入生成的 `/remote` 声明；`session-log-export` 则让 Node archive 生产代码不进入浏览器 controller。每个拆分包根 `tsconfig.json` 因此只作为 solution，两个 aggregate 和直接消费方分别引用 `tsconfig.host.json` 或 `tsconfig.client.json`。workspace `constraints` 门禁遍历可达的 Project Reference 图，并按各引用 project 自身的 compiler face 检查：只有单一配置的目标可由任一 face 引用，拆分配置的目标则必须引用匹配的 leaf，不得引用 solution 根或另一侧 leaf；该门禁按「两个 leaf 配置同时存在」自动发现拆分包，所以新拆分的包会自动纳入管辖。[`api-remotes` README](../packages/api/remotes/README.zh.md) 与 [`session-log-export` README](../packages/session-query/session-log-export/README.zh.md)分别说明其拆分。
+拆分 Host/Client tsconfig 的包有七个：`api/remotes`、`api/gateway`、`api/session-controller`、`api/workspace-controller`、`client/connection`、`session-query/session-log-export` 与 `experimental/liveshare-protocol`。`api/remotes` 的 Host 入口进入 Host Typert 图，而 Client 入口导入生成的 `/remote` 声明；`session-log-export` 则让 Node archive 生产代码不进入浏览器 controller；`liveshare-protocol` 把 Node 线路编解码放在 Host leaf、浏览器查看页载体放在 Client leaf。每个拆分包根 `tsconfig.json` 因此只作为 solution，两个 aggregate 和直接消费方分别引用 `tsconfig.host.json` 或 `tsconfig.client.json`。workspace `constraints` 门禁遍历可达的 Project Reference 图，并按各引用 project 自身的 compiler face 检查：只有单一配置的目标可由任一 face 引用，拆分配置的目标则必须引用匹配的 leaf，不得引用 solution 根或另一侧 leaf；该门禁按「两个 leaf 配置同时存在」自动发现拆分包，所以新拆分的包会自动纳入管辖。[`api-remotes` README](../packages/api/remotes/README.zh.md) 与 [`session-log-export` README](../packages/session-query/session-log-export/README.zh.md)分别说明其拆分。
 
-`pnpm run build:artifacts` 按生成依赖顺序产出全部产物，只检查并编译各 compiler face 的包 reference：
+`pnpm run build:artifacts` 产出全部产物，只检查并编译各 compiler face 的包 reference。Client 编译等待 Host 和 Desktop 的 bundle 完成：拆分 compiler face 会重写这些 bundle 步骤读取的共享 `lib/types` 文件。Client bundle 在 Client 编译后执行。产物步骤顺序为：
 
 ```sh
 pnpm run build:native-system
+pnpm exec tsx scripts/generate-typert.ts
 tsc -b <tsconfig.host.json references>
 tsdown --env.DSH_BUILD_FACE host
 pnpm --filter @deepseek-ai/dsh-desktop run bundle
@@ -90,7 +93,7 @@ tsdown --env.DSH_BUILD_FACE client
 pnpm run build:web
 ```
 
-`pnpm run build:check` 只并发运行 `tsc -p tsconfig.host.json` 与 `tsc -p tsconfig.client.json`。project mode 依据磁盘上已有的包声明检查各 aggregate 的仓库级测试和脚本 program，从不编译 reference，因此 `build:check` 既不检测也不重建缺失或过期的 `build:artifacts` 产物；产物缺失时表现为编译器错误。`pnpm run build` 把两组步骤作为一张[调度](../scripts/run-gates.ts)依赖图运行：每个 aggregate 检查在本 face 的包编译完成后立即开始，与其余产物步骤重叠执行。三个命令中，`DSH_GATE_CONCURRENCY` 限制并发步骤数（`1` 按依赖顺序执行），`DSH_GATE_FAIL_FAST=1` 在第一个失败时停止其余步骤；否则失败只跳过其依赖方，因此会报告所有相互独立的错误。失败步骤打印自身输出，任一失败都以非零状态退出且不写 client build record。
+`pnpm run build:check` 只并发运行 `tsc -p tsconfig.host.json` 与 `tsc -p tsconfig.client.json`。project mode 依据磁盘上已有的包声明检查各 aggregate 的仓库级测试和脚本 program，从不编译 reference，因此 `build:check` 既不检测也不重建缺失或过期的 `build:artifacts` 产物；产物缺失时表现为编译器错误。`pnpm run build` 把两组步骤作为一张[调度](../scripts/run-gates.ts)依赖图运行：每个 aggregate 检查在本 face 的包编译完成后立即开始，与其余产物步骤重叠执行。三个命令中，`DSH_GATE_CONCURRENCY` 限制并发步骤数（`1` 按依赖顺序执行），`DSH_GATE_FAIL_FAST=1` 在第一个失败时停止其余步骤；否则失败只跳过其依赖方，因此会报告所有相互独立的错误。失败步骤打印自身输出，任一失败都以非零状态退出且不写 client build record。 Host TypeScript 编译进程的 V8 old-space 上限为 8 GiB，用于包依赖图和无缓存的 aggregate 检查。
 
 按改动需要选择命令：
 
@@ -107,9 +110,11 @@ PR 产物 builder 运行 `build:artifacts`；必需的 Linux 与 Windows 普通�
 
 两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`；两者都不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。tsdown 并发构建匹配到的 workspace 成员；`apps/desktop` 的主进程 bundle 需要从工作区 devDependencies 的 `lib/` 产物内联这些包，因此在 Host 阶段之后单独一步打 bundle（[Desktop README](../apps/desktop/README.zh.md#bundled-workspace-dependencies)）。
 
-Typert 以 `tsconfig.host.json` 为种子分析 Host 类型，生成 Host 反射产物及 Host-for-Client Remote 投影；Client tsdown 不启动 Typert。Host tsdown 以插件形式运行它，[`generate-typert.ts`](../scripts/generate-typert.ts) 则不打包地执行同一生成，写出逐字节相同的文件。不打包的这一轮只从源码读取工作区包；若 Host program 会载入某个包的 `lib/` 产物，它就失败并指出该 import 及应补的 `paths` 别名，因此可以与 Host 包编译并行。Client 源码 import 生成的 Remote 声明，所以 Client 包编译总在这两种生成之一之后。`pnpm run typecheck` 运行 `build.ts --scope typecheck` 图：Host 包编译与不打包的 Typert 生成并行，之后是 Client 包编译，每个 aggregate 在本 face 的包编译完成后以 build mode（`tsc -b`）检查；它跳过 native addon、所有 bundle、Web 以及 client build record。`lint`、`lint:fix` 与 `doc-typecheck` 读取生成的声明但不依赖 Host aggregate 检查，因此只准备 Host 包编译与不打包的 Typert 生成（`compile-referenced-projects.ts host-contracts`）。这些命令都不写 bundle：可运行的 `lib/` 产物保持上一次 `build:artifacts` 的状态，因此启动或测试构建产物之前先运行 `build:artifacts`。
+Typert 通过 `tsconfig.host.json` 分析 Host 类型，在包编译之前生成 Host 反射和 Host-for-Client Remote 声明。仅源码的 [`generate-typert.ts`](../scripts/generate-typert.ts) 阶段拒绝依赖构建产物的工作区导入，包括经由依赖回到生成声明的元数据依赖。Host tsdown 转换源码装饰器，但不重复生成元数据；Client tsdown 同样使用已有元数据。`pnpm run typecheck` 生成元数据，按 reference 顺序编译 Host 与 Client 包，并在每个 aggregate 的包编译完成后以 `tsc -b` 检查它。该命令跳过 native addon、bundle、Web 和 client build record。`lint`、`lint:fix` 与 `doc-typecheck` 通过 `compile-referenced-projects.ts host-contracts` 准备元数据与 Host 包声明；生成失败时不启动依赖它的编译。这些仅生成声明的命令不更新运行时 bundle；启动或测试构建产物之前应运行 `build:artifacts`。
 
 `pnpm run build` 与 `build:artifacts` 会内联根包版本、七位源码 commit，并在 Git 报告本地变化时内联 dirty 标记；调用方提供的其他 `DSH_CLIENT_*` 值也会被继承。`pnpm run build:official` 是与 CI 和 release 产物构建等价的跨平台本地命令，并省略本地 dirty 标记。每次 `build` 或 `build:artifacts` 成功后都会写入一份被 gitignore 的记录，把精确公开值与 Vite 输出及动态 client bundle 绑定；release 打包和 built Web 测试会拒绝缺少记录或被后续局部构建改动的产物。`pnpm run dev:web` 会先执行 `build:artifacts`（`--skip-build` 则复用现有产物树），再读取一次当前版本和 Git 状态，并在本次会话的所有 watcher stage 之间共享该环境；它不会校验完整构建记录，因为 watcher stage 会重写记录覆盖的产物。
+
+`pnpm run build --profile local` 显式选择本地客户端品牌，保留仓库版本、commit 与 dirty 元数据，并丢弃继承的客户端标题及其他公开覆盖值。`build:official` 保留其精确的官方值。[Desktop 打包](../apps/desktop/packaging/README.zh.md#configuration-and-local-builds) 按签名模式选择 profile。
 
 静态分析和测试通过 base 的 `paths` 映射把工作区 import 解析到 `src`，且必须在干净树上通过；消费构建产物 `lib/` 的门禁显式声明该依赖。生成的 Host-for-Client Remote 声明是有意设置的例外：公共 `typecheck`、`lint` 和 `doc-typecheck` 命令会先生成这些声明，而内部 `*:contracts-ready` 脚本假定调用它的公共命令或调度器门禁已经依赖 Typert 约定生成阶段或完整构建。门禁准备约定见 [Typert Remote Agent Note](../.agents/notes/implemented/architecture/2026-08-02-typert-remote-method-calls.zh.md)。
 
@@ -133,7 +138,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://... # optional
 ```
 
-`DEEPSEEK_BASE_URL` 可选，默认为公开 API。请勿提交真实凭证。未设置 `DEEPSEEK_API_KEY` 时，真实 API 的 e2e 套件会自动跳过。
+`DEEPSEEK_BASE_URL` 可选，默认为公开 API。e2e 与 Web 的 Vitest 配置，以及 `DSH_SNAPSHOT=record` 时的快照配置，会自行加载根目录 `.env`；而从仓库根目录启动的 `pnpm dsh` 和 `pnpm run demo:ptc` 会把它当作项目 `.env` 读取，项目 `.env` 不能设置 `DEEPSEEK_BASE_URL`，因此这些启动需要导出该变量，或把它写入 `$DSH_HOME/.env`。请勿提交真实凭证。未设置 `DEEPSEEK_API_KEY` 时，真实 API 的 e2e 套件会自动跳过。
 
 ### Git 集成
 
@@ -149,17 +154,19 @@ vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `v
 
 pi-ai 检查会在内存中重新生成预期元数据。数据过期时，检查拒绝提交，不改写或暂存文件。修改 pi-ai 依赖或生成器后，请按包内的[提供方元数据更新步骤](../packages/llm/llm-pi-ai/README.zh.md#generated-provider-metadata)操作。
 
-除限定范围的配对和提供方元数据检查外，这些钩子有意不运行测试、快照、文档检查、构建或 `hygiene`。贡献者只运行一次[与改动行为相关的检查](../AGENTS.md#run-relevant-checks-locally)；CI 负责全量覆盖率门禁、构建产物冒烟测试，以及 Node 22.19、24 和 26 兼容性矩阵。
+除限定范围的配对和提供方元数据检查外，这些钩子有意不运行测试、快照、文档检查、构建或 `hygiene`。贡献者只运行一次[与改动行为相关的检查](../AGENTS.md#run-relevant-checks-locally)；CI 负责全量覆盖率门禁、构建产物冒烟测试，以及 Node 24.9、最新的 24 和 26 兼容性矩阵。
 
 贡献者可以选择运行 `pnpm run check:all`，执行全面的本地门禁集。该命令独立于 Git 钩子，也不是对 agent 的指令。
 
 在 CI 之外（`CI` 不为 `true`），默认 worker 数遵循[本地 worker 预算](../scripts/parallelism.ts)：门禁调度器、`build`、`typecheck`、Oxlint 与 publint 为 12，Vitest fork 与本地覆盖率为 48。`doc-sync`、`test:docs`、`hygiene` 与 `check:all` 最多同时运行 8 个门禁，CI 中同样如此。`os.availableParallelism()` 报告的是宿主 CPU 数而不是容器的 CPU 配额，因此不设上限的默认值会在共享主机上超额订阅。CI 仍使用 runner 的 CPU 数。`DSH_GATE_CONCURRENCY`、`DSH_OXLINT_THREADS`、`DSH_COVERAGE_MAX_WORKERS` 与 Vitest 的 `--maxWorkers` 可覆盖这些默认值。
 
+`run-gates` 让 CLI 帮助生成器每次只运行一个子进程；直接执行 `pnpm run verify-cli-help` 时使用独立运行的 worker 预算。`DSH_CLI_HELP_CONCURRENCY` 可用正整数覆盖该子进程上限，并在启动前校验。每次调用仍使用独立的 `DSH_HOME` 与 `DSH_AGENTS_HOME`，超时限制仍为 30 秒。
+
 ### CI 门禁
 
-keyless [CI 工作流](../.github/workflows/ci.yml) 将独立门禁分组到若干宽粒度 lane，并在受支持的 Node 版本上运行一组较小的兼容性检查。产物消费方在各自 lane 内等待一次 build。覆盖率分区复用按平台和运行器池隔离的文件耗时，在配置的 worker 上限内均衡工作量。必需 benchmark 在标准 GitHub 托管 Linux 上独立运行；[benchmark 运行器说明](../benchmarks/AGENTS.md)拥有路由及 job 超时。单独的真实 API 工作流按其配置的 worker 上限运行 `pnpm run test:e2e`。当前门禁和 job 清单以 [scripts/run-gates.ts](../scripts/run-gates.ts) 和工作流文件为准。
+keyless [CI 工作流](../.github/workflows/ci.yml) 将独立门禁分组到若干宽粒度 lane，并在受支持的 Node 版本上运行一组较小的兼容性检查。产物消费方在各自 lane 内等待一次 build。覆盖率分区复用按平台和运行器池隔离的文件耗时，在配置的 worker 上限内均衡工作量。原生 Windows lane 运行在独立的 [CI Windows 工作流](../.github/workflows/ci-windows.yml)中，Python 检查运行在独立的 [CI Python 工作流](../.github/workflows/ci-python.yml)中，两者都可单独重新运行。必需 benchmark 在标准 GitHub 托管 Linux 上独立运行；[benchmark 运行器说明](../benchmarks/AGENTS.md)拥有路由及 job 超时。单独的真实 API 工作流按其配置的 worker 上限运行 `pnpm run test:e2e`。当前门禁和 job 清单以 [scripts/run-gates.ts](../scripts/run-gates.ts) 和工作流文件为准。
 
-不带凭据的 dsh 依赖布局检查与 dsh/vendor 打包演练仅在 `DSH_CI_FAILOVER_LINUX=selfhosted`，且事件为受信任的 master 推送或同仓库、非 fork、非 Dependabot 拉取请求时使用现有 Linux 自托管池。其余情况（包括手动触发）均使用 `ubuntu-24.04`；手动发布仍使用托管运行器。持久化存储隔离与回退限制见[发布演练运行器说明](../.agents/notes/implemented/process/2026-07-26-ci-failover-runbook.zh.md)。
+不带凭据的 dsh 依赖布局检查与 dsh/vendor 打包演练仅在 `DSH_CI_FAILOVER_LINUX=selfhosted`，且事件为受信任的 master 推送或同仓库、非 fork、非 Dependabot 拉取请求时使用现有 Linux 自托管池。其余情况（包括手动触发）均使用 `ubuntu-24.94`；手动发布仍使用托管运行器。持久化存储隔离与回退限制见[发布演练运行器说明](../.agents/notes/implemented/process/2026-07-26-ci-failover-runbook.zh.md)。
 
 ### 日常命令
 
@@ -218,4 +225,4 @@ Web 命令后面的参数会传给 `dsh web`，例如 `pnpm run dev:web --no-ope
 { "doc": "docs/subsystems/session.md", "symbol": "SessionEvent", "source": "packages/core/session/src/types.ts" }
 ```
 
-`pnpm run verify-type-equiv`（`doc-sync` 的一环）随后通过 TypeScript 解析器从源码提取该符号的声明及其附带的 JSDoc，并断言代码块同时匹配两者。对于不应把实现体写进目录的类，请使用 ` ```ts public-api ` 并设置 `"projection": "public-api"`；门禁检查的投影会保留公共字段、构造函数、访问器、方法以及类和成员的原始 JSDoc，同时省略实现体和私有或受保护成员。比对会忽略空白和非 JSDoc 注释，但要求保留每条原始 JSDoc（包括成员文档），让读者同时看到源码约定和确切类型定义。该门禁按文档、符号和投影，在主块与 manifest 条目之间强制 1:1 对应；只有当配对 `.zh.md` 块的完整受跟踪围栏序列与其无后缀兄弟文件按字节一致且顺序相同时，才会复用后者的条目。`doc-typecheck` 对可编译围栏应用同一派生规则，同时跳过两种源码等价围栏的编译，并将其排除在 opt-out 比例的计算之外。当你改动一个已记录的类型声明或其 JSDoc 时，门禁会失败直到你更新粘贴内容；当你增删一个主块时，请在同一个变更里更新 manifest。
+`pnpm run verify-type-equiv`（`doc-sync` 的一环）随后通过 TypeScript 解析器从源码提取该符号的声明及其附带的 JSDoc，并断言代码块同时匹配两者。对于不应把实现体写进目录的类，请使用 ` ```ts public-api ` 并设置 `"projection": "public-api"`；门禁检查的投影会保留公共字段、构造函数、访问器、方法以及类和成员的原始 JSDoc，同时省略实现体和私有或受保护成员。比对会忽略空白和非 JSDoc 注释，但要求保留每条原始 JSDoc（包括成员文档），让读者同时看到源码约定和确切类型定义。该门禁按文档、符号和投影，在主块与 manifest 条目之间强制 1:1 对应；只有当配对 `.zh.md` 块的完整受跟踪围栏序列与其无后缀兄弟文件按字节一致且顺序相同时，才会复用后者的条目。`doc-typecheck` 对可编译围栏应用同一派生规则，同时跳过两种源码等价围栏的编译，并将其排除在 opt-out 比例的计算之外。版本目录早于根包版本的升级指南已冻结，其中的示例不参与当前 API 的编译检查。当你改动一个已记录的类型声明或其 JSDoc 时，门禁会失败直到你更新粘贴内容；当你增删一个主块时，请在同一个变更里更新 manifest。

@@ -1,8 +1,7 @@
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /**
- * A preset-mounted Schedule tool reaches a delegated child, and the Host
- * Schedule service refuses the child's own Session because the Session
- * controller can never deliver a reminder there.
+ * A preset-mounted Schedule tool reaches a delegated child, and the tool
+ * refuses the child's call before the Host Schedule service stores a task.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +16,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '../../../session/session-persistence-jsonl/src/index.ts'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -28,6 +27,7 @@ import { DomainFacility } from '../../../storage/storage-domain/src/index.ts'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import ScheduleService from '../../../schedule/schedule/src/index.ts'
 import * as ToolSchedule from '../../../schedule/tool-schedule/src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const contexts: Context[] = []
@@ -60,8 +60,8 @@ async function setupScheduleHost(): Promise<{ ctx: Context; parent: Agent; dispa
     ctx.provide('storageDomain', facility)
     return async () => { await facility.closeAll(); unmount() }
   })
-  // The fake is unreachable while the service refuses a subagent Session; a
-  // call means the refusal let a reminder reach delivery.
+  // The fake is unreachable while the tool refuses a subagent; a call means
+  // the refusal let a task reach delivery.
   const dispatched = vi.fn(async () => { throw new Error('a subagent Session must never be dispatched') })
   ctx.provide('sessionController', { resolveAgent: dispatched } as never)
   await ctx.plugin(ScheduleService)
@@ -73,11 +73,13 @@ async function setupScheduleHost(): Promise<{ ctx: Context; parent: Agent; dispa
   ctx.loader.builtins['tool-schedule'] = ToolSchedule
   await ctx.agentPresets.register({ id: 'coding', plugins: [{ name: 'cordis:tool-schedule' }] })
   ctx.llm.registerAdapter(['mock'], new MockAdapter([
-    toolCallResponse('schedule-call', 'schedule_create', { prompt: 'Check', title: 'Check', after_seconds: 60 }),
+    toolCallResponse('schedule-call', 'schedule_create', {
+      title: 'Check', prompt: 'Check', rrule: 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY', target: 'this_session',
+    }),
     textResponse('child done'),
   ]))
   const handle = await ctx.agents.create({
-    sessionId: SessionId('parent'),
+    sessionId: brandString<SessionId>('parent'),
     agentOptions: { provider: 'mock', model: 'mock' },
     setup: async (agentCtx: Context) => void await ctx.agentPresets.mount(agentCtx, 'coding'),
   })
@@ -91,24 +93,27 @@ function toolResultTexts(agent: Agent): string[] {
 }
 
 describe('a delegated child under a preset that mounts the Schedule tools', () => {
-  it('sees schedule_create and is refused with subagent_session without storing a task', async () => {
+  it('sees the four tools and is refused with subagent_session without storing a task', async () => {
     const { ctx, parent, dispatched } = await setupScheduleHost()
     const run = await ctx.subagents.startActivation({
       provider: 'spawn',
       label: 'child task',
       delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent, prompt: [{ type: 'text', text: 'child task' }] },
+      parent, prompt: [{ type: 'text', text: 'child task' }],
     })
 
     const child = ctx.agents.get(run.childId)
     if (child === undefined) throw new Error('the child run published no agent')
     expect(child.session.header.origin).toBe('subagent')
-    expect(ctx.tools.schemas(child).map(schema => schema.name)).toContain('schedule_create')
+    expect(ctx.tools.schemas(child).map(schema => schema.name)).toEqual(expect.arrayContaining([
+      'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
+    ]))
     await run.result
-    expect(toolResultTexts(child).join('')).toContain('"code":"subagent_session"')
-    expect(await ctx.schedule.list({ sessionId: child.session.id })).toEqual([])
-    expect(await ctx.schedule.catalog()).toEqual([])
+    expect(toolResultTexts(child)).toContain(
+      '{"code":"subagent_session","message":"A delegated subagent cannot use scheduled tasks."}',
+    )
+    expect(await ctx.schedule.list({})).toMatchObject({ items: [], total: 0 })
     expect(dispatched).not.toHaveBeenCalled()
     await run.dispose()
   })

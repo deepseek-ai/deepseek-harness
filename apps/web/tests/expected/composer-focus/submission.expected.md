@@ -1,0 +1,5 @@
+- chromium desktop Send: clears the draft; editor stays focused through response completion
+- chromium mobile Send: clears the draft; focus remains on the composer card through response completion, then advances to the editor and attachment button
+- chromium mobile Enter: clears the draft; focus remains on the composer card through response completion, then advances to the editor and attachment button
+- webkit mobile Send: clears the draft; focus remains on the composer card through response completion, then advances to the editor and attachment button
+- webkit mobile Enter: clears the draft; focus remains on the composer card through response completion, then advances to the editor and attachment button

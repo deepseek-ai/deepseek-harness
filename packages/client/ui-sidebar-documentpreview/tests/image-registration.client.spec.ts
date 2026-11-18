@@ -6,8 +6,9 @@ import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { ImageBody } from '../src/client/image/ImageBody.tsx'
 import { apply, BINARY_IMAGE_EXTENSIONS, IMAGE_BODY_ID, IMAGE_EXTENSIONS, imageBodyDefinition } from '../src/client/image/index.ts'
-import { en, zh } from '../src/client/image/locales.ts'
-import type { ZoomInjected, ZoomStore } from '../src/client/zoom/store.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/image/locales.ts'
+import type { ImageBodyInjected } from '../src/client/image/ImageBody.tsx'
+import type { ZoomStore } from '../src/client/zoom/store.ts'
 
 let dispose: (() => Promise<void>) | undefined
 afterEach(async () => { await dispose?.(); dispose = undefined })
@@ -39,7 +40,7 @@ describe('image registration', () => {
       key: string
       locale: string
       store: ZoomStore
-      inject: (sessionId: SessionId, actions: ReturnType<ZoomStore['create']>['actions']) => ZoomInjected
+      inject: (sessionId: SessionId, actions: ReturnType<ZoomStore['create']>['actions']) => ImageBodyInjected
     }
     const entries: Options[] = []
     const register = vi.fn((options: Options, body: unknown) => {
@@ -47,6 +48,8 @@ describe('image registration', () => {
       entries.push(options)
       return () => { bodies.delete(options.key); entries.splice(entries.indexOf(options), 1) }
     })
+    ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
+    ctx.provide('contextMenus', { open: vi.fn() } as never)
     ctx.provide('documentPreviews', registry)
     ctx.provide('slots', { inject: (_key: string, callback: () => () => void) => callback(), register } as never)
     ctx.provide('locale', {
@@ -63,7 +66,7 @@ describe('image registration', () => {
       expect(registry.candidates(`ASSET.${extension}`).map(entry => entry.id)).toEqual([IMAGE_BODY_ID])
     }
     expect(registry.getSnapshot()[0]?.title()).toBe(en.title)
-    expect(dictionaries.get('sidebarImage')).toEqual({ zh, en })
+    expect(dictionaries.get('sidebarImage')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     expect(register).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       name: 'sidebar.right.tab.document', key: IMAGE_BODY_ID, locale: 'sidebarImage',
     }), ImageBody)
@@ -83,3 +86,5 @@ describe('image registration', () => {
     expect(dictionaries.size).toBe(0)
   })
 })
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

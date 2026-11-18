@@ -56,7 +56,8 @@ class SharedNativeChannel implements NativeChannel {
   private cleanupTimer: ReturnType<typeof setTimeout> | undefined
   private cleanupFailure: Error | undefined
 
-  constructor(private readonly owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, private readonly config: NativeClientConfig) {
+  constructor(private readonly owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, private readonly config: NativeClientConfig,
+    private readonly recentActivityWindowMs: number) {
     this.stdin = new Writable({
       write: (chunk: Buffer, encoding, callback) => {
         void this.ready.promise.then((socket) => {
@@ -166,6 +167,12 @@ class SharedNativeChannel implements NativeChannel {
     if (!range.value) throw transportError('NATIVE_CLEANUP', 'Native launcher process range did not close')
     if (outcome.status === 'rejected') throw outcome.reason
     if (outcome.value.exitCode !== 0 || outcome.value.signal !== null) {
+      const stdout = this.launcher.collected.stdout?.readFrom(0).text ?? ''
+      let response: unknown
+      try { response = JSON.parse(stdout) }
+      catch (_error) { /* Missing or incomplete output uses the retained process diagnostics below. */ }
+      const refusal = Refusal.safeParse(response)
+      if (refusal.success) throw transportError(refusal.data.code, refusal.data.message)
       const stderr = this.launcher.collected.stderr?.readFrom(0).text ?? ''
       throw transportError('NATIVE_STARTUP', `Native launcher failed (exit ${outcome.value.exitCode}, signal ${outcome.value.signal})${stderr ? `: ${stderr}` : ''}`)
     }
@@ -205,10 +212,11 @@ class SharedNativeChannel implements NativeChannel {
       else ended.resolve()
     })
     socket.once('connect', () => {
-      const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs,
-        screenshotTimeoutMs, timeoutMs, graceMs, recentActivityWindowMs } = this.config
+      const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
+        screenshotTimeoutMs, timeoutMs, graceMs } = this.config
       socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey,
-        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs, recentActivityWindowMs } }) + '\n')
+        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
+          screenshotTimeoutMs, timeoutMs, graceMs, recentActivityWindowMs: this.recentActivityWindowMs } }) + '\n')
     })
     const receive = (chunk: Buffer): void => {
       const newline = chunk.indexOf(10)
@@ -280,8 +288,11 @@ class SharedNativeChannel implements NativeChannel {
  * Prepare or join the native process; writes wait for identity-checked readiness.
  * @param owner - Provider owning the short-lived native startup command.
  * @param config - Native runtime identity, operation limits and connection deadlines.
+ * @param recentActivityWindowMs - Configured macOS activity lookback in milliseconds.
  * @returns One independently disposable Agent connection, without operation replay.
  */
-export function createSharedNativeChannel(owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig): NativeChannel {
-  return new SharedNativeChannel(owner, config)
+export function createSharedNativeChannel(
+  owner: { subprocess: Pick<SubprocessRuntime, 'spawn'> }, config: NativeClientConfig, recentActivityWindowMs: number,
+): NativeChannel {
+  return new SharedNativeChannel(owner, config, recentActivityWindowMs)
 }

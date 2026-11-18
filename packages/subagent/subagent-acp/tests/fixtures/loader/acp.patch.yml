@@ -38,3 +38,9 @@
           - !!js process.env.DSH_TEST_MOCK_ACP_SERVER
         permission: reject
         env: !!js "process.env.DSH_TEST_ACP_MODE === 'diagnostic' ? { MOCK_TEXT: 'partial loader answer', MOCK_STOP: 'max_turn_requests' } : { MOCK_ECHO_CWD: '1' }"
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

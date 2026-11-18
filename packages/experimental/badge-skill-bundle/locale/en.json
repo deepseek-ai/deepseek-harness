@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "DSH badge skill",
-    "description": "Let agents add a “powered by dsh” badge to documents, pull requests, and other outputs."
+    "description": "Let agents add a “powered by dsh” badge to documents, pull requests, and other outputs.",
+    "detail": "docs/DETAIL.md"
   }
 }

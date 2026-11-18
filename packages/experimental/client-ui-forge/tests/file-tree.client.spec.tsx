@@ -1,0 +1,245 @@
+// @vitest-environment jsdom
+/** Changed-file directories, searching, and keyboard disclosure without reading repository contents. */
+import { useState } from 'react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { ForgeDiffFile } from '../src/types.ts'
+import { ChangedFiles, ChangedFilesMenu, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
+import { changedFileTree, filesInTreeOrder, filterFileTree, viewedNodes } from '../src/client/file-tree.ts'
+import { en } from '../src/client/locales.ts'
+import { FileTreePane } from '../src/client/FileTreePane.tsx'
+
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+function file(path: string, previousPath: string | null = null): ForgeDiffFile {
+  return { path, previousPath, status: previousPath === null ? 'modified' : 'renamed', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 1, deletions: 0, hunks: [] }
+}
+
+it('compacts directory chains, sorts directories before files, and keeps identical basenames distinct', () => {
+  const tree = changedFileTree([file('z.ts'), file('src/client/b.ts'), file('docs/a.ts'), file('src/client/a.ts')])
+  expect(tree.map(node => [node.kind, node.name])).toEqual([['directory', 'docs'], ['directory', 'src/client'], ['file', 'z.ts']])
+  expect(filesInTreeOrder(tree).map(file => file.path)).toEqual(['docs/a.ts', 'src/client/a.ts', 'src/client/b.ts', 'z.ts'])
+  expect(filterFileTree(tree, 'A.TS').map(node => node.path)).toEqual(['docs', 'src/client'])
+  expect(filterFileTree(tree, ' ')).toBe(tree)
+  expect(filterFileTree(tree, 'missing')).toEqual([])
+  expect(changedFileTree([])).toEqual([])
+  expect(filesInTreeOrder([])).toEqual([])
+})
+
+it('finds the viewed files and the directories whose every file is viewed', () => {
+  const tree = changedFileTree([file('z.ts'), file('src/client/b.ts'), file('src/client/a.ts'), file('src/server/c.ts'), file('docs/a.ts')])
+  expect([...viewedNodes(tree, new Set(['src/client/a.ts', 'src/client/b.ts', 'z.ts', 'docs/missing.ts']))].sort())
+    .toEqual(['src/client', 'src/client/a.ts', 'src/client/b.ts', 'z.ts'])
+  expect([...viewedNodes(tree, new Set(['src/client/a.ts', 'src/client/b.ts', 'src/server/c.ts']))].sort())
+    .toEqual(['src', 'src/client', 'src/client/a.ts', 'src/client/b.ts', 'src/server', 'src/server/c.ts'])
+  expect(viewedNodes(tree, new Set()).size).toBe(0)
+})
+
+it('draws viewed files and fully viewed directories subdued and says so to assistive technology', () => {
+  const files = [file('src/a.ts'), file('src/b.ts'), file('z.ts')]
+  const props = { files, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), state: { query: '', collapsed: {}, selected: null } }
+  const view = render(<ChangedFiles {...props} viewed={new Set(['src/a.ts'])} />)
+  const row = (path: string): HTMLElement => view.getByRole('button', { name: path })
+  expect([row('src').hasAttribute('data-viewed'), row('src/a.ts').hasAttribute('data-viewed'), row('src/b.ts').hasAttribute('data-viewed')])
+    .toEqual([false, true, false])
+  expect(row('src/a.ts').getAttribute('aria-description')).toBe(en['viewed.label'])
+  view.rerender(<ChangedFiles {...props} viewed={new Set(['src/a.ts', 'src/b.ts'])} />)
+  expect(row('src').getAttribute('aria-description')).toBe(en['viewed.directory'])
+  expect(row('z.ts').hasAttribute('aria-description')).toBe(false)
+  view.rerender(<ChangedFiles {...props} />)
+  expect(view.container.querySelectorAll('[data-viewed]')).toHaveLength(0)
+})
+
+it('matches renamed paths and keeps file names containing backslashes literal', () => {
+  const tree = changedFileTree([file('lib/new.ts', 'src/old.ts'), file('a\\b.ts')])
+  expect(filterFileTree(tree, 'old.ts').map(node => node.path)).toEqual(['lib'])
+  expect(tree[1]).toMatchObject({ kind: 'file', path: 'a\\b.ts' })
+})
+
+it('preserves input order for repeated paths with distinct file metadata', () => {
+  const first = file('same.ts', 'original.ts'), second = file('same.ts')
+  expect(filesInTreeOrder(changedFileTree([file('z.ts'), first, file('a.ts'), second])))
+    .toEqual([file('a.ts'), first, second, file('z.ts')])
+})
+
+it('searches through folded directories and restores their fold state when search is cleared', () => {
+  const jump = vi.fn()
+  const files = [file('src/a.ts'), file('src/b.ts'), file('README.md')]
+  function Harness() {
+    const [state, setState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
+    return <ChangedFiles files={files} state={state} t={makeTranslate(en)} jump={jump}
+      filter={(query) => { setState(value => ({ ...value, query })) }}
+      toggle={(path) => { setState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: !value.collapsed[path] } })) }} />
+  }
+  const view = render(<Harness />)
+  fireEvent.keyDown(view.getByRole('button', { name: 'src' }), { key: 'ArrowRight' })
+  fireEvent.keyDown(view.getByRole('button', { name: 'src' }), { key: 'Enter' })
+  fireEvent.keyDown(view.getByRole('button', { name: 'src/a.ts' }), { key: 'ArrowLeft' })
+  fireEvent.click(view.getByRole('button', { name: 'src' }))
+  fireEvent.click(view.getByRole('button', { name: 'src' }))
+  fireEvent.keyDown(view.getByRole('button', { name: 'src' }), { key: 'ArrowLeft' })
+  expect(view.queryByRole('button', { name: 'src/a.ts' })).toBeNull()
+  fireEvent.change(view.getByRole('textbox'), { target: { value: 'a.ts' } })
+  fireEvent.click(view.getByRole('button', { name: 'src/a.ts' }))
+  expect(jump).toHaveBeenCalledWith('src/a.ts')
+  expect(view.queryByRole('button', { name: 'README.md' })).toBeNull()
+  fireEvent.change(view.getByRole('textbox'), { target: { value: '' } })
+  expect(view.queryByRole('button', { name: 'src/a.ts' })).toBeNull()
+  fireEvent.keyDown(view.getByRole('button', { name: 'src' }), { key: 'ArrowRight' })
+  expect(view.getByRole('button', { name: 'src/a.ts' })).toBeTruthy()
+  fireEvent.change(view.getByRole('textbox'), { target: { value: 'missing' } })
+  expect(view.getByText('No matching files')).toBeTruthy()
+})
+
+it('keeps text-caret navigation in the filter while other keys bubble to the menu', () => {
+  const key = vi.fn()
+  const view = render(<div onKeyDown={key}><ChangedFiles files={[file('new.ts', 'old.ts')]}
+    state={{ query: '', collapsed: {}, selected: 'new.ts' }} t={makeTranslate(en)} filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} /></div>)
+  for (const name of ['Home', 'End', 'ArrowLeft', 'ArrowRight']) fireEvent.keyDown(view.getByRole('textbox'), { key: name })
+  expect(key).not.toHaveBeenCalled()
+  fireEvent.keyDown(view.getByRole('textbox'), { key: 'ArrowDown' })
+  expect(key).toHaveBeenCalledOnce()
+  expect(view.getByRole('button').getAttribute('aria-current')).toBe('true')
+})
+
+it('centers the selected file on each menu opening and then follows selection steps by the least scroll', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts', 'i.ts', 'j.ts'].map(path => file(path))
+  // Layout: the rows show three 30px files from y = 100; each file moves up by the rows' scroll offset.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(90)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const index = files.findIndex(item => item.path === this.getAttribute('aria-label'))
+    const scrolled = this.parentElement?.parentElement?.scrollTop ?? 0
+    return index < 0 ? new DOMRect(0, 100, 200, 90) : new DOMRect(0, 100 + index * 30 - scrolled, 200, 30)
+  })
+  const rows = (): HTMLElement => document.querySelector<HTMLElement>('[data-forge-file-tree] > :last-child')!
+  const props = { files, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn() }
+  const menu = render(<ChangedFilesMenu {...props} state={{ query: '', collapsed: {}, selected: 'f.ts' }} visible />)
+  const trigger = menu.getByRole('button', { name: 'All 10 files' })
+  for (const opening of [1, 2]) {
+    fireEvent.click(trigger)
+    // f.ts spans 250–280 and the view 100–190, so its middle moves to the view's middle.
+    expect(rows().scrollTop, `opening ${opening}`).toBe(120)
+    fireEvent.click(trigger)
+    expect(document.querySelector('[data-forge-file-tree]')).toBeNull()
+  }
+  menu.rerender(<ChangedFilesMenu {...props} state={{ query: '', collapsed: {}, selected: 'b.ts' }} visible />)
+  fireEvent.click(trigger)
+  expect(rows().scrollTop).toBe(0)
+  menu.unmount()
+  const pane = render(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected: null }} />)
+  expect(rows().scrollTop).toBe(0)
+  const select = (selected: string): void => { pane.rerender(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected }} />) }
+  select('h.ts')
+  expect(rows().scrollTop).toBe(150)
+  select('a.ts')
+  expect(rows().scrollTop).toBe(0)
+  select('c.ts')
+  expect(rows().scrollTop).toBe(0)
+  select('h.ts')
+  expect(rows().scrollTop).toBe(150)
+  pane.rerender(<ChangedFiles {...props} state={{ query: 'ts', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
+  pane.unmount()
+
+  // A navigation selects its file before the diff arrives; the rows then reveal it once they exist.
+  const early = render(<ChangedFiles {...props} files={[]} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
+  early.rerender(<ChangedFiles {...props} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(150)
+  rows().scrollTop = 0
+  early.rerender(<ChangedFiles {...props} files={[...files]} state={{ query: '', collapsed: {}, selected: 'h.ts' }} />)
+  expect(rows().scrollTop).toBe(0)
+})
+
+it('bounds pointer and keyboard resizing, retains hidden width, and stops cancelled drags', () => {
+  let containerWidth = 1000
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => containerWidth)
+  let measure: ResizeObserverCallback = () => {}
+  const disconnect = vi.spyOn(ResizeObserver.prototype, 'disconnect')
+  // Capture the observer callback so a parent resize can be delivered without a layout engine.
+  const NativeObserver = ResizeObserver
+  vi.stubGlobal('ResizeObserver', class extends NativeObserver {
+    constructor(callback: ResizeObserverCallback) { super(callback); measure = callback }
+    override observe() {}
+  })
+  try {
+    const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree', onWidth: vi.fn() }
+    const view = render(<FileTreePane {...props} position="right" />)
+    const handle = view.getByRole('separator')
+    const capture = vi.fn(), release = vi.fn()
+    Object.defineProperties(handle, { setPointerCapture: { value: capture }, releasePointerCapture: { value: release } })
+    const width = () => Number(handle.getAttribute('aria-valuenow'))
+    fireEvent.keyDown(handle, { key: 'Enter' })
+    expect(width()).toBe(240)
+    for (const [key, value] of [['ArrowLeft', 260], ['ArrowRight', 240], ['Home', 200], ['End', 600]] as const) {
+      fireEvent.keyDown(handle, { key }); expect(width()).toBe(value)
+    }
+    fireEvent.keyDown(handle, { key: 'Home' })
+    fireEvent.pointerDown(handle, { button: 2, pointerId: 1, clientX: 500 })
+    expect(capture).not.toHaveBeenCalled()
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 300 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 300 })
+    expect(width()).toBe(200)
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 500 })
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 300 })
+    expect(width()).toBe(200)
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 400 })
+    expect(width()).toBe(300)
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 350 })
+    expect(width()).toBe(350)
+    expect(release).toHaveBeenCalledWith(1)
+    for (const end of [fireEvent.pointerCancel, fireEvent.lostPointerCapture]) {
+      fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 500 })
+      end(handle, { pointerId: 1 })
+      fireEvent.pointerMove(handle, { pointerId: 1, clientX: 300 })
+      expect(width()).toBe(350)
+    }
+    view.rerender(<FileTreePane {...props} position="hidden" />)
+    containerWidth = 0
+    act(() => { measure([], new NativeObserver(() => {})) })
+    expect(width()).toBe(350)
+    containerWidth = 1000
+    view.rerender(<FileTreePane {...props} position="right" />)
+    act(() => { measure([], new NativeObserver(() => {})) })
+    expect(width()).toBe(350)
+    view.rerender(<FileTreePane {...props} position="left" />)
+    expect(view.getByRole('separator')).toBe(handle)
+    expect(width()).toBe(350)
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(width()).toBe(370)
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(width()).toBe(350)
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 350 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 400 })
+    expect(width()).toBe(400)
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 450 })
+    expect(width()).toBe(450)
+    containerWidth = 600
+    act(() => { measure([], new NativeObserver(() => {})) })
+    expect(width()).toBe(280)
+    view.unmount()
+    expect(disconnect).toHaveBeenCalled()
+  } finally { vi.unstubAllGlobals() }
+})
+
+it('keeps the width the cell above the tree needs as its least width', () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 1000)
+  const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree', onWidth: vi.fn() }
+  const view = render(<FileTreePane {...props} position="left" least={276} />)
+  const handle = view.getByRole('separator')
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['276', '276'])
+  expect(props.onWidth).toHaveBeenLastCalledWith(276)
+  fireEvent.keyDown(handle, { key: 'Home' })
+  expect(handle.getAttribute('aria-valuenow')).toBe('276')
+  view.rerender(<FileTreePane {...props} position="left" least={150} />)
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['200', '276'])
+})
+
+it('can mount into a detached fragment without measuring a nonexistent parent element', () => {
+  const observe = vi.spyOn(ResizeObserver.prototype, 'observe')
+  const view = render(<FileTreePane files={[]} state={{ query: '', collapsed: {}, selected: null }} t={makeTranslate(en)}
+    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" position="right" onWidth={vi.fn()} />, { container: document.createDocumentFragment() })
+  expect(observe).not.toHaveBeenCalled()
+  view.unmount()
+})

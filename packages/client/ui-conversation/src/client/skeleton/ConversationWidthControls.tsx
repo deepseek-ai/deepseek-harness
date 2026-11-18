@@ -24,7 +24,7 @@ function readWidthPreference(): number | null {
 function resolveContentWidth(columnWidth: number, preference: number | null): number {
   const max = Math.max(CONTENT_MIN, columnWidth - CONTENT_EDGE_BUDGET)
   if (preference !== null) return Math.min(Math.max(preference, CONTENT_MIN), max)
-  return Math.max(680, Math.min(columnWidth * 0.64, 920))
+  return Math.max(680, Math.min(columnWidth * 0.64, 880))
 }
 
 /** Convert a wheel event's vertical delta to scrollport pixels. */
@@ -106,8 +106,8 @@ function WidthHandle(props: {
     const body = event.currentTarget.parentElement
     /* v8 ignore next -- a width handle renders only inside the Conversation body. */
     if (body === null) return
-    const scrollport = body.querySelector<HTMLElement>(':scope > [data-conversation-scroll]')
-    /* v8 ignore next -- the Conversation body always contains its direct scroll element. */
+    const scrollport = body.querySelector<HTMLElement>('[data-conversation-scroll]')
+    /* v8 ignore next -- the Conversation body always contains its scroll element. */
     if (scrollport === null) return
     if (event.ctrlKey || event.deltaY === 0) return
     scrollport.scrollBy({ top: wheelDeltaY(event, scrollport) })

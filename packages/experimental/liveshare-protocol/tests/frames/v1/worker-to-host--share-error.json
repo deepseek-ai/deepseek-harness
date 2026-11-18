@@ -1,0 +1,6 @@
+{
+  "dir": "worker->host",
+  "note": "one share could not be carried, with the reason the worker read",
+  "frame": { "type": "share-error", "registrationToken": "11111111-1111-4111-8111-111111111111", "shareId": "share-one", "message": "relay refused registration status=401" },
+  "optional": []
+}

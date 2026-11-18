@@ -25,6 +25,8 @@ Choose an installed shell from the right sidebar's Start page to run commands in
 <a id="use-this-package"></a>
 ## Use this package
 
+Terminal tab titles reuse the shared 16px Regular terminal prompt glyph.
+
 The `terminal.new` command creates a separate terminal in the focused dock pane, replacing a guide and retaining existing content pages. From the conversation or a floating content page, it uses the active dock pane. The guide card right-aligns the current effective shortcut as unboxed text without a duplicate tooltip. Windows and macOS Web use the [shortcut service’s platform defaults](../shortcuts/README.md); Linux Web leaves the command unbound by default.
 
 Open the right sidebar and click **New terminal** to open the remembered available shell immediately. The separate arrow beside the title opens the installed-shell menu; selecting an item remembers it and opens that shell directly. Discovery runs when the menu opens and does not allocate a terminal. A failed lookup offers Retry in the menu. Use **New tab** to return to the guide and open another terminal.
@@ -34,6 +36,8 @@ Double-click the terminal's tab title to rename it. **Take control** makes the c
 Closing or replacing a terminal tab removes it immediately and ends its process in the background. Cleanup failures have no notification or manual retry action; saved unfinished close requests are retried when the Client plugin starts. Collapsing, switching tabs or Sessions, floating and fullscreen presentation preserve the process.
 
 After reload, the [sidebar restores its layout](../../client/ui-sidebar-right/README.md#state) and each terminal reconnects to its saved Host identity in the original tab. Collapsed and inactive tabs do not create recovery duplicates or change selection. Host terminals absent from the saved layout do not reopen automatically and have no UI recovery entry; they remain subject to the controller's unattended idle reclamation and Session/Host disposal. A missing saved process shows a localized unavailable panel with **New terminal**. Clicking it replaces the unavailable tab in place with a fresh terminal; recovery never creates that replacement automatically.
+
+Terminals an Agent opens appear by themselves. While a Session's header is displayed, the provider watches that Session's terminals and opens one tab per running Agent terminal not yet shown in this window, which expands a collapsed sidebar. It saves the tab's terminal association at once, so a reload reattaches even if the tab never mounted. A Session that is not displayed receives its tabs the next time it is. While the Agent controls a terminal, its title shows an **Agent** badge. Your first keystroke, paste, IME commit, drop, or click or touch that the running program receives in such a terminal takes it over and removes the **Agent** badge; scrolling, focus changes and other terminal-protocol replies from the emulator do not. When a terminal leaves the Session while the Agent still controls it, because the Agent closed it or its Session ended, this window closes its tab; a terminal you took over keeps its tab. Commands you type in an Agent terminal run in its sandbox, so a terminal started in a confined sandbox mode then shows a **Sandbox** badge. Hovering the badge of a confined terminal names its sandbox mode.
 
 The terminal background, default text, cursor, and selection follow the DSH theme, including system preference and theme-token overrides. Theme changes preserve the running shell, output, and application OSC color overrides. Reset commands restore colors to the current DSH defaults. The screen uses the Settings terminal font size and places the Settings terminal font ahead of its built-in monospace stack; changing either keeps the shell and output, and a visible writable screen refits the Host grid to the new cell size. xterm adjusts text toward 4.5:1 contrast; the cursor keeps at least 3:1 contrast against its cell background, including Vim colorschemes.
 
@@ -74,7 +78,7 @@ None; terminal output travels only between the browser and Host.
 - Shell discovery or native PTY startup can fail. The tab reports the failure without launching a different shell.
 - Completion menus and inline suggestions depend on shell configuration. The Web UI adds no independent completion engine.
 - Application OSC color overrides are retained by the mounted renderer; a newly opened renderer cannot recover them from the Host screen snapshot.
-- Terminal history is bounded. The feature does not send terminal output to the Agent, provide split terminal panes inside a tab, or restore processes after Host restart.
+- Terminal history is bounded. The feature does not send terminal output to the Agent itself, provide split terminal panes inside a tab, or restore processes after Host restart; an Agent reads terminals only through a terminal tool package.
 - A failed terminal chunk load requires a page reload because React caches a rejected lazy import for the page lifetime.
 
 <a id="dev-note"></a>

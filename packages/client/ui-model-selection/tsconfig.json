@@ -9,6 +9,12 @@
   ],
   "references": [
     {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../util/text-search"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {

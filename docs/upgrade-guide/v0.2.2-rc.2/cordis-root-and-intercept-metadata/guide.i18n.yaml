@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/cordis-root-and-intercept-metadata/guide.md
+/:
+  en: 4de1e21e06e1c67a
+  zh: f3195026d93e8127
+/ctx-context-root-replaces-ctx-root-and-service-intercept-metadata-is-renamed:
+  en: 3ecaed868843b9fe
+  zh: 827999ad27256e8e
+/ctx-context-root-replaces-ctx-root-and-service-intercept-metadata-is-renamed/change:
+  en: 84337d9923efc3c6
+  zh: e294b792081c7989
+/ctx-context-root-replaces-ctx-root-and-service-intercept-metadata-is-renamed/migration:
+  en: adec35b8052efcd3
+  zh: 56c53d6089761976

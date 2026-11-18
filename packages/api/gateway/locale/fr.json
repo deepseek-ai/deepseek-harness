@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "passerelle d'appel à distance",
+    "description": "Recevez l'appel d'interface du client et distribuez-le au service correspondant."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code hooks",
+    "description": "Run hooks from Claude Code hooks.json or settings at Harness interception points."
+  }
+}

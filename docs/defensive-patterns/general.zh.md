@@ -137,11 +137,44 @@ globalThis.__dshCache = new Map()   // shared across instances, reclaimed never
 
 反例让实例之间互相覆盖、回收时机不可控，并让状态在测试之间泄漏。
 
+<a id="plugins-do-not-read-the-cordis-root-context"></a>
+
+## 插件不读取 Cordis 根上下文
+
+插件通过自己的上下文获取服务、监听事件和注册内容，绝不经由 `ctx[Context.root]` 返回的根上下文。经由根上下文读取会跳过 `inject` 检查，因为根 fiber 没有 runtime；在根上下文上注册的监听器会跳过 scope 过滤；根上下文在根 isolate realm 中解析服务，而不是插件所在的 realm；在根上下文上注册的监听器或 accessor 不会随插件释放而移除。
+
+判定条件：为每处用法说出它替代的显式声明机制。读取服务对应一条 `inject` 条目；必须观察所有 scope 的监听器传入 `{ global: true }`；应用级的键或根级启动操作由拥有它的服务提供。边界是第一方 JavaScript 和 TypeScript（包括测试和 fixture），覆盖 `Context.root`、`symbols.root` 和 `Symbol.for('cordis.root')`，三者指向同一个符号。[verify-cordis-root.ts](../../scripts/verify-cordis-root.ts) 通过 `pnpm run verify-cordis-root` 运行，并由 `scripts/run-gates.ts` 作为 `cordis-root` 门禁运行，拒绝新增读取。例外：其 `CORDIS_ROOT_EXEMPTIONS` 中列出的文件，它们测试根上下文约定本身。`scripts/cordis-root.baseline.json` 中记录的读取是各包所有者待清理的工作，不是新代码的先例；理由见[决策记录](../../.agents/notes/implemented/process/2026-11-13-no-new-cordis-root-reads.zh.md)。
+
+```ts
+// Services come from inject; a listener that observes every scope says so.
+interface Loader { await(): Promise<void> }
+interface Context {
+  readonly loader: Loader
+  on(name: string, listener: () => void, options?: { global?: boolean }): () => void
+}
+
+export const inject = ['loader']
+
+export function apply(ctx: Context, listener: () => void): void {
+  void ctx.loader.await()
+  ctx.on('agent/inbox/inserted', listener, { global: true })
+}
+```
+
+```ts ignore-check
+void ctx[Context.root].loader.await()                   // no inject entry, no wait
+ctx[Context.root].on('agent/inbox/inserted', listener)  // escapes scope filtering and plugin disposal
+```
+
+反例让插件在依赖存在之前启动，让它观察和修改自身 scope 与 realm 之外的状态，并在插件释放后留下注册内容。
+
 <a id="a-business-capability-owns-itself"></a>
 
 ## 业务能力自己拥有自己
 
 业务能力住在自己的包里，经注册面接入——registry、`slots.inject`、waterfall 或事件订阅。runtime、controller、manager、gateway 承载通用编排：它可以持有注册表结构与 disposal 生命周期，但条目由拥有它们的包写入，且绝不硬编码一张业务中心表。
+
+先确定新增的区分、字段或适配器是否必要，再选择其所有者；移动不必要的概念并不能消除维护成本。对于必需的行为，如果局部实现只增加少量复杂度，就优先使用靠近生产者或消费方的现有扩展点。生产者可以在自己的包内通过[声明合并](../subsystems/core.zh.md#the-map--derived-union-pattern)声明功能专属变体，无需修改声明该共享类型的包。所有消费方共同依赖的义务由共享所有者负责。
 
 判定条件是：该能力是否由业务包自己声明并注册，中心层只做转发与生命周期管理、不做业务判定。边界是：中心层持有注册表结构与 disposal 生命周期，条目来自拥有它们的包。一条例外：纯基础设施能力——日志、传输、存储——不经业务注册面接入。中心层新增分支必须说明它为何无法下沉到业务包。
 

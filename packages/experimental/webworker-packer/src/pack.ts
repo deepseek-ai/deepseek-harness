@@ -28,8 +28,7 @@ import {
   type ImageLazyArchive, type ImageManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import picomatch from 'picomatch'
-import yaml from 'js-yaml'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
 import { WRAPPER_CONTRACT, type ImageFiles, type TransformOutcome } from './transform-image.ts'
 import { EXCLUDE, EXCLUDE_WORKSPACE, IMAGE_ENTRY_SEEDS, PAGE_ASSETS } from './rules.ts'
@@ -207,7 +206,7 @@ function treeRosterOf(root: string): string[] {
         continue
       }
       if (!entry.name.endsWith('.yml') && !entry.name.endsWith('.yaml')) continue
-      collectModuleNames(yaml.load(readFileSync(absolute, 'utf8'), { schema: entryListSchema }), names)
+      collectModuleNames(parseEntryYaml(readFileSync(absolute, 'utf8')), names)
     }
   }
   walk(root)
@@ -582,8 +581,9 @@ function materialize(
 /**
  * Request form the dynamic Client build emits for a package-local chunk: a
  * literal `require.async("./client.<name>.js")`, served by the Host on demand.
+ * The minifier may print the literal with any quote, including a template without substitutions.
  */
-const CHUNK_REQUEST = /\brequire\.async\(\s*(["'])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
+const CHUNK_REQUEST = /\brequire\.async\(\s*(["'`])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
 
 /**
  * Image paths every materialized package's `./client` export names, under any
@@ -696,7 +696,7 @@ export function packVfsImage(options: PackOptions): PackResult {
     files[`node_modules/${installation.name}/package.json`] = readFileSync(installation.manifest)
   }
   if (options.homePatch !== undefined && options.homePatch.length > 0) {
-    files[HOME_PATCH_PATH] = encoder.encode(yaml.dump(options.homePatch, { schema: entryListSchema, noRefs: true }))
+    files[HOME_PATCH_PATH] = encoder.encode(stringifyEntryYaml(options.homePatch))
   }
 
   for (const tree of configTrees) collectTree(tree.directory, files, tree.mount, relativePath => !excluded(relativePath))

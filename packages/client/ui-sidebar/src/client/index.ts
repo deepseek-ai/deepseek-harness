@@ -10,17 +10,25 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the Session root standard-props merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type { SidebarPanelMetadata, SidebarRootInjected } from './contract/slots.ts'
+import type { SidebarPanelMetadata, SidebarRootInjected, SidebarSectionInjected } from './contract/slots.ts'
+import { createPanelPins } from './panel-pins.ts'
 import { HeaderLeadingControls } from './HeaderLeadingControls.tsx'
 import { SidebarRoot } from './SidebarRoot.tsx'
-import { en, zh, type SidebarKey } from './locales.ts'
+import { PanelIcon } from './PanelIcon.tsx'
+import { en, ja, es, fr, de, ru, pt, zh, type SidebarKey } from './locales.ts'
 
 export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
-  SidebarPanelIconOwnerProps, SidebarPanelMetadata,
-  SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
+  SidebarPanelActionEntry, SidebarPanelActionsOwnerProps, SidebarPanelIconOwnerProps, SidebarPanelMetadata,
+  SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps, SidebarSessionActionOwnerProps,
+  SidebarSettingsOwnerProps, SectionScroller, SidebarSectionHookContext, SidebarSectionInjected, UseSectionScroller,
 } from './contract/slots.ts'
 export type { SidebarKey } from './locales.ts'
+
+/** The section occupant receives the scroller hook from each render's hookContext. */
+const SIDEBAR_SECTION_INJECT: SidebarSectionInjected = {
+  hooks: { sectionScroller: (_standard, { useSectionScroller }) => useSectionScroller },
+}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -44,7 +52,7 @@ export const inject = ['slots', 'layout', 'uiWorkspace', 'locale', 'shortcuts']
  */
 export function apply(ctx: ClientContext): void {
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-sidebar: dictionaries')
   const panels = createSnapshotStore<readonly SidebarPanelMetadata[]>([])
   const syncPanels = (): void => {
     const next = ctx.slots.entriesOfSlot('sidebar.panellist').map(({ options }) => {
@@ -61,32 +69,43 @@ export function apply(ctx: ClientContext): void {
   }
   ctx.effect(() => ctx.slots.subscribe('sidebar.panellist', syncPanels), 'ui-sidebar: panel entries')
   ctx.effect(() => ctx.locale.subscribe(syncPanels), 'ui-sidebar: panel labels')
+  const panelPins = createPanelPins()
+  const entryActions = {
+    getSnapshot: () => ctx.slots.entriesOfSlot('sidebar.panellist.actions').length > 0,
+    subscribe: (listener: () => void) => ctx.slots.subscribe('sidebar.panellist.actions', listener),
+  }
 
   const injectProps = (): SidebarRootInjected => ({
     // The shell's New Session button rides the Workspace UI's shared action
     // (current Session Workspace, then recent Workspace).
     startSession: (workspaceId) => { workspaceNavigation.startSession(workspaceId) },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
-    selectPanel: (id) => {
-      if (id === 'plugins' || id === 'schedules') ctx.get('productAnalytics')?.track('sidebar_menu_click', { menu_name: id === 'plugins' ? 'plugin' : 'cron' })
-      ctx.layout.selectPanel(id)
-    },
-    hooks: { panels, shortcuts: ctx.shortcuts.catalog },
+    selectPanel: (id) => { ctx.layout.selectPanel(id) },
+    setPinned: panelPins.setPinned,
+    trackEntryClick: (attributes) => { ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes) },
+    hooks: { panels, shortcuts: ctx.shortcuts.catalog, entryPins: panelPins.unpinned, entryActions },
   })
-  ctx.slots.inject('sidebar', () => ctx.slots.register({
-    name: 'sidebar',
-    locale: NS,
-    children: {
-      'sidebar.brand.mark': { kind: 'single', scope: 'root' },
-      'sidebar.brand.name': { kind: 'single', scope: 'root' },
-      'sidebar.toggle.badge': { kind: 'single', scope: 'root' },
-      'sidebar.panellist': { kind: 'list', scope: 'root' },
-      'sidebar.workspaces': { kind: 'single', scope: 'root' },
-      'sidebar.settings': { kind: 'single', scope: 'root' },
-      'sidebar.footer.action': { kind: 'list', scope: 'root' },
-    },
-    inject: injectProps,
-  }, SidebarRoot))
+  ctx.slots.inject('sidebar', function* () {
+    yield ctx.slots.registerFactory({
+      name: 'sidebar.panel.icon', scope: 'root',
+      children: { 'sidebar.panellist': { kind: 'list', scope: 'root' } },
+    }, PanelIcon)
+    yield ctx.slots.register({
+      name: 'sidebar',
+      locale: NS,
+      children: {
+        'sidebar.brand.mark': { kind: 'single', scope: 'root' },
+        'sidebar.brand.name': { kind: 'single', scope: 'root' },
+        'sidebar.toggle.badge': { kind: 'single', scope: 'root' },
+        'sidebar.panellist.actions': { kind: 'list', scope: 'root' },
+        'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SIDEBAR_SECTION_INJECT },
+        'sidebar.settings': { kind: 'single', scope: 'root' },
+        'sidebar.footer.action': { kind: 'list', scope: 'root' },
+        'sidebar.session.action': { kind: 'hoc', scope: 'root' },
+      },
+      inject: injectProps,
+    }, SidebarRoot)
+  })
   // macOS desktop hides the collapsed sidebar entirely, so the open/New
   // Session controls move into the frame's window-chrome seat beside the
   // traffic lights; the occupant reuses the shell's injected actions, and

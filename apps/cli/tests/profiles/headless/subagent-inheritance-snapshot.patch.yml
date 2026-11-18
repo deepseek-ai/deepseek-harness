@@ -10,6 +10,7 @@
   disabled: true
 
 - id: sandbox-policy
+  inject: []
   config:
     mode: workspace-write
     workspaceRoot: !!js process.cwd()
@@ -39,3 +40,8 @@
 - id: session-log-deepseek
   config:
     enabled: false
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
+  config:
+    applyPatch: true

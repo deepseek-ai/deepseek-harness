@@ -1,7 +1,7 @@
 /** Sidebar account launcher and locally authoritative sign-out action. */
 import { useEffect, useRef, useState } from 'react'
 import {
-  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium,
+  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineRegular, IconSettingsOutlineRegular, IconUserOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
@@ -9,7 +9,7 @@ import { SignOutDialog } from './SignOutDialog.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
 import { LogoutIcon } from './LogoutIcon.tsx'
 import { AccountAvatar } from './AccountAvatar.tsx'
-import { AccountNoticeStack } from './AccountNotice.tsx'
+import type {} from './account-ui.ts'
 import css from './AccountMenu.module.css'
 
 /** Account launcher composed by the settings shell. */
@@ -21,10 +21,9 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
  */
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
-  useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount, bonusNoticeShown, bonusNoticeDismissed,
+  useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount,
   contactUs, showLogin, start, cancel, avatarFailed, t,
 }: AccountMenuProps) {
-  const anchor = useRef<HTMLDivElement>(null)
   // The launcher outlives the panel, so a false-to-true edge is one Settings entry:
   // re-renders, section switches and tab switches inside one open must not read again.
   const settingsWasOpen = useRef(false)
@@ -54,13 +53,9 @@ export function AccountMenu({
   }
   // The plugin's start publishes `loginFailed` before it rejects, so the dialog owns the report.
   const beginSignIn = (): void => { setOpen(false); void start().catch(() => undefined) }
-  return <div ref={anchor} className={css.root}>
+  return <div className={css.root} data-inset={signedIn && wide}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
-    {signedIn && !account.desktopOnboardingVisible && !account.onboarding && account.notices && <AccountNoticeStack
-      notices={account.notices}
-      anchor={anchor} title={t('bonusNoticeTitle')} closeLabel={t('close')}
-      onShown={bonusNoticeShown} onDismiss={bonusNoticeDismissed} />}
     <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={signedIn ? undefined : css.signedOutMenu}
       anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
@@ -72,11 +67,11 @@ export function AccountMenu({
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}
       items={[
-        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} />,
+        { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineRegular size={14} />,
           ...(settingsShortcut === undefined ? {} : { shortcut: settingsShortcut }) },
-        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineMedium size={16} /> },
+        { id: 'contact', label: t('contactUs'), icon: <IconPaperPlaneOutlineRegular size={14} /> },
         ...(signedIn ? [{ id: 'signout', label: t('signOut'), icon: <LogoutIcon />, disabled: busy }]
-          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineMedium size={16} /> }]),
+          : [{ id: 'signin', label: t('signIn'), icon: <IconUserOutlineRegular size={14} /> }]),
       ]}
       onClose={() => { setOpen(false) }}
       onSelect={(id) => {

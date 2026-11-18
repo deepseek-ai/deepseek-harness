@@ -116,8 +116,10 @@
 .creditActions { display: flex; gap: 24px; margin-top: 60px; }
 .creditActions > button { flex: 1; max-width: 160px; }
 .creditActions .laterAction { background: var(--dsw-alias-onboarding-secondary-fill); }
-.creditActions .laterAction:hover:not(:disabled) {
-  background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--dsw-alias-onboarding-secondary-fill);
+@media (hover: hover) {
+  .creditActions .laterAction:hover:not(:disabled) {
+    background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--dsw-alias-onboarding-secondary-fill);
+  }
 }
 .page button { transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease; }
 
@@ -180,10 +182,17 @@
   mask-composite: exclude;
   opacity: 0;
 }
-.card:hover::before { border-color: var(--dsw-alias-border-l4); }
-.card:hover::after { opacity: 0.35; }
+@media (hover: hover) {
+  .card:hover::before { border-color: var(--dsw-alias-border-l4); }
+
+  .card:hover::after { opacity: 0.35; }
+}
 .selected::before { opacity: 0; }
-.selected::after, .selected:hover::after { opacity: 1; }
+.selected::after { opacity: 1; }
+
+@media (hover: hover) {
+  .selected:hover::after { opacity: 1; }
+}
 .selected::after { animation: borderSweep 14s linear infinite; }
 .officeCard, .card[data-process='compact'] { --card-border-stops: var(--dsw-gradient-onboarding-violet-stops); }
 .card[data-process='detailed'] { --card-border-stops: var(--dsw-gradient-onboarding-cyan-stops); }
@@ -237,14 +246,18 @@
 .navigation button { pointer-events: auto; }
 .navigation button { display: flex; align-items: center; gap: 20px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 16px; font-weight: 300; line-height: 32px; cursor: pointer; }
 .navigation button:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 5px; }
-.navigation button:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+@media (hover: hover) {
+  .navigation button:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+}
 .backIcon { width: 17px; height: 14px; flex: none; background: currentColor; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
 .status { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 14px; line-height: 22px; }
 .confirmation { padding: 22px 24px 0; color: var(--dsw-alias-label-primary); }
 .confirmationHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .confirmation h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
 .confirmationClose { display: flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; border: 0; border-radius: 28px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.confirmationClose:hover { background: var(--dsw-alias-interactive-bg-hover); }
+@media (hover: hover) {
+  .confirmationClose:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
 .confirmation p { margin: 0; font-size: 14px; line-height: 22px; }
 .confirmationActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .dialogButton { border-radius: 12px; font-family: var(--dsw-font-family); font-weight: 500; }
@@ -252,11 +265,17 @@
 
 @media (max-height: 760px) {
   .purpose, .process { top: calc(50% - 180px); }
+
   .purpose .copy h1, .process .copy h1 { font-size: 28px; line-height: 39px; }
+
   .subtitle { margin-top: 16px; line-height: 21px; }
+
   .card { padding: 24.5px 32.5px 32.5px; min-height: 187px; }
+
   .processCards { min-height: 0; padding-block: 0; }
+
   .primaryAction { margin-top: 40px; }
+
   .creditActions { margin-top: 32px; }
 }
 
@@ -270,9 +289,13 @@
 
 @media (max-width: 1100px) {
   .page { --page-padding: 40px; }
+
   .copy h1 { font-size: 26px; line-height: 40px; }
+
   .heroDescription { font-size: 16px; line-height: 28px; }
+
   .welcome .copy h1 { font-size: 28px; line-height: 48px; }
+
   .fileIcons { gap: 3px; }
 }
 
@@ -282,6 +305,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .page button, .card, .card::before, .card::after { transition: none; }
+
   .page, .fileIcons > svg, .selected::after { animation: none; }
 }
 

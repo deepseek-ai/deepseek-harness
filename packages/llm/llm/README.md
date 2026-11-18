@@ -25,9 +25,11 @@ Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider ada
 <a id="use-this-package"></a>
 ## Use this package
 
-`listModels` describes models offered by catalog-driven interfaces. Core resolution and streaming can still accept unlisted ids. The GUI requires catalog membership for selection and submission; adapters intended for GUI use must implement `listModels` and advertise their available models. The base implementation returns an empty list and therefore offers no GUI models.
+`listModels` describes models offered by catalog-driven interfaces. Core resolution and streaming can still accept unlisted ids. The GUI requires catalog membership for selection and submission; adapters intended for GUI use must implement `listModels` and advertise their available models. The base implementation returns an empty list and therefore offers no GUI models. An entry's optional `badge` holds selector text (one literal, or translations keyed by lowercase language id that include `en`) and a `neutral`, `info`, `success`, or `warning` tone; `resolveModelInfo` omits it, and no model request carries it. Providers publish `llm/models-updated(provider)` when their advertised catalog changes; clients reload the complete catalog, including omitted badges.
 
 Any composition that calls a model provider — an agent loop, a session-title generator, a compaction summarizer — streams its requests through this service. Mount it together with at least one provider adapter; the service itself has no configuration and no provider wire code.
+
+Import message, tool-call, provider-request, attempt, and reasoning-effort identifier types from `@deepseek-ai/dsh-llm/types` or the package root using `import type`. Brand strings with `brandString<IdentifierType>(value)` from `@deepseek-ai/dsh-brand`; branding preserves the string without validation.
 
 ### When to choose it
 
@@ -35,10 +37,11 @@ Choose this package whenever a plugin or composition needs to call a model: it i
 
 ### Minimal composition
 
-Mount the service and at least one adapter, then select the provider by name in every request:
+Mount the service and at least one adapter, then select the provider by name in every request. The DeepSeek route below also requires [`dsh-deepseek-auth`](../../account/deepseek-auth/README.md), which releases its API key:
 
 ```yaml
 - name: '@deepseek-ai/dsh-llm'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
@@ -57,6 +60,8 @@ for await (const chunk of ctx.llm.stream({
 ```
 
 After a successful mount, `ctx.llm.listProviders()` reports the registered routes in registration order.
+
+Auxiliary request producers declare their `purpose` in `LlmRequestPurposeMap` through module augmentation of `@deepseek-ai/dsh-llm/types`; each key maps to `true`. `GenerateOptions.purpose` accepts the declared keys, while ordinary conversation requests omit it. Import the producer package or its public types before constructing that auxiliary request. Adapters carry the purpose as model-hidden transport metadata and handle unfamiliar purposes without rejecting the request.
 
 `GenerateOptions.messages` accepts durable `Message` values and request-only `RequestUserInput` values. Request-only inputs carry user-role content with no `id` or `source`; Session writes and Agent delivery still require durable messages. Callers keep auxiliary inputs unchanged until the stream settles. A caller that records its exact request, such as session-title generation, must use durable messages.
 
@@ -81,6 +86,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### What you can do
 
+- **Extract content text** — `extractTextContent(content, options?)` from `@deepseek-ai/dsh-llm/message` joins only `text` blocks in order, preserving whitespace and empty text blocks while omitting all other block types without placeholders. The optional `options.separator` defaults to `''`. It accepts read-only content and returns `''` when no text blocks exist.
 - **Stream one model call** — `ctx.llm.stream(options)` yields raw chunks (token-level deltas) for any registered provider and model; consumers assemble them with `BlockAssembler`.
 - **Register provider adapters** — an adapter owns one or more provider routes, and its registration captures that route's retry policy; registering the same route twice fails with `DUPLICATE_ADAPTER`.
 - **Expose and activate providers through configuration** — adapters declare configurable-provider routes plus a settings namespace, so configuration surfaces can activate dormant providers and edit connection facts without a restart. `LlmConfigurableProvider.error` reports a configuration diagnostic for repair; unaffected models can remain serviceable. An entry can also carry `defaultBaseURL`, the endpoint the adapter uses when the profile sets none, and `nativeAuth`, the environment variables and OAuth sign-in that the adapter's authentication reads when the profile names no credential reference; `baseURLEnv` lists environment variables used to configure the endpoint. Configuration UIs read these fields from the directory without calling the adapter.
@@ -90,7 +96,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### Failures and recovery
 
-Every stream ends in exactly one terminal `finish` chunk: `{ kind: 'error', failure }` on failure, `{ kind: 'aborted', failure }` on cancellation. Failures carry stable codes such as `NO_ADAPTER`, `MISSING_CREDENTIAL`, `AUTH`, `RATE_LIMIT`, and `CONTEXT_WINDOW_EXCEEDED`; consumers route on the code, never on message text. `QUOTA` is provider-neutral exhaustion, while `ACCOUNT_QUOTA` is reserved for a first-party account balance that the current product can replenish. A request naming an unregistered provider fails with `NO_ADAPTER`, and a malformed credential fails with `INVALID_CREDENTIAL` instead of surfacing as an opaque fetch error. This service never re-runs a request: retrying is the job of `dsh-llm-retry` at the agent's failed-step extension point.
+Every stream ends in exactly one terminal `finish` chunk: `{ kind: 'error', failure }` on failure, `{ kind: 'aborted', failure }` on cancellation. Failures carry stable codes such as `NO_ADAPTER`, `MISSING_CREDENTIAL`, `AUTH`, `RATE_LIMIT`, and `CONTEXT_WINDOW_EXCEEDED`; consumers route on the code, never on message text. `LLM_FAILURE_CODES` defines every code the built-in providers and this runtime raise; `new LlmError` accepts only those codes or `HTTP_<status>`, and `LlmError.fromFailure` re-raises an observed failure whose code another provider chose. Codes marked `retryChoice` are the choices a provider `retryPolicy.retryableCodes` schema publishes to settings forms; being a choice does not add a code to the default retried set. `QUOTA` is provider-neutral exhaustion, while `ACCOUNT_QUOTA` is reserved for a first-party account balance that the current product can replenish. A request naming an unregistered provider fails with `NO_ADAPTER`, and a malformed credential fails with `INVALID_CREDENTIAL` instead of surfacing as an opaque fetch error. This service never re-runs a request: retrying is the job of `dsh-llm-retry` at the agent's failed-step extension point.
 
 -----
 
@@ -112,14 +118,13 @@ The service is built on one separation: **the logical contract is provider-neutr
 |---|---|
 | [`src/index.ts`](src/index.ts) | The `LlmRuntime` service: adapter registry, configurable-provider directory, model discovery, call preparation, and the streaming boundary |
 | [`src/types.ts`](src/types.ts) | The `StreamChunk` protocol, content-block map, finish reasons, and shared vocabulary |
-| [`src/message.ts`](src/message.ts) | Immutable message constructors shared by delivery, history, and requests |
+| [`src/message.ts`](src/message.ts) | Content text extraction and immutable message constructors shared by delivery, history, and requests |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`: incremental chunk-to-block assembly |
 | [`src/assistant-stream.ts`](src/assistant-stream.ts) | Compact timed Assistant stream accumulation, strict validation, exact expansion, and record-level readers |
 | [`src/call-config.ts`](src/call-config.ts) | Call-config validation, adapter-default materialization, and request freezing |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | Provider-owned retry policy resolution (normal and always modes) |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` taxonomy and provider-neutral failure codes |
 | [`src/content.ts`](src/content.ts) | Shared file and image helpers: content walks, file projection, image offload accounting, and offloaded-image projection |
-| [`src/api-key.ts`](src/api-key.ts) | Credential format check shared by every adapter |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | Failure normalization into terminal finish chunks |
 
 ### Main flow
@@ -174,11 +179,12 @@ Reasoning-effort materialization preserves the assembled request prefix. Image i
 These limits define where this service stops and other packages or future work begin. They are current package constraints, not a task backlog.
 
 - **No retry execution, caching, or rate limiting ships in this service** — provider registration stores the retry policy, but a stream remains a single provider attempt; `@deepseek-ai/dsh-llm-retry` executes the policy at durable agent-step boundaries.
+- **Only `attributionHeaders()` carries the `DSH_USER_AGENT_SUFFIX` token** — DeepSeek web search and web API plugins send their own fixed `User-Agent`, so the profile suffix does not reach those requests.
 - **`GenerateOptions` sampling is `temperature`/`maxTokens`/`stop` only** — no `tool_choice`, `top_p`, or penalty fields; the vocabulary grows when a producer lands ([dropped inert knobs](../../../.agents/notes/archived/simplification/2026-07-04-drop-inert-request-knobs.md)).
 - **Variants normally require a producer** — `prefill`, per-tool `strict`, block `cache` hints, and the `agent` message-source variant have no producer ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-prune-producerless-vocabulary-variants.md)).
 - **`BlockAssembler` handles core block kinds only** — a plugin-added block type whose stream is never closed by `block-end` makes `blocks()` throw.
 - **`GenerateOptions.sessionId` is a locally-declared brand** — importing dsh-session's `SessionId` would create a dependency cycle.
-- **Tool updates require session history** — `GenerateOptions.tools` contains active definitions. `toolHistory` supplies the initial declarations and historically resolved additions from `Session.toolHistory()`. At adapter dispatch, `projectToolUpdates` constructs deferred declarations and retains removed definitions for `in-history`; `addition-only` omits removed definitions and removal messages. Unsupported routes receive active tools without developer messages or `deferLoading`. Missing history or a request prefix omitting recorded updates falls back to current declarations without developer messages. Explicitly deferred baseline tools remain deferred until their first retained addition block; declaring a deferred tool does not activate it.
+- **Tool updates require session history** — `GenerateOptions.tools` contains active definitions. `toolHistory` supplies the initial declarations and historically resolved additions from `Session.toolHistory()`. At adapter dispatch, `projectToolUpdates` constructs deferred declarations and retains removed definitions for `in-history`; `addition-only` omits removed definitions and removal messages. Removing any tool or adding tools to an empty set on an addition-only route rebuilds the baseline from the declarations available after that update. Deferred declarations count as existing tools. Superseded tool blocks are omitted while unrelated content survives; subsequent additions remain deferred. Unsupported routes receive active tools without developer messages or `deferLoading`. Missing history or a request prefix omitting recorded updates falls back to current declarations without developer messages. Explicitly deferred tools become immediate during a rebuild only if an addition has already activated them; unactivated declarations remain deferred.
 
 <a id="dev-note"></a>
 ### Dev Note

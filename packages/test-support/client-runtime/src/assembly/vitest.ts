@@ -20,7 +20,7 @@ export interface ClientTestFixtures {
  * promise. Await it to observe startup failures; cleanup waits for startup but does not rethrow its rejection.
  * Missing mock responses still fail teardown even when no client was started. Page globals remain environment-owned.
  * @param plan - roster and replacement modules, shared as configuration rather than as a running client.
- * @param options - mount and readiness settings passed to `TestClient.start`.
+ * @param options - mount, readiness, and strictness settings passed to `TestClient.start`.
  * @returns Vitest's test function with test-scoped `mock` and `start` fixtures.
  */
 export function createClientTest(plan: AssemblyPlan, options: TestClientOptions = {}): TestAPI<ClientTestFixtures> {

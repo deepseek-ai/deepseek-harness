@@ -2,73 +2,56 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
-import { presentInspectListCall, presentInspectQueryCall } from './present.ts'
+import { presentInspectCall } from './present.ts'
 
 export const name = 'tool-cordis'
 export const inject = ['tools', 'cordisInspect']
 
 function requireAgent(exec: ToolExecution): Agent {
-  if (exec.agent === undefined) throw new Error('Cordis inspection requires an Agent-backed session')
+  if (exec.agent === undefined) throw new ToolContextUnavailableError('Cordis inspection requires an Agent-backed session')
   return exec.agent
 }
 
-/** Register read-only runtime inspection tools over the Host providers that
- * `@deepseek-ai/dsh-tool-cordis/host` registers once per process.
+/** Register runtime inspection over the Host providers registered once per process.
  * @param ctx Agent-scoped registration context.
  */
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
-    name: 'cordis_inspect_list',
-    description:
-      'List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest '
-      + 'manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and '
-      + 'input/output schemas. Call this Tool before writing or configuring a plugin, then select the provider and '
-      + 'method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business '
-      + 'Service that Plugin code can call.',
-    parameters: {},
-    output: {
-      schema: { type: 'json' },
-      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
-    },
-    execute(_args, _exec): Promise<JsonValue> {
-      return Promise.resolve({ providers: ctx.cordisInspect.list() } as unknown as JsonValue)
-    },
-    presentCall: presentInspectListCall,
-  }))
-
-  ctx.tools.register(defineTool({
-    name: 'cordis_inspect_query',
-    description:
-      'Run a read-only query declared by an Inspect Provider. platform, provider, and method must come from '
-      + 'cordis_inspect_list, and input must satisfy that method\'s schema. Use this Tool before writing plugin code '
-      + 'to read exact Service methods, Event modes, plugin Config schemas, Tool schemas, theme tokens, or live '
-      + 'Slot trees and props. Host queries run locally. A Client query waits for the first valid page response '
-      + 'within the configured timeout; otherwise it reports a Client failure or asks you to reconnect and retry. '
-      + 'This Tool cannot invoke business Service methods or modify the runtime.',
+    name: 'cordis_inspect',
+    description: 'Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; '
+      + 'then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. '
+      + 'Client queries require a connected page.',
     parameters: {
-      platform: { type: 'string', required: true, enum: ['host', 'client'], description: 'Runtime platform that owns the Provider.' },
-      provider: { type: 'string', required: true, description: 'Exact Provider ID returned by cordis_inspect_list.' },
-      method: { type: 'string', required: true, description: 'Exact method name declared by the Provider manifest.' },
-      input: { type: 'json', description: 'Optional query input; it must satisfy the method input schema.' },
+      query: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          platform: { type: 'string', required: true, enum: ['host', 'client'], description: 'Provider platform.' },
+          provider: { type: 'string', required: true, description: 'Provider ID from the directory.' },
+          method: { type: 'string', required: true, description: 'Method name from the directory.' },
+          input: { type: 'json', description: "Arguments matching the method's input schema." },
+        },
+      },
     },
     output: {
       schema: { type: 'json' },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
     },
-    async execute(args, exec) {
+    // Provider methods are read-only, and each Client query settles by its own request id.
+    isConcurrencySafe: () => true,
+    async execute({ query }, exec): Promise<JsonValue> {
+      if (query === undefined) return { providers: ctx.cordisInspect.list() } as unknown as JsonValue
       const data = await ctx.cordisInspect.query(
-        args.platform,
-        args.provider,
-        args.method,
-        args.input,
+        query.platform,
+        query.provider,
+        query.method,
+        query.input,
         requireAgent(exec),
         exec.signal,
       )
-      return { platform: args.platform, provider: args.provider, method: args.method, data }
+      return { platform: query.platform, provider: query.provider, method: query.method, data }
     },
-    presentCall: presentInspectQueryCall,
+    presentCall: presentInspectCall,
   }))
-
 }

@@ -36,6 +36,7 @@ import * as nodeOs from './builtin_modules/implemented/os.ts'
 import * as nodePath from './builtin_modules/implemented/path.ts'
 import * as nodePerfHooks from './builtin_modules/implemented/perf_hooks.ts'
 import * as nodeStream from './builtin_modules/implemented/stream.ts'
+import * as nodeStringDecoder from './builtin_modules/implemented/string_decoder.ts'
 import * as nodeStreamPromises from './builtin_modules/implemented/stream/promises.ts'
 import * as nodeTimersPromises from './builtin_modules/implemented/timers/promises.ts'
 import * as nodeTty from './builtin_modules/implemented/tty.ts'
@@ -47,6 +48,7 @@ import * as nodeChildProcess from './builtin_modules/implemented/child_process.t
 import * as nodeNet from './builtin_modules/mock/net.ts'
 import * as nodeSqlite from './builtin_modules/mock/sqlite.ts'
 import * as nodeVm from './builtin_modules/mock/vm.ts'
+import * as nodeRepl from './builtin_modules/mock/repl.ts'
 import * as nodeWorkerThreads from './builtin_modules/mock/worker_threads.ts'
 import * as systemFlock from './external_packages/node-addon-system-flock.ts'
 import * as koffi from './external_packages/koffi.ts'
@@ -56,6 +58,7 @@ import * as execa from './external_packages/execa.ts'
 import * as got from './external_packages/got.ts'
 import * as nodeAddonRequireBuiltin from './external_packages/node-addon-require-builtin.ts'
 import * as piAi from './external_packages/pi-ai.ts'
+import * as piCodingAgent from './external_packages/pi-coding-agent.ts'
 import * as ripgrep from './external_packages/ripgrep.ts'
 import * as sharp from './external_packages/sharp.ts'
 import * as ws from './external_packages/ws.ts'
@@ -81,8 +84,10 @@ const BUILTINS: Record<string, StaticModuleFactory> = {
   path: () => nodePath,
   'path/posix': () => nodePath,
   perf_hooks: () => nodePerfHooks,
+  repl: () => nodeRepl,
   sqlite: () => nodeSqlite,
   stream: () => nodeStream,
+  string_decoder: () => nodeStringDecoder,
   'stream/promises': () => nodeStreamPromises,
   'timers/promises': () => nodeTimersPromises,
   tty: () => nodeTty,
@@ -107,6 +112,7 @@ const EXTERNALS: Record<string, StaticModuleFactory> = {
   'ws': () => ws,
   '@vscode/ripgrep': () => ripgrep,
   '@earendil-works/pi-ai': () => piAi,
+  '@earendil-works/pi-coding-agent': () => piCodingAgent,
 }
 
 /**

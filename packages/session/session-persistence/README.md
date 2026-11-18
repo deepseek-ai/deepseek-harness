@@ -29,7 +29,7 @@ Mount one persistence backend to make sessions durable. The backend registers it
 
 ### Choosing a backend
 
-The seam ships the [JSONL](../session-persistence-jsonl/README.md) backend: one append-only `.jsonl.zstd` log per session. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
+Shipped profiles use the [JSONL](../session-persistence-jsonl/README.md) backend: one append-only `.jsonl.zstd` log per session. The separate [SQLite provider](../session-persistence-sqlite/README.md) saves logical events in a database and imports existing JSONL histories on first open. Both providers expose the same service and handle methods. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
 
 ### What the service provides
 
@@ -45,6 +45,8 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 ```
 
 Service-level `flush()` drains every active write handle's routed events and materializes its session, exactly as each handle's own `flush` would; failures aggregate per session as an `AggregateError` without abandoning the sweep, and a handle closed mid-sweep counts as flushed because close itself drains durably.
+
+`create(header, { source, inheritedEventCount })` durably stores the complete fork history before returning the writer. `source.events` runs from seq 0: the parent's stored prefix through the exclusive `source.endSeq`, then the child's events; when `header.isSeeded` is true, they contain the inherited marker at `inheritedEventCount`. A backend that shares the prefix requires the parent to exist with at least `endSeq` persisted events and writes only the remainder; a copying backend writes all of them. Later parent appends do not change the child. See [`SessionPersistenceCreateOptions`](src/index.ts) for the source fields and creation failures.
 
 Every log read and write flows through the returned `SessionHandle`; there are no id-addressed append or load methods. `handle.read(offset?, length?)` returns `{ eventState, events }`: the outer slice belongs to the caller, while `eventState` distinguishes an exclusively `detached` event graph from a `shared-frozen` graph that may also reside in a backend cache. The producer establishes this state and slices preserve it even when empty. Both states are safe to adopt without copying; a consumer that needs mutable events clones them first. Reads never include a torn tail, repeated reads on one handle never observe an older state than a prior read, and a write handle reads its own successful appends. `handle.append(events)` appends a contiguous batch whose first `seq` equals the stored next-seq; persistence is best-effort on resolution — the batch is accepted, ordered, and visible to reads on this backend instance, and only a resolved `flush` promises it survives a crash (the shipped JSONL backend happens to persist each batch immediately). `handle.flush()` is the durability barrier and also materializes an empty created session so it becomes durably listable. `handle.close()` is idempotent and uncancellable: a read handle frees local resources; a write handle completes pending durability and releases write ownership. Once an `append` or `flush` resolves, reads started afterwards on the same backend instance — on any handle, or through `stat`/`list` — observe at least that prefix.
 
@@ -62,7 +64,7 @@ Persistence returns the physically valid log; semantic repair belongs to the rea
 
 ### Failures and recovery
 
-For versioned artifacts, `stat` and `list` expose `formatStatus` as `current` or `migration-required`. The separate `header` remains current logical metadata. This status describes storage, not an in-memory preparation or migration task; providers without this information omit it.
+For versioned artifacts, `stat` and `list` expose `formatStatus` as `current` or `migration-required`. The separate `header` remains current logical metadata. This status describes storage, not an in-memory preparation or migration task; providers without this information omit it. A materialized snapshot also carries `location` with the backend-resolved selected per-Session artifact path when the backend keeps one; this observational metadata supports diagnostics and export, is not persisted Session content, and is omitted for an unmaterialized pending Session.
 
 A stored log the current build cannot faithfully interpret is refused with a direction-aware error, never misread. `SessionHandle` exposes only current logical records identified by `SESSION_FORMAT_VERSION`; a provider must convert any supported historical storage before returning a handle, and the shipped JSONL provider migrates supported historical generations through its static catalog. A newer format instructs the operator to upgrade the harness. An event type unknown to this build refuses unless its envelope marks it `ignorable`, and committed-prefix corruption rejects as `SessionPersistenceCorruptionError`.
 

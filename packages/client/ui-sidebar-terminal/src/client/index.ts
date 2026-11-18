@@ -1,7 +1,7 @@
 /** Register interactive terminal tabs and explicit process cleanup with the sidebar. */
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
+import type { WebTerminalId, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller/types'
 import type { SidebarRightTabParamsMap, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/client'
@@ -14,10 +14,11 @@ import { PluginArtworkTerminal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TerminalGuide, type TerminalGuideInjected } from './TerminalGuide.tsx'
 import { LazyTerminalBody } from './LazyTerminalBody.tsx'
 import { TerminalTitle } from './TerminalTitle.tsx'
+import { AgentTerminalOpener, type AgentTerminalOpenerInjected } from './AgentTerminalOpener.tsx'
 // import { TerminalRecovery, type TerminalRecoveryInjected } from './TerminalRecovery.tsx'
 // import { TerminalCleanup, type TerminalCleanupInjected } from './TerminalCleanup.tsx'
 import type { TerminalBodyInjected, TerminalInjected } from './face.ts'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** Services needed by the terminal's two sidebar seats. */
 export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'webTerminals', 'theme', 'shortcuts']
@@ -67,7 +68,7 @@ export function apply(ctx: Context): void {
       return { status: 'handled', run: () => { ctx.sidebarRight.openTabFromTarget('terminal', target) } }
     },
   }), 'ui-sidebar-terminal: shortcut')
-  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'ui-sidebar-terminal.copy')
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en, ja, es, fr, de, ru, pt }), 'ui-sidebar-terminal.copy')
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id, kind: 'terminal', multiple: true, priority: 'builtin', title: () => t('title'),
     guide: [{ id: 'new', order: 20, title: () => t('new'), description: () => t('description'), icon: PluginArtworkTerminal }],
@@ -99,6 +100,47 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab.title', key: id, locale: namespace, inject }, TerminalTitle,
   )), 'ui-sidebar-terminal.title')
+  const openAgentTerminals = (sessionId: SessionId, terminals: readonly WebTerminalInfo[]): void => {
+    for (const info of terminals) {
+      if (info.origin !== 'agent' || info.state !== 'running' || ctx.webTerminals.isRepresented(sessionId, info.id)) continue
+      const before = new Set(ctx.sidebarRight.tabsIn(sessionId).map(tab => tab.id))
+      ctx.sidebarRight.openTabIn(sessionId, 'terminal', { params: { terminalId: info.id } })
+      // Binding before the body mounts keeps the tab attached to this terminal across reload.
+      const opened = ctx.sidebarRight.tabsIn(sessionId).find(tab => tab.kind === 'terminal' && !before.has(tab.id))
+      if (opened !== undefined) ctx.webTerminals.bind(sessionId, opened.contentId, info.id)
+    }
+  }
+  // Terminals each Session's latest roster listed under Agent control. One that leaves the roster while the Agent
+  // controls it was ended by the Agent or its Session, so this window closes the tabs bound to it.
+  const agentControlled = new Map<SessionId, ReadonlySet<WebTerminalId>>()
+  const closeEndedAgentTerminals = (sessionId: SessionId, terminals: readonly WebTerminalInfo[]): void => {
+    const listed = new Set(terminals.map(info => info.id))
+    const ended = new Set([...agentControlled.get(sessionId) ?? []].filter(terminal => !listed.has(terminal)))
+    const controlled = terminals.filter(info => info.origin === 'agent' && info.control === 'agent')
+    agentControlled.set(sessionId, new Set(controlled.map(info => info.id)))
+    if (ended.size === 0) return
+    for (const tab of ctx.sidebarRight.tabsIn(sessionId)) {
+      const bound = tab.kind === 'terminal' ? ctx.webTerminals.boundTerminal(sessionId, tab.contentId) : undefined
+      if (bound !== undefined && ended.has(bound)) ctx.sidebarRight.closeIn(sessionId, tab.id)
+    }
+  }
+  const watches = new Map<SessionId, AgentTerminalOpenerInjected>()
+  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions', id: 'agent-terminals', locale: namespace,
+    inject: (sessionId): AgentTerminalOpenerInjected => {
+      let watch = watches.get(sessionId)
+      if (watch === undefined) {
+        watch = {
+          watchAgentTerminals: () => ctx.webTerminals.watch(sessionId, (terminals) => {
+            closeEndedAgentTerminals(sessionId, terminals)
+            openAgentTerminals(sessionId, terminals)
+          }),
+        }
+        watches.set(sessionId, watch)
+      }
+      return watch
+    },
+  }, AgentTerminalOpener)), 'ui-sidebar-terminal.agent-terminals')
   // ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
   //   name: 'conversation.session.header.actions', id, locale: namespace,
   //   inject: (sessionId): TerminalRecoveryInjected => ({

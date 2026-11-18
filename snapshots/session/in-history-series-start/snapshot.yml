@@ -1,0 +1,11 @@
+version: 1
+scenario: in-history-series-start
+profile: headless
+composition: in-history-series-start
+recording: authored
+header:
+  class: in-history-series-start
+  pin: true
+  toolSchemasSource: dynamic-tool-updates
+  changes: 2
+  promptChanges: 1

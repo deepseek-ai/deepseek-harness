@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface do modo de permissão",
+    "description": "Define as permissões padrão para novas sessões e alterna o modo de permissões para a sessão atual."
+  }
+}

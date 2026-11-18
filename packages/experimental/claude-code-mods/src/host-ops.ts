@@ -10,18 +10,17 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-// Type-only: activate the `ctx.get('subprocess')` and `ctx.get('sessionProjections')` Context declarations.
+// Type-only: activate the `ctx.get('subprocess')` Context declaration.
 import type {} from '@deepseek-ai/dsh-subprocess'
-import type {} from '@deepseek-ai/dsh-session-projection'
-import type { SessionProjectionStateMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import type { Session } from '@deepseek-ai/dsh-session'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
-// Type-only: merges the token-meter projection states into SessionProjectionStateMap.
 import type {} from '@deepseek-ai/dsh-token-meter'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -80,6 +79,14 @@ const storeDomainSpec = defineDomain({
   tables: { store: domainTable<string, Record<string, JsonValue>>(zod.record(zod.string(), zod.json())) },
 })
 
+/** A call to a mod-registered tool that no `tool.call` hook answered; code `MOD_UNANSWERED`. */
+export class ModUnansweredError extends HarnessError {
+  constructor(message: string) {
+    super(message, 'MOD_UNANSWERED')
+    this.name = 'ModUnansweredError'
+  }
+}
+
 /** Options the host op table is built from. */
 export interface HostOpsOptions {
   readonly ctx: Context
@@ -110,17 +117,13 @@ function requireAgent(context: OpContext<AgentBinding>, op: string): Agent {
   return agent
 }
 
-function textOf(content: readonly ContentBlock[]): string {
-  return content.filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join('')
-}
-
 /**
  * Project one tool outcome onto Claude Code's `tool.call` result.
  * @param result - the harness tool outcome.
  * @returns its text as `result`, with `isError` on a failure.
  */
 export function toolCallResultOf(result: ToolExecutionResult): ToolCallResult {
-  return result.isError ? { result: textOf(result.content), isError: true } : { result: textOf(result.content) }
+  return result.isError ? { result: extractTextContent(result.content), isError: true } : { result: extractTextContent(result.content) }
 }
 
 /** The model's raw JSON arguments as an object; an unparsable string is an empty input. */
@@ -140,7 +143,7 @@ function sessionMessages(messages: readonly Message[], aliases: ToolNameAliases)
     const toolUses = message.content
       .filter((block): block is Extract<ContentBlock, { type: 'tool-call' }> => block.type === 'tool-call')
       .map(block => ({ tool_use_id: block.id, tool: aliases.toMod(block.name), input: argumentsOf(block.arguments) }))
-    out.push({ role: message.role, text: textOf(message.content), toolUses })
+    out.push({ role: message.role, text: extractTextContent(message.content), toolUses })
   }
   return out
 }
@@ -223,11 +226,6 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
   /** Ask the band of the event's session to redraw, when a surface is drawn at all. */
   function redraw(agent: Agent | undefined): void {
     if (agent !== undefined) options.redraw?.(agent.session.id)
-  }
-
-  /** One projection's state, or undefined when the registry or the projection's owning plugin is not composed. */
-  function projection<K extends keyof SessionProjectionStateMap>(session: Session, key: K): SessionProjectionStateMap[K] | undefined {
-    return ctx.get('sessionProjections')?.stateOf(session, key)
   }
 
   return {
@@ -348,7 +346,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
           render: (_args, value) => [{ type: 'text', text: value as string }],
         },
         execute() {
-          return Promise.reject(new Error(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
+          return Promise.reject(new ModUnansweredError(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
         },
       }
       track(registry.register(definition), binding.agent)
@@ -359,20 +357,23 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       const registry = ctx.get('tools')
       if (registry === undefined) throw new Error('$.tool.call needs a tool registry (dsh-tools), which this deployment did not compose')
       const { tool, tool_use_id: _ignored, agentId: _agent, ...args } = record(input)
-      const callId = ToolCallId(`mod-${randomUUID()}`)
+      const callId = brandString<ToolCallId>(`mod-${randomUUID()}`)
       // The pipeline raises `tool.call` for this call from the calling mod, so only earlier mods see it.
       options.callOrigins.set(callId, context.mod)
       try {
-        const result = await registry.execute({
-          callId,
-          name: aliases.toHarness(requireString(tool, '$.tool.call tool')),
-          arguments: args,
+        const batch = await registry.execute({
+          calls: [{
+            type: 'tool-call', id: callId,
+            name: aliases.toHarness(requireString(tool, '$.tool.call tool')),
+            arguments: JSON.stringify(args),
+          }],
           ...agent === undefined ? {} : { agent },
           signal: context.signal,
         })
         // Guidance a tool defers to the next request still reaches the model when a mod made the call.
-        if (agent !== undefined) for (const context of result.additionalContexts ?? []) agent.inject(context)
-        return toolCallResultOf(result)
+        if (agent !== undefined) for (const context of batch.additionalContexts) agent.inject(context)
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- execute returns one result per call
+        return toolCallResultOf(batch.results[0]!.result)
       } finally {
         options.callOrigins.delete(callId)
       }
@@ -411,14 +412,12 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
     },
     'session.turns': (_input, context) => {
       const agent = requireAgent(context, 'session.turns')
-      const boundary = projection(agent.session, 'turnBoundary')
-      if (boundary === undefined) throw new Error('$.session.turns needs the turnBoundary projection, which this deployment did not compose')
-      return boundary.lastTurn
+      return ctx.agents.turnBoundaryOf(agent.session).lastTurn
     },
     'session.messages': (_input, context) => sessionMessages(requireAgent(context, 'session.messages').session.deriveMessages(), aliases),
     'session.usage': (_input, context): SessionUsage => {
       const agent = requireAgent(context, 'session.usage')
-      const pressure = projection(agent.session, 'contextPressure')
+      const pressure = ctx.get('tokenMeter')?.contextPressure(agent.session)
       const tokens = pressure?.pressureTokens
       const window = pressure?.contextWindow ?? 0
       return {

@@ -3,7 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { en, zh } from '../src/client/excel/locales.ts'
 import type { ExcelBodyProps, LoadedExcelBodyProps } from '../src/client/excel/LazyExcelBody.tsx'
 
@@ -14,7 +14,7 @@ import { ExcelBody } from '../src/client/excel/excel.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { LoadingIndicator } from '../src/client/LoadingIndicator.tsx'
 
-const props = { content: { kind: 'bytes', data: new Uint8Array([1]) }, limits: Config({}).excel, t: makeTranslate(en), resourceAddress: 'dsh-resource://file/session/s1/book.xlsx' } as ExcelBodyProps
+const props = { content: { kind: 'bytes', data: new Uint8Array([1]) }, limits: EXCEL_DEFAULTS, t: makeTranslate(en), resourceAddress: 'dsh-resource://file/session/s1/book.xlsx' } as ExcelBodyProps
 const loadedProps = { ...props, format: 'xlsx', loading: <LoadingIndicator label={en.loading} /> } satisfies LoadedExcelBodyProps
 const value = { sheets: [{ name: 'Budget', celldata: [] }], missingResults: 0, unsupportedFeatures: [] }
 const formulaValue = { sheets: [{ name: 'Budget', celldata: [{ r: 0, c: 0, v: { f: '=SUM(1,2)', m: '' } }] }], missingResults: 1, unsupportedFeatures: [] }
@@ -55,6 +55,25 @@ it('shows loading then a workbook with editing and recalculation disabled', asyn
   const signal = mocked.parse.mock.calls[0]![3] as AbortSignal
   view.unmount()
   expect(signal.aborted).toBe(true)
+})
+
+it('opens the formula warning by touch and closes it on an outside press', async () => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+  mocked.parse.mockResolvedValue(formulaValue)
+  const view = render(<ExcelBody {...loadedProps} />)
+  const warning = await screen.findByRole('button', { name: en.formulaWarning })
+  fireEvent.pointerEnter(warning, { pointerType: 'touch' })
+  fireEvent.pointerDown(warning, { pointerType: 'touch' })
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
+  fireEvent.click(warning)
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe(en.formulaWarning)
+  expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
+  fireEvent.pointerDown(document.body, { pointerType: 'touch' })
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
 })
 
 it.each([en, zh])('lists only detected unsupported content and clears the notice on file replacement', async (dictionary) => {

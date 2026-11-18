@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Computer Use",
+    "description": "エージェントがパソコン上のアプリを直接操作できるようにします。",
+    "detail": "docs/DETAIL.md"
+  }
+}

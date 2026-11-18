@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "sandbox de processo local",
+    "description": "Fornece isolamento de processos por sistema operacional e limita o escopo de acesso dos comandos."
+  }
+}

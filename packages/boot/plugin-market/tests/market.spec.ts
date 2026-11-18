@@ -1,11 +1,16 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { updateVolatile } from '@deepseek-ai/cosmokit'
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
+import { DetailFailure } from '@deepseek-ai/dsh-plugin-detail'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import PluginMarket, { type Config, type MarketQuery } from '../src/index.ts'
 import { parseIndexBody } from '../src/parse.ts'
+import { RepositoryCache } from '../src/repository-cache.ts'
+
+/** Clone cache directory of services whose tests read no repository; nothing creates it. */
+const UNUSED_CACHE = '/nonexistent/plugin-market-detail-cache'
 
 // Parse in-process; parse-worker.spec.ts runs the real Worker.
 vi.mock('../src/parse-thread.ts', () => ({
@@ -36,7 +41,13 @@ function entry(name: string, fields: Record<string, unknown> = {}, versions: Rec
   return { name, versions, ...fields }
 }
 
-async function mount(config: Partial<{ indexes: string[]; fetchTimeoutMs: number; maxBytes: number; cacheTtlMs: number }> = {}, options: {
+async function mount(config: Partial<{
+  indexes: string[]
+  fetchTimeoutMs: number
+  detailGitTimeoutMs: number
+  maxBytes: number
+  cacheTtlMs: number
+}> = {}, options: {
   bundles?: BundleInfo[]
   exemptions?: Record<string, string[]>
   settings?: (ns: string, patch: object) => Promise<void>
@@ -66,7 +77,7 @@ async function mount(config: Partial<{ indexes: string[]; fetchTimeoutMs: number
       captured = resolved
     }
   }
-  await ctx.plugin(CapturingMarket, { indexes: [URL_A], ...config })
+  await ctx.plugin(CapturingMarket, { indexes: [URL_A], detailCacheDir: UNUSED_CACHE, ...config })
   if (captured === undefined) throw new Error('market did not mount')
   return { ctx, market: ctx.pluginMarket, config: captured }
 }
@@ -95,6 +106,101 @@ function read(market: PluginMarket, url: string, refresh = false) {
 async function failure(promise: Promise<unknown>) {
   return remoteErrorOf(await promise.then(() => { throw new Error('resolved') }, (error: unknown) => error))
 }
+
+/** Simulate an index transport that settles only when its request is aborted. */
+function waitForAbort<T>(signal: AbortSignal): Promise<T> {
+  return new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => {
+      const reason: unknown = signal.reason
+      reject(reason instanceof Error ? reason : new Error('Index read aborted'))
+    }, { once: true })
+  })
+}
+
+it('uses Git to read a configured index and refreshes it through the same repository address', async () => {
+  const url = 'git+ssh://git@github.com/team/plugins.git?path=market%2Findex.json&ref=release%2Fstable'
+  const git = vi.spyOn(RepositoryCache.prototype, 'readIndex')
+    .mockResolvedValueOnce(new TextEncoder().encode(JSON.stringify(index([entry('first')]))))
+    .mockResolvedValueOnce(new TextEncoder().encode(JSON.stringify(index([entry('second')]))))
+  onTestFinished(() => { git.mockRestore() })
+  const fetch = serve()
+  const { market } = await mount({ indexes: [url], maxBytes: 4096 })
+  expect((await read(market, url)).entries.map(plugin => plugin.name)).toEqual(['first'])
+  expect((await read(market, url)).entries.map(plugin => plugin.name)).toEqual(['first'])
+  expect(git).toHaveBeenCalledTimes(1)
+  expect((await read(market, url, true)).entries.map(plugin => plugin.name)).toEqual(['second'])
+  expect(git).toHaveBeenCalledTimes(2)
+  expect(git).toHaveBeenLastCalledWith('ssh://git@github.com/team/plugins.git', 'release/stable', 'market/index.json', 4096, expect.any(AbortSignal))
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+it('lets a Git index read outlive the HTTP deadline and aborts it at the Git deadline', async () => {
+  const url = 'git+ssh://git@github.com/team/plugins.git'
+  const fetchTimeoutMs = 15_000
+  const detailGitTimeoutMs = 60_000
+  const httpDeadline = new AbortController()
+  const gitDeadline = new AbortController()
+  const deadline = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms =>
+    ms === fetchTimeoutMs ? httpDeadline.signal : gitDeadline.signal)
+  onTestFinished(() => { deadline.mockRestore() })
+  serve((init) => {
+    if (init.signal == null) throw new Error('HTTP index read has no abort signal')
+    return waitForAbort(init.signal)
+  })
+  const gitRead = vi.spyOn(RepositoryCache.prototype, 'readIndex').mockImplementationOnce((_repository, _ref, _path, _limit, signal) =>
+    waitForAbort(signal))
+  onTestFinished(() => { gitRead.mockRestore() })
+  const { market } = await mount({ indexes: [URL_A, url], fetchTimeoutMs, detailGitTimeoutMs })
+  const http = failure(read(market, URL_A))
+  const git = failure(read(market, url))
+
+  httpDeadline.abort(new Error('HTTP deadline'))
+  expect(await http).toMatchObject({ code: 'plugin-market/fetch-failed', details: { reason: 'HTTP deadline' } })
+  expect(gitRead.mock.calls[0]?.[4].aborted).toBe(false)
+  expect(deadline.mock.calls).toEqual([[fetchTimeoutMs], [detailGitTimeoutMs]])
+
+  gitDeadline.abort(new Error('Git deadline'))
+  expect(await git).toMatchObject({ code: 'plugin-market/fetch-failed', details: { reason: 'Git deadline' } })
+})
+
+it.each([
+  [new DetailFailure('denied', 'raw Git diagnostics'), 'Check Host Git authentication'],
+  [new DetailFailure('git-unavailable', 'raw Git diagnostics'), 'Git is unavailable on the Host'],
+  [new DetailFailure('network', 'raw Git diagnostics'), 'Git could not connect'],
+  [new DetailFailure('too-large', 'raw Git diagnostics'), 'exceeds its size limit'],
+  [new DetailFailure('invalid', 'raw Git diagnostics'), 'Git could not read the index file'],
+  [new Error('raw Git diagnostics'), 'Git could not read the index file'],
+  [undefined, 'No regular index file at index.json'],
+])('reports a Git read failure without forwarding subprocess diagnostics: %s', async (error, message) => {
+  const url = 'git+https://github.com/team/plugins.git'
+  const git = vi.spyOn(RepositoryCache.prototype, 'readIndex')
+  onTestFinished(() => { git.mockRestore() })
+  if (error === undefined) git.mockResolvedValueOnce(undefined)
+  else git.mockRejectedValueOnce(error)
+  const { market } = await mount({ indexes: [url] })
+  const result = await failure(read(market, url))
+  expect(result?.code).toBe('plugin-market/fetch-failed')
+  expect(result?.message).toContain(message)
+  expect(market.listIndexes()[0]?.error).not.toContain('raw Git diagnostics')
+})
+
+it('cancels the Git index read when the market is disposed', async () => {
+  const url = 'git+ssh://git@github.com/team/plugins.git'
+  const git = vi.spyOn(RepositoryCache.prototype, 'readIndex').mockImplementationOnce((_repository, _ref, _path, _limit, signal) =>
+    waitForAbort(signal))
+  onTestFinished(() => { git.mockRestore() })
+  const { market, ctx } = await mount({ indexes: [url] })
+  const pending = failure(read(market, url))
+  await ctx.fiber.dispose()
+  expect(await pending).toMatchObject({ code: 'plugin-market/fetch-failed', details: { reason: 'Plugin market disposed' } })
+})
+
+it('refuses a malformed Git URL without including the raw address in the error', async () => {
+  const { market } = await mount({}, { settings: () => Promise.resolve() })
+  expect(await failure(market.setIndexes(['git+ssh://[']))).toMatchObject({
+    code: 'plugin-market/invalid-index-url', message: 'Use a valid Git repository address', details: { url: '', reason: 'git-source' },
+  })
+})
 
 it('reads an index with installation status, compatibility, and install arguments', async () => {
   const runtime = getDshRuntimeVersion()
@@ -160,6 +266,35 @@ it('reports a provided bundle without a version', async () => {
   serve(json(index([entry('shipped')])))
   const { market } = await mount({}, { bundles: [bundle('shipped', { installed: false, optional: true, availability: 'installation' })] })
   expect((await read(market, URL_A)).entries[0]?.installation).toEqual({ status: 'provided' })
+})
+
+it('marks the versions newer than a Git copy, from the repository directory it pins, as updates', async () => {
+  const commit = (digit: string): string => digit.repeat(40)
+  const git = (version: string, digit: string, path = 'packages/p') => release(version, { source: { type: 'git', url: 'https://git.example/o/plugins', commit: commit(digit), path } })
+  const versions = [git('1.3.0', 'd', 'packages/q'), git('1.2.0', 'c'), release('1.1.0'), git('1.0.0', 'a'), git('0.9.0', '9')]
+  serve(json(index(['from-git', 'from-registry', 'no-source', 'no-version', 'unpinned'].map(name => entry(name, {}, versions)))))
+  const pinned = `git+ssh://git@git.example/o/plugins.git#${commit('a')}&path:/packages/p`
+  const { market } = await mount({}, {
+    bundles: [
+      bundle('from-git', { version: '1.0.0', update: 'git', source: pinned }),
+      bundle('from-registry', { version: '1.0.0', update: 'registry', source: 'from-registry@1.0.0' }),
+      bundle('no-source', { version: '1.0.0', update: 'git' }),
+      bundle('no-version', { update: 'git', source: pinned }),
+      bundle('unpinned', { version: '1.0.0', update: 'git', source: 'git+https://git.example/o/plugins.git#main&path:/packages/p' }),
+    ],
+  })
+  const by = Object.fromEntries((await read(market, URL_A)).entries.map(item => [item.name, item]))
+  // The SSH form a profile saved has the HTTPS form's origin; another directory of the repository is another plugin.
+  expect(by['from-git']?.versions.map(version => [version.version, version.update])).toEqual([['1.3.0', false], ['1.2.0', true], ['1.1.0', false], ['1.0.0', false], ['0.9.0', false]])
+  expect(by['from-git']?.versions[1]?.install).toEqual({ spec: `git+https://git.example/o/plugins.git#${commit('c')}&path:/packages/p` })
+  for (const name of ['from-registry', 'no-source', 'no-version', 'unpinned']) expect(by[name]?.versions.some(version => version.update)).toBe(false)
+})
+
+it('matches a copy pnpm saved as a known host\'s shortcut with the index\'s HTTPS versions', async () => {
+  const commit = (digit: string): string => digit.repeat(40)
+  serve(json(index([entry('hosted', {}, [release('1.1.0', { source: { type: 'git', url: 'https://github.com/o/plugins', commit: commit('b'), path: 'p' } })])])))
+  const { market } = await mount({}, { bundles: [bundle('hosted', { version: '1.0.0', update: 'git', source: `github:o/plugins#${commit('a')}&path:/p` })] })
+  expect((await read(market, URL_A)).entries[0]?.versions[0]?.update).toBe(true)
 })
 
 it('shares concurrent reads, caches documents, and refetches on refresh or expiry', async () => {
@@ -377,8 +512,10 @@ async function searching() {
   }
 }
 
-it('filters by category and every label, and an undeclared id matches nothing', async () => {
+it('preserves publisher order before sorting and through category and label filters', async () => {
   const names = await searching()
+  expect(await names({})).toEqual(['dsh-weather', 'dsh-auto-review', 'dsh-notes'])
+  expect(await names({ labels: ['ui'] })).toEqual(['dsh-weather', 'dsh-auto-review'])
   expect(await names({ category: 'work' })).toEqual(['dsh-auto-review', 'dsh-notes'])
   expect(await names({ labels: ['official', 'ui'] })).toEqual(['dsh-auto-review'])
   expect(await names({ category: 'fun', labels: ['official'] })).toEqual([])
@@ -471,10 +608,11 @@ it('reads one plugin by name from the cached document', async () => {
 })
 
 it('keeps index order among equal sort-key values and among plugins without one', async () => {
-  const valued = (name: string, downloads?: number) => entry(name, { metadata: { sortKeys: downloads === undefined ? {} : { downloads } } })
-  serve(json({ ...SEARCHABLE, plugins: [valued('a'), valued('b', 1), valued('c'), valued('d', 2), valued('e', 1)] }))
+  const valued = (name: string, downloads?: number | null) =>
+    entry(name, { metadata: { sortKeys: downloads === undefined ? {} : { downloads } } })
+  serve(json({ ...SEARCHABLE, plugins: [valued('a'), valued('b', 1), valued('c'), valued('d', 2), valued('e', 1), valued('f', 0), valued('g', null), entry('h'), entry('i', { metadata: null })] }))
   const { market } = await mount()
-  for (const [direction, expected] of [['asc', ['b', 'e', 'd', 'a', 'c']], ['desc', ['d', 'b', 'e', 'a', 'c']]] as const) {
+  for (const [direction, expected] of [['asc', ['f', 'b', 'e', 'd', 'a', 'c', 'g', 'h', 'i']], ['desc', ['d', 'b', 'e', 'f', 'a', 'c', 'g', 'h', 'i']]] as const) {
     const result = await market.search(URL_A, { sort: { kind: 'key', id: 'downloads', direction }, offset: 0, limit: 10 })
     expect(result.entries.map(item => item.name)).toEqual(expected)
   }

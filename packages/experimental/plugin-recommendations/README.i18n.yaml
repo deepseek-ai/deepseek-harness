@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/plugin-recommendations/README.md
+/:
+  en: c34591bc4458dc55
+  zh: 7672f17a222f287e
+/deepseek-ai-dsh-plugin-recommendations:
+  en: f7efb269a445d68e
+  zh: 171930b415e131f7
+/deepseek-ai-dsh-plugin-recommendations/summary:
+  en: 9bf4699d4f05f511
+  zh: 33f63aeb459401b3
+/deepseek-ai-dsh-plugin-recommendations/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 59094206ec49ad20
+/deepseek-ai-dsh-plugin-recommendations/use-this-package:
+  en: ba11c5a727ae3555
+  zh: 59a9e3d04832dc0e
+/deepseek-ai-dsh-plugin-recommendations/use-this-package/outcomes-and-recovery:
+  en: 691664b2240412fb
+  zh: 525a550531bffb11
+/deepseek-ai-dsh-plugin-recommendations/understand-the-implementation:
+  en: 31b55dcaa24666b3
+  zh: b5ff1b43bb2238d5
+/deepseek-ai-dsh-plugin-recommendations/further-exploration:
+  en: 518ecd793a55716c
+  zh: cbd41296e21dd441
+/deepseek-ai-dsh-plugin-recommendations/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations:
+  en: 79e932b35e50619a
+  zh: 821b4d95d6ce1d22
+/deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/what-the-model-sees:
+  en: c81e4da1e7ab7807
+  zh: a62666a46eeaf557
+/deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/token-effect:
+  en: 9a41214da269af8b
+  zh: d3ee9c6331d29e50
+/deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/kv-cache-effect:
+  en: 6c7cca3da06ca5d5
+  zh: 3bfaeb910f9e7039
+/deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work:
+  en: fc3171d0573a897f
+  zh: 7acf5dc1c3ecbe41
+/deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 文件系统",
+    "description": "通过共享的 POSIX SSH 辅助程序访问远程文件系统。"
+  }
+}

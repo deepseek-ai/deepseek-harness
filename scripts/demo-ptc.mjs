@@ -10,9 +10,10 @@ const child = spawn(process.execPath, [
   'apps/cli/src/bin.ts',
   '--profile',
   'headless',
+  '--patch',
+  'apps/cli/config/examples/ptc.yml',
   task,
 ], {
   stdio: 'inherit',
-  env: { ...process.env, DSH_TOOLS_MODE: 'ptc' },
 })
 child.on('exit', (code, signal) => { process.exit(signal !== null ? 1 : code ?? 1) })

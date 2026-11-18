@@ -1,4 +1,4 @@
-/** Private built entry for the persistent Node REPL. */
+/** Private built entry for retained Node evaluations. */
 import { openInheritedControlChannel } from '@deepseek-ai/dsh-subprocess/control'
 import { runPersistentMain } from './persistent-process.ts'
 

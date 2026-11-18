@@ -32,6 +32,7 @@ describe.skipIf(!existsSync(join(repoRoot, 'apps/cli/lib/bin.js')))('dsh SOURCE 
       const patch = join(root, 'source-tool.patch.yml')
       await writeFile(patch, JSON.stringify([
         { id: 'headless-startup', disabled: true },
+        { id: 'sandbox-policy', inject: [], config: { mode: process.env.DSH_PERMISSION_MODE ?? 'workspace-write', workspaceRoot: cwd } },
         { id: 'headless-runner', disabled: true },
         { id: 'llm-deepseek', disabled: true },
         { id: 'agent-default-model', config: { provider: 'cli-mock', model: 'cli-mock' } },
@@ -57,7 +58,6 @@ describe.skipIf(!existsSync(join(repoRoot, 'apps/cli/lib/bin.js')))('dsh SOURCE 
           DSH_HOME: join(root, 'home'),
           DSH_AGENTS_HOME: join(root, 'agents'),
           DSH_TELEMETRY_DISABLED: '1',
-          DSH_TOOLS_MODE: 'native',
           DSH_CLI_MOCK_FAILURE: '0',
         },
         input: '',

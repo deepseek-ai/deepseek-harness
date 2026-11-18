@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   SessionEventLike, SessionEventLikeEntry, SessionLiveEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -10,6 +11,7 @@ import {
   ConversationLocationIndex,
   ConversationNodeAssembler as RuntimeConversationNodeAssembler,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ConversationUpdateError } from '../src/client/conversation/assembler.ts'
 import type {
   ConversationMatch, ConversationNodeContext,
   ConversationNodeDefinition, ConversationViewDefinition, ConversationViewNode,
@@ -138,7 +140,7 @@ function transientChunk(
       type: 'assistant/live-chunk',
       seq,
       time: 1_700_000_000_000 + seq,
-      data: { attemptId: LlmAttemptId('test-attempt'), turn, step, chunk },
+      data: { attemptId: brandString<LlmAttemptId>('test-attempt'), turn, step, chunk },
     },
   }
 }
@@ -816,7 +818,7 @@ describe('ConversationNodeAssembler', () => {
     if (settlementEvent.type !== 'assistant/message') throw new Error('expected Assistant settlement')
     const settlement = { type: 'event' as const, event: settlementEvent }
 
-    expect(assembler.settleAssistant(LlmAttemptId('test-attempt'), settlement)).toBe('immediate')
+    expect(assembler.settleAssistant(brandString<LlmAttemptId>('test-attempt'), settlement)).toBe('immediate')
     assembler.flush()
 
     const after = [...testSnapshot(assembler)?.nodes.values() ?? []]
@@ -828,7 +830,7 @@ describe('ConversationNodeAssembler', () => {
 
     assembler.append(transientChunk(13.5, 2, 3, { type: 'reasoning-delta', index: 0, text: 'x' }))
     assembler.flush()
-    expect(assembler.settleAssistant(LlmAttemptId('test-attempt'))).toBe('immediate')
+    expect(assembler.settleAssistant(brandString<LlmAttemptId>('test-attempt'))).toBe('immediate')
     assembler.flush()
     expect([...testSnapshot(assembler)?.nodes.values() ?? []]
       .find(candidate => candidate.id === '2:3')?.data)
@@ -866,7 +868,7 @@ describe('ConversationNodeAssembler', () => {
     expect(before.order).toHaveLength(6)
     const unrelated = before.nodes.get(before.order[5]!)
     const delta = transientChunk(1.5, 1, 1, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('shared'), name: 'write', argumentsDelta: '{}',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('shared'), name: 'write', argumentsDelta: '{}',
     })
     expect(() => assembler.append(delta)).toThrow('owner failure')
     assembler.flush()
@@ -878,7 +880,7 @@ describe('ConversationNodeAssembler', () => {
     expect(assembler.append(delta)).toBe('none')
     assembler.flush()
     expect(testSnapshot(assembler)).toBe(partial)
-    expect(assembler.settleAssistant(LlmAttemptId('test-attempt'))).toBe('immediate')
+    expect(assembler.settleAssistant(brandString<LlmAttemptId>('test-attempt'))).toBe('immediate')
     assembler.flush()
     const settled = testSnapshot(assembler)!
     for (const key of before.order.slice(0, 5)) {
@@ -974,7 +976,7 @@ describe('ConversationNodeAssembler', () => {
     assembler.flush()
     expect(start).toHaveBeenCalledOnce()
     expect([...testSnapshot(assembler)?.nodes.values() ?? []][0]?.data).toBe(1)
-    assembler.settleAssistant(LlmAttemptId('test-attempt'))
+    assembler.settleAssistant(brandString<LlmAttemptId>('test-attempt'))
     assembler.flush()
     expect([...testSnapshot(assembler)?.nodes.values() ?? []][0]?.data).toBeNull()
   })
@@ -1239,15 +1241,15 @@ describe('ConversationNodeAssembler', () => {
     assembler.replaceWindow([], false)
     for (const [index, id] of ['a', 'b'].entries()) {
       assembler.append(transientChunk(1.1 + index / 10, 1, 1, {
-        type: 'tool-call-delta', index, id: ToolCallId(id), name: 'write', argumentsDelta: '',
+        type: 'tool-call-delta', index, id: brandString<ToolCallId>(id), name: 'write', argumentsDelta: '',
       }))
     }
-    assembler.append(input(at(SessionSeq(3), 'tool/call', { turn: 1, step: 1, callId: ToolCallId('b'), name: 'write', arguments: '{}' })))
-    assembler.append(input(at(SessionSeq(4), 'tool/call', { turn: 1, step: 1, callId: ToolCallId('a'), name: 'write', arguments: '{}' })))
+    assembler.append(input(at(SessionSeq(3), 'tool/call', { turn: 1, step: 1, callId: brandString<ToolCallId>('b'), name: 'write', arguments: '{}' })))
+    assembler.append(input(at(SessionSeq(4), 'tool/call', { turn: 1, step: 1, callId: brandString<ToolCallId>('a'), name: 'write', arguments: '{}' })))
     assembler.append(input(at(SessionSeq(5), 'step/end', { turn: 1, step: 1 })))
     assembler.flush()
     expect([...testSnapshot(assembler)!.nodes.values()][0]?.data).toBeCloseTo(1.2)
-    assembler.settleAssistant(LlmAttemptId('test-attempt'))
+    assembler.settleAssistant(brandString<LlmAttemptId>('test-attempt'))
     assembler.flush()
     expect([...testSnapshot(assembler)!.nodes.values()][0]?.data).toBe(4)
   })
@@ -1915,7 +1917,7 @@ describe('ConversationNodeAssembler', () => {
     })
   })
 
-  it('rejects withdrawing a previously materialized Node during an incremental update', () => {
+  it('rejects withdrawing a previously materialized Node and replaces the view with a complete rebuild', () => {
     const definition: ConversationNodeDefinition<boolean> = {
       kind: 'toggle',
       match: (event) => {
@@ -1937,9 +1939,65 @@ describe('ConversationNodeAssembler', () => {
     expect(testSnapshot(assembler)?.order).toHaveLength(1)
 
     assembler.append(input(at(SessionSeq(2), 'toggle/hide', {})))
-    expect(() => assembler.flush()).toThrow(/withdrew materialized target "test"/)
+    let failure: unknown
+    try {
+      assembler.flush()
+    } catch (error: unknown) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ConversationUpdateError)
+    expect((failure as ConversationUpdateError).rebuilt).toBe(true)
+    expect(((failure as ConversationUpdateError).cause as Error).message).toMatch(/withdrew materialized target "test"/)
+    // The rebuild replayed the window, so the view already reflects the hidden toggle.
+    expect(testSnapshot(assembler)?.order).toHaveLength(0)
+    assembler.append(input(at(SessionSeq(3), 'command/run', { commandId: 'two', name: 'x' })))
+    expect(() => assembler.flush()).not.toThrow()
+  })
 
+  it('reports both failures when the rebuild fails and retries the rebuild on the next flush', () => {
+    let starts = 0
+    const definition: ConversationNodeDefinition<boolean> = {
+      kind: 'toggle',
+      match: (event) => {
+        if ((event.type as string) === 'command/run') return { id: 'one', role: 'start' }
+        if ((event.type as string) === 'toggle/hide') return { id: 'one', role: 'update' }
+        return null
+      },
+      start: () => {
+        starts++
+        if (starts === 2) throw new Error('replay start failed')
+        return true
+      },
+      update: () => false,
+      target: 'test',
+      buildViewNode: context => context.state === true ? node(context, true) : null,
+    }
+    const assembler = new ConversationNodeAssembler(
+      new TestEventDefinitions([definition]),
+      new TestViewDefinitions([testView()]),
+    )
+    assembler.replaceWindow([input(at(SessionSeq(1), 'command/run', { commandId: 'one', name: 'x' }))], false)
+    assembler.flush()
+    assembler.append(input(at(SessionSeq(2), 'toggle/hide', {})))
+
+    let failure: unknown
+    try {
+      assembler.flush()
+    } catch (error: unknown) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ConversationUpdateError)
+    expect((failure as ConversationUpdateError).rebuilt).toBe(false)
+    const cause = (failure as ConversationUpdateError).cause
+    expect(cause).toBeInstanceOf(AggregateError)
+    expect((cause as AggregateError).errors.map(error => (error as Error).message)).toEqual([
+      expect.stringMatching(/withdrew materialized target "test"/),
+      'replay start failed',
+    ])
+    // The failed rebuild published no view; the next flush rebuilds before any other work.
     expect(testSnapshot(assembler)?.order).toHaveLength(1)
+    expect(assembler.flush()).toBe(true)
+    expect(testSnapshot(assembler)?.order).toHaveLength(0)
   })
 
   it('fails loud when a Definition returns undefined State', () => {

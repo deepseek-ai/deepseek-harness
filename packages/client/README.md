@@ -39,6 +39,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-renderer/`](ui-renderer/README.md) | Binds slot data to React and mounts the assembled application | `ctx.uiRenderer` |
 | [`ui-slots/`](ui-slots/README.md) | Defines typed extension Slots and reusable Component Factories | — |
 | [`ui-session/`](ui-session/README.md) | Adapts Session Controller state into standard Slot sources and hooks | — |
+| [`ui-session-status/`](ui-session-status/README.md) | Keeps reading reminders in Host memory and combines running state, the effective pending interaction, and shared reminders into the Session status table behind `useSessionStatus` | `ctx.sessionStatus` / `ctx.uiSession.sessionStatus` |
 | [`ui-theme/`](ui-theme/README.md) | Applies the selected color theme | — |
 | [`ui-primitives/`](ui-primitives/README.md) | Provides shared React controls, icons, and content renderers | — |
 | [`ui-attachment/`](ui-attachment/README.md) | Registers composer and message-image attachment presentation | — |
@@ -49,7 +50,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.md) | Displays documents in right Sidebar tabs | `ctx.documentPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.md) | Browses sandboxed HTTP(S) pages, including loopback services, in right-Sidebar tabs | — |
 | [`resources/`](resources/README.md) | Unified resource model: protocol providers behind the `useResource` session standard hook | `ctx.resources` |
-| [`ui-sidebar-files/`](ui-sidebar-files/README.md) | Right-Sidebar workspace file tree tab type | — |
+| [`ui-sidebar-files/`](ui-sidebar-files/README.md) | The workspace files page and one workspace tree per pane beside docked and floating previews | — |
 | [`ui-brand-official/`](ui-brand-official/README.md) | Fills the generic browser-brand slots with the official name and marks | — |
 | [`ui-workspace/`](ui-workspace/README.md) | Provides workspace selection and creation surfaces | — |
 | [`ui-conversation/`](ui-conversation/README.md) | Presents the active conversation and its input surface | — |
@@ -64,14 +65,14 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-skill/`](ui-skill/README.md) | Adds skill references to inline suggestions | — |
 | [`ui-reference/`](ui-reference/README.md) | Unified Web `@file` / `@session` reference source | — |
 | [`ui-secret-mask/`](ui-secret-mask/README.md) | Masks recognized credentials in sent user text | — |
+| [`ui-agent-team/`](ui-agent-team/README.md) | Session Team switch and shared tasks below the Subagent tree | — |
 | [`ui-subagent/`](ui-subagent/README.md) | Provides subagent navigation, child transcript states, and inline references | — |
 | [`ui-jobs/`](ui-jobs/README.md) | Lists this session's background jobs with on-demand streaming record panels | — |
-| [`ui-schedule/`](ui-schedule/README.md) | Lists the current Session's active reminders in a read-only header catalog | — |
+| [`ui-schedule/`](ui-schedule/README.md) | Provides the sidebar Automation tasks page and right Sidebar task tab, which create, edit, run, pause, resume, and delete Host scheduled tasks, plus the Session header clock and row mark | — |
+| [`ui-session-panel/`](ui-session-panel/README.md) | Adds the Session header toggle and the floating Session panel whose sections plugins register, with the Environment section | — |
 | [`ui-model-selection/`](ui-model-selection/README.md) | Provides model selection in conversation surfaces | — |
-| [`ui-deepseek-model-label-1017/`](ui-deepseek-model-label-1017/README.md) | Adds the temporary 1017 badge to official DeepSeek Flash model labels | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.md) | Configures default permissions and switches the current session's access | — |
 | [`ui-plan/`](ui-plan/README.md) | Presents active plan-mode status and its exit control | — |
-| [`ui-settings-plugins/`](ui-settings-plugins/README.md) | Owns the Built-in plugins settings section shell and its tab extension point | — |
 | [`ui-user-questions/`](ui-user-questions/README.md) | Presents interactive questions requested by the agent | — |
 | [`ui-agent-preset/`](ui-agent-preset/README.md) | Selects a session's agent preset and authors preset compositions | — |
 | [`ui-settings/`](ui-settings/README.md) | Hosts the settings interface and its extension areas | — |
@@ -81,10 +82,11 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.md) | Provides the agent-loop settings page on the Plugins page | — |
 | [`ui-settings-session-log/`](ui-settings-session-log/README.md) | Controls API Session-log upload in General settings | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.md) | Provides the Subagent settings page on the Plugins page | — |
-| [`ui-settings-web-search/`](ui-settings-web-search/README.md) | Provides the web-search settings page on the Plugins page | — |
+| [`ui-settings-web-search/`](ui-settings-web-search/README.md) | Provides the web search and fetch settings page on the Plugins page | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.md) | Contributes the sidebar Plugins panel: install, enable, disable, retry, and compose installed packages | — |
+| [`ui-connector-account/`](ui-connector-account/README.md) | Holds the accounts connector plugins register on the Host and shows each bundle's account section, tag, activation prompt, confirmations, and notices on the Plugins page | `ctx.connectorAccounts` |
+| [`ui-entry-customization/`](ui-entry-customization/README.md) | Adds region-local More menus that pin or unpin plugin launchers and start a plugin draft | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.md) | Contributes the Discover tab to the Plugins page: browse market indexes and install their bundles | — |
-| [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.md) | Contributes the read-only Host Loader inventory tab to Plugins settings | — |
 | [`ui-deliverables/`](ui-deliverables/README.md) | Produces the changed-files card with its comparison tabs, delivery cards, and clickable final-response file references | — |
 | [`ui-message-feedback/`](ui-message-feedback/README.md) | Provides message ratings and feedback dialogs opened from ratings, `/feedback`, or the Session Header menu | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.md) | In-app directory browsing surface for the workspace directory flow | — |

@@ -34,3 +34,5 @@
 - insert:
     - id: serial-created-fixture
       name: '../../../packages/core/agent-loop/tests/fixtures/serial-created.mjs'
+      config:
+        checkRootCancellation: true

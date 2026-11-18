@@ -146,7 +146,7 @@ class FeedService extends TypertRemoteService {
   async *swallow(signal: AbortSignal): RemoteStream<string, string> {
     try {
       for await (const item of this.invocation().uplink<string>()) yield item
-    } catch {
+    } catch (_uplinkFailed) {
       // The fixture keeps yielding after the rejected item on purpose.
     }
     yield 'swallowed'
@@ -416,16 +416,56 @@ describe('Typert Remote streams', () => {
     expect(() => { startup.commit() }).not.toThrow()
   })
 
-  it('validates the WebSocket heartbeat timer range and the stream inbox bound', () => {
-    expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144 })
-    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 }))
-      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })
+  it('validates the WebSocket heartbeat timer range, the stream inbox and outbox bounds, and the compression mode', () => {
+    expect(TypertGatewayService.Config({})).toEqual({
+      websocketHeartbeatIntervalMs: 2_000,
+      streamInboxBytes: 262_144,
+      streamOutboxBytes: 1_048_576,
+      websocketCompression: 'deflate',
+    })
+    expect(TypertGatewayService.Config({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+      streamOutboxBytes: 1,
+      websocketCompression: 'none',
+    })).toEqual({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+      streamOutboxBytes: 1,
+      websocketCompression: 'none',
+    })
+    for (const streamOutboxBytes of [0, 1.5]) {
+      expect(() => TypertGatewayService.Config({ streamOutboxBytes })).toThrow()
+    }
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }
     for (const streamInboxBytes of [0, 1.5]) {
       expect(() => TypertGatewayService.Config({ streamInboxBytes })).toThrow()
     }
+    for (const websocketCompression of ['gzip', 'DEFLATE', '', 1]) {
+      expect(() => TypertGatewayService.Config({ websocketCompression } as never)).toThrow()
+    }
+  })
+
+  it('applies the configured compression mode to the Remote stream carrier', async () => {
+    const { ctx } = await setup(true)
+    const negotiating = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
+      headers: { cookie: await browserCookie(ctx) },
+    })
+    await once(negotiating, 'open')
+    expect(negotiating.extensions).toContain('permessage-deflate')
+    negotiating.close()
+    await once(negotiating, 'close')
+
+    const plain = await setup(true, { websocketCompression: 'none' })
+    const unnegotiated = new WebSocket(`ws://127.0.0.1:${String(plain.ctx.webServer.port)}/api/remote.mux`, {
+      headers: { cookie: await browserCookie(plain.ctx) },
+    })
+    await once(unnegotiated, 'open')
+    expect(unnegotiated.extensions).toBe('')
+    unnegotiated.close()
+    await once(unnegotiated, 'close')
   })
 
   it('opens decoded carrier payloads through the in-process wire adapter', async () => {
@@ -791,7 +831,7 @@ describe('Typert Remote streams', () => {
 
   it('reports configured frame capacity and the encoded envelope size for the current stream id', async () => {
     const { ctx, service } = await setup(true, { streamInboxBytes: 512 })
-    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, { headers: { cookie: browserCookie(ctx) } })
+    const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, { headers: { cookie: await browserCookie(ctx) } })
     await once(socket, 'open')
     try {
       const streamId = '界"window'
@@ -812,7 +852,7 @@ describe('Typert Remote streams', () => {
   it('echoes uplink frames over the WebSocket carrier and fails misused uplinks per stream', async () => {
     const { ctx, service } = await setup(true)
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -830,7 +870,9 @@ describe('Typert Remote streams', () => {
       ])
     })
     expect(service.returns).toBe(1)
-    expect(service.peers.at(-1)).toBe(ctx.connection.browserPeer)
+    const admitted = ctx.connection.admit({ headers: { host: `127.0.0.1:${String(ctx.webServer.port)}`, cookie: await browserCookie(ctx) } })
+    if ('rejection' in admitted) throw new Error('expected the issued cookie to authenticate')
+    expect(service.peers.at(-1)).toBe(admitted.peer)
 
     sendOpen(socket, 'rejected', 'feed/echo', { prefix: '' })
     socket.send(JSON.stringify({ type: 'item', streamId: 'rejected', value: 1 }))
@@ -865,7 +907,7 @@ describe('Typert Remote streams', () => {
   it('fails a stream whose buffered uplink exceeds the configured inbox bytes', async () => {
     const { ctx } = await setup(true, { streamInboxBytes: 64 })
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -956,7 +998,7 @@ describe('Typert Remote streams', () => {
   it('uses the configured WebSocket heartbeat interval', { timeout: 1_000 }, async () => {
     const { ctx } = await setup(true, { websocketHeartbeatIntervalMs: 20 })
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     const ping = once(socket, 'ping')
     await once(socket, 'open')
@@ -969,7 +1011,7 @@ describe('Typert Remote streams', () => {
   it('multiplexes independent streams over one WebSocket and propagates cancellation', async () => {
     const { ctx, service } = await setup(true)
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -1048,7 +1090,7 @@ describe('Typert Remote streams', () => {
     await events[Symbol.asyncIterator]().return?.()
 
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -1091,7 +1133,7 @@ describe('Typert Remote streams', () => {
       .toThrow('forwarded Remote event source is already registered')
 
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -1298,23 +1340,39 @@ describe('Typert Remote streams', () => {
 
   it('retries a colliding Remote event Client id before opening the second generation', async () => {
     const { ctx } = await setup(true)
-    // Connection minted the browser Peer id above; only the event Client ids are counted below.
+    await browserCookie(ctx)
     randomUuid.mockClear()
     const source = new RemoteEventSourceProbe()
-    const unregister = ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST)
+    const unregister = ctx.effect(() => ctx.typertGateway.registerRemoteEvents(source.source, REMOTE_HOST))
     const firstId = '00000000-0000-4000-8000-000000000011' as ReturnType<typeof randomUUID>
     const secondId = '00000000-0000-4000-8000-000000000012' as ReturnType<typeof randomUUID>
     randomUuid.mockReturnValueOnce(firstId).mockReturnValueOnce(firstId).mockReturnValueOnce(secondId)
 
-    const first = await openEventClient(ctx, 'events-client-id-a')
-    const second = await openEventClient(ctx, 'events-client-id-b')
+    try {
+      const first = await openEventClient(ctx, 'events-client-id-a')
+      expect(first.clientId).toBe(firstId)
+      expect(randomUuid).toHaveBeenCalledTimes(1)
+      const second = await openEventClient(ctx, 'events-client-id-b')
+      expect(second.clientId).toBe(secondId)
+      expect(randomUuid).toHaveBeenCalledTimes(3)
 
-    expect(first.clientId).toBe(firstId)
-    expect(second.clientId).toBe(secondId)
-    expect(randomUuid).toHaveBeenCalledTimes(3)
-    first.socket.close()
-    second.socket.close()
-    await unregister()
+      const notification = { event: 'fixture/changed', args: ['both clients'] }
+      source.push(notification)
+      await vi.waitFor(() => {
+        for (const client of [first, second]) {
+          expect(client.frames).toContainEqual({
+            type: 'item', streamId: client.streamId, value: { type: 'emit', ...notification },
+          })
+        }
+      })
+      const closed = [once(first.socket, 'close'), once(second.socket, 'close')]
+      first.socket.close()
+      second.socket.close()
+      await Promise.all(closed)
+    } finally {
+      randomUuid.mockReset()
+      await unregister()
+    }
   })
 
   it('fans one scoped waterfall out and accepts the first Client result', async () => {
@@ -1544,7 +1602,7 @@ describe('Typert Remote streams', () => {
   it('validates the internal Remote event request and reports an absent source', async () => {
     const { ctx } = await setup(true)
     const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-      headers: { cookie: browserCookie(ctx) },
+      headers: { cookie: await browserCookie(ctx) },
     })
     await once(socket, 'open')
     const frames: Record<string, unknown>[] = []
@@ -1651,7 +1709,7 @@ async function setup(
 
 async function acceptsSocket(ctx: Context): Promise<boolean> {
   const socket = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
-    headers: { cookie: browserCookie(ctx) },
+    headers: { cookie: await browserCookie(ctx) },
   })
   const closed = new Promise<void>((resolve) => { socket.once('close', () => { resolve() }) })
   const opened = await once(socket, 'open').then(() => true, () => false)
@@ -1733,7 +1791,7 @@ interface RemoteEventTestClient {
 
 async function openEventClient(ctx: Context, streamId: string): Promise<RemoteEventTestClient> {
   const origin = `http://127.0.0.1:${String(ctx.webServer.port)}`
-  const cookie = browserCookie(ctx)
+  const cookie = await browserCookie(ctx)
   const socket = new WebSocket(`${origin.replace('http:', 'ws:')}/api/remote.mux`, {
     headers: { cookie },
   })

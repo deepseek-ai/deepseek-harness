@@ -4,9 +4,9 @@
   "events": [
     {
       "source": "agent",
-      "windowId": 7,
+      "windowId": "7",
       "ageMs": 12000,
-      "operation": "click"
+      "operation": "invoke"
     },
     {
       "source": "external-input",

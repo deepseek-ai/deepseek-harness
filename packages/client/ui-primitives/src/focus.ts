@@ -1,6 +1,21 @@
-/** Focus presentation for automatic entry and restoration. */
+/** Mobile-device detection and automatic focus presentation. */
 const releases = new WeakMap<HTMLElement, () => void>()
 const navigationKeys = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+let mobileDevice: boolean | undefined
+
+/**
+ * Identify iOS and Android phones and tablets from the current browser's device information.
+ * MacIntel with multiple touch points identifies desktop-mode iPads.
+ * The first result is shared by all callers until the page reloads.
+ * @returns true for recognized mobile devices; false for other devices, including unrecognized UAs.
+ */
+export function isMobileDevice(): boolean {
+  if (mobileDevice !== undefined) return mobileDevice
+  const { userAgent, platform, maxTouchPoints } = navigator
+  mobileDevice = /Android|iPhone|iPad|iPod/i.test(userAgent)
+    || (platform === 'MacIntel' && maxTouchPoints > 1)
+  return mobileDevice
+}
 
 /**
  * Focus an automatic destination without a focus outline until keyboard navigation or blur.

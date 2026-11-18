@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek API Erweiterung",
+    "description": "Erlauben Sie anderen Plugins, Erweiterungsfelder zu DeepSeek Modellanfragen hinzuzufügen."
+  }
+}

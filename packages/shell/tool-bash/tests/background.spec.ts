@@ -1,26 +1,31 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import type { JobId } from '@deepseek-ai/dsh-jobs'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import type { ShellExecution, ShellProcess } from '@deepseek-ai/dsh-shell'
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
+import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import { processSources, ringDelta } from '../src/background.ts'
 import { renderPromoted } from '../src/render.ts'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Readiness polling stays on wall time while a test controls the execution deadline.
 const pollingTimeout = setTimeout
@@ -37,6 +42,8 @@ async function setup() {
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
   await ctx.plugin(ToolTasks)
@@ -50,9 +57,9 @@ async function setup() {
 
 let callCounter = 0
 function call(ctx: Context, args: Record<string, unknown>) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`background-call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`background-call-${++callCounter}`),
     name: 'bash',
     arguments: args,
   })
@@ -126,9 +133,9 @@ describe('background bash output', () => {
     const jobs = ctx.jobs
     const job = jobs.list()[0]
     await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
-    const read = text(await ctx.tools.execute({
+    const read = text(await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-spawn-failure-read'),
+      callId: brandString<ToolCallId>('background-spawn-failure-read'),
       name: 'job_output',
       arguments: { job_id: String(job!.id) },
     }))
@@ -226,7 +233,7 @@ describe('foreground commands as jobs', () => {
       const body = text(result)
       expect(body).toContain('early-output')
       expect(body).toContain(`[still running after 250ms; moved to background job ${jobId}]`)
-      expect(body).toContain('read newer output with job_output, stop it with job_kill')
+      expect(body.endsWith(`moved to background job ${jobId}]`)).toBe(true)
       expect(body.indexOf('early-output')).toBeLessThan(body.indexOf('[still running'))
 
       const jobs = ctx.jobs
@@ -274,10 +281,49 @@ describe('foreground commands as jobs', () => {
 
   it('a command whose start fails reports the failure as an error result and leaves no job behind', async () => {
     const ctx = await setup()
-    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(new Error('spawn bash ENOENT'))
+    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }))
     const result = await call(ctx, { command: 'true', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    expect(text(result)).toBe('Error: cannot start "bash": the program or the working directory does not exist (spawn bash ENOENT)')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a spawn that fails after the process published reports a coded failure and leaves no job behind', async () => {
+    const ctx = await setup()
+    const result = await call(ctx, { command: 'true', description: 'test command', workdir: join(spillDir, 'missing-workdir') })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a job stopped from outside before its process published reports the stop', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.shell, 'execute').mockImplementation(spec => new Promise((_resolve, reject) => {
+      spec.signal?.addEventListener('abort', () => { reject(new Error('preparation stopped')) }, { once: true })
+    }))
+    const pending = call(ctx, { command: 'ls', description: 'test command' })
+    await vi.waitFor(() => { expect(ctx.jobs.list()).toHaveLength(1) })
+    ctx.jobs.kill(ctx.jobs.list()[0]!.id, undefined, 'cancelled by the user')
+    const result = await pending
     expect(result.isError).toBe(true)
-    expect(text(result)).toBe('Error: spawn bash ENOENT')
+    expect((result.content[0] as { text: string }).text).toBe('Error: preparation stopped; cancelled by the user')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a coded preparation failure keeps its name and code through the job path', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(new SandboxUnavailableError('workspace-write', 'bwrap: setting up uid map: Permission denied'))
+    const result = await call(ctx, { command: 'true', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SandboxUnavailableError', code: 'SANDBOX_UNAVAILABLE' } },
+    })
+    expect(text(result)).toContain('Runner failure: bwrap: setting up uid map: Permission denied')
     expect(ctx.jobs.list()).toEqual([])
   })
 
@@ -289,9 +335,9 @@ describe('foreground commands as jobs', () => {
       else if (event.type !== 'output') seen.push(event.type)
     })
     const controller = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('background-call-aborted'),
+      callId: brandString<ToolCallId>('background-call-aborted'),
       name: 'bash',
       arguments: { command: 'sleep 30', description: 'test command' },
     })
@@ -321,9 +367,9 @@ describe('foreground commands as jobs', () => {
     }
     vi.spyOn(ctx.shell, 'execute').mockResolvedValue(stubborn)
     const controller = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('background-call-aborted-slow-kill'),
+      callId: brandString<ToolCallId>('background-call-aborted-slow-kill'),
       name: 'bash',
       arguments: { command: 'sleep 30', description: 'test command', timeoutMs: 100 },
     })
@@ -352,13 +398,14 @@ describe('foreground commands as jobs', () => {
 
   it('registers the job under the calling agent so it is fenced to its session', async () => {
     const ctx = await setup()
-    const ownerId = SessionId('promote-owner')
+    const ownerId = brandString<SessionId>('promote-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
         version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
       }),
+      model: unsupportedModel(),
       inbox: unsupportedInbox(),
       status: 'idle',
       ctx,
@@ -371,9 +418,9 @@ describe('foreground commands as jobs', () => {
       whenIdle: () => Promise.resolve(),
     }
     ctx.agents.register(owner)
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-promote-owned'),
+      callId: brandString<ToolCallId>('background-promote-owned'),
       name: 'bash',
       arguments: { command: 'printf "held\\n"; sleep 30', description: 'test command', timeoutMs: 250 },
       agent: owner,
@@ -424,6 +471,8 @@ describe('foreground commands as jobs', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry, { pumpPollMs: 25 })
     await ctx.plugin(ToolTasks)
@@ -453,9 +502,7 @@ describe('foreground commands as jobs', () => {
 describe('renderPromoted', () => {
   it('pins the promoted text with and without pre-promotion output', () => {
     expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 120_000, output: '' })).toBe(
-      '[still running after 120000ms; moved to background job bash-7]\n'
-      + 'The command keeps running in the background. You will be notified when it finishes; '
-      + 'read newer output with job_output, stop it with job_kill.',
+      '[still running after 120000ms; moved to background job bash-7]',
     )
     // A partial line gains the separating newline exactly once.
     expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'partial' }))
@@ -468,13 +515,14 @@ describe('renderPromoted', () => {
 describe('owned background output', () => {
   it('fences an owned background run under the owning session', async () => {
     const ctx = await setup()
-    const ownerId = SessionId('background-owner')
+    const ownerId = brandString<SessionId>('background-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
       session: Session.create(ownerId, undefined, {
         version: SESSION_FORMAT_VERSION, id: ownerId, createdAt: 0, cwd: process.cwd(), isSeeded: false,
       }),
+      model: unsupportedModel(),
       inbox: unsupportedInbox(),
       status: 'idle',
       ctx,
@@ -487,9 +535,9 @@ describe('owned background output', () => {
       whenIdle: () => Promise.resolve(),
     }
     ctx.agents.register(owner)
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-owned-1'),
+      callId: brandString<ToolCallId>('background-owned-1'),
       name: 'bash',
       arguments: { command: 'echo owned', description: 'test command', run_in_background: true },
       agent: owner,

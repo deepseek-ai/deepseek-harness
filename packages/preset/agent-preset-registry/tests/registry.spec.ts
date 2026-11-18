@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { assembleContextFor } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { entryListProblem } from '../src/index.ts'
 import { currentKey, harness, declare, contribution, agentOn, liveRegistries, plugin } from './harness.ts'
 import { omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
@@ -108,7 +108,7 @@ describe('declarative preset revisions', () => {
     await declare(ctx, contribution('minimal'))
     const agent = await agentOn(ctx, 'selection')
     expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
-    expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('minimal')
+    expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('minimal')
     agent.session.append('turn/start', { turn: 1 })
     await expect(ctx.agentPresets.select(agent, 'standard')).rejects.toThrow('already started')
   })
@@ -246,6 +246,7 @@ it('ignores a retired modeSelectionEnabled field in the user patch', async () =>
 it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(async (ctx) => {
   await ctx.plugin(Loader)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   return ctx.plugin(AgentPresets, { default: 'standard' })
 }))
 
@@ -276,7 +277,7 @@ it('serializes competing blank-session selections and recovers after a failed se
     ctx.agentPresets.select(agent, 'absent'), ctx.agentPresets.select(agent, 'minimal'), ctx.agentPresets.select(agent, 'standard'),
   ])
   expect(results.map(row => row.status)).toEqual(['rejected', 'fulfilled', 'fulfilled'])
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('standard')
+  expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('standard')
 })
 
 it('retains a newly acquired generation when a previous activation is replaced', async () => {
@@ -317,11 +318,11 @@ it('logs the default preset a blank Session runs once it is selected without a r
   const ctx = await setup()
   await declare(ctx, contribution('standard'))
   const agent = await agentOn(ctx, 'unrecorded')
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBeNull()
+  expect(ctx.agentPresets.presetForSession(agent.session)).toBeNull()
 
   expect(await ctx.agentPresets.select(agent, 'standard')).toBe('standard')
 
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('standard')
+  expect(ctx.agentPresets.presetForSession(agent.session)).toBe('standard')
 })
 
 it('recomposes and logs a repeated selection once the preset definition was replaced', async () => {
@@ -348,7 +349,7 @@ it('does not lose the durable selection when a tools observer rejects notificati
   const agent = await agentOn(ctx, 'observer')
   ctx.on('tools/change', () => { throw new Error('observer refused') })
   expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
-  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('minimal')
+  expect(ctx.sessionProjections.checkpoint(agent.session).agentPreset?.val).toBe('minimal')
 })
 
 it('inventories failed conditional entries without executing their expressions again', async () => {

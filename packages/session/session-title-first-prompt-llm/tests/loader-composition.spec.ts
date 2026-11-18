@@ -6,12 +6,14 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import LlmRuntime, { createUserMessage, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { GenerateOptions, LlmCallConfig, StreamChunk } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
 import * as providerPlugin from '@deepseek-ai/dsh-session-title-first-prompt-llm'
 import { anthropicTextEvents, closeMockServers, mockServer } from '../../../llm/llm-pi-ai/tests/mock-server.ts'
@@ -56,6 +58,7 @@ async function loadComposition(
     "- name: '@deepseek-ai/dsh-llm'",
     "- name: '@deepseek-ai/dsh-session'",
     "- name: '@deepseek-ai/dsh-session-projection'",
+    "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-session-title'",
     '  config:',
     '    fallbackMaxWords: 5',
@@ -78,6 +81,7 @@ async function loadComposition(
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
+    ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-session-title', SessionTitleService],
     ['@deepseek-ai/dsh-session-title-first-prompt-llm', providerPlugin],
     ...entryModules,
@@ -109,7 +113,7 @@ async function promptThenRequest(
   id: string,
   config: LlmCallConfig,
 ): Promise<{ session: Session; messageSeq: SessionSeq }> {
-  const session = ctx.sessions.create(SessionId(id))
+  const session = ctx.sessions.create(brandString<SessionId>(id))
   session.append('turn/start', {
     turn: 1,
   })
@@ -185,7 +189,7 @@ describe('session-title Loader composition', () => {
     const { session, messageSeq } = await promptThenRequest(ctx, 'pi-ai-title', {
       provider: 'gateway',
       model: 'adaptive-model',
-      reasoningEffort: ReasoningEffortId('max'),
+      reasoningEffort: brandString<ReasoningEffortId>('max'),
     })
     await vi.waitFor(() => {
       expect(ctx.sessionTitle.get(session)?.source.kind).toBe('provider')

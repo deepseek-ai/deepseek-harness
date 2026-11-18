@@ -5,7 +5,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId } from './types.ts'
+import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
@@ -14,7 +16,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import {
   applyGoalEvent,
@@ -24,7 +26,6 @@ import type { GoalFoldState } from './fold.ts'
 import {
   GOAL_CHANGE_VERSION,
   GoalError,
-  GoalId,
 } from './runtime.ts'
 import type {
   CreateGoalRequest,
@@ -47,10 +48,6 @@ import type {
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
-// The pure payload outlet (./types.ts, ONE home of the `goal` projection-key
-// declaration) re-exported onto the package root keeps the module edge in
-// the emitted index.d.ts, so aggregate programs consuming the declarations
-// still receive the SessionProjectionStateMap merge.
 export type * from './types.ts'
 export type * from './domain.ts'
 export { GOAL_CHANGE_VERSION, GoalError, GoalId } from './runtime.ts'
@@ -247,15 +244,21 @@ export class GoalService extends TypertRemoteService {
   private readonly resolved: ResolvedConfig
   private readonly runtimeStates = new WeakMap<Session, GoalRuntimeState>()
 
+  private goalProjectionHandle!: ProjectionHandle<GoalProjectionState>
+
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'goals')
     this.resolved = {
       defaultMaxGoalRounds: resolveMaxGoalRounds(config.defaultMaxGoalRounds ?? 256),
     }
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    this.goalProjectionHandle = await ctx.sessionProjections.register(goalProjectionDefinition)
     ctx.on('agent/created', ({ agent }) => {
       this.setActivation(agent.session, 'disarmed')
     })
-    ctx.sessionProjections.register(goalProjectionDefinition)
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'goal/change') return
       const runtime = this.runtimeState(session)
@@ -309,7 +312,7 @@ export class GoalService extends TypertRemoteService {
     }
     const now = Date.now()
     const goal: GoalSnapshot = {
-      id: GoalId(`goal-${randomUUID()}`),
+      id: brandString<GoalId>(`goal-${randomUUID()}`),
       revision: 1,
       objective: spec.objective,
       phase: 'active',
@@ -474,9 +477,8 @@ export class GoalService extends TypertRemoteService {
 
   /** Read the current durable projection maintained by the registry. */
   private state(session: Session): GoalProjection | null {
-    const state = this.ctx.sessionProjections.stateOf(session, 'goal')
-    if (state === undefined) throw new Error('goal projection is not registered')
-    if (state.failure !== null) throw new Error(state.failure)
+    const state = this.goalProjectionHandle.stateOf(session)
+    if (state.failure !== null) throw new GoalError(state.failure, 'GOAL_STATE_CORRUPT')
     return state.current
   }
 
@@ -497,9 +499,7 @@ export class GoalService extends TypertRemoteService {
     const runtime = this.runtimeState(session)
     if (runtime.activation === activation) return
     runtime.activation = activation
-    const state = this.ctx.sessionProjections.stateOf(session, 'goal')
-    /* v8 ignore next -- static inject requires the projection registry before this service activates. */
-    if (state === undefined) return
+    const state = this.goalProjectionHandle.stateOf(session)
     if (state.failure !== null) return
     const goal = this.view(state.current, runtime)
     this.ctx.emit('goal/activation-changed', {

@@ -1,0 +1,10 @@
+version: 1
+scenario: deepseek-deferred-tools
+profile: headless
+composition: deepseek-deferred-tools
+recording: authored
+header:
+  class: deepseek-deferred-tools
+  pin: true
+  systemPromptSource: deepseek-all-deferred-tools
+  changes: 4

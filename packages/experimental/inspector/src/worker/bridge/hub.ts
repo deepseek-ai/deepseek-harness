@@ -305,7 +305,7 @@ export class InspectorSourceRegistry {
     for (const listener of [...this.statusListeners]) {
       try {
         listener()
-      } catch {
+      } catch (_observerFailed) {
         // A diagnostic observer is isolated from source admission and later observers.
       }
     }
@@ -315,7 +315,7 @@ export class InspectorSourceRegistry {
     for (const listener of [...this.eventListeners]) {
       try {
         listener(event)
-      } catch {
+      } catch (_consumerFailed) {
         // A protocol consumer is isolated from source admission and sibling consumers.
       }
     }

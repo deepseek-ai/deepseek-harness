@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Fernzugriffskontrolle",
+    "description": "Steuern Sie, mit welchen Methoden Nicht-Eigentümer-Verbindungen auf Berechtigungs-Snapshots für jede Verbindung zugreifen und diese beibehalten können."
+  }
+}

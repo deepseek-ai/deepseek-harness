@@ -6,15 +6,19 @@
 // under the standard discipline: turn 1 produces a bash call plus two
 // parallel reads in one assistant message (tool-call density for the
 // trajectory ledger/timing lanes), turn 2 a markdown-rich reply.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import type SessionToolResults from '@deepseek-ai/dsh-client-ui-trajectory'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -27,10 +31,15 @@ const SEED = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const TIMING_EXPECTED = join(SNAPSHOT_DIR, 'timing.expected.md')
 const SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-results.expected.md')
+const ID_SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-id-results.expected.md')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', import.meta.url))
 const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
+const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
+const EVICTED_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-evicted.expected.md')
+const LIVE_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result.expected.md')
+const RUNNING_RESULT_EXPECTED = join(CODE_CARD_DIR, 'live-result-running.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -202,9 +211,20 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       { timeout: 10_000 },
     ).toBe(0)
 
-    await search.fill('WATERFALL')
     const resultTree = page.getByRole('tree', { name: 'Search results' })
     const result = resultTree.getByRole('treeitem')
+    // The seed log carries its id only in the header, so this mid-id,
+    // differently cased fragment can match only through local id matching.
+    await search.fill('PANES-WEB')
+    await expect.poll(() => result.count(), { timeout: 10_000 }).toBe(1)
+    await page.getByRole('status', { name: 'Searching session history…' }).waitFor({ state: 'detached', timeout: 30_000 })
+    await compareOrRefreshGolden(
+      ID_SEARCH_EXPECTED,
+      await captureStableAria(page, '[class*="listArea"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await search.fill('WATERFALL')
     await expect.poll(() => result.count(), { timeout: 30_000 }).toBe(1)
     await expect.poll(() => result.getByText('WATERFALL', { exact: false }).count(), {
       timeout: 10_000,
@@ -293,11 +313,50 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByRole('tab', { name: 'Result' }).click()
     await expect.poll(() => page.getByText('NAVIGATION_OK', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
     expect(await page.locator('[data-timeline-span="message"][data-assistant-timing="true"]').count()).toBeGreaterThan(0)
+    await page.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
     const snapshot = (await captureStableAria(page, '[class*="viewArea"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(TRAJECTORY_EXPECTED, snapshot, MODE)
     await details.getByRole('button', { name: 'Close details' }).click()
   }, 60_000)
+
+  it.skipIf(MODE === 'record')('keeps trajectory folding and search usable at 390px in every locale', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-trajectory-toolbar-narrow'))
+    await ensureSeedOpen(page)
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    const toolbar = page.getByRole('toolbar')
+    const search = toolbar.getByRole('searchbox')
+    try {
+      for (const locale of ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+        await scaffold.ctx.settings.update('locale', { preference: locale })
+        await expect.poll(() => page.evaluate(() => document.documentElement.lang))
+          .toBe(locale === 'zh' ? 'zh-CN' : locale)
+        await search.fill('NAVIGATION_OK')
+        await page.setViewportSize({ width: 390, height: 844 })
+        await expect.poll(() => toolbar.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          return {
+            fits: element.scrollWidth <= element.clientWidth + 1,
+            controlsFit: [...element.querySelectorAll('button:not([hidden]), input')].every((control) => {
+              const rect = control.getBoundingClientRect()
+              return rect.width > 0 && rect.height > 0
+                && rect.left >= bounds.left && rect.right <= bounds.right
+                && rect.top >= bounds.top && rect.bottom <= bounds.bottom
+            }),
+          }
+        }), { message: `${locale} toolbar at 390px` }).toEqual({ fits: true, controlsFit: true })
+        expect(await search.evaluate(element => element === document.activeElement)).toBe(true)
+        expect(await search.inputValue()).toBe('NAVIGATION_OK')
+        await search.fill('')
+        const subcalls = toolbar.getByRole('button').last()
+        await subcalls.click()
+        expect(await subcalls.isVisible()).toBe(true)
+        await page.setViewportSize({ width: 1680, height: 1_000 })
+      }
+    } finally {
+      await scaffold.ctx.settings.update('locale', { preference: 'en' })
+    }
+  }, 90_000)
 
   it.skipIf(MODE === 'record')('restores Assistant timing from recorded history', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-timing'))
@@ -412,6 +471,66 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     }
   }, 120_000)
 
+  it.skipIf(MODE === 'record')('copies the complete Session as Markdown from the Session Header', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-copy-markdown'))
+    await ensureSeedOpen(page)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    expect(await page.evaluate(() => typeof ClipboardItem)).toBe('function')
+    expect(await page.evaluate(() => typeof navigator.clipboard.write)).toBe('function')
+    await page.evaluate(() => {
+      const clipboard = navigator.clipboard
+      const originalWrite = clipboard.write.bind(clipboard)
+      Reflect.set(globalThis, '__dshClipboardWrites', 0)
+      Object.defineProperty(clipboard, 'write', {
+        configurable: true,
+        value: (...args: Parameters<typeof originalWrite>) => {
+          Reflect.set(globalThis, '__dshClipboardWrites', Number(Reflect.get(globalThis, '__dshClipboardWrites')) + 1)
+          return originalWrite(...args)
+        },
+      })
+    })
+    const markdownResponse = page.waitForResponse(response =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === '/api/session.markdown', { timeout: 30_000 })
+    const copyButton = page.getByRole('button', { name: 'More actions' })
+    await copyButton.click()
+    await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).click()
+    const response = await markdownResponse
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toBe('text/markdown; charset=utf-8')
+    await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
+
+    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID)))?.location?.path
+    if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
+    expect((await stat(sourcePath)).isFile()).toBe(true)
+    expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
+    const markdown = await page.evaluate(() => navigator.clipboard.readText())
+    expect(markdown).toContain(`Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\``)
+    const normalized = markdown
+      .split(sourcePath).join('{{sessionFile}}')
+      .split(scaffold.workspaceCwd).join('{{cwd}}')
+    // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
+    await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
+    expect(normalized).toContain('Session file:\n\n```text\n{{sessionFile}}\n```')
+    expect(normalized).toContain('# NavScenario: first run bash to')
+    expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')
+    expect(normalized).toContain('<details><summary>3 previous messages</summary>')
+    expect(normalized).toContain('**Tool: `bash`**')
+    expect(normalized).toContain('NAVIGATION_OK')
+    expect(normalized).toContain('FIRST_DONE')
+    expect(normalized).toContain('Navigation Summary')
+    expect(normalized).not.toContain('The user wants me to follow')
+    expect(normalized).not.toContain('{{system}}')
+    expect(normalized).not.toContain('request/header')
+    expect(normalized.endsWith('\n')).toBe(true)
+    expect(normalized.endsWith('\n\n')).toBe(false)
+
+    await copyButton.click()
+    expect(await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).isDisabled()).toBe(false)
+    await page.keyboard.press('Escape')
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('focuses the ledger by dragging an overview interval', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-timeline'))
     await ensureSeedOpen(page)
@@ -446,7 +565,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // The card's own controls are outside the summary row and must not expand
     // the right column either — the expanded terminal card is read in place.
-    await page.locator('[data-sample="bash"] ~ div [data-terminal] [class*="_copyButton_"]').first().click()
+    await page.locator('[data-sample="bash"] ~ div [data-terminal]').first().getByRole('button', { name: 'Copy', exact: true }).click()
     await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
     // Opening a file into the empty column creates only its preview tab.
     const fileLink = page.locator('[data-variant="read"] button').first()
@@ -479,9 +598,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // squeeze the output pane below its content width and the line must keep
     // its single row and overflow sideways instead of folding. Soft-wrapping
     // here shreds the column alignment this card exists to hold.
-    const layout = await card.locator('[class*="_output_"]').first().evaluate((node) => {
+    const layout = await card.locator('[data-terminal-output]').evaluate((node) => {
       const pane = node as HTMLElement
-      const row = pane.querySelector<HTMLElement>('[class*="_line_"]')
+      const row = pane.querySelector<HTMLElement>(':scope > div')
       if (row === null) throw new Error('output pane has no line')
       const before = row.offsetHeight
       const restore = pane.style.width
@@ -495,7 +614,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // jsdom cannot report: --dsw-* tokens resolve only against the real theme
     // stylesheet. This command settled cleanly, so the dot must be the green
     // success token — a red one here would read as a failed command.
-    const dot = await card.locator('[class*="_runState_"][data-state]').first().evaluate((node) => {
+    const dot = await card.locator('[data-terminal-banner] [data-state]').evaluate((node) => {
+      const banner = node.closest('[data-terminal-banner]')
+      const prompt = banner?.querySelector('[data-terminal-prompt]') ?? null
+      if (banner === null || prompt === null) throw new Error('terminal status dot has no prompt banner')
       // The token lives on body, so the probe must sit in the same cascade.
       const probe = document.createElement('span')
       probe.style.color = 'var(--dsw-alias-state-success-primary)'
@@ -508,10 +630,10 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         success,
         // One label per card (the state is the call's), so it hangs off the
         // prompt column rather than the row the dot sits in.
-        label: node.closest('[class*="_prompt_"]')?.querySelector('[class*="_runStateLabel_"]')?.textContent ?? null,
+        label: banner.querySelector('[data-terminal-state-label]')?.textContent ?? null,
         // The dot precedes the prompt label in document order, which is what
         // puts it to the left of the `$`.
-        beforePrompt: node.compareDocumentPosition(node.parentElement!.querySelector('[class*="_cwd_"]')!)
+        beforePrompt: node.compareDocumentPosition(prompt)
           === Node.DOCUMENT_POSITION_FOLLOWING,
         // The dot lives in the card's OWN left padding, so it sits inside the
         // card box yet left of the prompt text. Owning the reservation as padding
@@ -521,9 +643,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
         insideCard: (node as HTMLElement).getBoundingClientRect().left
           >= (node.closest('[data-terminal]')?.getBoundingClientRect().left ?? Infinity),
         leftOfPrompt: (node as HTMLElement).getBoundingClientRect().right
-          <= (node.closest('[class*="_promptLine_"]')
-            ?.querySelector('[class*="_cwd_"]')
-            ?.getBoundingClientRect().left ?? -Infinity),
+          <= prompt.getBoundingClientRect().left,
       }
     })
     expect(dot.state).toBe('done')
@@ -542,17 +662,227 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // Copy writes the raw output through the browser's own clipboard, which in
     // a real page is the async Clipboard API rather than the jsdom fallback.
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-    await card.locator('[class*="_copyButton_"]').first().click()
-    await expect.poll(() => card.locator('[class*="_copyButton_"]').first().textContent(), { timeout: 5_000 })
-      .toBe('Copied')
+    await card.getByRole('button', { name: 'Copy', exact: true }).click()
+    await expect.poll(() => card.getByRole('button', { name: 'Copied', exact: true }).count(), { timeout: 5_000 })
+      .toBe(1)
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('NAVIGATION_OK')
   }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
-    await assertFixtureInventory(CODE_CARD_DIR, ['code-card.expected.md', 'command-wrap.expected.md'])
+    await assertFixtureInventory(CODE_CARD_DIR, [
+      'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
+      'live-result-evicted.expected.md', 'live-result.expected.md', 'live-result-running.expected.md',
+    ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.v3.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
+      'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md', 'timing.expected.md',
     ])
+  })
+  it.skipIf(MODE === 'record')('inspects a live tool value without adding it to the Session journal', async () => {
+    await ensureSeedOpen(page)
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
+    const unregister = scaffold.ctx.tools.register(defineTool({
+      name: 'live_result_probe', description: 'Live result inspection fixture.', parameters: {},
+      output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'LIVE_RESULT_RENDERED' }] },
+      execute: async () => ({ answer: 42 }),
+    }))
+    onTestFinished(unregister)
+    const callId = brandString<ToolCallId>('live-result-probe')
+    let resultEvent: SessionEvent | undefined
+    const off = scaffold.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'tool/result' && event.data.message.toolCallId === callId) resultEvent = event
+    }, { global: true })
+    onTestFinished(() => { off() })
+    const batch = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
+      calls: [{ type: 'tool-call', id: callId, name: 'live_result_probe', arguments: '{}' }],
+    })
+    expect(batch.results[0]?.result.isError).toBe(false)
+    expect(resultEvent).toBeDefined()
+    expect(resultEvent?.data).not.toHaveProperty('value')
+    const abort = new AbortController()
+    const observed = (scaffold.ctx.get('sessionToolResults') as SessionToolResults).watch(
+      { sessionId: agent.id, seq: resultEvent!.seq }, abort.signal,
+    )[Symbol.asyncIterator]()
+    try {
+      expect((await observed.next()).value).toEqual({ available: true, value: { answer: 42 } })
+    } finally { abort.abort(); await observed.return?.() }
+
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'live_result_probe' }).click()
+    const details = page.getByRole('complementary', { name: 'Event details' })
+    await details.getByRole('tab', { name: 'Result', exact: true }).click()
+    await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
+    const rawSection = details.getByRole('region', { name: 'Raw result', exact: true })
+    const renderedSection = details.getByRole('region', { name: 'Rendered result', exact: true })
+    await expect.poll(() => rawSection.textContent()).toContain('answer:')
+    expect(await renderedSection.textContent()).toContain('LIVE_RESULT_RENDERED')
+    expect(await details.getByRole('button', { name: 'Raw result', exact: true }).count()).toBe(0)
+    await compareOrRefreshGolden(
+      LIVE_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
+    const unregisterJson = scaffold.ctx.tools.register(defineTool({
+      name: 'json_result_probe', description: 'JSON result inspection fixture.', parameters: {},
+      output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }] },
+      execute: async () => Array.from({ length: 80 }, (_, index) => index),
+    }))
+    onTestFinished(unregisterJson)
+    const jsonBatch = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
+      calls: [{ type: 'tool-call', id: brandString<ToolCallId>('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
+    })
+    expect(jsonBatch.results[0]?.result.isError).toBe(false)
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'json_result_probe' }).click()
+    await rawSection.getByRole('tree').waitFor()
+    await renderedSection.getByRole('tree').waitFor()
+    const originalViewport = page.viewportSize()!
+    try {
+      for (const width of [originalViewport.width, 390]) {
+        await page.setViewportSize({ width, height: 600 })
+        const geometry = await details.getByRole('tabpanel').evaluate((panel) => {
+          const sections = [...panel.querySelectorAll('section[aria-label]')]
+          const first = sections[0]!.getBoundingClientRect()
+          const second = sections[1]!.getBoundingClientRect()
+          return {
+            gap: second.top - first.bottom,
+            headingFonts: sections.map(section => getComputedStyle(section.querySelector('h3')!).fontSize),
+            overflowingDescendants: [...panel.querySelectorAll('*')].filter(node =>
+              /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1).length,
+            scrolls: panel.scrollHeight > panel.clientHeight,
+            horizontalOverflow: panel.scrollWidth > panel.clientWidth + 1,
+            headingsAligned: first.left === second.left,
+          }
+        })
+        expect(geometry).toEqual({
+          gap: 2, headingFonts: ['13px', '13px'], overflowingDescendants: 0,
+          scrolls: true, horizontalOverflow: false, headingsAligned: true,
+        })
+        await details.getByRole('tabpanel').evaluate((panel) => { panel.scrollTop = panel.scrollHeight })
+        expect(await details.getByRole('tabpanel').evaluate(panel => panel.scrollTop)).toBeGreaterThan(0)
+      }
+    } finally {
+      await page.setViewportSize(originalViewport)
+    }
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'live_result_probe' }).click()
+    await expect.poll(() => rawSection.textContent()).toContain('answer:')
+    const newer = await scaffold.ctx.tools.execute({
+      agent, signal: new AbortController().signal,
+      calls: Array.from({ length: 1000 }, (_, index) => ({
+        type: 'tool-call' as const, id: brandString<ToolCallId>(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
+      })),
+    })
+    expect(newer.results).toHaveLength(1000)
+    expect(newer.results.every(entry => !entry.result.isError)).toBe(true)
+    await details.getByText('Raw results are only available for live tool calls', { exact: true }).waitFor()
+    // Keep hover and focus tooltips out of the recorded result panel.
+    await details.getByText('Raw results are only available for live tool calls', { exact: true }).click()
+    await details.getByRole('tooltip').waitFor({ state: 'hidden' })
+    await compareOrRefreshGolden(
+      EVICTED_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
+    await details.getByText('LIVE_RESULT_RENDERED', { exact: true }).waitFor()
+  })
+
+  it.skipIf(MODE === 'record')('keeps long raw strings and PTC output readable in one result scroller', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-long-tool-results'))
+    await ensureSeedOpen(page)
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
+    agent.session.append('turn/start', { turn: 3 })
+    onTestFinished(() => {
+      agent.session.append('step/end', { turn: 3, step: 1 })
+      agent.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
+    })
+    agent.session.append('step/start', { turn: 3, step: 1 })
+    const callId = brandString<ToolCallId>('long-ptc-result')
+    const call = agent.session.append('tool/call', {
+      turn: 3, step: 1, callId, name: 'run_code',
+      arguments: JSON.stringify({ code: 'inspect("PTC output")', description: 'Long program output' }),
+    })
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    await page.locator('tr[data-kind="tool"]').filter({ hasText: 'Long program output' }).click()
+    const details = page.getByRole('complementary', { name: 'Event details' })
+    await details.getByRole('tab', { name: 'Result', exact: true }).click()
+    const raw = details.getByRole('region', { name: 'Raw result', exact: true })
+    const rendered = details.getByRole('region', { name: 'Rendered result', exact: true })
+    await raw.getByText('Running…', { exact: true }).waitFor()
+    await compareOrRefreshGolden(
+      RUNNING_RESULT_EXPECTED, await captureStableAria(page, '#trajectory-detail-panel', scaffold.workspaceCwd), MODE,
+    )
+    const ptcOutput = [...Array.from({ length: 100 }, (_, i) => `PTC_LINE_${i}`), 'PTC_END'].join('\n')
+    agent.session.append('tool/result', {
+      turn: 3, step: 1,
+      message: createToolResultMessage({ callId, content: [{ type: 'text', text: ptcOutput }], isError: false }),
+    }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
+    await rendered.getByText(ptcOutput, { exact: true }).waitFor()
+    const stringValue = 'raw_output_'.repeat(300) + 'RAW_END'
+    const probes = [
+      { name: 'long_string_probe', value: stringValue },
+      { name: 'long_json_probe', value: { detail: 'json_output_'.repeat(120) } },
+    ]
+    for (const probe of probes) {
+      const unregister = scaffold.ctx.tools.register(defineTool({
+        name: probe.name, description: 'Long result layout fixture.', parameters: {},
+        output: {
+          schema: { type: 'json' },
+          render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? 'STRING_RENDERED' : JSON.stringify(value) }],
+        },
+        execute: async () => probe.value,
+      }))
+      onTestFinished(unregister)
+      const batch = await scaffold.ctx.tools.execute({
+        agent, signal: new AbortController().signal, log: { turn: 3, step: 1 },
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>(probe.name), name: probe.name, arguments: '{}' }],
+      })
+      expect(batch.results[0]?.result.isError).toBe(false)
+    }
+    const viewport = page.viewportSize()!
+    try {
+      for (const width of [viewport.width, 390]) {
+        await page.setViewportSize({ width, height: 600 })
+        for (const name of ['Long program output', ...probes.map(probe => probe.name)]) {
+          await details.getByRole('button', { name: 'Close details' }).click()
+          await page.locator('tr[data-kind="tool"]').filter({ hasText: name }).click()
+          await details.getByRole('tab', { name: 'Result', exact: true }).click()
+          if (name === 'long_json_probe') {
+            await raw.getByRole('treeitem').waitFor()
+            const heights = await Promise.all([raw, rendered].map(section =>
+              section.getByRole('treeitem').evaluate(row => row.getBoundingClientRect().height)))
+            expect(heights[0]).toBeGreaterThan(3 * 16)
+            expect(heights[0]).toBe(heights[1])
+          } else {
+            const body = name === 'Long program output' ? rendered : raw
+            await expect.poll(() => body.locator('pre').textContent()).toBe(
+              name === 'Long program output' ? ptcOutput : JSON.stringify(stringValue),
+            )
+          }
+          const panel = details.getByRole('tabpanel')
+          const geometry = await panel.evaluate((element) => {
+            element.scrollTop = element.scrollHeight
+            const bounds = element.getBoundingClientRect()
+            const pre = element.querySelector('pre')
+            let tailVisible = true
+            if (pre?.lastChild !== null && pre?.lastChild !== undefined) {
+              const range = document.createRange()
+              range.selectNodeContents(pre)
+              range.setStart(pre.lastChild, (pre.lastChild.textContent?.length ?? 1) - 1)
+              const tail = range.getBoundingClientRect()
+              tailVisible = tail.top >= bounds.top && tail.bottom <= bounds.bottom
+            }
+            return {
+              scrolls: element.scrollTop > 0 && getComputedStyle(element).overflowY === 'auto',
+              tailVisible,
+              overflowingDescendants: [...element.querySelectorAll('*')].filter(node =>
+                /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1).length,
+              horizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+            }
+          })
+          expect(geometry).toEqual({ scrolls: true, tailVisible: true, overflowingDescendants: 0, horizontalOverflow: false })
+        }
+      }
+    } finally {
+      await page.setViewportSize(viewport)
+    }
   })
 })

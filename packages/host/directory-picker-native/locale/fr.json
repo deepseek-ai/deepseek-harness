@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Service de sélection d'annuaire système",
+    "description": "Appelle la boîte de dialogue de sélection de répertoire du système d'exploitation."
+  }
+}

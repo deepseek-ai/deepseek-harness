@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Almacenamiento de archivos adjuntos locales",
+    "description": "Guarde archivos adjuntos como imágenes de la sesión y léalos según el identificador de contenido."
+  }
+}

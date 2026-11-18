@@ -7,6 +7,7 @@ import { afterEach, expect, it } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as PluginInventory from '../src/index.ts'
@@ -40,7 +41,9 @@ it.each([true, false])('reports an unversioned package by name alongside a versi
   const siblingUrl = pathToFileURL(join(siblingDir, 'plugin.js')).href
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
+    '- name: cordis:session-projections',
     '- name: cordis:agents',
+    '- name: cordis:projections',
     '- name: cordis:deepseek-extensions',
     '- name: cordis:plugin-inventory',
     `- name: ${JSON.stringify(privateUrl)}`,
@@ -53,7 +56,9 @@ it.each([true, false])('reports an unversioned package by name alongside a versi
   ctx.baseUrl = pathToFileURL(configPath).href
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
+  ctx.loader.builtins['session-projections'] = SessionProjectionRegistry
   ctx.loader.builtins.agents = AgentRegistry
+  ctx.loader.builtins.projections = SessionProjectionRegistry
   ctx.loader.builtins['deepseek-extensions'] = DeepSeekLlmApiExtensionRegistry
   ctx.loader.builtins['plugin-inventory'] = PluginInventory
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })

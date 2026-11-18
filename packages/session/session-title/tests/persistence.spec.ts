@@ -4,10 +4,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionTitleService, { foldSessionTitle } from '@deepseek-ai/dsh-session-title'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const CONFIG = {
   fallbackMaxWords: 5,
@@ -21,7 +23,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function appendPersistedTitle(ctx: Context, id: ReturnType<typeof SessionId>): Promise<void> {
+async function appendPersistedTitle(ctx: Context, id: SessionId): Promise<void> {
   const session = ctx.sessions.create(id)
   const handle = await ctx.sessionPersistence.create(session.header)
   try {
@@ -39,7 +41,7 @@ async function appendPersistedTitle(ctx: Context, id: ReturnType<typeof SessionI
   }
 }
 
-async function expectPersistedTitle(ctx: Context, id: ReturnType<typeof SessionId>): Promise<void> {
+async function expectPersistedTitle(ctx: Context, id: SessionId): Promise<void> {
   const handle = await ctx.sessionPersistence.open(id, 'read')
   try {
     const { events } = await handle.read()
@@ -64,10 +66,11 @@ describe('session title persistence round trips', () => {
   it('round-trips through a remounted JSONL backend', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-title-jsonl-'))
     roots.push(root)
-    const id = SessionId('title-jsonl')
+    const id = brandString<SessionId>('title-jsonl')
     const writer = new Context()
     await writer.plugin(SessionStore)
     await writer.plugin(SessionProjectionRegistry)
+    await writer.plugin(AgentRegistry)
     await writer.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await writer.plugin(SessionTitleService, CONFIG)
     await appendPersistedTitle(writer, id)

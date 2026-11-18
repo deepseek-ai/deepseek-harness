@@ -1,0 +1,67 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.document {
+  min-width: 0;
+  /* A long README scrolls inside the section instead of pushing the page's later sections out of reach. */
+  max-height: min(560px, 60vh);
+  overflow-y: auto;
+  /* Horizontal rules separate the document from its neighbors; a full frame would clash with the images' own corners. */
+  border-block: 0.5px solid var(--dsw-alias-border-l1);
+  /* Keep the scrollbar off the text and the text width independent of overflow. */
+  scrollbar-gutter: stable;
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+
+.document:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 3px;
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar {
+  display: block;
+  height: 12px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-skeleton);
+  animation: dsh-plugin-detail-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+}
+
+.long { width: min(480px, 90%); }
+.short { width: min(240px, 50%); }
+
+@keyframes dsh-plugin-detail-skeleton {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar { animation: none; }
+}

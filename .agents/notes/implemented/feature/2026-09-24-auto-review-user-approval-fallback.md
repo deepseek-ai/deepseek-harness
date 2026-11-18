@@ -14,7 +14,7 @@ A reviewer denial returns the tools pipeline's existing `ask` decision when the 
 
 Selecting Auto writes `danger-full-access` with the `ask` approval policy. A recorded Auto selection also matches the `never` policy. A [delegated in-process child pins `never`](../../../../packages/subagent/subagent/README.md), so a child Auto keeps the final `AutoReviewDeniedError` denial and its reason, and a Session recorded under the earlier `never` bundle still resolves to Auto instead of Full access. Selecting Auto again writes `ask`.
 
-A reviewer failure denies the call with `Auto review of tool "<name>" failed; its body was not executed: <error>` and no structured error info. A provider failure's message carries the finish kind, failure code, and provider message, so the model and the generic tool card show the actual cause.
+A reviewer failure denies the call with `Auto review of tool "<name>" failed; its body was not executed: <error>` and structured `AutoReviewFailedError` / `AUTO_REVIEW_FAILED` info. [Headless callers](2026-10-18-headless-auto-review.md) use that identity to distinguish failure from denial. A provider failure's message carries the finish kind, failure code, and provider message, so the model and the generic tool card show the actual cause.
 
 ## Alternatives considered
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "无界面运行配置",
+    "description": "在 dsh-base 上直接使用核心 Agent/Session 执行单次任务，不包含 Host、HTTP 或浏览器层。"
+  }
+}

@@ -1,7 +1,7 @@
 /**
  * The browser roster of a `dsh --profile`, read from its bundle patch files
  * the way the launcher composes them: each bundle's `dsh.bundle.patch` file list is
- * parsed with the include plugin's YAML dialect (`entryListSchema`) and
+ * parsed with the include plugin's `parseEntryYaml` and
  * composed by its `applyEntryPatches`; every enabled row whose package
  * declares `dsh.client.platform === 'web'` becomes a roster row carrying that
  * declaration's `inject` and `immediately`; rows nested in Loader groups count
@@ -15,15 +15,17 @@
  */
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { applyEntryPatches, parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { exactPackageSpecifier, parseDshClient } from '@deepseek-ai/dsh-client-modules/client'
-import * as yaml from 'js-yaml'
 import { ClientRoster, type ClientRosterRow } from './roster.ts'
 
-/** The `web` profile's bundle layers, in the order `dsh --profile web` applies them (app-boot `PROFILE_TEMPLATES.web`). */
+/**
+ * The `web` profile's bundle layers, in the order `dsh --profile web` applies them
+ * (`PROFILE_TEMPLATES.web` in `@deepseek-ai/dsh-official-bundles`).
+ */
 export const WEB_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
 
 interface PackageManifest {
@@ -54,7 +56,7 @@ export function bundleRoster(
   const layers = bundles.map(name => readLayer(name, anchor))
   const entries = applyEntryPatches([], layers.flatMap(layer => layer.patches), (message: string, ...args: unknown[]) => {
     throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
-  })
+  }).data
   const anchors = layers.map(layer => layer.manifestPath)
   const rows: ClientRosterRow[] = []
   const seen = new Set<string>()
@@ -93,7 +95,7 @@ function readLayer(bundle: string, anchor: string): BundleLayer {
   }
   const patches = files.flatMap((patch) => {
     const file = join(dirname(manifestPath), patch)
-    const parsed: unknown = yaml.load(readFileSync(file, 'utf8'), { schema: entryListSchema })
+    const parsed: unknown = parseEntryYaml(readFileSync(file, 'utf8'))
     if (!Array.isArray(parsed)) throw new Error(`client-test-runtime: ${file} must be a top-level list of patches`)
     return parsed as PatchOptions[]
   })
@@ -130,8 +132,14 @@ function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, 'utf8')) as PackageManifest
 }
 
-/** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+/**
+ * Prefer an anchor manifest with the requested package name, then search dependencies by depth and anchor order.
+ * Return real paths so linked bundles use their own dependency directories.
+ */
 function locateManifest(anchors: readonly string[], name: string): string | undefined {
+  for (const anchor of anchors) {
+    if (basename(anchor) === 'package.json' && readManifest(anchor).name === name) return realpathSync(anchor)
+  }
   const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
   for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
     for (const search of paths) {

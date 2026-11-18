@@ -5,8 +5,8 @@
  * `--scope check` type-checks only the Host and Client aggregate programs against the package
  * declarations already on disk; the default runs both step sets as one dependency graph, so the
  * aggregate checks overlap the remaining artifact steps. `--scope typecheck` (`pnpm run typecheck`)
- * type-checks every package project and both aggregate programs; beside Host compilation it writes
- * the Typert declarations that Client compilation imports, without bundling.
+ * generates Typert declarations before package compilation, then type-checks every package project
+ * and both aggregate programs without bundling.
  */
 
 import { rmSync } from 'node:fs'
@@ -38,6 +38,8 @@ export interface BuildArguments {
   readonly scope: BuildScope
   /** Client build profile requested by `--profile`; `complete` and `artifacts` scopes only. */
   readonly profile: string | undefined
+  /** Run build steps without overlap, including when a concurrency override is set. */
+  readonly serial: boolean
 }
 
 /**
@@ -53,6 +55,7 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
     options: {
       profile: { type: 'string' },
       scope: { type: 'string' },
+      serial: { type: 'boolean', default: false },
     },
     allowPositionals: false,
   })
@@ -63,22 +66,23 @@ export function parseBuildArguments(args: readonly string[]): BuildArguments {
   if ((scope === 'check' || scope === 'typecheck') && values.profile !== undefined) {
     throw new Error(`build: --profile selects artifact values and does not apply to --scope ${scope}`)
   }
-  return { scope, profile: values.profile }
+  return { scope, profile: values.profile, serial: values.serial }
 }
 
 /**
  * Construct the build steps of one scope as a gate dependency graph.
- * Artifact steps keep the serial order native, Host compilation, Host bundle (Typert),
- * Desktop bundle, Client compilation, Client bundle, then Web. The typecheck scope runs Host
- * compilation beside the bundle-free Typert pass, which reads only source, and then Client
- * compilation, which needs both outputs; it writes no bundle. In the complete and typecheck
- * scopes each aggregate check waits only for its own face's package compilation; alone, the
+ * Artifact steps generate Typert from source before Host compilation, then bundle Host,
+ * Desktop, and Client artifacts before Web. Native output also precedes Host compilation.
+ * The typecheck scope generates Typert before compiling Host and Client packages; it writes no
+ * bundle. In complete and typecheck scopes each aggregate check waits only for its own face's
+ * package compilation; alone, the
  * checks have no predecessors and read whatever declarations already exist. The typecheck scope
  * checks aggregates in build mode, which skips a program whose tsbuildinfo is current; the other
  * scopes use project mode, which compiles no reference.
  * @param root - Repository root containing the compiler and bundle configurations.
  * @param scope - Steps to include.
  * @param environment - Environment overlay applied to every step; the parent value of a key mapped to `undefined` is removed.
+ * @param serial - Whether each step must wait for the preceding step in report order.
  * @returns The gate graph in report order.
  * @throws If an aggregate configuration is invalid.
  */
@@ -86,13 +90,14 @@ export function buildGates(
   root: string,
   scope: BuildScope,
   environment: Readonly<Record<string, string | undefined>> = {},
+  serial = false,
 ): Gate[] {
   const env = { ...environment }
   const gates: Gate[] = []
   if (scope === 'complete' || scope === 'artifacts') {
     gates.push(pnpmGate('native', 'native addon', ['run', 'build:native-system'], [], env))
     for (const step of libraryBuildSteps(root, 'all')) {
-      gates.push(libraryGate(step, step.id === 'host-src' ? ['native'] : step.needs, env))
+      gates.push(libraryGate(step, step.id === 'host-src' ? ['native', ...step.needs] : step.needs, env))
     }
     gates.push(pnpmGate('web', 'Web build', ['run', 'build:web'], ['client-bundle'], env))
   }
@@ -107,12 +112,16 @@ export function buildGates(
         displayCommand: `tsc ${scope === 'typecheck' ? '-b' : '-p'} tsconfig.${face}.json`,
         command: process.execPath,
         args: scope === 'typecheck' ? aggregateBuildArgs(face) : aggregateCheckArgs(face),
-        // No Host aggregate file imports a generated `/typert` or `/remote` subpath, so
-        // host-check never reads what a concurrent host-typert step writes.
         needs: scope === 'check' ? [] : [`${face}-src`],
         env,
       })
     }
+  }
+  if (serial) {
+    return gates.map((gate, index) => {
+      const previous = gates[index - 1]
+      return previous === undefined ? gate : { ...gate, needs: [...new Set([...(gate.needs ?? []), previous.id])] }
+    })
   }
   return gates
 }
@@ -155,16 +164,16 @@ async function main(): Promise<number> {
   if (!process.features.typescript) {
     throw new Error('build: Node.js TypeScript type stripping is unavailable in this Node.js process; remove --no-experimental-strip-types from NODE_OPTIONS or use a Node.js build with TypeScript support')
   }
-  const { scope, profile } = parseBuildArguments(process.argv.slice(2))
+  const { scope, profile, serial } = parseBuildArguments(process.argv.slice(2))
   const root = resolve(import.meta.dirname, '..')
   const name = scope === 'complete' ? 'build' : scope === 'typecheck' ? 'typecheck' : `build:${scope}`
   const budget = defaultParallelism()
   const workers = (gates: readonly Gate[]) => ({
-    workers: Math.min(gates.length, budget),
-    source: describeDefaultParallelism(),
+    workers: serial ? 1 : Math.min(gates.length, budget),
+    source: serial ? '--serial' : describeDefaultParallelism(),
   })
   if (scope === 'check' || scope === 'typecheck') {
-    const gates = buildGates(root, scope)
+    const gates = buildGates(root, scope, {}, serial)
     return runAggregate(name, gates, workers(gates))
   }
 
@@ -172,7 +181,7 @@ async function main(): Promise<number> {
   const clientEnvironment = resolveClientBuildEnvironment(repositoryEnvironment, profile ?? process.env[CLIENT_BUILD_PROFILE_SELECTOR])
   const environment = environmentOverlay(process.env, clientBuildProcessEnvironment(process.env, clientEnvironment))
   rmSync(resolve(root, CLIENT_BUILD_RECORD_PATH), { force: true })
-  const gates = buildGates(root, scope, environment)
+  const gates = buildGates(root, scope, environment, serial)
   const exitCode = await runAggregate(name, gates, workers(gates))
   if (exitCode !== 0) return exitCode
   const record = writeClientBuildRecord(root, clientEnvironment)

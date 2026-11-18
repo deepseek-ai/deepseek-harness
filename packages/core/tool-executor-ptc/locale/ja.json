@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PTC ツール実行",
+    "description": "run_code プログラム経由でツールを実行し、SDK バインディングを生成します。"
+  }
+}

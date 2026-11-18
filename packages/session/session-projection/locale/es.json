@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Resumen del estado de la sesión",
+    "description": "Genere título, estado y otra información a partir del registro de sesión para que otras funciones lo lean."
+  }
+}

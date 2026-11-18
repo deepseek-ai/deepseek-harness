@@ -1,0 +1,32 @@
+.entryName { display: flex; align-items: center; gap: 8px; }
+.entryTitle { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.activeMark { flex: none; margin-left: auto; }
+.entryIcon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
+.sidebarEntry { position: relative; }
+.sidebarEntry .entryName { padding-right: 28px; }
+.sidebarEntry .activeMark {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+.pinAnchor { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; }
+.pinButton { width: 22px; height: 22px; padding: 0; color: var(--dsw-alias-label-tertiary); }
+
+.sidebarEntry .pinButton:active:not(:disabled) { background: transparent; }
+
+@media (hover: hover) {
+  .sidebarEntry:hover > div:first-child > button { background: var(--dsw-alias-interactive-bg-hover); }
+  .sidebarEntry .pinButton:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+  }
+  .pinAnchor { opacity: 0; }
+  .sidebarEntry .activeMark { opacity: 1; }
+  .sidebarEntry:hover .pinAnchor,
+  :global(html[data-input-modality='keyboard']) .sidebarEntry:focus-within .pinAnchor { opacity: 1; }
+  .sidebarEntry:hover .activeMark,
+  :global(html[data-input-modality='keyboard']) .sidebarEntry:focus-within .activeMark { opacity: 0; }
+}

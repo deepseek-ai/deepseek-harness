@@ -2,7 +2,9 @@
 .triggerAnchor { display: inline-flex; flex: none; }
 .captureRow { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 34px; }
 .roundButton { width: 32px; height: 32px; padding: 0; border-radius: 50%; corner-shape: round; flex: none; background: var(--dsw-specific-selector); }
-.roundButton:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid); }
+@media (hover: hover) {
+  .roundButton:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid); }
+}
 .waveform { display: block; flex: 1; width: 0; height: 24px; min-width: 24px; color: var(--dsw-alias-label-secondary); }
 .activityMessage { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .inlineAction { flex: none; }
@@ -48,5 +50,6 @@
 .inputLevel > span[data-active='true'] { background: var(--dsw-alias-state-success-primary); }
 @media (max-width: 480px) {
   .deviceRow, .preferences label, .sourceChoice label { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+
   .deviceError { grid-column: 1; }
 }

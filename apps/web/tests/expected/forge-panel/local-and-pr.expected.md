@@ -1,0 +1,22 @@
+- complementary "会话面板":
+  - region "环境":
+    - heading "环境" [level=2]
+    - text: workspace {{cwd}} feat 项目目录
+    - button "本地变更 · 4 个文件，新增 4 行，删除 1 行": 本地变更 · 4 个文件
+    - text: +4 −1
+    - button "本地变更操作"
+  - region "变更请求":
+    - heading "变更请求" [level=2]
+    - text: "1"
+    - list:
+      - listitem:
+        - button "变更请求状态：需要处理 Add the pull request panel":
+          - img "变更请求状态：需要处理"
+          - text: Add the pull request panel
+        - text: "#7"
+        - button "#7 的操作"
+        - 'button "收起 #7" [expanded]'
+        - button "检查 已加载 1 项检查，仍有更多"
+        - button "评审 等待评审"
+        - text: 合并 无冲突
+        - 'button "查看 #7 的变更：新增 128 行，删除 14 行"': 变更 +128 −14 1 条未解决讨论

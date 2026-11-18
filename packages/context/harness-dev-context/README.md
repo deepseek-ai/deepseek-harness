@@ -57,7 +57,7 @@ A host-only session projection, `harnessDevLegacyPrompt`, folds every committed 
 
 ### Main flow
 
-Activation registers the projection unit, both sections, and both contexts. At each assembly the sections choose the admitted earlier paragraph or the current guidance; at each request admission the contexts read the advertised URL. Disposing the plugin fiber removes every registration.
+Activation awaits the projection handle before registering both sections and both contexts. At each assembly the sections read the handle to choose the admitted earlier paragraph or the current guidance; at each request admission the contexts read the advertised URL. Disposing the plugin fiber removes every registration.
 
 </details>
 

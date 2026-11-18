@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Bucle de ejecución del agente",
+    "description": "Coordine solicitudes de modelos, invocaciones de herramientas y pasos de seguimiento para avanzar en las tareas de los agentes."
+  }
+}

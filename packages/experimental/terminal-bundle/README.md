@@ -1,5 +1,5 @@
 ---
-description: "Keep shell processes alive across tool calls."
+description: "Let the agent run long-lived commands in terminals you can watch in the sidebar."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add six experimental global terminal tools to every Agent. The bundle owns an isolated terminal registry with the platform shell backend; terminals remain Agent-owned. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Add six experimental global terminal tools to every Agent, plus two read-only tools for the person's own terminals. The bundle owns an isolated terminal registry whose backend opens each terminal as a sidebar tab the person can watch and take over. It ships switched off in Web and Desktop and is omitted from the Plugins bundle lists and detail pages.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Add six experimental global terminal tools to every Agent. The bundle owns an is
 <a id="use-this-package"></a>
 ## Use this package
 
-In Web or Desktop, open Plugins and enable **Persistent terminals** in Official. Switch it off to remove its profile layer.
+In `$DSH_HOME/profiles/<name>/package.json` (default home: `~/.dsh`), add `@deepseek-ai/dsh-experimental-terminal-bundle` to `dsh.profile.bundles` to enable its profile layer; remove it from that list to disable it. Restart that profile to apply the change; see the [profile reference](../../../apps/cli/reference/README.md#profile-boot). The [minimal preset](../../bundle/web-app/presets/minimal.patch.yml) loads its own persistent shell independently of this bundle.
 
-Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
+The selected layer adds its global tools to every Agent in the Host, in every preset including minimal. Hiding the management entry preserves existing selections; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/persistent-terminal-controls/guide.md) explains how to disable a previously enabled layer.
 
 -----
 
@@ -37,7 +37,7 @@ Enabling or disabling the bundle registers or removes its global tools in the ru
 <details>
 <summary>Implementation details — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-persistent-terminals`, which registers the tools in the global tool layer. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-persistent-terminals`, which registers the tools in the global tool layer. Its `optional-terminal-panel` row prefers `pwsh`, then `powershell`, on Windows and the execution environment's default shell elsewhere. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
 
 </details>
 
@@ -46,14 +46,15 @@ Enabling or disabling the bundle registers or removes its global tools in the ru
 <a id="further-exploration"></a>
 ## Further Exploration
 
-[Capability implementation](../tool-terminal/README.md)
+- [Sidebar terminal backend](../terminal-panel/README.md)
+- [Terminal tools](../tool-terminal/README.md)
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the [capability implementation](../tool-terminal/README.md), which owns model context and results.
+Indirectly, through the [terminal tools](../tool-terminal/README.md) and the [sidebar terminal backend](../terminal-panel/README.md), which own model context and results.
 
 #### KV Cache effect
 
@@ -63,7 +64,8 @@ The layer adds no request content directly; the capability implementation owns c
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Terminals belong to the Agent that created them. POSIX uses Bash and Windows uses PowerShell; the bundle does not share another terminal registry.
+- Agent terminals require the Web or Desktop composition, which mounts the terminal controller; the bundle does not share another terminal registry.
+- The [sidebar terminal backend limitations](../terminal-panel/README.md#known-limitations-and-deferred-work) apply.
 
 -----
 

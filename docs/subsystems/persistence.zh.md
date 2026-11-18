@@ -113,16 +113,16 @@ interface SessionHandle extends AsyncDisposable {
 
 只读观察即 `open(id, 'read')`：句柄提供经过验证的连续前缀切片，绝不返回撕裂尾部，且同一句柄上的重复读取绝不会观察到比先前读取更旧的状态。持久化侧不存在已准备 Session 缓存：session-query 拥有自己的冷读缓存，按 `stat().revision` 变更令牌为每个 id 缓存一个已配平的冷 Session，仅在令牌变化时重新读取。该生命周期由[基于句柄的持久化 Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.zh.md)定义；已归档的 [Session 准备阶段记录](../../.agents/notes/archived/architecture/2026-08-05-session-preparation.md)记载了发布边界 `SessionPreparation` 最初的决策。
 
-## `SessionLocation`——拒绝诊断的产物目标
+## `SessionLocation`——每一 Session 的产物元数据
 
-`SessionLocation` 不是面向消费者的查询：日志访问走会话句柄的 `read`。它仅作为拒绝诊断存在，使 `SessionFormatUnsupportedError` 能指出本构建拒绝解读的原始日志。JSONL 提供其项目/会话目录内 transcript（文本记录）的绝对路径；没有逐会话工件的后端则不提供。
+`SessionLocation` 用于诊断与导出的观察元数据；日志访问仍走会话句柄的 `read`。已物化的持久化快照携带选中产物路径，`SessionFormatUnsupportedError` 也能指出本构建拒绝解读的原始日志。JSONL 提供其项目/会话目录内 transcript（文本记录）的绝对路径；没有逐会话工件的后端则不提供。
 
 ```ts type-equiv
 /**
- * A backend-resolved, per-session local artifact location. Carried only by
- * refusal diagnostics ({@link SessionFormatUnsupportedError}) so a user can
- * find the raw log a build refused to interpret; it is not a consumer-facing
- * query — log access goes through a session handle's `read`.
+ * A backend-resolved, per-Session local artifact path used by observational
+ * snapshots and refusal diagnostics. It names a backend target for the Session
+ * and does not authorize reads; log access still goes through a session
+ * handle's `read`. It is not persisted Session content.
  */
 interface SessionLocation {
   /** Backend-specific artifact kind, for example `jsonl`. */
@@ -154,9 +154,17 @@ interface SessionHeader {
   readonly id: SessionId
   /** Non-negative safe-integer Unix epoch milliseconds when the session was created. */
   readonly createdAt: number
-  /** Absolute working directory the session was created in (if any). */
+  /**
+   * Canonical absolute working directory the session was created in (if any). Producers resolve the
+   * requested directory through the execution-world filesystem before recording it, so the later
+   * canonical directory records of the working-directory service compare with it lexically.
+   */
   readonly cwd?: string
-  /** The session this one was forked from (seed lineage), if any. */
+  /**
+   * Direct creator of a subagent Session. Ordinary forks omit this field;
+   * historical ordinary forks may retain their source id here. Presence alone
+   * does not classify a Session as a subagent; use `origin` for that distinction.
+   */
   readonly parentSession?: SessionId
   /**
    * Whether this Session contains a fork-inherited event prefix. The exact prefix
@@ -223,7 +231,7 @@ interface CreateSessionOptions {
 }
 ```
 
-因此，回放/fork 的调用方式为 `ctx.agents.create({ sessionId, seed, meta })`——fork 还会随 `meta.isSeeded: true` 提供 `inheritedEventCount`，且只有经 agent-loop 发布的会话才会持久化，且循环会在发布之前通过新会话的写句柄存储 seed；将一个*持久化*会话恢复为活跃 agent 的调用方式为 `ctx.agents.resume({ resumeSessionId })`。
+直接回放使用 `ctx.agents.create({ sessionId, seed, meta })`。fork 则提供 `parentSource: { sessionId, endSeq, events }`、`inheritedEventCount` 和 `meta.isSeeded: true`：父来源指定父会话、不包含末端位置的前缀长度，以及从该长度继续的子会话事件。工厂在子会话存储之前加载并持久保存父前缀；`SessionPersistence.create()` 存储该前缀和子会话后缀后才返回写句柄。只有经 agent-loop 发布的 Session 才遵循实时持久化路径。将持久化 Session 恢复为实时 Agent 使用 `ctx.agents.resume({ resumeSessionId })`。
 
 ## 准备与恢复所有权
 
@@ -319,6 +327,12 @@ interface SessionPersistenceSnapshot {
   readonly eventCount?: number
   /** Physical artifact byte size, when the backend can provide it cheaply (JSONL); otherwise absent. */
   readonly sizeBytes?: number
+  /**
+   * Backend-resolved location of the selected materialized per-Session
+   * artifact, for diagnostics and export. Absent when the backend has no
+   * materialized per-Session file, including an unmaterialized pending Session.
+   */
+  readonly location?: SessionLocation
 }
 ```
 
@@ -326,9 +340,10 @@ interface SessionPersistenceSnapshot {
 
 ## 后端
 
-随产品交付的 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
+随产品交付的多个 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——逐会话仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；具备崩溃安全的原子实体化、逐批 `fsync` 的 append，以及在第一次新 append 之前截断撕裂尾部。`stat`/`list` 携带 `sizeBytes` 与尽力而为的、由 `fs.stat` 派生的修订号。
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)**——带索引元数据及前驱关联 Segment 的逻辑 JSON 事件存储，每次写入存为一帧 JSON 行，默认以 Zstandard 压缩。此可选提供者在首次打开时导入现有 JSONL，并协调并发读者及每个 Session 的唯一写者；`stat`/`list` 不导入历史。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -337,6 +352,25 @@ interface SessionPersistenceSnapshot {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxdeepseekchatimport--deepseekchatimportservice"></a>
+
+### `ctx.deepseekChatImport` — `DeepseekChatImportService`
+
+Serves the owner-only export upload route and the limits the browser checks first.
+
+```ts cordis-catalog
+/**
+ * Report the limits the browser checks before uploading. Only the owner may
+ * import, so every other principal is refused.
+ * @param signal - Client cancellation or Remote withdrawal.
+ * @returns the largest accepted archive size.
+ * @throws {RemoteError} `deepseekChatImport/owner-only` for a caller that is not the owner.
+ */
+@Remote limits(signal: AbortSignal): DeepseekChatImportLimits
+```
+
+Source: [`packages/experimental/deepseek-chat-import/src/index.ts`](../../packages/experimental/deepseek-chat-import/src/index.ts)
 
 <a id="ctxsessionpersistence--sessionpersistence-abstract-seam"></a>
 
@@ -353,18 +387,25 @@ Freshness: once an `append` or `flush` resolves, reads started afterwards on thi
 ```ts cordis-catalog
 /**
  * Create a new stored session and take its write ownership.
+ * With `parentSource`, store the complete fork history before resolving; a
+ * backend may share the parent's stored prefix or copy it. A failed creation
+ * releases acquired write ownership; already committed history remains stored.
  * @param header - the immutable header (id, version, cwd, lineage) to store.
- * @param options - optional cancellation.
+ * @param options - cancellation, inherited-prefix count, and optional fork source.
  * @returns a `write` handle owned by the caller; close it to release ownership.
  * @throws {SessionAlreadyExistsError} when the id already exists.
+ * @throws {SessionPersistenceNotFoundError} when a sharing backend cannot find the fork parent.
+ * @throws {HarnessError} with `SESSION_FORK_PREFIX_NOT_PERSISTED` when a sharing backend finds the parent prefix not durable.
  */
 abstract create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>
 
 /**
  * Open an existing stored session.
  *
- * `read` never takes ownership and works while another handle (or process)
- * holds write ownership. `write` atomically claims single-writer ownership;
+ * Returned `read` handles retain no write ownership and work while another
+ * handle (or process) holds write ownership. A first legacy read open may
+ * acquire ownership temporarily to import history into the selected backend.
+ * `write` atomically claims single-writer ownership;
  * an existing active owner rejects.
  * @param id - the stored session to open.
  * @param access - `read` or `write`.

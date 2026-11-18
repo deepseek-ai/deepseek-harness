@@ -3,7 +3,7 @@ import type { ContextMessageNode } from '../contract/snapshot.ts'
 import type { ChatKey } from '../locale.ts'
 
 /** Existing primitive glyph selected for a Turn trigger's source family. */
-export type TurnTriggerIcon = 'agent' | 'github' | 'goal' | 'job' | 'plugin' | 'request' | 'schedule' | 'subagent' | 'team' | 'webhook'
+export type TurnTriggerIcon = 'agent' | 'continue' | 'github' | 'goal' | 'job' | 'plugin' | 'request' | 'schedule' | 'subagent' | 'team' | 'webhook'
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -13,20 +13,38 @@ function field(source: Record<string, unknown>, key: string): string {
   return typeof source[key] === 'string' ? source[key] : ''
 }
 
+/** Missing or malformed historical reasons stay generic; unfamiliar reasons never imply success. */
+function subagentTitle(reason: unknown): ChatKey {
+  if (typeof reason !== 'string' || reason === '') return 'message.trigger.subagent'
+  switch (reason) {
+    case 'completed': return 'message.trigger.subagent.completed'
+    case 'aborted': return 'message.trigger.subagent.aborted'
+    case 'error': return 'message.trigger.subagent.error'
+    case 'max-tokens': return 'message.trigger.subagent.maxTokens'
+    case 'refusal': return 'message.trigger.subagent.refusal'
+    // Backends may extend the recorded reason vocabulary.
+    default: return 'message.trigger.subagent.unknown'
+  }
+}
+
 /**
  * Describe a waking message using its recorded source.
  * @param node - durable context, including the original notification body.
- * @returns localized title key and source-family icon.
+ * @returns localized title, source-family icon, and compact presentation for continuation receipts.
  */
 export function turnTriggerDetails(node: ContextMessageNode): {
   title: ChatKey
   icon: TurnTriggerIcon
+  compact?: true
 } {
   const source = record(node.source)
   const kind = field(source, 'kind')
   let title: ChatKey = 'message.trigger.request'
   let icon: TurnTriggerIcon = 'request'
   switch (kind) {
+    case 'retry':
+      if (node.content.length === 0) return { title: 'message.continuation.requested', icon: 'continue', compact: true }
+      break
     case 'goal': {
       title = 'message.trigger.goal'
       icon = 'goal'
@@ -40,11 +58,10 @@ export function turnTriggerDetails(node: ContextMessageNode): {
       title = 'message.trigger.team'
       icon = 'team'
       break
-    case 'subagent-settled': {
-      title = 'message.trigger.subagent'
+    case 'subagent-settled':
+      title = subagentTitle(source.stopReason)
       icon = 'subagent'
       break
-    }
     case 'webhook': {
       const github = field(source, 'provider') === 'github'
       title = github ? 'message.trigger.github' : 'message.trigger.webhook'

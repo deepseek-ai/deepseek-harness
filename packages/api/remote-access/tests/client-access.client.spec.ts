@@ -5,12 +5,17 @@ import type { TypertRemoteContribution, TypertResource } from '@deepseek-ai/dsh-
 import type { RemoteAccessFrame, RemoteAccessGrant } from '../src/types.ts'
 import { ClientAccessState, parseInjectedBaseline, type Baseline } from '../src/client/state.ts'
 import { mountAccess } from '../src/client/mount.ts'
+import { whenAllowed } from '../src/client/when-allowed.ts'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertResourceMap {
     /** Test-only resource kinds; the Client face itself names no kind. */
     'test-shelf': TypertResource<string>
     'test-desk': TypertResource<string>
+  }
+  interface TypertRemoteMap {
+    /** Test-only endpoint the `whenAccess` specs guard effects on. */
+    'test/guarded': () => Promise<never>
   }
 }
 
@@ -287,5 +292,225 @@ describe('remote-access Client mount', () => {
     expect(report).toHaveBeenCalledWith('access snapshot stream failed; owner access answers are unaffected', failure)
     expect(value(globalFork)).toBe(true)
     await access.dispose()
+  })
+})
+
+/** A baseline whose grants allow `test/guarded` on the listed resources. */
+function followOn(...resources: RemoteAccessGrant['resource'][]): Extract<RemoteAccessFrame, { type: 'baseline' }> {
+  return { type: 'baseline', owner: false, grants: resources.map(resource => ({ resource, actions: ['test/guarded'] })) }
+}
+
+describe('remote-access whenAccess', () => {
+  it('installs the effects while the global resource allows the action, disposes them in reverse order on loss, and reinstalls on the next grant', async () => {
+    const access = await mounted()
+    const log: string[] = []
+    const guarded = access.ctx.plugin({
+      inject: ['remoteAccess'],
+      apply: (ctx: Context) => {
+        ctx.remoteAccess.whenAccess('test/guarded', function* () {
+          log.push('install')
+          yield () => { log.push('dispose first') }
+          yield () => { log.push('dispose second') }
+        })
+      },
+    })
+    await guarded.await()
+    expect(log).toEqual([])
+
+    access.stream().push(followOn({ kind: 'global' }))
+    await vi.waitFor(() => { expect(log).toEqual(['install']) })
+    // A frame that leaves the answer unchanged installs nothing again.
+    access.stream().push({ type: 'upsert', grant: { resource: { kind: 'test-shelf', id: 's1' }, actions: ['session/fork'] } })
+    access.stream().push({ type: 'upsert', grant: { resource: { kind: 'global' }, actions: ['session/list'] } })
+    await vi.waitFor(() => { expect(log).toEqual(['install', 'dispose second', 'dispose first']) })
+    access.stream().push({ type: 'upsert', grant: { resource: { kind: 'global' }, actions: ['test/guarded'] } })
+    await vi.waitFor(() => { expect(log).toHaveLength(4) })
+    expect(log[3]).toBe('install')
+
+    await guarded.dispose()
+    expect(log.slice(4)).toEqual(['dispose second', 'dispose first'])
+    await access.dispose()
+  })
+
+  it('runs the callback at once for the owner and disposes it with the returned disposer', async () => {
+    const access = await mounted({ type: 'baseline', owner: true })
+    const dispose = vi.fn()
+    const callback = vi.fn(() => dispose)
+    const stop = access.ctx.remoteAccess.whenAccess('test/guarded', callback)
+    expect(callback).toHaveBeenCalledOnce()
+    stop()
+    await vi.waitFor(() => { expect(dispose).toHaveBeenCalledOnce() })
+    await access.dispose()
+  })
+
+  it('follows one resource of a declared kind through whenResourceAccess', async () => {
+    const access = await mounted(followOn({ kind: 'test-shelf', id: 's1' }))
+    const dispose = vi.fn()
+    const shelf = vi.fn(() => dispose)
+    const desk = vi.fn(() => () => {})
+    access.ctx.remoteAccess.whenResourceAccess('test-shelf', 's1', 'test/guarded', shelf)
+    access.ctx.remoteAccess.whenResourceAccess('test-desk', 's1', 'test/guarded', desk)
+    expect(shelf).toHaveBeenCalledOnce()
+    expect(desk).not.toHaveBeenCalled()
+    access.stream().push({ type: 'remove', resource: { kind: 'test-shelf', id: 's1' } })
+    await vi.waitFor(() => { expect(dispose).toHaveBeenCalledOnce() })
+    await access.dispose()
+  })
+
+  it('disposes a non-owner\'s effects once its stream fails terminally', async () => {
+    const access = await mounted(followOn({ kind: 'global' }))
+    vi.spyOn(access.ctx.logger, 'error').mockImplementation(() => undefined)
+    const dispose = vi.fn()
+    access.ctx.remoteAccess.whenAccess('test/guarded', () => dispose)
+    access.stream().fail(new Error('carrier closed for good'))
+    await vi.waitFor(() => { expect(dispose).toHaveBeenCalledOnce() })
+    await access.dispose()
+  })
+
+  it('throws a setup failure at once while allowed, and reports a later one without retrying it', async () => {
+    const owner = await mounted({ type: 'baseline', owner: true })
+    expect(() => owner.ctx.remoteAccess.whenAccess('test/guarded', () => { throw new Error('setup failed') }))
+      .toThrow('setup failed')
+    await owner.dispose()
+
+    const access = await mounted()
+    const failures: unknown[] = []
+    const onLoud = (error: unknown): void => { failures.push(error) }
+    process.on('uncaughtException', onLoud)
+    try {
+      const failing = vi.fn((): () => void => { throw new Error('late failure') })
+      const throwsValue = vi.fn(function* (): Generator<() => void> {
+        yield () => {}
+        throw new Error('late value')
+      })
+      const later = vi.fn(() => () => {})
+      access.ctx.remoteAccess.whenAccess('test/guarded', failing)
+      access.ctx.remoteAccess.whenAccess('test/guarded', throwsValue)
+      access.ctx.remoteAccess.whenAccess('test/guarded', later)
+      access.stream().push(followOn({ kind: 'global' }))
+      await vi.waitFor(() => { expect(failures).toHaveLength(2) })
+      expect(failures.map(String)).toEqual(['Error: late failure', 'Error: late value'])
+      expect(later).toHaveBeenCalledOnce()
+      access.stream().push({ type: 'remove', resource: { kind: 'global' } })
+      access.stream().push({ type: 'upsert', grant: { resource: { kind: 'global' }, actions: ['test/guarded'] } })
+      await vi.waitFor(() => { expect(later).toHaveBeenCalledTimes(2) })
+      expect(failing).toHaveBeenCalledOnce()
+      expect(throwsValue).toHaveBeenCalledOnce()
+    } finally {
+      process.off('uncaughtException', onLoud)
+    }
+    await access.dispose()
+  })
+
+  it('skips a controller another installation stopped during the same notification', async () => {
+    const access = await mounted()
+    let stopLater = (): void => {}
+    const first = vi.fn(() => {
+      stopLater()
+      return () => {}
+    })
+    const later = vi.fn(() => () => {})
+    access.ctx.remoteAccess.whenAccess('test/guarded', first)
+    stopLater = access.ctx.remoteAccess.whenAccess('test/guarded', later)
+    access.stream().push(followOn({ kind: 'global' }))
+    await vi.waitFor(() => { expect(first).toHaveBeenCalledOnce() })
+    expect(later).not.toHaveBeenCalled()
+    await access.dispose()
+  })
+
+  it('installs nothing for a grant that arrives while its caller is unloading', async () => {
+    const access = await mounted()
+    const callback = vi.fn(() => () => {})
+    let release = (): void => {}
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    const pauseUnload = vi.fn(async () => { await blocked })
+    const caller = access.ctx.plugin({
+      inject: ['remoteAccess'],
+      apply: (ctx: Context) => {
+        ctx.remoteAccess.whenAccess('test/guarded', callback)
+        ctx.effect(() => pauseUnload, 'pause caller unload')
+      },
+    })
+    await caller.await()
+    const disposing = caller.dispose()
+    await vi.waitFor(() => { expect(pauseUnload).toHaveBeenCalledOnce() })
+    access.stream().push(followOn({ kind: 'global' }))
+    await vi.waitFor(() => { expect(value(access.global('test/guarded'))).toBe(true) })
+    expect(callback).not.toHaveBeenCalled()
+    release()
+    await disposing
+    await access.dispose()
+  })
+})
+
+/** A hand-driven access answer that notifies synchronously. */
+function drivenAnswer(): { readonly answer: HostObservable<boolean>; set(allowed: boolean): void } {
+  let allowed = false
+  const listeners = new Set<() => void>()
+  return {
+    answer: {
+      getSnapshot: () => allowed,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    },
+    set(next) {
+      allowed = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+describe('whenAllowed', () => {
+  it('installs nothing when the answer turns true while its caller is unloading', async () => {
+    const root = new Context()
+    const driven = drivenAnswer()
+    const callback = vi.fn(() => () => {})
+    const caller = root.plugin({
+      apply: (ctx: Context) => {
+        whenAllowed(ctx, driven.answer, callback, 'test')
+        // Disposed before the controller: it turns the answer true mid-unload.
+        ctx.effect(() => () => { driven.set(true) }, 'grant during unload')
+      },
+    })
+    await caller.await()
+    await caller.dispose()
+    expect(callback).not.toHaveBeenCalled()
+    await root.fiber.dispose()
+  })
+
+  it('ignores its disposer after a later failure retired it, and reports a non-Error failure as an Error', async () => {
+    const root = new Context()
+    const driven = drivenAnswer()
+    const failures: unknown[] = []
+    const onLoud = (error: unknown): void => { failures.push(error) }
+    process.on('uncaughtException', onLoud)
+    try {
+      const stop = whenAllowed(root, driven.answer, () => { throw new Error('late failure') }, 'test')
+      driven.set(true)
+      await vi.waitFor(() => { expect(failures).toHaveLength(1) })
+      expect(() => { stop() }).not.toThrow()
+      // A faulty answer that throws a non-Error value is reported as an Error naming it.
+      let reads = 0
+      const listeners: (() => void)[] = []
+      whenAllowed(root, {
+        getSnapshot: () => {
+          reads++
+          if (reads > 1) throw 'unreadable answer'
+          return false
+        },
+        subscribe: (listener) => {
+          listeners.push(listener)
+          return () => {}
+        },
+      }, () => () => {}, 'test')
+      for (const listener of listeners) listener()
+      await vi.waitFor(() => { expect(failures).toHaveLength(2) })
+      expect(String(failures[1])).toBe('Error: unreadable answer')
+    } finally {
+      process.off('uncaughtException', onLoud)
+    }
+    await root.fiber.dispose()
   })
 })

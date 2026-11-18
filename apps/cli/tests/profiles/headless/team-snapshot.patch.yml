@@ -21,35 +21,12 @@
     root: './.sessions'
     compression: none
 
-- id: tool-subagent-control
-  disabled: true
-
-- id: tool-subagent-list-agents
-  disabled: true
-
-- id: tool-subagent-report
-  disabled: true
-
-- id: tool-subagent
-  disabled: true
-
-- id: tool-subagent-fork
-  disabled: true
-
 - insert:
-    - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
-      config:
-        maxMembers: 8
-        maxTasks: 256
-        maxMessageBytes: 65536
-        disposalTimeoutMs: 5000
-
-    - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
-      config:
-        freshProvider: spawn
-        forkProvider: fork
-
     - id: team-fixture-llm
       name: './tests/fixtures/team-llm.mjs'
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

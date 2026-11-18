@@ -1,20 +1,25 @@
-import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Agent controls use the same manager methods as the Web and bound inventory reads. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type PluginManager from '../src/index.ts'
 import type { BundleInfo } from '../src/types.ts'
 import * as tool from '../src/tools.ts'
+import { PluginManagerError } from '../src/error.ts'
+import { FileLockError } from '@deepseek-ai/dsh-atomic-write'
 
-function resultText(result: Awaited<ReturnType<ToolRuntime['execute']>>): string {
+function resultText(result: ToolExecutionResult): string {
   if (typeof result.value !== 'string') throw new Error('Expected a serialized manager result')
   return result.value
 }
@@ -35,13 +40,14 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
   ctx.provide('pluginManager', manager as unknown as PluginManager)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode })
   if (approval !== undefined) await ctx.plugin(ApprovalService, { policy: approval })
   const fiber = await ctx.plugin(tool)
-  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => ctx.tools.execute({ name: 'plugin_manager', arguments: args,
+  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => executeToolFixture(ctx, { name: 'plugin_manager', arguments: args,
     ...agent === undefined ? {} : { agent },
-    callId: ToolCallId('manager-call'), signal })
+    callId: brandString<ToolCallId>('manager-call'), signal })
   return { ctx, manager, call, fiber }
 }
 
@@ -118,7 +124,7 @@ it('exposes an absent Official bundle installation target without display metada
 
 it('checks the calling session on each execution, including after permission is revoked', async () => {
   const { call, manager } = await fixture()
-  const id = SessionId('manager-permissions')
+  const id = brandString<SessionId>('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent
   setSandboxMode(session, 'workspace-write')
@@ -132,7 +138,7 @@ it('checks the calling session on each execution, including after permission is 
 })
 
 function activeAgent(): Agent {
-  const id = SessionId('manager-approval')
+  const id = brandString<SessionId>('manager-approval')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   session.append('turn/start', { turn: 1 })
   return { session } as unknown as Agent
@@ -223,7 +229,7 @@ it('paginates inventories with an explicit continuation and total', async () => 
   expect(resultText(await call({ action: 'list_bundles' }))).toContain('"name":"bundle"')
 })
 
-it('keeps UI translation metadata out of model-facing plugin and bundle lists', async () => {
+it('keeps UI translation and listing metadata out of model-facing plugin and bundle lists', async () => {
   const { call, manager } = await fixture()
   const meta = { title: { en: 'Plugin', zh: '插件' }, error: 'UI-only diagnostic' }
   manager.listPlugins.mockImplementationOnce(async () => [{ entryId: 'include:plugin', enabled: true, meta }])
@@ -231,7 +237,7 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
     entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
   })
   manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, listedByDefault: false, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
   }])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
     entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,
@@ -271,7 +277,19 @@ it.each([
   { action: 'set_version_exemption', target: 'plugin@1.0.0', runtimeVersion: '1.0.0' },
 ])('rejects incomplete or unbounded tool inputs: %j', async (args) => {
   const { call } = await fixture()
-  expect((await call(args)).isError).toBe(true)
+  const result = await call(args)
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+})
+
+it('reports profile read, lock, and disposal failures with their error codes', async () => {
+  const { manager, call } = await fixture()
+  manager.listBundles.mockRejectedValueOnce(new PluginManagerError('plugin-manager: failed to read the profile: bad JSON', 'PLUGIN_MANAGER_PROFILE_READ_FAILED'))
+  manager.setBundleEnabled.mockRejectedValueOnce(new FileLockError('/profile/package.json.lock'))
+  manager.removeBundle.mockRejectedValueOnce(new PluginManagerError('plugin-manager: the manager is disposed', 'PLUGIN_MANAGER_UNAVAILABLE'))
+  expect((await call({ action: 'list_bundles' })).error?.info).toEqual({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_PROFILE_READ_FAILED' })
+  expect((await call({ action: 'set_bundle', target: 'bundle', enabled: false })).error?.info).toEqual({ name: 'FileLockError', code: 'FILE_LOCK_TIMEOUT' })
+  expect((await call({ action: 'remove_bundle', target: 'bundle' })).error?.info).toEqual({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_UNAVAILABLE' })
 })
 
 it('presents reads and changes distinctly and disposes its registration', async () => {
@@ -303,4 +321,6 @@ it('tells the agent the next step for each change outcome it can act on', async 
   expect(await outcome({ changed: false, application: 'failed', packageResult: { kind: 'unknown' }, error: { code: 'operation-error' } }))
     .toContain('Report the diagnostic')
   expect(await outcome({ changed: false, application: 'failed' })).toContain('Report the diagnostic')
+  expect(await outcome({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } }))
+    .toBe('This bundle cannot run on the current Host platform; ask the user to use a supported Host.')
 })

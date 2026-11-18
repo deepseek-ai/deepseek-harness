@@ -13,3 +13,9 @@
         serviceVersion: !!js process.env.DSH_APP_VERSION
         compression: gzip
         scheduledDelayMillis: 60000
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

@@ -4,11 +4,12 @@ import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '../src/index.ts'
 import type { SubagentStartRequest, SubagentRun, SubagentResult } from '../src/types.ts'
 import { externalTestParent } from './external-activation-helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const complete: SubagentResult = { output: [], stopReason: 'completed' }
 
@@ -27,13 +28,13 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
     ctx, parent,
     start: (owner: Agent = parent) => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: new AbortController().signal, delivery,
-      request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+      parent: owner, prompt: [{ type: 'text', text: 'work' }],
     }),
   }
 }
 
 function run(id: string, result: Promise<SubagentResult>, dispose = () => Promise.resolve()): SubagentRun {
-  return { id: SessionId(id), result, dispose }
+  return { id: brandString<SessionId>(id), result, dispose }
 }
 
 describe('external activation ownership', () => {
@@ -41,10 +42,10 @@ describe('external activation ownership', () => {
     const entered = Promise.withResolvers<undefined>()
     const published = Promise.withResolvers<SubagentRun>()
     const fixture = await setup(() => { entered.resolve(undefined); return published.promise })
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
     const starting = fixture.start()
     await entered.promise
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     let released = false
     void waiting.then(() => { released = true })
     await Promise.resolve()
@@ -53,7 +54,7 @@ describe('external activation ownership', () => {
     const activation = await starting
     await waiting
     await activation.dispose()
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it('drains one parent’s external child without cancelling another parent’s pending startup', async () => {
@@ -86,7 +87,7 @@ describe('external activation ownership', () => {
   it('cleans an external execution whose id collides with a resident Session', async () => {
     const dispose = vi.fn(() => Promise.resolve())
     const fixture = await setup(() => Promise.resolve(run('occupied-id', Promise.resolve(complete), dispose)))
-    fixture.ctx.sessions.create(SessionId('occupied-id'))
+    fixture.ctx.sessions.create(brandString<SessionId>('occupied-id'))
     await expect(fixture.start()).rejects.toMatchObject({ code: 'DUPLICATE_CHILD' })
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(fixture.ctx.sessionProjections.snapshot(fixture.parent.session, ['subagentCatalog']).values.subagentCatalog).toEqual([])
@@ -109,7 +110,7 @@ describe('external activation ownership', () => {
       expect(fixture.ctx.sessionProjections.snapshot(otherParent.session, ['subagentCatalog']).values.subagentCatalog).toEqual([])
       expect(fixture.ctx.sessionProjections.snapshot(fixture.parent.session, ['subagentCatalog']).values.subagentCatalog)
         .toMatchObject([{ id: first.childId, mode: 'external' }])
-      await expect(fixture.ctx.subagents.waitForChildren(otherParent)).resolves.toBe(false)
+      await expect(fixture.ctx.subagents.waitForTreeWork(otherParent)).resolves.toBe(false)
     } finally {
       firstResult.resolve(complete)
       await first.dispose()
@@ -141,7 +142,7 @@ describe('external activation ownership', () => {
       expect(dispose).toHaveBeenCalledOnce()
       expect(warning).toHaveBeenCalledWith(expect.stringContaining('admission rollback failed:'))
       expect(warning).toHaveBeenCalledWith(expect.stringContaining('unknown teardown failure'))
-      await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+      await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
     } finally {
       append.mockRestore()
       warning.mockRestore()

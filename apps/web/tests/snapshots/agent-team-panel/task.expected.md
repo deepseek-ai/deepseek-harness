@@ -1,9 +1,19 @@
-- dialog "Agent Team":
-  - heading "Members" [level=3]
-  - button "lead Current chat Inactive" [disabled]
-  - heading "Shared tasks 1" [level=3]
-  - article:
-    - strong: Agent task
-    - text: In progress
-    - paragraph: Created by the Team Lead
-    - text: "task-1Owner: leadWrite scopes: src/web"
+- complementary "Session panel":
+  - region "Environment":
+    - heading "Environment" [level=2]
+    - text: workspace {{cwd}}
+  - region "Subagents":
+    - heading "Subagents" [level=2]
+    - text: 1 external
+    - tree "Subagent sessions":
+      - 'treeitem "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher · External task" [disabled] [level=1]': "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result."
+  - region "Shared tasks":
+    - heading "Shared tasks" [level=2]
+    - text: 1 in progress
+    - list:
+      - listitem:
+        - button "In progress Agent task" [expanded]:
+          - img "In progress"
+          - text: Agent task
+        - paragraph: Created by the root agent
+        - paragraph: "Owner: lead"

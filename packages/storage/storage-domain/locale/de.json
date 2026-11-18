@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Strukturierte Datenspeicherung",
+    "description": "Speichern Sie Schlüsselwertdaten anhand der Prüfsumme der Datenstruktur und benachrichtigen Sie andere Plug-Ins über Änderungen."
+  }
+}

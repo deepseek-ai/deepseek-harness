@@ -60,19 +60,21 @@ factory 返回类实例，并保留 spec，直到 `descriptors` 或 `methods` ge
 
 ### 静态分析工作区
 
-静态消费方直接针对工作区的 `tsconfig.host.json` 与 `tsconfig.client.json` 聚合配置调用 `WorkspaceAnalyzer`，选择 face 与包子集，并在不生成或加载运行时产物的前提下读取生成的 `FaceModel` 与类型图。`analyzeInBatches()` 通过有界的编译器程序处理大批量包选择，模型形态保持一致；`discoverPackages()` 无需构建类型检查程序即可找出参与贡献的包，其可选的 `package.json` 谓词会在读取某个包的源码或项目配置之前就跳过该包。Typert 只解析它所分析的包的 tsconfig；校验每个被引用的 tsconfig 由之前运行的 `tsc -b` 负责。
+静态消费方直接针对工作区的 `tsconfig.host.json` 与 `tsconfig.client.json` 聚合配置调用 `WorkspaceAnalyzer`，选择 face 与包子集，并在不生成或加载运行时产物的前提下读取生成的 `FaceModel` 与类型图。`analyzeInBatches()` 通过有界的编译器程序处理大批量包选择，模型形态保持一致；`discoverPackages()` 无需构建类型检查程序即可找出参与贡献的包，其可选的 `package.json` 谓词会在读取某个包的源码或项目配置之前就跳过该包。Typert 只解析它所分析的包的 tsconfig；校验每个被引用的 tsconfig 由包编译中的 `tsc -b` 负责。
 
 JSON、YAML、SVG、PNG、JPEG 和 WebP 资源导出不提供 TypeScript 声明，因此不进入 API 模型。JavaScript 或 TypeScript 导出源文件缺失时仍报错。
 
 ### 在 tsdown 构建中运行生成
 
-包的 `./tsdown` 子路径为根 tsdown 配置提供 `typertPlugin()`：它在打包前转换 TypeScript 依赖中的标准装饰器，并在包输出根目录生成模型驱动的 face 产物。其 `transform` 钩子带有模块 id 过滤器，非 TypeScript 模块不会进入 JavaScript。工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录，因此包自身的 face 叶子配置永远不会被当作根目录。`package` 模式在当前包的 `writeBundle` 中同步生成，并只生成该包。
+`./tsdown` 子路径导出 `decoratorPlugin()` 与 `typertPlugin()`。`./tsdown` 子路径导出 `decoratorPlugin()` 与 `typertPlugin()`。`decoratorPlugin()` 转换标准 TypeScript 装饰器，不读取或写入元数据。仓库构建在仅源码生成完成后使用它；需要在打包时生成元数据的消费方使用 `typertPlugin()`。
+
+`typertPlugin()` 用于需要在打包时生成元数据的构建：它在打包前转换 TypeScript 依赖中的标准装饰器，并在包输出根目录生成模型驱动的 face 产物。其 `transform` 钩子带有模块 id 过滤器，非 TypeScript 模块不会进入 JavaScript。工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录，因此包自身的 face 叶子配置永远不会被当作根目录。`package` 模式在当前包的 `writeBundle` 中同步生成，并只生成该包。
 
 `workspace` 模式对每个显式贡献方各生成一次，且不阻塞打包：第一个包构建的 `buildStart` 在 Worker Thread 中启动生成，第一个 `writeBundle` 等待结果并写入全部产物，之后的打包立即返回。分析错误、worker 崩溃或提前退出、worker 响应格式错误，都会以指明工作区与原因的 `TypertWorkerError` 使该打包失败，从而使整个 tsdown 阶段失败；报告失败之前 worker 已被终止。
 
 ### 不经打包器生成
 
-`writeWorkspaceArtifacts()` 与 `writePackageArtifacts()` 是插件的写盘函数：每个产物写成 `lib/typert.<face>.{js,d.ts}`，带 Remote 方法时另写 `lib/typert.remote-client.{js,d.ts,d.ts.map}`，没有 Remote 方法的 Host 产物会删除残留的 Remote client 文件。把 `WorkspaceTypertGenerator.generateContributors()` 的结果交给它们写盘，得到的字节与 `workspace` 模式插件相同；`findWorkspaceRoot()` 采用插件的工作区根目录规则。仓库中不打包的生成 [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts) 就以这种方式为不需要 bundle 的类型检查生成 Host face。
+`writeWorkspaceArtifacts()` 与 `writePackageArtifacts()` 是插件的写盘函数：每个产物写成 `lib/typert.<face>.{js,d.ts}`，带 Remote 方法时另写 `lib/typert.remote-client.{js,d.ts,d.ts.map}`，没有 Remote 方法的 Host 产物会删除残留的 Remote client 文件。把 `WorkspaceTypertGenerator.generateContributors()` 的结果交给它们写盘，得到的字节与 `workspace` 模式插件相同；`findWorkspaceRoot()` 采用插件的工作区根目录规则。仓库中不打包的生成 [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts) 就以这种方式为产物构建与仅生成声明的构建在包编译之前生成 Host face。
 
 设置 `rejectBuildOutputs: true` 后，若 face program 载入了工作区包 `lib/` 目录下的文件，或无法解析对工作区包的 import（例如包尚未编译的工作区），分析会以 `TypertAnalysisError` 失败。错误信息列出每个这样的 import 说明符，以及应由 `paths` 别名映射到的源文件；因此通过的生成只依赖工作区源码，可以在包编译之前或与之并行运行。若某个 face 的源码 import 生成产物（例如 Client face import `/remote`），则不要开启它。
 
@@ -111,13 +113,13 @@ Host 与 Client 是两个独立的 TypeScript 程序。直接项目引用确定�
 
 ### 生成与发布约定
 
-`FaceModelEmitter` 输出包含只缓存成功结果的 Zod schema factory 与 `TYPERT` 贡献的可执行 JavaScript，以及把 factory 通过包的公开导出标注为返回 `z.ZodType<SourceType>` 的声明文件；不支持的 Zod 投影会失败。含 Remote 方法的 Host face 还会额外为 Client 生成 Host Remote 约定的 `typert.remote-client.*` 投影。`WorkspaceTypertGenerator` 校验每个贡献方的 `package.json`：`./typert` 与 `./client/typert`（存在 Remote 方法时还有 `./remote`）必须指向精确的生成文件，且 `files` 清单必须包含它们。
+`FaceModelEmitter` 输出包含只缓存成功结果的 Zod schema factory 与 `TYPERT` 贡献的可执行 JavaScript，以及把 factory 通过包的公开导出标注为返回 `z.ZodType<SourceType>` 的声明文件；不支持的 Zod 投影会失败。含 Remote 方法的 Host face 还会额外为 Client 生成 Host Remote 约定的 `typert.remote-client.*` 投影，其中包括生成声明所引用的声明映射。`WorkspaceTypertGenerator` 校验每个贡献方的 `package.json`：`./typert` 与 `./client/typert`（存在 Remote 方法时还有 `./remote`）必须指向精确的生成文件，且 `files` 清单必须包含它们。
 
 [一元二进制结果](../protocol/README.zh.md)在泛型类型解析后被识别。其 codec 校验字节数组类型与 JSON 元数据，不遍历、复制或冻结字节载荷；生成的 Client 声明保留原有元数据类型，并将字节的底层缓冲区收窄为 `ArrayBuffer`。
 
 ### 目录投影
 
-运行时类型闭包索引导出的 workspace 声明和被引用的框架 enum。Vendor 声明不参与业务 API 发现；公共结果引用其中 enum 时，目录仍提供其定义。
+运行时类型闭包索引导出的 workspace 声明和被引用的框架 enum。Vendor 声明不参与业务 API 发现；公共结果引用其中 enum 时，目录仍提供其定义。类声明文本保留可调用的方法重载，不包含重载的实现签名。
 
 根导出包含本仓库 Cordis 目录使用的模型驱动提取逻辑、完整性检查与确定性文本渲染器。它们接受 `CordisCatalogPolicy`；由仓库持有的类型链接、基础类型／豁免分类与继承的 Cordis 条目仍位于 `scripts/gen-cordis-catalog.ts`，由调用方显式传入，因此本包只包含投影机制，不会隐式复制仓库的文档分类体系。
 

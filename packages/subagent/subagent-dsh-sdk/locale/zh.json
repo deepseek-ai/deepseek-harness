@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH SDK 子智能体后端",
+    "description": "通过 TypeScript SDK 和标准输入输出 JSON-RPC 驱动子进程中的 Harness。"
+  }
+}

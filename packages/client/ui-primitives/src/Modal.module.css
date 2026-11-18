@@ -66,14 +66,13 @@
   width: 100%;
 }
 
-/* Header row (figma Title row): pad l24/t22/r14/b12, SPACE_BETWEEN —
- * title left, close button right. */
+/* Header controls and footer actions share the content column's trailing edge. */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 22px 14px 12px 24px;
+  padding: 22px 24px 12px;
 }
 
 .title {
@@ -84,6 +83,22 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.warning .title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.warningIcon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.warning .header + .body {
+  margin-top: 0;
+}
+
 .close {
   flex: none;
   display: inline-flex;
@@ -91,6 +106,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
@@ -98,8 +114,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .close:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Description and body share the 332px content column (24px side pads). */
@@ -118,6 +136,10 @@
   min-width: 0;
   margin-top: 20px;
   padding: 0 24px;
+}
+
+.header + .body {
+  margin-top: 8px;
 }
 
 .footer {

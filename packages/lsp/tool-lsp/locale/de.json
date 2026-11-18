@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sprachserver-Tools",
+    "description": "Fragen Sie Definitionen, Referenzen, Implementierungen und Hover-Informationen mit einbasierten UTF-16-Cursorpositionen und begrenzten Ergebnissen ab."
+  }
+}

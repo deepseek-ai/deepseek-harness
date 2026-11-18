@@ -1,15 +1,18 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, type GenerateOptions, type Message, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import UserQuestionService, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const PLAN_CONFIG = { section: 'Test plan mode instructions.' }
 
@@ -28,6 +31,7 @@ async function harness(adapter: MockAdapter): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(PlanModeController, PLAN_CONFIG)
@@ -56,8 +60,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 
 /** Read the plan unit that backs the service in this full composition. */
 function planActive(ctx: Context, agent: Agent): boolean {
-  const state = ctx.sessionProjections.stateOf(agent.session, 'plan')
-  if (state === undefined) throw new Error('plan projection is not registered')
+  const state = ctx.planMode.get(agent)
   return state.active
 }
 
@@ -99,7 +102,7 @@ describe('plan mode through the agent loop', () => {
       textResponse('Noted in the plan.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-plan-seed'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-plan-seed'), { provider: 'mock', model: 'mock' })
     // Selected while idle: the mode commits immediately, before the first assembly.
     ctx.planMode.set(agent, true)
 
@@ -128,19 +131,19 @@ describe('plan mode through the agent loop', () => {
     expect(log.some(event => event.type === 'user/message' && event.data.source.kind !== 'user')).toBe(false)
   })
 
-  it('a user flip between turns lands at the boundary: one notice and a replaced system node with stable tool schemas', async () => {
+  it('a user flip between turns lands at the boundary: one notice and an added exit tool', async () => {
     const adapter = new MockAdapter([
       textResponse('First turn, default mode.'),
       textResponse('Second turn, plan mode.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-plan-flip'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-plan-flip'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
     expect(planActive(ctx, agent)).toBe(false)
     const first = findEvent(agent.session.snapshotEvents(), 'request/header')
-    expect(first.data.header.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
+    expect(first.data.header.tools?.map(tool => tool.name)).toEqual(['read', 'write'])
     const firstSystem = findEvent(agent.session.snapshotEvents(), 'system/message')
     expect(systemText(agent)).not.toContain(PLAN_CONFIG.section)
 
@@ -164,10 +167,10 @@ describe('plan mode through the agent loop', () => {
     expect(second?.sourceEventSeqs).toEqual([firstSystem.seq])
     expect(agent.session.surface.nodes[0]).toBe(second?.seq)
     expect(systemText(agent)).toContain('plan mode')
-    expect(log.filter(event => event.type === 'request/header').map(event => event.data.reason)).toEqual(['initial', 'series'])
+    expect(log.filter(event => event.type === 'request/header').map(event => event.data.reason)).toEqual(['initial', 'change'])
     const secondHeader = findEvent(log, 'request/header', 'last')
     expect(secondHeader.data.header.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
-    expect(secondHeader.data.header.tools).toEqual(first.data.header.tools)
+    expect(secondHeader.data.header.tools).not.toEqual(first.data.header.tools)
   })
 
   it('a mode flip at error settlement waits until the step after a same-step retry', async () => {
@@ -181,7 +184,7 @@ describe('plan mode through the agent loop', () => {
       textResponse('Entered plan mode on the next step.'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('it-plan-retry-flip'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-plan-retry-flip'), { provider: 'mock', model: 'mock' })
     ctx.on('agent/request-error', async ({ agent: subject }, next) => {
       if (subject !== agent) return next()
       ctx.planMode.set(agent, true)
@@ -205,7 +208,7 @@ describe('plan mode through the agent loop', () => {
 
     expect(adapter.requests).toHaveLength(3)
     expect(requestSystem(adapter.requests[2])).toContain(PLAN_CONFIG.section)
-    expect(adapter.requests[2]?.tools).toEqual(adapter.requests[0]?.tools)
+    expect(adapter.requests[2]?.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
     const log = agent.session.snapshotEvents()
     const planMode = findEvent(log, 'plan/mode')
     const firstEnd = log.find(event => event.type === 'step/end'
@@ -234,7 +237,7 @@ describe('plan mode through the agent loop', () => {
     const ctx = await harness(adapter)
     await ctx.plugin(UserQuestionService)
     ctx.on('user-questions/request', () => Promise.reject(new UserQuestionError('the user cancelled ask_user_question', 'ASK_CANCELLED')))
-    const agent = await ctx.agentLoop.create(SessionId('it-plan-dismiss'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('it-plan-dismiss'), { provider: 'mock', model: 'mock' })
     ctx.planMode.set(agent, true)
 
     const idle = waitForIdle(ctx, agent)

@@ -21,7 +21,7 @@
       "path": "../../util/launch-environment"
     },
     {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../../../vendor/loader"
@@ -33,10 +33,10 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../util/values"
+      "path": "../../core/agent"
     },
     {
-      "path": "../../util/timeout"
+      "path": "../../account/deepseek-auth"
     }
   ]
 }

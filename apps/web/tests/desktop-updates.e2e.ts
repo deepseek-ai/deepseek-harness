@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { describe, expect, it } from 'vitest'
 import { presentDesktopUpdate } from '../../desktop/src/update-presentation.ts'
-import { en } from '../../desktop/src/locale.ts'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
 
 // Mirrors the preload's presentation-only API; importing Client projects would mix compiler faces.
@@ -53,8 +52,8 @@ describe('web e2e: Desktop update workspace chrome', () => {
           const errorDetail = locale === 'zh-CN' ? '下载更新失败，请重试。' : 'Could not download the update. Please try again.'
           const readyLabel = locale === 'zh-CN' ? '安装并重启' : 'Install and Restart'
           const version = '0.1.5-nightly.20260911'
-          // The carrier classification deliberately uses English shell copy; Web copy follows its own locale.
-          const available = presentDesktopUpdate({ phase: 'available', version }, en)
+          // The carrier exposes semantic states; Web copy follows its own locale.
+          const available = presentDesktopUpdate({ phase: 'available', version })
           const publish = async (state: Presentation) => page.evaluate((value) => {
             (window as FixtureWindow).updateFixture.publish(value)
           }, state)
@@ -71,15 +70,14 @@ describe('web e2e: Desktop update workspace chrome', () => {
           await update.click()
           await expect.poll(opens).toBe(1)
 
-          const progress = presentDesktopUpdate({ phase: 'downloading', version, percent: 58 }, en)
+          const progress = presentDesktopUpdate({ phase: 'downloading', version, percent: 58 })
           await publish(progress)
           const downloading = page.getByRole('button', { name: '58%', exact: true })
           await downloading.waitFor()
-          expect(await downloading.getAttribute('aria-disabled')).toBe('true')
+          expect(await downloading.getAttribute('aria-disabled')).toBe('false')
           expect(await downloading.locator('svg').count()).toBe(1)
-          // Force dispatch past Playwright's aria-disabled guard to verify the product's click guard.
-          await downloading.click({ force: true })
-          expect(await opens()).toBe(1)
+          await downloading.click()
+          await expect.poll(opens).toBe(2)
           await page.screenshot({ path: join(evidence, 'downloading.png') })
 
           const collapse = locale === 'zh-CN' ? '收起侧边栏' : 'Collapse sidebar'
@@ -93,7 +91,7 @@ describe('web e2e: Desktop update workspace chrome', () => {
           const updateBackground = await badge.evaluate(element => getComputedStyle(element).backgroundColor)
           await page.screenshot({ path: join(evidence, 'collapsed.png') })
 
-          const error = presentDesktopUpdate({ phase: 'error', version, failedOperation: 'download', message: 'HTTP 503' }, en)
+          const error = presentDesktopUpdate({ phase: 'error', version, failedOperation: 'download', message: 'HTTP 503' })
           await publish(error)
           const errorBadge = toggle.getByRole('img', { name: retryLabel, exact: true })
           await errorBadge.waitFor()
@@ -119,21 +117,21 @@ describe('web e2e: Desktop update workspace chrome', () => {
           await expect.poll(() => tooltip.evaluateAll(elements => elements.map(element => getComputedStyle(element).opacity))).toEqual(['1'])
           await page.screenshot({ path: join(evidence, 'retry.png') })
           await retry.click()
-          await expect.poll(opens).toBe(2)
+          await expect.poll(opens).toBe(3)
 
-          await publish(presentDesktopUpdate({ phase: 'ready', version }, en))
+          await publish(presentDesktopUpdate({ phase: 'ready', version }))
           const ready = page.getByRole('button', { name: readyLabel, exact: true })
           await ready.waitFor()
           expect(await ready.getAttribute('aria-disabled')).toBe('false')
-          expect(await opens()).toBe(2)
+          expect(await opens()).toBe(3)
           await page.screenshot({ path: join(evidence, 'ready.png') })
           await ready.click()
-          await expect.poll(opens).toBe(3)
+          await expect.poll(opens).toBe(4)
           expect(tripwire.pageErrors).toEqual([])
           expect(tripwire.warnings).toEqual([])
           expect(await page.evaluate(() => (window as FixtureWindow).updateFixture.listeners.size)).toBe(1)
           await writeFile(join(evidence, 'result.json'), JSON.stringify({ locale, geometry, updateBackground, failedBackground,
-            passed: true, explicitActions: 3, carrier: 'substituted', host: 'real Web composition',
+            passed: true, explicitActions: 4, carrier: 'substituted', host: 'real Web composition',
             electron: false, installerExecuted: false }, null, 2) + '\n')
           console.log(`Desktop workspace chrome evidence: ${evidence}`)
         } catch (error) {

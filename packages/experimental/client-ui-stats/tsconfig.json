@@ -1,0 +1,27 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../api/session-controller/tsconfig.client.json" },
+    { "path": "../../attachment/attachment" },
+    { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/store" },
+    { "path": "../../client/ui-conversation/tsconfig.client.json" },
+    { "path": "../../client/ui-primitives" },
+    { "path": "../../client/ui-renderer" },
+    { "path": "../../client/ui-session" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../core/session" },
+    { "path": "../../core/tools" },
+    { "path": "../../llm/llm" },
+    { "path": "../../llm/llm-retry" },
+    { "path": "../../interaction/user-approval" },
+    { "path": "../../llm/token-meter" },
+    { "path": "../../session/session-stats" }
+  ]
+}

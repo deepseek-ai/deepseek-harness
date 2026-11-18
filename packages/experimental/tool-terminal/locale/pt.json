@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ferramentas de terminal persistentes",
+    "description": "Forneça seis ferramentas PTY persistentes com propriedade de sessão isolada e integração de tarefas em segundo plano."
+  }
+}
