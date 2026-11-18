@@ -193,7 +193,8 @@ Construct producers inside their owning `ctx.effect`. In this example, the integ
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import type { AutomationCandidate, ScheduleId } from '@deepseek-ai/dsh-schedule'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 
 class ObservationSource {
   constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}

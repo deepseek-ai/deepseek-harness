@@ -193,7 +193,8 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import type { AutomationCandidate, ScheduleId } from '@deepseek-ai/dsh-schedule'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 
 class ObservationSource {
   constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
