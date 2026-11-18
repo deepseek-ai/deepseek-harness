@@ -37,7 +37,7 @@ Status: implemented
 | `SessionInputShell.refreshLexiconSubscription()`／`DraftEditorRuntime.refreshLexiconSubscription()` | `InputHub` 拥有 Session scope 的 `inject` 回调，在缓存输入对象后连接词典，服务到达或替换时重接，销毁时退订。连接和词典更新都会重扫当前 editor，不覆盖旧文本；`setDraft` 不负责建立订阅 |
 | `ConversationStoreState`／`createConversationStore` | draft 支持兼容旧字符串的结构化输入，View 状态及原 key 保持 |
 | `DefaultConversationViews` | 删除恢复／预填 effect；保留持久化回调的绑定和解绑。初始保存只能读取 owner 的当前快照，不能把 render 时的旧文字写回 |
-| `apply.ts` 中现有 `selectWorkspace` 回调 | 沿用原有跨工作区携带规则，但传递 `draftSnapshot` 而不是纯文本，防止携带时再次丢失引用 |
+| 跨工作区的草稿移动（`apply.ts` 中的 `moveDraft`） | 沿用原有跨工作区携带规则，但传递 `draftSnapshot` 而不是纯文本，防止携带时再次丢失引用 |
 
 不新增草稿服务、存储 key、通用任务框架或另一套 Session 创建入口；不改 SlotRenderer、Host Session 日志、命令执行和文件发现 RPC。`InputActions` 保留统一输入操作入口，组件不单独注入另一条内容初始化回调。
 

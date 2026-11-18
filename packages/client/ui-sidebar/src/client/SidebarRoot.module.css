@@ -693,6 +693,26 @@
   outline-offset: -2px;
 }
 
+/* A panel's trailing content follows the title in the row's flow, as a Session row's trailing icons do: a row without
+   content keeps its full title width, and the title yields room only to content that shows. On the collapsed rail it
+   sits over the icon's top trailing corner. */
+.panelTrailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.collapsed .panelTrailing {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
+
 @media (hover: hover) {
   .panelUnpin { opacity: 0; }
   .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }

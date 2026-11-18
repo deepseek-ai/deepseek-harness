@@ -92,7 +92,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   runtime.remote.provideNamespaces({ session: { openWorkspacePath: vi.fn() } })
   let mainReference: ReturnType<typeof runtime.sessions.retain> | undefined
   const openSession = (id: SessionId): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     mainReference?.release()
     mainReference = next
   }

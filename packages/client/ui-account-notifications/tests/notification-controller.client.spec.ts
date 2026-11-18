@@ -11,6 +11,8 @@ import { createNotificationController, type AccountNotice, type NotificationCont
 import { notification } from './notification-fixture.ts'
 
 const TIMING = { pollIntervalMs: 600_000 }
+/** Initial delay the controller reads when it schedules a read; tests change it to model a new Host value. */
+let initialPollIntervalMs = TIMING.pollIntervalMs
 const controllers = new Set<NotificationController>()
 
 /**
@@ -34,7 +36,7 @@ function setup() {
   const stacks: (readonly AccountNotice[])[] = []
   const published: (AccountNotice | null)[] = []
   const controller = createNotificationController({
-    ...TIMING, locale: 'en', read, readContent,
+    pollIntervalMs: () => initialPollIntervalMs, locale: 'en', read, readContent,
     reportEvent: (id, event) => ({ displayed: displayed, cta_clicked: clicked, dismissed })[event](id),
     publish: (notices) => { stacks.push(notices); published.push(notices[0] ?? null) },
   })
@@ -45,6 +47,7 @@ function setup() {
 }
 
 afterEach(() => {
+  initialPollIntervalMs = TIMING.pollIntervalMs
   for (const controller of controllers) controller.end()
   controllers.clear()
   vi.restoreAllMocks()
@@ -66,6 +69,29 @@ it('reads immediately and starts the next delay only after the current request s
   expect(read).toHaveBeenCalledTimes(1)
   await vi.advanceTimersByTimeAsync(1)
   expect(read).toHaveBeenCalledTimes(2)
+  controller.end()
+})
+
+it('reads the initial delay when scheduling each read until the server provides one', async () => {
+  vi.useFakeTimers()
+  const { controller, read } = setup()
+  controller.begin()
+  await vi.advanceTimersByTimeAsync(0)
+  // A new initial delay applies from the next scheduled read, not to the read already waiting.
+  initialPollIntervalMs = 1_000
+  await vi.advanceTimersByTimeAsync(TIMING.pollIntervalMs)
+  expect(read).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(read).toHaveBeenCalledTimes(3)
+  read.mockResolvedValue({ nextPollAfterSeconds: 60, notifications: [] })
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(read).toHaveBeenCalledTimes(4)
+  // The server delay now governs this poll regardless of the initial delay.
+  initialPollIntervalMs = 500
+  await vi.advanceTimersByTimeAsync(59_999)
+  expect(read).toHaveBeenCalledTimes(4)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(read).toHaveBeenCalledTimes(5)
   controller.end()
 })
 

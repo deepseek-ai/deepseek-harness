@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-client` 让模型使用外部 MCP（Model Context Protocol）服务器的工具与资源。每台服务器配置一条记录；其工具使用 `mcp__github__create_issue` 这样的名称。默认不启用任何服务器。随附 profile 已提供[共享资源发现与读取](../mcp-resources/README.zh.md)。调用方作用域为空时，不添加 MCP 工具或提示词文本。服务器指令作为字面文本加入已记录的系统提示词；MCP 提示词模板不受支持。缓慢或崩溃的服务器可能延迟启动，或让调用失败直至恢复。
+`dsh-mcp-client` 让模型使用外部 MCP（Model Context Protocol）服务器的工具与资源。每台服务器配置一条记录；其工具使用 `mcp__github__create_issue` 这样的名称。默认不启用任何服务器。随附 profile 已提供[共享资源发现与读取](../mcp-resources/README.zh.md)。调用方作用域为空时，不添加 MCP 工具或提示词文本。服务器指令作为字面文本加入已记录的系统提示词；MCP 提示词模板不受支持。配置 `toolLoading: on-demand` 时，系统提示词列出这些工具，由各 agent 加载所需的工具。缓慢或崩溃的服务器可能延迟启动，或让调用失败直至恢复。
 
 ## 目录
 
@@ -68,6 +68,8 @@ kind: "package-reference"
 | `reconnect.initialDelayMs` | `500` | 首次重连延迟；每次连续失败尝试翻倍 |
 | `reconnect.maxDelayMs` | `30,000` | 退避上限；同时是重置尝试预算所需的正常运行时长 |
 | `reconnect.maxAttempts` | `10` | 每次中断内连续失败尝试次数上限，超出后放弃 |
+| `toolLoading` | `eager` | `on-demand` 让服务器的工具不进入任何工具列表，直到 agent 用 `mcp__<serverName>__load_tools` 加载 |
+| `catalogDescriptionMaxLength` | `160` | 按需服务器提示词目录中每个工具摘要的最大字符数 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-client)是每个受支持字段的穷尽式真源。
 
@@ -100,6 +102,11 @@ kind: "package-reference"
 服务器的工具会在 harness 开始首个轮次之前出现。设置 `startupTimeoutMs` 可约束每次连接尝试，包括模板解析与初次工具发现；省略时不添加覆盖整次尝试的截止时间。工具列表通知会刷新已注册工具；发现失败保留上一组工具，注册冲突则关闭连接并按重连策略处理。
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
+
+<a id="on-demand-tool-loading"></a>
+### 按需加载工具
+
+工具定义太大、不适合随每次请求发送的服务器，可以设置 `toolLoading: on-demand`。这样它的工具不进入工具列表：系统提示词列出每个工具的原始名称及其描述的第一行，模型用 `mcp__<serverName>__load_tools` 加载需要的工具。加载的工具只加入调用方 agent 的工具列表；子 agent、fork 和恢复的会话开始时都没有已加载的工具。之后的每次同步（包括重连后的同步）会重新注册服务器仍提供的已加载工具，并移除其余工具。服务器自己名为 `load_tools` 的工具不列入目录，并记录一条警告。能看到加载器的 agent 都能加载目录中的任何工具；工具限制见[已知限制](#known-limitations-and-deferred-work)。
 
 <a id="runtime-templates-and-credentials"></a>
 ### 运行时模板与凭据
@@ -146,8 +153,9 @@ kind: "package-reference"
 | [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
 | [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定，并替换每个已解析的值 |
 | [`src/templates.ts`](src/templates.ts) | 凭据模板语法、替换与引用发现 |
-| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册与字面服务器指令 |
+| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册、字面服务器指令与按需工具目录 |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
+| [`src/tool-loading.ts`](src/tool-loading.ts) | 按需加载：加载器工具、提示词目录与各 agent 已加载的工具 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
@@ -226,6 +234,20 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV-cache 条目失效。
 
+### 按需工具
+
+#### 模型看到什么
+
+按需服务器提供一个工具 `mcp__<serverName>__load_tools`，以及一个标题为 `On-demand tools from MCP server <serverName>` 的系统提示词段落，列出每个工具的原始名称和摘要。只有能看到加载器的 agent 才会看到该段落。一次加载返回它新增或已经加载的公开名称；下一次请求带上这些工具的定义，会话日志记录这次工具添加。
+
+#### Token 影响
+
+在 agent 加载工具之前，服务器的开销是加载器定义加每个工具一行目录，每条摘要以 `catalogDescriptionMaxLength` 为上限，而不是全部工具定义。每个已加载的工具会把完整定义加入该 agent 的请求。
+
+#### KV Cache 影响
+
+一次加载会改变该 agent 的工具列表。声明了工具更新的路由会追加这次添加并保留前缀；其他路由开始新的请求序列。服务器工具列表变化时目录段落随之改写，与服务器指令变化的情况相同。
+
 ### 服务器指令
 
 #### 模型看到什么
@@ -253,6 +275,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
 - **OAuth 授权需要浏览器能直接访问 Host Web 服务器**——回调地址是该服务器自身的源地址：监听地址加端口，启用 TLS 时使用 HTTPS。只能通过代理或 Web 应用的 `publicUrl` 访问 DSH 的浏览器无法完成授权。动态客户端注册以该回调地址区分，监听地址或端口改变、或端口随机分配时，下一次显式授权会注册新的客户端；退出登录会保留之前的注册记录。
+- **按需加载不受工具限制约束**——已加载的工具位于调用方 agent 自己的作用域，`tools.restrict()` 的 allow 与 deny 掩码不过滤它们，而且这些掩码会拒绝继承工具列表中不存在的名称。要按名称禁止可加载的工具，使用执行 guard（`tools.guard`）。PTC 模式下程序在开始时绑定工具，`run_code` 内加载的工具要到下一个程序才能调用。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
 
 <a id="dev-note"></a>

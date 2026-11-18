@@ -1,0 +1,7 @@
+version: 1
+scenario: deepseek-content-refusal
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
