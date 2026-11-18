@@ -51,7 +51,8 @@ export function apply(ctx: Context): void {
       name: 'source-task-input-consumer',
       inject: ['schedule'],
       apply(scope: Context) {
-        const source = new SampleSource(candidate => scope.schedule.submit(id, candidate))
+        const schedule = scope.schedule
+        const source = new SampleSource(candidate => schedule.submit(id, candidate))
         let delivery: Promise<void> | undefined
         scope.effect(function* () {
           yield scope.on('schedule/resolve-agent', (sessionId, next) => sessionId === agent.id ? Promise.resolve(agent) : next())

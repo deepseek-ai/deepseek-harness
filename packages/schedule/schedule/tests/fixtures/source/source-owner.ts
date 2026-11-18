@@ -14,8 +14,9 @@ export const inject = ['schedule', 'sourceComposition']
 export function apply(ctx: Context): void {
   const world = ctx.sourceComposition
   ctx.effect(() => {
-    const first = world.first = new ObservationSource(candidate => ctx.schedule.submit(world.firstTask.id, candidate))
-    const second = world.second = new ObservationSource(candidate => ctx.schedule.submit(world.secondTask.id, candidate))
+    const schedule = ctx.schedule
+    const first = world.first = new ObservationSource(candidate => schedule.submit(world.firstTask.id, candidate))
+    const second = world.second = new ObservationSource(candidate => schedule.submit(world.secondTask.id, candidate))
     return async () => { await Promise.all([first.drain(), second.drain()]) }
   })
 }
