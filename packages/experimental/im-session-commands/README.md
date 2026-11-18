@@ -61,11 +61,11 @@ See the generated [configuration catalog](../../../docs/config-catalog.md#deepse
 | `/help` | List the built-in commands followed by registered `passthrough` commands | `可用命令：` plus one line per command |
 | `<passthrough>` | Execute the named command in `ctx.commands` against the chat's `home` session | The command's output text, or `已完成。` |
 
-When no matching session is active or present, the plugin replies with `没有正在运行的会话。`, `没有可重置的会话。`, or `当前聊天还没有会话。`. Senders rejected by `allow: 'admins'` receive `你没有权限执行这个命令。`. `/status` and `/help` are always permitted for all senders because they do not modify session state.
+When no matching session is active or present, the plugin replies with `没有正在运行的会话。`, `没有可重置的会话。`, or `当前聊天还没有会话。`. Senders rejected by `allow: 'admins'` receive `你没有权限执行这个命令。`. If a side-effecting command was interrupted before its receipt could settle, a replayed retry replies with `该命令此前已开始执行，但结果未能落盘（结果未知，未重复执行）。`. `/status` and `/help` are always permitted for all senders because they do not modify session state.
 
 ### Command matching rules
 
-The plugin handles a message only when `message.addressed` is `true` and `message.command` is present (in group chats, leading `@bot` mentions are stripped before parsing `/name`). If a message does not address the bot, does not start with a slash command, or names a command that is neither built-in nor registered under `passthrough`, the plugin calls `next()` so downstream routing plugins receive the message unchanged.
+The plugin handles a message only when `message.addressed` is `true` and `message.command` is present (in group chats, leading `@bot` mentions are stripped before parsing `/name`; only a `/name` token followed by whitespace or end-of-text is parsed as a command, so paths or calls like `/new/project` and `/clear()` remain plain text). If a message does not address the bot, does not start with a slash command, or names a command that is neither built-in nor registered under `passthrough`, the plugin calls `next()` so downstream routing plugins receive the message unchanged.
 
 -----
 
@@ -75,7 +75,7 @@ The plugin handles a message only when `message.addressed` is `true` and `messag
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`SessionCommands` coordinates four services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), `ctx.agents` (live agent status and inbox queue inspection), and `ctx.storageDomain` (the `im_session_commands` domain). Execution is serialized per `message.key`. On the first run of a command, `SessionCommands` computes the answer (passing a message-keyed `operationId` and `expectedGeneration` on resets so re-running an unsettled `/clear` or `/new` neither advances a later generation nor resets twice), writes the reply text and target session list to `im_session_commands` before calling `event.reply`, and returns `{ kind: 'handled', by: 'session-commands', sessions }`. If a retry or restart re-enters `im/message` after the command already ran, the recorded receipt is replayed into `event.reply` and returned directly without recomputing against mutated session state; settled receipts expire after `retentionMs`.
+`SessionCommands` coordinates four services: `ctx.im` (session lookup, `stop`, and `reset`), `ctx.commands` (passthrough command listing and execution), `ctx.agents` (live agent status and inbox queue inspection), and `ctx.storageDomain` (the `im_session_commands` domain). Execution is serialized per `message.key`. Command receipts follow a two-phase `pending` → side effects → `done` lifecycle in `im_session_commands`: before running side-effecting work (`/stop`, `/clear`, `/new`, or a `passthrough` command), `SessionCommands` persists a `pending` receipt with the target session list, then runs the command (passing a message-keyed `operationId` and `expectedGeneration` on resets so re-running an unsettled `/clear` or `/new` neither advances a later generation nor resets twice), and settles the receipt to `done` with the reply text before calling `event.reply` and returning `{ kind: 'handled', by: 'session-commands', sessions }`. If a passthrough `execute()` returns `undefined`, the `pending` receipt is rolled back so retries still pass through. If a retry or restart re-enters `im/message`, a `done` receipt is replayed directly without recomputing, while an interrupted `pending` receipt is settled to `done` with the `interrupted` reply without re-running side effects; both `done` and `pending` receipts expire after `retentionMs`.
 
 Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the message arrived in a thread and at least one session bound to the chat is confined to that thread (`binding.thread === message.thread.id`), only those thread-bound sessions are targeted; otherwise all sessions bound to the chat are targeted. `/clear` and `/new` further filter targets to sessions where `binding.home === true` and `resettable` includes `record.owner`.
 
@@ -105,11 +105,11 @@ Target sessions are selected from `ctx.im.sessions.forChat(chat)`: if the messag
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the plugin answers a command with one chat reply and returns before any routing strategy can hand that message to an agent.
+Indirectly, through `ctx.commands` when executing configured `passthrough` commands (by default `/compact`, which delegates to `dsh-compaction` and runs a summarize model request), while built-in commands answer in the chat without calling a model.
 
 #### KV Cache effect
 
-Independent: a command starts no model request, and a reset it performs only makes the next turn of that session build a fresh prefix.
+Independent for built-in commands: they start no model request, and a reset only makes the next turn of that session build a fresh prefix. Passthrough commands delegate their KV-cache behaviour to the target command plugin.
 
 ## Known Limitations and Deferred Work
 

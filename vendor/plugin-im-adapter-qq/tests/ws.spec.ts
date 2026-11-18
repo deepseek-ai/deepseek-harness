@@ -240,7 +240,7 @@ describe('QQ gateway heartbeat', () => {
     const mounted = await mount()
     const socket = await dial(mounted)
     mounted.adapter.heartbeat()
-    expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT })
+    expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT, d: null })
     expect(mounted.adapter.acked).toBe(false)
     socket.receive({ op: Opcode.HEARTBEAT_ACK })
     await vi.waitFor(() => { expect(mounted.adapter.acked).toBe(true) })
@@ -256,8 +256,8 @@ describe('QQ gateway heartbeat', () => {
     socket.receive(ready())
     await vi.waitFor(() => { expect(mounted.adapter.seq).toBe(7) })
     mounted.adapter.heartbeat()
-    // The heartbeat echoes the last sequence number, and no HEARTBEAT_ACK follows this time.
-    expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT, s: 7 })
+    // The heartbeat echoes the last sequence number in `d`, and no HEARTBEAT_ACK follows this time.
+    expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT, d: 7 })
     mounted.adapter.heartbeat()
     expect(socket.closed).toBe(true)
     expect(socket.closeCode).toBe(3000)
@@ -267,7 +267,7 @@ describe('QQ gateway heartbeat', () => {
     const mounted = await mount()
     const socket = await dial(mounted)
     socket.receive({ op: Opcode.HEARTBEAT })
-    await vi.waitFor(() => { expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT }) })
+    await vi.waitFor(() => { expect(socket.sent.at(-1)).toEqual({ op: Opcode.HEARTBEAT, d: null }) })
     expect(mounted.adapter.acked).toBe(false)
   })
 })

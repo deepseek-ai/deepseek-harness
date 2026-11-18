@@ -5,9 +5,9 @@
  * renderers are separate plugins; the optional default dispatcher (`config.defaultDispatch`) only receives what every
  * routing listener passed on.
  */
-import { Context, Service } from '@deepseek-ai/cordis'
-import { toText } from '@deepseek-ai/cordis-plugin-im-core'
-import type { Bot, Fragment, MembersPage, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
+import { Service, type Context } from '@deepseek-ai/cordis'
+import { PlatformError, toText } from '@deepseek-ai/cordis-plugin-im-core'
+import type { Bot, Fragment, MembersPage, MessageStream, SendResult, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-attachment'
@@ -92,6 +92,7 @@ export class ImService extends Service implements ImApi {
   private readonly home: Context
   private readonly sources = new Map<string, ImSourceConfig>()
   private timer: ReturnType<typeof setInterval> | undefined
+  private closing = false
 
   constructor(ctx: Context, readonly config: ImConfig) {
     super(ctx, 'im')
@@ -111,7 +112,10 @@ export class ImService extends Service implements ImApi {
     // `announced` reads `this.intake`, which this constructor creates right after: the closure only runs once a
     // publication completes, long after both exist.
     this.sender = new ImSender(ctx, config, {
-      store: this.store, sessions: this.sessions, announced: key => this.intake.announced(key),
+      store: this.store,
+      sessions: this.sessions,
+      announced: key => this.intake.announced(key),
+      onResult: (bot, result) => { if (this.closing) this.recordOutbound(bot, result) },
     })
     const dispatcher = config.defaultDispatch === undefined ? undefined : new ImDispatcher(config.defaultDispatch, this.sessions)
     this.dispatcher = dispatcher
@@ -148,11 +152,11 @@ export class ImService extends Service implements ImApi {
       await receiveReady
       await this.intake.receive(session)
     })
-    let closing = false
     let releaseTimer: ReturnType<typeof setTimeout> | undefined
     let warnTimer: ReturnType<typeof setTimeout> | undefined
+    let offSend: (() => void) | undefined
     const checkActive = (): void => {
-      if (closing || ctx.fiber.uid === null) {
+      if (this.closing || ctx.fiber.uid === null) {
         throw new Error('The IM service was disposed before startup finished.')
       }
     }
@@ -163,11 +167,7 @@ export class ImService extends Service implements ImApi {
       checkActive()
       await this.sender.start()
       checkActive()
-      ctx.on('send', (bot, result) => {
-        void this.intake.outbound(bot, result).catch((error: unknown) => {
-          ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
-        })
-      })
+      offSend = ctx.on('send', (bot, result) => { this.recordOutbound(bot, result) }, { global: true })
       this.activity.start()
       this.outputs.start()
       ctx.inject(['tools', 'systemPrompt'], (scoped) => { applyTools(scoped, this, this.config) })
@@ -184,7 +184,7 @@ export class ImService extends Service implements ImApi {
     })()
     let teardownTask: Promise<void> | undefined
     const teardown = (reason?: unknown): Promise<void> => {
-      closing = true
+      this.closing = true
       this.sessions.hold()
       offReceive()
       failReceive(reason)
@@ -202,6 +202,11 @@ export class ImService extends Service implements ImApi {
           ['the hosted agents', () => this.agentHost.disposeAll()],
           ['the turn outputs', () => this.outputs.dispose()],
           ['the sender', () => this.sender.dispose()],
+          ['the outbound send listener', () => {
+            offSend?.()
+            return Promise.resolve()
+          }],
+          ['the outbound announcements', () => this.intake.drainAnnouncements()],
           ['the message store', () => this.store.dispose()],
         ]
         for (const [what, release] of releases) {
@@ -226,7 +231,7 @@ export class ImService extends Service implements ImApi {
     // `im_read_file` inside `applyTools`) finish before any recovered turn or inbound dispatch runs.
     const release = (): void => {
       clearTimeout(warnTimer)
-      if (closing) return
+      if (this.closing) return
       releaseTimer = setTimeout(() => {
         this.intake.release()
         this.sessions.release()
@@ -247,7 +252,7 @@ export class ImService extends Service implements ImApi {
       void loader.await().then(
         () => { release() },
         (error: unknown) => {
-          if (closing) return
+          if (this.closing) return
           ctx.logger.warn('IM dispatch starts although the composition did not settle: %s', String(error))
           release()
         },
@@ -346,7 +351,7 @@ export class ImService extends Service implements ImApi {
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
     if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
-    const message = await readWithin(bot.getMessage(record.ref, id), this.config.platformTimeoutMs, signal)
+    const message = await readPlatform(bot, bot.getMessage(record.ref, id), this.config.platformTimeoutMs, signal)
     // The stored branch checks the chat because a message key is per bot; a platform read needs the same check, since
     // `getMessage` is handed the chat as a routing hint and one bot serves every chat it was added to.
     if (message.chat.id !== record.ref.id) {
@@ -374,7 +379,7 @@ export class ImService extends Service implements ImApi {
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so its members cannot be listed.`)
     if (bot.members === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot list the members of a chat.`)
-    return await readWithin(bot.members(record.ref, cursor, limit), this.config.platformTimeoutMs, signal)
+    return await readPlatform(bot, bot.members(record.ref, cursor, limit), this.config.platformTimeoutMs, signal)
   }
 
   /**
@@ -419,6 +424,12 @@ export class ImService extends Service implements ImApi {
     }
   }
 
+  private recordOutbound(bot: Bot, result: SendResult): void {
+    void this.intake.outbound(bot, result).catch((error: unknown) => {
+      this.home.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
+    })
+  }
+
   /** Waterfall argument of one admitted message (bound helpers; idempotent `deliver` keyed by the message). */
   private event(message: ImMessage, source: ImSourceConfig): ImMessageEvent {
     const chat = message.chat.key
@@ -426,7 +437,9 @@ export class ImService extends Service implements ImApi {
     return {
       message, source, bot,
       reply: (content, options) => this.send(chat, content, {
-        quote: message.key, ...message.thread && { thread: message.thread.id }, ...options,
+        ...this.store.get(message.key) === undefined ? {} : { quote: message.key },
+        ...message.thread && { thread: message.thread.id },
+        ...options,
       }),
       send: (content, options) => this.send(chat, content, options),
       deliver: (target, options) => this.sessions.deliver(target, {
@@ -435,6 +448,26 @@ export class ImService extends Service implements ImApi {
         content: options.content ?? [message],
       }),
     }
+  }
+}
+
+/**
+ * Run one bounded platform read and translate adapter/platform errors into structured {@link ImError}s with `cause`
+ * preserved, so tool callers receive a declared error code instead of an unclassified adapter exception.
+ */
+async function readPlatform<T>(bot: Bot, read: Promise<T>, timeout: number, signal?: AbortSignal): Promise<T> {
+  try {
+    return await readWithin(read, timeout, signal)
+  } catch (error: unknown) {
+    if (error instanceof ImError) throw error
+    const candidate = bot as { classify?: (error: unknown) => PlatformError }
+    const classified = error instanceof PlatformError
+      ? error
+      : typeof candidate.classify === 'function'
+        ? candidate.classify(error)
+        : new PlatformError('fatal', error instanceof Error ? error.message : String(error), { cause: error })
+    const code: ImError['code'] = classified.kind === 'permission' ? 'access' : 'unavailable'
+    throw new ImError(code, classified.message, { cause: error })
   }
 }
 

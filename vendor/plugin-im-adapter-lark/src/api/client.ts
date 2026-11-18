@@ -247,7 +247,9 @@ export class LarkApi {
   async answer<T>(method: string, path: string, options: LarkRequestOptions = {}): Promise<T> {
     const envelope = await this.request<T>(method, path, options)
     if (envelope.data === undefined || envelope.data === null) {
-      throw new LarkApiError(`${method} ${path} answered without data`, { status: 200, body: envelope })
+      throw new LarkApiError(`${method} ${path} answered without data`, {
+        status: 200, published: 'unknown', body: envelope,
+      })
     }
     return envelope.data
   }

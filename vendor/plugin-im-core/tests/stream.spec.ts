@@ -539,6 +539,21 @@ describe('retry', () => {
     await advance(500)
     expect(d2.calls).toMatchObject([{ op: 'open', attempt: 2 }])
     await closeAll(s2)
+
+    // If an earlier open attempt had published:unknown and the retry hits StreamLimitError (e.g. exhausted passive
+    // budget), the stream must fail as published:unknown rather than falling back to plain host.send().
+    const d3 = fakeDriver('patch')
+    d3.failures.open.push(
+      new PlatformError('retryable', 'lost response', { published: 'unknown' }),
+      new StreamLimitError({ kind: 'budget', message: 'no passive reply left' }),
+    )
+    const h3 = { ...fakeHost(d3), idempotentSend: () => true }
+    const s3 = createMessageStream(h3, { attempts: 2, firstDelayMs: 0, idempotencyKey: 'k-2' })
+    s3.update('a')
+    await advance(500)
+    await expect(s3.done).rejects.toMatchObject({ published: 'unknown' })
+    await expect(s3.close('final')).rejects.toMatchObject({ published: 'unknown' })
+    expect(h3.sends).toEqual([])
   })
 
   it('close failure fails done', async () => {
@@ -974,5 +989,46 @@ describe('abort', () => {
     await advance(100)
     await closeAll(stream, 'A')
     expect(edits).toEqual([{ text: 'B' }, { text: 'A' }])
+  })
+
+  it('aborts an in-flight createEditDriver.tick editPayload when stream.abort() is called', async () => {
+    let editSignal: AbortSignal | undefined
+    const adapter: EditDriverAdapter = {
+      id: 'b',
+      sendPayload: async () => ({ id: 'm1', kind: 'card', time: 1 }),
+      editPayload: (_part, _payload, _handle, signal) => new Promise((_resolve, reject) => {
+        editSignal = signal
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      }),
+    }
+    const stream = createMessageStream(fakeHost(createEditDriver<FakeTypes>(adapter, { limit: 5 })), {
+      firstDelayMs: 0,
+      intervalMs: 100,
+    })
+    stream.update('A')
+    await flush()
+    stream.update('B')
+    await advance(100)
+    expect(editSignal).toBeDefined()
+    expect(editSignal?.aborted).toBe(false)
+    await stream.abort({ recall: true })
+    expect(editSignal?.aborted).toBe(true)
+    await expect(stream.done).rejects.toBeInstanceOf(StreamAbortError)
+  })
+
+  it('detaches the caller AbortSignal listener when the stream closes or fails', async () => {
+    const controller = new AbortController()
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener')
+    const stream = createMessageStream(fakeHost(undefined), { signal: controller.signal })
+    await closeAll(stream, 'done')
+    expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function))
+
+    const controller2 = new AbortController()
+    const removeSpy2 = vi.spyOn(controller2.signal, 'removeEventListener')
+    const host2 = fakeHost(undefined)
+    host2.send = async () => { throw new PlatformError('invalid', 'bad') }
+    const stream2 = createMessageStream(host2, { signal: controller2.signal })
+    await expect(closeAll(stream2, 'x')).rejects.toThrow('bad')
+    expect(removeSpy2).toHaveBeenCalledWith('abort', expect.any(Function))
   })
 })

@@ -98,6 +98,8 @@ export interface SentPart {
   thread?: { id: string; root?: string }
   /** Adapter-opaque reply context (referrer) of this published part, when reported by the send answer. */
   referrer?: unknown
+  /** Platform-local alternate ids (such as QQ `ext_info.ref_idx`) by which later quotes may refer to this part. */
+  aliases?: string[]
   raw?: unknown
 }
 
@@ -677,7 +679,6 @@ export abstract class Bot<C = unknown> {
         }
         const part = await this.withRetry(
           () => this.adapterHooks.sendPayload(frame.payloads[index], target, ctx),
-          target,
           options.signal,
           () => this.adapterHooks.idempotentSend?.(target, ctx) ?? false,
         )
@@ -702,7 +703,7 @@ export abstract class Bot<C = unknown> {
       const part = handle.parts[index]!
       // Count before the request: a failed edit may still have consumed platform budget.
       handle.edits += 1
-      await this.withRetry(() => editPayload.call(this.adapterHooks, part, frame.payloads[index], handle), handle.target, options.signal)
+      await this.withRetry(() => editPayload.call(this.adapterHooks, part, frame.payloads[index], handle, options.signal), options.signal)
     }
     handle.content = frame.content
     const result: SendResult = { handle, report: frame.result.report }
@@ -746,7 +747,7 @@ export abstract class Bot<C = unknown> {
     const deletePart = this.adapterHooks.deletePart
     if (!deletePart) throw new PlatformError('invalid', `${this.id}: the adapter cannot delete messages`)
     for (const part of handle.parts) {
-      await this.withRetry(() => deletePart.call(this.adapterHooks, part, handle), handle.target)
+      await this.withRetry(() => deletePart.call(this.adapterHooks, part, handle))
     }
   }
 
@@ -813,7 +814,6 @@ export abstract class Bot<C = unknown> {
   /** Run a platform call, retrying `retryable` / `rate-limit` failures when safe (`published: 'no'` or idempotent). */
   private async withRetry<R>(
     operation: () => Promise<R>,
-    target: Target,
     signal?: AbortSignal,
     idempotent: boolean | (() => boolean) = true,
   ): Promise<R> {
@@ -1073,7 +1073,7 @@ export abstract class Adapter<C = unknown, M extends Record<string, Mode<any>> =
   abstract sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart>
   /** Whether a retry of `sendPayload` is deduplicated by the platform when the outcome of an earlier attempt is unknown. */
   idempotentSend?(target: Target, ctx: SendContext): boolean
-  editPayload?(part: SentPart, payload: unknown, handle: MessageHandle): Promise<void>
+  editPayload?(part: SentPart, payload: unknown, handle: MessageHandle, signal?: AbortSignal): Promise<void>
   deletePart?(part: SentPart, handle: MessageHandle): Promise<void>
   /** Stream driver per mode; undefined ⇒ core uses the `final` strategy. */
   streamDriver?(mode: string, target: Target): StreamDriver | undefined

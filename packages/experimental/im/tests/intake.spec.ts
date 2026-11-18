@@ -248,6 +248,48 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-remote'))?.quote?.text).toBe('remote original')
     expect(store.get(ImMessageKey('fake:bot', 'm-err'))?.quote?.text).toBeUndefined()
     expect(store.get(ImMessageKey('fake:bot', 'm-raw'))?.quote?.text).toBeUndefined()
+
+    // A platform with dual ids (e.g. QQ `msg_id` + `msg_idx` alias) resolves quotes against the local store.
+    await deliver(bot, 'evt-aliased', inbound({
+      id: 'm-aliased',
+      aliases: ['REFIDX_orig'],
+      referrer: { ref: 'chat-1-ref' },
+      content: h('message', h.text('aliased original')),
+    }))
+    bot.getMessage = async () => { throw new Error('should not reread stored aliased message') }
+    await deliver(bot, 'evt-reply-alias', inbound({ id: 'm-reply-alias', quote: { id: 'REFIDX_orig' } }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-reply-alias'))?.quote?.text).toBe('aliased original')
+
+    // Another chat on the same bot must not inherit quote text or referrer from chat-1's alias.
+    const otherChat = { id: 'chat-2', type: 'group' as const }
+    delete bot.getMessage
+    await deliver(bot, 'evt-other-chat', inbound({
+      id: 'm-other-chat',
+      chat: otherChat,
+      quote: { id: 'REFIDX_orig' },
+    }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-other-chat'))?.quote?.text).toBeUndefined()
+
+    await bot.send({ chat: otherChat }, h('message', h('quote', { id: 'REFIDX_orig' }), h.text('own reply')))
+    await intake.idle()
+    const ownReply = store.latest(ImChatKey('fake:bot', 'chat-2'))
+    expect(ownReply?.referrer).toBeUndefined()
+
+    // Own outbound parts carrying platform aliases (e.g. QQ ext_info.ref_idx) are indexed so replies can quote them.
+    const sent = await bot.send({ chat: { id: 'chat', type: 'group' } }, h('message', h.text('own aliased')))
+    await intake.outbound(bot, {
+      ...sent,
+      handle: {
+        ...sent.handle,
+        parts: [{ id: 'ROBOT1.0_own', kind: 'text', time: 1000, aliases: ['REFIDX_own'] }],
+      },
+    })
+    expect(store.get(ImMessageKey('fake:bot', 'REFIDX_own'))).toMatchObject({
+      key: ImMessageKey('fake:bot', 'ROBOT1.0_own'),
+      aliases: ['REFIDX_own'],
+    })
   })
 
   it('stops waiting for a platform read that never answers', async () => {
@@ -462,6 +504,7 @@ describe('ImIntake admission', () => {
     const dispatcher = new ImDispatcher(intake.config.defaultDispatch!, {
       get: () => undefined,
       of: () => undefined,
+      deliveredTo: () => undefined,
       ensure: async (spec) => {
         hosted = sessionIdOf(spec.key, 0)
         return { ...spec, sessionId: hosted, generation: 0, createdAt: 0, lastActiveAt: 0 }
@@ -941,6 +984,10 @@ describe('admission and drafts', () => {
     expect(command(h('message', h.text('/ pass')))).toBeUndefined()
     expect(command(h('message', at('bot-user')))).toBeUndefined()
     expect(command(h('message', at('bot-user'), h.markdown('/stop')))).toBeUndefined()
+    // Paths and calls without a whitespace/end boundary after the token are plain text, not commands.
+    expect(command(h('message', h.text('/new/project')))).toBeUndefined()
+    expect(command(h('message', h.text('/clear()')))).toBeUndefined()
+    expect(command(h('message', h.text('/stop()')))).toBeUndefined()
     // A command's arguments keep further mentions and text after the first run.
     expect(command(h('message', h.text('/ai'), at('user-9'), h.text('rest'))))
       .toEqual({ name: 'ai', rawInput: '@user-9rest' })

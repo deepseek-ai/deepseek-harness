@@ -61,11 +61,11 @@ kind: "package-reference"
 | `/help` | 列出内置命令以及已在 `ctx.commands` 中注册的 `passthrough` 命令 | `可用命令：` 加每条命令一行 |
 | `<passthrough>` | 针对该聊天的 `home` 会话执行 `ctx.commands` 中注册的同名命令 | 命令自身的返回文本，或 `已完成。` |
 
-当没有匹配的运行中会话或可操作会话时，插件仍会回复 `没有正在运行的会话。`、`没有可重置的会话。` 或 `当前聊天还没有会话。`。被 `allow: 'admins'` 拒绝的发送者会收到 `你没有权限执行这个命令。`。`/status` 与 `/help` 不会修改会话状态，因此始终对所有发送者开放。
+当没有匹配的运行中会话或可操作会话时，插件仍会回复 `没有正在运行的会话。`、`没有可重置的会话。` 或 `当前聊天还没有会话。`。被 `allow: 'admins'` 拒绝的发送者会收到 `你没有权限执行这个命令。`。若带副作用的命令在回执落定前中断，重放重试会回复 `该命令此前已开始执行，但结果未能落盘（结果未知，未重复执行）。`。`/status` 与 `/help` 不会修改会话状态，因此始终对所有发送者开放。
 
 ### 命令匹配规则
 
-本插件仅处理 `message.addressed` 为 `true` 且解析出了 `message.command` 的消息（在群聊中，消息开头的 `@bot` 提及会在解析 `/name` 前去除）。如果群消息未 `@` 机器人、不包含斜杠命令，或命令名既不是内置命令也未在 `passthrough` 中配置并注册，插件会调用 `next()` 将消息原样交给后续路由插件处理。
+本插件仅处理 `message.addressed` 为 `true` 且解析出了 `message.command` 的消息（在群聊中，消息开头的 `@bot` 提及会在解析 `/name` 前去除；只有 `/name` 后紧跟空白或文本结束才会被解析为命令，因此 `/new/project`、`/clear()` 等属于普通文本）。如果群消息未 `@` 机器人、不包含斜杠命令，或命令名既不是内置命令也未在 `passthrough` 中配置并注册，插件会调用 `next()` 将消息原样交给后续路由插件处理。
 
 -----
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-`SessionCommands` 协调四个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）、`ctx.agents`（读取活动 agent 的运行状态与收件箱队列）与 `ctx.storageDomain`（`im_session_commands` 存储域）。执行按 `message.key` 串行化。首次执行某条命令时，`SessionCommands` 先计算应答（重置调用传入由 `message.key` 派生的 `operationId` 与当前 `expectedGeneration`，使未决的 `/clear` 或 `/new` 重跑时既不会重复推进代次也不会误重置后续代次），在调用 `event.reply` 前将回复文本与目标会话列表写入 `im_session_commands`，随后返回 `{ kind: 'handled', by: 'session-commands', sessions }`。若重试或重启在命令已执行后再次进入 `im/message`，插件直接用已存回执调用 `event.reply` 并返回原会话列表，不会在已变更的会话状态上重新求值；已完成回执在超过 `retentionMs` 后过期清理。
+`SessionCommands` 协调四个服务：`ctx.im`（查询会话、停止与重置）、`ctx.commands`（列出并执行透传命令）、`ctx.agents`（读取活动 agent 的运行状态与收件箱队列）与 `ctx.storageDomain`（`im_session_commands` 存储域）。执行按 `message.key` 串行化。命令回执在 `im_session_commands` 中遵循 `pending` → 执行副作用 → `done` 的两阶段生命周期：在执行带副作用的命令（`/stop`、`/clear`、`/new` 或 `passthrough` 命令）之前，`SessionCommands` 先持久化一条包含目标会话列表的 `pending` 回执，再执行命令（重置调用传入由 `message.key` 派生的 `operationId` 与当前 `expectedGeneration`，使未决的 `/clear` 或 `/new` 重跑时既不会重复推进代次也不会误重置后续代次），随后在调用 `event.reply` 前将回执更新为包含回复文本的 `done` 状态并返回 `{ kind: 'handled', by: 'session-commands', sessions }`。若透传命令的 `execute()` 返回 `undefined`，则回滚该 `pending` 回执以便重试继续透传。若重试或重启再次进入 `im/message`，`done` 回执会直接重放而不会在已变更的会话状态上重新求值，中断遗留的 `pending` 回执则会落定为带 `interrupted` 提示的 `done` 回执而不会重跑副作用；`done` 与 `pending` 回执均在超过 `retentionMs` 后过期清理。
 
 目标会话从 `ctx.im.sessions.forChat(chat)` 中选取：若消息位于某个话题线程内，且存在限定在该线程（`binding.thread === message.thread.id`）的会话，则仅以这些线程会话为目标；否则以绑定到该聊天的所有会话为目标。`/clear` 与 `/new` 会进一步筛选出 `binding.home === true` 且 `record.owner` 在 `resettable` 列表中的会话。
 
@@ -105,11 +105,11 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无，插件只用一条聊天回复回答命令，并在任何路由策略能把该消息交给 agent 之前就返回。
+间接影响，通过 `ctx.commands` 执行配置的 `passthrough` 命令（默认 `/compact` 委托给 `dsh-compaction` 发起摘要模型请求），而内建命令只直接在聊天中回复、不调用模型。
 
 #### KV Cache 影响
 
-独立：命令不发起任何模型请求；它执行的重置只会让该会话的下一轮构建全新前缀。
+内建命令为独立影响：不发起任何模型请求，执行重置只会让该会话的下一轮构建全新前缀。`passthrough` 命令的 KV Cache 行为由目标命令插件决定。
 
 ## 已知限制与后续工作
 

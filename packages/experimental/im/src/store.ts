@@ -1,7 +1,7 @@
 /** Message store with per-chat monotonic `seq`, retention, and `ctx.im.history`. */
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  ImSourceId, type ImChat, type ImChatKey, type ImConfig, type ImHistory, type ImMessage, type ImMessageKey, type ImOutcome,
+  ImMessageKey, ImSourceId, type ImChat, type ImChatKey, type ImConfig, type ImHistory, type ImMessage, type ImOutcome,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { imDomain, type ImDomain, type StoredChat, type StoredEvent, type StoredMessage } from './state.ts'
@@ -52,6 +52,8 @@ export class ImStore implements ImHistory {
   private readonly chats = new Map<ImChatKey, StoredChat>()
   private readonly events = new Map<string, StoredEvent>()
   private readonly records = new Map<ImMessageKey, StoredMessage>()
+  /** Maps `${botId}|${alias}` to the canonical `ImMessageKey` for platforms with dual message ids (e.g. QQ `msg_idx`). */
+  private readonly aliases = new Map<ImMessageKey, ImMessageKey>()
   /** Per chat, seq-ascending; every entry has a record in {@link records}. */
   private readonly chatMessages = new Map<ImChatKey, ImMessage[]>()
   private readonly recentOutcomes: { key: ImMessageKey; outcome: ImOutcome; at: number }[] = []
@@ -68,6 +70,7 @@ export class ImStore implements ImHistory {
     for (const [key, event] of domain.table('events').entries()) this.events.set(key, event)
     for (const [key, record] of domain.table('messages').entries()) {
       this.records.set(key, record)
+      this.indexAliases(record.message)
       const messages = this.chatMessages.get(record.message.chat.key)
       if (messages) messages.push(record.message)
       else this.chatMessages.set(record.message.chat.key, [record.message])
@@ -85,6 +88,7 @@ export class ImStore implements ImHistory {
     this.chats.clear()
     this.events.clear()
     this.records.clear()
+    this.aliases.clear()
     this.chatMessages.clear()
   }
 
@@ -160,6 +164,7 @@ export class ImStore implements ImHistory {
       const record: StoredMessage = { message, dispatch, storedAt }
       await domain.table('messages').put(draft.key, record)
       this.records.set(draft.key, record)
+      this.indexAliases(message)
       const messages = this.chatMessages.get(draft.chat.key)
       if (messages) messages.push(message)
       else this.chatMessages.set(draft.chat.key, [message])
@@ -247,23 +252,32 @@ export class ImStore implements ImHistory {
     return this.serialize(async () => {
       const domain = this.domainOf()
       const cutoff = now - this.config.retentionMs
-      for (const [key, record] of this.records.entries()) {
-        if (record.dispatch === 'pending' || record.storedAt >= cutoff) continue
-        await domain.table('messages').delete(key)
-        this.records.delete(key)
+      const expiredMessages: ImMessage[] = []
+      for (const record of this.records.values()) {
+        if (record.dispatch !== 'pending' && record.storedAt < cutoff) expiredMessages.push(record.message)
       }
-      // Rebuild the per-chat indexes from the survivors; they are short (bounded by maxRecords) and seq-ascending.
-      for (const messages of this.chatMessages.values()) {
-        const kept = messages.filter(message => this.records.has(message.key))
-        if (kept.length === messages.length) continue
-        messages.length = 0
-        messages.push(...kept)
+      if (expiredMessages.length > 0) {
+        await domain.table('messages').deleteMany(expiredMessages.map(message => message.key))
+        for (const message of expiredMessages) {
+          this.records.delete(message.key)
+          this.dropAliases(message)
+        }
+        // Rebuild the per-chat indexes from the survivors; they are short (bounded by maxRecords) and seq-ascending.
+        for (const messages of this.chatMessages.values()) {
+          const kept = messages.filter(message => this.records.has(message.key))
+          if (kept.length === messages.length) continue
+          messages.length = 0
+          messages.push(...kept)
+        }
       }
       // Dedupe receipts outlive nothing: once their retention passed, a redelivery is a new delivery.
-      for (const [key, event] of domain.table('events').entries()) {
-        if (event.receivedAt >= cutoff) continue
-        await domain.table('events').delete(key)
-        this.events.delete(key)
+      const expiredEvents: string[] = []
+      for (const [key, event] of this.events) {
+        if (event.receivedAt < cutoff) expiredEvents.push(key)
+      }
+      if (expiredEvents.length > 0) {
+        await domain.table('events').deleteMany(expiredEvents)
+        for (const key of expiredEvents) this.events.delete(key)
       }
     })
   }
@@ -294,8 +308,15 @@ export class ImStore implements ImHistory {
     return out
   }
 
+  /**
+   * Look up a stored message by canonical `key` or by any recorded platform `aliases` key (`bot|alias`).
+   * Callers scoping lookups to one chat must verify `message.chat.key`.
+   */
   get(key: ImMessageKey): ImMessage | undefined {
-    return this.records.get(key)?.message
+    const direct = this.records.get(key)?.message
+    if (direct !== undefined) return direct
+    const canonical = this.aliases.get(key)
+    return canonical === undefined ? undefined : this.records.get(canonical)?.message
   }
 
   latest(chat: ImChatKey): ImMessage | undefined {
@@ -332,7 +353,20 @@ export class ImStore implements ImHistory {
       }
       await domain.table('messages').delete(victim.key)
       this.records.delete(victim.key)
+      this.dropAliases(victim)
       messages.splice(messages.indexOf(victim), 1)
+    }
+  }
+
+  private indexAliases(message: ImMessage): void {
+    for (const alias of message.aliases ?? []) {
+      this.aliases.set(ImMessageKey(message.chat.bot, alias), message.key)
+    }
+  }
+
+  private dropAliases(message: ImMessage): void {
+    for (const alias of message.aliases ?? []) {
+      this.aliases.delete(ImMessageKey(message.chat.bot, alias))
     }
   }
 

@@ -22,7 +22,7 @@ export interface SessionCommandsConfig {
   resettable: string[]
   /** Reply language; `zh` by default. */
   locale: SessionCommandsLocale
-  /** How long completed command receipts are kept for idempotent redelivery replay (ms). */
+  /** How long recorded command receipts (`done` and `pending`) are kept before pruning (ms). */
   retentionMs: number
 }
 

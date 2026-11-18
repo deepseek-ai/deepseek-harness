@@ -231,6 +231,11 @@ export class ImIntake {
     return running === undefined ? undefined : await running
   }
 
+  /** Wait for every in-flight `outbound` announcement to finish storing its own message. */
+  async drainAnnouncements(): Promise<void> {
+    await Promise.allSettled([...this.announcing.values()])
+  }
+
   /**
    * Store one own publication (`via: 'self'`) in the chat it went to. Own messages are stored even for a source with
    * `store: 'addressed'` (that rule filters what the chat hears), so a session reading its own history sees what it
@@ -244,12 +249,14 @@ export class ImIntake {
     const target = result.handle.target
     const source = this.config.sources.find(candidate => admitsChat(candidate, bot.id, target.chat))
     if (source === undefined) return undefined
+    const chat = chatOf(bot.id, target.chat, source)
     const quoteNode = result.handle.content.children.find(
       (child): child is Element<'quote'> => child.type === 'quote',
     )
-    const quoted = quoteNode === undefined
+    const quotedCandidate = quoteNode === undefined
       ? undefined
       : this.store.get(ImMessageKey(bot.id, quoteNode.attrs.id))
+    const quoted = quotedCandidate?.chat.key === chat.key ? quotedCandidate : undefined
     const resolvedThread = part.thread !== undefined
       ? { id: part.thread.id, ...part.thread.root === undefined ? {} : { root: part.thread.root } }
       : typeof target.thread === 'string'
@@ -261,7 +268,7 @@ export class ImIntake {
     const time = part.time || Date.now()
     const draft: ImMessageDraft = {
       key: ImMessageKey(bot.id, part.id),
-      chat: chatOf(bot.id, target.chat, source),
+      chat,
       ...resolvedThread === undefined ? {} : { thread: resolvedThread },
       sender: { id: bot.selfId, ...bot.user?.name === undefined ? {} : { name: bot.user.name }, isBot: true, self: true },
       content: result.handle.content,
@@ -269,6 +276,7 @@ export class ImIntake {
       mentions: { self: false, all: false, users: [] },
       addressed: false,
       time,
+      ...part.aliases?.length ? { aliases: [...part.aliases] } : {},
       ...referrer === undefined ? {} : { referrer },
       via: 'self',
     }
@@ -393,23 +401,23 @@ export class ImIntake {
   private async withQuoteText(bot: Bot, draft: ImMessageDraft): Promise<ImMessageDraft> {
     const quote = draft.quote
     if (quote === undefined || quote.text !== undefined) return draft
-    const text = await this.quotedText(bot, draft.chat.ref, quote.key)
+    const text = await this.quotedText(bot, draft.chat, quote.key)
     return text === undefined ? draft : { ...draft, quote: { ...quote, text } }
   }
 
   /**
-   * The text of one quoted message: the store when this deployment received it, the platform otherwise.
+   * The text of one quoted message: the store when this deployment received it in the same chat, the platform otherwise.
    * @param bot - the bot of the chat being read.
-   * @param chat - platform reference of the chat the reply arrived in.
+   * @param chat - admitted chat the reply arrived in.
    * @param key - key of the quoted message.
    * @returns its text, or undefined when neither the store nor the platform can show it.
    */
-  private async quotedText(bot: Bot, chat: ChatRef, key: ImMessageKey): Promise<string | undefined> {
+  private async quotedText(bot: Bot, chat: ImChat, key: ImMessageKey): Promise<string | undefined> {
     const stored = this.store.get(key)
-    if (stored !== undefined) return stored.text
+    if (stored !== undefined && stored.chat.key === chat.key) return stored.text
     if (bot.getMessage === undefined) return undefined
     try {
-      return toText((await this.readWithin(bot.getMessage(chat, splitKey(key).id))).content)
+      return toText((await this.readWithin(bot.getMessage(chat.ref, splitKey(key).id))).content)
     } catch (error: unknown) {
       // The reply is still a deliverable message: a quote the platform will not hand back stays an id.
       this.ctx.logger.warn('IM quoted message %s could not be read: %s', key,
@@ -619,7 +627,7 @@ export function admit(sources: readonly ImSourceConfig[], bot: string, message: 
  * @param bot - the bot that received the message.
  * @param message - the received platform message.
  * @param source - the admitting rule, which names the chat's source id.
- * @param via - how the message reached the host: `platform`, `button` or `self`.
+ * @param via - how the message reached the host: `platform` (received or read) or `self` (published by this host).
  * @returns the draft the store turns into an {@link ImMessage} by assigning the chat's next seq.
  */
 export function draftOf(bot: Bot, message: InboundMessage, source: ImSourceConfig, via: ImMessage['via']): ImMessageDraft {
@@ -632,6 +640,7 @@ export function draftOf(bot: Bot, message: InboundMessage, source: ImSourceConfi
   const referrer = message.referrer
   return {
     key: ImMessageKey(bot.id, message.id),
+    ...message.aliases?.length ? { aliases: [...message.aliases] } : {},
     chat: chatOf(bot.id, message.chat, source),
     ...message.thread === undefined ? {} : { thread: message.thread },
     sender: { ...message.sender, self: message.sender.id === bot.selfId },
@@ -673,16 +682,13 @@ function isLeadingDecoration(child: Element, selfId: string): boolean {
   return child.type === 'text' && child.attrs.content.trim() === ''
 }
 
-/** The name of a `/name` token (letters, digits, `_`, `.`, `-`); undefined when `text` is not one. */
+/**
+ * The name of a `/name` token (letters, digits, `_`, `.`, `-`) followed by whitespace or end-of-text; undefined when
+ * `text` is plain text (such as `/new/project` or `/clear()`).
+ */
 function commandName(text: string): string | undefined {
-  if (!text.startsWith('/')) return undefined
-  let name = ''
-  for (const character of text.slice(1)) {
-    if (!/[A-Za-z0-9_.-]/.test(character)) break
-    name += character
-  }
-  // `/` alone, `/ stop` and `/.hidden` are plain text, not commands.
-  return /^[A-Za-z0-9]/.test(name) ? name : undefined
+  const match = /^\/([A-Za-z0-9][A-Za-z0-9_.-]*)(?=$|\s)/.exec(text)
+  return match?.[1]
 }
 
 /** The chat identity of one bot+chat pair under an admitting source. */

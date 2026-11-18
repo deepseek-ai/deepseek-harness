@@ -498,6 +498,214 @@ describe('reset', () => {
     expect(harness.host.get(record.key)?.generation).toBe(1)
     expect(harness.resets).toHaveLength(1)
   })
+
+  it('completes uncommitted reset receipts during recover() before admitting pending deliveries', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+
+    // Record an unadmitted delivery for generation 0 directly in the deliveries table (simulating a crash mid-deliver).
+    const deliveryId = `${record.sessionId}|pending-1`
+    first.pool.media.get('im_sessions')?.tables.get('deliveries')?.set(deliveryId, {
+      session: record.sessionId,
+      delivery: { id: 'pending-1', mode: 'steer', content: [{ type: 'text', text: 'stale' }] },
+      createdAt: Date.now(),
+      admitted: false,
+    })
+
+    // Write the reset receipt but fail the subsequent `save(next)` so generation 0 remains on disk.
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-crash', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool })
+    await second.host.whenRecovered()
+    expect(second.host.get(record.key)?.generation).toBe(1)
+    expect(second.host.pendingDeliveries()).toBe(0)
+    expect(second.resets).toHaveLength(1)
+    expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
+  })
+
+  it('serializes recover() behind an in-flight reset() without duplicating events or dropping concurrent bindings', async () => {
+    const harness = await booted({ withoutStart: true })
+    const origOpen = harness.ctx.storageDomain.open.bind(harness.ctx.storageDomain)
+    let blockNextSessionPut = false
+    let onSessionPutBlocked: (() => void) | undefined
+    const sessionPutBlocked = new Promise<void>((resolve) => { onSessionPutBlocked = resolve })
+    let releaseSessionPut: (() => void) | undefined
+    const sessionPutGate = new Promise<void>((resolve) => { releaseSessionPut = resolve })
+    vi.spyOn(harness.ctx.storageDomain, 'open').mockImplementation(async (schema) => {
+      const domain = await origOpen(schema)
+      const sessionsTable = domain.table('sessions' as never) as { put: (k: unknown, v: unknown) => Promise<void> }
+      const origPut = sessionsTable.put.bind(sessionsTable)
+      sessionsTable.put = async (k, v) => {
+        if (blockNextSessionPut) {
+          blockNextSessionPut = false
+          onSessionPutBlocked?.()
+          await sessionPutGate
+        }
+        return origPut(k, v)
+      }
+      return domain
+    })
+    await harness.host.start()
+
+    const record = await harness.host.ensure(spec())
+    blockNextSessionPut = true
+    const resetPromise = harness.host.reset(record.key, 'cmd', { operationId: 'op-concurrent', expectedGeneration: 0 })
+    await sessionPutBlocked
+
+    // `this.resets` now holds the receipt while `save(next)` is paused inside `reset()`'s write/serial lock.
+    harness.host.retry()
+    const bindPromise = harness.host.bind(record.key, [
+      { chat: CHAT.key, writable: true, home: true },
+      { chat: ImChatKey('fake:bot', 'other'), writable: false },
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+    releaseSessionPut?.()
+
+    await resetPromise
+    await bindPromise
+    await harness.host.whenRecovered()
+
+    expect(harness.host.get(record.key)?.generation).toBe(1)
+    expect(harness.host.get(record.key)?.bindings).toEqual([
+      { chat: CHAT.key, writable: true, home: true },
+      { chat: ImChatKey('fake:bot', 'other'), writable: false },
+    ])
+    expect(harness.resets).toHaveLength(1)
+    expect(harness.created).toHaveLength(2)
+  })
+
+  it('isolates a failing reset replay in recover() so other sessions still receive their pending deliveries', async () => {
+    const first = await booted()
+    const a = await first.host.ensure(spec({ key: 'conv:a' }))
+    const b = await first.host.ensure(spec({ key: 'conv:b' }))
+
+    first.failFormat()
+    await expect(first.host.deliver(b.key, messagesDelivery('followup', [message('d-b', 1)]))).rejects.toThrow(/format offline/)
+
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(a.key, 'cmd', { operationId: 'op-stuck', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    await expect(first.host.deliver(a.key, messagesDelivery('followup', [message('d-a', 1)]))).rejects.toThrow(/uncommitted reset/)
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool, withoutStart: true })
+    const warn = vi.spyOn(second.host.ctx.logger, 'warn')
+    const origReset = second.host.reset.bind(second.host)
+    vi.spyOn(second.host, 'reset').mockImplementation(async (key, reason, opts) => {
+      if (key === a.key) throw new Error('agent dispose stuck')
+      return origReset(key, reason, opts)
+    })
+    await second.host.start()
+    await second.host.whenRecovered()
+
+    expect(warn.mock.calls.some(([fmt]) => String(fmt).includes('IM reset %s remains pending'))).toBe(true)
+    expect(second.host.get(a.key)?.generation).toBe(0)
+    expect(second.ctx.agents.get(a.sessionId)).toBeUndefined()
+    expect(second.host.pendingDeliveries()).toBe(1)
+    expect(second.ctx.agents.get(b.sessionId)).toBeDefined()
+  })
+
+  it('never prunes an uncommitted reset receipt past retentionMs so stale deliveries stay blocked', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+    first.failFormat()
+
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-aged', expectedGeneration: 0 })).rejects.toThrow()
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-stale', 2)]))).rejects.toThrow(/uncommitted reset/)
+
+    const resetsTable = first.pool.media.get('im_sessions')?.tables.get('resets')
+    for (const [id, stored] of resetsTable ?? []) {
+      resetsTable?.set(id, { ...(stored as Record<string, unknown>), createdAt: 0 })
+    }
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool, withoutStart: true })
+    vi.spyOn(second.host, 'reset').mockRejectedValue(new Error('still failing'))
+    await second.host.start()
+    await second.host.whenRecovered()
+
+    // A second recovery pass must still see the aged uncommitted receipt and keep the old generation's delivery blocked.
+    second.host.retry()
+    await second.host.whenRecovered()
+    expect(second.pool.media.get('im_sessions')?.tables.get('resets')?.size).toBe(1)
+    expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
+    expect(second.host.pendingDeliveries()).toBe(1)
+  })
+
+  it('refuses direct deliver() / admit() to a session with an uncommitted reset receipt', async () => {
+    const harness = await booted()
+    const a = await harness.host.ensure(spec({ key: 'conv:a' }))
+    const b = await harness.host.ensure(spec({ key: 'conv:b' }))
+    await harness.host.reset(b.key, 'clear', { operationId: 'op-b-done', expectedGeneration: 0 })
+
+    let failSessionWrite = true
+    harness.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        harness.pool.failNextWrites = 1
+      }
+    })
+    await expect(harness.host.reset(a.key, 'clear', { operationId: 'op-a-stuck', expectedGeneration: 0 })).rejects.toThrow()
+
+    await expect(harness.host.deliver(a.key, messagesDelivery('followup', [message('d-blocked', 1)])))
+      .rejects.toMatchObject({ code: 'unavailable' })
+    await expect(harness.host.agent(a.key)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(harness.ctx.agents.get(a.sessionId)).toBeUndefined()
+    await expect(harness.host.deliver(b.key, messagesDelivery('followup', [message('d-ok', 1)]))).resolves.toBeUndefined()
+  })
+
+  it('rebuilds retired generation set on start() so stale deliveries are discarded after restart, and refuses stale writes inside deliver()', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+    first.failFormat()
+    await expect(first.host.deliver(record.key, messagesDelivery('followup', [message('d-seed', 1)]))).rejects.toThrow(/format offline/)
+
+    // Reset to generation 1, then inject an unadmitted generation-0 delivery on disk (simulating a crash between
+    // `deliver()` write and `admit()` discard) and restart into a fresh host.
+    await first.host.reset(record.key, 'clear')
+    first.pool.media.get('im_sessions')?.tables.get('deliveries')?.set(`${record.sessionId}|d-orphan`, {
+      session: record.sessionId,
+      delivery: { id: 'd-orphan', mode: 'followup', content: [{ type: 'text', text: 'orphan' }] },
+      createdAt: Date.now(),
+      admitted: false,
+    })
+    await first.host.dispose()
+
+    const second = await booted({ pool: first.pool })
+    await second.host.whenRecovered()
+    expect(second.host.pendingDeliveries()).toBe(0)
+    expect(second.pool.media.get('im_sessions')?.tables.get('deliveries')?.has(`${record.sessionId}|d-orphan`)).toBe(false)
+
+    // Also verify deliver() refuses to write an intent once its resolved generation has been retired concurrently.
+    const gen1 = second.host.get(record.key)!.sessionId
+    const resetPromise = second.host.reset(record.key, 'clear-2')
+    const deliverPromise = second.host.deliver(gen1, messagesDelivery('followup', [message('d-race', 2)]))
+    await resetPromise
+    await expect(deliverPromise).rejects.toMatchObject({ code: 'unavailable' })
+  })
 })
 
 describe('ephemeral sessions', () => {
@@ -753,7 +961,7 @@ describe('agent hosting', () => {
 
     const replaced = await harness.host.reset(record.key, 'clear')
     expect(replaced).toBe(record.sessionId)
-    await expect(delivering).rejects.toThrow(/no longer hosted/)
+    await expect(delivering).rejects.toThrow(/discarded by a session reset/)
     expect(harness.host.pendingDeliveries()).toBe(0)
     expect(storedDeliveryIds(harness.pool)).toEqual([])
   })
@@ -826,5 +1034,54 @@ describe('stored delivery validation', () => {
     // The intent survived the schema as admitted, so the restart neither re-sends nor re-inserts it.
     expect(second.host.pendingDeliveries()).toBe(0)
     expect(second.model.requests).toEqual([])
+  })
+
+  it('serializes concurrent reset(key) calls without operationId/expectedGeneration and concurrent admit()', async () => {
+    const harness = await booted()
+    const initial = await harness.host.ensure(spec())
+    const reset1 = harness.host.reset(initial.key, 'first')
+    const replaced1 = await reset1
+    expect(replaced1).toBe(initial.sessionId)
+    const afterFirst = harness.host.get(initial.key)!
+    expect(afterFirst.sessionId).not.toBe(initial.sessionId)
+
+    // Record a real unadmitted delivery for `afterFirst.sessionId`, then race `admit()` (via retry) with `reset2`:
+    // both serialize on the stable `key` so `reset2` discards the intent and nothing is inserted into `afterFirst`.
+    const stuck = messagesDelivery('followup', [message('race-after-first')])
+    harness.failFormat()
+    await expect(harness.host.deliver(initial.key, stuck)).rejects.toThrow(/format offline/)
+    expect(harness.host.pendingDeliveries()).toBe(1)
+    harness.healFormat()
+
+    const reset2 = harness.host.reset(initial.key, 'second')
+    const retry = harness.host.deliver(initial.key, stuck)
+    const [reset2Result, retryResult] = await Promise.allSettled([reset2, retry])
+    expect(reset2Result).toEqual({ status: 'fulfilled', value: afterFirst.sessionId })
+    expect(retryResult.status).toBe('rejected')
+    expect((retryResult as PromiseRejectedResult).reason).toMatchObject({ code: 'unavailable' })
+    expect(await insertions(harness, afterFirst.sessionId)).toEqual([])
+    const finalRecord = harness.host.get(initial.key)
+    expect(finalRecord?.generation).toBe(2)
+    expect(finalRecord?.sessionId).not.toBe(afterFirst.sessionId)
+  })
+
+  it('serializes agent() behind reset() so a retired sessionId rejects and a key opens the new generation', async () => {
+    const harness = await booted()
+    const initial = await harness.host.ensure(spec())
+    const resetting = harness.host.reset(initial.key, 'clear')
+    const byId = harness.host.agent(initial.sessionId)
+    const byKey = harness.host.agent(initial.key)
+    const [replaced, idResult, keyResult] = await Promise.allSettled([resetting, byId, byKey])
+
+    expect(replaced).toEqual({ status: 'fulfilled', value: initial.sessionId })
+    expect(idResult.status).toBe('rejected')
+    expect((idResult as PromiseRejectedResult).reason).toMatchObject({ code: 'unavailable' })
+    expect(keyResult.status).toBe('fulfilled')
+    const opened = (keyResult as PromiseFulfilledResult<Awaited<ReturnType<typeof harness.host.agent>>>).value
+    expect(opened.session.id).toBe(harness.host.get(initial.key)?.sessionId)
+    expect(opened.session.id).not.toBe(initial.sessionId)
+    expect(harness.ctx.agents.get(initial.sessionId)).toBeUndefined()
+    // Calling `agent()` with an already-retired `SessionId` after `reset()` commits also rejects with `unavailable`.
+    await expect(harness.host.agent(initial.sessionId)).rejects.toMatchObject({ code: 'unavailable' })
   })
 })

@@ -6,13 +6,13 @@
  * failures, stream drivers); the corpus block checks the shared corpus.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { h, normalize, type Tag, tags, toText, variantTable } from '@deepseek-ai/satori-element'
 import {
-  createRenderReport, ElementRegistry, type Mode, PlatformError, Status, StreamLimitError,
+  createRenderReport, ElementRegistry, type Mode, PlatformError, type Satori, Status, StreamLimitError,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import {
   containsText, corpusCases, corpusInput, corpusKeys, createPlainMode, createTextMode,
@@ -487,4 +487,23 @@ describe('testkit helpers', () => {
     const tag: Tag = 'table'
     expect(toText(normalize(minimalContent(tag, 'align')))).toContain('Header')
   })
+
+  const runtimeUrl = new URL('../lib/index.js', import.meta.url)
+  const testingUrl = new URL('../lib/testing.js', import.meta.url)
+
+  it.skipIf(!existsSync(runtimeUrl) || !existsSync(testingUrl))(
+    'shares PlatformError class identity across built runtime and testing entrypoints',
+    async () => {
+      const runtime = await import(runtimeUrl.href) as { PlatformError: typeof PlatformError; Satori: typeof Satori }
+      const testing = await import(testingUrl.href) as { FakeAdapter: typeof FakeAdapter }
+      const { Context } = await import('@deepseek-ai/cordis')
+      const ctx = new Context()
+      await ctx.plugin(runtime.Satori)
+      const err = new runtime.PlatformError('permission', 'denied', { published: 'no' })
+      const adapter = new testing.FakeAdapter(ctx, { modes: {} })
+      expect(adapter.classify(err)).toBe(err)
+      expect(adapter.classify(err)).toBeInstanceOf(runtime.PlatformError)
+      await ctx.fiber.dispose()
+    },
+  )
 })

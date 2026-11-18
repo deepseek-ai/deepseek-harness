@@ -186,6 +186,17 @@ describe('sendMessagePayload — quote and dedupe', () => {
     expect(calls[0]!.data.message_reference).toEqual({ message_id: 'REFIDX_abcdef', ignore_get_message_error: true })
   })
 
+  it('records ext_info.ref_idx in SentPart.aliases when present', async () => {
+    const { bot } = await mount(() => ({ body: { id: 'ROBOT1.0_sent', ext_info: { ref_idx: 'REFIDX_sent' } } }))
+    const withAlias = await sendMessagePayload(bot, { msg_type: 0, content: 'x' }, group, context())
+    expect(withAlias.id).toBe('ROBOT1.0_sent')
+    expect(withAlias.aliases).toEqual(['REFIDX_sent'])
+
+    const { bot: plainBot } = await mount(() => ({ body: { id: 'ROBOT1.0_plain' } }))
+    const withoutAlias = await sendMessagePayload(plainBot, { msg_type: 0, content: 'x' }, group, context())
+    expect(withoutAlias.aliases).toBeUndefined()
+  })
+
   it('keeps the reference a mode already serialized', async () => {
     const { bot, calls } = await mount()
     const payload = { msg_type: 0, content: 'x', message_reference: { message_id: 'REFIDX_own' } }

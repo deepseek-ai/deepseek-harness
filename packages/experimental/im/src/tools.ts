@@ -22,7 +22,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type { FileSystem, FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
+import { FsError, type FileSystem, type FsInfo, type FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
@@ -73,17 +73,17 @@ const MAX_STAGE_NAME_BYTES = 160
 const TRUNCATED = '\n… (truncated: the result exceeded the configured read limit)'
 
 /** Image formats a file extension publishes as a picture (`im_send_file`). */
-const IMAGE_TYPES: Readonly<Record<string, string>> = {
+const IMAGE_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
-}
+})
 /** Audio formats and their media types. */
-const AUDIO_TYPES: Readonly<Record<string, string>> = {
+const AUDIO_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   opus: 'audio/ogg', ogg: 'audio/ogg', mp3: 'audio/mpeg', wav: 'audio/wav', silk: 'audio/silk', m4a: 'audio/mp4',
-}
+})
 /** Video formats and their media types. */
-const VIDEO_TYPES: Readonly<Record<string, string>> = {
+const VIDEO_TYPES: Readonly<Record<string, string>> = Object.assign(Object.create(null) as Record<string, string>, {
   mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
-}
+})
 
 /** A `#12` / `12` seq reference of `im_read` and `im_reply`. */
 const SEQ = /^#?(\d+)$/
@@ -219,7 +219,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${stageName(item.ref.seq, item.ref.index, attachment.name)}`
         const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
         const policy = policyService?.resolve({ session: agent.session })
-        await scoped.fs.writeBytes(target, data, undefined, exec.signal, policy)
+        await withCapacityFsError(() => scoped.fs.writeBytes(target, data, undefined, exec.signal, policy))
         return {
           id: args.id,
           chat,
@@ -493,7 +493,6 @@ interface SendView {
 
 /** One stored message in the tool-facing form. */
 function viewOf(message: ImMessage, selfId?: string): MessageView {
-  const { bot } = splitKey(message.chat.key)
   return {
     key: message.key,
     seq: message.seq,
@@ -505,7 +504,7 @@ function viewOf(message: ImMessage, selfId?: string): MessageView {
     text: message.text,
     // The bot's own mention is how the message addressed it, not a person a reply can address.
     mentions: message.mentions.users
-      .filter(user => user.id !== bot && user.id !== selfId)
+      .filter(user => user.id !== selfId)
       .map(user => ({ id: user.id, ...user.name === undefined ? {} : { name: user.name } })),
     ...message.quote === undefined ? {} : { quote: message.quote.key },
     ...message.thread === undefined ? {} : { thread: message.thread.id },
@@ -587,9 +586,21 @@ async function fileContent(
   if (fs.processPathFromHostPath(fs.processPath(target)) !== undefined) {
     return fileElement(name, fs.fileUrl(target), info.size)
   }
-  const data = await fs.readBytes(target, signal, config.send.maxMediaBytes)
+  const data = await withCapacityFsError(() => fs.readBytes(target, signal, config.send.maxMediaBytes))
   return fileElement(name, `data:${mediaTypeOf(extensionOf(name))};base64,${Buffer.from(data).toString('base64')}`,
     data.byteLength)
+}
+
+/** Translate `FsError('FS_TOO_LARGE')` from cross-world transfers into `ImError('capacity')`. */
+async function withCapacityFsError<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error: unknown) {
+    if (error instanceof FsError && error.code === 'FS_TOO_LARGE') {
+      throw new ImError('capacity', error.message, { cause: error })
+    }
+    throw error
+  }
 }
 
 /** Truncate one UTF-8 string so its byte length is at most `maxBytes` (`maxBytes > 0`). */

@@ -213,9 +213,10 @@ export class ImOutputRegistry implements ImOutputs {
     // next inbound frame is re-admitted against the current rules, so the controls have to be as well.
     if (!admitsChat(source, interaction.bot.id, interaction.chat)) return
     if (!allows(source.users, interaction.user.id)) return
-    const message = interaction.message === undefined
+    const candidate = interaction.message === undefined
       ? undefined
       : this.deps.im.history.get(ImMessageKey(interaction.bot.id, interaction.message.id))
+    const message = candidate?.chat.key === chat.key ? candidate : undefined
     const owner = message === undefined ? undefined : this.deps.sender.sessionOf(message.key)
     return { chat, ...message === undefined ? {} : { message }, ...owner === undefined ? {} : { session: owner } }
   }
@@ -305,22 +306,29 @@ export class ImOutputRegistry implements ImOutputs {
 
   /**
    * The per-turn sink: attribution to the session; the trigger is quoted (in its thread, else the binding's) only
-   * when it belongs to the target chat.
+   * when it belongs to the target chat and is still stored in `im_messages` (omitting `quote` otherwise).
    */
   private io(activity: ImActivity, target: ImBinding): ImOutputIO {
     const { chat } = target
     const trigger = activity.trigger?.chat.key === chat ? activity.trigger : undefined
     const thread = trigger?.thread?.id ?? target.thread
-    const options: ImSendOptions = {
-      session: activity.session.sessionId,
-      ...trigger === undefined ? {} : { quote: trigger.key },
-      ...thread === undefined ? {} : { thread },
+    // Quote the trigger only while it is still stored in `im_messages`: if retention or `maxRecords` evicted it
+    // before or during the turn, `quoteId()` would reject the send with `access` and drop the turn output.
+    const sendOptions = (): ImSendOptions => {
+      const quote = trigger !== undefined && this.deps.im.history.get(trigger.key) !== undefined
+        ? trigger.key
+        : undefined
+      return {
+        session: activity.session.sessionId,
+        ...quote === undefined ? {} : { quote },
+        ...thread === undefined ? {} : { thread },
+      }
     }
     return {
       chat,
       stream: (streamOptions?: StreamOptions): Promise<MessageStream> =>
-        this.deps.sender.stream(chat, { ...options, ...streamOptions }),
-      send: (content: Fragment): Promise<ImSendResult> => this.deps.sender.send(chat, content, options),
+        this.deps.sender.stream(chat, { ...sendOptions(), ...streamOptions }),
+      send: (content: Fragment): Promise<ImSendResult> => this.deps.sender.send(chat, content, sendOptions()),
     }
   }
 

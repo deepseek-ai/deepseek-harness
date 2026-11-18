@@ -7748,7 +7748,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImDispatcher',
-    declaration: 'export class ImDispatcher {\n    constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, \'ensure\' | \'get\' | \'of\'>);\n    async handle(event: ImMessageEvent): Promise<ImOutcome>;\n    guidance(agent: Agent | undefined): string;\n}',
+    declaration: 'export class ImDispatcher {\n    constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, \'ensure\' | \'get\' | \'of\' | \'deliveredTo\'>);\n    async handle(event: ImMessageEvent): Promise<ImOutcome>;\n    guidance(agent: Agent | undefined): string;\n}',
   },
   {
     name: 'ImDispatcherConfig',
@@ -7780,7 +7780,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImIntake',
-    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
+    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    async drainAnnouncements(): Promise<void>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
   },
   {
     name: 'ImIntakeHost',
@@ -7812,7 +7812,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMessage',
-    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
+    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    aliases?: readonly string[];\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
   },
   {
     name: 'ImMessageDraft',
@@ -7848,7 +7848,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSenderDeps',
-    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
+    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n    onResult?: (bot: Bot, result: SendResult) => void;\n}',
   },
   {
     name: 'ImSendOptions',
@@ -7864,7 +7864,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSessionHost',
-    declaration: 'export class ImSessionHost implements ImSessions {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSessionHostDeps);\n    async start(): Promise<void>;\n    hold(): void;\n    release(): void;\n    retry(): void;\n    async whenRecovered(): Promise<void>;\n    async dispose(): Promise<void>;\n    hosted(sessionId: SessionId): ImSessionRecord | undefined;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n    pendingDeliveries(): number;\n    async ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter: ImSessionFilter = {}): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    async deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    async reset(key: string, reason: string, options: ImResetOptions = {}): Promise<SessionId | undefined>;\n    async bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    async stop(target: SessionId | string): Promise<boolean>;\n    admit(sessionId: SessionId, id: string, fresh: boolean = false): Promise<void>;\n}',
+    declaration: 'export class ImSessionHost implements ImSessions {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSessionHostDeps);\n    async start(): Promise<void>;\n    hold(): void;\n    release(): void;\n    retry(): void;\n    async whenRecovered(): Promise<void>;\n    async dispose(): Promise<void>;\n    hosted(sessionId: SessionId): ImSessionRecord | undefined;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n    pendingDeliveries(): number;\n    async ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter: ImSessionFilter = {}): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliveredTo(key: string, deliveryId: string): SessionId | undefined;\n    async deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    async reset(key: string, reason: string, options: ImResetOptions = {}): Promise<SessionId | undefined>;\n    async bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    async agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    async stop(target: SessionId | string): Promise<boolean>;\n    admit(sessionId: SessionId, id: string, fresh: boolean = false): Promise<void>;\n}',
   },
   {
     name: 'ImSessionHostDeps',
@@ -7876,7 +7876,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSessions',
-    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
+    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    deliveredTo(key: string, deliveryId: string): SessionId | undefined;\n    reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
   },
   {
     name: 'ImSessionSpec',

@@ -165,4 +165,14 @@ describe('Lark error classification', () => {
     const error = new Http.Error('Unauthorized', 'STATUS_ERROR', new Response(null, { status: 401 }))
     expect(classify(error).kind).toBe('permission')
   })
+
+  it('classifies a non-global ResponseLike (undici) response with its status and Retry-After', () => {
+    const classified = classify({
+      response: {
+        status: 429,
+        headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '4' : null },
+      },
+    })
+    expect(classified).toMatchObject({ kind: 'rate-limit', published: 'no', retryAfterMs: 4000 })
+  })
 })

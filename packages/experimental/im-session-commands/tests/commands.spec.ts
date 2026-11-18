@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { h } from '@deepseek-ai/cordis-plugin-im-core'
+import { h, normalize } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ImMessageEvent, ImSessionRecord, ImSessionSpec } from '@deepseek-ai/dsh-im/src/api.ts'
 import { ImChatKey, ImMessageKey, ImSourceId } from '@deepseek-ai/dsh-im/src/api.ts'
@@ -49,7 +49,7 @@ async function running(harness: CommandsHarness, record: ImSessionRecord): Promi
 function lines(harness: CommandsHarness): string[] {
   const content = harness.replies.at(-1)?.content
   if (content === undefined) throw new Error('the plugin did not reply')
-  return Array.isArray(content) ? content.map(String) : [String(content)]
+  return String(content).split('\n')
 }
 
 /** The text of the last reply when it is one string. */
@@ -78,6 +78,7 @@ describe('routing', () => {
     await harness.receive(direct)
     expect(harness.outcome(direct.id)).toMatchObject({ kind: 'handled', by: BY })
     expect(lines(harness)[0]).toBe('可用命令：')
+    expect(normalize(harness.replies.at(-1)!.content).children.map(String).join('')).toContain('可用命令：\n/')
   })
 
   it('passes unknown and unconfigured commands to the next listener', async () => {
@@ -572,6 +573,86 @@ describe('lifecycle', () => {
     expect(reopenedTable?.has(stopKey)).toBe(true)
     expect(second.outcome(pendingStop.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
     expect(text(second)).toBe('已停止 1 个会话。')
+  })
+
+  it('settles a pending command receipt as unknown on replay without re-running /stop on a newer turn', async () => {
+    const first = await bootCommands()
+    const shared = await ensureShared(first)
+    const stopFrame = inbound('/stop')
+    const stopKey = ImMessageKey('fake:bot', stopFrame.id)
+
+    // Fail `store.settle` so the message stays pending in `im_messages`, and leave the command receipt `pending`
+    // (as if the process crashed after persisting intent and running `/stop`, before `done` could be written).
+    vi.spyOn(first.store, 'settle').mockRejectedValueOnce(new Error('crash before settle'))
+    await first.receive(stopFrame)
+    await first.intake.idle()
+    first.base.pool.media.get('im_session_commands')?.tables.get('commands')?.set(stopKey, {
+      status: 'pending',
+      reply: '',
+      sessions: [shared.sessionId],
+      createdAt: Date.now(),
+    })
+    await first.close()
+
+    const second = await bootCommands({
+      pool: first.base.pool,
+      root: first.base.root,
+      commands: { retentionMs: 60_000 },
+    })
+    const stopSpy = vi.spyOn(second.base.ctx.im.sessions, 'stop')
+    second.intake.pump()
+    await second.intake.idle()
+
+    expect(stopSpy).not.toHaveBeenCalled()
+    expect(second.outcome(stopFrame.id)).toEqual({ kind: 'handled', by: BY, sessions: [shared.sessionId] })
+    expect(text(second)).toContain('结果未知')
+    expect(second.base.pool.media.get('im_session_commands')?.tables.get('commands')?.get(stopKey)).toMatchObject({
+      status: 'done',
+    })
+  })
+
+  it('prunes expired pending receipts on reopen so they are not settled as interrupted', async () => {
+    const first = await bootCommands()
+    const shared = await ensureShared(first)
+    const stopFrame = inbound('/stop')
+    const stopKey = ImMessageKey('fake:bot', stopFrame.id)
+
+    vi.spyOn(first.store, 'settle').mockRejectedValueOnce(new Error('crash before settle'))
+    await first.receive(stopFrame)
+    await first.intake.idle()
+    first.base.pool.media.get('im_session_commands')?.tables.get('commands')?.set(stopKey, {
+      status: 'pending',
+      reply: '',
+      sessions: [shared.sessionId],
+      createdAt: 0,
+    })
+    await first.close()
+
+    const second = await bootCommands({
+      pool: first.base.pool,
+      root: first.base.root,
+      commands: { retentionMs: 60_000 },
+    })
+    // Reopening pruned the expired `pending` row; re-running `/stop` executes cleanly instead of replying interrupted.
+    second.intake.pump()
+    await second.intake.idle()
+    expect(text(second)).toBe('没有正在运行的会话。')
+  })
+
+  it('rolls back the pending receipt when passthrough execute() returns undefined so retries pass through', async () => {
+    const harness = await bootCommands({
+      commands: { passthrough: ['compact'] },
+    })
+    harness.ctx.commands.register({ name: 'compact', description: 'Compact context', handler: () => ({ kind: 'success' }) })
+    await ensureShared(harness)
+    // Simulate a command disappearing between `list(agent)` and `execute(...)`.
+    vi.spyOn(harness.base.ctx.commands, 'execute').mockResolvedValue(undefined)
+
+    const msg = inbound('/compact')
+    await harness.receive(msg)
+    const key = ImMessageKey('fake:bot', msg.id)
+    expect(harness.base.pool.media.get('im_session_commands')?.tables.get('commands')?.get(key)).toBeUndefined()
+    expect(harness.outcome(msg.id)).toEqual({ kind: 'ignored' })
   })
 
   it('serializes concurrent dispatches of one message key and recovers after a reply failure', async () => {

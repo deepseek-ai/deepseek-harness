@@ -76,6 +76,8 @@ export interface ImChat {
  */
 export interface ImMessage {
   key: ImMessageKey
+  /** Alternative platform message ids for the same message (e.g. QQ `msg_idx`), indexed for quote/read lookup. */
+  aliases?: readonly string[]
   /** Per chat, monotonic, assigned at store time (inbound and own outbound). */
   seq: number
   chat: ImChat
@@ -121,6 +123,8 @@ export interface ImMessageEvent {
   readonly bot: Bot
   /**
    * Send into the chat quoting this message (and in its thread, if any); its adapter referrer rides on the target.
+   * `quote` is attached only while this message remains stored in `im_messages`: if `maxRecords` or `retentionMs`
+   * removed it, the reply still publishes into the same chat (and thread) without a quote instead of failing.
    * The publication carries no session, so the chat's admission is its only gate (`sources[].writable` governs the
    * publications a session claims).
    */
@@ -491,15 +495,33 @@ export interface ImSessions {
   list(filter?: ImSessionFilter): ImSessionRecord[]
   /** Sessions whose bindings include the chat (commands plugin, /stop). */
   forChat(chat: ImChatKey): ImSessionRecord[]
-  /** Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. */
+  /**
+   * Durable: recorded first, admitted into the agent inbox (dedupe by id), retried on restart. Throws
+   * `ImError('unavailable')` if a concurrent `reset()` discards the pending intent before admission completes so
+   * callers can re-deliver into the replacement generation.
+   */
   deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>
+  /**
+   * Session id of any generation of `key` (including generations retired by reset) that already admitted
+   * `deliveryId`, or `undefined` when none did. Dedupe window equals `config.retentionMs`, after which `recover()`
+   * prunes admitted delivery intents.
+   */
+  deliveredTo(key: string, deliveryId: string): SessionId | undefined
   /**
    * Cancel + dispose the live agent and bump generation so the next `ensure()` creates a fresh session. Returns the
    * replaced `SessionId`, or `undefined` when `key` is not hosted (or already advanced past `expectedGeneration`).
    */
   reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>
   bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>
-  /** Live agent (created/resumed with the stored composition). */
+  /**
+   * Live agent (created/resumed with the stored composition). Serializes on the session's stable `key` behind any
+   * in-flight `reset()` / `admit()`, then re-resolves: rejects with `ImError('unavailable')` if `target` is a
+   * `SessionId` retired by `reset()` (re-resolve by `key` or `forChat()` — retrying the retired id keeps failing)
+   * or if the current generation has an uncommitted reset receipt (retryable with the same `target` after recovery
+   * when `target` is the stable `key`; a `SessionId` is retired by that advance, so re-resolve by `key` /
+   * `forChat()`); opens the new generation when called by stable `key`; rejects with `ImError('access')` if
+   * `target` is unhosted.
+   */
   agent(target: SessionId | string): Promise<Agent>
   /** Session for a calling agent (tools): walks the parent chain to the nearest hosted record. */
   of(sessionId: SessionId): ImSessionRecord | undefined
@@ -517,10 +539,16 @@ export interface ImSendOptions extends SendOptions {
   /** Durable receipt key (tools pass sha256(sessionId, toolCallId)); absent = fire-and-forget. */
   operationId?: string
   /**
-   * Message the publication answers: rendered as the content's `<quote>` envelope, and — when it names a stored
-   * message of the same chat — its `referrer` becomes the target's, so passive replies and thread placement work.
+   * Message the publication answers: must name a message stored in `im_messages` for the target chat (keys from
+   * another bot, another chat, or unstored/expired keys are rejected with `ImError('access')`). Rendered as the
+   * content's `<quote>` envelope, and its stored `referrer` becomes the target's for passive replies and thread placement.
    */
   quote?: ImMessageKey
+  /**
+   * Thread placement: a `string` targets that explicit thread id; `true` answers inside `quote`'s thread. When both
+   * `thread` and `quote` are omitted for a `session`, defaults to the thread of the message `ImSessions.trigger(session)`
+   * answered last in memory (falling back to the chat's main timeline when none exists or after a restart).
+   */
   thread?: string | true
   /** For grants check + attribution. */
   session?: SessionId
@@ -546,6 +574,10 @@ export interface ImHistory {
   after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
   /** The same walk backwards: up to `limit` messages with seq < `seq`, oldest first. */
   before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
+  /**
+   * Look up a stored message by canonical `key` or by any recorded platform `aliases` key (`bot|alias`).
+   * Callers scoping lookups to one chat must verify `message.chat.key`.
+   */
   get(key: ImMessageKey): ImMessage | undefined
   latest(chat: ImChatKey): ImMessage | undefined
 }

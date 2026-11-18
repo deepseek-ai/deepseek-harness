@@ -87,7 +87,7 @@ kind: "package-reference"
 | `reset(key, reason, options?)` | 取消并释放当前 agent，删除未入箱的投递记录，递增 `generation` 并返回被替换的 `SessionId`（传入 `options.operationId` 时记录持久化重置回执，`options.expectedGeneration` 已不匹配时跳过） |
 | `bind(target, bindings)` | 替换会话的聊天绑定列表 |
 | `stop(target)` | 取消会话当前正在运行的轮次；若无运行中轮次则返回 `false` |
-| `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent` |
+| `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent`（按稳定 `key` 排在在途 `reset()`/`admit()` 之后；对已退役 `SessionId` 或存在未提交重置回执的代次抛出 `ImError('unavailable')`，按 `key` 调用则打开新代次，未托管时抛出 `ImError('access')`） |
 | `of(sessionId)` | 沿 `parent` 链向上查找最近的托管会话记录 |
 | `trigger(sessionId)` | 返回启动当前轮次的那条触发消息 `ImMessage` |
 
@@ -95,7 +95,7 @@ kind: "package-reference"
 
 ### 消息发送、格式化与历史
 
-所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。显式指定 `thread` 字符串时，该线程必须属于目标聊天：发送器优先复用同聊天已存消息的匹配 `referrer`，未命中时由适配器向平台解析并校验归属（解析或归属校验失败时以 `published: 'no'` 拒绝发布）。当 `options.session` 在该聊天上的全部可写绑定都受 `thread` 约束、未传入显式 `options.thread`、且 `options.quote` 指向话题根消息（自身无 `thread` 字段）时，`send` 与 `stream` 会将该根消息 id 作为 `Target.thread` 转发给适配器，使回复留在话题内。既未指定话题线程、也未引用消息的发送，落在该会话最后回复的消息所在的话题线程里（`ImSessions.trigger`）：那正是该会话自身答案的落点，因为输出渲染器会引用这条触发消息并继承其话题线程，任务的工作不属于聊天主时间线。因此受 `thread` 约束的会话不必指定话题就能发到它正在回复的那条线程；只有当这条消息属于另一个话题线程时，未指定话题的发送才会被拒绝。
+所有出站消息均通过 `ctx.im.send`（单条消息）或 `ctx.im.stream`（流式更新消息）发送。每次发送还会对照聊天记录上保存的规则 id 重新核验当前 `config.sources` 准入（若规则已被删除或收窄导致该聊天不再被接纳，则抛出 `ImError('access')`；若另一条当前规则仍接纳该聊天，则在下一条入站消息刷新 `chat.source` 后自愈）。传入 `options.session` 时，该会话或其托管祖先必须在目标聊天上拥有 `writable: true` 的绑定。传入 `options.quote` 必须指向目标聊天在 `im_messages` 中已存的消息键（来自其他机器人、其他聊天或未入库/已过期的键会以 `ImError('access')` 拒绝），它会在消息内容最前面插入 `<quote>` 元素，并将被引用消息保存的适配器 `referrer` 附加到发送目标上，从而支持被动回复与话题内回复。传入 `options.thread` 可指定目标话题线程 id，设为 `true` 则跟随被引用消息所在的话题线程。显式指定 `thread` 字符串时，该线程必须属于目标聊天：发送器优先复用同聊天已存消息的匹配 `referrer`，未命中时由适配器向平台解析并校验归属（解析或归属校验失败时以 `published: 'no'` 拒绝发布）。当 `options.session` 在该聊天上的全部可写绑定都受 `thread` 约束、未传入显式 `options.thread`、且 `options.quote` 指向话题根消息（自身无 `thread` 字段）时，`send` 与 `stream` 会将该根消息 id 作为 `Target.thread` 转发给适配器，使回复留在话题内。既未指定话题线程、也未引用消息的发送，落在该会话最后回复的消息所在的话题线程里（`ImSessions.trigger`）：那正是该会话自身答案的落点，因为输出渲染器会引用这条触发消息并继承其话题线程，任务的工作不属于聊天主时间线。因此受 `thread` 约束的会话不必指定话题就能发到它正在回复的那条线程；只有当这条消息属于另一个话题线程时，未指定话题的发送才会被拒绝。
 
 传入 `options.operationId` 时，发送器会在调用平台接口前向 `im_receipts` 写入 `pending` 回执，并在调用结束后更新为观测到的结果：`confirmed`、`failed`（平台明确拒绝且未发布任何内容）、`partial`（多段消息或已开流的流式消息在部分内容已留在聊天中后失败）或 `uncertain`（网络故障、超时、发出后取消或崩溃后无结果记录）。使用相同的 `operationId`、目标与内容重放会直接返回已存回执而不会重复发送；相同 `operationId` 搭配不同参数会抛出 `conflict` 错误。
 
@@ -282,7 +282,7 @@ You are the default IM session: you receive every message that addresses the bot
 - **监听器必须自行保证幂等键** — 监听器抛错会让消息保持 `pending` 并在后续重试；插件在投递或发送时必须传入稳定的幂等 id，否则重试时会重复执行。
 - **平台 ACK 不代表模型处理完成** — 接收层在消息记录持久化后立即向平台返回 ACK，模型的轮次推理与工具调用在后台异步进行。
 - **恢复投递需线性扫描会话日志** — 核对待恢复投递是否已写入收件箱时，需要读取目标会话的日志事件。
-- **有限保留策略不是历史归档** — 已完成的消息与事件摘要在超过 `retentionMs` 或超出每聊 `maxRecords` 上限时会被清理，不提供自动归档导出。
+- **有限保留策略不是历史归档** — 已完成的消息在超过 `retentionMs` 或超出每聊 `maxRecords` 上限时会被清理，事件摘要在超过 `retentionMs` 后过期，不提供自动归档导出。
 - **待处理消息与不确定回执无图形界面** — 未决的 `pending` 消息与 `uncertain` 发送回执只能通过 `ctx.im.status()` 和进程日志排查。
 - **托管会话的 agent 常驻内存** — 非 `ephemeral` 会话在首次打开后会将 `Agent` 实例保留在内存中，直到会话重置或服务关闭，宿主不会按空闲时间自动卸载。
 - **`reset` 会更换 `sessionId`** — 重置会话会递增 `generation` 并生成新的 `sessionId`，因此指向旧 `sessionId` 的外部记录（如后台任务归属记录）不会自动迁移到新会话。

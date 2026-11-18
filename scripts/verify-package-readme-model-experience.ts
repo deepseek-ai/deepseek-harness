@@ -274,7 +274,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/web/web': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-web.' },
   'packages/web/web-fetch-http': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/workflow/workflow': { kind: 'indirect', reason: 'The service delegates parent and child model rendering to its consumer and engine.' },
-  'packages/experimental/im-session-commands': { kind: 'none', reason: 'A bot command answers in the chat and returns before the default dispatch hands that message to an agent.' },
+  'packages/experimental/im-session-commands': { kind: 'indirect', reason: 'Built-in commands answer in chat without calling a model; passthrough commands (default /compact) delegate through ctx.commands to the owning plugin.' },
 }
 
 interface Failure {

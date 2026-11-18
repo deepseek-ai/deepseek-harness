@@ -5,7 +5,7 @@
  */
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Satori, h } from '@deepseek-ai/cordis-plugin-im-core'
+import { PlatformError, Satori, h } from '@deepseek-ai/cordis-plugin-im-core'
 import type { InboundMessage } from '@deepseek-ai/cordis-plugin-im-core'
 import { createTextMode, FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -269,6 +269,35 @@ describe('ImService facade', () => {
     await expect(service.readMessage(CHAT, 'm-pre-aborted', preAborted.signal)).rejects.toMatchObject({ code: 'unavailable' })
   })
 
+  it('converts classified platform readMessage and members failures into ImError with cause', async () => {
+    const { service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    const denied = new PlatformError('permission', 'missing roster scope', { code: 99991672 })
+    bot.members = () => Promise.reject(denied)
+    await expect(service.members(CHAT)).rejects.toMatchObject({ code: 'access', message: 'missing roster scope', cause: denied })
+
+    const rawRateLimit = Object.assign(new Error('too many requests'), { status: 429 })
+    bot.classify = () => new PlatformError('rate-limit', 'rate limited by platform', { cause: rawRateLimit })
+    bot.getMessage = () => Promise.reject(rawRateLimit)
+    await expect(service.readMessage(CHAT, 'm-rate')).rejects.toMatchObject({
+      code: 'unavailable', message: 'rate limited by platform', cause: rawRateLimit,
+    })
+
+    // Bots without classify() fall back to unavailable with Error.message or String(error).
+    Object.defineProperty(bot, 'classify', { value: undefined, configurable: true })
+    const plainError = new Error('plain adapter boom')
+    bot.getMessage = () => Promise.reject(plainError)
+    await expect(service.readMessage(CHAT, 'm-plain')).rejects.toMatchObject({
+      code: 'unavailable', message: 'plain adapter boom', cause: plainError,
+    })
+    bot.members = () => Promise.reject('raw string failure')
+    await expect(service.members(CHAT)).rejects.toMatchObject({
+      code: 'unavailable', message: 'raw string failure', cause: 'raw string failure',
+    })
+  })
+
   it('publishes and streams through the send funnel of its sender', async () => {
     const { service, bot } = await mount()
     await deliver(bot, inbound('m1'))
@@ -279,6 +308,34 @@ describe('ImService facade', () => {
     stream.update(h('message', h.text('streamed')))
     await stream.close()
     expect(bot.sentPayloads().length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('keeps the send listener active during teardown so in-flight sends still store their own message', async () => {
+    const { base, service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    let releaseSend!: () => void
+    const sendGate = new Promise<void>((resolve) => { releaseSend = resolve })
+    let enteredSend!: () => void
+    const sendStarted = new Promise<void>((resolve) => { enteredSend = resolve })
+    const origSend = bot.sendPayload.bind(bot)
+    bot.sendPayload = async (payload, target, sendCtx) => {
+      enteredSend()
+      await sendGate
+      return origSend(payload, target, sendCtx)
+    }
+
+    const sending = service.send(CHAT, h('message', h.text('during-teardown')), { operationId: 'op-teardown' })
+    await sendStarted
+    const disposing = base.ctx.fiber.dispose()
+    await Promise.resolve()
+    releaseSend()
+
+    const [result] = await Promise.all([sending, disposing])
+    expect(result.status).toBe('confirmed')
+    expect(result.message?.text).toBe('during-teardown')
+    expect(result.message?.seq).toBe(2)
   })
 
   it('formats messages through its formatter', async () => {
@@ -300,11 +357,15 @@ describe('ImService facade', () => {
   })
 
   it('binds reply and send to the chat of the message it dispatches', async () => {
-    const { base, bot } = await mount()
+    const { base, bot, service } = await mount()
     const handled: string[] = []
     base.ctx.on('im/message', async (event: ImMessageEvent): Promise<ImOutcome> => {
       handled.push(event.message.key)
       const tag = event.message.key
+      if (tag === ImMessageKey('fake:bot', 'm2')) {
+        // Simulate the trigger being evicted from store before `event.reply` runs: reply still sends without quote.
+        vi.spyOn(service.store, 'get').mockReturnValueOnce(undefined)
+      }
       await event.reply(h('message', h.text(`reply ${tag}`)))
       await event.send(h('message', h.text(`direct ${tag}`)))
       return { kind: 'handled', by: 'facade-spec' }
@@ -757,5 +818,32 @@ describe('ImService facade', () => {
     expect(ctx.im).toBeDefined()
     await remounted.dispose()
     await ctx.fiber.dispose()
+  })
+
+  it('drains in-flight outbound announcements before closing the message store during teardown', async () => {
+    const { base, bot, service } = await mount()
+    await deliver(bot, inbound('m-admit'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    let enteredPut!: () => void
+    const putEntered = new Promise<void>((resolve) => { enteredPut = resolve })
+    let releasePut!: () => void
+    const putGate = new Promise<void>((resolve) => { releasePut = resolve })
+    const originalPut = service.store.put.bind(service.store)
+    vi.spyOn(service.store, 'put').mockImplementationOnce(async (...args) => {
+      enteredPut()
+      await putGate
+      return await originalPut(...args)
+    })
+
+    // Trigger an announcement via `bot.send()` directly so `sender.dispose()` has no pending dispatch/settlement
+    // waiting on it — only `intake.drainAnnouncements()` keeps `store.dispose()` from closing the domain early.
+    const directSend = bot.send({ chat: { id: 'chat', type: 'group' } }, h('message', h.text('direct-bot-send')))
+    await putEntered
+    const disposing = base.ctx.fiber.dispose()
+    releasePut()
+    await Promise.all([directSend, disposing])
+
+    expect(base.pool.media.get('im_messages')?.tables.get('messages')?.size).toBe(2)
   })
 })

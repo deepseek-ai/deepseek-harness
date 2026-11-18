@@ -74,7 +74,11 @@ export interface PassiveManagerOptions {
   config: PassiveConfig
   /** Clock; injected by tests. */
   now?: () => number
-  /** Booked windows kept at once (the oldest is dropped beyond this); default 256. */
+  /**
+   * Soft bound on booked windows kept at once (default 256): expired windows are reaped first, then the oldest
+   * un-ticketed windows are evicted above this limit. Live windows holding `idempotencyKey` tickets are retained until
+   * `until` expires, so active memory is bounded by window lifetime (5 min group / 60 min C2C).
+   */
   max?: number
 }
 
@@ -92,7 +96,7 @@ interface PassiveEntry {
   tickets: Map<string, number>
 }
 
-/** Default bound of booked windows: a busy bot sees a handful of live events at a time. */
+/** Default soft bound of booked windows (`PassiveManagerOptions.max`); ticketed live windows are retained until `until`. */
 const DEFAULT_MAX_WINDOWS = 256
 
 /** The map key of one passive id: ids are chat-scoped in the platform's dedupe, so the chat is part of it. */

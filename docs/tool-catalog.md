@@ -238,7 +238,7 @@ Publish one markdown message into an IM chat you may write. Returns the delivery
     },
     "thread": {
       "type": "string",
-      "description": "Thread id to publish into; omit for the chat itself."
+      "description": "Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none."
     }
   },
   "required": [
@@ -267,7 +267,7 @@ Publish one local file into an IM chat you may write as an image, video, audio o
     },
     "quote": {
       "type": "string",
-      "description": "Message to answer, by key or seq; omit to publish into the chat."
+      "description": "Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none."
     }
   },
   "required": [

@@ -8,10 +8,11 @@
  *   publication is host- or plugin-originated (the session command plugin's replies and notices, an event's own
  *   `reply`), so only the chat's admission gates it: `sources[].writable` is a property of a session's binding, not a
  *   chat-wide permission.
- * - **Target.** `target()` resolves the chat ref of an admitted chat and the caller's thread wish; `quote` becomes the
- *   content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path, and the
- *   quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for a
- *   stream on every state, because the target is resolved once.
+ * - **Target.** `target()` resolves the chat ref of an admitted chat, re-verifies that the chat's stored `source` rule in
+ *   `config.sources` still exists and admits it (else `ImError('access')`), and applies the caller's thread wish; `quote`
+ *   becomes the content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path,
+ *   and the quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for
+ *   a stream on every state, because the target is resolved once.
  * - **Receipts.** A publication with `options.operationId` records `pending` *before* it reaches the platform and the
  *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing —
  *   `PlatformError.published === 'no'`, `StrictRenderError`, or a stream whose message was never opened or was
@@ -41,6 +42,7 @@ import {
   type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
+import { admitsChat } from './intake.ts'
 import { runKeyed, WriteQueue } from './serial.ts'
 import { storedChatKey, storedMessageKey, storedSessionId } from './state.ts'
 import type { ImStore } from './store.ts'
@@ -55,6 +57,8 @@ export interface ImSenderDeps {
    * not await the listener that stores it, so without this the receipt raced the store and lost `message` and `seq`.
    */
   announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>
+  /** Fallback announcement hook used during teardown once Cordis has unregistered the plugin-scoped `send` listener. */
+  onResult?: (bot: Bot, result: SendResult) => void
 }
 
 /** One durable receipt, keyed by the operation id of one publication. */
@@ -123,9 +127,11 @@ export class ImSender {
   private readonly attribution = new Map<ImMessageKey, SessionId>()
   /** Per-operation dispatch chain (see {@link serial}). */
   private readonly chains = new Map<string, Promise<unknown>>()
+  /** In-flight un-receipted sends awaited by {@link dispose}. */
+  private readonly inflight = new Set<Promise<unknown>>()
   /** In-flight stream receipt settlement tasks awaited by {@link dispose}. */
   private readonly settlements = new Set<Promise<void>>()
-  /** Open streams with a durable receipt; aborted on {@link dispose} so settlements cannot hang forever. */
+  /** Open streams; aborted on {@link dispose} so settlements cannot hang forever. */
   private readonly openStreams = new Set<MessageStream>()
   /** The receipt write chain. */
   private readonly writes = new WriteQueue()
@@ -141,7 +147,7 @@ export class ImSender {
 
   /** Finish the dispatches in flight and close the domain. */
   async dispose(): Promise<void> {
-    await Promise.allSettled([...this.chains.values()])
+    await Promise.allSettled([...this.chains.values(), ...this.inflight])
     await Promise.allSettled([...this.openStreams].map(stream => stream.abort({ reason: 'IM sender disposed' })))
     await Promise.allSettled([...this.settlements])
     await this.writes.drain()
@@ -167,10 +173,10 @@ export class ImSender {
   private async publishNow(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImSendResult> {
     const confinedThread = this.grant(chat, options.session, options)
     const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
-    const quoted = withQuote(content, options.quote)
+    const quoted = withQuote(content, this.quoteId(chat, options.quote))
     const id = options.operationId
     if (id === undefined) {
-      const result = await this.dispatch(this.botOf(chat), target, quoted, options)
+      const result = await this.track(this.dispatch(this.botOf(chat), target, quoted, options))
       if (result.status !== 'confirmed') {
         this.ctx.logger.warn('IM publication to %s of session %s was not confirmed (%s): %s',
           chat, options.session ?? '-', result.status, result.error)
@@ -192,9 +198,12 @@ export class ImSender {
     const confinedThread = this.grant(chat, options.session, options)
     const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
     const bot = this.botOf(chat)
+    const quoteId = this.quoteId(chat, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      return this.watched(this.quoted(bot.stream(target, options), options.quote), chat)
+      const stream = bot.stream(target, options)
+      this.openStreams.add(stream)
+      return this.watched(this.quoted(stream, quoteId), bot, chat, options.session, stream)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
@@ -233,34 +242,63 @@ export class ImSender {
         this.settlements.delete(settlement)
       })
       this.settlements.add(settlement)
-      return this.watched(this.quoted(stream, options.quote), chat)
+      return this.watched(this.quoted(stream, quoteId), bot, chat)
     })
   }
 
   /**
-   * Log a warning when `stream.done` rejects so an unobserved stream failure remains visible in diagnostics.
+   * Attribute a completed (or partially opened) stream to its session and log a warning when `stream.done` rejects so
+   * an unobserved stream failure remains visible in diagnostics.
    * @param stream - the stream handed to the caller.
+   * @param bot - bot that opened the stream.
    * @param chat - the admitted chat, for the message.
+   * @param session - publishing session, for un-receipted streams whose attribution is not handled by `settlement`.
    * @returns that stream.
    */
-  private watched(stream: MessageStream, chat: ImChatKey): MessageStream {
-    void stream.done.catch((error: unknown) => {
-      this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
+  private watched(
+    stream: MessageStream, bot: Bot, chat: ImChatKey, session?: SessionId, rawStream?: MessageStream,
+  ): MessageStream {
+    const done = stream.done.then(
+      (result) => {
+        this.deps.onResult?.(bot, result)
+        this.attribute(result.handle, session)
+      },
+      (error: unknown) => {
+        if (stream.handle !== undefined) this.attribute(stream.handle, session)
+        this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
+      },
+    ).finally(() => {
+      if (rawStream !== undefined) this.openStreams.delete(rawStream)
+      this.settlements.delete(done)
     })
+    if (rawStream !== undefined) this.settlements.add(done)
     return stream
   }
 
+  /** Track an un-receipted dispatch so {@link dispose} drains it before tearing down. */
+  private track<T>(work: Promise<T>): Promise<T> {
+    this.inflight.add(work)
+    void work.then(() => undefined, () => undefined).then(() => { this.inflight.delete(work) })
+    return work
+  }
+
   /**
-   * Core target of one publication: the chat ref of an admitted chat, the caller's thread wish and — when the
-   * publication answers a stored message or stored thread of this chat — that message's adapter referrer
-   * (see {@link referrerOf}).
+   * Core target of one publication: the chat ref of an admitted chat (re-verifying the chat's stored `source` rule in
+   * current `config.sources`), the caller's thread wish and — when the publication answers a stored message or stored
+   * thread of this chat — that message's adapter referrer (see {@link referrerOf}).
    * @param chat - chat key.
    * @param options - `thread` and `quote`; a `quote` is applied to the content (see {@link send}).
    * @returns the target handed to `bot.send` / `bot.stream`.
+   * @throws ImError `access` when `chat` was never admitted or its stored `source` rule was removed or narrowed so it
+   *   no longer admits `chat`.
    */
   target(chat: ImChatKey, options: Pick<ImSendOptions, 'thread' | 'quote'> = {}): Target {
     const known = this.deps.store.chat(chat)
     if (known === undefined) throw new ImError('access', `Chat ${chat} is not admitted to IM.`)
+    const source = this.config.sources.find(candidate => candidate.id === known.source)
+    if (source === undefined || !admitsChat(source, known.bot, known.ref)) {
+      throw new ImError('access', `Chat ${chat} is no longer admitted to IM.`)
+    }
     const thread = options.thread
     const referrer = this.referrerOf(chat, options.quote, thread)
     return {
@@ -365,6 +403,7 @@ export class ImSender {
       const result = await bot.send(target, content, {
         ...options, ...key === undefined ? {} : { idempotencyKey: key }, signal: deadline.signal,
       })
+      this.deps.onResult?.(bot, result)
       this.attribute(result.handle, options.session)
       return await this.confirmed(result)
     } catch (error) {
@@ -504,34 +543,39 @@ export class ImSender {
     const fromQuote = quoted?.chat.key === chat ? quoted : undefined
     // A publication that names neither a thread nor a message stays in the thread this session is talking in: its
     // output renderers quote the trigger and inherit that thread, so the chat's own timeline is not where its work is.
-    const answered = explicit === undefined && fromQuote === undefined ? this.answeredThread(chat, session) : undefined
+    const answered = explicit === undefined && fromQuote === undefined ? this.answeredMessage(chat, session) : undefined
     // An open chat binds the session to the whole conversation, so any of its threads is allowed.
-    if (confined.length < writable.length) return answered
-    const allowed = explicit !== undefined
-      ? allowedThreads.has(explicit)
-      : fromQuote !== undefined
-        ? messageInThreads(fromQuote, allowedThreads)
-        : answered !== undefined && allowedThreads.has(answered)
-    if (!allowed) {
-      throw new ImError(
-        'access',
-        `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
-      )
+    if (confined.length < writable.length) return answered?.thread?.id
+    if (explicit !== undefined) {
+      if (!allowedThreads.has(explicit)) throw this.threadAccessError(chat, session, allowedThreads)
+      return undefined
     }
-    if (explicit === undefined && fromQuote === undefined) return answered
-    if (fromQuote !== undefined && fromQuote.thread === undefined) return splitKey(fromQuote.key).id
-    return undefined
+    if (fromQuote !== undefined) {
+      if (!messageInThreads(fromQuote, allowedThreads)) throw this.threadAccessError(chat, session, allowedThreads)
+      return fromQuote.thread === undefined ? splitKey(fromQuote.key).id : undefined
+    }
+    if (answered === undefined || !messageInThreads(answered, allowedThreads)) {
+      throw this.threadAccessError(chat, session, allowedThreads)
+    }
+    return answered.thread?.id ?? splitKey(answered.key).id
+  }
+
+  private threadAccessError(chat: ImChatKey, session: SessionId, allowedThreads: ReadonlySet<string>): ImError {
+    return new ImError(
+      'access',
+      `Chat ${chat} is confined to thread(s) ${[...allowedThreads].join(', ')} for session ${session}; pass an allowed thread.`,
+    )
   }
 
   /**
-   * The thread of the message a session answered last (`ImSessions.trigger`), when that message belongs to `chat`.
+   * The message a session answered last (`ImSessions.trigger`), when that message belongs to `chat`.
    * @param chat - chat the publication goes to.
    * @param session - publishing session.
-   * @returns the thread id, or `undefined` for a message outside any thread or of another chat.
+   * @returns the trigger message, or `undefined` when none exists or it belongs to another chat.
    */
-  private answeredThread(chat: ImChatKey, session: SessionId): string | undefined {
+  private answeredMessage(chat: ImChatKey, session: SessionId): ImMessage | undefined {
     const trigger = this.deps.sessions.trigger(session)
-    return trigger?.chat.key === chat ? trigger.thread?.id : undefined
+    return trigger?.chat.key === chat ? trigger : undefined
   }
 
   /** The bot of a chat (`ImError('unavailable')` when it is not mounted). */
@@ -542,12 +586,30 @@ export class ImSender {
     return bot
   }
 
+  /**
+   * Resolve the platform-facing `<quote id>` for a quoted message key: uses the first recorded alias (e.g. QQ
+   * `msg_idx`) when present, falling back to the key's message id. Rejects quotes belonging to another bot or not
+   * stored in `chat` so cross-chat/cross-bot quote spoofing (including unstored or expired messages from another
+   * chat) fails with `ImError('access')`.
+   */
+  private quoteId(chat: ImChatKey, quote: ImMessageKey | undefined): string | undefined {
+    if (quote === undefined) return undefined
+    if (splitKey(quote).bot !== splitKey(chat).bot) {
+      throw new ImError('access', `Quoted message ${quote} belongs to another bot and cannot be quoted in ${chat}.`)
+    }
+    const stored = this.deps.store.get(quote)
+    if (stored === undefined || stored.chat.key !== chat) {
+      throw new ImError('access', `Quoted message ${quote} is not stored in chat ${chat} and cannot be quoted.`)
+    }
+    return stored.aliases?.[0] ?? splitKey(quote).id
+  }
+
   /** The same stream with the reply quote wrapped around every state the caller publishes. */
-  private quoted(stream: MessageStream, quote: ImMessageKey | undefined): MessageStream {
-    if (quote === undefined) return stream
+  private quoted(stream: MessageStream, quoteId: string | undefined): MessageStream {
+    if (quoteId === undefined) return stream
     return {
-      update: (content) => { stream.update(withQuote(content, quote)) },
-      close: final => final === undefined ? stream.close() : stream.close(withQuote(final, quote)),
+      update: (content) => { stream.update(withQuote(content, quoteId)) },
+      close: final => final === undefined ? stream.close() : stream.close(withQuote(final, quoteId)),
       abort: options => stream.abort(options),
       get state() { return stream.state },
       get handle() { return stream.handle },
@@ -660,9 +722,9 @@ export function messageInThreads(message: ImMessage, threads: ReadonlySet<string
  * When `content` is already a `<message>` root (as output renderers produce), the `<quote>` element is inserted as its
  * first child rather than wrapping a second `<message>` around it, because `<message>` is only valid at the root.
  */
-function withQuote(content: Fragment, quote: ImMessageKey | undefined): Fragment {
-  if (quote === undefined) return content
-  const quoted = h('quote', { id: splitKey(quote).id })
+function withQuote(content: Fragment, quoteId: string | undefined): Fragment {
+  if (quoteId === undefined) return content
+  const quoted = h('quote', { id: quoteId })
   if (isElement(content) && content.type === 'message') return { ...content, children: [quoted, ...content.children] }
   return h('message', quoted, content)
 }

@@ -47,7 +47,10 @@ export class ImDispatcher {
    * @param sessions - the session host the dispatcher session lives in.
    * @throws ImError `configuration` when `cwd` is not absolute.
    */
-  constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, 'ensure' | 'get' | 'of'>) {
+  constructor(
+    readonly config: ImDispatcherConfig,
+    readonly sessions: Pick<ImSessions, 'ensure' | 'get' | 'of' | 'deliveredTo'>,
+  ) {
     if (!isAbsolute(config.cwd)) {
       throw new ImError('configuration', `The IM dispatcher cwd ${JSON.stringify(config.cwd)} must be an absolute path.`)
     }
@@ -62,6 +65,8 @@ export class ImDispatcher {
     const { message } = event
     if (message.sender.self || !message.addressed) return { kind: 'ignored' }
     const record = await this.ensure(event)
+    const prior = this.sessions.deliveredTo(DISPATCHER_KEY, message.key)
+    if (prior !== undefined) return { kind: 'handled', by: DISPATCHER_OWNER, sessions: [prior] }
     await event.deliver(record.sessionId, {
       mode: this.config.delivery, media: true, header: chatHeader(message.chat),
     })

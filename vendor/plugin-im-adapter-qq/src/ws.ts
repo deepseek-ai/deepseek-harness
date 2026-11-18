@@ -8,7 +8,7 @@
  * | 10 | `HELLO` | ← | announces `heartbeat_interval`; the socket must identify or resume right away |
  * | 2 | `IDENTIFY` | → | `{ token, intents, shard: [0, 1] }` — opens a session |
  * | 6 | `RESUME` | → | `{ token, session_id, seq }` — re-attaches to the session of the previous socket |
- * | 1 | `HEARTBEAT` | → | `{ s }`, at the announced interval |
+ * | 1 | `HEARTBEAT` | → | `{ d }` (`seq` or `null`), at the announced interval |
  * | 11 | `HEARTBEAT_ACK` | ← | proves the connection is alive; a missing ack makes the socket a zombie |
  * | 0 | `DISPATCH` | ← | one event plus the **sequence number `s`** that `RESUME` echoes |
  * | 7 | `RECONNECT` | ← | the server wants a new socket; the session stays resumable |
@@ -56,7 +56,7 @@ export interface GatewayPayload {
   op: number
   /** Frame body; shape depends on `op` and (for dispatches) on `t`. */
   d?: unknown
-  /** Sequence number of a dispatch; `RESUME` and the heartbeats echo the latest one. */
+  /** Sequence number of a dispatch; `RESUME` (`seq`) and `HEARTBEAT` (`d`) echo the latest one. */
   s?: number | undefined
   /** Event name of a dispatch (`READY`, `GROUP_AT_MESSAGE_CREATE`, `INTERACTION_CREATE` …). */
   t?: string | undefined
@@ -225,7 +225,7 @@ export class WsClient extends WsClientBase<QQBot> {
       socket.close(3000, 'heartbeat not acknowledged')
       return
     }
-    this.send(socket, { op: Opcode.HEARTBEAT, s: this.seq })
+    this.send(socket, { op: Opcode.HEARTBEAT, d: this.seq ?? null })
     this.acked = false
   }
 

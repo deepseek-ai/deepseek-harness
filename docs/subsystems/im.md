@@ -14,7 +14,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImChatKey` | Global chat identity, `${bot}\|${chat.id}` |
 | `ImMessageKey` | Global message identity, `${bot}\|${message.id}` |
 | `ImChat` | An admitted chat: its key, the bot that serves it, the adapter's `ChatRef`, and the rule that admitted it |
-| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform` or `self`), and adapter referrer |
+| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform` or `self`), optional `aliases` (platform-local alternate message ids for alias lookup), and adapter referrer |
 | `ImCommand` | A slash command parsed from a message after stripping leading self-mentions: command name and raw input |
 | `ImOutcome` | Waterfall result: `handled` by a named plugin (with optional target session ids), or `ignored` (with optional reason) |
 | `ImMessageEvent` | Waterfall argument: the stored message, its source configuration, the bot, plus chat-bound `reply`, `send`, and idempotent `deliver` helpers |
@@ -25,9 +25,9 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImSessionRecord` | Stored session record: its spec plus the derived session id, generation counter, and timestamps |
 | `ImDelivery` | Durable delivery intent: idempotency id, delivery mode, content or stored messages to format, trigger message, optional media download flag, and optional header |
 | `ImDeliveryMode` | Delivery mode: `steer` joins a running turn or starts one, `followup` queues a turn, `inject` adds context without waking an idle agent |
-| `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
+| `ImSessions` | Hosted session manager: `ensure`, `get`, `list`, `forChat`, `deliver`, `deliveredTo`, `reset`, `bind`, `agent`, `of`, `stop`, and `trigger` |
 | `ImResetOptions` | Session reset options: durable receipt `operationId` and optimistic `expectedGeneration` guard |
-| `ImSendOptions` | Outbound publication options: receipt `operationId`, quoted message key, target thread, and the session used for grant checks and attribution |
+| `ImSendOptions` | Outbound publication options: receipt `operationId`, same-chat stored quoted message key (`ImError('access')` otherwise), target thread, and the session used for grant checks and attribution |
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |
 | `ImHistory` | Per-chat history queries by `seq`: `after`, `before`, `get`, and `latest` |
 | `ImFormatOptions` | Message formatting options: `xml` or `line` style, media attachment flag, optional header, and abort signal |

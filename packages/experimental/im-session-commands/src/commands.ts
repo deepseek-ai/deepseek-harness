@@ -26,21 +26,24 @@ const BUILTINS: ReadonlySet<string> = new Set<string>(BUILTIN_ORDER)
 
 /** Durable receipt of one handled command message, keyed by `event.message.key`. */
 export interface StoredCommandReceipt {
+  /** `'pending'` while side effects are in flight; `'done'` (or omitted for legacy rows) once settled. */
+  status?: 'pending' | 'done'
   /** Exact reply content recorded before the first `event.reply` call so redeliveries replay identical text. */
-  reply: string | string[]
+  reply: string
   /** Hosted session ids the command acted on, when any. */
   sessions?: SessionId[]
   createdAt: number
 }
 
 interface DecidedCommand {
-  reply: string | string[]
+  reply: string
   sessions?: readonly SessionId[]
 }
 
 const storedSessionId = z.string().transform((value): SessionId => value as SessionId)
 const commandReceiptSchema = z.object({
-  reply: z.union([z.string(), z.array(z.string())]),
+  status: z.exactOptional(z.enum(['pending', 'done'])),
+  reply: z.string(),
   sessions: z.exactOptional(z.array(storedSessionId)),
   createdAt: z.number(),
 })
@@ -154,13 +157,33 @@ export class SessionCommands {
       const table = domain.table('commands')
       const recorded = table.get(message.key)
       if (recorded !== undefined) {
+        if (recorded.status === 'pending') {
+          const settled: StoredCommandReceipt = {
+            ...recorded,
+            status: 'done',
+            reply: this.strings.interrupted,
+          }
+          await table.put(message.key, settled)
+          await this.reply(event, settled.reply)
+          return this.outcome(settled.sessions)
+        }
         await this.reply(event, recorded.reply)
         return this.outcome(recorded.sessions)
       }
-      const decided = await this.decide(event, name, builtin, command.rawInput)
-      if (decided === undefined) return undefined
+      const persistPending = (sessions: readonly SessionId[]): Promise<void> => table.put(message.key, {
+        status: 'pending',
+        reply: '',
+        ...sessions.length === 0 ? {} : { sessions: [...sessions] },
+        createdAt: Date.now(),
+      })
+      const decided = await this.decide(event, name, builtin, command.rawInput, persistPending)
+      if (decided === undefined) {
+        if (table.get(message.key)?.status === 'pending') await table.delete(message.key)
+        return undefined
+      }
       const now = Date.now()
       const receipt: StoredCommandReceipt = {
+        status: 'done',
         reply: decided.reply,
         ...decided.sessions === undefined || decided.sessions.length === 0 ? {} : { sessions: [...decided.sessions] },
         createdAt: now,
@@ -181,6 +204,7 @@ export class SessionCommands {
     name: string,
     builtin: boolean,
     rawInput: string,
+    persistPending: (sessions: readonly SessionId[]) => Promise<void>,
   ): Promise<DecidedCommand | undefined> {
     const { message } = event
     const privileged = !builtin || (name !== 'status' && name !== 'help')
@@ -188,19 +212,25 @@ export class SessionCommands {
     const chat = message.chat.key
     const records = this.ctx.im.sessions.forChat(chat)
     switch (name) {
-      case 'stop': return this.stop(message, records)
+      case 'stop': return this.stop(message, records, persistPending)
       case 'clear':
-      case 'new': return this.reset(message, records, chat, name)
+      case 'new': return this.reset(message, records, chat, name, persistPending)
       case 'status': return this.status(message, records, chat)
       case 'help': return this.help(message, records, chat)
-      default: return this.forward(message, records, chat, name, rawInput)
+      default: return this.forward(message, records, chat, name, rawInput, persistPending)
     }
   }
 
   /** `/stop`: cancel every running session bound to the chat, thread-bound ones only when they exist. */
-  private async stop(message: ImMessage, records: ImSessionRecord[]): Promise<DecidedCommand> {
+  private async stop(
+    message: ImMessage,
+    records: ImSessionRecord[],
+    persistPending: (sessions: readonly SessionId[]) => Promise<void>,
+  ): Promise<DecidedCommand> {
+    const targets = this.targets(records, message)
+    await persistPending(targets.map(record => record.sessionId))
     const stopped: SessionId[] = []
-    for (const record of this.targets(records, message)) {
+    for (const record of targets) {
       if (await this.ctx.im.sessions.stop(record.key)) stopped.push(record.sessionId)
     }
     return {
@@ -215,8 +245,10 @@ export class SessionCommands {
     records: ImSessionRecord[],
     chat: ImChatKey,
     name: BuiltinCommandName,
+    persistPending: (sessions: readonly SessionId[]) => Promise<void>,
   ): Promise<DecidedCommand> {
     const targets = records.filter(record => this.resettable.has(record.owner) && homeOf(record, chat))
+    await persistPending(targets.map(record => record.sessionId))
     const replaced: SessionId[] = []
     const operationId = `${BY}:${message.key}`
     for (const record of targets) {
@@ -248,7 +280,7 @@ export class SessionCommands {
         line(labels.state, state),
         line(labels.queued, String(queued)),
         line(labels.activity, describeAge(Date.now() - home.lastActiveAt, this.strings)),
-      ],
+      ].join('\n'),
       sessions: [home.sessionId],
     }
   }
@@ -261,13 +293,13 @@ export class SessionCommands {
     if (home === undefined) {
       // Without a session the registry cannot be consulted, so advertise the configured names alone.
       for (const name of this.passthrough) if (!BUILTINS.has(name)) lines.push(`/${name}`)
-      return { reply: lines }
+      return { reply: lines.join('\n') }
     }
     const agent = await this.ctx.im.sessions.agent(home.sessionId)
     for (const descriptor of this.ctx.commands.list(agent)) {
       if (this.passthrough.has(descriptor.name)) lines.push(`/${descriptor.name} — ${descriptor.description}`)
     }
-    return { reply: lines, sessions: [home.sessionId] }
+    return { reply: lines.join('\n'), sessions: [home.sessionId] }
   }
 
   /** A passthrough name: run the registered dsh command against the chat's home session. */
@@ -277,11 +309,14 @@ export class SessionCommands {
     chat: ImChatKey,
     name: string,
     rawInput: string,
+    persistPending: (sessions: readonly SessionId[]) => Promise<void>,
   ): Promise<DecidedCommand | undefined> {
     const home = this.findHome(records, message, chat)
     if (home === undefined) return { reply: this.strings.noSession }
     // `agent()` opens (or resumes) the live agent the registry executes against.
     const agent: Agent = await this.ctx.im.sessions.agent(home.sessionId)
+    if (!this.ctx.commands.list(agent).some(descriptor => descriptor.name === name)) return undefined
+    await persistPending([home.sessionId])
     // An unregistered name (or one that vanished between listing and execution) is not this plugin's command.
     const execution = await this.ctx.commands.execute(agent, `/${name}${rawInput}`, [], this.shutdown.signal)
     if (execution === undefined) return undefined
@@ -306,7 +341,8 @@ export class SessionCommands {
     const cutoff = now - this.config.retentionMs
     const expired: ImMessageKey[] = []
     for (const [key, receipt] of table.entries()) {
-      if (receipt.createdAt < cutoff) expired.push(key)
+      if (receipt.createdAt >= cutoff) continue
+      expired.push(key)
     }
     if (expired.length > 0) await table.deleteMany(expired)
   }

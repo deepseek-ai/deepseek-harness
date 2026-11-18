@@ -4,8 +4,7 @@
   "version": "5.0.0-alpha.0",
   "type": "module",
   "files": [
-    "lib/index.js",
-    "lib/testing.js",
+    "lib/*.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "src"

@@ -204,6 +204,14 @@ function ackBody(frame: RawFrame) {
   return JSON.parse(Buffer.from(frame.payload ?? new Uint8Array()).toString('utf8'))
 }
 
+/** The transport envelope and base64-decoded JSON business body of one card callback answer. */
+function cardAckBody(frame: RawFrame): { code: unknown; data: unknown } {
+  const envelope = ackBody(frame) as Record<string, unknown>
+  expect(envelope.code).toBe(200)
+  expect(typeof envelope.data).toBe('string')
+  return { code: envelope.code, data: JSON.parse(Buffer.from(envelope.data as string, 'base64').toString('utf8')) }
+}
+
 /** One header of a decoded frame. */
 function headerOf(frame: RawFrame, key: string) {
   return frame.headers.find(header => header.key === key)?.value
@@ -400,7 +408,7 @@ describe('Lark card callbacks', () => {
     socket.receive(eventFrame(mounted, cardAction))
     // The platform gives a card callback 3 seconds, so the empty answer must not wait for the chat probe/intake.
     await vi.waitFor(() => { expect(acks(mounted, socket)).toHaveLength(1) })
-    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({})
+    expect(cardAckBody(acks(mounted, socket)[0]!)).toEqual({ code: 200, data: {} })
     expect(headerOf(acks(mounted, socket)[0]!, 'biz_rt')).toBe('0')
     expect(received).not.toHaveBeenCalled()
     gate.resolve(Response.json({ code: 0, data: { chat_mode: 'group' } }))
@@ -442,7 +450,7 @@ describe('Lark card callbacks', () => {
     })
     socket.receive(eventFrame(mounted, cardAction))
     await vi.waitFor(() => { expect(seen).toEqual([1]) })
-    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({ toast: { type: 'success', content: '已确认' } })
+    expect(cardAckBody(acks(mounted, socket)[0]!)).toEqual({ code: 200, data: { toast: { type: 'success', content: '已确认' } } })
     gate.resolve()
     await new Promise(resolve => setTimeout(resolve, 10))
     expect(acks(mounted, socket)).toHaveLength(1)
@@ -459,7 +467,7 @@ describe('Lark card callbacks', () => {
     await vi.waitFor(() => { expect(acks(mounted, socket)).toHaveLength(1) })
     expect(Date.now() - start).toBeLessThan(1_000)
     expect(received).toHaveBeenCalledTimes(1)
-    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({})
+    expect(cardAckBody(acks(mounted, socket)[0]!)).toEqual({ code: 200, data: {} })
     await mounted.bot.disconnect()
   })
 
@@ -470,7 +478,7 @@ describe('Lark card callbacks', () => {
     mounted.ctx.on('satori/receive', async () => { throw new Error('store down') })
     socket.receive(eventFrame(mounted, cardAction))
     await vi.waitFor(() => { expect(acks(mounted, socket)).toHaveLength(1) })
-    expect(ackBody(acks(mounted, socket)[0]!)).toEqual({})
+    expect(cardAckBody(acks(mounted, socket)[0]!)).toEqual({ code: 200, data: {} })
     await vi.waitFor(() => { expect(error).toHaveBeenCalled() })
     expect(acks(mounted, socket)).toHaveLength(1)
     await mounted.bot.disconnect()

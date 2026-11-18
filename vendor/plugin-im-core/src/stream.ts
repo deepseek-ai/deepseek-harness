@@ -154,6 +154,8 @@ export class StreamAbortError extends Error {
 export const STREAM_INTERVAL_MS = 300
 /** Default first-publication delay of the `edit` strategy. */
 export const STREAM_EDIT_FIRST_DELAY_MS = 800
+/** Maximum time best-effort `driver.close` may take after `abort({ recall: false })`. */
+export const STREAM_ABORT_CLOSE_TIMEOUT_MS = 5000
 /** Retry backoff: base, factor 2, cap. */
 export const STREAM_BACKOFF_BASE_MS = 500
 export const STREAM_BACKOFF_MAX_MS = 8_000
@@ -185,7 +187,7 @@ export function createMessageStream<T extends ModeTypes>(host: StreamHost<T>, op
 export interface EditDriverAdapter {
   readonly id: string
   sendPayload(payload: unknown, target: Target, ctx: SendContext): Promise<SentPart>
-  editPayload(part: SentPart, payload: unknown, handle: MessageHandle): Promise<void>
+  editPayload(part: SentPart, payload: unknown, handle: MessageHandle, signal?: AbortSignal): Promise<void>
 }
 
 export interface EditDriverOptions {
@@ -205,12 +207,12 @@ export interface EditDriverOptions {
  */
 export function createEditDriver<T extends ModeTypes = ModeTypes>(adapter: EditDriverAdapter, options: EditDriverOptions = {}): StreamDriver<T> {
   const published = new WeakMap<MessageHandle, string | undefined>()
-  const edit = async (handle: MessageHandle, payload: unknown) => {
+  const edit = async (handle: MessageHandle, payload: unknown, signal?: AbortSignal) => {
     const part = handle.parts[0]
     if (!part) throw new PlatformError('invalid', 'edit stream: handle has no part')
     handle.edits += 1
     try {
-      await adapter.editPayload(part, payload, handle)
+      await adapter.editPayload(part, payload, handle, signal)
     } catch (error) {
       // The platform may have applied the edit before the error (or left the message in an unknown state):
       // drop the cached last-published key so `close` does not skip writing back an earlier payload.
@@ -236,13 +238,13 @@ export function createEditDriver<T extends ModeTypes = ModeTypes>(adapter: EditD
       published.set(handle, payloadKey(payload))
       return handle
     },
-    async tick(handle, change) {
-      await edit(handle, change.payload)
+    async tick(handle, change, ctx) {
+      await edit(handle, change.payload, ctx.signal)
     },
-    async close(handle, last) {
+    async close(handle, last, ctx) {
       const key = payloadKey(last.payload)
       if (key !== undefined && key === published.get(handle)) return
-      await edit(handle, last.payload)
+      await edit(handle, last.payload, ctx.signal)
     },
     budget(handle) {
       if (options.limit === undefined) return {}
@@ -319,6 +321,8 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   private closing: Promise<void> | undefined
   private readonly sleepers = new Set<{ wake: () => void; interruptible: boolean }>()
   private readonly registered = new Map<string, InteractionAction['callback']>()
+  private readonly callerSignal: AbortSignal | undefined
+  private readonly onCallerAbort: (() => void) | undefined
 
   constructor(private readonly host: StreamHost<T>, private readonly options: StreamOptions) {
     this.driver = host.driver
@@ -337,8 +341,13 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     // `done` is informational; an unobserved failure must not become an unhandled rejection.
     this.done.catch(() => {})
     if (signal) {
-      if (signal.aborted) void this.abort({ reason: 'signal' })
-      else signal.addEventListener('abort', () => void this.abort({ reason: 'signal' }), { once: true })
+      if (signal.aborted) {
+        void this.abort({ reason: 'signal' })
+      } else {
+        this.callerSignal = signal
+        this.onCallerAbort = () => void this.abort({ reason: 'signal' })
+        signal.addEventListener('abort', this.onCallerAbort, { once: true })
+      }
     }
   }
 
@@ -380,6 +389,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       result => {
         if (!result || this.aborted || this.settled) return
         this.settled = true
+        this.unlisten()
         this._state = 'closed'
         this.resolveDone(result)
       },
@@ -391,6 +401,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
   async abort(options: { recall?: boolean; reason?: string } = {}): Promise<boolean> {
     if (this.aborted || this.settled) return false
     this.aborted = true
+    this.unlisten()
     this._state = 'closing'
     this.clearTimer()
     this.wake(false)
@@ -403,8 +414,8 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       if (options.recall) {
         recalled = await this.recall(handle)
       } else if (this.driver && this.applied && handle.parts.length && !this.resent) {
-        // End platform streaming on what is shown (CardKit streaming_mode off, QQ input_state 10); best effort.
-        const signal = new AbortController().signal
+        // End platform streaming on what is shown (CardKit streaming_mode off, QQ input_state 10); best effort, bounded.
+        const signal = AbortSignal.timeout(STREAM_ABORT_CLOSE_TIMEOUT_MS)
         await this.driver.close(handle, this.applied, this.context(handle.content, this.lastQuote, this.lastReport!, 1, signal)).catch(() => {})
       }
     }
@@ -527,7 +538,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
           },
         )
       } catch (error) {
-        if (this.isLimit(error)) {
+        if (this.isLimit(error) && !(PlatformError.is(error) && error.published === 'unknown')) {
           this.paused = 'open: ' + this.limitOf(error).message
           this.warn('could not open its message: %s', this.paused)
           return // nothing published; close sends the final state as a plain message
@@ -786,9 +797,14 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     }
   }
 
+  private unlisten() {
+    if (this.onCallerAbort) this.callerSignal?.removeEventListener('abort', this.onCallerAbort)
+  }
+
   private fail(error: unknown) {
     if (this.settled || this.aborted) return
     this.settled = true
+    this.unlisten()
     this._state = 'failed'
     this.clearTimer()
     this.wake(false)
@@ -821,10 +837,12 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
 
   /**
    * Run `op` with up to `attempts` tries for `retryable` / `rate-limit` errors (exponential backoff, honouring
-   * `retryAfterMs`). An operation whose publication outcome is unknown (`published !== 'no'`) is retried only when
-   * `idempotent` allows it (subsequent edits on an existing handle, or an initial open with platform deduplication).
-   * Throws the classified error otherwise; `StreamLimitError` passes through untouched. An interruptible retry
-   * (intermediate ticks) is cut short by close/abort with `Interrupted`.
+   * `retryAfterMs`). Once any attempt fails with `published: 'unknown'` (`sawUnknown`), every subsequent retry
+   * (including after backoff sleep, before the next attempt) requires `idempotent(attempt)` to hold — even if a later
+   * attempt fails with `published: 'no'` — and any terminal failure preserves `published: 'unknown'`. `StreamLimitError`
+   * passes through untouched only when `sawUnknown` is false; otherwise it is converted to a `fatal` `PlatformError`
+   * with `published: 'unknown'` so `tick()`'s open branch does not fall back to plain `host.send()`. An interruptible
+   * retry (intermediate ticks) is cut short by close/abort with `Interrupted`.
    */
   private async retry<R>(
     op: (attempt: number) => Promise<R>,
@@ -832,26 +850,33 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     idempotent: boolean | ((attempt: number) => boolean) = true,
   ): Promise<R> {
     let sawUnknown = false
+    const isIdempotent = (attempt: number) => typeof idempotent === 'function' ? idempotent(attempt) : idempotent
+    const preserveUnknown = (classified: PlatformError): PlatformError =>
+      sawUnknown && classified.published !== 'unknown'
+        ? new PlatformError(classified.kind, classified.message, {
+            cause: classified,
+            published: 'unknown',
+            ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
+          })
+        : classified
     for (let attempt = 1; ; attempt++) {
       try {
         return await op(attempt)
       } catch (error) {
-        if (error instanceof StreamLimitError) throw error
+        if (error instanceof StreamLimitError) {
+          if (sawUnknown) throw new PlatformError('fatal', error.message, { cause: error, published: 'unknown' })
+          throw error
+        }
         if (this.aborted) throw error
         const classified = this.classify(error)
         if (classified.published === 'unknown') sawUnknown = true
-        const safe = classified.published === 'no' || (typeof idempotent === 'function' ? idempotent(attempt) : idempotent)
+        const safe = (!sawUnknown && classified.published === 'no') || isIdempotent(attempt)
         const again = (classified.kind === 'retryable' || classified.kind === 'rate-limit') && safe && attempt < this.attempts
-        if (!again) {
-          throw sawUnknown && classified.published !== 'unknown'
-            ? new PlatformError(classified.kind, classified.message, {
-                cause: classified,
-                published: 'unknown',
-                ...classified.retryAfterMs !== undefined ? { retryAfterMs: classified.retryAfterMs } : {},
-              })
-            : classified
-        }
+        if (!again) throw preserveUnknown(classified)
         if (!await this.sleep(streamBackoff(attempt, classified.retryAfterMs), interruptible)) throw new Interrupted(classified.message)
+        if ((sawUnknown || classified.published !== 'no') && !isIdempotent(attempt + 1)) {
+          throw preserveUnknown(classified)
+        }
       }
     }
   }

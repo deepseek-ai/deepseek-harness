@@ -130,13 +130,19 @@ async function boot(
   const stub = new StubBot(ctx)
   ctx.bots.push(stub)
   const config = Config({
-    sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], retryIntervalMs: 60_000, ...options.config,
+    sources: [
+      { id: 'team', bot: 'fake:bot', writable: true, store: 'all' },
+      { id: 'stub-team', bot: 'stub:bot', writable: true, store: 'all' },
+      { id: 'qq-team', bot: 'qq:404', writable: true, store: 'all' },
+    ],
+    retryIntervalMs: 60_000,
+    ...options.config,
   })
   const store = new ImStore(ctx, config)
   await store.start()
   await store.touchChat({ key: CHAT, bot: 'fake:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
   await store.touchChat({
-    key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team'),
+    key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('stub-team'),
   })
   const sessions = new FakeSessions()
   const sender = new ImSender(ctx, config, {
@@ -166,7 +172,10 @@ function ownDraft(key: ImMessageKey, chat: ImChatKey = CHAT): ImMessageDraft {
   return {
     key,
     chat: {
-      key: chat, bot: splitKey(chat).bot, ref: { id: splitKey(chat).id, type: 'group' }, source: ImSourceId('team'),
+      key: chat,
+      bot: splitKey(chat).bot,
+      ref: { id: splitKey(chat).id, type: 'group' },
+      source: ImSourceId(chat === STUB_CHAT ? 'stub-team' : 'team'),
     },
     sender: { id: 'bot-user', isBot: true, self: true },
     content: normalize(h.text('hello')),
@@ -248,7 +257,8 @@ describe('ImSender.send', () => {
   })
 
   it('applies the quote envelope and the thread wish', async () => {
-    const { bot, sender } = await boot()
+    const { bot, sender, store } = await boot()
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), undefined), 'none')
     await sender.send(CHAT, h.text('hello'), { quote: ImMessageKey('fake:bot', 'm9') })
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
     expect(bot.operations[0]?.target?.thread).toBeUndefined()
@@ -459,7 +469,7 @@ describe('ImSender.send', () => {
   it('refuses a chat whose bot is not mounted', async () => {
     const { sender, store } = await boot()
     const chat = ImChatKey('qq:404', 'chat')
-    await store.touchChat({ key: chat, bot: 'qq:404', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
+    await store.touchChat({ key: chat, bot: 'qq:404', ref: { id: 'chat', type: 'group' }, source: ImSourceId('qq-team') })
     await expect(sender.send(chat, h.text('hello'))).rejects.toThrow(/No bot qq:404 is mounted/)
   })
 })
@@ -524,6 +534,32 @@ describe('ImSender grants', () => {
       quote: ImMessageKey('fake:bot', 'r1'),
     })
     await okRootStream.close(h.text('stream-reply'))
+    expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
+
+    // An explicit thread must not be overwritten by a quoted unthreaded root message from the same chat.
+    const otherRoot = await store.put({ ...inThread, key: ImMessageKey('fake:bot', 'm-other-root') }, 'none')
+    const keepExplicit = await sender.send(CHAT, h.text('keep-t1'), {
+      session: confined.sessionId,
+      thread: 't1',
+      quote: otherRoot.key,
+    })
+    expect(keepExplicit.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('t1')
+
+    // Bare sends for a root-confined session follow `messageInThreads` on its trigger (both nested thread and root).
+    const nestedTrigger = await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-nested'), undefined),
+      thread: { id: 'omt_x', root: 'r1' },
+    }, 'none')
+    sessions.answered(rootConfined, nestedTrigger)
+    const okNested = await sender.send(CHAT, h.text('bare-nested'), { session: rootConfined.sessionId })
+    expect(okNested.status).toBe('confirmed')
+    expect(bot.operations.at(-1)?.target?.thread).toBe('omt_x')
+
+    const rootTrigger = store.get(ImMessageKey('fake:bot', 'r1'))!
+    sessions.answered(rootConfined, rootTrigger)
+    const okRootBare = await sender.send(CHAT, h.text('bare-root'), { session: rootConfined.sessionId })
+    expect(okRootBare.status).toBe('confirmed')
     expect(bot.operations.at(-1)?.target?.thread).toBe('r1')
   })
 
@@ -603,7 +639,8 @@ describe('ImSender receipts', () => {
 
 describe('ImSender.stream', () => {
   it('applies the quote to every published state', async () => {
-    const { bot, sender, sessions } = await boot()
+    const { bot, sender, sessions, store } = await boot()
+    await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), undefined), 'none')
     const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
     const stream = await sender.stream(CHAT, {
       quote: ImMessageKey('fake:bot', 'm9'), operationId: 'op-quoted', session: session.sessionId,
@@ -619,9 +656,20 @@ describe('ImSender.stream', () => {
     expect(bot.operations.at(-1)?.payload).toMatchObject({ quote: 'm9', text: 'final' })
   })
 
+  it('attributes an un-receipted stream to its publishing session on completion', async () => {
+    const { sender, sessions } = await boot()
+    const session = sessions.add('im-stream-no-op', [{ chat: CHAT, writable: true, home: true }])
+    const stream = await sender.stream(CHAT, { session: session.sessionId })
+    stream.update(h.text('streaming'))
+    const result = await stream.close(h.text('done'))
+    const partId = result.handle.parts[0]!.id
+    expect(sender.sessionOf(ImMessageKey('fake:bot', partId))).toBe(session.sessionId)
+  })
+
   it('closes a quoted stream without a final state and aborts another one', async () => {
-    const { sender } = await boot()
+    const { sender, store } = await boot()
     const quote = ImMessageKey('fake:bot', 'm9')
+    await store.put(inboundDraft(quote, undefined), 'none')
     const closed = await sender.stream(CHAT, { quote })
     closed.update(h.text('last'))
     expect((await closed.close()).handle.parts).toHaveLength(1)
@@ -777,23 +825,60 @@ describe('ImSender referrers', () => {
     expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
   })
 
-  it('leaves the target without a referrer for an unknown quote, another chat, or a message without one', async () => {
+  it('uses a same-chat alias as the outbound quote id while preserving the original referrer', async () => {
+    const { bot, sender, store } = await boot()
+    const quoted = await store.put({ ...inboundDraft(ImMessageKey('fake:bot', 'ROBOT1.0_m9'), REFERRER), aliases: ['REFIDX_9'] }, 'none')
+    const result = await sender.send(CHAT, h.text('hello'), { quote: quoted.key })
+    expect(result.status).toBe('confirmed')
+    expect(bot.operations[0]?.target?.referrer).toEqual(REFERRER)
+    expect(bot.operations[0]?.payload).toMatchObject({ quote: 'REFIDX_9' })
+  })
+
+  it('refuses to publish into a previously admitted chat after its source rule is removed or narrowed', async () => {
+    const { bot, sender, sessions } = await boot()
+    const session = sessions.add('s-revoked', [{ chat: CHAT, writable: true }])
+    await expect(sender.send(CHAT, h.text('still admitted'), { session: session.sessionId })).resolves.toMatchObject({ status: 'confirmed' })
+
+    // Narrow the source rule so CHAT is no longer admitted, then remove the source entirely.
+    sender.config.sources = Config({
+      sources: [{ id: 'team', bot: 'fake:bot', chats: ['other'], writable: true, store: 'all' }],
+    }).sources
+    await expect(sender.send(CHAT, h.text('narrowed out'), { session: session.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
+
+    sender.config.sources = []
+    await expect(sender.send(CHAT, h.text('source gone'), { session: session.sessionId }))
+      .rejects.toMatchObject({ code: 'access' })
+    expect(bot.operations).toHaveLength(1)
+  })
+
+  it('leaves the target without a referrer when unquoted or quoting a message without one', async () => {
     const { bot, sender, store } = await boot()
     await sender.send(CHAT, h.text('unquoted'))
-    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
-
-    await sender.send(CHAT, h.text('unknown'), { quote: ImMessageKey('fake:bot', 'nope') })
-    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
-
-    // A message stored under another chat keeps its referrer to itself (the adapter would answer the wrong route).
-    const foreign = await store.put(inboundDraft(ImMessageKey('stub:bot', 'm7'), REFERRER, STUB_CHAT), 'none')
-    await sender.send(CHAT, h.text('foreign'), { quote: foreign.key })
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
 
     // A stored message that arrived without a referrer contributes none.
     const plain = await store.put(ownDraft(ImMessageKey('fake:bot', 'm8')), 'none')
     await sender.send(CHAT, h.text('plain'), { quote: plain.key })
     expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+  })
+
+  it('rejects quoting a message from another bot, another stored chat, or unstored/expired keys on send and stream', async () => {
+    const { bot, sender, store } = await boot()
+    const otherBotMsg = ImMessageKey('stub:bot', 'm-other-bot')
+    await expect(sender.send(CHAT, h.text('cross-bot'), { quote: otherBotMsg })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: otherBotMsg })).rejects.toMatchObject({ code: 'access' })
+
+    const otherChat = ImChatKey('fake:bot', 'other-chat')
+    const otherChatMsg = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm-other-chat'), REFERRER, otherChat), 'none')
+    await expect(sender.send(CHAT, h.text('cross-chat'), { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: otherChatMsg.key })).rejects.toMatchObject({ code: 'access' })
+
+    // Unstored or expired message keys (e.g. from a store: 'none' readonly chat) are also rejected.
+    const unstored = ImMessageKey('fake:bot', 'nope')
+    await expect(sender.send(CHAT, h.text('unstored'), { quote: unstored })).rejects.toMatchObject({ code: 'access' })
+    await expect(sender.stream(CHAT, { quote: unstored })).rejects.toMatchObject({ code: 'access' })
+    expect(bot.operations).toHaveLength(0)
   })
 
   it('carries the referrer into a quoted stream', async () => {
@@ -899,6 +984,32 @@ describe('concurrent receipt capacity reservation', () => {
 
     await sender.dispose()
     expect(receiptsOf(pool).get('op-stream-unclosed')).toMatchObject({ status: 'uncertain' })
+  })
+
+  it('drains in-flight un-receipted send() and aborts/drains un-receipted stream() on dispose', async () => {
+    const { sender, stub } = await boot()
+    let releaseSend!: () => void
+    const sendGate = new Promise<void>((resolve) => { releaseSend = resolve })
+    let sendFinished = false
+    stub.answer = async ({ target, content }) => {
+      await sendGate
+      sendFinished = true
+      return stubResult(target, content, ['m-unreceipted'])
+    }
+
+    const pendingSend = sender.send(STUB_CHAT, h.text('in flight'))
+    const openStream = await sender.stream(CHAT)
+    let disposingResolved = false
+    const disposing = sender.dispose().then(() => { disposingResolved = true })
+
+    await Promise.resolve()
+    expect(disposingResolved).toBe(false)
+
+    releaseSend()
+    await disposing
+    expect(sendFinished).toBe(true)
+    await expect(pendingSend).resolves.toMatchObject({ status: 'confirmed' })
+    await expect(openStream.done).rejects.toThrow()
   })
 })
 

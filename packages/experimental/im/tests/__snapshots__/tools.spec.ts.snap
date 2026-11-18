@@ -115,7 +115,7 @@ exports[`model-visible surface > pins the schema of every registered IM tool 1`]
           "type": "string",
         },
         "thread": {
-          "description": "Thread id to publish into; omit for the chat itself.",
+          "description": "Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none.",
           "type": "string",
         },
       },
@@ -188,7 +188,7 @@ exports[`model-visible surface > pins the schema of every registered IM tool 1`]
           "type": "string",
         },
         "quote": {
-          "description": "Message to answer, by key or seq; omit to publish into the chat.",
+          "description": "Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none.",
           "type": "string",
         },
       },

@@ -70,6 +70,7 @@ describe('ImOutputRegistry lifecycle', () => {
     const hosted = harness.host({ output: 'probe' })
     const trigger = inbound('thread-1')
 
+    harness.messages.set(trigger.key, trigger)
     harness.ctx.emit('im/activity', activity(hosted, { trigger }), 'start')
     await flush()
     expect(probe.calls).toEqual(['begin:1'])
@@ -108,10 +109,16 @@ describe('ImOutputRegistry lifecycle', () => {
 
     // A trigger outside a thread is quoted without a thread of its own.
     const top = inbound()
+    harness.messages.set(top.key, top)
     harness.ctx.emit('im/activity', activity(hosted, { turn: 2, trigger: top }), 'start')
     await flush()
     await probe.ios[1]!.send('hello')
     expect(harness.sender.sends[1]?.options).toEqual({ session: hosted.sessionId, quote: top.key })
+
+    // If the trigger is evicted from history before or during the turn, `quote` is omitted rather than failing with access.
+    harness.messages.delete(top.key)
+    await probe.ios[1]!.send('after-eviction')
+    expect(harness.sender.sends[2]?.options).toEqual({ session: hosted.sessionId })
   })
 
   it('renders nothing for `none`, an unknown renderer or no writable home binding', async () => {
@@ -237,6 +244,7 @@ describe('ImOutputRegistry lifecycle', () => {
 
     // A writable binding of the trigger's chat wins: the trigger is quoted inside that binding's thread.
     const elsewhere = { ...inbound(), key: ImMessageKey(BOT.id, 'm-other'), chat: other }
+    harness.messages.set(elsewhere.key, elsewhere)
     harness.ctx.emit('im/activity', activity(hosted, { trigger: elsewhere }), 'start')
     await flush()
     expect(probe.ios[0]?.chat).toBe(other.key)
@@ -378,6 +386,21 @@ describe('ImOutputRegistry buttons', () => {
     // An envelope without a button is not a click.
     await harness.registry.button(noClick())
     expect(harness.buttons).toHaveLength(1)
+  })
+
+  it('ignores a stored message belonging to another chat when attributing an interaction', async () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    const foreign = harness.host({ key: 'foreign', output: 'probe', bindings: [{ chat: ImChatKey('fake:bot', 'elsewhere'), writable: true, home: true }] })
+    const foreignMsg = { ...inbound(), key: ImMessageKey('fake:bot', 'm-foreign'), chat: chatOf('elsewhere') }
+    // Simulate an alias collision where history.get(aliasKey) returns a message from another chat.
+    harness.messages.set(ImMessageKey('fake:bot', 'REFIDX_shared'), foreignMsg)
+    harness.sender.owners.set(foreignMsg.key, foreign.sessionId)
+
+    await harness.registry.button(click('dsh:plain', { message: 'REFIDX_shared' }))
+    expect(harness.buttons).toHaveLength(1)
+    expect(harness.buttons[0]?.message).toBeUndefined()
+    expect(harness.buttons[0]?.session).toBeUndefined()
   })
 
   it('routes the stop button of a bound session to sessions.stop', async () => {

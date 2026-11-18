@@ -161,7 +161,10 @@ export class ImSessionHost implements ImSessions {
     this.disposed = false
     const domain = await this.ctx.storageDomain.open(imSessionsDomain)
     this.domain = domain
-    for (const [, record] of domain.table('sessions').entries()) this.index(record)
+    for (const [, record] of domain.table('sessions').entries()) {
+      this.index(record)
+      for (let g = 0; g < record.generation; g += 1) this.retired.add(sessionIdOf(record.key, g))
+    }
     for (const [id, stored] of domain.table('deliveries').entries()) this.deliveries.set(id, stored)
     for (const [id, stored] of domain.table('resets').entries()) this.resets.set(id, stored)
     this.retry()
@@ -277,12 +280,32 @@ export class ImSessionHost implements ImSessions {
     return this.list({ chat })
   }
 
+  /**
+   * Session id of any generation of `key` (including generations retired by reset) that already admitted
+   * `deliveryId`, or `undefined` when none did. Dedupe window equals `config.retentionMs`, after which `recover()`
+   * prunes admitted delivery intents.
+   */
+  deliveredTo(key: string, deliveryId: string): SessionId | undefined {
+    const current = this.records.get(key)
+    if (!current) return undefined
+    for (let generation = current.generation; generation >= 0; generation -= 1) {
+      const sessionId = sessionIdOf(key, generation)
+      if (this.deliveries.get(`${sessionId}|${deliveryId}`)?.admitted) return sessionId
+    }
+    return undefined
+  }
+
   async deliver(target: SessionId | string, delivery: ImDelivery): Promise<void> {
     const record = this.resolve(target)
     const id = `${record.sessionId}|${delivery.id}`
     const known = this.deliveries.get(id)
     if (known) {
-      if (!known.admitted) await this.admit(known.session, id)
+      if (!known.admitted) {
+        await this.admit(known.session, id)
+        if (!this.deliveries.has(id)) {
+          throw new ImError('unavailable', `IM delivery ${delivery.id} was discarded by a session reset.`)
+        }
+      }
       return
     }
     const stored: StoredDelivery = { session: record.sessionId, delivery, createdAt: Date.now(), admitted: false }
@@ -291,7 +314,12 @@ export class ImSessionHost implements ImSessions {
     if (inputBytes(delivery) > this.config.maxInputBytes) {
       throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.', { permanent: true })
     }
-    await this.write(() => this.domainOf().table('deliveries').put(id, stored))
+    await this.write(() => {
+      if (this.hosted(record.sessionId) === undefined) {
+        throw new ImError('unavailable', `IM delivery ${delivery.id} was discarded by a session reset.`)
+      }
+      return this.domainOf().table('deliveries').put(id, stored)
+    })
     this.deliveries.set(id, stored)
     await this.admit(record.sessionId, id, true)
     // A reset that ran while this intent was being recorded drops the undelivered intents of the generation it
@@ -311,13 +339,13 @@ export class ImSessionHost implements ImSessions {
       if (recorded !== undefined && known.generation > recorded.fromGeneration) return recorded.replaced
     }
     // The whole lifecycle of the generation being replaced — cancel, dispose, and the record advance that publishes
-    // the next one — runs as ONE serial operation for that session id, because `admit()` queues on the same chain.
+    // the next one — runs as ONE serial operation for that session key, because `admit()` queues on the same chain.
     // Releasing the chain between the dispose and the write let a queued admission read the disposed generation and
     // write its stale record back, which rolled the counter back and made the cleared session current again.
     const outcome = await this.serial<{
       replaced: SessionId | undefined
       advanced?: { old: ImSessionRecord; record: ImSessionRecord }
-    }>(known.sessionId, async () => {
+    }>(key, async () => {
       const current = this.resolve(key)
       const recorded = receiptKey === undefined ? undefined : this.resets.get(receiptKey)
       if (recorded !== undefined) {
@@ -344,22 +372,8 @@ export class ImSessionHost implements ImSessions {
           await this.domainOf().table('resets').put(receiptKey, receipt)
           this.resets.set(receiptKey, receipt)
         }
-        const undelivered: string[] = []
-        for (const [id, stored] of this.deliveries) {
-          if (stored.session === latest.sessionId && !stored.admitted) undelivered.push(id)
-        }
-        if (undelivered.length > 0) {
-          await this.domainOf().table('deliveries').deleteMany(undelivered)
-          for (const id of undelivered) this.deliveries.delete(id)
-        }
-        const generation = latest.generation + 1
-        const sessionId = sessionIdOf(key, generation)
-        const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
-        await this.save(next)
-        this.ids.delete(latest.sessionId)
-        this.retired.add(latest.sessionId)
-        this.triggers.delete(latest.sessionId)
-        return { replaced: latest.sessionId, advanced: { old: latest, record: next } }
+        const advanced = await this.advanceGeneration(latest, now)
+        return { replaced: latest.sessionId, advanced }
       })
     })
     // Announced after the serial operation settled: a listener may call back into this host.
@@ -378,8 +392,23 @@ export class ImSessionHost implements ImSessions {
     })
   }
 
-  agent(target: SessionId | string): Promise<Agent> {
-    return this.deps.agents.open(this.resolve(target))
+  async agent(target: SessionId | string): Promise<Agent> {
+    if (this.retired.has(target as SessionId)) {
+      throw new ImError('unavailable', `IM session ${target} was replaced by a reset.`)
+    }
+    const initial = this.resolve(target)
+    return await this.serial(initial.key, async () => {
+      // Re-resolve inside `serial(key)` after any in-flight `reset()` finishes so a retired `SessionId` or a
+      // generation with an uncommitted reset receipt is never reopened after disposal.
+      const current = this.resolve(initial.key)
+      if (target !== initial.key && current.sessionId !== target) {
+        throw new ImError('unavailable', `IM session ${target} was replaced by a reset.`)
+      }
+      if (this.hasPendingReset(current.sessionId)) {
+        throw new ImError('unavailable', `IM session ${current.sessionId} has an uncommitted reset; retry after recovery.`)
+      }
+      return await this.deps.agents.open(current)
+    })
   }
 
   of(sessionId: SessionId): ImSessionRecord | undefined {
@@ -404,9 +433,47 @@ export class ImSessionHost implements ImSessions {
 
   // -------------------------------------------------------------------------------------------------------------
 
+  private async advanceGeneration(
+    latest: ImSessionRecord,
+    now: number,
+  ): Promise<{ old: ImSessionRecord; record: ImSessionRecord }> {
+    const undelivered: string[] = []
+    for (const [id, stored] of this.deliveries) {
+      if (stored.session === latest.sessionId && !stored.admitted) undelivered.push(id)
+    }
+    if (undelivered.length > 0) {
+      await this.domainOf().table('deliveries').deleteMany(undelivered)
+      for (const id of undelivered) this.deliveries.delete(id)
+    }
+    const generation = latest.generation + 1
+    const sessionId = sessionIdOf(latest.key, generation)
+    const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
+    await this.save(next)
+    this.ids.delete(latest.sessionId)
+    this.retired.add(latest.sessionId)
+    this.triggers.delete(latest.sessionId)
+    return { old: latest, record: next }
+  }
+
   private async recover(): Promise<void> {
+    // Finish any committed reset receipt whose generation advance never persisted before admitting pending deliveries,
+    // so deliveries queued for the replaced generation are discarded instead of executing in the old session.
+    const blocked = new Set<SessionId>()
+    for (const [receiptKey, stored] of [...this.resets]) {
+      const current = this.hosted(stored.replaced)
+      if (current === undefined) continue
+      try {
+        await this.reset(current.key, 'recover', { operationId: receiptKey.slice(current.key.length + 1) })
+      } catch (error: unknown) {
+        // One failing reset must not starve other sessions' deliveries or retention pruning,
+        // and its own queued deliveries must stay un-admitted until the reset finishes.
+        blocked.add(stored.replaced)
+        this.ctx.logger.warn('IM reset %s remains pending: %s', receiptKey, error)
+      }
+      if (this.held) return
+    }
     for (const [id, stored] of [...this.deliveries]) {
-      if (stored.admitted) continue
+      if (stored.admitted || blocked.has(stored.session)) continue
       try {
         await this.admit(stored.session, id)
       } catch (error: unknown) {
@@ -416,18 +483,29 @@ export class ImSessionHost implements ImSessions {
       if (this.held) return
     }
     const cutoff = Date.now() - this.config.retentionMs
-    await this.write(async () => {
-      for (const [id, stored] of this.deliveries) {
-        if (!stored.admitted || stored.createdAt >= cutoff) continue
-        await this.domainOf().table('deliveries').delete(id)
-        this.deliveries.delete(id)
-      }
-      for (const [id, stored] of this.resets) {
-        if (stored.createdAt >= cutoff) continue
-        await this.domainOf().table('resets').delete(id)
-        this.resets.delete(id)
-      }
-    })
+    const expiredDeliveries: string[] = []
+    for (const [id, stored] of this.deliveries) {
+      if (stored.admitted && stored.createdAt < cutoff) expiredDeliveries.push(id)
+    }
+    const expiredResets: string[] = []
+    for (const [id, stored] of this.resets) {
+      // Never prune an uncommitted reset receipt: its replaced generation is still hosted, so dropping the receipt
+      // before advance completes would allow stale deliveries of that generation to be admitted on the next pass.
+      if (this.hosted(stored.replaced) !== undefined || stored.createdAt >= cutoff) continue
+      expiredResets.push(id)
+    }
+    if (expiredDeliveries.length > 0 || expiredResets.length > 0) {
+      await this.write(async () => {
+        if (expiredDeliveries.length > 0) {
+          await this.domainOf().table('deliveries').deleteMany(expiredDeliveries)
+          for (const id of expiredDeliveries) this.deliveries.delete(id)
+        }
+        if (expiredResets.length > 0) {
+          await this.domainOf().table('resets').deleteMany(expiredResets)
+          for (const id of expiredResets) this.resets.delete(id)
+        }
+      })
+    }
   }
 
   /**
@@ -439,7 +517,7 @@ export class ImSessionHost implements ImSessions {
    * @param fresh - recorded by this very call, so the log cannot hold it yet and no read is needed.
    */
   admit(sessionId: SessionId, id: string, fresh: boolean = false): Promise<void> {
-    return this.serial(sessionId, async () => {
+    return this.serial(this.hosted(sessionId)?.key ?? sessionId, async () => {
       const stored = this.deliveries.get(id)
       if (stored === undefined || stored.admitted) return
       const record = this.hosted(sessionId)
@@ -449,6 +527,9 @@ export class ImSessionHost implements ImSessions {
         // merely unknown (a store this process has not loaded) keeps its intents pending.
         if (this.retired.has(sessionId)) await this.discard(id)
         throw new ImError('unavailable', `IM session ${sessionId} of delivery ${id} is no longer hosted.`)
+      }
+      if (this.hasPendingReset(sessionId)) {
+        throw new ImError('unavailable', `IM session ${sessionId} has an uncommitted reset; delivery ${id} remains pending.`)
       }
       const { delivery } = stored
       const agent = await this.deps.agents.open(record)
@@ -531,6 +612,17 @@ export class ImSessionHost implements ImSessions {
     this.index(record)
   }
 
+  /**
+   * Whether `sessionId` has an uncommitted reset receipt (`replaced === sessionId`), so `admit()` refuses with
+   * `unavailable` and keeps the intent pending until the reset advances.
+   */
+  private hasPendingReset(sessionId: SessionId): boolean {
+    for (const stored of this.resets.values()) {
+      if (stored.replaced === sessionId) return true
+    }
+    return false
+  }
+
   /** Forget one delivery intent whose generation is gone, so no recovery pass retries it. */
   private async discard(id: string): Promise<void> {
     await this.write(async () => {
@@ -543,8 +635,8 @@ export class ImSessionHost implements ImSessions {
     return this.writes.run(operation)
   }
 
-  private serial<T>(sessionId: SessionId, operation: () => Promise<T>): Promise<T> {
-    return runKeyed(this.chains, sessionId, operation)
+  private serial<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    return runKeyed(this.chains, key, operation)
   }
 
   private domainOf(): ImSessionsDomain {

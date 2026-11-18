@@ -209,7 +209,14 @@ export async function sendMessagePayload(
     const request = fillRequest(body, ticket, ctx.quote)
     try {
       const answer = await bot.api.sendMessage(address, request, ctx.options.signal)
-      return { id: answer.id, kind: messageKindOf(request.msg_type), time: Date.now(), raw: answer }
+      const refIdx = answer.ext_info?.ref_idx
+      return {
+        id: answer.id,
+        kind: messageKindOf(request.msg_type),
+        time: Date.now(),
+        ...refIdx ? { aliases: [refIdx] } : {},
+        raw: answer,
+      }
     } catch (error) {
       if (!isDedupe(error) || attempt > 1) throw error
       if (ticket?.reused) throw alreadyPublished(bot, ticket, error)

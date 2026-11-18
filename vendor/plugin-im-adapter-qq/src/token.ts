@@ -10,6 +10,7 @@
  */
 
 import { PlatformError } from '@deepseek-ai/cordis-plugin-im-core'
+import { classify } from './errors.ts'
 import { DEFAULT_TOKEN_URL } from './config.ts'
 
 /** Body of a successful `getAppAccessToken` call; `expires_in` is a string in some platform answers. */
@@ -128,8 +129,8 @@ export class AccessToken {
  // A refresh that fails while the cached token is still accepted must not break the caller: the platform
  // keeps the old token valid for the remaining window.
       if (this.live) return this.value!
-      if (PlatformError.is(error)) throw asUnpublishedTokenError(error)
-      throw new PlatformError('retryable', 'failed to obtain a QQ access token', { cause: error, published: 'no' })
+      const classified = classify(error)
+      throw asUnpublishedTokenError(classified, error)
     }
     const accessToken = result?.access_token
     if (typeof accessToken !== 'string' || !accessToken) {
@@ -158,11 +159,15 @@ function cancelledTokenError(signal: AbortSignal): PlatformError {
   })
 }
 
-function asUnpublishedTokenError(error: PlatformError): PlatformError {
+function asUnpublishedTokenError(error: PlatformError, original?: unknown): PlatformError {
   if (error.published === 'no') return error
-  return new PlatformError(error.kind, error.message, {
+  const cause = error.cause ?? original ?? error
+  const message = original !== undefined && cause === original && error.kind === 'retryable' && error.code === undefined && error.retryAfterMs === undefined
+    ? 'failed to obtain a QQ access token'
+    : error.message
+  return new PlatformError(error.kind, message, {
     published: 'no',
-    cause: error,
+    cause,
     ...error.code === undefined ? {} : { code: error.code },
     ...error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs },
   })

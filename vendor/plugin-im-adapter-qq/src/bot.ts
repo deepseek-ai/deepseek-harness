@@ -105,6 +105,9 @@ export class QQBot extends Adapter<QQConfig, QQModes> {
         const init: Http.RequestConfig = { method: 'POST', data }
         if (signal) init.signal = signal
         const response = await ctx.http(url, init)
+        if (!response.ok) {
+          throw Object.assign(new Error(`QQ access-token endpoint answered ${response.status}`), { response })
+        }
         return await response.json()
       },
     })
