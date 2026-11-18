@@ -84,6 +84,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         pad.received = { [weak self] event in
             guard let self else { return }
             var value: [String: Any] = ["type": event.type.rawValue, "timestamp": event.timestamp, "flags": event.modifierFlags.rawValue,
+                                       "sourcePid": event.cgEvent?.getIntegerValueField(.eventSourceUnixProcessID) ?? 0,
                                        "shift": event.modifierFlags.contains(.shift), "command": event.modifierFlags.contains(.command)]
             if [.keyDown, .keyUp].contains(event.type) {
                 value["keyCode"] = event.keyCode

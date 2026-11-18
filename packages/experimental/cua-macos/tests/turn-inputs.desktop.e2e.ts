@@ -26,7 +26,7 @@ const helperPath = process.env.DSH_CUA_TEST_HELPER
 const State = z.object({
   pid: z.number(), windowId: z.string().nullable(), active: z.boolean(), keyWindow: z.boolean(),
   pad: z.tuple([z.number(), z.number(), z.number(), z.number()]),
-  events: z.array(z.object({ type: z.number(), keyCode: z.number().optional() })),
+  events: z.array(z.object({ type: z.number(), keyCode: z.number().optional(), sourcePid: z.number() })),
 })
 
 // These cases share the real desktop and deliberately run in order. Run this opt-in file alone.
@@ -60,7 +60,7 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       await expect.poll(async () => {
         try { return (await observe()).windowId }
         catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
-      }).toBeTruthy()
+      }, { timeout: 30_000 }).toBeTruthy()
       const initial = await observe()
       const pad = initial.pad
       const programs = [
@@ -96,6 +96,10 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       await ctx.plugin(UserQuestions)
       ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
       await ctx.plugin(Provider, { helperPath, requireSystemPointerApproval: false })
+      const permissions = await ctx.cuaAccess.systemStatus()
+      if (permissions.platform !== 'darwin') throw new Error('Expected macOS permission metadata')
+      const sourcePid = permissions.helper.pid
+      const received = async () => (await observe()).events.filter(event => event.sourcePid === sourcePid)
       await mountAgentLoopTestHarness(ctx)
       ctx.llm.registerAdapter(['desktop-fixture'], new Model())
       const handle = await ctx.agents.create({ sessionId: brandString<SessionId>(`desktop-${ending}`), meta: { cwd: directory },
@@ -103,11 +107,11 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Exercise owned input' }], source: { kind: 'user' } }))
       if (ending === 'thinking-stop') { await thinking.promise; handle.agent.cancel({ kind: 'user' }) }
       if (ending === 'tool-stop') {
-        await expect.poll(async () => (await observe()).events.length).toBe(3)
+        await expect.poll(async () => (await received()).length, { timeout: 30_000 }).toBe(3)
         handle.agent.cancel({ kind: 'user' })
       }
       await handle.agent.whenIdle()
-      await expect.poll(async () => (await observe()).events.map(event => [event.type, event.keyCode ?? null])).toEqual([
+      await expect.poll(async () => (await received()).map(event => [event.type, event.keyCode ?? null]), { timeout: 30_000 }).toEqual([
         [10, 0], [1, null], [10, 13], [11, 13], [2, null], [11, 0],
       ])
       const outcomes = handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/end')

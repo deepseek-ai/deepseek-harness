@@ -110,7 +110,7 @@ turn/start
 turn/end
 ```
 
-`turn/*`、`step/*`、`system/message`、`user/message`、`assistant/message`、`assistant/attempt` 和 `tool/*` 是持久会话事件；其余是分属三个事件域的实时扩展点。`agent/assistant-stream` 发布进程本地 start、瞬态 chunk 与 end frame。loop 会在 committed end frame 前把完整紧凑 stream 提交为一个 message 或仅日志 attempt；Web Session-follow adapter 是该 live event 唯一的远程消费方。`agent/pre-step`、`agent/request`、`llm/stream` 和三个 `tools/*` 事件是 waterfall（瀑布式事件），其监听器必须调用 `next()` 才能委托下去；`agent/turn-stopping` 是 serial 事件，没有 `next()`。`agent/turn-finalizing` 在正常完成、错误和取消时等待所有资源清理，再提交 `turn/end` 和开始下一回合；所有监听器结束后统一报告失败。
+`turn/*`、`step/*`、`system/message`、`user/message`、`assistant/message`、`assistant/attempt` 和 `tool/*` 是持久 Session 事件。其他事件是实时扩展点。`agent/assistant-stream` 发布进程本地 start、瞬态分片和 end；loop 在 committed end 之前提交完整 stream，Web Session-follow 是唯一的远程消费方。`agent/pre-step`、`agent/request`、`llm/stream` 和 `tools/*` 的 waterfall 监听器必须调用 `next()`；`agent/turn-stopping` 是 serial 事件。`agent/turn-finalizing` 在 `turn/end` 前等待所有资源清理，覆盖错误和取消路径；所有监听器结束后统一报告失败。
 
 fork 创建存储调用方提供的历史；共享前缀的后端先持久化父前缀（[生命周期](../packages/core/agent-loop/README.zh.md#understand-the-implementation)）。工厂 setup 在 Session 进入 SessionStore 并完成 `session/created` 之后、`agent/created` 之前运行；收尾事件在移除之前提交。
 
