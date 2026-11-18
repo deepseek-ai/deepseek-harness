@@ -8,7 +8,7 @@
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, Menu,
+  IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestCheck, ChangeRequestReviewer, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -32,7 +32,10 @@ type Translate = PropsLocale<typeof NS>['t']
 /** Checks or reviewers a block lists before it folds the rest. */
 const LISTED = 5
 
-/** The control that lists everything a block holds, or folds it again. */
+/**
+ * The control that lists everything a block holds, or folds it again. Its chevron points down to list and up to fold,
+ * as the Session panel's fold does.
+ */
 function Fold({ expanded, total, onToggle, t }: {
   readonly expanded: boolean
   readonly total: number
@@ -41,8 +44,8 @@ function Fold({ expanded, total, onToggle, t }: {
 }): ReactNode {
   return (
     <button type="button" className={clsx(css.statusLine, css.statusLineButton, css.statusFold)} aria-expanded={expanded} onClick={onToggle}>
-      <span className={css.statusIcon}>
-        <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, !expanded && css.chevronClosed)} />
+      <span className={css.statusIcon} data-forge-review-fold={expanded ? 'less' : 'more'}>
+        {expanded ? <IconChevronUpOutlineRegular size={12} /> : <IconChevronDownOutlineRegular size={12} />}
       </span>
       {expanded ? t('fold.less') : t('reviewPage.showAll', { count: total })}
     </button>

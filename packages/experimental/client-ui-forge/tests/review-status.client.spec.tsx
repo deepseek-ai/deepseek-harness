@@ -113,7 +113,11 @@ describe('ReviewStatus checks', () => {
 
     const fold = within(block).getByRole('button', { name: 'Show all 5' })
     expect(fold.getAttribute('aria-expanded')).toBe('false')
+    // The chevron points down to list everything and up to fold again.
+    expect(fold.querySelector('[data-forge-review-fold]')?.getAttribute('data-forge-review-fold')).toBe('more')
     fireEvent.click(fold)
+    expect(within(block).getByRole('button', { name: 'Show less' }).querySelector('[data-forge-review-fold]')?.getAttribute('data-forge-review-fold'))
+      .toBe('less')
     expect([...block.querySelectorAll('[data-forge-check-group]')].map(group => group.getAttribute('data-forge-check-group')))
       .toEqual(['failed', 'running', 'cancelled', 'passed', 'other'])
     expect(within(block).getByRole('group', { name: 'Passed' }).textContent).toContain('Passed · 1')
