@@ -782,7 +782,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(transaction).toHaveBeenCalledTimes(2)
   })
 
-  it('contains a queued time callback refused while its owning context unloads', async () => {
+  it('reports a queued time callback refused when root shutdown closes AgentRegistry admission', async () => {
     const test = await setup([])
     await vi.advanceTimersByTimeAsync(0)
     const entered = Promise.withResolvers<undefined>()
@@ -814,14 +814,15 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     const cleanup = async () => {
       release.resolve(undefined)
       allowStop.resolve(undefined)
-      await Promise.allSettled([unloading, owner.dispose(), runtime.dispose()])
+      await Promise.allSettled([unloading, test.ctx.fiber.dispose(), owner.dispose(), runtime.dispose()])
     }
     beforeDispose.push(cleanup)
     try {
       runtime.requestDrive()
       await entered.promise
       runtime.requestDrive()
-      unloading = owner.dispose()
+      // Root shutdown closes provider admission while the child retains its committed agents binding.
+      unloading = test.ctx.fiber.dispose()
       await unloadingEntered.promise
       release.resolve(undefined)
       await reported.promise
