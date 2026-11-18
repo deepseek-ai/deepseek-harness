@@ -246,8 +246,9 @@ describe('local request-image cache', () => {
   it('rejects an impossible hard limit after reaching one pixel', async () => {
     const attachments = await store()
     const attachment = await attachments.saveImage({ data: await image(64, 32), mediaType: 'image/png' })
-    await expect(attachments.readImageRequest(attachment, { width: 64, height: 32, maxImageBytes: 1, imageTargetBytes: 1 }))
-      .rejects.toMatchObject({ code: 'IMAGE_REQUEST_TOO_LARGE', message: expect.stringContaining('1x1 pixels') })
+    const request = attachments.readImageRequest(attachment, { width: 64, height: 32, maxImageBytes: 1, imageTargetBytes: 1 })
+    await expect(request).rejects.toMatchObject({ code: 'IMAGE_REQUEST_TOO_LARGE' })
+    await expect(request).rejects.toThrow('1x1 pixels')
   })
 
   it('rejects invalid soft targets and a soft target above the hard limit', async () => {
