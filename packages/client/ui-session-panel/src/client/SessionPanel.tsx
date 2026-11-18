@@ -1,9 +1,11 @@
 /** Floating Session panel in the Chat View's aside: section titles drawn from the section roster, bodies from the section slot. */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FocusEvent, type ReactNode } from 'react'
+import {
+  useCallback, useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type DragEvent, type FocusEvent, type ReactNode,
+} from 'react'
 import { IconDragHandleOutlineRegular, isBehindModal, observeComposition, useRowDragPreview } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import { ENVIRONMENT_SECTION_ID } from './sections.ts'
-import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
+import type { SessionPanelPresentation, SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
 import { presentationOf } from './visibility.ts'
 import css from './SessionPanel.module.css'
 
@@ -87,11 +89,62 @@ function sectionHalf(event: DragEvent<HTMLElement>): DropTarget['placement'] {
 }
 
 /**
+ * Whether the reader can move a section: at least two of the sections that
+ * show have a drag handle. With one, every place it could land is the place
+ * it has, since a section always lands after Environment. CSS hides a
+ * section whose body rendered nothing, so the answer is read from the page.
+ * @param head - a section's title row.
+ * @returns whether a drag can change the order.
+ */
+function canReorder(head: Element): boolean {
+  const panel = head.closest('[data-session-panel]')
+  /* v8 ignore next -- a title row renders only inside the panel. */
+  if (panel === null) return false
+  let movable = 0
+  for (const section of panel.querySelectorAll('[data-session-panel-section]')) {
+    if (section.querySelector('[data-session-panel-grip]') !== null && getComputedStyle(section).display !== 'none') movable += 1
+  }
+  return movable >= 2
+}
+
+/** What the panel showed at its last render, and the entrance or exit it is playing. */
+interface PanelMotion {
+  /** How the panel showed. */
+  readonly presentation: SessionPanelPresentation | 'hidden'
+  /** Whether the panel had room to dock. */
+  readonly fits: boolean
+  /** The animation in progress; absent once it ends. */
+  readonly phase?: 'enter' | 'exit'
+  /** The presentation a leaving panel keeps until its exit ends. */
+  readonly leaving?: SessionPanelPresentation
+}
+
+/**
+ * Decide the motion for a change in what the panel shows. The panel plays
+ * its entrance or exit only when the reader's press shows or hides it: the
+ * toggle, or a press that closes the overlay. A change in the room to dock
+ * shows or hides the panel at once, as when a panel mounts and learns its
+ * room, on a switch to another Session, or when the window resizes. Nothing
+ * plays for a reader who asked for reduced motion.
+ * @param motion - what the panel showed at its last render.
+ * @param presentation - how the panel shows now.
+ * @param fits - whether the panel has room to dock now.
+ * @returns the state for this render.
+ */
+function motionAfter(motion: PanelMotion, presentation: SessionPanelPresentation | 'hidden', fits: boolean): PanelMotion {
+  const before = motion.presentation
+  if ((before === 'hidden') === (presentation === 'hidden')) return { ...motion, presentation, fits }
+  if (motion.fits !== fits || matchMedia('(prefers-reduced-motion: reduce)').matches) return { presentation, fits }
+  return before === 'hidden' ? { presentation, fits, phase: 'enter' } : { presentation, fits, phase: 'exit', leaving: before }
+}
+
+/**
  * Let the reader reorder the sections by dragging a section's title row onto
  * another section. The drag is the browser's own, with an offscreen copy of
  * the title row as its image, and a drop moves the section through
  * `moveSection`: to the side of the target the pointer's half names, and
- * always after Environment, whose own title row is no drag source.
+ * always after Environment, whose own title row is no drag source. A drag
+ * does not start while fewer than two shown sections can move.
  * @param moveSection - moves a section beside another.
  * @returns the section being dragged, where it would land, and the handlers for a section and its title row.
  */
@@ -137,6 +190,10 @@ function useSectionReorder(moveSection: (id: string, target: string, placement: 
       : {
         draggable: true,
         onDragStart: (event: DragEvent<HTMLElement>): void => {
+          if (!canReorder(event.currentTarget)) {
+            event.preventDefault()
+            return
+          }
           event.dataTransfer.effectAllowed = 'move'
           event.dataTransfer.setData('application/x-dsh-session-panel-section', id)
           setDragged(id)
@@ -158,9 +215,14 @@ function useSectionReorder(moveSection: (id: string, target: string, placement: 
  * gutter holds it, or the transcript can move aside to leave it. The plugin
  * observes the probe, so the panel renders again only when the docking
  * decision flips. While the docking preference is on, the probe carries the
- * mark that has the Conversation body keep the panel's room free. The title
- * row of every section but Environment is draggable, which reorders the
- * sections, and holds a drag handle that its stylesheet shows on hover.
+ * mark that has the Conversation body keep the panel's room free. A press
+ * that shows or hides the panel plays its entrance or exit, and the probe
+ * then carries the mark that has the Conversation body move the transcript
+ * over the same time; a leaving panel stays until its exit ends. A panel that
+ * shows or hides for its room, as on a switch to another Session or a resized
+ * window, does so at once. The title row of every section but
+ * Environment is draggable, which reorders the sections, and holds a drag
+ * handle that its stylesheet shows on hover.
  * @param props - Session values, shared visibility, sections and their move action, the dock probes and their ref factory, and copy.
  * @returns the dock probe and, unless hidden, the panel.
  */
@@ -176,16 +238,29 @@ export function SessionPanel({
   const sections = useSections(entries => entries)
   const panel = useRef<HTMLElement>(null)
   const dismissOverlay = useCallback(() => { closeOverlay(sessionId) }, [closeOverlay, sessionId])
-  const owner = useMemo((): SessionPanelSectionOwnerProps | undefined => presentation === 'hidden'
+  const [motion, setMotion] = useState<PanelMotion>({ presentation, fits })
+  if (motion.presentation !== presentation || motion.fits !== fits) setMotion(motionAfter(motion, presentation, fits))
+  const rendered = presentation === 'hidden' && motion.leaving !== undefined ? motion.leaving : presentation
+  const owner = useMemo((): SessionPanelSectionOwnerProps | undefined => rendered === 'hidden'
     ? undefined
-    : { presentation, dismissOverlay },
-  [presentation, dismissOverlay])
+    : { presentation: rendered, dismissOverlay },
+  [rendered, dismissOverlay])
   useOverlayDismissal(panel, presentation === 'overlay', toggleElementId(sessionId), dismissOverlay)
-  const focus = useFocusReturn(owner === undefined, toggleElementId(sessionId))
+  const focus = useFocusReturn(presentation === 'hidden', toggleElementId(sessionId))
   const reorder = useSectionReorder(moveSection)
+  const endMotion = useCallback((event: AnimationEvent<HTMLElement>): void => {
+    // Rows animate too, and their events bubble; only the panel's own animation ends its entrance or exit.
+    if (event.target === event.currentTarget) setMotion(current => ({ presentation: current.presentation, fits: current.fits }))
+  }, [])
   return (
     <>
-      <span ref={probeRef} className={css.dockProbe} data-session-panel-probe="" data-session-panel-reserve={docks ? '' : undefined} />
+      <span
+        ref={probeRef}
+        className={css.dockProbe}
+        data-session-panel-probe=""
+        data-session-panel-reserve={docks ? '' : undefined}
+        data-session-panel-moving={motion.phase === undefined ? undefined : ''}
+      />
       {owner !== undefined && (
         <aside
           id={panelElementId(sessionId)}
@@ -194,7 +269,9 @@ export function SessionPanel({
           ref={panel}
           onFocus={focus.onFocus}
           onBlur={focus.onBlur}
+          onAnimationEnd={endMotion}
           data-session-panel={owner.presentation}
+          data-session-panel-motion={motion.phase}
         >
           {sections.map((section) => {
             const titleId = `${panelElementId(sessionId)}-${section.id}`

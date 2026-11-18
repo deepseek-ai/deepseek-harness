@@ -26,6 +26,10 @@ The panel's dock probe is 1px wide while the gutter holds the panel, or while th
 
 The handles follow the column: their positions take half the inset, and each takes its width from the gutter on its own side. While the body makes room, the reserve holds the column's end edge, so a drag moves only the start edge, and the width changes by the pointer's travel instead of twice it, on either handle. A column dragged wider than the start gutter can give takes its room back: the panel hides and the column centers, as a column dragged wide already hid the panel docked in the gutter.
 
+### One motion for the panel and the transcript
+
+A press that shows or hides the panel plays its entrance or exit, and the transcript moves over the same 160ms and curve: the panel's stylesheet sets `--dsh-chat-end-reserve-transition` on the Conversation body while the animation runs, and the scrollport's padding and the aside layer's margin both take their transition from it. The panel tells a press from a change of room by comparing renders: what it shows changed while its room stayed the same. A change of room shows or hides the panel at once, which covers a mount, a switch to another Session, a resized window, and a dragged transcript width.
+
 ## Alternatives considered
 
 - **A pin that opts in to making room.** The panel would dock at laptop widths only after the reader found and pressed a pin on it. In a wide window the pin changes nothing visible, and until it is pressed the default at laptop widths stays an overlay that closes on the next press. The panel docks wherever it can instead, and the toggle is the one control that hides it.
@@ -35,6 +39,8 @@ The handles follow the column: their positions take half the inset, and each tak
 - **Percentages without a published width.** The inset would differ between the scrollport, the width handles, and the aside layer, and the largest reserve would read a width that the inset itself narrows.
 - **A second probe and a room type in the plugin's state.** The plugin would track the gutter and the reserve apart. Nothing reads them apart, so one probe reports their union and the plugin's interfaces stay as they were.
 - **No width handles while the transcript makes room.** The handles' positions stay simple, but the panel docks by default at laptop widths, so the reader would lose the width drag there.
+- **A transition that is always on.** The inset follows the window and the dragged width every frame, so a standing transition makes the transcript trail the pointer during a resize or a width drag, and it would animate across a Session switch. The transition is on only while a press shows or hides the panel.
+- **Animating when the window crosses the width that makes room.** The inset steps there inside the stylesheet, one frame before the panel learns of it, so the transcript would jump while the panel animated. Both change at once instead.
 - **Making room in embedded Chat Views.** An embedded transcript's width is a percentage of its frame, so the inset would need that frame's own measure, and embedded frames are rarely wide enough. An embedded Chat View makes no room.
 
 ## Consequences
@@ -43,6 +49,7 @@ The handles follow the column: their positions take half the inset, and each tak
 - A reader who wants the transcript centered hides the panel from the toggle.
 - With the default transcript width the panel docks from a Chat frame about 1068px wide; below that, and beside a transcript dragged wide, it is the overlay it was.
 - A width drag beside the docked panel moves one edge of the column, not both.
+- The transcript's motion re-lays it out on each of about ten frames. Beside the longest recorded Session, 790 elements, no frame took longer than 9.3ms; a much longer transcript has not been measured.
 - `ui-conversation` publishes the scrollport's width and two derived lengths, pads its scrollport's end, and moves its width handles; `ui-chat`'s aside layer has an end margin and a gutter that counts the inset. Neither renders or observes anything more for them.
 
 ## Testing

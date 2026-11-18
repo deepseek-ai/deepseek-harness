@@ -366,6 +366,109 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('moves the transcript with the panel when a press shows or hides it, and shows it at once on a reload', async () => {
+    await openSession()
+    // A page that does not ask for reduced motion, as the page of the other cases does.
+    const moving = await newPanelPage(browser)
+    onTestFinished(() => moving.close())
+    onTestFailed(() => saveFailureShot(moving, 'web-e2e-session-panel-motion'))
+    const errors = watchConsole(moving)
+    // A 260px gutter: the panel docks by the transcript moving 88px, an end inset of 176px.
+    await moving.setViewportSize({ width: TRANSCRIPT + 2 * 260 + chrome, height: 1000 })
+    await moving.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSeed(moving)
+    await shows(moving, 'docked')
+    /**
+     * Sample what each frame shows until the page settles, in a task queued from the frame callback: it runs after
+     * that frame's style, layout, size observers, and paint, so a state a size observer replaces is not reported.
+     */
+    const startSampling = () => moving.evaluate(() => {
+      const frames: { inset: number; motion: string | null; opacity: number | null; edge: number | null; sideways: number }[] = []
+      Object.assign(window, { sampled: frames })
+      const channel = new MessageChannel()
+      channel.port1.onmessage = (): void => {
+        const scroll = document.querySelector<HTMLElement>('[data-conversation-scroll]')
+        const panel = document.querySelector<HTMLElement>('[data-session-panel]')
+        if (scroll !== null) {
+          frames.push({
+            inset: Number.parseFloat(getComputedStyle(scroll).paddingInlineEnd),
+            motion: panel === null ? null : panel.dataset['sessionPanelMotion'] ?? 'none',
+            opacity: panel === null ? null : Number(getComputedStyle(panel).opacity),
+            edge: panel === null ? null : scroll.getBoundingClientRect().left + scroll.clientWidth - panel.getBoundingClientRect().right,
+            sideways: scroll.scrollWidth - scroll.clientWidth,
+          })
+        }
+        requestAnimationFrame(() => { channel.port2.postMessage(0) })
+      }
+      requestAnimationFrame(() => { channel.port2.postMessage(0) })
+    })
+    const sampled = () => moving.evaluate(() => (window as never as { sampled: {
+      inset: number
+      motion: string | null
+      opacity: number | null
+      edge: number | null
+      sideways: number
+    }[] }).sampled.splice(0))
+    const toggle = moving.locator('[data-session-panel-toggle]')
+    await startSampling()
+
+    // The toggle hides the panel: it leaves over the same frames the transcript takes its room back.
+    await toggle.click()
+    await shows(moving, null)
+    const leaving = await sampled()
+    const exit = leaving.filter(frame => frame.motion === 'exit')
+    expect(exit.length).toBeGreaterThan(4)
+    expect(leaving.every((frame, index) => index === 0 || frame.inset <= leaving[index - 1]!.inset)).toBe(true)
+    expect(exit.some(frame => frame.inset > 20 && frame.inset < 156)).toBe(true)
+    // The slide stays inside the scrollport: a panel past its end edge would give the body a sideways scroll range,
+    // whose bar lifts the composer for as long as it shows.
+    expect(leaving.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
+    // One time and one curve: the panel's opacity and its slide across its 8px edge follow the inset's progress.
+    for (const frame of exit) {
+      expect(Math.abs(frame.opacity! - frame.inset / 176)).toBeLessThan(0.06)
+      expect(Math.abs(frame.edge! - 8 * frame.inset / 176)).toBeLessThan(0.8)
+    }
+    expect(leaving.at(-1)).toEqual({ inset: 0, motion: null, opacity: null, edge: null, sideways: 0 })
+
+    // The toggle shows it again: the same motion in reverse.
+    await toggle.click()
+    await shows(moving, 'docked')
+    await expect.poll(() => moving.locator('[data-session-panel]').getAttribute('data-session-panel-motion')).toBeNull()
+    const entering = await sampled()
+    const enter = entering.filter(frame => frame.motion === 'enter')
+    expect(enter.length).toBeGreaterThan(4)
+    expect(entering.every((frame, index) => index === 0 || frame.inset >= entering[index - 1]!.inset)).toBe(true)
+    expect(enter.some(frame => frame.inset > 20 && frame.inset < 156)).toBe(true)
+    expect(entering.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
+    for (const frame of enter) {
+      expect(Math.abs(frame.opacity! - frame.inset / 176)).toBeLessThan(0.06)
+      expect(Math.abs(frame.edge! - 8 * frame.inset / 176)).toBeLessThan(0.8)
+    }
+    expect(entering.at(-1)).toEqual({ inset: 176, motion: 'none', opacity: 1, edge: 8, sideways: 0 })
+
+    // A window resized past the room and back shows and hides the panel at once: no frame is in between.
+    const viewport = moving.viewportSize()!
+    await moving.setViewportSize({ width: 1100, height: viewport.height })
+    await shows(moving, null)
+    await moving.setViewportSize(viewport)
+    await shows(moving, 'docked')
+    const resized = await sampled()
+    expect(resized.filter(frame => frame.motion === 'enter' || frame.motion === 'exit')).toEqual([])
+    expect(resized.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
+    expect(resized.filter(frame => frame.motion === 'none').every(frame => frame.opacity === 1 && frame.edge === 8)).toBe(true)
+
+    // A reload, like a switch to another Session, mounts the panel shown: it is opaque and in place in its first frame.
+    await moving.reload({ waitUntil: 'load' })
+    await startSampling()
+    await openSeed(moving)
+    await shows(moving, 'docked')
+    await moving.waitForTimeout(300)
+    const arriving = (await sampled()).filter(frame => frame.motion !== null)
+    expect(arriving.length).toBeGreaterThan(0)
+    expect(new Set(arriving.map(frame => JSON.stringify(frame)))).toEqual(new Set([JSON.stringify({ inset: 176, motion: 'none', opacity: 1, edge: 8, sideways: 0 })]))
+    expect(errors.pageErrors).toEqual([])
+  })
+
   it('reorders sections by dragging a title row, keeps Environment first, and keeps the order across a reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-session-panel-order'))
     await openSession()
@@ -380,6 +483,21 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
       version: 2, childId: brandString<SessionId>('session-panel-layout-external'), childCreatedAt: Date.now(), mode: 'external',
       label: 'Review the docking rules',
     })
+    // With Environment and one other section there is nowhere to move it: its title row offers no drag.
+    const lone = page.locator('[data-session-panel] [data-session-panel-section="subagents"]').locator('h2').locator('..')
+    await lone.waitFor({ timeout: 20_000 })
+    await lone.hover()
+    expect(await lone.evaluate(element => ({
+      cursor: getComputedStyle(element).cursor,
+      handle: getComputedStyle(element.querySelector('[data-session-panel-grip]')!).opacity,
+      trailing: getComputedStyle(element.children[1]!).visibility,
+    }))).toEqual({ cursor: 'auto', handle: '0', trailing: 'visible' })
+    const start = (await lone.boundingBox())!
+    await page.mouse.move(start.x + 40, start.y + start.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(start.x + 40, start.y - 30, { steps: 6 })
+    expect(await page.locator('[data-session-panel-section][data-dragging]').count()).toBe(0)
+    await page.mouse.up()
     scaffold.ctx.jobs.start({
       kind: 'bash', label: 'pnpm run build', owner: agent.id,
       run: () => ({ done: release.promise, cancel: () => { release.resolve({ status: 'completed' }) } }),

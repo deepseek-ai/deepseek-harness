@@ -526,7 +526,8 @@ export async function showSessionPanel(page: Page): Promise<Locator> {
   const deadline = Date.now() + 20_000
   while (true) {
     if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
-    if (await panel.isVisible()) break
+    // A panel playing its exit is still in the page; it does not count as shown.
+    if (await panel.and(page.locator(':not([data-session-panel-motion="exit"])')).isVisible()) break
     if (Date.now() >= deadline) throw new Error('the Session panel did not show')
     await page.waitForTimeout(250)
   }

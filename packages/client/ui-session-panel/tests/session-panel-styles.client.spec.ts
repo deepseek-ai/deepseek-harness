@@ -94,9 +94,7 @@ describe('SessionPanel.module.css docking geometry', () => {
 
 describe('SessionPanel.module.css section reordering', () => {
   it('gives a draggable title row the grab cursor and lays the handle over its end, on the More column, without taking room', () => {
-    expect(declarationsOf('.head')['position']).toBe('relative')
-    expect(declarationsOf('.head')['cursor']).toBeUndefined()
-    expect(declarationsOf(".head[draggable='true']")).toEqual({ cursor: 'grab' })
+    expect(declarationsOf('.head')).toMatchObject({ position: 'relative', cursor: 'var(--section-head-cursor)' })
     // Out of the row's flow: 2px in and 24px wide puts its center 14px from the row's end, the rows' More column.
     expect(declarationsOf('.grip')).toMatchObject({
       'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px',
@@ -113,8 +111,41 @@ describe('SessionPanel.module.css section reordering', () => {
     // The pointer rules stay inside the hover media query, so a touch that latches hover shows no handle.
     // A title row without a handle, Environment's, keeps its trailing content on hover.
     const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
-    expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: 1;/)
-    expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: hidden;/)
+    expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: var\(--section-grip-opacity\);/)
+    expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: var\(--section-trailing-visibility\);/)
+  })
+
+  it('offers the drag only on a shown section with a handle that has another such section before or after it', () => {
+    expect(declarationsOf('.section')).toMatchObject({
+      '--section-head-cursor': 'auto', '--section-grip-opacity': '0', '--section-trailing-visibility': 'visible',
+    })
+    const movable = '.section:has(> .head > .grip)'
+      + ':not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))'
+    // The selector list holds commas of its own, so the rule is read from the stylesheet with its whitespace collapsed.
+    const flat = css.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+    expect(flat).toContain(
+      `.section:nth-child(n + 2 of ${movable}), .section:nth-last-child(n + 2 of ${movable}) {`
+      + ' --section-head-cursor: grab; --section-grip-opacity: 1; --section-trailing-visibility: hidden; }',
+    )
+  })
+
+  it('plays the entrance and the exit only on a panel that carries the mark, and moves the transcript over the same time and curve', () => {
+    const motion = '160ms cubic-bezier(0.4, 0, 0.2, 1)'
+    expect(declarationsOf('.panel')['animation']).toBeUndefined()
+    expect(declarationsOf(".panel[data-session-panel-motion='enter']")).toEqual({ animation: `dsh-session-panel-enter ${motion}` })
+    // The exit holds its last frame until the panel is removed, and a leaving panel takes no presses.
+    expect(declarationsOf(".panel[data-session-panel-motion='exit']")).toEqual({
+      'animation': `dsh-session-panel-exit ${motion} forwards`, 'pointer-events': 'none',
+    })
+    expect(declarationsOf(':global([data-conversation-content]):has(.dockProbe[data-session-panel-moving])'))
+      .toEqual({ '--dsh-chat-end-reserve-transition': motion })
+    // The two keyframes mirror each other: transparent at the scrollport's end edge, the panel's own edge inset away,
+    // so the slide never puts the panel past that edge.
+    const frames = (name: string): string => (new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '').replace(/\s+/g, ' ').trim()
+    expect(frames('dsh-session-panel-enter'))
+      .toBe('from { opacity: 0; transform: translateX(var(--panel-edge)); } to { opacity: 1; transform: translateX(0); }')
+    expect(frames('dsh-session-panel-exit'))
+      .toBe('from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(var(--panel-edge)); }')
   })
 
   it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {

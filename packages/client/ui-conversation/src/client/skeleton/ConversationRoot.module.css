@@ -486,7 +486,9 @@
      gets no inset at all, so the surface reads the maximum before it relies
      on the room. Every length derives from the scrollport's measured width,
      so the same values hold where a percentage would resolve against
-     another box. */
+     another box. The inset applies at once unless the stylesheet also sets
+     --dsh-chat-end-reserve-transition, a duration and an easing, for as long
+     as it wants a change of the inset animated. */
   --dsh-chat-end-reserve-max: calc(
     var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width) - var(--dsh-composer-side-clearance) - 16px
   );
@@ -523,6 +525,7 @@
   margin-right: 2px;
   /* The end reserve: 0 unless a surface beside the transcript asks for room. */
   padding-inline-end: var(--dsh-chat-end-inset);
+  transition: padding-inline-end var(--dsh-chat-end-reserve-transition, 0s);
   overflow-y: auto;
   /* Reserved unconditionally: the composer seat rides this box's content box in
      Chat and its padding box under a view's composer overlay, so an `auto`

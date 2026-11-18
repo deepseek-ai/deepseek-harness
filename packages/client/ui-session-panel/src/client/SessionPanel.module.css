@@ -56,7 +56,28 @@
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-panel);
   pointer-events: auto;
-  animation: dsh-session-panel-enter 120ms ease-out;
+}
+
+/* A press that shows or hides the panel plays its entrance or exit: it
+   slides from or to the scrollport's end edge, across its own edge inset,
+   and fades. A longer slide would put the panel past that edge and give the
+   Conversation body a sideways scroll range, whose bar lifts the composer
+   while it shows. A panel that shows or hides for its room, as on a switch
+   to another Session or a resized window, carries no mark and does so at
+   once. A leaving panel takes no presses. */
+.panel[data-session-panel-motion='enter'] {
+  animation: dsh-session-panel-enter 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel[data-session-panel-motion='exit'] {
+  animation: dsh-session-panel-exit 160ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* While the entrance or exit plays, the Conversation body moves the
+   transcript into or out of the panel's room over the same time and curve. */
+:global([data-conversation-content]):has(.dockProbe[data-session-panel-moving]) {
+  --dsh-chat-end-reserve-transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Over the transcript the panel is narrower than docked, so it covers less of
@@ -94,6 +115,10 @@
 .section {
   position: relative;
   padding: 4px 0 6px;
+  /* What its title row offers: nothing, unless the reader can move the section (see the rule before `.head`). */
+  --section-head-cursor: auto;
+  --section-grip-opacity: 0;
+  --section-trailing-visibility: visible;
 }
 
 /* Reordering. The dragged section dims, and the section the pointer is over
@@ -142,7 +167,7 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-/* The box a title row's drag handle is placed in. */
+/* The box a title row's drag handle is placed in; the row of a section the reader can move shows the grab cursor. */
 .head {
   position: relative;
   display: flex;
@@ -150,11 +175,24 @@
   gap: 8px;
   min-height: 24px;
   padding: 0 6px;
+  cursor: var(--section-head-cursor);
 }
 
-/* A title row that is a section's drag source: every one but Environment's. */
-.head[draggable='true'] {
-  cursor: grab;
+/* A section the reader can move: one with a drag handle that shows, beside
+   at least one other. A lone one stays where it is, since a section always
+   lands after Environment, so its title row offers no drag: no grab cursor
+   and no handle. "Shows" is the negation of the empty-body rule above, and
+   the two selectors match a section with such a section before it and one
+   with such a section after it. */
+.section:nth-child(
+  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+),
+.section:nth-last-child(
+  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+) {
+  --section-head-cursor: grab;
+  --section-grip-opacity: 1;
+  --section-trailing-visibility: hidden;
 }
 
 /* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
@@ -218,23 +256,22 @@
 
 @media (hover: hover) {
   .head:hover > .grip {
-    opacity: 1;
+    opacity: var(--section-grip-opacity);
   }
 
   .head:hover:has(> .grip) > .actions {
-    visibility: hidden;
+    visibility: var(--section-trailing-visibility);
   }
 }
 
 @keyframes dsh-session-panel-enter {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateX(var(--panel-edge)); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .panel {
-    animation: none;
-  }
+@keyframes dsh-session-panel-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(var(--panel-edge)); }
 }
 
 /* Rows. The rows of every section share one look without sharing a

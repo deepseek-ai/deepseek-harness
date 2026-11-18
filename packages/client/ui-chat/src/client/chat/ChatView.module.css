@@ -366,7 +366,10 @@
    element whose containing block is the layer, as it does in the
    back-to-bottom control's padding below. The Conversation body's end
    reserve narrows the frame by --dsh-chat-end-inset; the layer reaches back
-   across it to the scrollport's end edge, and the gutter counts it. */
+   across it to the scrollport's end edge, and the gutter counts it. The
+   margin follows the body's --dsh-chat-end-reserve-transition, as the
+   scrollport's padding does, so the layer's end edge stays put while the
+   inset animates. */
 .asideSlot {
   position: absolute;
   top: 0;
@@ -375,6 +378,7 @@
   z-index: 9;
   height: 0;
   margin-inline-end: calc(-1 * var(--dsh-chat-end-inset, 0px));
+  transition: margin-inline-end var(--dsh-chat-end-reserve-transition, 0s);
   pointer-events: none;
   --dsh-chat-aside-gutter: calc(
     var(--dsh-chat-end-inset, 0px)

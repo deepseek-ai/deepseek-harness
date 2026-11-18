@@ -68,6 +68,8 @@ describe('Conversation body end reserve', () => {
 
   it('pads the scrollport end by the inset and makes no room in an embedded occurrence', () => {
     expect(declarationsOf('.scrollBody')['padding-inline-end']).toBe('var(--dsh-chat-end-inset)')
+    // The inset applies at once unless a stylesheet sets the transition for a change it wants animated.
+    expect(declarationsOf('.scrollBody')['transition']).toBe('padding-inline-end var(--dsh-chat-end-reserve-transition, 0s)')
     const embedded = declarationsOf('.embeddedBody')
     expect([embedded['--dsh-chat-end-reserve-max'], embedded['--dsh-chat-end-inset']]).toEqual(['0px', '0px'])
   })

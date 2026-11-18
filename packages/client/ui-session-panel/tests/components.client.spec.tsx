@@ -382,6 +382,106 @@ describe('SessionPanel', () => {
     expect(marked(docked.container)).toBe(false)
   })
 
+  describe('motion', () => {
+    const HIDDEN: SessionPanelVisibility = { pinned: false, overlay: null }
+    const probeOf = (container: HTMLElement): Element => container.querySelector('[data-session-panel-probe]')!
+    const panelOf = (): HTMLElement | null => screen.queryByRole('complementary')
+    /**
+     * End an element's animation. jsdom's style object has no unprefixed `animation`, so React listens for the
+     * prefixed event name there; a browser delivers the unprefixed one.
+     */
+    const endAnimation = (element: Element): void => {
+      for (const type of ['animationend', 'webkitAnimationEnd']) fireEvent(element, new Event(type, { bubbles: true }))
+    }
+    /** The page does not ask for reduced motion. */
+    const allowMotion = (): void => { vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }))) }
+
+    it('plays the entrance when a press shows the panel, marks the probe meanwhile, and ends both with the animation', () => {
+      allowMotion()
+      const view = render(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      const panel = panelOf()!
+      expect(panel.getAttribute('data-session-panel-motion')).toBe('enter')
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(true)
+      // A row's own animation ending inside the panel does not end the entrance.
+      endAnimation(screen.getByText('environment body'))
+      expect(panel.getAttribute('data-session-panel-motion')).toBe('enter')
+      endAnimation(panel)
+      expect(panelOf()).toBe(panel)
+      expect(panel.hasAttribute('data-session-panel-motion')).toBe(false)
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+    })
+
+    it('keeps a panel a press hid until its exit ends, with the presentation it had, and hands focus to the toggle at once', () => {
+      allowMotion()
+      const toggle = document.createElement('button')
+      toggle.id = `dsh-session-panel-toggle-${SID}`
+      document.body.append(toggle)
+      try {
+        const docked = panelProps(true, DOCKED)
+        const view = render(<SessionPanel {...docked.props} />)
+        const panel = panelOf()!
+        expect(panel.hasAttribute('data-session-panel-motion')).toBe(false)
+        screen.getByRole('button', { name: '刷新' }).focus()
+        const hidden = panelProps(true, HIDDEN)
+        view.rerender(<SessionPanel {...hidden.props} />)
+        expect(panelOf()).toBe(panel)
+        expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['docked', 'exit'])
+        expect(hidden.owners.every(owner => owner.presentation === 'docked')).toBe(true)
+        expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(true)
+        // The docking preference is off, so the transcript takes its room back while the panel leaves.
+        expect(probeOf(view.container).hasAttribute('data-session-panel-reserve')).toBe(false)
+        expect(document.activeElement).toBe(toggle)
+        endAnimation(panel)
+        expect(panelOf()).toBeNull()
+        expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+      } finally {
+        toggle.remove()
+      }
+    })
+
+    it('plays the exit of a closed overlay without keeping its dismissal, and the entrance again when a press shows it meanwhile', () => {
+      allowMotion()
+      const open = panelProps(false, { pinned: true, overlay: SID })
+      const view = render(<SessionPanel {...open.props} />)
+      const panel = panelOf()!
+      const closed = panelProps(false, DOCKED)
+      view.rerender(<SessionPanel {...closed.props} />)
+      expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['overlay', 'exit'])
+      fireEvent.keyDown(document, { key: 'Escape' })
+      fireEvent.pointerDown(document.body)
+      expect(closed.closeOverlay).not.toHaveBeenCalled()
+      view.rerender(<SessionPanel {...panelProps(false, { pinned: true, overlay: SID }).props} />)
+      expect(panelOf()).toBe(panel)
+      expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['overlay', 'enter'])
+    })
+
+    it('shows and hides at once when the room to dock changes, as on a mount, a Session switch, or a resized window', () => {
+      allowMotion()
+      const view = render(<SessionPanel {...panelProps(false, DOCKED).props} />)
+      expect(panelOf()).toBeNull()
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      expect(panelOf()!.hasAttribute('data-session-panel-motion')).toBe(false)
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+      view.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
+      expect(panelOf()).toBeNull()
+      // A change of the room while the panel stays hidden changes nothing either.
+      view.rerender(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      view.rerender(<SessionPanel {...panelProps(false, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+    })
+
+    it('plays nothing for a reader who asked for reduced motion', () => {
+      const view = render(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      expect(panelOf()!.hasAttribute('data-session-panel-motion')).toBe(false)
+      view.rerender(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+    })
+  })
+
   describe('section order', () => {
     const THREE: readonly SessionPanelSectionEntry[] = [...SECTIONS, { id: 'jobs', label: '后台任务' }]
     const sectionOf = (id: string): HTMLElement => document.querySelector<HTMLElement>(`[data-session-panel-section="${id}"]`)!
@@ -435,6 +535,25 @@ describe('SessionPanel', () => {
       fireEvent.dragStart(headOf('environment'), { dataTransfer })
       expect(dataTransfer.setData).not.toHaveBeenCalled()
       expect(marks()).toEqual(NONE)
+    })
+
+    it('starts no drag while only one shown section can move, since it could land nowhere else', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      // CSS hides a section whose body rendered nothing; here, the other movable one.
+      sectionOf('change-requests').style.display = 'none'
+      const dataTransfer = transfer()
+      const start = createEvent.dragStart(headOf('jobs'))
+      Object.defineProperty(start, 'dataTransfer', { value: dataTransfer })
+      fireEvent(headOf('jobs'), start)
+      expect(start.defaultPrevented).toBe(true)
+      expect(dataTransfer.setData).not.toHaveBeenCalled()
+      expect(marks()).toEqual(NONE)
+      expect(moveSection).not.toHaveBeenCalled()
+      // With both shown the drag starts.
+      sectionOf('change-requests').style.display = ''
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer })
+      expect(dataTransfer.setData).toHaveBeenCalledWith('application/x-dsh-session-panel-section', 'jobs')
     })
 
     it('marks the dragged section and the edge it would land at, and moves it on the drop', () => {

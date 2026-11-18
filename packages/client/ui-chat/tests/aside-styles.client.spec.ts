@@ -25,6 +25,8 @@ describe('Chat aside layer', () => {
 
   it('reaches across the Conversation body\'s end inset, so it spans the scrollport whatever room the body keeps free', () => {
     expect(declarationsOf('.asideSlot')).toContain('margin-inline-end: calc(-1 * var(--dsh-chat-end-inset, 0px))')
+    // The margin animates with the scrollport's padding, so the layer's end edge stays put while the inset changes.
+    expect(declarationsOf('.asideSlot')).toContain('transition: margin-inline-end var(--dsh-chat-end-reserve-transition, 0s)')
   })
 
   it('publishes the end gutter as the end inset plus half of what the transcript column leaves of the rest, never negative', () => {
