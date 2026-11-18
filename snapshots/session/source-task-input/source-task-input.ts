@@ -7,7 +7,11 @@ import ScheduleService, { ScheduleId, scheduleDomain } from '@deepseek-ai/dsh-sc
 import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 
 class SampleSource {
-  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+  private readonly submit: (candidate: AutomationCandidate) => Promise<void>
+
+  constructor(submit: (candidate: AutomationCandidate) => Promise<void>) {
+    this.submit = submit
+  }
 
   sample(left: string, right: string): Promise<void> {
     return this.submit({ text: `Left: ${left}\nRight: ${right}` })

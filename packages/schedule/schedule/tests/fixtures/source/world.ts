@@ -9,9 +9,12 @@ import type { AutomationCandidate, ScheduleCatalogEntry } from '@deepseek-ai/dsh
 /** Explicit observation producer; its owner supplies admission and drains accepted submissions. */
 export class ObservationSource {
   private readonly pending = new Set<Promise<void>>()
+  private readonly submit: (candidate: AutomationCandidate) => Promise<void>
 
   /** @param submit - Submit one observation through the owning plugin's active Context. */
-  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+  constructor(submit: (candidate: AutomationCandidate) => Promise<void>) {
+    this.submit = submit
+  }
 
   /**
    * Submit one supplied observation.

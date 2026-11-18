@@ -11,7 +11,11 @@ const INITIAL_INPUT = 'Inspect the completed build.'
 const RECOVERY_INPUT = 'Inspect the replacement build.'
 
 class CandidateSource {
-  constructor(private readonly submit: (candidate: AutomationCandidate) => Promise<void>) {}
+  private readonly submit: (candidate: AutomationCandidate) => Promise<void>
+
+  constructor(submit: (candidate: AutomationCandidate) => Promise<void>) {
+    this.submit = submit
+  }
 
   publish(text: string): Promise<void> { return this.submit({ text }) }
 }
