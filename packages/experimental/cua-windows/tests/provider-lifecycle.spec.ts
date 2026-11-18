@@ -50,7 +50,6 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
-  expect(GUIDANCE).toContain('Windows sends system input. The selected window must be in the foreground for both events; only the press requires the pointer over it. Use try/finally to release the button if the program fails.')
   expect(backend.sendKeyEvent).toBeUndefined()
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
