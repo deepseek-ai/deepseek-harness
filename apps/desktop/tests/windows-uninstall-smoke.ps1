@@ -71,14 +71,21 @@ try {
         [IO.File]::WriteAllText((Join-Path $userDataPath 'Local State'), 'chromium profile')
         [IO.File]::WriteAllText((Join-Path $cachePath 'download.txt'), 'update')
         Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
-        $missingLocation = $mode -in @('missing-location', 'missing-location-foreign')
+        $missingLocation = $mode -in @('missing-location', 'missing-location-short', 'missing-location-foreign')
         $foreign = $mode -eq 'missing-location-foreign'
         if ($missingLocation) { Remove-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation }
         $arpKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey
         if ($mode -eq 'missing-location') {
             $originalCommand = (Get-ItemProperty $arpKey).UninstallString
             $alternateCommand = $originalCommand.Replace($installPath + '\', $installPath + '\.\')
+            if ($alternateCommand -ceq $originalCommand -or -not $alternateCommand.Contains($installPath + '\.\')) { throw 'Equivalent-path fixture did not rewrite the uninstall command' }
             Set-ItemProperty $arpKey UninstallString $alternateCommand
+        }
+        if ($mode -eq 'missing-location-short') {
+            $uninstallFile = Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')
+            $shortFile = (New-Object -ComObject Scripting.FileSystemObject).GetFile($uninstallFile).ShortPath
+            if ($shortFile -ceq $uninstallFile) { throw 'Short-name fixture has no alternate name' }
+            Set-ItemProperty $arpKey UninstallString ('"' + $shortFile + '" /currentuser')
         }
         $desktopLink = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) ($ProductName + '.lnk')
         $startLink = Join-Path ([Environment]::GetFolderPath('Programs')) ($ProductName + '.lnk')
@@ -87,7 +94,7 @@ try {
             $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($desktopLink)
             $shortcut.TargetPath = Join-Path $installPath ($ProductName + '.exe')
             $shortcut.Save()
-            if (-not (Test-Path -LiteralPath $desktopLink) -or (Get-ItemProperty $arpKey).UninstallString -notlike ('*' + $installPath + '*')) { throw 'Missing A uninstall fixtures' }
+            if (-not (Test-Path -LiteralPath $desktopLink) -or -not (Test-Path -LiteralPath $arpKey)) { throw 'Missing A uninstall fixtures' }
         }
         $integrationRoot = if ($foreign) { $externalPath } else { $installPath }
         $commandDirectory = Join-Path $integrationRoot 'resources\runtime\cli\bin'
@@ -107,7 +114,7 @@ try {
         try { $key.SetValue('', '"' + (Join-Path $integrationRoot ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
         $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'missing-location', 'missing-location-foreign', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'missing-location', 'missing-location-short', 'missing-location-foreign', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
         if ($mode -eq 'upgrade') {
             Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')

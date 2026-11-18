@@ -184,6 +184,13 @@ Function un.RunRegistrationCleanup
   ${If} $0 != 0
     StrCpy $UnCleanupResult 1
     DetailPrint $1
+    ${If} $UnDirectoryOnly == 1
+    ${AndIf} $UnRegistrationArguments != "-UnownedOnly"
+      System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "[unverified] Registration cleanup targets: HKCU\${UNINSTALL_REGISTRY_KEY}; $oldDesktopLink; $oldStartMenuLink") ?c'
+      !ifdef UNINSTALL_REGISTRY_KEY_2
+        System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "[unverified] Registration cleanup target: HKCU\${UNINSTALL_REGISTRY_KEY_2}") ?c'
+      !endif
+    ${EndIf}
     System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "Registration cleanup failed or did not return a result. Exit: $0. Targets: HKCU\${DSH_COMMAND_ENVIRONMENT_KEY} [Path]; HKCU\${DSH_COMMAND_OWNER_KEY}; HKCU\${DSH_PROTOCOL_KEY}. Unverified registrations may remain.") ?c'
   ${EndIf}
 FunctionEnd

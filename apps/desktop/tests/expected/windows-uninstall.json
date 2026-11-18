@@ -4,6 +4,7 @@
     "silent",
     "unowned",
     "missing-location",
+    "missing-location-short",
     "missing-location-foreign",
     "owned-retained",
     "upgrade",
