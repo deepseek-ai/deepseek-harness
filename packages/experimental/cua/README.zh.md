@@ -103,7 +103,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 提供方通过 `NativeClient.registerCleanup(cleanup)` 注册归连接所有的资源清理；返回的 disposer 用于注销回调。连接仍可发送请求时，回调收到 `canRequest: true`，通过 `requestCleanup()` 执行原生清理，并等待确认后返回。连接被强制关闭后，`canRequest: false` 只允许清理本地状态。程序结束和连接关闭都触发清理时，每项资源复用同一个已缓存的清理 Promise。
 
-正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
+原生清理期间到达的请求等待清理确认后再发送。等待期间取消的请求不会发给 helper。正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
 `agentPreset` 默认为 `ptc`：使用该 preset 的 Agent 获得原始 `cua` 工具和 PTC 指引，其他 Agent 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset、未组合 preset 的 Agent，以及没有 preset 注册表的组合中的全部 Agent，例如 SDK、headless 和 ACP profile。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件、可选 preset 注册表的加载与卸载和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。preset 选择或注册表变化后，某个 Agent 的更新失败时只记录警告，不影响其他 Agent 的更新。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。设置 `agentPreset: false` 可改为全局注册原始 `cua` 工具；没有 preset 的 Host 挂载 PTC 工具执行器时，需要这项设置才能提供 `tools.cua`。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
