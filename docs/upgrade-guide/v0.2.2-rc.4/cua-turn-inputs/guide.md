@@ -8,7 +8,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-macOS `sendKeyEvent('down')` holds a key across `run_code` and `cua_run_code` calls in the same turn. Returning or throwing from a program no longer releases it while the turn continues. Explicit `up` releases it immediately at the original recipient. Window-directed and system `toggleMouse('down')` join the same lifecycle. After `turn/end`, including failure or user cancellation, CUA releases all remaining keys and mouse buttons in reverse dispatch order and waits for native acknowledgement. The end record can precede release; `whenIdle()` and subsequent CUA input wait for cleanup. Complete `pressKey`, `typeText`, `click` and `drag` operations keep their operation-local cleanup. Windows retains its current behavior.
+macOS `sendKeyEvent('down')` holds a key across `run_code` and `cua_run_code` calls in the same turn. Returning or throwing from a program no longer releases it while the turn continues. Explicit `up` releases it immediately at the original recipient. Window-directed and system `toggleMouse('down')` join the same lifecycle. After `turn/end`, including failure or user cancellation, CUA releases all remaining keys and mouse buttons in reverse dispatch order and waits for native acknowledgement. The end record can precede release; `whenIdle()` and subsequent CUA input wait for cleanup. Complete `pressKey`, `typeText`, `click` and `drag` operations keep their operation-local cleanup. The turn scope belongs to shared CUA behavior. Windows has not yet implemented this lifecycle and retains its current behavior.
 
 ## Migration
 

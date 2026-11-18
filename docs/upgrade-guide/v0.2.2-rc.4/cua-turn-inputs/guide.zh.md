@@ -8,7 +8,7 @@ description: macOS CUA 的显式键盘和鼠标按下现在可在同一回合内
 
 ## 变更
 
-macOS 的 `sendKeyEvent('down')` 可在同一回合内跨 `run_code` 和 `cua_run_code` 调用持有按键。程序返回或抛错后，回合仍继续时不再自动释放。显式 `up` 立即向原接收方释放。窗口定向和系统 `toggleMouse('down')` 使用相同生命周期。`turn/end` 之后，包括异常结束和用户取消，CUA 按实际派发顺序的反序释放剩余键盘键和鼠标按钮，并等待原生确认。结束记录可以早于释放；`whenIdle()` 和后续 CUA 输入会等待清理完成。完整的 `pressKey`、`typeText`、`click` 和 `drag` 操作继续在本次操作内清理。Windows 保持现有行为。
+macOS 的 `sendKeyEvent('down')` 可在同一回合内跨 `run_code` 和 `cua_run_code` 调用持有按键。程序返回或抛错后，回合仍继续时不再自动释放。显式 `up` 立即向原接收方释放。窗口定向和系统 `toggleMouse('down')` 使用相同生命周期。`turn/end` 之后，包括异常结束和用户取消，CUA 按实际派发顺序的反序释放剩余键盘键和鼠标按钮，并等待原生确认。结束记录可以早于释放；`whenIdle()` 和后续 CUA 输入会等待清理完成。完整的 `pressKey`、`typeText`、`click` 和 `drag` 操作继续在本次操作内清理。回合持有范围属于共通 CUA 规则。Windows 尚未实现这套生命周期，保持现有行为。
 
 ## 迁移
 
