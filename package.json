@@ -219,8 +219,6 @@
     "start:web": "node --import tsx/esm apps/cli/src/bin.ts web",
     "dev:web": "tsx scripts/dev-web.ts --poll",
     "dev:bundle-registry": "tsx scripts/dev-bundle-registry.ts",
-    "gen:vendor-im": "node --import tsx/esm scripts/gen-vendor-im-types.ts",
-    "verify:vendor-im": "node --import tsx/esm scripts/gen-vendor-im-types.ts --check",
     "postinstall": "node scripts/install-lefthook.mjs",
     "gen-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts",
     "verify-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts --check",

@@ -476,29 +476,13 @@ export function parseVendoredRows(text: string): VendoredRow[] {
 }
 
 /**
- * Parse repository-authored `vendor/` package rows out of `vendor/README.md`.
- * @param text - the complete `vendor/README.md` contents.
- * @returns package names explicitly declared with `none:` upstream origin, in table order.
- */
-export function parseLocalVendorRows(text: string): string[] {
-  const rows: string[] = []
-  for (const line of text.split('\n')) {
-    const match = /^\| \x60\S+\/\x60 \| \x60([^\x60]+)\x60 \| — \| \S+ \| none: .+ \| — \|$/.exec(line)
-    if (match?.[1] !== undefined) rows.push(match[1])
-  }
-  return rows
-}
-
-/**
  * Parse the vendored manifest table and confirm it accounts for every vendored
  * directory. The `vendor/` tree — not the table — is the set that must be
  * disclosed, so a row that stops matching the table format is a hard error
  * rather than a package that quietly vanishes from the notices.
  */
 function collectVendored(): (VendoredRow & { sourceDirectory: string })[] {
-  const readme = readFileSync(resolve(root, 'vendor/README.md'), 'utf8')
-  const rows = parseVendoredRows(readme)
-  const localRows = parseLocalVendorRows(readme)
+  const rows = parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8'))
   const onDisk = new Map<string, string>()
   for (const entry of readdirSync(resolve(root, 'vendor'), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
@@ -507,20 +491,6 @@ function collectVendored(): (VendoredRow & { sourceDirectory: string })[] {
   }
 
   const parsed = new Set(rows.map(row => row.npmName))
-  for (const localName of localRows) {
-    if (parsed.has(localName)) {
-      throw new Error(`gen-third-party-notices: ${localName} is listed as both vendored and local in vendor/README.md.`)
-    }
-    const dir = onDisk.get(localName)
-    if (dir === undefined) {
-      throw new Error(`gen-third-party-notices: local vendor package ${localName} from vendor/README.md has no vendor/ directory.`)
-    }
-    const license = readManifest(`vendor/${dir}/package.json`).license
-    if (license !== 'MIT') {
-      throw new Error(`gen-third-party-notices: local vendor package ${localName} declares license ${JSON.stringify(license)}; vendor/ assumes MIT throughout.`)
-    }
-    parsed.add(localName)
-  }
   const missing = [...onDisk.keys()].filter(name => !parsed.has(name))
   if (missing.length > 0) {
     throw new Error(`gen-third-party-notices: vendor/README.md has no manifest-table row for ${missing.join(', ')}; its table format changed or the sync is incomplete.`)

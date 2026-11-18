@@ -46,6 +46,8 @@ interface Rename {
 const RENAMES: readonly Rename[] = [
   { directory: 'plugin-im-core', upstream: '@satorijs/core', scoped: '@deepseek-ai/cordis-plugin-im-core' },
   { directory: 'plugin-im-adapter-lark', upstream: '@satorijs/adapter-lark', scoped: '@deepseek-ai/cordis-plugin-im-adapter-lark' },
+  { directory: 'plugin-im-adapter-qq', upstream: '@satorijs/adapter-qq', scoped: '@deepseek-ai/cordis-plugin-im-adapter-qq' },
+  { directory: 'plugin-im-markdown', upstream: '@satorijs/markdown', scoped: '@deepseek-ai/cordis-plugin-im-markdown' },
   { directory: 'satori-element', upstream: '@satorijs/element', scoped: '@deepseek-ai/satori-element' },
   { directory: 'element', upstream: '@cordisjs/element', scoped: '@deepseek-ai/cordis-element' },
   { directory: 'http', upstream: '@cordisjs/plugin-http', scoped: '@deepseek-ai/cordis-plugin-http' },

@@ -31,6 +31,7 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-plugin-im-core` | `@satorijs/core` | [vendor/plugin-im-core](vendor/plugin-im-core/) | MIT |
 | `@deepseek-ai/cordis-plugin-im-adapter-lark` | `@satorijs/adapter-lark` | [vendor/plugin-im-adapter-lark](vendor/plugin-im-adapter-lark/) | MIT |
 | `@deepseek-ai/cordis-plugin-im-adapter-qq` | `@satorijs/adapter-qq` | [vendor/plugin-im-adapter-qq](vendor/plugin-im-adapter-qq/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-markdown` | `@satorijs/markdown` | [vendor/plugin-im-markdown](vendor/plugin-im-markdown/) | MIT |
 
 ## Runtime npm dependencies
 

@@ -1,7 +1,7 @@
 /**
  * Generated-route client of the OpenAPI subset (`types/`), and the `/_api/:name` escape hatch.
  *
- * `types/*.ts` is generated from the pinned upstream declarations by `scripts/gen-vendor-im-types.ts`; its
+ * `types/*.ts` retains the `auth`, `im` and `contact` OpenAPI route families from upstream; its
  * `Internal.define({ '/im/v1/messages': { POST: 'im.message.create', … } })` calls register every route of the
  * subset here at import time, and its `declare module` blocks type the resulting tree. The tree is a plain object of
  * callables addressed by name (`bot.internal.im.message.get(messageId)`), so a caller can reach a route this adapter

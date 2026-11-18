@@ -17,12 +17,17 @@
     "lib/types/**/*.d.ts.map",
     "src"
   ],
+  "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "vendor/plugin-im-markdown"
   },
+  "bugs": {
+    "url": "https://github.com/satorijs/satori/issues"
+  },
+  "homepage": "https://satori.chat/",
   "keywords": [
     "satori",
     "markdown",
