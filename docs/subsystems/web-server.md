@@ -156,13 +156,6 @@ admit(request: ConnectionTrustRequest): PeerAdmission
  * @returns a new Peer distinct from every other Peer.
  */
 createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
-
-/**
- * Add this process's launch credential to the clean application URL.
- * @param baseUrl - clean application URL.
- * @returns the URL a registered provider announced, or `baseUrl` when none announces one.
- */
-authenticatedUrl(baseUrl: string): string
 ```
 
 Types: [Principal](typert.md)
@@ -189,13 +182,6 @@ register(provider: AuthenticationProvider): () => Promise<void>
  * @returns the first live Peer, 401 if no provider accepts, or 503 when verification failed without success.
  */
 authenticate(request: ConnectionTrustRequest): PeerAdmission
-
-/**
- * The launch URL announced by the first provider that publishes one.
- * @param baseUrl - clean application URL.
- * @returns the URL carrying a launch credential, or undefined when no provider announces one.
- */
-authenticatedUrl(baseUrl: string): string | undefined
 ```
 
 Types: [AuthenticationProvider](../../packages/client/connection/README.md#browser-authentication-and-request-trust)

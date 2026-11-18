@@ -50,8 +50,6 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
 
 每个认证请求代表一个 `PeerScope`：`principal` 指明调用方，`interactions` 决定转发事件参与，`signal` 在作用域结束时中止。`ctx.connection.browserPeer` 保留给可信进程内调用方；网络 handler 使用 WebServer 选定的 Peer，不重复准入。直接 `ctx.connection.admit(request)` 为其他适配器保留来源与凭据检查。`createPeer({ principal, interactions? })` 在调用 Context 中创建 Peer；interactions 默认 `answer`。Connection 不维护 Peer 查询表或 Socket 认领；各 Provider 保存自己的 Peer。创建者作用域或 `dispose()` 可释放 Peer。`fetch(request, peer)` 与 HTTP bridge 显式接收 Peer；精确路由要求 owner，方法级判断归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md)。
 
-`authenticatedUrl(baseUrl)` 返回第一个公布启动 URL 的 Provider 给出的 URL；没有 Provider 公布时返回干净的 URL。本进程在自己监听器上提供的界面并不持有浏览器 Cookie，因此它用该 URL 换取一个 Cookie，并在转发给这里的 `/api/remote.mux` upgrade 上携带结果；凭据只留在本进程内。
-
 Token 插件拥有供 API 调用方使用的 `GET /connect?token=...&interactions=answer|none`：验证 Token 后通过 Connection 创建 API Peer，返回302、Mux 目标地址和签名 API Cookie。API 连接默认 `none`，非法或重复声明返回 400。HTTP 可先于 WebSocket 建立。Token 的 `webserver/upgrade` 监听器在路由准入后拥有 API Socket 认领：重复关联返回409，关闭时在释放 Peer 前同步撤销 Cookie，之后使用它的 HTTP 被拒绝。其他 Provider 的 Peer 委派后续处理，不应用 Token 的单 Socket 策略。已受理 unary 调用保留请求级取消，但 Peer 释放后 `invocation.peer.ctx` 不再接受新的 effect 注册。API 调用方将 Cookie 与浏览器存储分开；两者使用相同的 authority 专属 Cookie 名称。
 
 通过认证的共享 HTTP 请求在传输请求体之前经过 `connection/request` waterfall。监听器可以拒绝新请求，或等待 `next()` 直到响应完成；释放所属 fiber 会移除准入行为。Desktop 使用此扩展点，在已批准的安装期间锁住新的 API 工作，而不取消已接纳的工作。客户端断开会中止处理函数的信号；桥接器停止写入 socket，并排空剩余响应块。WebSocket 流仍由 API Gateway 负责。

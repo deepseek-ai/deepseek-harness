@@ -787,12 +787,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a new Peer distinct from every other Peer.',
       },
       {
-        signature: 'authenticatedUrl(baseUrl: string): string',
-        description: 'Add this process\'s launch credential to the clean application URL.',
-        parameters: [{ name: 'baseUrl', description: 'clean application URL.' }],
-        returns: 'the URL a registered provider announced, or `baseUrl` when none announces one.',
-      },
-      {
         signature: 'readonly authentication: ConnectionAuthentication',
         description: 'Credential verifier sub-service; consumers inject `connection.authentication`.',
         parameters: [],
@@ -815,12 +809,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Verify credentials without applying an HTTP response or source policy.',
         parameters: [{ name: 'request', description: 'current carrier headers and cancellation facts.' }],
         returns: 'the first live Peer, 401 if no provider accepts, or 503 when verification failed without success.',
-      },
-      {
-        signature: 'authenticatedUrl(baseUrl: string): string | undefined',
-        description: 'The launch URL announced by the first provider that publishes one.',
-        parameters: [{ name: 'baseUrl', description: 'clean application URL.' }],
-        returns: 'the URL carrying a launch credential, or undefined when no provider announces one.',
       },
     ],
   },
@@ -6412,7 +6400,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AuthenticationProvider',
-    declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n    authenticatedUrl?(baseUrl: string): string;\n}',
+    declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
   },
   {
     name: 'AuthorizationEntry',
@@ -6680,7 +6668,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionAuthentication',
-    declaration: 'export class ConnectionAuthentication extends Service {\n    constructor(ctx: Context);\n    register(provider: AuthenticationProvider): () => Promise<void>;\n    authenticate(request: ConnectionTrustRequest): PeerAdmission;\n    authenticatedUrl(baseUrl: string): string | undefined;\n}',
+    declaration: 'export class ConnectionAuthentication extends Service {\n    constructor(ctx: Context);\n    register(provider: AuthenticationProvider): () => Promise<void>;\n    authenticate(request: ConnectionTrustRequest): PeerAdmission;\n}',
   },
   {
     name: 'ConnectionFetchHandler',
@@ -7860,7 +7848,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSenderDeps',
-    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
+    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n}',
   },
   {
     name: 'ImSendOptions',

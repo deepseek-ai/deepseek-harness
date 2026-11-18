@@ -54,20 +54,6 @@ export class ConnectionAuthentication extends Service {
     }
     return { rejection: failed ? 503 : 401 }
   }
-
-  /**
-   * The launch URL announced by the first provider that publishes one.
-   * @param baseUrl - clean application URL.
-   * @returns the URL carrying a launch credential, or undefined when no provider announces one.
-   */
-  authenticatedUrl(baseUrl: string): string | undefined {
-    if (this.disposed || this.owner.fiber.uid === null) return undefined
-    for (const { provider } of [...this.providers]) {
-      const announced = provider.authenticatedUrl?.(baseUrl)
-      if (announced !== undefined) return announced
-    }
-    return undefined
-  }
 }
 
 declare module '@deepseek-ai/cordis' {

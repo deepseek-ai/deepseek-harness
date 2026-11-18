@@ -59,16 +59,6 @@ export class HostConnectionService extends Service implements HostConnectionHand
   /** Connection-owned Peer for trusted in-process callers, not network authentication. */
   readonly browserPeer: PeerScope
   readonly authentication: ConnectionAuthentication
-  /**
-   * The same registry, under a name no nested service shadows.
-   *
-   * A method invoked through the traceable proxy reads properties against the
-   * caller's context, which resolves a property named after a nested service
-   * (`connection.authentication`) only for a caller that injects it. The launch
-   * URL is asked for by a plugin that injects `connection` alone, so this method
-   * reads the registry captured at construction instead.
-   */
-  private readonly authRegistry: ConnectionAuthentication
   private readonly owner: Context
   private disposed = false
   private readonly interceptors = new Map<string, ConnectionRpcInterceptor>()
@@ -88,7 +78,6 @@ export class HostConnectionService extends Service implements HostConnectionHand
     super(ctx, 'connection')
     this.owner = ctx
     this.authentication = ctx['connection.authentication']
-    this.authRegistry = this.authentication
     this.browserPeer = new Peer(ctx, { principal: { kind: 'owner' } })
     ctx.effect(() => async () => {
       this.disposed = true
@@ -138,20 +127,6 @@ export class HostConnectionService extends Service implements HostConnectionHand
   }): PeerScope {
     if (this.disposed) throw new Error('connection: cannot create a Peer after disposal')
     return new Peer(this.ctx, options)
-  }
-
-  /**
-   * Add this process's launch credential to the clean application URL.
-   *
-   * A surface this process serves on its own listener has no browser credential,
-   * so it cannot present the cookie the transport admits on `/api/remote.mux`. It
-   * exchanges this URL for one and forwards the result. Deployments whose
-   * providers announce no credential keep the clean URL.
-   * @param baseUrl - clean application URL.
-   * @returns the announced URL, or `baseUrl` when no provider announces one.
-   */
-  authenticatedUrl(baseUrl: string): string {
-    return this.authRegistry.authenticatedUrl(baseUrl) ?? baseUrl
   }
 
   /** Check the deployment's request-source policy without credential verification. */

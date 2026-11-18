@@ -115,18 +115,6 @@ export interface AuthenticationProvider {
    * @returns a provider-owned Peer, or undefined to try the next provider.
    */
   authenticate(request: ConnectionTrustRequest): PeerScope | undefined
-
-  /**
-   * Announce an application URL that carries this provider's launch credential.
-   *
-   * A same-process surface in front of this listener holds no browser credential
-   * of its own, so it cannot present the cookie the transport admits on the
-   * browser socket. It exchanges this URL instead and forwards the issued
-   * credential. A provider that publishes no such credential omits the method.
-   * @param baseUrl - clean application URL.
-   * @returns the URL carrying the credential, or undefined when this provider announces none.
-   */
-  authenticatedUrl?(baseUrl: string): string
 }
 
 /** Outcome of admitting one request: the Peer it speaks for, or the status refusing it. */
@@ -243,12 +231,7 @@ export interface HostConnectionHandle {
    */
   createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
 
-  /**
-   * Add this process's launch credential to the clean application URL.
-   * @param baseUrl - clean application URL.
-   * @returns the URL a registered provider announced, or `baseUrl` when none announces one.
-   */
-  authenticatedUrl(baseUrl: string): string
+
 }
 
 /** Transport-independent Fetch handler used by HTTP and worker carriers. */
