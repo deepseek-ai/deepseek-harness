@@ -6,3 +6,4 @@ recording: authored
 header:
   class: pi-ai-image-limits
   pin: true
+  systemPromptSource: text-turn
