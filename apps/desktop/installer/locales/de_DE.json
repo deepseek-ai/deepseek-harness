@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Details ausblenden",
     "INSTALLER_EXTRACT_SAVED": "Der vollständige Bericht wurde unter %s gespeichert",
     "INSTALLER_EXTRACT_UNSAVED": "Der vollständige Bericht konnte nicht gespeichert werden. Verwenden Sie „Fehlerdetails kopieren“, um sie beizubehalten.",
-    "INSTALLER_EXTRACT_COPIED": "Fehlerdetails wurden in die Zwischenablage kopiert."
+    "INSTALLER_EXTRACT_COPIED": "Fehlerdetails wurden in die Zwischenablage kopiert.",
+    "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness ist an mehreren Orten installiert",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Einige Elemente konnten nicht bereinigt werden. Speichern Sie den Bericht für weitere Informationen.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Registrierter Installationsort:",
+    "INSTALLER_UNINSTALL_SCOPE": "Auch Befehle, Verknüpfungen und Einträge, die auf dieses Verzeichnis zeigen, werden entfernt:",
+    "INSTALLER_UNINSTALL_CONTINUE": "Deinstallationsordner weiter bereinigen",
+    "INSTALLER_UNINSTALL_SAVE": "Bereinigungsbericht speichern…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "Der Bericht konnte nicht gespeichert werden. Wählen Sie einen anderen Speicherort.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "Deinstallation nicht abgeschlossen",
+    "INSTALLER_UNINSTALL_UNSAFE": "Der Löschbereich konnte nicht bestätigt werden. Es wurde nichts gelöscht.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "Ein Bereinigungsvorgang lieferte kein vollständiges Ergebnis. Weitere Schritte wurden gestoppt.",
+    "INSTALLER_UNINSTALL_BLOCKED": "Diese Datei konnte nicht gelöscht werden. Schließen Sie Programme, die sie möglicherweise verwenden, prüfen Sie die Zugriffsrechte und versuchen Sie es erneut.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Deinstallation abgeschlossen"
   },
   "uninstaller": {
     "welcome": "Willkommen",

@@ -68,7 +68,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, heldInputState = false, timeoutMs = 30_000) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, heldInputState = false, timeoutMs = 30_000, disposeNative?: (state: { closedChannels: number }) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -109,6 +109,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
           getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
           acceptsPidSelector: selectorPid !== undefined, heldInputState,
+          ...disposeNative ? { disposeNative: () => disposeNative(native.state) } : {},
           capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
@@ -381,6 +382,18 @@ it('reports native held input after programs, keeps it across turns, and stops r
   expect(reminders(f.agent)).toHaveLength(2)
 })
 
+it('reports the Windows keyboard window and desktop input mode and supports a later explicit up', async () => {
+  const f = await setup(['var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.sendKeyEvent("w", "down")'],
+    'windows', undefined, true, true)
+  await f.run()
+  expect(f.native.events).toEqual(['w:down'])
+  expect(reminders(f.agent)[0]).toContain('Key "w", appHandle "fixture-app", windowId "7" (system input)')
+  f.model.restart(['await win.sendKeyEvent("w", "up")'])
+  await f.run()
+  expect(f.native.events).toEqual(['w:down', 'w:up'])
+  expect(reminders(f.agent)).toHaveLength(1)
+})
+
 it('releases keyboard and mouse in mixed reverse order on program failure', async () => {
   const f = await setup([holdProgram,
     'await app.sendKeyEvent("shift", "down"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("d", "down"); throw Error("program failed")', 'inspect("recovered")'],
@@ -475,6 +488,20 @@ it('reports failed native state inspection and releases held input instead of cl
   expect(reminders(f.agent)).toEqual([])
   expect(f.native.held).toEqual([])
   expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('Held state unavailable')
+})
+
+it('keeps the Windows helper runtime alive until its Agent connection confirms release', async () => {
+  const disposed = vi.fn(async (state: { closedChannels: number }) => state.closedChannels)
+  const f = await setup([holdProgram], 'windows', undefined, true, true, undefined, async (state) => { await disposed(state) })
+  await f.run()
+  const release = f.native.controlNext('releaseHeldInputs')
+  const closing = f.provider.dispose()
+  await release.entered
+  try { expect(disposed).not.toHaveBeenCalled() } finally { release.reply() }
+  await closing
+  expect(disposed).toHaveBeenCalledOnce()
+  expect(await disposed.mock.results[0]?.value).toBe(1)
+  expect(f.native.held).toEqual([])
 })
 
 it.each(['agent', 'provider', 'context'] as const)('awaits native release when the %s is disposed after a completed turn', async (owner) => {

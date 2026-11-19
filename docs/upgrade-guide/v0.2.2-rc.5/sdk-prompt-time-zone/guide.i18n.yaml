@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/sdk-prompt-time-zone/guide.md
+/:
+  en: a07259d8388d4cac
+  zh: 2e52c1c30028a099
+/sdk-prompts-report-the-process-time-zone-by-default:
+  en: a05ff032b245d2a9
+  zh: 65a504c65b00ed4f
+/sdk-prompts-report-the-process-time-zone-by-default/change:
+  en: 6f9aa3d02e634b47
+  zh: 9637bed97668d8d7
+/sdk-prompts-report-the-process-time-zone-by-default/migration:
+  en: f39441fa05c7a2fd
+  zh: 9f125d2d0f293f47

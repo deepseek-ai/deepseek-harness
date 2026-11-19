@@ -179,6 +179,11 @@ export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
   /**
+   * Stop the provider's shared transport after every Agent and permission connection has closed.
+   * @returns Transport shutdown completion.
+   */
+  disposeNative?(): Promise<void>
+  /**
    * Select platform operation instructions for the exposed tool form.
    * @param kind Raw cua calls or standalone cua_run_code programs.
    * @returns Instructions before shared capability guidance and configured limits are added.
@@ -276,6 +281,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const releases = await Promise.allSettled(owners.map(owner => owner.release()))
       const errors: unknown[] = []
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
+      try { await backend.disposeNative?.() } catch (error) { errors.push(error) }
       if (errors.length > 0) ctx.logger.error(new AggregateError(errors, 'dsh-cua helper cleanup failed'))
     }
     const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemPointer?: boolean) => {

@@ -84,6 +84,14 @@ foreach (var invalid in new[]
 })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"mouse\",\"method\":\"toggleMouse\",\"params\":" + invalid + "}")), "INVALID_ARGUMENT");
 
+foreach (var method in new[] { "getHeldInputs", "releaseHeldInputs" })
+{
+    var query = $$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"a"}}""";
+    Check(NativeRequest.Parse(WireJson.Parse(query)).Params.GetProperty("taskId").GetString() == "a",
+        "Private held-input operations accept only the task owner");
+    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{}}""")), "INVALID_ARGUMENT");
+    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"a","appHandle":"app"}}""")), "INVALID_ARGUMENT");
+}
 HeldInputChecks.Run(Check, Refuses);
 
 var actionSchema = NativeRequest.Parse(WireJson.Parse("""{"id":"schema","method":"getActionSchema","params":{"action":"Invoke.Invoke"}}"""));

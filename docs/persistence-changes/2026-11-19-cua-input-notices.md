@@ -27,20 +27,20 @@ id: 2026-11-19-cua-input-notices
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "0880996d224033d9a668528f51edf5f229d9b07dda42fb65f7d1cc1150c12836"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "0c815ede184e032dbe04cf80acef1b69805eec6dc80fad2ab8ecc78dd12d89b5"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "3a6f3e4354a90287bb3a1fb19e7a2f643cdbd7c6472c865abd11f8fa2d3358d5"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "a7de6bf0f2e865cb8b3c3cd28b0e1b68682fc546eb182cbea7312a0552d2e267"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "4e81b0490558b80c87cd09b214cd958ce0df1bf2bb431c930ff8fd441a8d1df5"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "85ffc622d03785ad37dae842e9c8ae04c1b6630faafa03e646e4cbbb3a972497"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "507043f63e859f272ce78f6bc65a7361ee087e5e06301f9c100302230bc887a7"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "ce12331e75676e8b9b8b979fb867278ce772c51e2c23e038c14745379efb89fb"
     decision: same-version
 ```
 

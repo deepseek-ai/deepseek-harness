@@ -253,7 +253,7 @@ describe('Computer Use MCP composition', () => {
     })
     onTestFinished(() => { finish.resolve(); read.mockRestore() })
     const running = run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await app.sendKeyEvent("w", "down"); inspect(await win.getScreenshot())')
-      .then(value => texts(value).join(' '), error => String(error))
+      .then(value => texts(value).join(' '), (error: unknown) => String(error))
     await entered.promise
     let reset: ReturnType<typeof client.callTool> | undefined
     try {

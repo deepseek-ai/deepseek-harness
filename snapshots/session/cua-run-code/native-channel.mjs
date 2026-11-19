@@ -28,7 +28,8 @@ export function createNativeFixture(selectorPid) {
     let heldCallId
     function dispatch(method, params) {
       if (method === 'getHeldInputs') return held.filter(press => press.connection === connection && press.taskId === params.taskId).map(press => press.kind === 'key'
-        ? { kind: 'key', key: press.key, appHandle: press.appHandle, mode: 'application' }
+        ? { kind: 'key', key: press.key, appHandle: press.appHandle, ...press.windowId === undefined
+          ? { mode: 'application' } : { windowId: press.windowId, mode: 'system' } }
         : { kind: 'mouse', button: press.key, appHandle: press.appHandle, windowId: press.windowId, mode: press.mode })
       if (method === 'releaseHeldInputs') {
         const released = dispatch('getHeldInputs', params).reverse()

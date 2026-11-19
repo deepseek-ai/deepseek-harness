@@ -69,6 +69,8 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
 
 内容块数组与字符串使用相同的命令路由。`session.run([{"type": "text", "text": "/compact"}])` 和 `session.run("/compact")` 都调用原生压缩并返回 `RunResult`。要绕过原生命令路由，调用底层 `client.session_prompt(session_id, blocks)` 并管理后续活动；运行时 skill（技能）识别仍然适用。
 
+以 `time_zone` 传入用户时区，例如 `session.run("When is noon tomorrow?", time_zone="Asia/Shanghai")`；`harness.run()` 与 `client.session_prompt()` 接受同一关键字参数，并以 `timeZone` 协议字段发送。取值为 `UTC` 或 IANA Area/Location 名称；其他取值会在执行输入前被运行时以 `JsonRpcError` 拒绝。不传时，运行时为每条 prompt 采样自身进程时区。原生命令不记录时区。
+
 先选择支持图片输入的模型。通过现有内容块数组同时提交命令和图片，例如 `session.run([{"type": "text", "text": "/plan Analyze this image."}, {"type": "image", "data": image_base64, "mimeType": "image/png"}])`；`harness.run()` 接受相同输入。计划输入和目标创建、编辑接受图片；`/plan off`、目标控制、压缩和权限命令按[原生附件规则](../../packages/sdk/server/README.zh.md#command-input)拒绝图片。原生命令输入支持编码栅格图片，不支持一般文件上传或客户端提供的附件引用。
 
 每次调用在发送前订阅，并在返回或抛出异常前释放订阅。`on_notification` 按传输顺序接收本次输入的会话树活动；区间可以包含重叠工作。调用可以重叠，不会消耗彼此的结果。原生拒绝返回 `finish_reason="error"`；路由、协议、传输和观察回调失败则抛出异常。格式错误的原生命令响应抛出 `SdkProtocolError`，保留校验原因。超时或观察回调失败不回滚运行时工作，也不授权自动重试。`request_timeout_seconds` 限制协议响应等待，不限制之后的输入活动。
