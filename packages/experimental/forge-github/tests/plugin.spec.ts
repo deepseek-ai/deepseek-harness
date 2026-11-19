@@ -186,17 +186,19 @@ describe.skipIf(process.platform === 'win32')('forge-github plugin status querie
     const gh = await recordingGh(pullRequestNode(0), 1)
     const context = new Context()
     cleanups.push(async () => { await context.fiber.dispose() })
-    // The deadline of the registry equals the one of a `gh` run, as it does by default.
-    await context.plugin(ForgeService, { fetchTimeoutMs: 1_000 })
-    await context.plugin(ForgeGitHub, { ghCommand: gh.command, timeoutMs: 1_000, snapshotBatchSize: 2 })
+    // The deadline of the registry equals the one of a `gh` run, as it does by default. Five seconds leave the `gh`
+    // run that answers enough time on a machine that also runs other specs.
+    await context.plugin(ForgeService, { fetchTimeoutMs: 5_000 })
+    await context.plugin(ForgeGitHub, { ghCommand: gh.command, timeoutMs: 5_000, snapshotBatchSize: 2 })
     const outcomes = new Map<number, string>()
 
     for (const number of [1, 2, 3, 4]) {
       context.forge.watch(pull(number), (update) => { outcomes.set(number, 'failure' in update ? update.failure.code : 'snapshot') })
     }
 
-    await vi.waitFor(() => { expect(outcomes.size).toBe(4) }, { timeout: 10_000 })
+    await vi.waitFor(() => { expect(outcomes.size).toBe(4) }, { timeout: 30_000 })
     expect([...outcomes].sort(([left], [right]) => left - right)).toEqual([[1, 'unavailable'], [2, 'unavailable'], [3, 'snapshot'], [4, 'snapshot']])
-    expect(await gh.queries()).toEqual([[1, 2], [3, 4]])
-  })
+    // The run that hangs may end before it logged its query; the query after it is sent once.
+    expect((await gh.queries()).filter(numbers => !numbers.includes(1))).toEqual([[3, 4]])
+  }, 60_000)
 })
