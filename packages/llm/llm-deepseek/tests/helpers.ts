@@ -96,8 +96,9 @@ export async function server(
  * @returns the decoded form fields.
  */
 export async function uploadedForm(init: RequestInit | undefined): Promise<FormData> {
-  if (!(init?.body instanceof Uint8Array)) throw new Error('expected an encoded multipart body')
-  return await new Request('http://localhost/v1/files', { method: 'POST', headers: init.headers, body: init.body }).formData()
+  const body = init?.body
+  if (!(body instanceof Uint8Array)) throw new Error('expected an encoded multipart body')
+  return await new Request('http://localhost/v1/files', { method: 'POST', headers: new Headers(init?.headers), body }).formData()
 }
 
 /** Supply only the image projection operation; any unexpected storage work fails. */
