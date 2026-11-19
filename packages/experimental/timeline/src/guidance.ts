@@ -6,7 +6,7 @@ import { scopeParentOf } from '@deepseek-ai/dsh-scope'
 import type { Config } from './config.ts'
 import { delegationContext, isWorker } from './delegation.ts'
 import type { OwnsAgent } from './delegation.ts'
-import { taskLanguageInstruction } from './policy.ts'
+import { outputLanguage, taskLanguageInstruction } from './policy.ts'
 import type { TimelineStorage } from './storage.ts'
 import { measureAll, prioritiesOf, prioritizedTasks } from './tasks.ts'
 
@@ -40,10 +40,11 @@ export function installGuidance(ctx: Context, config: Config, storage: TimelineS
   ctx.systemPrompt.section({
     name: 'timeline:planning',
     order: 120,
-    text: ({ agent }) =>
-      isWorker(agent)
-        ? workerInstructions
-        : `${instructions}\n\n${taskLanguageInstruction(config.language, config.uiLanguage)}`,
+    text: ({ agent }) => {
+      if (isWorker(agent)) return workerInstructions
+      const language = outputLanguage(config.language, config.uiLanguage)
+      return language === undefined ? instructions : `${instructions}\n\n${taskLanguageInstruction(language)}`
+    },
     interpolate: false,
   })
   ctx.systemPrompt.context({

@@ -352,11 +352,11 @@ export function chatSnapshotFixture(input: {
   const nodes = legacy.nodes.flatMap((node, index): ChatConversationViewNode[] => {
     if (node.kind === 'command' && node.name === 'compact') {
       const sourceSeq = node.outcome?.kind === 'success' ? node.outcome.sourceEventSeq : undefined
-      const candidates = sourceSeq === undefined
-        ? []
-        : legacy.nodes.filter((candidate): candidate is CompactionSummaryNode =>
+      // The checkpoint lands after the summary event that the settlement cites.
+      const compaction = sourceSeq === undefined
+        ? undefined
+        : legacy.nodes.find((candidate): candidate is CompactionSummaryNode =>
           candidate.kind === 'compaction' && candidate.summaryEventSeq === sourceSeq)
-      const compaction = candidates.length === 1 ? candidates[0] : undefined
       if (node.outcome === null || compaction !== undefined) {
         if (compaction !== undefined) linkedCompactions.add(compaction)
         const base = settledNode(node, turns)

@@ -636,9 +636,9 @@ describe('the Task Tree and Timeline tabs', () => {
     // the same locale instead of the host ICU locale, which differs across CI runners.
     const shown = (at: number) => new Date(at).toLocaleString('en')
     expect(titles).toEqual([
-      'Task Tree: Review release',
-      'Review release · Verify behavior',
       `Level 1 · 1m: ${shown(report.start)} – ${shown(report.end)}`,
+      'Review release · Verify behavior',
+      'Task Tree: Review release',
     ])
     expect(screen.getByText(en.controlWaiting)).toBeTruthy()
     expect(screen.getByText('The saved result is verified.')).toBeTruthy()
@@ -689,6 +689,20 @@ describe('the Task Tree and Timeline tabs', () => {
     rerender(<Fixture value={{ ...view, reports: [placeholder, report] }} />)
     expect(screen.getByRole('tab', { name: en.reports }).textContent).toBe(`${en.reports}1`)
   })
+  it('orders the session history by creation time, newest first, with the later-saved discussion first on a tie', () => {
+    const note = (text: string, createdAt: number) => annotationSchema.parse({
+      id: randomUUID(), target: { kind: 'tree', tree: tree.id }, text, createdAt, reply: null,
+    })
+    const annotations = [note('Newest', now + 9), note('Imported old', now - 9), note('Tie saved first', now), note('Tie saved last', now)]
+    const { container } = render(<Fixture value={{ ...view, annotations }} />)
+    const history = container.querySelector<HTMLDetailsElement>('.timeline-discussion-history')
+    if (history === null) throw new Error('Missing request history')
+    history.open = true
+    fireEvent(history, new Event('toggle'))
+    expect([...history.querySelectorAll('.timeline-annotation')].map(item => item.lastElementChild?.textContent)).toEqual([
+      'Newest', 'Tie saved last', 'Tie saved first', 'Imported old',
+    ])
+  })
   it('omits empty request history from both main pages', () => {
     render(<Fixture />)
     expect(screen.queryByText(en.discussionHistory)).toBeNull()
@@ -714,10 +728,10 @@ describe('the Task Tree and Timeline tabs', () => {
     }))
     const { container } = render(<Fixture value={{ ...view, annotations, reports: [archived] }} initial={{ historyOpen: true }} />)
     const labels = [...container.querySelectorAll('.timeline-annotation-target')].map(node => node.textContent)
-    expect(labels.slice(0, 3)).toEqual([
-      `Task Tree: ${en.detailUnavailable}`, ` · ${en.detailUnavailable}`, en.detailUnavailable,
+    expect(labels.slice(2)).toEqual([
+      en.detailUnavailable, ` · ${en.detailUnavailable}`, `Task Tree: ${en.detailUnavailable}`,
     ])
-    expect(labels[3]).toContain('Level 1 · 2m: ')
+    expect(labels[1]).toContain('Level 1 · 2m: ')
     expect(screen.getByText(en.controlDeliveryUnknown)).toBeTruthy()
     expect(screen.getByRole('group', { name: en.pausePending }).getAttribute('data-tooltip')).toContain(en.controlDeliveryUnknown)
   })

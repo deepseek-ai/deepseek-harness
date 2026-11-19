@@ -38,7 +38,7 @@ import type { SiblingNameReservation } from './names.ts'
 import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
 import type { SubagentRunId } from './types.ts'
 import type {
-  ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
+  ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority, SubagentCapacity,
   SubagentActivationSpec, SubagentActivation, SubagentMemberNames, SubagentStartRequest, SubagentRun,
   SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, ResolvedSubagentStartRequest,
 } from './types.ts'
@@ -786,6 +786,18 @@ export class SubagentManager {
     if (this.draining) return 'manager'
     const root = this.rootOf(agent)
     return this.closingRoots.has(root) ? root : undefined
+  }
+
+  /**
+   * Observe the shared capacity of a live tree member.
+   * @param caller - exact live root or resident child selecting the tree.
+   * @returns occupied slots and the current configured limit, without reserving capacity.
+   */
+  capacityOf(caller: Agent): SubagentCapacity {
+    return {
+      running: this.rootPools.get(this.rootOf(caller))?.size ?? 0,
+      limit: this.maxActiveSubagents(),
+    }
   }
 
   /** Share one capacity pool across every instance in a subagent tree. */

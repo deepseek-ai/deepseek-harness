@@ -89,6 +89,7 @@ describe('fixed report limits', () => {
     }
     expect(liveConfig(Config({ language: 'zh-CN' })).language).toBe('zh-CN')
     expect(liveConfig(Config({ language: 'ui' })).language).toBe('ui')
+    expect(liveConfig(Config({ language: 'chat' })).language).toBe('chat')
     for (const progressDecimals of [0, 1, 2, 3] as const)
       expect(liveConfig(Config({ progressDecimals })).progressDecimals).toBe(progressDecimals)
     expect(() => { Reflect.apply(Config, undefined, [{ progressDecimals: 4 }]) }).toThrow()

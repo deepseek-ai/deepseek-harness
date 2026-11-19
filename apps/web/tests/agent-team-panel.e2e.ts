@@ -627,7 +627,8 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await panel.count()).toBe(1)
       await page.mouse.click(2, 2)
       await panel.waitFor({ state: 'detached' })
-      await page.setViewportSize(viewport)
+      // A width whose transcript cannot move aside for the panel, so the toggle opens it over the conversation.
+      await page.setViewportSize({ width: 1100, height: viewport.height })
       await trigger.focus()
       await page.keyboard.press('Enter')
       await tasksHeading.waitFor()
@@ -675,8 +676,9 @@ describe('web e2e: agent teamwork panel', () => {
     const row = board.locator(`[data-team-task="${task.id}"]`)
     const emptyRow = board.locator(`[data-team-task="${completed.id}"]`)
     onTestFinished(() => page.setViewportSize(viewport))
-    // Constrain the panel so closed and expanded task rows both exercise its scrollbar.
-    await page.setViewportSize({ width: viewport.width, height: 500 })
+    // Constrain the panel so closed and expanded task rows both exercise its scrollbar, at a width whose transcript
+    // cannot move aside for it: the panel opens over the conversation and stays mounted as the window narrows below.
+    await page.setViewportSize({ width: 1100, height: 500 })
     await showSharedTasksSection(page)
     await row.waitFor()
     expect(await board.locator('[data-team-task-details], article').count()).toBe(0)

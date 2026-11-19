@@ -6,7 +6,7 @@
 
 ## 配置 DeepSeek
 
-打开**设置 → 模型**。DeepSeek 卡片提供一个 API 密钥字段；输入密钥并保存。
+打开**设置 → 模型**。DeepSeek API 卡片提供一个 API 密钥字段；输入密钥并保存。
 
 ![模型页：DeepSeek 卡片，及其下方的添加模型提供商入口](providers-models-page.zh.png)
 

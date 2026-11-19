@@ -11,10 +11,10 @@
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek
+      - text: DeepSeek API
       - img "API 密钥已配置"
-      - button "编辑 DeepSeek (deepseek-official)": 编辑
-      - text: DeepSeek deepseek-official API 密钥
+      - button "编辑 DeepSeek API (deepseek-official)": 编辑
+      - text: DeepSeek API deepseek-official API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: sk-messa••••••••••ding

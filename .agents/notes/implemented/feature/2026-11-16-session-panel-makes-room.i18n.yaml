@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-16-session-panel-makes-room.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-16-session-panel-makes-room.md
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel:
+  en: e70c9ec483c744d7
+  zh: 022406f7ffae63a1
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/problem:
+  en: 5cab4a0fb9ad60c2
+  zh: 074a63beaad1aa55
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/decision:
+  en: 2120aa7bf642ec99
+  zh: af7493fa21357df0
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/decision/the-body-owns-the-room-and-the-panel-asks-for-it:
+  en: 133c15546f787723
+  zh: 8e8cb9260af14207
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/decision/one-probe-whose-answer-does-not-depend-on-the-room-made:
+  en: 8dc78b8b67322164
+  zh: c0f785ab10d9cbf0
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/decision/width-handles-beside-the-docked-panel:
+  en: f474cd213b7d7d90
+  zh: c2a67709e43af311
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/decision/one-motion-for-the-panel-and-the-transcript:
+  en: 084f01ca61d03d34
+  zh: 6e1dbac9332ecfa4
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/alternatives-considered:
+  en: a3b6a8462b2440e2
+  zh: e10fb5a9faf20ec8
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/consequences:
+  en: a9dfb9dc68ab2123
+  zh: e94de2ee21482fd3
+/agent-note-the-transcript-moves-aside-for-the-docked-session-panel/testing:
+  en: ac6c37d6e85c30ba
+  zh: 4d978cc079f323cc

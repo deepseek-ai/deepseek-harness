@@ -792,4 +792,3 @@ describe('SessionObservationReader cold projections', () => {
     await ctx.fiber.dispose()
   })
 })
-

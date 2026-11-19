@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for session-control.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/session-control.md
+/:
+  en: bf54008623f4721c
+  zh: a2cb20f9a5acdeb7
+/send-a-message-to-another-session:
+  en: de0624d539d2fb11
+  zh: bf32ff9a6e7b0a2b
+/send-a-message-to-another-session/summary:
+  en: b7a6b1b53f4a7671
+  zh: 5bed38daed30bfbe
+/send-a-message-to-another-session/table-of-contents:
+  en: d618088b4c6d8909
+  zh: 8eb1b2e50fb18582
+/send-a-message-to-another-session/enable-messaging:
+  en: cd0ff4e2ee3fec46
+  zh: 5f21e4c4d7ef8097
+/send-a-message-to-another-session/send-and-check-the-receipt:
+  en: 2a74a421d25909b5
+  zh: 8918fe0833eef196
+/send-a-message-to-another-session/delivery-limits:
+  en: 51f667e2fc1247d5
+  zh: e7fc0609224f3e82
+/send-a-message-to-another-session/further-exploration:
+  en: 39ce772bb1597c59
+  zh: 52ff6d9ea4d29818
+/send-a-message-to-another-session/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269
