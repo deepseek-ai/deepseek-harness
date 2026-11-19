@@ -35,7 +35,7 @@ Callbacks caused bugs before, so prefer other designs where possible.
 
 ### 注解
 
-一个规则分组是本目录中一对以分组命名的双语文件，例如 `general.md` 和 `general.zh.md`。其一级标题为 `<字母>：<名称>`，后接一段说明该分组范围的文字。`<字母>` 由一个或多个大写字母组成，在各分组之间唯一。[README.zh.md](README.zh.md) 列出全部分组。
+一个规则分组是本目录中除 `README.md` 外、以分组命名的一对双语文件，例如 `general.md` 和 `general.zh.md`。其一级标题为 `<字母>：<名称>`，后接一段说明该分组范围的文字。`<字母>` 由一个或多个大写字母组成，在各分组之间唯一。[README.zh.md](README.zh.md) 列出全部分组和规则；新增规则时在同一变更中把它加入其中。
 
 一条规则是所属分组文件中的一个二级标题 `<字母>.<n>：<标题>`。标题前放一个 `<a id>` 锚点，取值为去掉点号的小写编号。`<n>` 按添加顺序从 1 开始计数。删除的规则编号不再复用。
 
@@ -105,7 +105,7 @@ export declare function upload(data: Uint8Array): AsyncIterable<UploadEvent>
 
 ### 例外
 
-- event handler（事件处理函数）：为处理事件而注册的函数或对象，例如 `ctx.on()` 的监听器、传给注册表 `register()` 的处理函数，或客户端组件的 `onClick` prop。注册返回其 disposer。传给处理函数的 waterfall `next()` 属于处理函数签名的一部分。
+- 事件处理函数：调用方为接收事件而注册的函数或对象，例如 `ctx.on()` 的监听器（注册返回其 disposer），以及客户端组件的事件 prop，例如 `onClick`。传给处理函数的 waterfall `next()` 属于处理函数签名的一部分。
 - 被调用方在调用返回或其 promise 落定之前就已调用完毕、异常会传回调用方、且不会保留的函数，例如比较函数或在锁内运行的任务。
 
 ### 注解

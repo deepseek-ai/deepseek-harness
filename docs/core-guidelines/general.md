@@ -35,7 +35,7 @@ No ID. No imperative title. The requirement is buried in the rationale, and noth
 
 ### Note
 
-A rule section is one bilingual file pair in this directory, named for the section, such as `general.md` and `general.zh.md`. Its level-1 heading is `<Letter>: <Name>`, followed by one paragraph that states its scope. `<Letter>` is one or more capital letters, unique among sections. [README.md](README.md) lists every section.
+A rule section is a bilingual pair in this directory other than `README.md`, named for the section, such as `general.md` and `general.zh.md`. Its level-1 heading is `<Letter>: <Name>`, followed by one paragraph that states its scope. `<Letter>` is one or more capital letters, unique among sections. [README.md](README.md) lists every section and rule; add each new rule there in the same change.
 
 A rule is a level-2 heading `<Letter>.<n>: <Title>` in its section file. An `<a id>` anchor, the lowercased ID without the dot, precedes the heading. `<n>` counts from 1 in order of addition. A removed rule's number is never reused.
 
@@ -105,7 +105,7 @@ Order, failure, and cancellation follow the iteration protocol. The caller's exc
 
 ### Exception
 
-- An event handler: a function or object registered to handle events, such as a `ctx.on()` listener, a handler passed to a registry's `register()`, or a client component's `onClick` prop. The registration returns its disposer. The waterfall `next()` passed to a handler is part of the handler's signature.
+- An event handler: a function or object that a caller registers to receive events, such as a `ctx.on()` listener (the registration returns its disposer), or a client component's event prop such as `onClick`. A waterfall `next()` passed to a handler is part of the handler's signature.
 - A function that the callee finishes calling before the call returns or its promise settles, whose exceptions reach the caller, and that the callee does not keep, such as a comparator or a task run under a lock.
 
 ### Note
