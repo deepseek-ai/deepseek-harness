@@ -159,12 +159,12 @@ function WidthHandle(props: {
  */
 export function ConversationWidthControls({ container, phase }: ConversationWidthControlsProps) {
   const publishWidths = useCallback((container: HTMLDivElement): void => {
-    const target = container.parentElement ?? container
+    // The axis registers these inputs without inheritance, so they belong on the body that derives from them.
     const column = container.offsetWidth
-    target.style.setProperty('--dsh-conversation-column-width', `${column}px`)
+    container.style.setProperty('--dsh-conversation-column-width', `${column}px`)
     const preference = readWidthPreference()
-    if (preference === null) target.style.removeProperty('--dsh-chat-user-width')
-    else target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
+    if (preference === null) container.style.removeProperty('--dsh-chat-user-width')
+    else container.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
   }, [])
 
   useLayoutEffect(() => {
@@ -181,8 +181,7 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
   }, [container])
   const onDrag = useCallback((width: number): void => {
     if (container === null) return
-    const target = container.parentElement ?? container
-    target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(container.offsetWidth, width)}px`)
+    container.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(container.offsetWidth, width)}px`)
   }, [container])
   const onCommit = useCallback((width: number): void => {
     if (container === null) return

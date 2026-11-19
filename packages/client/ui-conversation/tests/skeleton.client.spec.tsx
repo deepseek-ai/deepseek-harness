@@ -950,24 +950,22 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
-  it('publishes the column width as a px variable for the shared width axis', () => {
+  it('publishes the column width as a px variable on the body for the shared width axis', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
-    const root = content.parentElement as HTMLElement
     // jsdom offsetWidth is 0 until faked: the observer publishes whatever the
     // layout reports, and the CSS clamp() floors the axis at 680px either way.
     Object.defineProperty(content, 'offsetWidth', { value: 1200, configurable: true })
     act(() => { fireResize(content) })
-    expect(root.style.getPropertyValue('--dsh-conversation-column-width')).toBe('1200px')
+    expect(content.style.getPropertyValue('--dsh-conversation-column-width')).toBe('1200px')
     // No dragged preference: the user-width override stays absent so the
     // adaptive clamp term applies.
-    expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
+    expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
   })
 
   it('drag → persist → window clamp round-trip on a width handle', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
-    const root = content.parentElement as HTMLElement
     Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
     act(() => { fireResize(content) })
     const handle = b.view.container.querySelector('[data-width-handle="right"]') as HTMLElement
@@ -991,13 +989,13 @@ describe('ConversationRoot resident composer', () => {
       expect(handle.style.getPropertyValue('--dsh-width-handle-pointer-y')).toBe('300px')
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 825, clientY: 300 })
       expect(handle.hasAttribute('data-dragging')).toBe(false)
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('930px')
+      expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('930px')
       expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       // Window shrinks: the displayed width re-clamps (900 − 176 = 724) but the
       // preference stays.
       Object.defineProperty(content, 'offsetWidth', { value: 900, configurable: true })
       act(() => { fireResize(content) })
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
+      expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
       expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       // A press without travel (a real double-click delivers two such
       // press/release rounds) must not commit the clamped display value over
@@ -1005,7 +1003,7 @@ describe('ConversationRoot resident composer', () => {
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 800, clientY: 300 })
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 800, clientY: 300 })
       expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
+      expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
       // No reset affordance on the handle: double-click leaves the preference alone.
       fireEvent.doubleClick(handle)
       expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
@@ -1020,7 +1018,6 @@ describe('ConversationRoot resident composer', () => {
   it('changes the width by the pointer travel, not twice it, while the scrollport pads its end for a reserve', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
-    const root = content.parentElement as HTMLElement
     const scrollport = content.querySelector('[data-conversation-scroll]') as HTMLElement
     Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
     act(() => { fireResize(content) })
@@ -1042,12 +1039,12 @@ describe('ConversationRoot resident composer', () => {
       // The reserve holds the column's end edge: 25px outward on the start handle moves the start edge 25px → 880 + 25.
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 400, clientY: 300 })
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 375, clientY: 300 })
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('905px')
+      expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('905px')
       // Without the inset the column is centered and both edges move: 905 + 2 × 10.
       inset = '0px'
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 400, clientY: 300 })
       fireEvent.pointerUp(handle, { pointerId: 1, clientX: 390, clientY: 300 })
-      expect(root.style.getPropertyValue('--dsh-chat-user-width')).toBe('925px')
+      expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('925px')
     } finally {
       for (const [name, descriptor] of originals) {
         if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)
