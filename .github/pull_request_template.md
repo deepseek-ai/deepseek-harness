@@ -6,6 +6,8 @@
 
 ## Changes
 
+<!-- Interface changes、Behavior changes、Module responsibilities and dependencies 三项；没有就写 None。 -->
+
 ## Testing
 
 <!-- 测试设计 -->
