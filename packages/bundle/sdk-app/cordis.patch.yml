@@ -54,7 +54,9 @@
         pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
 
 # The skill catalog lists dsh-doc, as the Desktop standard, PTC, and Creator
-# presets do; its instructions load only when the model calls `skill`.
+# presets do; its instructions load only when the model calls `skill`. The
+# path resolves through this package's `@deepseek-ai/dsh-agent-preset`
+# dependency, which no plugin row names.
 - id: skill-filesystem
   config:
     customSkillDirs:
