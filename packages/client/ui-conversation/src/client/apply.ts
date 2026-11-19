@@ -22,7 +22,7 @@ import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
+  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected, ConversationShellInjected,
   ConversationSessionInjected, DraftFileUploads, UserTextInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
@@ -112,7 +112,7 @@ function hostPathBridge(): HostPathBridge | undefined {
 interface WorkspaceNavigation {
   openSession(sessionId: SessionId): void
   openWorkspace(
-    workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
+    workspaceId: Parameters<ConversationShellInjected['openWorkspace']>[0],
     beforeOpen: (sessionId: SessionId) => void,
   ): Promise<void>
 }
@@ -329,6 +329,10 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
     },
   })
 
+  const shellInjected: ConversationShellInjected = {
+    openWorkspace: (workspaceId, adopt) => workspaceNavigation.openWorkspace(workspaceId, adopt),
+  }
+
   const registerConversationRoot = () => slots.register({
     name: 'main.conversation',
     children: {
@@ -359,7 +363,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
       },
-      selectWorkspace: workspaceId => workspaceNavigation.openWorkspace(workspaceId, (nextId) => {
+      moveDraft: (nextId) => {
         if (sessionId !== undefined && nextId !== sessionId) {
           const from = inputHub.shell(sessionId)
           // A draft with a submission in flight stays with the Session that is admitting it.
@@ -384,7 +388,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
             }
           }
         }
-      }),
+      },
     }),
   }, ConversationContent)
 
@@ -580,7 +584,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
     yield slots.register({
       name: 'main',
       key: 'conversation',
-      children: { 'main.conversation': { kind: 'single', scope: 'session-maybe' } },
+      children: { 'main.conversation': { kind: 'single', scope: 'session-maybe', inject: shellInjected } },
     }, ConversationPanel)
     yield registerConversationRoot()
     yield registerConversationContent()

@@ -352,7 +352,7 @@
 
               Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
 
-              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed only to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
 
               Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
 
@@ -475,7 +475,11 @@
     # The shared base enables the stable model-facing web_search and web_fetch
     # tools. The Web app disables this host row and composes both tools per agent
     # preset; products with a stricter network policy override tool-web. Search
-    # defaults to the DeepSeek Search API (deepseek-search-api) and fetch to the
+    # composes no fixed provider, so dsh-web selects per model provider route:
+    # legacy Messages search (deepseek-official) for a conversation on a DeepSeek
+    # model route, because DeepSeek makes no per-search charge for it, and the
+    # DeepSeek Search API (deepseek-search-api) for every other route. Fetch
+    # defaults to the
     # anonymous local fetcher (http). The DeepSeek Search and Fetch APIs
     # (deepseek-search-api, deepseek-fetch-api) follow the conversation: on the
     # deepseek-account route they send the account token to that route's
@@ -483,8 +487,8 @@
     # origin, so a DEEPSEEK_API_KEY alone serves both without a sign-in.
     # searchBaseURL / searchApiKeyEnv (fetch* for Fetch) pin one capability to
     # its own endpoint and key instead.
-    # Legacy Messages search (deepseek-official) is selectable separately and
-    # uses its own endpoint, with the account token or DEEPSEEK_API_KEY.
+    # Legacy Messages search uses its own endpoint, with the account token or
+    # DEEPSEEK_API_KEY.
     # Anonymous fetch accepts only public
     # HTTP(S) destinations, resolves and validates every destination, and pins
     # every actual connection. This composition gives web_search 60s whichever
@@ -495,7 +499,6 @@
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-search-api
         fetchProvider: http
 
     - id: web-search-deepseek

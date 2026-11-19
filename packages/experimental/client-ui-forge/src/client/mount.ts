@@ -19,12 +19,14 @@ import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/type
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgePanelChangeRequest,
+  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgePanelState,
 } from '../types.ts'
+import { actionReporter } from './action-notices.ts'
 import { AnnotationView } from './annotations.ts'
 import { ForgeChangesService } from './changes-service.ts'
 import type {} from './slots.ts'
 import { ReviewQueue } from './review-queue.ts'
+import { registerReviewPage } from './review-page/review-mount.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { formatThreadQuote, threadQuoteSummary } from './review-threads.ts'
@@ -46,9 +48,9 @@ import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
 import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource,
+  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource, type PanelStream,
 } from './source.ts'
-import { numberOf } from './status.ts'
+import { numberOf, type ChangeRequestEntry } from './status.ts'
 import type { WorktreeRequestResult } from './WorktreeNameDialog.tsx'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
 import { WorktreeSettings } from './WorktreeSettings.tsx'
@@ -56,7 +58,7 @@ import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields }
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
 /** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace']
 
 /** The worktree row of the Forge bundle, whose Plugins page carries the archive cleanup switch. */
 export const WORKTREE_ROW_KEY = '@deepseek-ai/dsh-experimental-forge-bundle#worktree'
@@ -113,6 +115,34 @@ function registerUi(ctx: Context): void {
     })
     return { text: t('toast.archiveCleanupScheduled'), tone: 'success' }
   })
+  /**
+   * Follow a Session's panel only after its own history connection opened: the Host resolves the `follow` argument
+   * by resuming the Session's Agent, which would otherwise read the Session log a second time beside that opening.
+   * The stream holds a Session reference until it ends, and calls `followed` once its first state arrived.
+   */
+  const followOpened = (sessionId: SessionId, signal: AbortSignal, followed: () => void): PanelStream => {
+    let inner: PanelStream | undefined
+    async function* frames(): AsyncGenerator<ForgePanelState> {
+      const reference = ctx.sessions.retain(sessionId, { source: 'forgePanel', signal })
+      try {
+        const state = (await reference.ready).session.getSnapshot()
+        if (state.openState !== 'open') throw state.openError ?? new Error(`forge-panel: Session ${sessionId} is not open`)
+        inner = ctx.remote.forgePanel.follow(sessionId, signal)
+        let first = true
+        for await (const frame of inner) {
+          yield frame
+          // The source published the frame before asking for the next one.
+          if (first) {
+            first = false
+            followed()
+          }
+        }
+      } finally {
+        reference.release()
+      }
+    }
+    return Object.assign(frames(), { dispose: () => { inner?.dispose() } })
+  }
   const stores = new Map<SessionId, SessionStores>()
   ctx.effect(() => () => {
     for (const store of [...stores.values()]) store.release()
@@ -123,8 +153,14 @@ function registerUi(ctx: Context): void {
     if (store === undefined) {
       const scope = ctx.sessions.scope(sessionId)
       if (scope === undefined) throw new Error(`forge-panel: Session ${sessionId} is not retained`)
+      // A refresh asked for before the Host follows the panel would find no panel there, so it waits for the first state.
+      let deferred = false
       const panel = createPanelSource({
-        open: signal => ctx.remote.forgePanel.follow(sessionId, signal),
+        open: signal => followOpened(sessionId, signal, () => {
+          if (!deferred) return
+          deferred = false
+          refreshIfStale()
+        }),
         subscribeReset: listener => ctx.on('connection/reset', listener),
       })
       const dispose = scope.effect(() => () => {
@@ -133,6 +169,10 @@ function registerUi(ctx: Context): void {
       }, 'forge-panel: release Session state')
       let refreshedAt: number | undefined
       const refreshIfStale = (): void => {
+        if (panel.hooks.panel.getSnapshot().state === null) {
+          deferred = true
+          return
+        }
         const now = Date.now()
         if (refreshedAt !== undefined && now - refreshedAt < AUTO_REFRESH_MIN_MS) return
         refreshedAt = now
@@ -214,15 +254,12 @@ function registerUi(ctx: Context): void {
     quoteInInput(sessionId, /(?:^|\n)(?:> )?## Review Thread (\d+)/g, index => formatThreadQuote(thread, url, index),
       threadQuoteSummary(thread, range))
   /** How toasts name a change request: its number, else its title, else its URL. */
-  const nameOf = (entry: ForgePanelChangeRequest): string => {
+  const nameOf = (entry: ChangeRequestEntry): string => {
     const number = numberOf(entry)
     return number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number })
   }
-  /** Tell the reader that the code host may have applied an action it did not confirm, which they should check there. */
-  const reportUnknown = (entry: ForgePanelChangeRequest): void => {
-    notices.report('toast.actionUnknown', { params: { name: nameOf(entry) } })
-  }
-  const remove = (sessionId: SessionId, entry: ForgePanelChangeRequest): void => {
+  const reportAction = actionReporter(notices, nameOf)
+  const remove = (sessionId: SessionId, entry: ChangeRequestEntry): void => {
     void ctx.remote.forgePanel.dismiss(sessionId, entry.url).then((result) => {
       if (!settled(result, 'toast.removeFailed')) return
       notices.report('toast.removed', {
@@ -269,31 +306,21 @@ function registerUi(ctx: Context): void {
         return result.value
       },
       markReady: async (entry) => {
-        const result = await ctx.remote.forgePanel.markReady(sessionId, entry.url)
-        if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.markReadyFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.markReady(sessionId, entry.url),
+          { done: 'toast.markedReady', failed: 'toast.markReadyFailed' })
       },
       merge: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha)
-        if (result.ok) notices.report('toast.merged', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha),
+          { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
       },
       rerunChecks: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request)
-        if (result.ok) notices.report('toast.rerunRequested', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.rerunStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.rerunFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request),
+          { done: 'toast.rerunRequested', stale: 'toast.rerunStale', failed: 'toast.rerunFailed' })
       },
       requestReviews: async (entry, reviewers) => {
-        const result = await ctx.remote.forgePanel.requestReviews(sessionId, entry.url, reviewers)
-        const login = reviewers.map(reviewer => reviewer.login).join(', ')
-        if (result.ok) notices.report('toast.reviewRequested', { tone: 'success', params: { name: nameOf(entry), login } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.reviewRequestFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.requestReviews(sessionId, entry.url, reviewers),
+          { done: 'toast.reviewRequested', failed: 'toast.reviewRequestFailed' },
+          { login: reviewers.map(reviewer => reviewer.login).join(', ') })
       },
       reviewerCandidates: async (url, query, signal) => {
         const result = await ctx.remote.forgePanel.reviewerCandidates(sessionId, url, query, signal)
@@ -301,11 +328,8 @@ function registerUi(ctx: Context): void {
         return result.value
       },
       updateBranch: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.updateBranch(sessionId, entry.url, request.method, request.headSha)
-        if (result.ok) notices.report('toast.branchUpdated', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.branchUpdateStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.branchUpdateFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.updateBranch(sessionId, entry.url, request.method, request.headSha),
+          { done: 'toast.branchUpdated', stale: 'toast.branchUpdateStale', failed: 'toast.branchUpdateFailed' })
       },
       openLink,
       copyText,
@@ -383,10 +407,7 @@ function registerUi(ctx: Context): void {
       openLink,
       copyPath,
       createChangeRequest: () => { createChangeRequest(sessionId) },
-      report: (key, params) => {
-        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' || key === 'review.discarded' ? 'success' : 'failure',
-          ...params === undefined ? {} : { params } })
-      },
+      report: notices.report,
     }
   }
   /** Request a worktree; a refused branch name goes back to the naming dialog, any other failure to a toast. */
@@ -501,6 +522,9 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
+  registerReviewPage(ctx, {
+    notices, settled, nameOf, openLink, copyText, copyPath, locale, quoteReview: addReviewToInput, quoteThread: addThreadToInput,
+  })
   const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
   ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')
   ctx.slots.inject('plugins.row.config', () => ctx.slots.register({

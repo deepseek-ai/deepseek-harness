@@ -38,7 +38,7 @@ let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
 // web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
-const agent = { id: brandString<SessionId>('tool-web-integration') } as Agent
+const agent = { id: brandString<SessionId>('tool-web-integration'), session: { requestContext: () => undefined } } as Agent
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }

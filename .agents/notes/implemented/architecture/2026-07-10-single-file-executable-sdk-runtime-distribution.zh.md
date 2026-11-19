@@ -25,6 +25,8 @@ exe 使用 [@yao-pkg/pkg](https://github.com/yao-pkg/pkg)（vercel/pkg 归档后
 
 同一补丁还把 SEA bootstrap 的原生插件解包改成原子写入。VFS 内的插件首次 `dlopen` 时，pkg 的 `patchDlopen` 会把该插件所在的包目录整棵拷到 `$PKG_NATIVE_CACHE_PATH/pkg/<.node 文件的 sha256>/`（默认 `~/.cache/pkg/...`），这是同一个 exe 的所有并发进程共用的按用户目录；上游用 `writeFileSync` 直接写目标路径，会把另一个进程可能已经映射的文件截断，并让该进程的 `existsSync`/哈希比对读到写了一半的文件。因此并发首次启动在 Linux 上以 SIGBUS 崩溃，在 macOS 上对 sharp 的 libvips 报 `ERR_DLOPEN_FAILED: Library not loaded`（#4664）。补丁让三处写入都经过同目录临时文件加 `renameSync`，于是缓存路径要么不存在、要么完整，每个进程都在加载前走完自己的拷贝，相同内容的并发 rename 不需要锁。缓存位置、哈希键与逐文件比对均未改变，通过 `PKG_NATIVE_CACHE_PATH` 按实例隔离缓存的消费方照常工作；worker 线程只定义该钩子而从不安装。 实测（linux-x64、node24 构建目标、pkg 6.21.0，一个加载 sharp 及其 18 MB libvips 库的探针，16 个进程对同一个空缓存并发首次启动，跑五轮）：改动前 80 个进程中 39 个以 SIGBUS 崩溃，改动后 80 个全部正常，且无残留临时文件。
 
+同一补丁还让 VFS 的 `stat`、`lstat`、它们的同步形式以及 `fs.promises` 遵守 `{ bigint: true }`。上游无论选项如何都返回同一份数值型 stats，而 `dsh-fs-local` 与 `dsh-fs-sandbox` 通过 BigInt stats 读取 VFS 路径，因此经 `ctx.fs` 访问打包文件时都会以 `Cannot mix BigInt and other types` 失败：`read` 工具打不开打包的 skill 文件，位于 VFS 内的 `skill-filesystem` 根使 skill 发现不完整。补丁把 VFS 条目的数值转换为 `BigIntStats` 字段，其中纳秒时间由毫秒值换算；VFS 之外的路径仍使用 Node 自身的结果。
+
 术语提醒：pkg 的 `/snapshot` VFS 与本仓库测试体系的「快照」（ACP（Agent Client Protocol）回放预期输出、`$DSH_SNAPSHOT`）无关，本文用「VFS」指前者。
 
 ### 对外服务接口是 dsh 应用中的插件

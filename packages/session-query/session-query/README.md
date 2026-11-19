@@ -118,8 +118,6 @@ The service registers the `sessionListMetadata` projection for Session blankness
 
 A cold `SessionObservation` reports `persistedEventCount` to separate the stored prefix from the in-memory interrupted-turn repairs in `events`. Fork callers keep those repairs in the child's suffix. A live observation omits the field, since a live log carries no read-time repairs.
 
-`inspectSession(id, read, signal?)` prepares a cold Session without publishing or resuming it and calls a synchronous domain getter at a fresh live or prepared cut. The getter may read its owned projection or resolve policy; it must not mutate or retain the Session. The observation is released after the getter returns or throws; callers retain only the returned data. Preparation uses the observation cache and validates persisted history.
-
 ### Reads and traces
 
 `readSession` replays the log through `Session.create` to reuse resume's validation. `readSurface`, `listEvents`, and `traceEvent` share one `foldSurface` pass that classifies events as `current`, `shadowed`, or `log-only` and validates zero-based contiguous seqs, surface-marker eligibility, and replacement or citation integrity; any violation fails with `SESSION_QUERY_INVALID_SURFACE`. Traces are one-shot: session lineage reads the corpus once and walks parents and descendant trees deterministically, and event traces follow positional replacers to the final node while keeping cited-source links non-transitive.

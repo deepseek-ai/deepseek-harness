@@ -12,7 +12,7 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-settings'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { HarnessError } from '@deepseek-ai/dsh-error'
@@ -147,11 +147,11 @@ export class WorktreeService extends Service {
     this.projection = await this.ctx.sessionProjections.register(worktreeProjection)
     // Reclamation needs the Workspace archive events and the Session corpus; without
     // them the service only creates and restores, as a headless profile composes it.
-    this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory', 'sandboxPolicy'], (scope) => {
+    this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory'], (scope) => {
       const reclamation = new WorktreeReclamation(scope, {
         retainOnArchive: () => this.config.retainOnArchive.get(),
         exclusiveCheckout: (path, body) => this.exclusiveCheckout(path, body),
-        removeCheckout: (session, request, signal, admit) => this.removeCheckout(session, request, signal, admit),
+        removeCheckout: (request, signal, admit) => this.removeCheckout(request, signal, admit),
       }, this.projection)
       this.reclamation = reclamation
       scope.effect(() => () => { this.reclamation = undefined })
@@ -283,25 +283,25 @@ export class WorktreeService extends Service {
   /**
    * Read the archive cleanup of a Session's created checkout; waiting never
    * starts one. Absent without the Workspace and query providers.
-   * @param session - archived Session whose cleanup is read.
+   * @param sessionId - archived Session whose cleanup is read; reading neither loads nor resumes it.
    * @param revision - null reads at once; a matching revision waits for that attempt to settle.
    * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    return await this.reclamation?.cleanupOf(session, revision) ?? null
+  async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.reclamation?.cleanupOf(sessionId, revision) ?? null
   }
 
   /**
-   * Inspect a recorded checkout under the Session's policy and, when eligible
-   * and admitted, remove it and its registration without force or branch
-   * deletion. A rejection can leave a partial directory; the branch stays.
+   * Inspect a recorded checkout and, when eligible and admitted, remove it and
+   * its registration without force or branch deletion. Archiving is the user's
+   * authorization, so Git runs unconfined by any Session's sandbox policy; the
+   * inspection bounds it to a clean checkout of the configured pool registered
+   * on the recorded branch. A rejection can leave a partial directory; the branch stays.
    */
-  private async removeCheckout(
-    session: Session, request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean,
-  ): Promise<boolean> {
+  private async removeCheckout(request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const policy = this.ctx.sandboxPolicy.resolve({ session })
+    const policy: SandboxExecutionPolicy = { mode: 'danger-full-access', workspaceRoot: request.repositoryRoot }
     const git = { read: this.gitRunner(policy, control), scan: this.gitScanner(policy, control) }
     const operation = removeCheckout(this.ctx, this.config.directory, request, git, control, admit)
     this.pending.add(operation)
@@ -401,7 +401,7 @@ export class WorktreeService extends Service {
     onPhase: ((phase: Exclude<CreateWorktreePhase, 'fetch'>) => void) | undefined,
   ): Promise<RestoredWorktree> {
     onPhase?.('prepare')
-    const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
+    const policy = this.sourcePolicy(agent.session, repositoryRoot)
     const run = this.gitRunner(policy, signal)
     if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new WorktreeError(`worktree path already exists: ${path}`, 'WORKTREE_ALREADY_EXISTS')
     if (!relativePath(branch) || branch.startsWith('-')) throw new WorktreeError('worktree branch must be a relative Git branch name', 'WORKTREE_INVALID_ARGUMENT')
@@ -435,6 +435,15 @@ export class WorktreeService extends Service {
     } catch (error) {
       throw retainedFailure(`Could not restore worktree ${branch} at ${path}. Any created checkout and branch are retained.`, error, signal)
     }
+  }
+
+  /**
+   * The policy restoration runs under: the Session's mode and grants, bounded by the source
+   * checkout of the recorded worktree instead of the Session's own root, which may be the worktree
+   * directory, removed or being removed.
+   */
+  private sourcePolicy(session: Session, repositoryRoot: string): SandboxExecutionPolicy {
+    return { ...this.ctx.sandboxPolicy.resolve({ session }), workspaceRoot: repositoryRoot }
   }
 
   /** Confine Git commands to the caller's sandbox policy, collecting bounded stdout. */

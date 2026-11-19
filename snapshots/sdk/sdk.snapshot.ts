@@ -80,6 +80,8 @@ const MINIMAL_BASH_DESCRIPTION = `Run commands in a bash shell
 * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.`
 
 const mode = process.env.DSH_SNAPSHOT ?? 'replay'
+/** Every input reports one fixed zone, so recorded prompts and their time context do not follow the host zone. */
+const SNAPSHOT_TIME_ZONE = 'UTC'
 const recording = mode === 'record'
 const refreshing = mode === 'refresh'
 const sessionWriteMode = recording ? 'record' : refreshing ? 'refresh' : 'replay'
@@ -834,6 +836,8 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const env: Record<string, string> = {
     ...Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)) as Record<string, string>,
     ...recording ? {} : REPLAY_CREDENTIAL_ENV,
+    // A runtime that receives a prompt without a zone, such as an SDK subagent child, samples this process zone.
+    TZ: SNAPSHOT_TIME_ZONE,
     DSH_SNAPSHOT: mode,
     DSH_SNAPSHOT_PROVIDER: route.provider,
     DSH_SNAPSHOT_MODEL: route.model,
@@ -925,7 +929,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
               type: 'image' as const, data: image.data, mimeType: image.mediaType,
             })) ?? [],
             { type: 'text', text: action.line },
-          ] : action.line)
+          ] : action.line, { timeZone: SNAPSHOT_TIME_ZONE })
           expect(execution.sessionId).toBe(sessionId)
           if (scenario.name === 'plan-review' && action === actions.find(item => item.kind === 'command')) {
             expect(execution).toMatchObject({ finalResponse: 'SDK_PLAN_APPROVED', finishReason: 'completed' })
@@ -974,6 +978,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
             throw new Error(`${scenario.name} run fixture requires one text block per prompt`)
           }
           const outcome = await session.run(content.text, {
+            timeZone: SNAPSHOT_TIME_ZONE,
             onNotification(message) {
               notifications.push(message)
               observe(message)
@@ -982,6 +987,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           result = outcome
         } else {
           const outcome = await session.run(materializeInput(action.content, scenario, cwd, liveSessions), {
+            timeZone: SNAPSHOT_TIME_ZONE,
             onNotification: (notification) => {
               notifications.push(notification)
               observe(notification)

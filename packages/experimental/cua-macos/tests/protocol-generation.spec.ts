@@ -38,6 +38,19 @@ describe('native protocol generation', () => {
     }
   })
 
+  it('admits an action schema request with only an action name', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    expect(validate({ id: 'schema', method: 'getActionSchema', params: { action: 'AXPress' } })).toBe(true)
+    const invalid = [
+      {}, { action: '' }, { action: 7 }, { action: 'AXPress', appHandle: 'app' },
+      { action: 'AXPress', windowId: '1' }, { action: 'AXPress', snapshotId: 'snapshot' },
+      { action: 'AXPress', elementId: '0' },
+    ]
+    for (const params of invalid) {
+      expect(validate({ id: 'schema', method: 'getActionSchema', params })).toBe(false)
+    }
+  })
+
   it('enforces macOS tree budgets at native admission', () => {
     const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
     const read = (maxElements: number, maxDepth: number) => ({

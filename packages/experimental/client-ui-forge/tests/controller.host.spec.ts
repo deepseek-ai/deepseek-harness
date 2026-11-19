@@ -69,6 +69,12 @@ const UNAVAILABLE = {
   restoration: null, waiting: null,
 }
 
+/**
+ * The same facts once the Session works in its worktree: its root no longer contains the repository's Git
+ * directory, which another worktree would have to write. The option that shows the blocker is hidden by then.
+ */
+const IN_WORKTREE = { ...UNAVAILABLE, blocker: 'outside-writable-root' as const }
+
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
 /** Abbreviated commit object name Git prints for HEAD. */
@@ -206,8 +212,11 @@ describe('forgePanel.follow', () => {
     await follower.next(on('feat'))
     expect(opened.provider.lookups).toEqual(['octo/demo feat'])
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await vi.waitFor(() => { expect(opened.provider.lookups).toEqual(['octo/demo feat', 'octo/demo feat']) })
+    // A refresh names its Session by id and leaves the panels of other Sessions alone.
+    await opened.ctx.forgePanel.refresh(brandString<SessionId>('session-unfollowed'), signal)
+    expect(opened.provider.lookups).toEqual(['octo/demo feat', 'octo/demo feat'])
   })
 
   it('looks up nothing for an upstream on a remote that no provider recognizes', async () => {
@@ -233,7 +242,7 @@ describe('forgePanel.follow', () => {
 
     const first = await follower.until(state => polled(state, pullUrl(7)) && failing(state, pullUrl(8)))
     opened.provider.failures.set(7, { code: 'unavailable', message: 'offline' })
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const later = await follower.until(state => failing(state, pullUrl(7)))
 
     expect(first.changeRequests).toMatchObject([
@@ -469,7 +478,7 @@ describe('forgePanel local changes', () => {
       .rejects.toMatchObject({ code: 'forgePanel/filter-config-failed' })
 
     await git(repo, 'config', '--unset', key)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await expect(follower.until(state => state.local !== null)).resolves.toMatchObject({ local: { files: [{ path: 'tracked.txt' }] } })
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal))
       .resolves.toMatchObject({ files: [{ path: 'tracked.txt' }] })
@@ -688,7 +697,7 @@ describe('forgePanel change request diffs', () => {
       (await opened.ctx.forgePanel.changeRequestDiff(session, pullUrl(7), null, signal)).files.map(file => file.path)
     const moved = async (snapshot: { headSha: string; baseBranch: string }): Promise<void> => {
       opened.provider.overrides.set(7, snapshot)
-      await opened.ctx.forgePanel.refresh(opened.session, signal)
+      await opened.ctx.forgePanel.refresh(opened.session.id, signal)
       await follower.until(state => state.changeRequests[0]?.snapshot?.baseBranch === snapshot.baseBranch
         && state.changeRequests[0].snapshot.headSha === snapshot.headSha)
     }
@@ -948,13 +957,33 @@ describe('forgePanel worktree blockers', () => {
     expect(unblocked.worktree.blocker).toBeNull()
   })
 
+  it('offers a worktree from a linked checkout while the Session\'s policy grants its shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked)
+    const follower = reader(opened)
+    const blocked = await follower.until(ready)
+
+    const revoke = opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, join(repo, '.git'))
+    shellTurn(opened.session, 1, [{ callId: 'first', command: 'true', output: '' }])
+    const granted = await follower.next(state => state.worktree.blocker !== 'outside-writable-root')
+    revoke()
+    shellTurn(opened.session, 2, [{ callId: 'second', command: 'true', output: '' }])
+    const revoked = await follower.next(state => state.worktree.blocker !== null)
+
+    expect(blocked.worktree.blocker).toBe('outside-writable-root')
+    expect(granted.worktree.blocker).toBeNull()
+    expect(revoked.worktree.blocker).toBe('outside-writable-root')
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
     await follower.until(state => state.worktree.blocker === 'not-git')
 
     opened.sandbox.failure = new Error('sandbox unavailable')
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
 
     await expect(follower.next(state => state.checkout.state === 'failed')).resolves.toMatchObject({ worktree: { blocker: null } })
   })
@@ -1024,11 +1053,11 @@ describe('forgePanel worktree requests', () => {
   it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
     const { repo } = await project()
     const without = await open(repo)
-    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session.id, null)).toBeNull()
     const opened = await open(repo, {}, { worktrees: true })
-    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session.id, null)).toBeNull()
     vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
-    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session.id, 3)).toEqual({ revision: 3, status: 'removed' })
   })
 
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
@@ -1083,7 +1112,7 @@ describe('forgePanel worktree requests', () => {
       repository: demo,
       readiness: { state: 'ready', message: null, signIn: null },
       changeRequests: [],
-      worktree: { ...UNAVAILABLE, request: { from: null, name: null }, created },
+      worktree: { ...IN_WORKTREE, request: { from: null, name: null }, created },
       local: { base: created?.baseCommit.slice(0, 7), files: [] },
     })
     expect(opened.provider.probes).toEqual(['fake.test'])
@@ -1239,7 +1268,7 @@ describe('forgePanel worktree creation while a message waits', () => {
     const waiting = { ...UNAVAILABLE, editable: true, request: { from: null, name: null }, waiting: 'creation' }
     expect(prepare.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'prepare' } })
     expect(checkout.worktree).toEqual({ ...waiting, creation: { ...running, phase: 'checkout' } })
-    expect(moved.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created })
+    expect(moved.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created })
     expect(moved.checkout).toEqual({ state: 'ready', checkout: { root: created?.path, branch, linked: true, commit: COMMIT } })
     expect(created).toEqual({
       path: join(repo, '.agents', 'worktrees', ...branch.split('/')),
@@ -1525,11 +1554,17 @@ describe('forgePanel removed worktrees', () => {
     const created = await startInWorktree(opened)
     const tip = await commitAt(created.path, 'later.txt', '2026-05-01T00:00:00Z')
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
+    const granted = await plain()
+    opened.ctx.sandboxPolicy.registerWritableRoot(opened.session, granted)
     await rm(created.path, { recursive: true, force: true })
 
     sendPrompt(opened.agent, 'next')
     const missing = await follower.until(state => state.worktree.waiting === 'restoration')
     expect(opened.agent.wakes).toBe(1)
+    // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
+    // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
+    const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [granted] })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -1545,11 +1580,11 @@ describe('forgePanel removed worktrees', () => {
     await opened.agent.whenIdle()
     const restored = await restoration
 
-    expect(missing.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created, missing: { branchExists: true }, waiting: 'restoration' })
+    expect(missing.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created, missing: { branchExists: true }, waiting: 'restoration' })
     expect(preparing.worktree).toMatchObject({ missing: { branchExists: true }, restoration: { phase: 'prepare' }, waiting: 'restoration' })
     expect(checkingOut.worktree.restoration).toEqual({ phase: 'checkout' })
     expect(restored).toMatchObject({ directory: created.path, checkout: { state: 'ready', checkout: { root: created.path, branch: created.branch } } })
-    expect(restored.worktree).toEqual({ ...UNAVAILABLE, request: { from: null, name: null }, created })
+    expect(restored.worktree).toEqual({ ...IN_WORKTREE, request: { from: null, name: null }, created })
     expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(tip)
     expect(await readFile(join(created.path, 'later.txt'), 'utf8')).toBe('later.txt\n')
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created.path)
@@ -1571,7 +1606,7 @@ describe('forgePanel removed worktrees', () => {
     await git(repo, 'worktree', 'prune')
     await git(repo, 'branch', '-D', created.branch)
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const gone = await follower.until(state => state.worktree.missing?.branchExists === false)
     const restoration = follower.next(state => state.worktree.missing === null && state.checkout.state === 'ready')
     await opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -1618,13 +1653,13 @@ describe('forgePanel removed worktrees', () => {
     await follower.until(state => state.directory === created.path && state.checkout.state === 'ready')
     await rm(created.path, { recursive: true, force: true })
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const inspected = await follower.next(state => state.worktree.missing !== null)
     opened.sandbox.failure = new Error('sandbox unavailable')
     sendPrompt(opened.agent, 'next')
     await opened.agent.whenIdle()
     const answer = follower.next(state => state.worktree.missing === null)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     const unanswered = await answer
 
     expect(inspected).toMatchObject({ directory: created.path, checkout: { state: 'failed' }, worktree: { missing: { branchExists: true } } })
@@ -1890,13 +1925,13 @@ describe('forgePanel actions', () => {
   it('refreshes the checkout, sign-in state, and change requests of a followed Session only', async () => {
     const { repo } = await project()
     const opened = await open(repo)
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     const follower = reader(opened)
     await follower.until(state => ready(state) && polled(state, pullUrl(7)))
     const inspections = opened.sandbox.calls.length
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await follower.until(() => opened.provider.fetches.length === 2
       && opened.sandbox.calls.length > inspections && opened.provider.probes.length === 2)
 
@@ -1911,7 +1946,7 @@ describe('forgePanel actions', () => {
     let settled = false
 
     const inspection = hold(opened.sandbox, '--show-toplevel')
-    const inspected = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
+    const inspected = opened.ctx.forgePanel.refresh(opened.session.id, signal).then(() => { settled = true })
     await inspection.reached
     await settle()
     expect(settled).toBe(false)
@@ -1921,7 +1956,7 @@ describe('forgePanel actions', () => {
     const probe = Promise.withResolvers<ForgeReadiness>()
     opened.provider.readinessImpl = () => probe.promise
     settled = false
-    const probed = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
+    const probed = opened.ctx.forgePanel.refresh(opened.session.id, signal).then(() => { settled = true })
     await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
@@ -1940,7 +1975,7 @@ describe('forgePanel actions', () => {
     const inspections = opened.sandbox.calls.length
 
     shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
     await settle()
 
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
@@ -1968,7 +2003,7 @@ describe('forgePanel actions', () => {
     await follower.until(state => state.checkout.state === 'none')
     const inspections = opened.sandbox.calls.length
 
-    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await opened.ctx.forgePanel.refresh(opened.session.id, signal)
 
     // The refresh found the same state, which the panel already published.
     const refreshed = follower.states.at(-1)
@@ -2169,7 +2204,7 @@ describe('forgePanel actions', () => {
 
     await expect(opened.ctx.forgePanel.track(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.dismiss(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
-    await expect(opened.ctx.forgePanel.refresh(opened.session, controller.signal)).rejects.toThrow('closed')
+    await expect(opened.ctx.forgePanel.refresh(opened.session.id, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(1), null, controller.signal)).rejects.toThrow('closed')

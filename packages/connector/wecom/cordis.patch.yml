@@ -1,0 +1,3 @@
+- insert:
+    - id: wecom
+      name: '@deepseek-ai/dsh-wecom'

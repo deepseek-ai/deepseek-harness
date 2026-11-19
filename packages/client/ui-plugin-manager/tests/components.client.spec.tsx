@@ -794,7 +794,7 @@ describe('PluginManagerPage', () => {
     expect(locked.getAttribute('title')).toBe(en.reasonManagementRequired)
   })
 
-  it('omits profile and persistent-terminal bundles while retaining other optional and third-party bundles', () => {
+  it('omits hidden bundles while retaining other optional and third-party bundles', () => {
     renderTab({
       packages: [
         ...[
@@ -804,7 +804,7 @@ describe('PluginManagerPage', () => {
           '@deepseek-ai/dsh-sdk-app',
           '@deepseek-ai/dsh-acp-app',
           '@deepseek-ai/dsh-sdk-minimal',
-          '@deepseek-ai/dsh-experimental-terminal-bundle',
+          '@deepseek-ai/dsh-experimental-tool-worktree',
         ].map(name => pkg({ name })),
         pkg({ name: '@acme/dsh-base', readOnlyReason: 'management-required' }),
         pkg({ name: 'dsh-better-sidebar' }),
@@ -817,22 +817,31 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-count]')).toBeNull()
   })
 
-  it.each([false, true])('hides persistent terminals from both lists and direct navigation without changing enabled=%s', (enabled) => {
+  it.each([false, true])('offers persistent terminals after Timeline with enabled=%s', (enabled) => {
     const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
     const b = renderTab({ packages: [
-      pkg({ name, official: true, enabled, rows: [row()] }),
+      pkg({ name, optional: true, installed: false, removable: false, enabled, rows: [row()] }),
+      pkg({ name: '@deepseek-ai/dsh-timeline', optional: true, installed: false, removable: false, enabled: false }),
       pkg({ name: '@deepseek-ai/dsh-experimental-voice-input-bundle', official: true }),
     ] })
-    expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    expect(document.querySelector(`[data-plugin-package="${name}"]`) !== null).toBe(enabled)
     fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
-    expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+    expect(Array.from(document.querySelectorAll('[data-plugin-package]'), card => card.getAttribute('data-plugin-package'))).toEqual([
+      '@deepseek-ai/dsh-experimental-voice-input-bundle', '@deepseek-ai/dsh-timeline', name,
+    ])
+    const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+    expect(within(card).getByText(en.statusBeta)).toBeTruthy()
+    expect(within(card).getByRole('switch').getAttribute('aria-checked')).toBe(String(enabled))
+    fireEvent.click(within(card).getByRole('button', { name: en.openDetail.replace('{name}', name) }))
+    const detail = document.querySelector(`[data-plugin-detail="${name}"]`) as HTMLElement
+    expect(within(detail).getByText(en.statusBeta)).toBeTruthy()
+    fireEvent.click(within(detail).getByRole('switch', { name: en.enableToggle.replace('{name}', name) }))
+    expect(b.actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, !enabled)
     act(() => { b.navigation.actions.setView({ kind: 'package', name }) })
-    expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+    expect(document.querySelector(`[data-plugin-detail="${name}"]`)).not.toBeNull()
     act(() => { b.navigation.actions.setView({ kind: 'row', name, rowId: 'sidebar' }) })
-    expect(document.querySelector('[data-plugin-row-detail]')).toBeNull()
-    expect(screen.queryByRole('switch', { name: en.enableToggle.replace('{name}', name) })).toBeNull()
-    expect(b.actions.setEnabled).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-plugin-row-detail]')).not.toBeNull()
     expect(b.actions.setRowEnabled).not.toHaveBeenCalled()
     expect(b.actions.uninstall).not.toHaveBeenCalled()
   })
@@ -893,7 +902,7 @@ describe('PluginManagerPage', () => {
 
   it.each([false, true])('shows an empty list for hidden bundles with errors and installed=%s', (installed) => {
     renderTab({
-      packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-experimental-terminal-bundle'].map(name => pkg({
+      packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-experimental-tool-worktree'].map(name => pkg({
         name, installed, error: { code: 'operation-error', diagnostic: 'Unreadable bundle' },
       })),
     })
