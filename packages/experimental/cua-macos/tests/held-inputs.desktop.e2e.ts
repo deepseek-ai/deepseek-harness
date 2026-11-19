@@ -66,7 +66,7 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       const pad = initial.pad
       const programs = [
         `var app = await cua.getApp(${JSON.stringify(String(initial.pid))}); await app.activate(); var win = await app.getWindow(${JSON.stringify(initial.windowId)}); await win.getAccessibilityTree(); var bounds = (await app.getWindows()).find(w => w.windowId === win.windowId).bounds; await win.mouseMove([Math.round(${pad[0] + 80} / bounds.width * 999), Math.round(${pad[1] + 70} / bounds.height * 999)], { relative: true, useSystemPointer: true }); await app.sendKeyEvent('a', 'down')`,
-        `await win.toggleMouse('left', 'down'); await app.sendKeyEvent('w', 'down'); ${ending === 'tool-stop' ? 'await new Promise(() => {})' : ''}`,
+        `await win.toggleMouse('left', 'down', { useSystemPointer: true }); await app.sendKeyEvent('w', 'down'); ${ending === 'tool-stop' ? 'await new Promise(() => {})' : ''}`,
       ]
       const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
       class Model extends LlmAdapter {
@@ -112,10 +112,14 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
         handle.agent.cancel({ kind: 'user' })
       }
       await handle.agent.whenIdle()
+      if (ending !== 'tool-stop') {
+        const failures = handle.agent.session.deriveMessages().filter(message => message.role === 'tool' && message.isError)
+        expect(failures, JSON.stringify(failures)).toEqual([])
+      }
       if (ending === 'completed') {
         await expect.poll(async () => (await received()).map(event => event.type), { timeout: 30_000 }).toEqual([10, 1, 10])
         expect(JSON.stringify(handle.agent.session.snapshotEvents())).toContain('CUA inputs are still held')
-        programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up'); await app.sendKeyEvent('a', 'up')"
+        programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up', { useSystemPointer: true }); await app.sendKeyEvent('a', 'up')"
         handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Release held input' }], source: { kind: 'user' } }))
         await handle.agent.whenIdle()
       }

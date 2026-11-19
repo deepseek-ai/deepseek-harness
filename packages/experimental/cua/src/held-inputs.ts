@@ -158,10 +158,12 @@ export class CuaHeldInputs {
           `${message}. Held-input cleanup failed: ${String(error)}`, { cause: error }) }
       }
       try {
-        const result = await next().catch(async (error: unknown) => {
+        let result: Awaited<ReturnType<typeof next>>
+        try { result = await next() }
+        catch (error) {
           await releaseAfter(`Program failed: ${String(error)}`)
           throw error
-        })
+        }
         if (result.isError || signal.aborted) {
           await releaseAfter(result.isError ? result.error.message : 'Program cancelled')
         } else if (execution.parent === undefined) {
