@@ -4199,6 +4199,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-system-prompt -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tencent-docs -->
+<a id="deepseek-aidsh-tencent-docs"></a>
+
+## `@deepseek-ai/dsh-tencent-docs`
+
+- `inject`: `mcpManager` · `systemPrompt`
+- `source`: [`packages/connector/tencent-docs/src/index.ts:30`](../packages/connector/tencent-docs/src/index.ts)
+
+```ts config-catalog
+/** Tencent Docs MCP endpoint and tool loading for the managed server entry. */
+export interface Config {
+  /** Streamable HTTP MCP endpoint; defaults to Tencent Docs' hosted server. */
+  url: string
+  /** `on-demand` (default) keeps Tencent Docs' tools hidden from each agent until it loads them; `eager` sends all of them. */
+  toolLoading: 'eager' | 'on-demand'
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-docs -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
 <a id="deepseek-aidsh-terminal-bash"></a>
 
@@ -5093,7 +5112,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-upstream-skills`
 
 - `inject`: `skills`
-- `source`: [`packages/connector/upstream-skills/src/index.ts:32`](../packages/connector/upstream-skills/src/index.ts)
+- `source`: [`packages/connector/upstream-skills/src/index.ts:35`](../packages/connector/upstream-skills/src/index.ts)
 
 ```ts config-catalog
 /** Where every registered plugin's upstream files are downloaded from. */

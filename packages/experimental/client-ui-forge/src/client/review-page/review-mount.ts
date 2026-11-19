@@ -32,6 +32,8 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
     /** The review page's conversation about a change request. */
     forgeReview: unknown
+    /** A Session panel stream, held from its opening until it ends. */
+    forgePanel: unknown
   }
 }
 

@@ -167,6 +167,18 @@ it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element i
   expect(Request.safeParse({ method: 'click', params: { ...params, elementId: '' } }).success).toBe(false)
 })
 
+it('admits action schema queries with only a nonempty action name', () => {
+  const params = { action: 'Transform.Resize' }
+  for (const schema of [Request, SystemPointerRequest]) {
+    expect(schema.parse({ method: 'getActionSchema', params })).toEqual({ method: 'getActionSchema', params })
+    for (const invalid of [
+      {}, { action: '' }, { action: 1 }, { ...params, appHandle: 'app' },
+      { ...params, windowId: '23' }, { ...params, snapshotId: 'snapshot' },
+      { ...params, elementId: '0' }, { ...params, argument: null },
+    ]) expect(schema.safeParse({ method: 'getActionSchema', params: invalid }).success).toBe(false)
+  }
+})
+
 it('admits an element action query only with a retained snapshot identity', () => {
   const params = { appHandle: 'app', snapshotId: 'snapshot', elementId: '42.12345' }
   expect(Request.parse({ method: 'listActions', params })).toEqual({ method: 'listActions', params })

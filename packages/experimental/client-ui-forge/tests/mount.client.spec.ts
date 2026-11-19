@@ -171,6 +171,11 @@ async function settle(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
 
+/** A Session binding whose history opening settled with `openState`. */
+function opened(openState = 'open', openError: Error | null = null) {
+  return { session: { getSnapshot: () => ({ openState, openError }) } }
+}
+
 async function base() {
   const ctx = new Context()
   const unmount = vi.fn(async () => {})
@@ -307,9 +312,9 @@ async function base() {
       if (fiber === undefined) { fiber = ctx.plugin(() => {}); scopes.set(id, fiber) }
       return fiber.ctx
     }),
-    // A reference to a retained Session whose opening has settled; only its identity and readiness are supplied.
-    retain: vi.fn((sessionId: SessionId, _options: { readonly source: string }) =>
-      ({ sessionId, ready: Promise.resolve() })),
+    // A reference to a retained Session whose opening has settled; only its identity, readiness, open state, and release are supplied.
+    retain: vi.fn((sessionId: SessionId, _options: { readonly source: string; readonly signal?: AbortSignal }) =>
+      ({ sessionId, ready: Promise.resolve(opened()), release: vi.fn() })),
   }
   ctx.provide('sessions', sessions)
   const worktreeForm = stubConfigForm<WorktreeSettingsFields>()
@@ -496,6 +501,7 @@ describe('mountForgePanel registration', () => {
     f.section(S1).hooks.panel.subscribe(() => {})
     f.attention(S2)
     f.list('row').hooks.states.subscribe(() => {})
+    await settle()
     expect(f.streams).toHaveLength(1)
     expect(f.stateStreams).toHaveLength(1)
 
@@ -630,7 +636,7 @@ describe('mountForgePanel Session stores', () => {
 
     const seen: unknown[] = []
     const unsubscribe = tab.hooks.panel.subscribe(() => { seen.push(tab.hooks.panel.getSnapshot().state) })
-    expect(f.forgePanel.follow).toHaveBeenCalledWith(S1, expect.any(AbortSignal))
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledWith(S1, expect.any(AbortSignal)) })
     f.streams[0]?.push(ready())
     await vi.waitFor(() => { expect(seen).toEqual([ready()]) })
 
@@ -638,9 +644,66 @@ describe('mountForgePanel Session stores', () => {
     expect(f.forgePanel.follow).toHaveBeenCalledOnce()
     f.ctx.emit('connection/reset')
     expect(f.streams[0]?.disposed).toHaveBeenCalled()
-    expect(f.forgePanel.follow).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledTimes(2) })
     unsubscribe()
     expect(f.streams[1]?.disposed).toHaveBeenCalled()
+    await f.dispose()
+  })
+
+  it('follows a Session panel only after the Session opened, holding a reference until the stream ends', async () => {
+    const f = await fixture()
+    const opening = Promise.withResolvers<ReturnType<typeof opened>>()
+    const release = vi.fn()
+    f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: opening.promise, release })
+    const unsubscribe = f.section(S1).hooks.panel.subscribe(() => {})
+    expect(f.sessions.retain.mock.calls.at(-1)?.[0]).toBe(S1)
+    expect(f.sessions.retain.mock.calls.at(-1)?.[1]).toMatchObject({ source: 'forgePanel' })
+    expect(f.sessions.retain.mock.calls.at(-1)?.[1].signal).toBeInstanceOf(AbortSignal)
+    await settle()
+    expect(f.forgePanel.follow).not.toHaveBeenCalled()
+
+    opening.resolve(opened())
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledOnce() })
+    expect(release).not.toHaveBeenCalled()
+    unsubscribe()
+    await vi.waitFor(() => { expect(release).toHaveBeenCalledOnce() })
+    expect(f.streams[0]?.disposed).toHaveBeenCalled()
+    await f.dispose()
+  })
+
+  it('releases the reference without following when the panel closes before the Session opens', async () => {
+    const f = await fixture()
+    const release = vi.fn()
+    f.sessions.retain.mockImplementationOnce((sessionId, options) => {
+      const ready = new Promise<never>((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => { reject(new Error('waiter aborted')) }, { once: true })
+      })
+      return { sessionId, ready, release }
+    })
+    const unsubscribe = f.section(S1).hooks.panel.subscribe(() => {})
+    await settle()
+    unsubscribe()
+    await vi.waitFor(() => { expect(release).toHaveBeenCalledOnce() })
+    expect(f.forgePanel.follow).not.toHaveBeenCalled()
+    await f.dispose()
+  })
+
+  it.each([
+    ['not open', opened('error', new Error('history failed'))],
+    ['not open without a reported error', opened('error')],
+  ])('shows the panel disconnected when the Session is %s, and follows after a reconnect', async (_name, binding) => {
+    const f = await fixture()
+    const release = vi.fn()
+    f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: Promise.resolve(binding), release })
+    const panel = f.section(S1).hooks.panel
+    const unsubscribe = panel.subscribe(() => {})
+    await vi.waitFor(() => { expect(panel.getSnapshot().disconnected).toBe(true) })
+    expect(release).toHaveBeenCalledOnce()
+    expect(f.forgePanel.follow).not.toHaveBeenCalled()
+
+    f.connection(S1).reconnect()
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledOnce() })
+    unsubscribe()
     await f.dispose()
   })
 
@@ -666,6 +729,7 @@ describe('mountForgePanel Session stores', () => {
     const f = await fixture()
     const first = f.section(S1)
     first.hooks.panel.subscribe(() => {})
+    await settle()
     expect(f.attention(S1).hooks.panel).toBe(first.hooks.panel)
     f.streams[0]!.push(ready({ changeRequests: [entry(1, snapshot(1))] }))
     await settle()
@@ -677,7 +741,7 @@ describe('mountForgePanel Session stores', () => {
     expect(next.hooks.panel.getSnapshot().state).toBeNull()
     expect(f.attention(S1).hooks.panel).toBe(next.hooks.panel)
     next.hooks.panel.subscribe(() => {})
-    expect(f.streams).toHaveLength(2)
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
     await f.dispose()
   })
 
@@ -748,6 +812,10 @@ describe('mountForgePanel Session panel actions', () => {
 
   it('refreshes each Session automatically at most once every 10 seconds', async () => {
     const f = await fixture()
+    for (const id of [S1, S2]) f.section(id).hooks.panel.subscribe(() => {})
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
+    for (const handle of f.streams) handle.push(ready())
+    await vi.waitFor(() => { expect(f.section(S2).hooks.panel.getSnapshot().state).not.toBeNull() })
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     const refreshIfStale = f.checkout(S1).refreshIfStale
     expect(f.checkout(S1).refreshIfStale).toBe(refreshIfStale)
@@ -766,6 +834,27 @@ describe('mountForgePanel Session panel actions', () => {
     refreshIfStale()
     await settle()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
+    await f.dispose()
+  })
+
+  it('defers an automatic refresh asked for before the panel state arrives until the Host follows the panel', async () => {
+    const f = await fixture()
+    const unsubscribe = f.section(S1).hooks.panel.subscribe(() => {})
+    f.checkout(S1).refreshIfStale()
+    await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledOnce() })
+    expect(f.forgePanel.refresh).not.toHaveBeenCalled()
+    f.streams[0]?.push(ready())
+    await vi.waitFor(() => { expect(f.forgePanel.refresh).toHaveBeenCalledWith(S1) })
+    f.streams[0]?.push(ready({ local: null }))
+    await settle()
+    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
+    // A later stream refreshes nothing on its own: only a refresh that was asked for waits for the first state.
+    f.ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
+    f.streams[1]?.push(ready())
+    await settle()
+    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
+    unsubscribe()
     await f.dispose()
   })
 
@@ -1818,7 +1907,7 @@ describe('mountForgePanel review page chat', () => {
   it('warns when the conversation does not open', async () => {
     const f = await chatFace()
     const failure = new Error('closed')
-    f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: Promise.reject(failure) })
+    f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: Promise.reject(failure), release: vi.fn() })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await f.chat.fill(f.chat.retain(S1), { kind: 'reference', frame: reviewed(7) })
     expect(warn).toHaveBeenCalledWith('forge-panel: the review conversation did not open:', failure)

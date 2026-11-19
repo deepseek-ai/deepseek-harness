@@ -5,7 +5,7 @@ description: Create or edit Office files; inspect Office files and PDFs. Load be
 
 # Office task routing
 
-Load `office-docx`, `office-pptx`, or `office-xlsx` to create, read, or edit; operations alone need no format skill.
+For authoring or reading, load `office-docx`, `office-pptx`, or `office-xlsx`. Bundled Python includes `pypdf` for existing PDFs.
 
 If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
 
@@ -13,4 +13,4 @@ If `office_render`, `office_convert`, or `office_recalculate` is not in your too
 - `office_recalculate`: formulas, with `format: "xlsx"` or `"ods"`.
 - `office_convert` with `format`; Office inputs only, not PDFs. For PDF export alone, check the copy is nonempty and starts with `%PDF-`, then deliver it without rendering.
 
-Copy temporary outputs to the destination, keeping existing files unless asked to replace them. Reuse loaded skills.
+Copy outputs to the destination; keep existing files unless asked to replace them. Reuse loaded skills.

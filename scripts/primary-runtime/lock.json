@@ -154,6 +154,10 @@
       "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"
     },
     {
+      "url": "https://files.pythonhosted.org/packages/3f/4b/77e8ad4ac42c9d93600f40541a50e9feb3a61d2bbee2d76f659346072051/pypdf-6.21.4-py3-none-any.whl",
+      "sha256": "33e4fb41ca352810eb4e9838aa0d82d6888a5f8bf682f43e99cce5faa666255c"
+    },
+    {
       "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
       "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
     },
@@ -174,6 +178,7 @@
     "Pillow": "12.3.0",
     "lxml": "6.1.3",
     "XlsxWriter": "3.2.9",
+    "pypdf": "6.21.4",
     "typing_extensions": "4.16.0",
     "et_xmlfile": "2.0.0"
   }
