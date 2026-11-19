@@ -69,8 +69,11 @@ declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
   interface SidebarRightResourceParamsMap {
     /** File line navigation supported by the text preview. */
     file: WorkspaceFileParams
+  }
+
+  interface SidebarRightTabParamsMap {
     /** Transient Markdown supplied when a compaction row is opened. */
-    'content-preview': { readonly summaryMarkdown: string }
+    'compaction-summary': { readonly summaryMarkdown: string }
   }
 }
 
@@ -137,7 +140,7 @@ export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewCo
   const summaryId = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction'
   const t = ctx.locale.bind('documentMarkdown')
   ctx.effect(() => ctx.sidebarRightTabs.register({
-    id: summaryId, kind: 'compaction-summary', patterns: ['dsh-resource://content-preview/compaction%3A*'],
+    id: summaryId, kind: 'compaction-summary',
     priority: 'builtin', title: () => t('summary.title'),
   }), 'ui-sidebar-documentpreview: compaction summaries')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({

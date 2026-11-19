@@ -47,9 +47,8 @@ export function compactionRows(ctx: Context): (sessionId: SessionId) => Compacti
       const text = event && summaryText(event)
       if (text === undefined) return t('message.compaction.notFound')
       const identity = address.kind === 'session' ? [address.sessionId] : [address.parentSessionId, address.childSessionId, address.mode]
-      const key = encodeURIComponent(`compaction:${JSON.stringify([...identity, summarySeq])}`)
-      ctx.sidebarRight.openResource(`dsh-resource://content-preview/${key}`, {
-        kind: 'compaction-summary', params: { summaryMarkdown: text },
+      ctx.sidebarRight.openContent('compaction-summary', { summaryMarkdown: text }, {
+        key: JSON.stringify([...identity, summarySeq]),
       })
       return null
     },
