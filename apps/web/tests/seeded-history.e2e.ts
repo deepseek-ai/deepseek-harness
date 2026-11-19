@@ -54,12 +54,6 @@ const COMMAND_ROW_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seede
 const FEEDBACK_ROW_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/feedback-row.expected.md', import.meta.url))
 const FILE_PREVIEW_EXPECTED = join(SNAPSHOT_DIR, 'file-preview.expected.md')
 const CHECKPOINT_SIDEBAR_EXPECTED = join(SNAPSHOT_DIR, 'checkpoint-sidebar.expected.md')
-// Copies of MARKDOWN_BODY_ID in
-// packages/client/ui-sidebar-documentpreview/src/client/markdown/index.ts and
-// of the English `preview.title` in
-// packages/client/ui-compaction/src/client/locales.ts. apps/web does not
-// declare either feature plugin as a dependency, so this spec cannot import
-// their source values.
 const CHECKPOINT_TITLE = 'Context summary'
 const MODE = webSnapshotMode()
 const SEED_ID = 'seeded-history-web-e2e'

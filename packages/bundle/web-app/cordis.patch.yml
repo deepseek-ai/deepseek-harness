@@ -329,11 +329,6 @@
     - id: ui-sidebar-documentpreview
       name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
 
-    # Compaction checkpoints in the content tab: the replacement message the
-    # model reads after a compact, opened from Chat's compact rows.
-    - id: ui-compaction
-      name: '@deepseek-ai/dsh-client-ui-compaction'
-
     # Web profiles opt in; Desktop retains sandboxed HTTP(S) Browser tabs.
     - id: ui-sidebar-browser
       name: '@deepseek-ai/dsh-client-ui-sidebar-browser'

@@ -18,4 +18,4 @@ description: 重新打开已保存的计划预览，并把自定义文档正文�
 1. 关闭旧布局中不可用的计划标签，并从计划或审批卡片重新打开。需要预览的组合应加载 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview`；它的可选服务缺席时，计划打开按钮保持禁用。
 2. 调用 `ctx.sidebarRight.openContent({ mediaType: 'text/markdown', text }, { title, key })` 打开正文。方法直接打开侧栏，`destination: 'float'` 使用浮窗。刷新浏览器后请重新打开预览。
 3. 通过 `sidebar.right.document.body` 挂载自定义渲染器，提供 `rendererId` 和 `useTabInfo`。工作区文件传入 `baseAddress: resourceAddress`，没有文件基址的正文省略它。
-4. 将压缩标记上非空的 `summaryEventSeq` 传给压缩预览服务以显示记录的摘要。
+4. 使用压缩标记上的 `summaryEventSeq` 从会话历史读取对应摘要。

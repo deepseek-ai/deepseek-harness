@@ -125,9 +125,6 @@
     },
     {
       "path": "../ui-context-menu"
-    },
-    {
-      "path": "../ui-compaction"
     }
   ],
   "exclude": [

@@ -18,4 +18,4 @@ Custom document bodies use the `sidebar.right.document.body` Factory. Its input 
 1. Close unavailable saved plan tabs and reopen their plan or review cards. Include `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` in compositions that need previews; without its optional service, plan openers are disabled.
 2. Open text with `ctx.sidebarRight.openContent({ mediaType: 'text/markdown', text }, { title, key })`. The method opens the sidebar directly; use `destination: 'float'` for a floating panel. Reopen previews after a browser reload.
 3. Mount custom document renderers through `sidebar.right.document.body`, supplying `rendererId` and `useTabInfo`. Pass `baseAddress: resourceAddress` for workspace files and omit it for content without a file base.
-4. Pass the marker’s non-null `summaryEventSeq` to the compaction preview service to display the recorded summary.
+4. Use the marker’s `summaryEventSeq` to read its recorded summary from Session history.

@@ -3200,9 +3200,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-commands':
         specifier: workspace:*
         version: link:../../client/ui-commands
-      '@deepseek-ai/dsh-client-ui-compaction':
-        specifier: workspace:*
-        version: link:../../client/ui-compaction
       '@deepseek-ai/dsh-client-ui-connector-account':
         specifier: workspace:*
         version: link:../../client/ui-connector-account
@@ -4331,9 +4328,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-approval':
         specifier: workspace:*
         version: link:../ui-approval
-      '@deepseek-ai/dsh-client-ui-compaction':
-        specifier: workspace:*
-        version: link:../ui-compaction
       '@deepseek-ai/dsh-client-ui-context-menu':
         specifier: workspace:*
         version: link:../ui-context-menu
@@ -4490,30 +4484,6 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
-
-  packages/client/ui-compaction:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:*
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-api-session-controller':
-        specifier: workspace:*
-        version: link:../../api/session-controller
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../locale
-      '@deepseek-ai/dsh-client-ui-sidebar-documentpreview':
-        specifier: workspace:*
-        version: link:../ui-sidebar-documentpreview
-      '@deepseek-ai/dsh-client-ui-sidebar-right':
-        specifier: workspace:*
-        version: link:../ui-sidebar-right
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../ui-slots
 
   packages/client/ui-connector-account:
     dependencies:

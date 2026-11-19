@@ -238,7 +238,6 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   sidebarRightTabs: 'client-side right-Sidebar tab-type registry — packages/client/ui-sidebar-right/README.md owns the API',
   forgeChanges: 'client-side changes view face for other plugins — docs/subsystems/forge.md#extension-api owns the API',
   documentPreviews: 'client-side document renderer registry — docs/subsystems/sidebar-right.md owns the API',
-  compactionPreviews: 'client-side checkpoint preview navigation — packages/client/ui-compaction/README.md owns the API',
 }
 
 /**

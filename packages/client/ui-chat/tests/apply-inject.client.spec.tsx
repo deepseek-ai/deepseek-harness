@@ -24,6 +24,8 @@ import {
 import {
   apply as applyChat, inject as injectChat, type ChatFlowDataInjected, type ChatViewInjected,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { SessionWireEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createChatStore } from '../src/client/stores.ts'
@@ -72,6 +74,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
+    openContent: vi.fn<typeof runtime.ctx.sidebarRight.openContent>(() => true),
     openResource: vi.fn<(address: string) => void>(),
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
@@ -87,7 +90,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  const events = vi.fn<ClientRemote['session']['events']>(async ({ throughSeq }) => ({
+    ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: {
+      type: 'compaction/summary', seq: throughSeq ?? 42, time: 0, data: { summary: [{ type: 'text', text: '# Summary' }] },
+    } }] },
+  }))
+  runtime.remote.provideNamespaces({ session: { openWorkspacePath, events } })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
@@ -147,7 +155,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable,
+    events, runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
@@ -456,40 +464,66 @@ describe('Chat inject API', () => {
     }
   })
 
-  it('opens ordinary and subagent checkpoints through the optional preview service', async () => {
+  it('opens recorded summaries by Session and stops pending reads when the viewer unloads', async () => {
     const b = await bench()
-    const open = vi.fn(async () => null)
     try {
-      const injected = b.compactionRow('compaction')
+      const row = b.compactionRow('manual-compaction')
       const signal = new AbortController().signal
-      expect(await injected.openCompaction(42, signal)).toBeNull()
-      const service = await b.runtime.mount({ apply(ctx) { ctx.provide('compactionPreviews', { open }) } })
-      await vi.waitFor(() => { expect(injected.hooks.compactionPreview.getSnapshot()).toBe(true) })
-      await injected.openCompaction(42, signal)
-      expect(open).toHaveBeenLastCalledWith({ kind: 'session', sessionId: ROOT }, 42, signal)
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(b.events).not.toHaveBeenCalled()
+      const viewer = await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'session', sessionId: ROOT }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent).toHaveBeenCalledWith({ mediaType: 'text/markdown', text: '# Summary' },
+        expect.objectContaining({ title: '上下文摘要' }))
       const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
       vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
-      await injected.openCompaction(7, signal)
-      expect(open).toHaveBeenLastCalledWith({ kind: 'subagent', ...child }, 7, signal)
-      await service.dispose()
-      expect(injected.hooks.compactionPreview.getSnapshot()).toBe(false)
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'subagent', ...child }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent.mock.calls[0]![1].key).not.toBe(b.sidebarRight.openContent.mock.calls[1]![1].key)
+      b.events.mockImplementationOnce(async (_query, active) => {
+        await viewer.dispose()
+        expect(active?.aborted).toBe(true)
+        throw new Error('cancelled')
+      })
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(row.hooks.compactionPreview.getSnapshot()).toBe(false)
+      expect(b.sidebarRight.openContent).toHaveBeenCalledTimes(2)
     } finally { await b.runtime.dispose() }
   })
 
-  it('tracks preview service availability independently of sidebar tab registration', async () => {
-    const b = await bench(undefined, false)
+  it('reports unreadable summaries and keeps cancelled reads out of the sidebar', async () => {
+    const b = await bench()
     try {
-      const preview = b.compactionRow('manual-compaction').hooks.compactionPreview
-      expect(preview.getSnapshot()).toBe(false)
-      const changed = vi.fn()
-      const unsubscribe = preview.subscribe(changed)
-      const service = await b.runtime.mount({ apply(ctx) { ctx.provide('compactionPreviews', { open: async () => null }) } })
-      await vi.waitFor(() => { expect(preview.getSnapshot()).toBe(true) })
-      expect(changed).toHaveBeenCalledOnce()
-      await service.dispose()
-      expect(preview.getSnapshot()).toBe(false)
-      expect(changed).toHaveBeenCalledTimes(2)
-      unsubscribe()
+      const row = b.compactionRow('compaction')
+      const signal = new AbortController().signal
+      await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      const event = { seq: 42, time: 0, type: 'compaction/summary', data: { summary: [{ type: 'text', text: 'summary' }] } }
+      const records: SessionWireEvent[] = [{ ...event, seq: 41 }, { ...event, type: 'other' },
+        ...[null, {}, { summary: [null] }, { summary: [{}] }, { summary: [{ type: 'text', text: 5 }] },
+          { summary: [{ type: 'image' }, { type: 'text', text: ' ' }] }].map(data => ({ ...event, data }))]
+      for (const invalid of records) {
+        b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: invalid }] } })
+        expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      }
+      b.events.mockRejectedValueOnce(new Error('offline'))
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) })
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [] } })
+      expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      expect(await row.openCompaction(42, AbortSignal.abort())).toBeNull()
+      const pending = new AbortController()
+      b.events.mockImplementationOnce(async () => {
+        pending.abort()
+        return { ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event }] } }
+      })
+      expect(await row.openCompaction(42, pending.signal)).toBeNull()
+      expect(b.sidebarRight.openContent).not.toHaveBeenCalled()
+      b.sidebarRight.openContent.mockReturnValueOnce(false)
+      expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
     } finally { await b.runtime.dispose() }
   })
 

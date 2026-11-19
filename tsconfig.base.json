@@ -291,8 +291,6 @@
       "@deepseek-ai/dsh-client-ui-sidebar-right/client": ["./packages/client/ui-sidebar-right/src/client"],
       "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": ["./packages/client/ui-sidebar-documentpreview/src"],
       "@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client": ["./packages/client/ui-sidebar-documentpreview/src/client"],
-      "@deepseek-ai/dsh-client-ui-compaction": ["./packages/client/ui-compaction/src"],
-      "@deepseek-ai/dsh-client-ui-compaction/client": ["./packages/client/ui-compaction/src/client"],
       "@deepseek-ai/dsh-client-ui-sidebar-browser": ["./packages/client/ui-sidebar-browser/src"],
       "@deepseek-ai/dsh-client-ui-sidebar-browser/client": ["./packages/client/ui-sidebar-browser/src/client"],
       "@deepseek-ai/dsh-client-ui-sidebar-browser/types": ["./packages/client/ui-sidebar-browser/src/types.ts"],

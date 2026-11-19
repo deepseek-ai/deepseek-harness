@@ -1,9 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionAddress } from '@deepseek-ai/dsh-api-session-controller/types'
-import type {} from '@deepseek-ai/dsh-client-ui-compaction/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { CompactionRowInjected } from './CompactionItem.tsx'
-import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { compactionRows } from './compaction-preview.ts'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
 import { NS } from '../locale.ts'
@@ -33,23 +30,7 @@ export function registerChatNodeRenderers(
   performanceUsage: ObservableSnapshot<PerformanceUsageMode>,
   presentation: ObservableSnapshot<ChatPresentationPolicy>,
 ): void {
-  const compactionPreview = createSnapshotStore<boolean>(false)
-  let compactionPreviews: Context['compactionPreviews'] | undefined
-  ctx.inject(['compactionPreviews'], (scope) => {
-    scope.effect(() => {
-      compactionPreviews = scope.compactionPreviews
-      compactionPreview.set(true)
-      return () => { compactionPreviews = undefined; compactionPreview.set(false) }
-    }, 'ui-chat: compaction preview availability')
-  })
-  const injectCompaction = (sessionId: SessionId): CompactionRowInjected => ({
-    hooks: { compactionPreview },
-    openCompaction: (seq, signal) => {
-      const child = ctx.sessions.subagentAddress(sessionId)
-      const address: SessionAddress = child === undefined ? { kind: 'session', sessionId } : { kind: 'subagent', ...child }
-      return compactionPreviews?.open(address, seq, signal) ?? Promise.resolve(null)
-    },
-  })
+  const injectCompaction = compactionRows(ctx)
   ctx.effect(() => ctx.slots.registerFactory({
     name: 'conversation.chat.reasoning.content',
     scope: 'root',
