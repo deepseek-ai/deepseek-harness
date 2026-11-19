@@ -135,7 +135,10 @@ export class CuaHeldInputs {
     void owner.close().catch(() => undefined) // close records and reports the failure; waiters join the same promise.
   }
 
-  /** @returns Exact disposers retained until programs and native connections have drained. */
+  /**
+   * Observe program outcomes and cancellation while retaining native cleanup dependencies.
+   * @returns Exact disposers retained until programs and native connections have drained.
+   */
   *install(): Generator<() => void> {
     const ctx = this.ctx
     yield ctx.on('tools/execute', async (execution, next) => {
