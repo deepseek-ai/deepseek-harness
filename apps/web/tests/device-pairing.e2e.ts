@@ -176,10 +176,16 @@ it('lets a paired mobile browser approve another device and keeps denied or canc
     }
 
     const mode = webSnapshotMode()
+    const applicationUrl = new URL(scaffold.authenticatedUrl)
+    const tokenPlaceholder = `${applicationUrl.origin}${applicationUrl.pathname}?token=xxx`
+    expect(await applicant.locator('#token').getAttribute('placeholder')).toBe(tokenPlaceholder)
     await compareOrRefreshGolden(
       fileURLToPath(new URL('./expected/device-pairing/request.expected.md', import.meta.url)),
       (await captureStableAria(applicant, 'main', scaffold.workspaceCwd, {
-        replacements: [[code, '{{pairing-code}}'], [new URL(scaffold.baseUrl).host, '{{authority}}']],
+        replacements: [
+          [tokenPlaceholder, '{{application-url}}?token=xxx'],
+          [code, '{{pairing-code}}'], [new URL(scaffold.baseUrl).host, '{{authority}}'],
+        ],
       })).replace(/\d+:\d{2}/gu, '{{remaining}}'), mode,
     )
     await compareOrRefreshGolden(
@@ -349,7 +355,7 @@ it('keeps one Remote connection panel, its QR invitation, and login link while a
     await expect.poll(() => navigation.count()).toBe(1)
     await navigation.click()
     const section = owner.getByRole('region', { name: '远程连接', exact: true })
-    const loginLink = section.getByRole('region', { name: '链接登录', exact: true }).locator('code')
+    const loginLink = section.getByRole('region', { name: '访问地址', exact: true }).locator('code')
     await expect.poll(() => loginLink.innerText()).toBe(fixture.authenticatedUrl)
     const approvals = section.getByRole('region', { name: '配对申请', exact: true })
     await approvals.waitFor()
@@ -510,7 +516,7 @@ it('keeps Token and pairing usable on the same page after a QR exchange fails', 
     await failure.waitFor()
     expect(new URL(applicant.url()).hash).toBe('')
     expect(await applicant.evaluate(() => '__DSH_BOOT__' in window)).toBe(false)
-    const token = applicant.getByLabel('登录令牌或链接', { exact: true })
+    const token = applicant.locator('#token')
     expect(await token.isEnabled()).toBe(true)
     expect(await applicant.locator('#token-submit').isEnabled()).toBe(true)
     expect(await applicant.getByRole('button', { name: '申请配对', exact: true }).isEnabled()).toBe(true)

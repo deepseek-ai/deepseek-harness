@@ -129,7 +129,7 @@
   margin-inline-start: auto;
 }
 
-.qrActions > button,
+.cardActions > button,
 .linkRow > button,
 .actions > button {
   flex: none;

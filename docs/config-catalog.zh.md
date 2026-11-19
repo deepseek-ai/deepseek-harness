@@ -591,7 +591,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-client-remote-connection`
 
 - `inject`: `connection` · `connection.authentication` · `credentials` · `webServer` · `webApp`
-- `source`: [`packages/client/remote-connection/src/index.ts:28`](../packages/client/remote-connection/src/index.ts)
+- `source`: [`packages/client/remote-connection/src/index.ts:33`](../packages/client/remote-connection/src/index.ts)
 
 ```ts config-catalog
 /** Deployment timing and limits for remote browser login. */

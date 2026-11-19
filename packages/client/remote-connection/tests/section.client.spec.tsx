@@ -45,13 +45,26 @@ function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 
 }
 
 describe('Remote connection section', () => {
-  it.each(['en', 'zh'] as const)('introduces the access address before QR login in %s', (language) => {
+  const additionsCases: readonly { label: string; state: Partial<RemoteConnectionState> }[] = [
+    { label: 'ready', state: {} },
+    { label: 'loading', state: { phase: 'loading', deployment: null } },
+    { label: 'unreachable', state: { deployment: { ...ready.deployment!, availability: 'unreachable-host' } } },
+    { label: 'failed', state: { phase: 'error', deployment: null, error: 'loadFailed' } },
+  ]
+
+  it.each(additionsCases)('keeps pairing approvals visible when QR state is $label', ({ state }) => {
+    const { useResource } = panel(state, 'en', {}, true)
+    expect(screen.getByRole('region', { name: 'Pairing requests' })).toBeTruthy()
+    expect(useResource).toHaveBeenCalledExactlyOnceWith('dsh-resource://device-pairing/requests?retry=0')
+  })
+
+  it.each(['en', 'zh'] as const)('introduces the access address before QR login and pairing approvals in %s', (language) => {
     const copy = language === 'en' ? en : zh
-    panel({}, language)
+    panel({}, language, {}, true)
     const section = screen.getByRole('region', { name: copy.title })
     expect(within(section).getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
-      .toEqual([copy.addressTitle, copy.qrTitle])
-    expect(within(section).getAllByRole('region')).toHaveLength(2)
+      .toEqual([copy.addressTitle, copy.qrTitle, copy['pairing.title']])
+    expect(within(section).getAllByRole('region')).toHaveLength(3)
     const description = within(section).getByText(copy.addressDescription)
     for (const card of within(section).getAllByRole('region')) {
       expect(within(card).queryByText(copy.addressDescription)).toBeNull()
@@ -98,10 +111,10 @@ describe('Remote connection section', () => {
   it.each([
     ['en', 'unreachable-host'], ['en', 'untrusted-host'],
     ['zh', 'unreachable-host'], ['zh', 'untrusted-host'],
-  ] as const)('shows %s guidance for %s before the address', (language, availability) => {
+  ] as const)('shows %s guidance for %s before the address and keeps pairing available', (language, availability) => {
     const copy = language === 'en' ? en : zh
     const url = availability === 'unreachable-host' ? 'http://127.0.0.1:5432/' : 'https://untrusted.example/app/'
-    const { copyLink } = panel({ deployment: { ...ready.deployment!, url, availability } }, language, { copied: true })
+    const { copyLink } = panel({ deployment: { ...ready.deployment!, url, availability } }, language, { copied: true }, true)
     const section = screen.getByRole('region', { name: copy.title })
     const notice = within(section).getByText(copy[availability])
     expect(notice.closest('[role="status"]')).not.toBeNull()
@@ -116,6 +129,7 @@ describe('Remote connection section', () => {
     fireEvent.click(copyAddress)
     expect(copyLink).toHaveBeenCalledOnce()
     expect(within(section).queryByRole('region', { name: copy.qrTitle })).toBeNull()
+    expect(within(section).getByRole('region', { name: copy['pairing.title'] })).toBeTruthy()
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.queryByText(copy.addressDescription)).toBeNull()
     expect(screen.queryByText(copy.warning)).toBeNull()

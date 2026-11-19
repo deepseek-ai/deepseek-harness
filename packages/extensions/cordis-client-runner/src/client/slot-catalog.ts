@@ -4459,7 +4459,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'list',
     scope: 'root',
     summary: 'Additional options rendered after the active Remote connection panel.',
-    doc: 'Additional options rendered after the active Remote connection panel.\nEntries share its invitation and login-link state, actions, and close().\nReplacing the panel does not replace these independently ordered entries.',
+    doc: 'Additional options rendered after the active Remote connection panel.\nEntries share its invitation, login-link, and owner-gated pairing state, actions, and close().\nReplacing the panel does not replace these independently ordered entries.',
     registerOptions: [
       {
         name: 'id',
@@ -4498,12 +4498,12 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     keyDomain: '',
     hookContext: '',
-    slotInject: 'RemoteConnectionFace & LoginLinkFace',
+    slotInject: 'RemoteConnectionFace & LoginLinkFace & PairingInjected',
     declaredBy: 'an entry in \'settings.section\' (client-remote-connection), so it exists while that entry is mounted',
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.remoteConnection.extensions\', () => ctx.slots.register(\n      { name: \'settings.remoteConnection.extensions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/remote-connection/src/client/slots.ts:25',
+    source: 'packages/client/remote-connection/src/client/slots.ts:27',
   },
   {
     key: 'settings.section',

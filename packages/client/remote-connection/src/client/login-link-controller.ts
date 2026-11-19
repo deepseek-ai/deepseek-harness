@@ -45,7 +45,7 @@ export class LoginLinkController {
    * @param canCopyCredential - whether the current deployment permits copying a credential link.
    */
   constructor(
-    private readonly remote: Pick<RemoteConnectionApi, 'loginUrl'>,
+    private readonly remote: Pick<TypertClientRemote['remoteConnection'], 'loginUrl'>,
     private readonly write: (text: string) => Promise<boolean>,
     private readonly accessAddress: () => string | null,
     private readonly canCopyCredential: () => boolean,

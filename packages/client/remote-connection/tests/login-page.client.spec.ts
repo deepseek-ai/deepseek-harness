@@ -2,6 +2,7 @@
 /** Anonymous login-page effects before the authenticated application loads. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { enterAuthenticationPage, renderAuthenticationPage } from '../src/login-page.ts'
+import type { AuthenticationPageOptions } from '../src/login-page.ts'
 import { loginLocales } from '../src/login-locales.ts'
 
 const TOKEN = 'a'.repeat(43)
@@ -39,7 +40,7 @@ function page(path = `/?login=qr#${TOKEN}`, language = 'en-US') {
   }
 }
 
-function authenticationPage(options = { tokenLoginEnabled: true }, language = 'en-US') {
+function authenticationPage(options: AuthenticationPageOptions = { tokenLoginEnabled: true }, language = 'en-US') {
   const html = new DOMParser().parseFromString(renderAuthenticationPage(options), 'text/html')
   document.documentElement.innerHTML = html.documentElement.innerHTML
   history.replaceState(null, '', '/mount/')
@@ -134,6 +135,8 @@ it('clears a Token from the address and clears submission feedback on edit', asy
   await expect.poll(() => fixture.error.textContent).toBe(loginLocales.zh.tokenInvalid)
   await expect.poll(() => fixture.submit.disabled).toBe(false)
   expect(fixture.input.getAttribute('aria-invalid')).toBe('true')
+  expect(fixture.input.previousElementSibling?.textContent).toBe(loginLocales.zh.tokenHint)
+  expect(fixture.input.nextElementSibling).toBe(fixture.error)
   fixture.input.dispatchEvent(new Event('input'))
   expect(fixture.error.textContent).toBe('')
   expect(fixture.input.hasAttribute('aria-invalid')).toBe(false)
@@ -392,4 +395,46 @@ it('escapes embedded localized text before serializing the anonymous script', ()
   expect(document.querySelector<HTMLInputElement>('#token')?.placeholder).toBe(
     loginLocales.en.tokenPlaceholder.replace('{url}', loginLocales.en.tokenPlaceholderFallbackUrl),
   )
+})
+
+it.each(['en-US', 'zh-CN'])('keeps device pairing available without the Token provider in %s', (language) => {
+  const fixture = authenticationPage({ tokenLoginEnabled: false, pairingEnabled: true }, language)
+  enterAuthenticationPage(loginLocales)
+  const t = language.startsWith('zh') ? loginLocales.zh : loginLocales.en
+  expect(document.getElementById('description')?.textContent).toBe(t.authenticationDescription)
+  expect(document.getElementById('token-form')).toBeNull()
+  expect(document.querySelectorAll('dsh-device-pairing')).toHaveLength(1)
+  const script = document.querySelector<HTMLScriptElement>('script[src]')!
+  expect(script.getAttribute('src')).toBe('./pairing/client.js')
+  expect(script.defer).toBe(true)
+  expect(document.documentElement.innerHTML).not.toContain('__DSH_BOOT__')
+  expect(document.documentElement.innerHTML).not.toContain('authPages')
+  expect(fixture.exchange).not.toHaveBeenCalled()
+})
+
+it('renders the Token form and pairing as separate sign-in actions in the same document', () => {
+  const fixture = authenticationPage({ tokenLoginEnabled: true, pairingEnabled: true })
+  enterAuthenticationPage(loginLocales)
+  expect(fixture.form.querySelector('dsh-device-pairing')).toBeNull()
+  expect(fixture.form.nextElementSibling?.tagName).toBe('DSH-DEVICE-PAIRING')
+  expect(document.querySelectorAll('script[src]')).toHaveLength(1)
+  expect(renderAuthenticationPage({ tokenLoginEnabled: true, pairingEnabled: true }))
+    .toContain(`<dsh-device-pairing><noscript><p>${loginLocales.en.pairingScriptRequired}</p></noscript></dsh-device-pairing>`)
+})
+
+
+
+it.each([
+  { methods: 'Token and pairing', tokenLoginEnabled: true, pairingEnabled: true, count: 2 },
+  { methods: 'Token only', tokenLoginEnabled: true, pairingEnabled: false, count: 1 },
+  { methods: 'pairing only', tokenLoginEnabled: false, pairingEnabled: true, count: 1 },
+])('renders $methods below the shared heading and QR feedback', ({ tokenLoginEnabled, pairingEnabled, count }) => {
+  authenticationPage({ tokenLoginEnabled, pairingEnabled })
+  const methods = document.querySelector('.methods')!
+  expect(methods.children).toHaveLength(count)
+  expect(document.getElementById('token-form')?.parentElement).toBe(tokenLoginEnabled ? methods : undefined)
+  expect(document.querySelector('dsh-device-pairing')?.parentElement).toBe(pairingEnabled ? methods : undefined)
+  expect(document.getElementById('title')?.parentElement).toBe(methods.parentElement)
+  expect(document.getElementById('description')?.parentElement).toBe(methods.parentElement)
+  expect(document.getElementById('qr-notice')?.parentElement).toBe(methods.parentElement)
 })

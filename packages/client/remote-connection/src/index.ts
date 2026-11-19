@@ -184,6 +184,7 @@ export default class RemoteConnection extends TypertRemoteService {
       if ('rejection' in admission && admission.rejection !== 401) return new Response('authentication unavailable', { status: admission.rejection, headers })
       const html = renderAuthenticationPage({
         tokenLoginEnabled: this.tokenLoginUrl(this.owner.webApp.getAdvertisedUrl()) !== undefined,
+        pairingEnabled: true,
       })
       return new Response(request.method === 'HEAD' ? null : html, { status: qrLogin ? 200 : 401, headers })
     }

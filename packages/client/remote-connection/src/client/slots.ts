@@ -21,14 +21,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     }
     /**
      * Additional options rendered after the active Remote connection panel.
-     * Entries share its invitation and login-link state, actions, and close().
+     * Entries share its invitation, login-link, and owner-gated pairing state, actions, and close().
      * Replacing the panel does not replace these independently ordered entries.
      */
     'settings.remoteConnection.extensions': {
       kind: 'list'
       scope: 'root'
       owner: SettingsSectionOwnerProps
-      inject: RemoteConnectionFace & LoginLinkFace
+      inject: RemoteConnectionFace & LoginLinkFace & PairingInjected
     }
   }
 }
@@ -36,5 +36,5 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Settings close action and shared QR, login-link, and owner-gated pairing state/actions supplied to every panel. */
 export type RemoteConnectionContentProps = PropsRuntime<'settings.remoteConnection.content'>
 
-/** Shared login state, actions, and settings close action supplied to appended options. */
+/** Shared login and owner-gated pairing state, actions, and settings close action supplied to appended options. */
 export type RemoteConnectionExtensionProps = PropsRuntime<'settings.remoteConnection.extensions'>

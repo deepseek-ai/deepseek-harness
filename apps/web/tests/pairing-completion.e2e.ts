@@ -80,10 +80,13 @@ it('recognizes a delivered browser session when the pairing result crosses the l
     await applicant.clock.fastForward(ticket.expiresInMs)
     await expect.poll(() => applicant.evaluate(() => document.documentElement.dataset.sessionCheckStatus)).toBe('200')
     await applicant.locator('#auth-pair-panel[data-state="checking"]').waitFor()
+    const applicationUrl = new URL(scaffold.authenticatedUrl)
+    const tokenPlaceholder = `${applicationUrl.origin}${applicationUrl.pathname}?token=xxx`
+    expect(await applicant.locator('#token').getAttribute('placeholder')).toBe(tokenPlaceholder)
     await compareOrRefreshGolden(
       fileURLToPath(new URL('./expected/device-pairing/completion-checking.expected.md', import.meta.url)),
       await captureStableAria(applicant, 'main', scaffold.workspaceCwd, {
-        replacements: [[code, '{{pairing-code}}']],
+        replacements: [[tokenPlaceholder, '{{application-url}}?token=xxx'], [code, '{{pairing-code}}']],
       }), webSnapshotMode(),
     )
     await applicant.evaluate(() => { globalThis.dispatchEvent(new Event('release-pairing-completion')) })

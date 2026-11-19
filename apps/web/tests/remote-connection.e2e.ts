@@ -137,6 +137,7 @@ async function waitForPairingList(pairing: Locator): Promise<void> {
 }
 
 async function snapshot(page: Page, fixture: RemoteConnectionFixture, name: string, addressUrl = fixture.authenticatedUrl): Promise<void> {
+  await waitForPairingList(page.getByRole('region', { name: '配对申请', exact: true }))
   await expect.poll(() => page.getByRole('region', { name: '访问地址', exact: true }).locator('code').textContent()).toBe(addressUrl)
   const section = page.getByRole('region', { name: '远程连接', exact: true })
   await assertAddressLayout(section, true)
@@ -454,9 +455,12 @@ describe('web e2e: one-use QR browser login', () => {
         await expect.poll(() => address.locator('code').textContent()).toBe(plainUrl)
         const notice = section.getByRole('status').filter({ hasText: warning })
         await notice.getByText(warning, { exact: true }).waitFor()
-        expect(await section.getByRole('region').count()).toBe(1)
-        expect(await section.getByRole('heading', { level: 3 }).allTextContents()).toEqual(['访问地址'])
+        const pairing = section.getByRole('region', { name: '配对申请', exact: true })
+        await waitForPairingList(pairing)
+        expect(await section.getByRole('region').count()).toBe(2)
+        expect(await section.getByRole('heading', { level: 3 }).allTextContents()).toEqual(['访问地址', '配对申请'])
         expect(await address.getByText(warning, { exact: true }).count()).toBe(0)
+        expect(await pairing.getByText(warning, { exact: true }).count()).toBe(0)
         expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
         expect(await section.getByRole('img').count()).toBe(0)
         const copy = address.getByRole('button', { name: '复制链接', exact: true })
@@ -502,6 +506,7 @@ describe('web e2e: one-use QR browser login', () => {
           expect(await retry.isEnabled()).toBe(true)
           expect((await retry.boundingBox())!.height).toBe(28)
           expect(await section.getByRole('region', { name: '二维码登录', exact: true }).count()).toBe(0)
+          await waitForPairingList(pairing)
           await compareOrRefreshGolden(join(EXPECTED, 'unreachable-load-failed.expected.md'),
             await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd), MODE)
           if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'unreachable-load-failed.png') })
@@ -1351,6 +1356,7 @@ describe('web e2e: one-use QR browser login', () => {
       await custom.waitFor()
       expect(await nav.count()).toBe(1)
       expect(await section.count()).toBe(0)
+      expect(await page.getByRole('region', { name: '配对申请', exact: true }).count()).toBe(0)
       expect(await details.isChecked()).toBe(true)
       expect(await extension.getByRole('status', { name: '附加选项中的邀请编号' }).textContent()).toBe(invitationId)
       expect(await custom.getByRole('status', { name: '邀请编号' }).textContent()).toBe(invitationId)

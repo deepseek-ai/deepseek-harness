@@ -147,6 +147,8 @@ it('serves QR mode from the root even to a browser already authenticated through
     expect(page.headers['cache-control']).toBe('no-store')
     expect(page.headers['referrer-policy']).toBe('no-referrer')
     expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    expect(page.body).toContain('<dsh-device-pairing>')
+    expect(page.body).toContain('./pairing/client.js')
     expect(page.body).toContain('<h1 id="title">Connect to this Host</h1>')
     expect(page.body).toContain('id="token-form"')
     expect(page.body).toContain('id="qr-notice"')

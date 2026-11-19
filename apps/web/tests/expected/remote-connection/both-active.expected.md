@@ -16,3 +16,6 @@
       - timer: {{seconds}} 秒后过期
     - paragraph: 请勿分享登录二维码
     - paragraph: 二维码使用或过期前，持有它的人都可以登录，请勿传播
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

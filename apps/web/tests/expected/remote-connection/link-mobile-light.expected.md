@@ -10,3 +10,6 @@
   - region "二维码登录":
     - heading "二维码登录" [level=3]
     - button "生成二维码"
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

@@ -1,4 +1,4 @@
-/** Access address and QR login for browser sign-in. */
+/** Access address, QR login, and pairing approvals for browser sign-in. */
 import { QRCodeSVG } from 'qrcode.react'
 import { Button, IconWarningOutlineMedium, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -10,12 +10,13 @@ import css from './RemoteConnectionSection.module.css'
 export type RemoteConnectionSectionProps = RemoteConnectionContentProps & PropsLocale<'remoteConnection'>
 
 /**
- * Present address prerequisites, an access address, available QR login.
+ * Present address prerequisites, an access address, available QR login, and pairing cards.
  * @param props - Section injection and standard slot props.
  * @returns Remote connection settings content.
  */
 export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
-  const { t, useRemoteConnection } = props
+  const { t, useRemoteConnection, useApproval } = props
+  const pairingAvailable = useApproval(state => state.available)
   const available = useRemoteConnection(state => state.deployment?.availability === 'available')
   const loading = useRemoteConnection(state => state.phase === 'loading' && state.deployment === null)
   if (loading) return <section className={css.section} aria-label={t('title')}>
@@ -27,6 +28,7 @@ export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
     <ConnectionNotice {...props} />
     <AccessAddressCard {...props} />
     {available && <QrLoginCard {...props} />}
+    {pairingAvailable && <PairingRequests {...props} />}
   </section>
 }
 
@@ -53,7 +55,7 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
   return <section className={css.card} aria-label={t('qrTitle')} aria-busy={busy || undefined}>
     <header className={css.cardHeader}>
       <h3 className={css.methodTitle}>{t('qrTitle')}</h3>
-      <div className={css.qrActions}>
+      <div className={css.cardActions}>
         <Button variant="primary" size="sm" disabled={busy} onClick={create}>
           {t(regenerate ? 'regenerate' : 'generate')}
         </Button>

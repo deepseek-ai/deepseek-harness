@@ -71,9 +71,14 @@ it.each(['zh', 'en'])('recovers and replaces a request from the same browser and
       await applicant.locator('#auth-pair-panel[data-state="error"]').waitFor()
       expect(await applicant.locator('#auth-pair-retry').count()).toBe(0)
       expect(await applicant.locator('#auth-pair-request').isEnabled()).toBe(true)
+      const applicationUrl = new URL(scaffold.authenticatedUrl)
+      const tokenPlaceholder = `${applicationUrl.origin}${applicationUrl.pathname}?token=xxx`
+      expect(await applicant.locator('#token').getAttribute('placeholder')).toBe(tokenPlaceholder)
       await compareOrRefreshGolden(
         fileURLToPath(new URL(`./expected/device-pairing/recovery-error.${language}.expected.md`, import.meta.url)),
-        await captureStableAria(applicant, 'main', scaffold.workspaceCwd, { replacements: [[replacement, '{{pairing-code}}']] }),
+        await captureStableAria(applicant, 'main', scaffold.workspaceCwd, {
+          replacements: [[tokenPlaceholder, '{{application-url}}?token=xxx'], [replacement, '{{pairing-code}}']],
+        }),
         webSnapshotMode(),
       )
       const screenshots = process.env.DSH_PAIRING_SCREENSHOT_DIR

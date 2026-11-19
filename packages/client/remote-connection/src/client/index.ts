@@ -45,6 +45,13 @@ export async function apply(ctx: Context): Promise<void> {
     const link = new LoginLinkController(scope.remote.remoteConnection, writeClipboard,
       () => controller.store.getSnapshot().deployment?.url ?? null,
       () => controller.store.getSnapshot().deployment?.availability === 'available')
+    const pairing = requestsResource(scope.remote.remoteConnection)
+    const approval = new PairingApproval(scope.remote.remoteConnection, id => pairing.confirmed(id))
+    const pairingFace = (): PairingInjected => ({
+      hooks: { approval: approval.state },
+      decide: (id, decision) => approval.decide(id, decision),
+      dismiss: () => { approval.dismiss() },
+    })
     const invitationFace = controller.inject()
     const linkFace = link.inject()
     const approvalFace = pairingFace()

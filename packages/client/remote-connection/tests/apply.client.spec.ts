@@ -76,7 +76,24 @@ function extensionPlugin(id: string, order: number) {
   }
 }
 
-async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: Context) => Promise<void>) {
+function PairingExtension({ useApproval, decide, dismiss }: RemoteConnectionExtensionProps) {
+  const approval = useApproval(state => state)
+  return createElement('section', { 'aria-label': 'Pairing extension' },
+    createElement('output', { 'aria-label': 'Approval status' }, approval.available ? approval.notice ?? 'ready' : 'unavailable'),
+    createElement('button', { disabled: !approval.available || approval.busy, onClick: () => { void decide('request-one' as PairingRequestId, 'allow') } }, 'Approve request'),
+    createElement('button', { onClick: dismiss }, 'Dismiss approval'))
+}
+
+const pairingExtensionPlugin = {
+  inject: ['slots'],
+  apply(ctx: Context) {
+    ctx.slots.inject('settings.remoteConnection.extensions', () => ctx.slots.register({
+      name: 'settings.remoteConnection.extensions', id: 'pairing-options',
+    }, PairingExtension))
+  },
+}
+
+async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: Context) => Promise<void>, allowed = true) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(TypertRegistry).await()
@@ -126,19 +143,19 @@ describe('remote connection settings registration', () => {
     await screen.findByRole('button', { name: '生成二维码' })
     expect(await screen.findByRole('region', { name: '配对申请' })).toBeTruthy()
     expect(screen.getByRole('region', { name: zh.qrTitle })).toBeTruthy()
-    expect(screen.getByRole('region', { name: zh.linkTitle })).toBeTruthy()
+    expect(screen.getByRole('region', { name: zh.addressTitle })).toBeTruthy()
     expect(slots.entries('settings.section')).toHaveLength(1)
     const replacement = ctx.plugin(replacementPlugin)
     await act(async () => { await replacement.await() })
     expect(screen.queryByRole('region', { name: '配对申请' })).toBeNull()
-    expect(screen.queryByRole('region', { name: zh.linkTitle })).toBeNull()
+    expect(screen.queryByRole('region', { name: zh.addressTitle })).toBeNull()
     expect(screen.queryByRole('button', { name: '生成二维码' })).toBeNull()
     expect(screen.getByRole('region', { name: 'Custom connection' })).toBeTruthy()
     expect(slots.entries('settings.section')).toHaveLength(1)
     await act(async () => { await replacement.dispose() })
     expect(await screen.findByRole('region', { name: '配对申请' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '生成二维码' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: zh.linkTitle })).toBeTruthy()
+    expect(screen.getByRole('region', { name: zh.addressTitle })).toBeTruthy()
     await act(async () => { await fiber.dispose() })
     expect(slots.entries('settings.remoteConnection.content')).toEqual([])
     expect(slots.entries('shell.overlay')).toEqual([])
@@ -236,6 +253,7 @@ describe('remote connection settings registration', () => {
 
   it('appends ordered options without replacing the cards and keeps other entries and login state when one unloads', async () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/pairingRequests') return { ok: true, value: { requests: [], pollIntervalMs: 60_000 } }
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
       if (endpoint === 'remoteConnection/create') {
         return { ok: true, value: { id: 'extension-invitation', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
@@ -254,8 +272,10 @@ describe('remote connection settings registration', () => {
     const earlier = ctx.plugin(extensionPlugin('Earlier options', 10))
     await act(async () => { await earlier.await() })
     const earlierRegion = screen.getByRole('region', { name: 'Earlier options' })
-    expect(screen.getAllByRole('region').map(region => region.getAttribute('aria-label')))
-      .toEqual([zh.title, zh.addressTitle, zh.qrTitle, 'Earlier options', 'Later options'])
+    expect(screen.getAllByRole('region')).toEqual(
+      [zh.title, zh.addressTitle, zh.qrTitle, zh['pairing.title'], 'Earlier options', 'Later options']
+        .map(name => screen.getByRole('region', { name })),
+    )
     expect(screen.getByRole('img', { name: zh.qr })).toBe(qr)
     expect(earlierRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })
     expect(laterRegion.dataset).toMatchObject({ phase: 'pending', ticket: 'extension-invitation', link: 'ready' })
@@ -438,8 +458,9 @@ describe('remote connection settings registration', () => {
     })
     const url = 'https://host.example/?token=private-login-token'
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
-      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? url
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : endpoint === 'remoteConnection/loginUrl' ? url
+          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { slots } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -517,7 +538,8 @@ describe('remote connection settings registration', () => {
     const url = 'https://host.example/'
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/loginUrl') throw new Error('credential transport unavailable')
-      return { ok: true, value: { url, availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+      return { ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : { url, availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
     })
     const { slots, locale } = await bench(call)
     locale.setLocale(language)
@@ -604,17 +626,66 @@ it('submits approval through the shared namespace and keeps its notice outside S
   expect(face.hooks.approval.getSnapshot().available).toBe(false)
 })
 
+it('shares owner approval with appended options across panel replacement', async () => {
+  const decision = Promise.withResolvers<{ ok: true; value: 'approved' }>()
+  onTestFinished(() => { decision.resolve({ ok: true, value: 'approved' }) })
+  let approved = false
+  const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+    if (endpoint === 'remoteConnection/decidePairing') {
+      const result = await decision.promise
+      approved = true
+      return result
+    }
+    if (endpoint === 'remoteConnection/pairingRequests') return { ok: true, value: {
+      requests: approved ? [] : [{ id: 'request-one', code: 'ABCD2345', authority: 'https://host.example', sourceIp: '192.0.2.17', expiresInMs: 60000 }],
+      pollIntervalMs: 1000,
+    } }
+    return { ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+      : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+  })
+  const { ctx, slots, fiber } = await bench(call)
+  const extension = ctx.plugin(pairingExtensionPlugin)
+  await extension.await()
+  render(createElement(Fragment, null, slots.renderSlot('root', {})))
+  const approval = await screen.findByRole('button', { name: zh['pairing.approve'] })
+  const options = within(screen.getByRole('region', { name: 'Pairing extension' }))
+  expect(options.getByRole('status', { name: 'Approval status' }).textContent).toBe('ready')
+  fireEvent.click(options.getByRole('button', { name: 'Approve request' }))
+  expect(approval.hasAttribute('disabled')).toBe(true)
+  expect(options.getByRole('button', { name: 'Approve request' }).hasAttribute('disabled')).toBe(true)
+  await act(async () => { decision.resolve({ ok: true, value: 'approved' }) })
+  await screen.findByText(zh['pairing.approved'])
+  expect(options.getByRole('status', { name: 'Approval status' }).textContent).toBe('approved')
+  expect(screen.queryByText('ABCD 2345')).toBeNull()
+  expect(call).toHaveBeenCalledWith('/api', 'remoteConnection/decidePairing', { args: { id: 'request-one', decision: 'allow' } }, expect.any(AbortSignal))
+  const replacement = ctx.plugin(replacementPlugin)
+  await act(async () => { await replacement.await() })
+  expect(screen.queryByRole('region', { name: '配对申请' })).toBeNull()
+  expect(options.getByRole('status', { name: 'Approval status' }).textContent).toBe('approved')
+  fireEvent.click(options.getByRole('button', { name: 'Dismiss approval' }))
+  expect(screen.queryByText(zh['pairing.approved'])).toBeNull()
+  expect(approvalFace(slots).hooks.approval.getSnapshot().notice).toBeNull()
+  await act(async () => { await extension.dispose() })
+  expect(screen.queryByRole('region', { name: 'Pairing extension' })).toBeNull()
+  expect(screen.getByRole('region', { name: 'Custom connection' })).toBeTruthy()
+  await act(async () => { await fiber.dispose() })
+})
+
 it('preserves QR navigation while refusing pairing controls and reads without owner access', async () => {
   const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
     ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
       : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
   }))
-  const { slots, fiber } = await bench(call, undefined, false)
+  const { ctx, slots, fiber } = await bench(call, undefined, false)
+  await ctx.plugin(pairingExtensionPlugin).await()
   render(createElement(Fragment, null, slots.renderSlot('root', {})))
   await screen.findByRole('button', { name: '生成二维码' })
   expect(slots.entries('settings.section')).toHaveLength(1)
   expect(slots.entries('shell.overlay').map(entry => entry.options.id)).toEqual(['remote-connection-copy'])
   expect(screen.queryByRole('region', { name: '配对申请' })).toBeNull()
+  const options = within(screen.getByRole('region', { name: 'Pairing extension' }))
+  expect(options.getByRole('status', { name: 'Approval status' }).textContent).toBe('unavailable')
+  expect(options.getByRole('button', { name: 'Approve request' }).hasAttribute('disabled')).toBe(true)
   await approvalFace(slots).decide('request-one' as PairingRequestId, 'allow')
   await vi.waitFor(() => { expect(call).toHaveBeenCalledTimes(2) })
   expect(call.mock.calls.map(([, endpoint]) => endpoint)).toEqual(['remoteConnection/status', 'remoteConnection/loginUrl'])

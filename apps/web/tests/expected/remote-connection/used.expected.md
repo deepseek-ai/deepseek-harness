@@ -9,3 +9,6 @@
     - heading "二维码登录" [level=3]
     - button "重新生成"
     - status: 二维码已使用，请在手机上确认是否已登录
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

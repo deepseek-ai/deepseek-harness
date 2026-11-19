@@ -5,6 +5,8 @@ import { loginLocales } from './login-locales.ts'
 export interface AuthenticationPageOptions {
   /** Whether the default Token provider has published its login entry. */
   readonly tokenLoginEnabled: boolean
+  /** Whether the Remote provider accepts device-pairing requests. */
+  readonly pairingEnabled?: boolean
 }
 
 const pageStyle = `
@@ -140,14 +142,18 @@ export function enterAuthenticationPage(
 
 /**
  * Render Remote's root login page, without a Token value or private boot data.
- * @param options - public Token availability.
- * @returns self-contained sign-in choices with independent QR exchange feedback.
+ * @param options - Token login and device-pairing availability.
+ * @returns sign-in cards with titles and descriptions above controls, below the shared heading and QR feedback.
  */
 export function renderAuthenticationPage(options: AuthenticationPageOptions): string {
   const t = loginLocales.en
   const placeholder = t.tokenPlaceholder.replace('{url}', t.tokenPlaceholderFallbackUrl)
-  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p><div id="qr-notice" class="notice" hidden><p id="status" role="status"></p><a id="open" href="./" hidden>${t.open}</a></div>${options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get"><label id="token-label" for="token">${t.tokenLabel}</label><input id="token" type="password" name="token" placeholder="${placeholder}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"><p id="token-hint" class="hint">${t.tokenHint}</p><p id="token-error" class="error" role="alert"></p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''}`
-  return documentHtml(t.authenticationTitle, content, `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},(${enterBrowser.toString()}))`)
+  const tokenForm = options.tokenLoginEnabled ? `<form id="token-form" action="./" method="get" aria-labelledby="token-title"><h2 id="token-title"><label id="token-label" for="token">${t.tokenLabel}</label></h2><p id="token-hint" class="hint">${t.tokenHint}</p><input id="token" type="password" name="token" placeholder="${placeholder}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="token-hint token-error"><p id="token-error" class="error" role="alert"></p><button id="token-submit" type="submit">${t.tokenSubmit}</button></form>` : ''
+  const pairing = options.pairingEnabled
+    ? `<dsh-device-pairing><noscript><p>${t.pairingScriptRequired}</p></noscript></dsh-device-pairing>` : ''
+  const methods = tokenForm || pairing ? `<div class="methods">${tokenForm}${pairing}</div>` : ''
+  const content = `<h1 id="title">${t.authenticationTitle}</h1><p id="description" class="description">${options.tokenLoginEnabled || options.pairingEnabled ? t.authenticationDescription : t.authenticationUnavailable}</p><div id="qr-notice" class="notice" hidden><p id="status" role="status"></p><a id="open" href="./" hidden>${t.open}</a></div>${methods}`
+  return documentHtml(t.authenticationTitle, content, `(${enterAuthenticationPage.toString()})(${scriptJson(loginLocales)},(${enterBrowser.toString()}))`, options.pairingEnabled)
 }
 
 /**
