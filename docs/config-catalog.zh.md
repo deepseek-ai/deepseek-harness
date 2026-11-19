@@ -1752,13 +1752,16 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-feishu`
 
-- `inject`: `cliAccounts` · `skills`
-- `source`: [`packages/connector/feishu/src/index.ts:30`](../packages/connector/feishu/src/index.ts)
+- `inject`: `cliAccounts` · `skills` · `subprocess`
+- `source`: [`packages/connector/feishu/src/index.ts:33`](../packages/connector/feishu/src/index.ts)
 
 ```ts config-catalog
 /** Where lark-cli is. */
 export interface Config {
-  /** Absolute directory holding the `lark-cli` executable; defaults to the installed `@larksuite/cli` package. */
+  /**
+   * Absolute directory holding the `lark-cli` executable, which the plugin then never downloads. Defaults to the
+   * installed `@larksuite/cli` package.
+   */
   binDir?: string
 }
 ```

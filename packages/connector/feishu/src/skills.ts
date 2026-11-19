@@ -11,7 +11,10 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u
 /** The guides are not files: the loaded entry tells the model to open them through lark-cli. */
 const RESOURCES = 'Embedded lark-cli guides; open them with the skills read command given in the loaded skill.'
 
-/** Lists the packaged entry without running lark-cli; the entry is read once, when the plugin loads. */
+/**
+ * Lists the packaged entry while lark-cli is installed, without running it; the entry is read once, when the plugin
+ * loads. The catalog caches a listing, so the plugin invalidates it when a download installs lark-cli.
+ */
 export class FeishuSkillProvider implements SkillProvider {
   readonly name = 'feishu'
   private readonly candidate: SkillCandidate
@@ -19,9 +22,10 @@ export class FeishuSkillProvider implements SkillProvider {
 
   /**
    * @param entry - absolute path of the packaged `SKILL.md`, whose frontmatter gives the skill's name and description.
+   * @param installed - whether lark-cli, which serves the guides the entry indexes, is in place.
    * @throws when the entry has no YAML frontmatter, or its frontmatter has no skill name or no description.
    */
-  constructor(entry: string) {
+  constructor(entry: string, private readonly installed: () => boolean) {
     const raw = readFileSync(entry, 'utf8')
     const match = FRONTMATTER.exec(raw)
     const block = match?.[1]
@@ -41,7 +45,7 @@ export class FeishuSkillProvider implements SkillProvider {
   }
 
   list(): Promise<SkillCandidate[]> {
-    return Promise.resolve([this.candidate])
+    return Promise.resolve(this.installed() ? [this.candidate] : [])
   }
 
   get(): Promise<SkillDefinition> {

@@ -48,7 +48,7 @@ it('indexes every guide of the pinned lark-cli exactly once', () => {
 
 it('lists the entry with an opaque resource base and returns its body without the catalog-only fields', async () => {
   const file = join(entry, 'SKILL.md')
-  const provider = new FeishuSkillProvider(file)
+  const provider = new FeishuSkillProvider(file, () => true)
   expect(await provider.list()).toMatchObject([{ name: 'feishu', provider: 'feishu', source: 'bundled', locator: file, resourceBase: { kind: 'opaque' } }])
   const definition = await provider.get()
   expect(definition).not.toHaveProperty('rank')
@@ -56,14 +56,22 @@ it('lists the entry with an opaque resource base and returns its body without th
   expect(definition.content).toBe(body().trim())
 })
 
+it('lists the entry only while lark-cli, which serves its guides, is installed', async () => {
+  let installed = false
+  const provider = new FeishuSkillProvider(join(entry, 'SKILL.md'), () => installed)
+  expect(await provider.list()).toEqual([])
+  installed = true
+  expect(await provider.list()).toMatchObject([{ name: 'feishu' }])
+})
+
 it('refuses an entry without YAML frontmatter or without a skill name and description', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-feishu-entry-'))
   try {
     const file = join(dir, 'SKILL.md')
     await writeFile(file, '# No frontmatter\n')
-    expect(() => new FeishuSkillProvider(file)).toThrow('has no YAML frontmatter')
+    expect(() => new FeishuSkillProvider(file, () => true)).toThrow('has no YAML frontmatter')
     await writeFile(file, '---\nname: Not A Skill\n---\n\nbody\n')
-    expect(() => new FeishuSkillProvider(file)).toThrow('needs a skill name and a description')
+    expect(() => new FeishuSkillProvider(file, () => true)).toThrow('needs a skill name and a description')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

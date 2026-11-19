@@ -48,11 +48,12 @@ const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
 /* jscpd:ignore-end */
 
 type Operation = NonNullable<FeishuState['operation']>
-type Step = 'step.configuring' | 'step.authorizing' | 'step.connecting' | 'step.signing-out'
+type Step = 'step.downloading' | 'step.configuring' | 'step.authorizing' | 'step.connecting' | 'step.signing-out'
 
 function step(operation: Operation): Step {
   if (operation.kind === 'sign-out') return 'step.signing-out'
   switch (operation.phase) {
+    case 'downloading': return 'step.downloading'
     case 'configuring': return 'step.configuring'
     case 'authorizing': return 'step.authorizing'
     case 'signing-out': return 'step.signing-out'
@@ -64,12 +65,16 @@ function step(operation: Operation): Step {
   }
 }
 
+function cancelButton(text: Text): ConnectorAccountButton {
+  return { label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }
+}
+
 /** The section while an operation runs: its step, the Feishu page and its guidance while waiting there, and cancel. */
 function presentOperation(operation: Operation, text: Text): ConnectorAccountDisplay {
   const current = step(operation)
   const buttons: ConnectorAccountButton[] = []
   if (operation.authorizationUrl !== undefined) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
-  if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
+  if (operation.cancellable) buttons.push(cancelButton(text))
   const guidance = operation.authorizationUrl === undefined ? undefined
     : current === 'step.configuring' ? text('detail.configuring')
       : current === 'step.authorizing' ? text('detail.authorizing') : undefined
@@ -104,11 +109,23 @@ function failureOf(result: FeishuState['result'], text: Text): { failure?: Conne
  */
 export function presentAccount(view: FeishuState, text: Text): ConnectorAccountDisplay {
   const { account, operation } = view
-  if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
+  /* jscpd:ignore-start -- CLI app plugins that download their CLI show a running check alike, each with its own text. */
+  if (operation?.kind === 'check') {
+    return {
+      phase: 'checking', status: text(operation.phase === 'downloading' ? 'step.downloading' : 'status.checking'),
+      buttons: operation.cancellable ? [cancelButton(text)] : [], notes: [],
+    }
+  }
+  /* jscpd:ignore-end */
   if (operation !== undefined) return presentOperation(operation, text)
   const failure = failureOf(view.result, text)
   switch (account.state) {
     case 'unchecked': return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
+    case 'not-installed':
+      return {
+        phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
+        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.missing'), notes: [], ...failure,
+      }
     case 'unconfigured':
       return {
         phase: 'disconnected', status: text('status.disconnected'), badge: text('badge.disconnected'),

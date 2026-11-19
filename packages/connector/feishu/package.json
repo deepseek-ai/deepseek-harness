@@ -53,7 +53,8 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-cli-account": "workspace:*",
-    "@deepseek-ai/dsh-skill": "workspace:*"
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
