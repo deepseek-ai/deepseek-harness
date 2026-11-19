@@ -5865,6 +5865,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-connector-account` | — | [`packages/client/ui-connector-account/src/index.ts`](../packages/client/ui-connector-account/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-connectors` | — | [`packages/experimental/client-ui-connectors/src/index.ts`](../packages/experimental/client-ui-connectors/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/client/ui-creation-recommendations/src/index.ts`](../packages/client/ui-creation-recommendations/src/index.ts) |
@@ -5918,7 +5919,6 @@ export interface Config {
 | `@deepseek-ai/dsh-compaction-image-offload` | `agents` · `sessions` | [`packages/compaction/compaction-image-offload/src/index.ts`](../packages/compaction/compaction-image-offload/src/index.ts) |
 | `@deepseek-ai/dsh-computer-use` | — | [`packages/computer-use/computer-use/src/index.ts`](../packages/computer-use/computer-use/src/index.ts) |
 | `@deepseek-ai/dsh-config-editor` | `loader` · `profileContext` | [`packages/boot/config-editor/src/index.ts`](../packages/boot/config-editor/src/index.ts) |
-| `@deepseek-ai/dsh-connectors` | — | [`packages/experimental/connectors/src/index.ts`](../packages/experimental/connectors/src/index.ts) |
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
 | `@deepseek-ai/dsh-creation-recommendations` | `tools` · `pluginManager` · `agents` · `subagents` · `profileContext` · `skills` · `actionCards` | [`packages/extensions/creation-recommendations/src/index.ts`](../packages/extensions/creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |

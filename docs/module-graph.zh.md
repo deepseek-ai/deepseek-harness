@@ -283,7 +283,7 @@ flowchart TD
     pkg_tool_office["tool-office"]
   end
   subgraph group_experimental["packages/experimental"]
-    pkg_connectors["connectors"]
+    pkg_client_ui_connectors["client-ui-connectors"]
     pkg_cua["cua"]
     pkg_cua_bundle["cua-bundle"]
     pkg_cua_macos["cua-macos"]
@@ -1796,7 +1796,7 @@ flowchart TD
 | [`notion`](../packages/connector/notion) | `connector` | — |
 | [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
-| [`connectors`](../packages/experimental/connectors) | `experimental` | — |
+| [`client-ui-connectors`](../packages/experimental/client-ui-connectors) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
 | [`experimental-badge-skill-bundle`](../packages/experimental/badge-skill-bundle) | `experimental` | — |
 | [`experimental-client-ui-claude-code-mods`](../packages/experimental/client-ui-claude-code-mods) | `experimental` | — |

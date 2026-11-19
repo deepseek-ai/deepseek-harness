@@ -8,7 +8,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-const BUNDLE = '@deepseek-ai/dsh-connectors'
+const BUNDLE = '@deepseek-ai/dsh-client-ui-connectors'
 const FEISHU = '@deepseek-ai/dsh-feishu'
 const WECOM = '@deepseek-ai/dsh-wecom'
 const EXPECTED = fileURLToPath(new URL('./expected/connectors-tab/connectors-tab.expected.md', import.meta.url))

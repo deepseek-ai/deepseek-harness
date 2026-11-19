@@ -3,7 +3,7 @@ description: "Enable the Connectors tab of the Plugins page to list, install, an
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-connectors
+# @deepseek-ai/dsh-client-ui-connectors
 
 English | [中文](README.zh.md)
 
@@ -25,7 +25,7 @@ Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop
 <a id="use-this-package"></a>
 ## Use this package
 
-In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-connectors`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed; switching the bundle off removes the tab and hides the bundle's card again. This package has no configuration fields.
+In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-client-ui-connectors`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed; switching the bundle off removes the tab and hides the bundle's card again. This package has no configuration fields.
 
 Each row shows the connector's brand icon, title, and description in the interface language. A connector the profile does not hold shows **Install**, which opens the Plugins install dialog at its check screen with the connector's package at the running DSH version; the dialog offers **Enable now** once the installation finishes. A build that carries no DSH version shows no Install. An installed connector shows **Installed** or **On**; its row opens its page, and that page's Back button returns to the tab. Installed connectors keep their cards and switches on the Installed tab and run whether or not this bundle is enabled.
 

@@ -1,3 +1,0 @@
-- insert:
-    - id: connectors
-      name: '@deepseek-ai/dsh-connectors'

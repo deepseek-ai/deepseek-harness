@@ -3,7 +3,7 @@ description: "启用插件页的“连接器”标签，用来列出、安装和
 kind: "package-bundle"
 ---
 
-# @deepseek-ai/dsh-connectors
+# @deepseek-ai/dsh-client-ui-connectors
 
 [English](README.md) | 中文
 
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在**插件 → 添加插件**中输入 `@deepseek-ai/dsh-connectors`，选择**安装**，再选择**立即启用**。DSH 使用随包提供的版本，无需再次下载。也可在目标 [profile](../../boot/app-boot/README.zh.md#profiles) 的 `package.json` 中，将包名加入 `dsh.profile.bundles`。之后“已安装”旁会出现“连接器”标签；关闭这个 bundle 会移除标签，它的卡片也会再次隐藏。本包没有配置项。
+在**插件 → 添加插件**中输入 `@deepseek-ai/dsh-client-ui-connectors`，选择**安装**，再选择**立即启用**。DSH 使用随包提供的版本，无需再次下载。也可在目标 [profile](../../boot/app-boot/README.zh.md#profiles) 的 `package.json` 中，将包名加入 `dsh.profile.bundles`。之后“已安装”旁会出现“连接器”标签；关闭这个 bundle 会移除标签，它的卡片也会再次隐藏。本包没有配置项。
 
 每一行以界面语言显示连接器的品牌图标、名称和简介。profile 未持有的连接器显示**安装**，点击后插件页的安装对话框直接进入检查步骤，安装目标是该连接器在当前 DSH 版本的包；安装完成后，对话框提供**立即启用**。构建中没有 DSH 版本时，不显示“安装”。已安装的连接器显示**已安装**或**已开启**；点这一行会打开它的详情页，详情页的返回键会回到本标签。已安装的连接器在“已安装”标签中保留自己的卡片和开关，无论这个 bundle 是否开启都会运行。
 

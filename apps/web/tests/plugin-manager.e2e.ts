@@ -870,7 +870,7 @@ describe('web e2e: plugin manager', () => {
     for (const name of [
       '@deepseek-ai/dsh-experimental-session-search',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
-      '@deepseek-ai/dsh-connectors',
+      '@deepseek-ai/dsh-client-ui-connectors',
     ]) {
       expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
         .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
@@ -1043,7 +1043,7 @@ describe('web e2e: plugin manager', () => {
     for (const [name, title] of [
       ['@deepseek-ai/dsh-experimental-session-search', '会话搜索'],
       ['@deepseek-ai/dsh-experimental-ralph-bundle', 'Ralph 循环'],
-      ['@deepseek-ai/dsh-connectors', '连接器'],
+      ['@deepseek-ai/dsh-client-ui-connectors', '连接器'],
     ] as const) {
       const panel = await openPluginsPanel()
       expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
