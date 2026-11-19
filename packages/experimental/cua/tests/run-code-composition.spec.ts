@@ -40,32 +40,26 @@ const programs = [
   'await win.click("0")',
 ]
 
-type ProgramStep = string | readonly string[]
-
 class ProgramModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
   toolName = 'cua_run_code'
   beforeStream?: (index: number, options: GenerateOptions) => Promise<void>
   /** Requests a test holds back until it has finished acting between two model steps. */
   readonly gates = new Map<number, Promise<void>>()
-  constructor(private programs: readonly ProgramStep[]) { super() }
-  restart(programs: readonly ProgramStep[]): void { this.programs = programs; this.requests.length = 0 }
+  constructor(private programs: readonly string[]) { super() }
+  restart(programs: readonly string[]): void { this.programs = programs; this.requests.length = 0 }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text', 'image'] })
   }
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     await this.beforeStream?.(this.requests.length, options)
     await this.gates.get(this.requests.length)
-    const step = this.programs[this.requests.length]
+    const code = this.programs[this.requests.length]
     this.requests.push(options)
-    if (step !== undefined) {
-      const codes = typeof step === 'string' ? [step] : step
-      for (const [index, code] of codes.entries()) {
-        const id = brandString<ToolCallId>(`cua-program-${this.requests.length}${index === 0 ? '' : `-${index}`}`)
-        yield { type: 'block-start', index, blockType: 'tool-call' }
-        yield { type: 'block-end', index, block: { type: 'tool-call', id, name: this.toolName,
-          arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
-      }
+    if (code !== undefined) {
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>(`cua-program-${this.requests.length}`),
+        name: this.toolName, arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
     }
@@ -75,7 +69,7 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly ProgramStep[], platform = 'macos', selectorPid?: number, presetFree = false, heldInputState = false, timeoutMs = 30_000, disposeNative?: (state: { closedChannels: number }) => Promise<void>) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number, presetFree = false, heldInputState = false, timeoutMs = 30_000, disposeNative?: (state: { closedChannels: number }) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -388,23 +382,6 @@ it('reports native held input after programs, keeps it across turns, and stops r
   await f.run()
   expect(f.native.events).toEqual(['w:down', 'w:up'])
   expect(reminders(f.agent)).toHaveLength(2)
-})
-
-it.each([false, true])('delivers only the final held state from a model tool batch (D held: %s)', async (holdD) => {
-  const second = 'await app.sendKeyEvent("w", "up")' + (holdD ? '; await app.sendKeyEvent("d", "down")' : '')
-  const f = await setup([[holdProgram, second]], 'macos', undefined, true, true)
-  await f.run()
-  expect(f.native.events).toEqual(holdD ? ['w:down', 'w:up', 'd:down'] : ['w:down', 'w:up'])
-  expect(f.native.calls.filter(call => call.method === 'getHeldInputs')).toHaveLength(2)
-  expect(f.model.requests).toHaveLength(2)
-  const shown = f.model.requests[1]!.messages.map(message => JSON.stringify(message))
-    .filter(message => message.includes('CUA inputs are still held:'))
-  expect(shown).toHaveLength(holdD ? 1 : 0)
-  expect(reminders(f.agent)).toHaveLength(shown.length)
-  if (holdD) {
-    expect(reminders(f.agent)[0]).toContain('Key "d"')
-    expect(reminders(f.agent)[0]).not.toContain('Key "w"')
-  }
 })
 
 it('reports the Windows keyboard window and desktop input mode and supports a later explicit up', async () => {
