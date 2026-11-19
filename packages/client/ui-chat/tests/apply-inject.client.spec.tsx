@@ -74,8 +74,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
-    openContent: vi.fn<typeof runtime.ctx.sidebarRight.openContent>(() => true),
-    openResource: vi.fn<(address: string) => void>(),
+    openResource: vi.fn<typeof runtime.ctx.sidebarRight.openResource>(),
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
@@ -475,13 +474,13 @@ describe('Chat inject API', () => {
       await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
       await row.openCompaction(42, signal)
       expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'session', sessionId: ROOT }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
-      expect(b.sidebarRight.openContent).toHaveBeenCalledWith({ mediaType: 'text/markdown', text: '# Summary' },
-        expect.objectContaining({ title: '上下文摘要' }))
+      expect(b.sidebarRight.openResource).toHaveBeenCalledWith(expect.any(String),
+        { kind: 'compaction-summary', params: { summaryMarkdown: '# Summary' } })
       const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
       vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
       await row.openCompaction(42, signal)
       expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'subagent', ...child }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
-      expect(b.sidebarRight.openContent.mock.calls[0]![1].key).not.toBe(b.sidebarRight.openContent.mock.calls[1]![1].key)
+      expect(b.sidebarRight.openResource.mock.calls[0]![0]).not.toBe(b.sidebarRight.openResource.mock.calls[1]![0])
       b.events.mockImplementationOnce(async (_query, active) => {
         await viewer.dispose()
         expect(active?.aborted).toBe(true)
@@ -489,7 +488,7 @@ describe('Chat inject API', () => {
       })
       expect(await row.openCompaction(42, signal)).toBeNull()
       expect(row.hooks.compactionPreview.getSnapshot()).toBe(false)
-      expect(b.sidebarRight.openContent).toHaveBeenCalledTimes(2)
+      expect(b.sidebarRight.openResource).toHaveBeenCalledTimes(2)
     } finally { await b.runtime.dispose() }
   })
 
@@ -521,9 +520,7 @@ describe('Chat inject API', () => {
         return { ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event }] } }
       })
       expect(await row.openCompaction(42, pending.signal)).toBeNull()
-      expect(b.sidebarRight.openContent).not.toHaveBeenCalled()
-      b.sidebarRight.openContent.mockReturnValueOnce(false)
-      expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      expect(b.sidebarRight.openResource).not.toHaveBeenCalled()
     } finally { await b.runtime.dispose() }
   })
 

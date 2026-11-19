@@ -8,10 +8,9 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
+import { documentTabInfoFactory } from '../src/client/document/contract.ts'
 import { apply, MARKDOWN_BODY_ID, markdownDefinition } from '../src/client/markdown/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { registerDocumentViewer } from '../src/client/content/index.ts'
-import { en as previewEn, zh as previewZh } from '../src/client/locales.ts'
 
 const runtimes: SlotTestRuntime[] = []
 
@@ -24,7 +23,7 @@ describe('Markdown implementation registration', () => {
     let title = 'Markdown'
     const definition = markdownDefinition(() => title)
     expect(definition).toMatchObject({
-      id: MARKDOWN_BODY_ID, extensions: ['md', 'markdown'], mediaTypes: ['text/markdown'], priority: 'builtin', loading: 'text-pages', wrap: false,
+      id: MARKDOWN_BODY_ID, extensions: ['md', 'markdown'], priority: 'builtin', loading: 'text-pages', wrap: false,
     })
     expect(definition.title()).toBe('Markdown')
     title = 'Localized Markdown'
@@ -37,7 +36,7 @@ describe('Markdown implementation registration', () => {
     expect(registry.getSnapshot()).toEqual([])
   })
 
-  it('waits for the document body Factory, follows its declaration lifetime, and releases every contribution on unload', async () => {
+  it('waits for the document slot, renders with its locale, and releases every contribution on unload', async () => {
     const runtime = await SlotTestRuntime.create()
     runtimes.push(runtime)
     const previews = new DocumentPreviewRegistry()
@@ -45,7 +44,6 @@ describe('Markdown implementation registration', () => {
     const locale = new LocaleRuntime(runtime.ctx)
     runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
-    runtime.ctx.effect(() => locale.register('sidebarDocumentPreview', { zh: previewZh, en: previewEn }))
     locale.setLocale('en')
     const sessionId = brandString<SessionId>('markdown-registration')
     await runtime.sessions.add({ id: sessionId })
@@ -58,25 +56,25 @@ describe('Markdown implementation registration', () => {
         yield { ok: true as const, value: { absolutePath: '/work/guide/notes.md', version: 'v1' } }
       },
     }))
-    // The renderer waits through `ctx.slots.inject` until the Factory declares its slot.
     const feature = await runtime.mount({ inject: ['slots', 'locale', 'documentPreviews'], apply })
     expect(previews.getSnapshot().map(definition => definition.id)).toEqual([MARKDOWN_BODY_ID])
-    const registerFactory = (): (() => void) => registerDocumentViewer(runtime.ctx, () => {})
-    let unregister = registerFactory()
-    await runtime.flush()
-    expect(runtime.slots.entries('sidebar.right.tab.document')).toHaveLength(1)
     const useTabInfo = vi.fn<UseSidebarRightTabInfo>(() => { throw new Error('Markdown rendering does not need tab actions') })
-    const address = 'dsh-resource://file/session/markdown-registration/notes.md'
     await runtime.root.declare({
-      'sidebar.right.tab.document.actions': { kind: 'list', scope: 'session' },
-    }, ({ renderFactorySlot, SessionProvider }) => (
+      'sidebar.right.tab.document': {
+        kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } },
+      },
+    }, ({ renderSlot, SessionProvider }) => (
       <SessionProvider session={reference}>
-        {renderFactorySlot('sidebar.right.document.body', {
-          rendererId: MARKDOWN_BODY_ID, useTabInfo, resourceAddress: address, baseAddress: address,
+        {renderSlot('sidebar.right.tab.document', {
+          resourceAddress: 'dsh-resource://file/session/markdown-registration/notes.md',
           content: { kind: 'text', text: '# Notes\n\n```ts\nconst value = 1\n```\n\n![diagram](images/a.png)', pages: [], eof: true },
           wrap: false,
           scrollportRef: vi.fn(),
           addResource: vi.fn(), setResources: vi.fn(),
+        }, {
+          entryKey: MARKDOWN_BODY_ID,
+          hookContext: useTabInfo,
+          fallback: <span data-missing-markdown />,
         })}
       </SessionProvider>
     ))
@@ -87,24 +85,17 @@ describe('Markdown implementation registration', () => {
       expect(new URL(view.getByAltText('diagram').getAttribute('src')!).searchParams.get('path'))
         .toBe('/work/guide/images/a.png')
     })
+    expect(runtime.slots.entries('sidebar.right.tab.document')).toHaveLength(1)
     const t = locale.bind('documentMarkdown')
     await act(async () => { locale.setLocale('zh') })
     expect(locale.bind('documentMarkdown')).toBe(t)
     expect(view.getByRole('button', { name: '复制' })).toBeDefined()
     expect(useTabInfo).not.toHaveBeenCalled()
 
-    // The contribution collapses with the Factory's declaration and returns with the next one.
-    await act(async () => { unregister() })
-    expect(view.queryByRole('heading', { name: 'Notes' })).toBeNull()
-    unregister = registerFactory()
-    await runtime.flush()
-    expect(runtime.slots.entries('sidebar.right.tab.document')).toHaveLength(1)
-    expect(view.getByRole('heading', { name: 'Notes' })).toBeDefined()
-
     await feature.dispose()
     expect(previews.getSnapshot()).toEqual([])
     expect(runtime.slots.entries('sidebar.right.tab.document')).toEqual([])
-    expect(view.getByText(previewZh.rendererUnavailable.replace('{name}', MARKDOWN_BODY_ID))).toBeDefined()
+    expect(view.container.querySelector('[data-missing-markdown]')).not.toBeNull()
     expect(t('code.copy')).toBe('code.copy')
     await runtime.mount({ inject: ['slots', 'locale', 'documentPreviews'], apply })
     expect(previews.getSnapshot()).toHaveLength(1)

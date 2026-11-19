@@ -87,7 +87,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openRightbar: vi.fn(), closeRightbar: vi.fn() } as never)
   runtime.ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
-  runtime.ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}), get: vi.fn(() => ({})), candidates: vi.fn(() => []), subscribe: vi.fn(() => () => {}) } as never)
+  runtime.ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}), get: vi.fn(() => ({})), subscribe: vi.fn(() => () => {}) } as never)
   runtime.ctx.provide('resources', { register: vi.fn(() => () => {}) } as never)
   runtime.remote.provideNamespaces({ session: { openWorkspacePath: vi.fn() } })
   let mainReference: ReturnType<typeof runtime.sessions.retain> | undefined

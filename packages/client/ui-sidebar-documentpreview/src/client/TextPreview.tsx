@@ -15,13 +15,14 @@
  * loading states. A document layer handling Escape calls `preventDefault()` to
  * keep the navigator from also closing.
  */
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  FileTypeIcon, IconPauseOutlineRegular, IconPlayOutlineRegular, IconRefreshOutlineRegular, Tooltip, classifyFileType,
+  FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
+  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, Tooltip, classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { TextInjected } from './face.ts'
@@ -29,7 +30,6 @@ import { emptyFailureRecourse, failureLine } from './failure-line.ts'
 import { LoadingIndicator } from './LoadingIndicator.tsx'
 import { PreviewFrame } from './PreviewFrame.tsx'
 import { hostFileOf } from './rpc.ts'
-import { useScrollport } from './scrollport.ts'
 import type { TextStore } from './store.ts'
 import type { DocumentContent } from './document/contract.ts'
 import { binaryDocumentPath, matchingDocumentPreviews } from './document/registry.ts'
@@ -37,7 +37,6 @@ import type { DocumentPreviewDefinition } from './document/registry.ts'
 import { unviewableBinaryPath } from './document/unviewable.ts'
 import { PLAIN_BODY_ID } from './text/index.ts'
 import { clearLineMark, loadedPages, lastLineLoaded, markLine, scrollToLine } from './text/lines.ts'
-import { RendererMenu, WrapToggle } from './ViewerTools.tsx'
 import css from './TextPreview.module.css'
 
 export { linesOf, loadedPages, lastLineLoaded, scrollToLine } from './text/lines.ts'
@@ -52,7 +51,8 @@ export interface TextPreviewInjected extends TextInjected {
 export type TextPreviewProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
   & PropsRenderSlots<
-    'sidebar.right.tab.document.action' | 'sidebar.right.tab.document.actions' | 'sidebar.right.tab.document.unpreviewable'
+    | 'sidebar.right.tab.document' | 'sidebar.right.tab.document.action' | 'sidebar.right.tab.document.actions'
+    | 'sidebar.right.tab.document.unpreviewable'
   >
   & PropsRenderFactories
   & PropsStore<TextStore>
@@ -98,7 +98,10 @@ export function TextPreview({
   useEffect(() => {
     set([])
   }, [set, selected?.id])
-  const { scrollportRef, bindBody, bindScrollport } = useScrollport(state?.scrollTop ?? 0)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const scrollportRef = useRef<HTMLElement | null>(null)
+  const storedScrollTopRef = useRef(0)
+  const [menuOpen, setMenuOpen] = useState(false)
   const absolutePath = meta.value?.absolutePath ?? current?.complete?.absolutePath
   const displayPath = absolutePath ?? file.path
   // Contributions that hand the file to the Host wait for its Host path.
@@ -110,6 +113,17 @@ export function TextPreview({
   const loaded = useMemo(() => loadedPages(pages ?? {}), [pages])
   const loadedThrough = lastLineLoaded(loaded)
   const hasContent = mode === 'renderer' ? current?.version !== undefined : loaded.length > 0 || current?.complete !== undefined
+  storedScrollTopRef.current = state?.scrollTop ?? 0
+  const bindBody = useCallback((body: HTMLDivElement | null): void => {
+    const previous = bodyRef.current
+    bodyRef.current = body
+    if (scrollportRef.current === null || scrollportRef.current === previous) scrollportRef.current = body
+  }, [])
+  const bindScrollport = useCallback((scrollport: HTMLElement | null): void => {
+    const next = scrollport ?? bodyRef.current
+    scrollportRef.current = next
+    if (next !== null) next.scrollTop = storedScrollTopRef.current
+  }, [])
 
   // First mount reads the first page; a body coming back to a tab with content
   // reads nothing, because the store outlives the body.
@@ -283,22 +297,45 @@ export function TextPreview({
         )}
       tools={(
         <>
-          {candidates.length > 1 && (
-            <RendererMenu candidates={candidates} selected={selected} onSelect={(id) => { actions.selected(tab.id, id) }} t={t} />
-          )}
+          {candidates.length > 1
+            && (
+              <Menu
+                open={menuOpen}
+                anchor={(
+                  <button type="button" className={clsx(css.tool, css.viewerTool)} aria-label={t('openWith')} title={selected.title()} data-document-viewer-menu onClick={() => { setMenuOpen(value => !value) }}>
+                    {selected.title()}
+                  </button>
+                )}
+                items={candidates.map(candidate => ({ id: candidate.id, label: candidate.title() }))}
+                selectedId={selected.id}
+                onSelect={(id) => { actions.selected(tab.id, id); setMenuOpen(false) }}
+                onClose={() => { setMenuOpen(false) }}
+                align="end"
+                portal
+                dense
+              />
+            )}
           {selected.wrap === true && (
-            <WrapToggle
-              wrap={state.wrap}
-              t={t}
-              data-textpreview-tool="wrap"
-              onToggle={() => {
-                actions.toggledWrap(tab.id)
-                // Wrapping reflows the lines under a line mark without resizing its scrollport.
-                const body = scrollportRef.current
-                /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
-                if (body !== null) clearLineMark(body)
-              }}
-            />
+            // The tooltip names the action while the stable aria name and
+            // `aria-pressed` expose the control and its current state.
+            <Tooltip label={t(state.wrap ? 'wrap.disable' : 'wrap.enable')} side="bottom" delayMs={500}>
+              <button
+                type="button"
+                className={css.tool}
+                aria-pressed={state.wrap}
+                aria-label={t('wrap.aria')}
+                data-textpreview-tool="wrap"
+                onClick={() => {
+                  actions.toggledWrap(tab.id)
+                  // Wrapping reflows the lines under a line mark without resizing its scrollport.
+                  const body = scrollportRef.current
+                  /* v8 ignore next -- callback refs bind the scrollport during commit, before user input. */
+                  if (body !== null) clearLineMark(body)
+                }}
+              >
+                {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
+              </button>
+            </Tooltip>
           )}
           {content !== undefined && renderSlot('sidebar.right.tab.document.action', { content }, { entryKey: selected.id, hookContext: useTabInfo })}
           <span hidden>
@@ -351,10 +388,12 @@ export function TextPreview({
         {mode !== 'renderer' && !hasContent && current?.failure === undefined && (
           <LoadingIndicator label={t('loading')} />
         )}
-        {content !== undefined && renderFactorySlot('sidebar.right.document.body', {
-          rendererId: selected.id, useTabInfo,
-          resourceAddress: tab.contentId, baseAddress: tab.contentId, content, wrap: state.wrap, scrollportRef: bindScrollport,
+        {content !== undefined && renderSlot('sidebar.right.tab.document', {
+          resourceAddress: tab.contentId, content, wrap: state.wrap, scrollportRef: bindScrollport,
           addResource: add, setResources: set,
+        }, {
+          entryKey: selected.id, hookContext: useTabInfo,
+          fallback: <p className={css.statusLine}>{t('rendererUnavailable', { name: selected.title() })}</p>,
         })}
         {current?.failure !== undefined && (hasContent
           ? (

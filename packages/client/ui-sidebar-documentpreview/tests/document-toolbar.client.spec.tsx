@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { TextPreview } from '../src/client/TextPreview.tsx'
 import type { TextPreviewProps } from '../src/client/TextPreview.tsx'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
@@ -10,7 +11,7 @@ import { textBodyDefinition, PLAIN_BODY_ID } from '../src/client/text/index.ts'
 import { pdfBodyDefinition } from '../src/client/pdf/index.ts'
 import { imageBodyDefinition } from '../src/client/image/index.ts'
 import { htmlBodyDefinition } from '../src/client/html/index.ts'
-import { documentSlots, ABSOLUTE_PATH, ADDRESS, FILE, harness, page, settle, TAB_ID } from './fixtures.client.ts'
+import { documentSlots, ABSOLUTE_PATH, FILE, harness, page, settle, TAB_ID } from './fixtures.client.ts'
 
 afterEach(cleanup)
 
@@ -26,7 +27,7 @@ function codeProps(h: ReturnType<typeof harness>): TextPreviewProps {
   return {
     ...props,
     useDocumentPreviews: selector => selector([definition]),
-    renderFactorySlot: documentSlots((_key, owner) => <CodeBody {...props} {...owner} t={key => key} />),
+    renderSlot: documentSlots((_key, owner) => <CodeBody {...props} {...owner as unknown as OwnerOf<'sidebar.right.tab.document'>} t={key => key} />),
   }
 }
 
@@ -150,9 +151,9 @@ describe('document toolbar', () => {
       await pending.promise
     })
     h.bytes.mockReturnValueOnce(pending.promise)
-    const renderFactorySlot = vi.fn((_key: string) => null)
-    const documentRenders = (): number => renderFactorySlot.mock.calls.filter(call => call[0] === 'sidebar.right.document.body').length
-    const props: TextPreviewProps = { ...h.props(), useDocumentPreviews: selector => selector([binary]), renderFactorySlot }
+    const renderSlot = vi.fn((_key: string) => null)
+    const documentRenders = (): number => renderSlot.mock.calls.filter(call => call[0] === 'sidebar.right.tab.document').length
+    const props: TextPreviewProps = { ...h.props(), useDocumentPreviews: selector => selector([binary]), renderSlot }
     const view = render(<TextPreview {...props} />)
     expect(view.getByRole('status').hasAttribute('data-document-loading')).toBe(true)
     expect(view.getByRole('status').getAttribute('aria-label')).toBe('loading')
@@ -170,13 +171,13 @@ describe('document toolbar', () => {
     const h = harness({ 1: page(1, ['previous reader content'], true) })
     const view = render(<TextPreview {...h.props()} />)
     await settle()
-    const renderFactorySlot = vi.fn(() => null)
-    view.rerender(<TextPreview {...h.props()} useDocumentPreviews={selector => selector([{ ...binary, loading: 'renderer' }])} renderFactorySlot={renderFactorySlot} />)
+    const renderSlot = vi.fn(() => null)
+    view.rerender(<TextPreview {...h.props()} useDocumentPreviews={selector => selector([{ ...binary, loading: 'renderer' }])} renderSlot={renderSlot} />)
     expect(view.container.textContent).not.toContain('previous reader content')
     const rendererContentMatcher: unknown = expect.objectContaining({ kind: 'renderer' })
-    expect(renderFactorySlot).toHaveBeenCalledWith('sidebar.right.document.body', expect.objectContaining({
-      rendererId: binary.id, resourceAddress: ADDRESS, baseAddress: ADDRESS, content: rendererContentMatcher,
-    }))
+    expect(renderSlot).toHaveBeenCalledWith('sidebar.right.tab.document', expect.objectContaining({
+      content: rendererContentMatcher,
+    }), expect.any(Object))
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.complete).toBeUndefined()
     expect(h.bytes).not.toHaveBeenCalled()
   })

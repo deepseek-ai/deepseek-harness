@@ -43,7 +43,7 @@ export type OfficeBodyProps = DocumentPreviewProps & PropsStore<OfficeStore> & O
  */
 export function OfficeBody(props: OfficeBodyProps): ReactNode {
   const { tab } = props.useTabInfo()
-  const { load, retainTab, resourceAddress, baseAddress, t } = props
+  const { load, retainTab, resourceAddress, t } = props
   const request = props.content.kind === 'renderer' ? props.content : undefined
   const revision = request?.revision
   const held = props.useStore(state => state.byTab[tab.id])
@@ -71,8 +71,7 @@ export function OfficeBody(props: OfficeBodyProps): ReactNode {
   if (file === undefined) return <LoadingIndicator label={t('loading')} />
   return <div className={css.body}>
     {props.renderSlot('sidebar.right.tab.document.office.pdf', {
-      resourceAddress, ...(baseAddress === undefined ? {} : { baseAddress }),
-      content: { kind: 'bytes', data: file.data }, wrap: props.wrap, scrollportRef: props.scrollportRef,
+      resourceAddress, content: { kind: 'bytes', data: file.data }, wrap: props.wrap, scrollportRef: props.scrollportRef,
       addResource: props.addResource, setResources: props.setResources,
     }, { entryKey: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', hookContext: props.useTabInfo })}
   </div>

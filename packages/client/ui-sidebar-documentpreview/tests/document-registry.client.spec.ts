@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { binaryDocumentPath, DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
-import { markdownDefinition, MARKDOWN_BODY_ID } from '../src/client/markdown/index.ts'
-import { PLAIN_BODY_ID, textBodyDefinition } from '../src/client/text/index.ts'
 
 function definition(id: string, overrides: Partial<DocumentPreviewDefinition> = {}): DocumentPreviewDefinition {
   return { id, title: () => id, extensions: ['md'], loading: 'text-pages', ...overrides }
@@ -90,38 +88,5 @@ describe('document preview implementations', () => {
     registry.register(replacement)
     disposeOld()
     expect(registry.candidates('notes.txt')).toEqual([replacement])
-  })
-
-  it('selects media-type implementations by essence, extension band first, then registration order', () => {
-    const registry = new DocumentPreviewRegistry()
-    const builtin = definition('builtin', { priority: 'builtin', mediaTypes: ['text/markdown'] })
-    const first = definition('first', { mediaTypes: ['Text/Markdown', 'text/x-markdown'] })
-    const other = definition('other', { mediaTypes: ['text/plain'] })
-    const second = definition('second', { priority: 'extension', mediaTypes: [' text/markdown ; variant=GFM'] })
-    const files = definition('files')
-    for (const entry of [builtin, first, other, second, files]) registry.register(entry)
-    expect(registry.mediaTypeCandidates('text/markdown')).toEqual([first, second, builtin])
-    expect(registry.mediaTypeCandidates('  TEXT/MARKDOWN; charset=utf-8')).toEqual([first, second, builtin])
-    expect(registry.mediaTypeCandidates('text/x-markdown')).toEqual([first])
-    expect(registry.mediaTypeCandidates('text/html')).toEqual([])
-    // File selection keeps reading extensions only.
-    expect(registry.candidates('notes.md')).toEqual([first, other, second, files, builtin])
-  })
-
-  it('rejects media types on an implementation that reads its own file without registering', () => {
-    const registry = new DocumentPreviewRegistry()
-    expect(() => registry.register(definition('reader', { loading: 'renderer', mediaTypes: ['text/markdown'] })))
-      .toThrow(/"reader" declares media types but loads its own file content/u)
-    expect(registry.getSnapshot()).toEqual([])
-    registry.register(definition('reader', { loading: 'renderer' }))
-    expect(registry.mediaTypeCandidates('text/markdown')).toEqual([])
-  })
-
-  it('offers the builtin Markdown and plain-text bodies for their media types', () => {
-    const registry = new DocumentPreviewRegistry()
-    registry.register(textBodyDefinition(() => 'Plain text'))
-    registry.register(markdownDefinition(() => 'Markdown'))
-    expect(registry.mediaTypeCandidates('text/markdown').map(entry => entry.id)).toEqual([MARKDOWN_BODY_ID])
-    expect(registry.mediaTypeCandidates('text/plain; charset=utf-8').map(entry => entry.id)).toEqual([PLAIN_BODY_ID])
   })
 })

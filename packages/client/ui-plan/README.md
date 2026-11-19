@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Plan mode lets you review a plan before implementation. Enter with `/plan` and leave with the composer chip. Submitted plans open automatically in the right sidebar for review and remain available from cards in the completed Turn’s final artifact area after approval, rejection, or dismissal. Reopening a plan focuses its existing tab, and browser reload expires its transient content; reopen it from the plan card.
+Plan mode lets you review a plan before implementation. Enter with `/plan` and leave with the composer chip. Submitted plans open automatically in the right sidebar for review and remain available from cards in the completed Turn’s final artifact area after approval, rejection, or dismissal. Reopening a plan focuses its existing tab, and browser reload restores the document from Session history.
 
 ## Table of Contents
 
@@ -33,9 +33,9 @@ While the effective target is plan mode, the seat renders the blue "Plan" status
 
 ### Reading submitted plans
 
-When a Turn ends, each submitted plan appears in its final artifact area, using the file-delivery card treatment with a Markdown icon, title, and Open action. A pending plan opens automatically once per submission in the current browser session. Closing it stays effective across review remounts; a new submission opens its own plan. Historical cards open only when clicked. Use the card or review strip’s View full plan link to read the complete Markdown. Plans open in [content preview](../ui-sidebar-documentpreview/README.md#content-previews) tabs, titled with the plan’s first level-one heading. Without the document preview plugin, which provides content previews, the plan chip, cards, and review strip remain, but their open buttons are disabled and their tooltip names the missing plugin. Different submissions retain separate tabs; the review buttons alone decide whether implementation may begin.
+When a Turn ends, each submitted plan appears in its final artifact area, using the file-delivery card treatment with a Markdown icon, title, and Open action. A pending plan opens automatically once per submission in the current browser session. Closing it stays effective across review remounts; a new submission opens its own plan. Historical cards open only when clicked. Use the card or review strip’s View full plan link to read the complete Markdown. Plan tabs show a plain text file icon. Different submissions retain separate tabs; the review buttons alone decide whether implementation may begin.
 
-A review without a logged invocation also opens automatically. All plan preview text lives only in the current window’s memory, and the pending review card reopens the same tab. Reloading the page loses that text: the restored tab shows the content preview’s expired line, and a review that is still pending can open it again. Plans opened from an embedded child conversation use the visible parent sidebar and a key containing the child Session identity.
+A review without a logged invocation also opens automatically. Its complete text lives only in the tab’s navigation memory, and the pending review card can reopen it. Reloading the page loses that text; an expired preview directs the user back to a pending review. Plans opened from an embedded child conversation use the visible sidebar while retaining the child’s address for document reads.
 
 ### Failures
 
@@ -51,7 +51,7 @@ Admission failures (`matched: false`, business errors, transport faults) surface
 
 The chip occupies the conversation-declared `conversation.input.plan` single seat; the node half is an empty apply (the roster row). Reads ride the generic projection pair through the standard-kit `useProjection`: the effective target is `pending ? !active : active` — a folded host value, not client optimism, so an arriving frame corrects the chip either way. The seat's injected face carries one verb, `exitPlanMode`, which executes `/plan off` through `ctx.remote.commands.execute` and maps admission failures to an inline error line. The placeholder and hint text live in ui-conversation's `conversation` locale namespace and are shared verbatim with the claimed `/plan` command hint.
 
-Plan cards and pending reviews pass their complete Markdown directly to `ctx.sidebarRight.openContent`, with a Session-scoped invocation key or review key and a title derived from the leading heading. The shared content tab uses the existing sidebar placement, including embedded child plans displayed in the parent's sidebar. The content tab is optional: cards and review controls remain disabled until it is available. Automatic review opening also waits for `ctx.sidebarRight.mounted`. Navigation input stays in memory; after reload, reopen an expired preview from its plan or review card. Plan cards still derive from logged native or PTC calls through the Conversation Definition and contribute to `conversation.chat.turnTail` alongside file deliveries.
+Plan cards derive from native `tool/call` or PTC dispatch arguments through a Conversation Definition, with each invocation’s resolved Turn location. They contribute to the additive `conversation.chat.turnTail` list alongside file deliveries. The plan resource address identifies the invocation and its complete ordinary or direct-parent subagent Session address; its provider reads existing Session history, including older pages, without storing document text in sidebar layout. The question plugin owns the review action slot and supplies its request key, complete text, and optional invocation identity. The automatic open reads `ctx.sidebarRight.mounted` through a bound hook and runs once a Session is on screen: the Sidebar names the returning Session before the commit that mounts the review renders, so a review that arrived while a global panel or another Session was on screen opens from that commit's effect. The [historical decision](../../../.agents/notes/archived/feature/2026-09-17-persistent-plan-cards.md) explains why review lifetime and document lifetime remain separate. Subagent plan addresses also preserve unknown mode so history reads can resolve the child descriptor.
 
 The framework-bound `usePlans(turn)` exposes only submitted-plan data for that Turn. Chat indexes membership on Node updates and orders this collection when read; card rendering neither scans the transcript nor subscribes to other Turns or Node kinds.
 
@@ -68,7 +68,6 @@ Read these pages when the plan surface is not enough. They move from the chip to
 
 - [dsh-plan-mode](../../plan/plan-mode/README.md) — owns plan mode, the `/plan` command, the projection, and the policy section.
 - [ui-conversation](../ui-conversation/README.md) — declares the composer's `conversation.input.plan` seat and the placeholder locale keys.
-- [ui-sidebar-documentpreview](../ui-sidebar-documentpreview/README.md#content-previews) — the right-Sidebar content tab that shows plan documents and temporary reviews.
 - [Tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) — the `exit_plan_mode` tool schema the model uses to leave plan mode.
 - [Client package map](../README.md) — adjacent browser UI packages.
 
@@ -93,8 +92,6 @@ These limits define the current plan chip. They are current package constraints,
 - **Plan mode is guidance, not an execution sandbox** — deployments that require enforced read-only planning must compose the independent sandbox and approval policies.
 - **The chip belongs to the default composer** — a pending whole-composer interaction such as plan review temporarily replaces the InputBar and its chip.
 - **No inactive plan control** — entry uses the shared Command source; a session with the capability but inactive mode shows no plan affordance in the tool row.
-- **Preview text expires on reload** — text lives only in memory; reopen it from the plan or review card after reloading.
-- **Plan tabs saved by earlier versions are unavailable** — a layout saved before plans opened in content previews restores its `plan` tabs with no tab type to show them, so each shows the right sidebar’s unavailable line until closed; the plan’s Chat card reopens it as a content preview.
 
 <a id="dev-note"></a>
 ### Dev Note

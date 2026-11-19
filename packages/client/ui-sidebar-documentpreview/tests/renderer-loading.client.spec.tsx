@@ -15,7 +15,7 @@ import { officeFace } from '../src/client/office/face.ts'
 import { createOfficeStore, type OfficeState } from '../src/client/office/store.ts'
 import type { ReadOfficeDocument } from '../src/client/office/cache.ts'
 import { en } from '../src/client/office/locales.ts'
-import { documentSlots, harness, ABSOLUTE_PATH, ADDRESS, TAB_ID, SESSION, settle } from './fixtures.client.ts'
+import { harness, ABSOLUTE_PATH, ADDRESS, TAB_ID, SESSION, settle } from './fixtures.client.ts'
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
@@ -49,9 +49,13 @@ it('lets a non-Office renderer load content, report its version, and reload thro
     useEffect(() => { if (displayed !== undefined) request?.loaded(displayed.version) }, [displayed, request?.loaded])
     return <p>{displayed?.text ?? 'Loading custom content'}</p>
   }
-  const renderFactorySlot = documentSlots((_key, owner) => <CustomBody content={owner.content} />)
+  const renderSlot: TextPreviewProps['renderSlot'] = (name: string, input: unknown) => {
+    if (name !== 'sidebar.right.tab.document') return null
+    const owner = input as OwnerOf<'sidebar.right.tab.document'>
+    return <CustomBody content={owner.content} />
+  }
   const useDocumentPreviews: TextPreviewProps['useDocumentPreviews'] = selector => selector([custom])
-  const view = render(<TextPreview {...h.props()} renderFactorySlot={renderFactorySlot} useDocumentPreviews={useDocumentPreviews} />)
+  const view = render(<TextPreview {...h.props()} renderSlot={renderSlot} useDocumentPreviews={useDocumentPreviews} />)
   expect(read).toHaveBeenCalledTimes(1)
   expect(screen.getByText('Loading custom content')).toBeTruthy()
   expect(h.instance.getSnapshot().byTab[TAB_ID]?.version).toBeUndefined()
@@ -61,7 +65,7 @@ it('lets a non-Office renderer load content, report its version, and reload thro
   expect(h.instance.getSnapshot().byTab[TAB_ID]?.version).toBe('v1')
   act(() => { h.instance.actions.toggledAutoRefresh(TAB_ID) })
   h.setVersion('v2')
-  view.rerender(<TextPreview {...h.props()} renderFactorySlot={renderFactorySlot} useDocumentPreviews={useDocumentPreviews} />)
+  view.rerender(<TextPreview {...h.props()} renderSlot={renderSlot} useDocumentPreviews={useDocumentPreviews} />)
   expect(screen.getByText('changed')).toBeTruthy()
   expect(read).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'reloadNow' }))
@@ -85,7 +89,7 @@ const result = (version = 'v1', missingFonts: readonly string[] = []): Result =>
   offset: 0, eof: true, missingFonts, generation: 'engine' as OfficeKitGeneration,
 } })
 
-function setup({ base = true }: { base?: boolean } = {}) {
+function setup() {
   const h = harness()
   const office = createOfficeStore().create()
   const pending: { signal: AbortSignal; deferred: ReturnType<typeof Promise.withResolvers<Result>> }[] = []
@@ -112,23 +116,21 @@ function setup({ base = true }: { base?: boolean } = {}) {
       return <OfficeFontAction {...{ ...input as OwnerOf<'sidebar.right.tab.document.action'>, useTabInfo: options?.hookContext, useStore: useOffice,
         actions: office.actions, t: makeTranslate(en) } as OfficeFontActionProps} />
     }
-    return null
-  }
-  const body = documentSlots((_key, owner, options) => {
+    if (key !== 'sidebar.right.tab.document') return null
+    const owner = input as OwnerOf<'sidebar.right.tab.document'>
     if (owner.content.kind !== 'renderer') return <p>Raw bytes</p>
     request = owner.content
-    const { baseAddress: _baseAddress, ...unbased } = owner
     // The component fixture supplies the standard seats used by Office; the real slot binding is exercised by the browser scenario.
-    const props = { ...h.props(), ...base ? owner : unbased, useTabInfo: options?.hookContext, useStore: useOffice,
+    const props = { ...h.props(), ...owner, useTabInfo: options?.hookContext, useStore: useOffice,
       actions: office.actions, ...injected, retainTab,
-      t: makeTranslate(en), renderSlot: (_name: string, child: { content: DocumentContent; baseAddress?: string }) => (
-        <p data-test-pdf={child.baseAddress ?? 'none'}>{child.content.kind === 'bytes' ? new TextDecoder().decode(child.content.data) : ''}</p>
+      t: makeTranslate(en), renderSlot: (_name: string, child: { content: DocumentContent }) => (
+        <p data-test-pdf>{child.content.kind === 'bytes' ? new TextDecoder().decode(child.content.data) : ''}</p>
       ),
     } as OfficeBodyProps
     return <OfficeBody {...props} />
-  })
+  }
   function View({ renderer = true, implementation = definition.id }: { renderer?: boolean; implementation?: string }) {
-    return <TextPreview {...h.props()} renderSlot={slots} renderFactorySlot={body}
+    return <TextPreview {...h.props()} renderSlot={slots}
       useDocumentPreviews={selector => selector([renderer ? { ...definition, id: implementation } : { ...definition, id: 'raw', loading: 'bytes-complete' }])} />
   }
   onTestFinished(async () => {
@@ -162,13 +164,6 @@ it('retains renderer content across remounts and waits for reload when automatic
   await act(async () => { h.pending[1]!.deferred.resolve(result('v2')) })
   expect(screen.queryByText('changed')).toBeNull()
   expect(screen.getByText('PDF v2')).toBeTruthy()
-})
-
-it.each([[true, ADDRESS], [false, 'none']] as const)('passes the base address (%s) through to the nested PDF body', async (base, expected) => {
-  const h = setup({ base })
-  render(<h.View />)
-  await act(async () => { h.pending[0]!.deferred.resolve(result()) })
-  expect(screen.getByText('PDF v1').getAttribute('data-test-pdf')).toBe(expected)
 })
 
 it('aborts a superseded load and rejects its late bytes and version report', async () => {

@@ -11,11 +11,10 @@ import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ResourceRegistry } from '../../resources/src/client/resources.ts'
-import type { FactoryComponentPropsOf, HookContextOf, OwnerOf, RenderOpts } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Mock } from 'vitest'
 import { act } from '@testing-library/react'
 import { createElement, useSyncExternalStore } from 'react'
-import type { ReactNode } from 'react'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -26,16 +25,12 @@ import type { TextInjected } from '../src/client/face.ts'
 import type { DocumentFileBytes, ReadDocumentBytes, ReadWorkspaceFilePage, SessionFile } from '../src/client/rpc.ts'
 import { createTextStore } from '../src/client/store.ts'
 import type { TextStore } from '../src/client/store.ts'
-import type { DocumentBodyInput, DocumentPreviewProps } from '../src/client/document/contract.ts'
-import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
-import { DocumentViewer } from '../src/client/content/ContentPreview.tsx'
+import type { DocumentPreviewProps } from '../src/client/document/contract.ts'
 import { TextBody } from '../src/client/text/TextBody.tsx'
 import { textBodyDefinition } from '../src/client/text/index.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 
-type BodyKey = 'sidebar.right.tab.document'
-/** The document body Factory's one child dispatch, with the tab reader as its hook context. */
-type BodySlot = (key: BodyKey, owner: OwnerOf<BodyKey>, opts: RenderOpts & { hookContext: HookContextOf<BodyKey> }) => ReactNode
+type BodySlot = PropsRenderSlots<'sidebar.right.tab.document'>['renderSlot']
 
 export function createResources(): ResourceRegistry {
   const ctx = new Context()
@@ -43,20 +38,11 @@ export function createResources(): ResourceRegistry {
   return new ResourceRegistry(ctx)
 }
 
-/**
- * Render the production document-body Factory over a body-slot callback; the
- * navigator Factories mark their positions.
- * @param body - the Factory's `sidebar.right.tab.document` renderer.
- * @param definitions - registry snapshot the Factory names an unavailable renderer from.
- * @returns a `renderFactorySlot` for TextPreview.
- */
-export function documentSlots(body: BodySlot, definitions: readonly DocumentPreviewDefinition[] = []): TextPreviewProps['renderFactorySlot'] {
-  return (name: string, input: unknown) => name === 'sidebar.right.document.body'
-    ? createElement(DocumentViewer, {
-      ...input as DocumentBodyInput, renderSlot: body, t,
-      useDocumentPreviews: <S>(select: (value: readonly DocumentPreviewDefinition[]) => S): S => select(definitions),
-    } as FactoryComponentPropsOf<'sidebar.right.document.body'>)
-    : createElement('div', { 'data-navigator-factory': name })
+/** Preserve the body-slot callback used by component fixtures. */
+export function documentSlots(body: BodySlot): TextPreviewProps['renderSlot'] {
+  return (name: string, owner: unknown, options?: unknown) => name === 'sidebar.right.tab.document'
+    ? body(name, owner as Parameters<BodySlot>[1], options as Parameters<BodySlot>[2])
+    : null
 }
 
 export const TAB_ID = 'tab-1' as TabId
@@ -155,15 +141,16 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   onTestFinished(() => { controller.abort() })
   const tabActions = { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab: vi.fn(), close: vi.fn(), replace: vi.fn() }
   const definitions = [textBodyDefinition(() => t('viewer.text'))]
-  // The document body renders the plain body; other positions mark their input.
-  const body: BodySlot = (_key, owner, opts) => createElement(TextBody, {
-    ...owner, useTabInfo: opts.hookContext, sessionId: SESSION, useResource,
-  } as DocumentPreviewProps)
-  const renderSlot: TextPreviewProps['renderSlot'] = (key: string, owner: unknown) =>
-    key === 'sidebar.right.tab.document.action' ? null : createElement('div', {
-      'data-slot': key,
-      'data-slot-path': (owner as { absolutePath: string }).absolutePath,
-    })
+  // The document slot renders the plain body; other positions mark their input.
+  const renderSlot: TextPreviewProps['renderSlot'] = (key: string, owner: unknown, opts?: { hookContext?: unknown }) =>
+    key === 'sidebar.right.tab.document'
+      ? createElement(TextBody, {
+        ...owner as object, useTabInfo: opts?.hookContext, sessionId: SESSION, useResource,
+      } as DocumentPreviewProps)
+      : key === 'sidebar.right.tab.document.action' ? null : createElement('div', {
+        'data-slot': key,
+        'data-slot-path': (owner as { absolutePath: string }).absolutePath,
+      })
   const props = (navigation: { params?: unknown; revision: number } = { revision: 1 }) => ({
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
@@ -187,7 +174,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     addResource: face.addResource, setResources: face.setResources,
     useDocumentPreviews: () => definitions,
     renderSlot,
-    renderFactorySlot: documentSlots(body, definitions),
+    renderFactorySlot: (key: string) => createElement('div', { 'data-navigator-factory': key }),
     t,
   }) as TextPreviewProps
   return {

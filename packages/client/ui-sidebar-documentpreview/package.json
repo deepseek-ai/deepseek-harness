@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
-  "description": "Extensible Sidebar previews for Office documents, spreadsheets, Markdown, code, images, PDF, HTML, and plain text, from workspace files or in-memory content",
+  "description": "Extensible Sidebar previews for Office documents, spreadsheets, Markdown, code, images, PDF, HTML, and plain text",
   "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
@@ -91,9 +91,7 @@
     "yaml": "^2.9.0",
     "@deepseek-ai/dsh-client-ui-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
-    "@deepseek-ai/dsh-client-config": "workspace:*",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-util-crypto": "workspace:*"
+    "@deepseek-ai/dsh-client-config": "workspace:*"
   },
   "files": [
     "locale/*.json",

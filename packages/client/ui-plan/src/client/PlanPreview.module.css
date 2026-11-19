@@ -21,9 +21,8 @@
   transition: background-color 120ms ease;
 }
 @media (hover: hover) {
-  .card:hover:not(:disabled) { background: var(--plan-card-hover); }
+  .card:hover { background: var(--plan-card-hover); }
 }
-.card:disabled { cursor: default; opacity: 0.4; }
 .card:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
 .cardIcon { box-sizing: border-box; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-card-tile-fill); }
 .cardDetails { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
@@ -32,7 +31,13 @@
 .cardOpen { box-sizing: border-box; display: inline-flex; flex: none; align-items: center; height: 28px; padding: 4px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-button-floating-fill); font-size: 12px; line-height: 18px; }
 .reviewLink { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; cursor: pointer; }
 @media (hover: hover) {
-  .reviewLink:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+  .reviewLink:hover { color: var(--dsw-alias-label-primary); }
 }
-.reviewLink:disabled { cursor: default; color: var(--dsw-alias-label-quaternary); }
 .reviewLink:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
+.preview { position: relative; height: 100%; overflow: auto; padding: 20px 24px 40px; box-sizing: border-box; }
+.document { color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
+.message { padding: 24px; color: var(--dsw-alias-label-secondary); font-size: 14px; }
+.titleIcon { flex: none; }
+@media (max-width: 767px) {
+  .preview { padding: 16px 18px 32px; }
+}

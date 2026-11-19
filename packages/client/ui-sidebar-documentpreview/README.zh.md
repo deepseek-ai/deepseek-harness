@@ -1,5 +1,5 @@
 ---
-description: "右侧 Sidebar 的文档预览：共享文件加载与控件，可选 Markdown、代码、图片、PDF、Office 和 HTML 渲染器，以纯文本兜底，并为内存内容提供内容预览。"
+description: "右侧 Sidebar 的文档预览：共享文件加载与控件，可选 Markdown、代码、图片、PDF、Office 和 HTML 渲染器，并以纯文本兜底。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在右侧 Sidebar 预览文件，并切换已注册的渲染器。Markdown 和代码支持分页文本；PDF、HTML、常见图片和表格接收完整字节；未知扩展名使用纯文本。Word 与 PowerPoint 文档在本地转换为 PDF；表格在浏览器内打开。tab 提供文件状态、渲染器选择、换行以及自动或手动重新载入。插件可在头部和不支持预览的空态中添加本地打开控件。本包中的「文档」指工作区文件或内存内容：[内容预览](#content-previews)用同一批渲染器显示 compact 摘要、计划等内容。
+在右侧 Sidebar 预览文件，并切换已注册的渲染器。Markdown 和代码支持分页文本；PDF、HTML、常见图片和表格接收完整字节；未知扩展名使用纯文本。Word 与 PowerPoint 文档在本地转换为 PDF；表格在浏览器内打开。tab 提供文件状态、渲染器选择、换行以及自动或手动重新载入。插件可在头部和不支持预览的空态中添加本地打开控件。
 
 ## 目录
 
@@ -19,7 +19,6 @@ kind: "package-reference"
 - [Excel 预览](#excel-preview)
 - [Office 预览](#office-preview)
 - [导航](#navigation)
-- [内容预览](#content-previews)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -29,13 +28,15 @@ kind: "package-reference"
 <a id="what-it-registers"></a>
 ## 注册了什么
 
+压缩摘要标签显示所选聊天行提供的 Markdown。刷新页面后临时正文失效，从原行重新打开即可再次读取对应事件。
+
 图片拖放回调通过图片入口的注入接口从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。
 
 - **类型** —— `ctx.sidebarRightTabs.register(...)`，id 为 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview`（这个实现在 tab 系统中的身份，也是其正文注册所用的键），kind `text`，匹配完整文件资源地址的 pattern，档位 `fallback`。`canOpen` 只接受 Session 地址，其中路径可为相对或绝对路径；不认领裸 `absolute` 地址。在 `extension` 或 `builtin` 档以更窄 pattern（比如 `*.png`）注册的类型接走那些地址；其他受支持文件落到这里。整个地址就是内容身份，所以不同目录下同名的两个文件、或同一路径在两个会话之下，是两个 tab；解码后的 basename 是 tab 标题，keyed slot `sidebar.right.pane.tab.title` 会在标题前放置按扩展名选择的 `FileTypeIcon`。
 - **正文** —— keyed slot `sidebar.right.pane.tab`，键为类型的 id。固定头部在可用时显示 Host 的绝对路径，否则显示请求路径；共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 弱化目录颜色，以左侧渐隐保留被裁剪路径的尾部字符，并在悬停时展示完整值。有多个受支持的渲染器时才显示下拉菜单。仅文本兼容的源文件提供纯文本选项；只有一个渲染器时不显示查看器控件。已知的二进制容器后缀没有注册渲染器时，在路径头部下方显示文件类型图标和不支持预览的说明，并且不会发起读取。两个 Session 作用域的 list 子 slot 在文件元数据报出 Host 路径后把当前文件交给其他插件，owner prop 为 `absolutePath`：`sidebar.right.tab.document.actions` 在每个显示头部的状态里渲染在头部自有控件之后、导航栏开关之前，位置在各状态间相同，因此状态切换时不会重新挂载；`sidebar.right.tab.document.unpreviewable` 渲染在不支持预览的空态里，以及可读但本预览无法渲染的文件（`not-text`、`too-large`）的空态里，占据原本放重试的位置；载体或未分类的读取失败仍保留重试，不存在或非普通文件的路径只给说明。两者已发布的占位者都是 [`ui-open-in-app`](../ui-open-in-app/README.zh.md)。预览直接渲染 [`ui-sidebar-files`](../ui-sidebar-files/README.zh.md#the-navigator) 的 Session 作用域 Factory：`sidebar.files.navigator` 位于内容行的正文之后（该行带有 `data-files-navigator-row`），传入 `{ useTabInfo, page: false, onOpen }`，其中 `onOpen(address)` 调用 `tab.actions.openResource(address, { replaceTab: true })`；`sidebar.files.navigator.toggle` 位于头部末端，传入 `{ useTabInfo }`。两者在停靠与浮动分栏中从加载到完成保持挂载；未注册的 Factory 不绘制内容。导航栏在内容行的定位框与层叠上下文内决定宽度，让正文变窄或覆盖正文，不遮挡浮窗缩放手柄。自行处理 Escape 的渲染器浮层需调用 `preventDefault()`，避免同时关闭导航栏。仅当所选渲染器声明 `wrap: true` 时显示换行开关；图标表示点击后切换到的模式，该偏好按 tab 保存，初始开启。重新载入仍在此头部，不放入 Sidebar 的 tab 条。自动刷新默认开启；独立开关暂时隐藏，状态、文案、样式与切换逻辑保留。正文贴合格的每条边，各渲染器自行提供内容留白，并可拥有内部滚动区。这与文件树右侧预留 2px 滚动条间距的布局有意不同：Preview 使用格的完整宽度，使贴边 HTML 与代码滚动区终止于格的边缘。
 - **共享加载与视图状态**，会话作用域、按 tab id 分桶。store 持有累计页或完整字节、读取与观察版本、待处理 Resource 变化、自动刷新状态、加载/失败状态、渲染器选择、滚动位置、换行和已响应的导航 revision。普通 inject face 调用 Remote 读取，并经声明的 store action 写入。重新载入和加载模式变化会淘汰旧请求；tab 的中止信号清理其状态。
 
-文档实现在 `ctx.documentPreviews.register({ id, extensions, binaryExtensions?, mediaTypes?, priority, title, loading, wrap?, sourceLines? })` 注册元数据，并以相同 `id` 向 keyed、Session 作用域的 slot `sidebar.right.tab.document` 注册正文。Session 作用域的 Component Factory `sidebar.right.document.body` 持有该 slot：tab 类型通过 `renderFactorySlot('sidebar.right.document.body', { rendererId, useTabInfo, ...owner })` 渲染一次渲染器 occurrence，Factory 按 `rendererId` 分发；没有注册正文时，以实现的标题提示其不可用，定义也已移除时改用其 id。`mediaTypes` 让非文件内容通过 `ctx.documentPreviews.mediaTypeCandidates(mediaType)` 选择实现：匹配忽略参数与大小写，先排 `extension` 再排 `builtin`，随后按注册顺序；文件预览只按后缀选择。Markdown 声明 `text/markdown`，纯文本声明 `text/plain`；`register` 拒绝在 `loading: 'renderer'` 实现上声明 `mediaTypes`，因为这类正文自己读取文件。`binaryExtensions` 列出 `extensions` 中不可按文本阅读的后缀，这些后缀不提供纯文本选项。`sourceLines` 声明 `text-pages` 正文为[导航](#navigation)提供源码行锚点。两处注册都由 effect 持有，通过 `ctx.slots.inject` 等待该 slot，其生命周期跟随 Factory 注册。正文接收 `resourceAddress`（tab 的内容地址，只有文件预览中才是文件地址）、可选的 `baseAddress`（相对引用据此解析；文件预览中为文件地址，没有基准的内容省略）、`content`、`wrap`、`scrollportRef`、`addResource`、`setResources` 和标准 `useTabInfo`/`useResource` 钩子。依赖成员由 tab 持有的 `ResourceGroup` 管理；替换依赖始终保留根 Resource。内部滚动元素挂载 `scrollportRef`；卸载时恢复共享正文的滚动职责。注册表保留所有匹配备选：`extension`（默认）优先于 `builtin`，随后按更长的后缀、再按注册顺序排列。所选实现仍可用时，下拉选择保持不变。HTML、SVG 和未匹配的扩展名保留纯文本回退，与加载方式无关。
+文档实现在 `ctx.documentPreviews.register({ id, extensions, binaryExtensions?, priority, title, loading, wrap?, sourceLines? })` 注册元数据，并以相同 `id` 向 keyed、Session 作用域的子 slot `sidebar.right.tab.document` 注册正文。`binaryExtensions` 列出 `extensions` 中不可按文本阅读的后缀，这些后缀不提供纯文本选项。`sourceLines` 声明 `text-pages` 正文为[导航](#navigation)提供源码行锚点。两处注册都由 effect 持有，通过 `ctx.slots.inject` 等待子 slot。正文接收 `resourceAddress`、`content`、`wrap`、`scrollportRef`、`addResource`、`setResources` 和标准 `useTabInfo`/`useResource` 钩子。依赖成员由 tab 持有的 `ResourceGroup` 管理；替换依赖始终保留根 Resource。内部滚动元素挂载 `scrollportRef`；卸载时恢复共享正文的滚动职责。注册表保留所有匹配备选：`extension`（默认）优先于 `builtin`，随后按更长的后缀、再按注册顺序排列。所选实现仍可用时，下拉选择保持不变。HTML、SVG 和未匹配的扩展名保留纯文本回退，与加载方式无关。
 
 `loading: 'text-pages'` 和 `'bytes-complete'` 使用共享文件读取器。选择 `'renderer'` 时，所选正文在读取任何字节前挂载，并接收 `content: { kind: 'renderer', revision, loaded, failed, reload }`。其注入 face 负责内容加载、错误、store 更新和取消。`loaded(version)` 记录已展示的源版本并结束加载。`failed()` 结束加载但不记录成功版本，使后续文件变化可以重试；已被替换的 revision 所发出的报告会被忽略。`reload()` 增加 revision，正文据此取消并替换当前请求。正文也在卸载和 tab 关闭时取消请求，将已完成内容保留在自己声明的 tab store 中，并在 tab 结束时释放。[Office 预览](#office-preview) 使用此模式，转换后的字节和字体元数据不会进入共享文件 store。
 
@@ -44,7 +45,7 @@ kind: "package-reference"
 
 tab 使用 `fileAddressFor` 构造的 Session 地址，携带相对或绝对路径。路由在地址及其内容身份中保留 `.` 与 `..` 路径段，由 Host 解析。`hostFileOf(address)` 仅从地址取得 Session，不接收外部 Session 参数，也不借用当前或 Tab Session。Host 通过 Session 文件系统解析文件及关联路径，由该后端控制读取权限。任何 UI（包括 Global 组件）都共享同一完整地址的元数据。[Workspace Files README](../../api/workspace-files/README.zh.md) 定义这些规则；渲染器选择不改变导航地址。
 
-全部文本分页加载完成后，Markdown 图片通过已鉴权的 `/api/file` 路由读取绝对文件路径，以及相对于源文档所在目录的路径。相对图片等待 Host 返回 `baseAddress` 文件的绝对路径，没有 `baseAddress` 时不解析；此时 HTML 也不读取相对依赖。URL 转义只解码一次；查询参数与片段后缀不计入文件名。HTTP(S) 图片保留原始 URL，加载失败的图片显示 alt 文本。本地图片要求应用基址为 HTTP(S) URL；图片文件不加入自动刷新依赖。
+全部文本分页加载完成后，Markdown 图片通过已鉴权的 `/api/file` 路由读取绝对文件路径，以及相对于源文档所在目录的路径。相对图片等待 Host 返回文档绝对路径。URL 转义只解码一次；查询参数与片段后缀不计入文件名。HTTP(S) 图片保留原始 URL，加载失败的图片显示 alt 文本。本地图片要求应用基址为 HTTP(S) URL；图片文件不加入自动刷新依赖。
 
 <a id="how-it-reads"></a>
 ## 怎么读
@@ -132,17 +133,6 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 
 文档路径标签提供文件[右键菜单](../ui-context-menu/README.zh.md)，保留选中行号与当前窗格。
 
-<a id="content-previews"></a>
-## 内容预览
-
-非工作区文件内容通过 `ctx.sidebarRight.openContent({ mediaType, text }, { title, key?, destination? })` 打开；也可以用 `bytes` 替代 `text`。调用会直接打开共享侧栏，`destination: 'float'` 使用共享浮窗。稳定的 `key` 会复用预览并替换输入；省略它则创建新预览。需要隔离不同会话时，调用方应把会话和来源标识包含在 key 中。
-
-`content` 标签通过临时导航参数接收正文和标题，生命周期由侧栏管理，服务不另存正文缓存或资源流。刷新浏览器只恢复标签标识，正文参数会丢失并显示内容已过期，请从原卡片重新打开。私有 `content-preview` 地址仅用于定位导航目标，不是可读取的资源协议。
-
-标签按媒体类型选择渲染器，并使用共享 `sidebar.right.document.body` Factory。它复用文件预览的渲染器菜单和换行控件，按标签保存滚动位置与渲染器选择，关闭标签时释放状态。文本转换为完整文本页；字节和文本按渲染器加载模式解码或编码。内容预览省略 `baseAddress`，因此不会解析工作区相对引用。不支持的媒体类型会显示明确说明。
-
-计划和压缩摘要使用通用正文标签，该标签将 `{ title, content, useTabInfo }` 传给 `sidebar.right.document.body`，以显示 Markdown。只有可以切换渲染器或调整换行时才显示工具栏。文件标签向同一个 Factory 传入 `rendererId` 和已加载的文档，保留自己的文件工具栏。标题来自最新导航输入，刷新后回退到已记录的标题，正文区域和标签使用同一标题。
-
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -163,9 +153,6 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 - **本地 HTML 依赖集合有限。** 只打包直接引用的经典 `.js` 脚本和 `.css` 样式表。浏览器解析的资源仍受浏览器源与网络规则限制；iframe 不获得运行时文件读取桥接。
 - **滚动写入未节流。** 除布局夹紧外，每次滚动事件都把偏移记进 store；行块已 memo 化，于是由此引发的重渲染交还给 React 的是同一批元素。
 - **PDF chunk 加载失败后需要刷新页面。** React 会在页面生命周期内缓存被拒绝的 lazy import；已加载正文中的普通 PDF 打开或渲染失败仍可重试。
-- **内容在标签页打开期间驻留内存。** 通过 `ctx.sidebarRight.openContent` 打开的内容作为标签页的导航输入传递；关闭标签页即删除，窗口层面没有另外保留副本的存储。每次不带 `key` 的打开都会新建标签页，因此反复打开大内容时，每个打开的标签页各保留一份副本。
-- **窗口地址在刷新后失效。** 刷新后恢复的内容标签显示「已过期」，需要从来源重新打开内容。
-- **内容没有基准地址。** 内容预览中的 Markdown 图片等相对引用不会被解析。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -59,7 +59,7 @@ export type { GuideBodyProps, GuideInjected } from './tabs/guide/GuideBody.tsx'
 export type { ExpandButtonProps } from './shell/ExpandButton.tsx'
 export type { SidebarRightState, SurfaceState } from './stores.ts'
 export type {
-  ContentPreviewOptions, ISidebarRight, SidebarRightOpenResourceOptions, SidebarRightOpenTabOptions,
+  ISidebarRight, SidebarRightOpenResourceOptions, SidebarRightOpenTabOptions,
   SidebarRightPlacement, SidebarRightCloseHandler, SurfaceActions,
 } from './service.ts'
 export type {
@@ -72,7 +72,7 @@ export type {
   SidebarRightGuideActionEntry, SidebarRightGuideActionsOwnerProps,
 } from './contract/slots.ts'
 export type {
-  PreviewContent, SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightResourceParamsMap,
+  SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightResourceParamsMap,
   SidebarRightTabParams, SidebarRightTabParamsFor, SidebarRightTabParamsMap,
 } from './contract/params.ts'
 // The layout ids and rectangle the navigation face takes, so a caller needs no import from the kit.

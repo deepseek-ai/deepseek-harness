@@ -12,7 +12,9 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { PlanCards, PlanReviewOpen } from '../src/client/PlanCard.tsx'
-import { submittedPlan } from '../src/client/plan.ts'
+import { PlanPreview, PlanTitle } from '../src/client/PlanPreview.tsx'
+import { planAddress, parsePlanAddress, submittedPlan } from '../src/client/plan.ts'
+import { reviewPreviewAddress, isReviewPreviewAddress } from '../src/client/review-preview.ts'
 import { planDefinition } from '../src/client/plan-definition.ts'
 import { createPlanReviewStore } from '../src/client/review-store.ts'
 
@@ -27,17 +29,11 @@ function planHook(plans: readonly typeof plan[]): Parameters<typeof PlanCards>[0
   const source = createSnapshotStore(plans)
   return keyedObservableHook(() => source) as Parameters<typeof PlanCards>[0]['usePlans']
 }
-/** A bound boolean selector hook reading one value, such as `usePreviewAvailable`. */
-function flagHook(read: () => boolean) {
-  return <S,>(select: (value: boolean) => S): S => select(read())
-}
-const previewLoaded = flagHook(() => true)
 /** The opener's props share; each test supplies the on-screen Session hook beside it. */
 function reviewProps(review: { plan: string; callId?: typeof plan.callId }, openReview: Mock, store: ReturnType<ReturnType<typeof createPlanReviewStore>['create']>) {
-  const base = { review, requestKey: 'question:1', t, openReview, actions: store.actions,
+  return { review, requestKey: 'question:1', t, openReview, actions: store.actions,
     useStore: (select: (state: ReturnType<typeof store.getSnapshot>) => unknown) => select(store.getSnapshot()),
   } as unknown as Parameters<typeof PlanReviewOpen>[0]
-  return { ...base, usePreviewAvailable: previewLoaded }
 }
 /** A bound `useSidebarMounted` reading one on-screen Session value. */
 function seatHook(read: () => SessionId | undefined) {
@@ -65,7 +61,17 @@ describe('submitted plan identity', () => {
   ])('leaves malformed or unrelated input to its existing renderer: %j', (event) => {
     expect(submittedPlan(event)).toBeUndefined()
   })
-
+  it('round-trips opaque identifiers and refuses malformed addresses', () => {
+    expect(parsePlanAddress(planAddress(target))).toEqual(target)
+    for (const mode of ['one-shot', 'continuable'] as const) {
+      const child = { session: { kind: 'subagent' as const, parentSessionId: target.session.sessionId, childSessionId: 'child / 中文' as SessionId, mode }, callId: plan.callId }
+      expect(parsePlanAddress(planAddress(child))).toEqual(child)
+    }
+    for (const address of ['file:///plan.md', 'dsh-resource://plan/s/c/extra', 'dsh-resource://plan/s/%XX', 'dsh-resource://plan/s/c?text=x',
+      'dsh-resource://plan//c', 'dsh-resource://plan/subagent/p/c/invalid/call', 'dsh-resource://plan/subagent/p/c/one-shot']) {
+      expect(parsePlanAddress(address)).toBeUndefined()
+    }
+  })
   it('keeps a settled PTC update correlated with its existing card', () => {
     expect(planDefinition.match(call as never)).toEqual({ id: plan.callId, role: 'start' })
     const event = { type: 'tool/ptc-dispatch', data: { name: 'exit_plan_mode', subCallId: plan.callId, arguments: { plan: markdown } } }
@@ -116,7 +122,7 @@ it('projects native and PTC submissions into their resolved turns without duplic
   expect(snapshot.nodes.values()).toHaveLength(3)
   const props = { turn: { turn: 1 },
     usePlans: keyedObservableHook(turn => snapshot.nodes.turnDataSource(Number(turn), 'submitted-plan')) as Parameters<typeof PlanCards>[0]['usePlans'],
-    t, openPlan: vi.fn(), usePreviewAvailable: previewLoaded,
+    t, openPlan: vi.fn(),
   } as Parameters<typeof PlanCards>[0]
   const view = render(<PlanCards {...props} />)
   expect(view.container.querySelectorAll('[data-plan-card]')).toHaveLength(2)
@@ -149,7 +155,7 @@ it('updates plan cards only for their Turn’s plan data and preserves invocatio
   const changed = vi.fn()
   const unsubscribe = source.subscribe(changed)
   const props = {
-    turn: turn(1), t, openPlan: vi.fn(), usePreviewAvailable: previewLoaded,
+    turn: turn(1), t, openPlan: vi.fn(),
     useChat: () => { throw new Error('PlanCards must not subscribe to the complete Chat') },
     usePlans: keyedObservableHook(key => store.turnDataSource(Number(key), 'submitted-plan')),
   } as Parameters<typeof PlanCards>[0]
@@ -178,7 +184,7 @@ it('updates plan cards only for their Turn’s plan data and preserves invocatio
     expect(screen.getAllByRole('button').map(button => button.getAttribute('data-plan-card')))
       .toEqual(['Earlier plan', 'First plan', 'Second plan'])
     fireEvent.click(screen.getAllByRole('button')[0]!)
-    expect(props.openPlan).toHaveBeenCalledWith(earlier.data)
+    expect(props.openPlan).toHaveBeenCalledWith(earlier.data.callId)
 
     act(() => {
       builder.apply({ upserts: [{ ...first, location: { kind: 'turn', turn: turn(2) } }], timeline })
@@ -196,19 +202,19 @@ it('updates plan cards only for their Turn’s plan data and preserves invocatio
   }
 })
 
-describe('plan entry points', () => {
+describe('plan entry points and document', () => {
   it('opens the exact persistent card in either locale', () => {
     for (const dictionary of [en, zh]) {
       const openPlan = vi.fn()
       const props = { turn: { turn: 1 }, usePlans: planHook([plan]), seq: 30,
-        t: makeTranslate(dictionary, commonEn), openPlan, usePreviewAvailable: previewLoaded,
+        t: makeTranslate(dictionary, commonEn), openPlan,
       } as Parameters<typeof PlanCards>[0]
       const view = render(<PlanCards {...props} />)
       expect(openPlan).not.toHaveBeenCalled()
       expect(screen.getByText(dictionary['preview.action'])).toBeTruthy()
       expect(screen.queryByText('Implement')).toBeNull()
       fireEvent.click(screen.getByRole('button'))
-      expect(openPlan).toHaveBeenCalledWith(plan)
+      expect(openPlan).toHaveBeenCalledWith(plan.callId)
       expect(screen.getByText(plan.title)).toBeTruthy()
       view.unmount()
     }
@@ -217,15 +223,13 @@ describe('plan entry points', () => {
     const revised = { ...plan, callId: 'call:2' as typeof plan.callId, title: 'Second plan' }
     const plans = [plan, revised, { ...revised, callId: 'call:3' as typeof plan.callId }]
     const openPlan = vi.fn()
-    const props = {
-      turn: { turn: 1 }, usePlans: planHook(plans), t, openPlan, usePreviewAvailable: previewLoaded,
-    } as Parameters<typeof PlanCards>[0]
+    const props = { turn: { turn: 1 }, usePlans: planHook(plans), t, openPlan } as Parameters<typeof PlanCards>[0]
     const view = render(<PlanCards {...props} />)
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
       expect.stringContaining(plan.title), expect.stringContaining(revised.title), expect.stringContaining(revised.title),
     ])
     fireEvent.click(screen.getAllByRole('button')[1]!)
-    expect(openPlan).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call:2' }))
+    expect(openPlan).toHaveBeenCalledWith('call:2')
     view.rerender(<PlanCards {...{ ...props, usePlans: planHook([]) }} />)
     expect(view.container.innerHTML).toBe('')
   })
@@ -277,47 +281,64 @@ describe('plan entry points', () => {
     view.rerender(<PlanReviewOpen {...props} />)
     expect(openReview).toHaveBeenCalledTimes(2)
   })
-  it('disables the plan cards while content previews are unavailable', () => {
-    let available = false
-    const openPlan = vi.fn()
-    const props = {
-      turn: { turn: 1 }, usePlans: planHook([plan]), t, openPlan, usePreviewAvailable: flagHook(() => available),
-    } as Parameters<typeof PlanCards>[0]
-    const view = render(<PlanCards {...props} />)
-    const card = screen.getByRole('button', { name: `Open plan: ${plan.title}` })
-    expect((card as HTMLButtonElement).disabled).toBe(true)
-    expect(card.getAttribute('title')).toBe(en['preview.unavailable'])
-    fireEvent.click(card)
-    expect(openPlan).not.toHaveBeenCalled()
-    available = true
-    view.rerender(<PlanCards {...props} />)
-    expect((card as HTMLButtonElement).disabled).toBe(false)
-    expect(card.getAttribute('title')).toBeNull()
-    fireEvent.click(card)
-    expect(openPlan).toHaveBeenCalledExactlyOnceWith(plan)
+  it('renders temporary Markdown and reports expired navigation after reload', () => {
+    const address = reviewPreviewAddress(target.session.sessionId, 'window:question:1')
+    expect(isReviewPreviewAddress(address)).toBe(true)
+    expect(isReviewPreviewAddress(planAddress(target))).toBe(false)
+    const props = { t, useResource: () => ({ status: 'none' }),
+      useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address, params: { planReview: { title: plan.title, markdown } } } } }),
+    }
+    const view = render(<PlanPreview {...props as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('heading', { name: plan.title })).toBeTruthy()
+    expect(screen.getByText('Implement')).toBeTruthy()
+    view.rerender(<PlanTitle {...props as unknown as Parameters<typeof PlanTitle>[0]} />)
+    expect(screen.getByText(plan.title)).toBeTruthy()
+    view.rerender(<PlanPreview {...{ ...props,
+      useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address } } }),
+    } as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('status').textContent).toBe(en['preview.expired'])
+    view.rerender(<PlanTitle {...{ ...props,
+      useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address } } }),
+    } as unknown as Parameters<typeof PlanTitle>[0]} />)
+    expect(screen.getByText('Plan')).toBeTruthy()
+    view.rerender(<PlanPreview {...{ ...props,
+      useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address, params: { line: 2 } } } }),
+    } as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('status').textContent).toBe(en['preview.expired'])
   })
-  it.each([true, false])('disables the review opener and defers the automatic open until content previews load (logged: %s)', (logged) => {
-    let available = false
-    const openReview = vi.fn()
-    const store = createPlanReviewStore().create()
-    const review = { plan: markdown, ...(logged ? { callId: plan.callId } : {}) }
-    const props = { ...reviewProps(review, openReview, store),
-      useSidebarMounted: seatHook(() => target.session.sessionId), usePreviewAvailable: flagHook(() => available) }
-    const view = render(<PlanReviewOpen {...props} />)
-    const opener = screen.getByRole('button', { name: 'Open plan in sidebar' })
-    expect((opener as HTMLButtonElement).disabled).toBe(true)
-    expect(opener.getAttribute('title')).toBe(en['preview.unavailable'])
-    fireEvent.click(opener)
-    expect(openReview).not.toHaveBeenCalled()
-    expect(store.getSnapshot().opened).toEqual({})
-    available = true
-    view.rerender(<PlanReviewOpen {...props} />)
-    expect((opener as HTMLButtonElement).disabled).toBe(false)
-    expect(opener.getAttribute('title')).toBe(en['preview.open'])
-    expect(openReview).toHaveBeenCalledExactlyOnceWith(review, 'question:1')
-    available = false
-    view.rerender(<PlanReviewOpen {...props} />)
-    expect((opener as HTMLButtonElement).disabled).toBe(true)
-    expect(openReview).toHaveBeenCalledTimes(1)
+  it('shows restored Markdown and its heading as the tab title', () => {
+    const props = {
+      t, useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address: planAddress(target) } } }),
+      useResource: () => ({ status: 'live', value: plan }),
+    }
+    render(<PlanPreview {...props as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('heading', { name: plan.title })).toBeTruthy()
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    cleanup()
+    render(<PlanTitle {...props as unknown as Parameters<typeof PlanTitle>[0]} />)
+    expect(screen.getByText(plan.title)).toBeTruthy()
+  })
+  it('keeps a tab label while history loads', () => {
+    const props = { useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address: planAddress(target) } } }), useResource: () => ({ status: 'loading' }) }
+    render(<PlanTitle {...props as unknown as Parameters<typeof PlanTitle>[0]} />)
+    expect(screen.getByText('Plan')).toBeTruthy()
+  })
+  it.each([en, zh])('localizes plan failures and unavailable providers', (dictionary) => {
+    const props = { t: makeTranslate(dictionary, commonEn),
+      useTabInfo: () => ({ tab: { title: 'Plan', navigation: { address: planAddress(target) } } }),
+    }
+    const view = render(<PlanPreview {...{ ...props, useResource: () => ({ status: 'loading' }) } as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('status').textContent).toBe(dictionary['preview.loading'])
+    view.rerender(<PlanPreview {...{ ...props, useResource: () => ({ status: 'none' }) } as unknown as Parameters<typeof PlanPreview>[0]} />)
+    expect(screen.getByRole('status').textContent).toBe(dictionary['preview.unavailable'])
+    for (const [code, message] of [
+      ['plan/invalid-address', dictionary['preview.invalidAddress']],
+      ['plan/not-found', dictionary['preview.notFound']],
+      ['plan/read-failed', 'connection lost'],
+      ['session/not-found', 'connection lost'],
+    ] as const) {
+      view.rerender(<PlanPreview {...{ ...props, useResource: () => ({ status: 'failed', failure: { code, message: 'connection lost' } }) } as unknown as Parameters<typeof PlanPreview>[0]} />)
+      expect(screen.getByRole('status').textContent).toBe(dictionary['preview.failed'] + message)
+    }
   })
 })

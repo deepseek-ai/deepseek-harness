@@ -1,11 +1,6 @@
-/**
- * Document renderer slot and its dispatching Factory: the owner supplies shared
- * content state, renderers own their presentation.
- */
-import type { ContentPreviewInjected } from '../content/face.ts'
-import type { ContentPreviewStore } from '../content/store.ts'
+/** Document renderer slot: the owner supplies shared file state, renderers own their presentation. */
 import type { PropsRuntime, SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots'
-import type { PreviewContent, UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RefCallback } from 'react'
 
 /** One loaded text window, retaining source line positions. */
@@ -40,20 +35,8 @@ export interface DocumentBodyOwner {
   readonly addResource: (address: string) => void
   /** Replace this renderer's dependencies. @param addresses - complete file resource addresses. */
   readonly setResources: (addresses: readonly string[]) => void
-  /**
-   * The tab's content address. Only in a file preview is it a file resource
-   * address, readable through the standard useResource hook; implementations
-   * that resolve it as a file declare no `mediaTypes` and therefore render
-   * only in file previews.
-   */
+  /** Original file address, also readable through the standard useResource hook. */
   readonly resourceAddress: string
-  /**
-   * Address that relative references, such as Markdown images and HTML
-   * dependencies, resolve against. A file preview passes the file's resource
-   * address; content without a base omits it, and renderers then leave
-   * relative references unresolved.
-   */
-  readonly baseAddress?: string
   /** Ordinary file content or a renderer-owned loading request; text accumulates until eof. */
   readonly content: DocumentContent
   /** The document toolbar's current wrapping preference. */
@@ -62,35 +45,9 @@ export interface DocumentBodyOwner {
   readonly scrollportRef: RefCallback<HTMLElement>
 }
 
-/** One document renderer occurrence: the shared owner inputs, the implementation id, and the enclosing tab's reader. */
-export type DocumentBodyInput = DocumentBodyOwner & {
-  /** Registered implementation id, dispatched as the document slot's key. */
-  readonly rendererId: string
-  /** Enclosing tab's reader, forwarded to the document body as its hook context. */
-  readonly useTabInfo: UseSidebarRightTabInfo
-}
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface SlotFactoryMap {
-    /** A selected file renderer, or titled content with a shared toolbar and media-type renderer selection. */
-    'sidebar.right.document.body': {
-      scope: 'session'
-      props: DocumentBodyInput | { title: string; content: PreviewContent | undefined; useTabInfo: UseSidebarRightTabInfo }
-      children: {
-        'sidebar.right.tab.document': {
-          kind: 'keyed'
-          scope: 'session'
-          inject: { hooks: { tabInfo: SlotHookFactory<'sidebar.right.tab.document', UseSidebarRightTabInfo> } }
-        }
-      }
-      store: ContentPreviewStore
-      inject: ContentPreviewInjected
-      locale: 'sidebarDocumentPreview'
-    }
-  }
-
   interface SlotMap {
-    /** Document body selected by a registered implementation id; the `sidebar.right.document.body` Factory renders it. */
+    /** Document body selected by a registered implementation id. */
     'sidebar.right.tab.document': {
       kind: 'keyed'
       scope: 'session'

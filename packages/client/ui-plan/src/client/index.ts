@@ -1,4 +1,4 @@
-/** Plan controls and cards opening caller-supplied Markdown in the shared preview. */
+/** Plan-mode control, persistent Chat cards, and Session-backed sidebar previews. */
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -16,9 +16,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { PlanCards, PlanReviewOpen, type PlanCardsInjected, type PlanOpenInjected, type PlanReviewOpenInjected } from './PlanCard.tsx'
+import { PlanPreview, PlanTitle } from './PlanPreview.tsx'
 import { planDefinition } from './plan-definition.ts'
-import { planTitle } from './plan.ts'
+import { planResourceProvider } from './plan-resource.ts'
+import { planAddress, parsePlanAddress } from './plan.ts'
+import { isReviewPreviewAddress, reviewPreviewAddress } from './review-preview.ts'
 import { createPlanReviewStore } from './review-store.ts'
 import { PlanChip } from './PlanModeControl.tsx'
 import { en, ja, es, fr, de, ru, pt, zh, type PlanKey } from './locales.ts'
@@ -44,33 +48,33 @@ export interface PlanChipInjected {
   exitPlanMode: () => Promise<string | null>
 }
 
-/**
- * Services for plan controls, Conversation projection, and resource
- * navigation. Plan openers observe the registered content tab.
- */
-export const inject = ['slots', 'remote', 'remote.commands', 'sessions', 'locale', 'uiConversation', 'sidebarRight', 'sidebarRightTabs']
+/** Services for plan controls, Conversation projection, and resource navigation. */
+export const inject = ['slots', 'remote', 'remote.commands', 'remote.session', 'sessions', 'locale', 'uiConversation', 'resources', 'sidebarRight', 'sidebarRightTabs']
 
 /**
- * Register plan controls and cards, enabling openers while content previews are available.
+ * Register plan controls, permanent Chat cards, and sidebar document reading.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-plan: dictionaries')
 
   const previewId = '@deepseek-ai/dsh-client-ui-plan'
+  const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.uiConversation.events.register(planDefinition), 'ui-plan: conversation definition')
-  const previewAvailable = {
-    getSnapshot: () => ctx.sidebarRightTabs.get('content') !== undefined,
-    subscribe: (listener: () => void) => ctx.sidebarRightTabs.subscribe(listener),
-  }
+  ctx.effect(() => ctx.resources.register(planResourceProvider(ctx.remote.session)), 'ui-plan: resources')
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: previewId, kind: 'plan', patterns: ['dsh-resource://plan/**', 'dsh-resource://plan-review/**'], priority: 'builtin',
+    canOpen: address => parsePlanAddress(address) !== undefined || isReviewPreviewAddress(address),
+    title: () => t('preview.title'),
+  }), 'ui-plan: sidebar type')
   const open = (sessionId: SessionId): PlanOpenInjected => ({
-    openPlan: (plan) => {
-      if (!previewAvailable.getSnapshot()) return
-      ctx.sidebarRight.openContent({ mediaType: 'text/markdown', text: plan.markdown }, {
-        title: plan.title, key: `plan:${sessionId}:${plan.callId}`,
-      })
+    openPlan: (callId) => {
+      const child = ctx.sessions.subagentAddress(sessionId)
+      const session = child === undefined ? { kind: 'session' as const, sessionId } : { kind: 'subagent' as const, ...child }
+      ctx.sidebarRight.openResource(planAddress({ session, callId }))
     },
   })
+  const reviewWindow = randomUUID()
   const reviewStore = createPlanReviewStore()
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', id: previewId, locale: NS,
@@ -80,7 +84,6 @@ export function apply(ctx: ClientContext): void {
       const chat = ctx.uiConversation.binding(binding).target('chat')
       return {
         ...open(sessionId),
-        hooks: { previewAvailable },
         keyedHooks: {
           plans: (turn) => {
             const snapshot = chat.getSnapshot()
@@ -95,16 +98,20 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.plan-review.actions', id: previewId, locale: NS, store: reviewStore,
     inject: (sessionId: SessionId): PlanReviewOpenInjected => ({
       openReview: (review, requestKey) => {
-        if (!previewAvailable.getSnapshot()) return
-        // Reviews and logged plans share the same invocation key when one is available.
-        ctx.sidebarRight.openContent(
-          { mediaType: 'text/markdown', text: review.plan },
-          { title: planTitle(review.plan) ?? extractMarkdownPlainText(review.plan, { mode: 'first-line' }), key: review.callId === undefined ? `review:${sessionId}:${requestKey}` : `plan:${sessionId}:${review.callId}` },
-        )
+        if (review.callId !== undefined) { open(sessionId).openPlan(review.callId); return }
+        ctx.sidebarRight.openResource(reviewPreviewAddress(sessionId, `${reviewWindow}:${requestKey}`), {
+          params: { planReview: { markdown: review.plan, title: extractMarkdownPlainText(review.plan, { mode: 'first-line' }) } },
+        })
       },
-      hooks: { sidebarMounted: ctx.sidebarRight.mounted, previewAvailable },
+      hooks: { sidebarMounted: ctx.sidebarRight.mounted },
     }),
   }, PlanReviewOpen))
+  ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab', key: previewId, locale: NS,
+  }, PlanPreview))
+  ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab.title', key: previewId,
+  }, PlanTitle))
 
   ctx.slots.inject('conversation.input.plan', () => ctx.slots.register({
     name: 'conversation.input.plan',

@@ -18,8 +18,8 @@ import { TEXTPREVIEW_ID, TEXTPREVIEW_KIND } from '../src/client/definition.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { OfficeFontAction } from '../src/client/office/OfficeFontAction.tsx'
 import { OfficeBody } from '../src/client/office/OfficeBody.tsx'
+import { SummaryPreview, SummaryTitle } from '../src/client/SummaryPreview.tsx'
 import { TextPreview } from '../src/client/TextPreview.tsx'
-import type { ContentPreviewInjected } from '../src/client/content/face.ts'
 import { TextTitle } from '../src/client/TextTitle.tsx'
 import { TextBody } from '../src/client/text/TextBody.tsx'
 import { PLAIN_BODY_ID } from '../src/client/text/index.ts'
@@ -33,9 +33,6 @@ import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
-import { ContentPreview, DocumentViewer } from '../src/client/content/ContentPreview.tsx'
-import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
-import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 import type { textFace } from '../src/client/face.ts'
 import type { TextStore } from '../src/client/store.ts'
@@ -58,18 +55,10 @@ async function boot(values: SyncedConfigValues = { office: OFFICE_DEFAULTS, exce
   ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   ctx.provide('contextMenus', { open: vi.fn() } as never)
   ctx.provide('resources', createResources())
-  ctx.provide('sidebarRight', { openResource: vi.fn() } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   const tabs = new SidebarRightTabRegistry(ctx)
   const registered: Recorded[] = []
-  type FactoryOptions = { name: string; scope: string; locale?: string; children?: Record<string, unknown>; inject?: () => unknown }
-  const factories: { options: FactoryOptions; component: unknown }[] = []
   const slots = {
-    registerFactory: vi.fn((options: FactoryOptions, component: unknown) => {
-      const entry = { options, component }
-      factories.push(entry)
-      return () => { factories.splice(factories.indexOf(entry), 1) }
-    }),
     inject: vi.fn((_name: string, register: () => () => void) => register()),
     register: vi.fn((options: Omit<Recorded, 'component'>, component: unknown) => {
       const entry: Recorded = { ...options, component }
@@ -95,14 +84,15 @@ async function boot(values: SyncedConfigValues = { office: OFFICE_DEFAULTS, exce
   const fiber = ctx.plugin({ inject: [...inject], apply }, syncedConfig<DocumentPreviewConfig>(values))
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  return { ctx, tabs, registered, factories, dictionaries, fiber, read, readBytes }
+  return { ctx, tabs, registered, dictionaries, fiber, read, readBytes }
 }
 
 describe('ui-sidebar-documentpreview apply', () => {
   it('registers the type, its dictionaries, and the body and title seats under the type\'s id, the body with a store and a face', async () => {
-    const { ctx, tabs, registered, factories, dictionaries } = await boot()
+    const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')
     expect(tabs.get(TEXTPREVIEW_KIND)?.id).toBe(TEXTPREVIEW_ID)
+    expect(tabs.candidates('dsh-resource://content-preview/compaction%3As%2F7')[0]?.kind).toBe('compaction-summary')
     expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     // The seat key is the implementation's id, not the kind: an extension may
     // take the kind over, and the seat must still find this body.
@@ -119,21 +109,13 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
-      ['sidebar.right.pane.tab', CONTENTPREVIEW_ID, undefined, ContentPreview],
-      ['sidebar.right.pane.tab.title', CONTENTPREVIEW_ID, undefined, ContentTitle],
+      ['sidebar.right.pane.tab', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryPreview],
+      ['sidebar.right.pane.tab.title', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryTitle],
     ])
-    // Both services come from this plugin: renderers for every tab type, content sources for `content`.
-    expect(tabs.get('content')?.id).toBe(CONTENTPREVIEW_ID)
     expect(Object.keys(registered[0]!.children!)).toEqual([
-      'sidebar.right.tab.document.actions', 'sidebar.right.tab.document.unpreviewable', 'sidebar.right.tab.document.action',
+      'sidebar.right.tab.document', 'sidebar.right.tab.document.actions',
+      'sidebar.right.tab.document.unpreviewable', 'sidebar.right.tab.document.action',
     ])
-    // The document body Factory owns the renderer slot so other tab types can render it.
-    expect(factories.map(({ options, component }) => [options.name, options.scope, options.locale, component])).toEqual([
-      ['sidebar.right.document.body', 'session', 'sidebarDocumentPreview', DocumentViewer],
-    ])
-    expect(Object.keys(factories[0]!.options.children!)).toEqual(['sidebar.right.tab.document'])
-    const source = (factories[0]!.options.inject!() as ContentPreviewInjected).hooks.documentPreviews
-    expect(source.getSnapshot()).toBe(ctx.get('documentPreviews')?.getSnapshot())
     expect(registered[0]?.store).toBeDefined()
     expect(typeof registered[0]?.inject).toBe('function')
   })
@@ -151,13 +133,11 @@ describe('ui-sidebar-documentpreview apply', () => {
   })
 
   it('takes every registration back when the plugin is disposed', async () => {
-    const { ctx, tabs, registered, factories, dictionaries, fiber } = await boot()
+    const { tabs, registered, dictionaries, fiber } = await boot()
     await fiber.dispose()
     expect(tabs.get(TEXTPREVIEW_KIND)).toBeUndefined()
-    expect(tabs.get('content')).toBeUndefined()
-    expect(ctx.get('documentPreviews')).toBeUndefined()
+    expect(tabs.get('compaction-summary')).toBeUndefined()
     expect(registered).toEqual([])
-    expect(factories).toEqual([])
     expect(dictionaries.size).toBe(0)
   })
 

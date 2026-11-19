@@ -511,12 +511,18 @@
     "8a97553b9ca12038bcd1608c257cd797adf42df9bb6cb97dba4cd006da5dc433": 2,
     "f3204fe9ea06187b2048e93944d0c06535a489be7ddedfec1c4200c9f6d8dd30": 2
   },
-  "packages/client/ui-plan/tests/plan-card.client.spec.tsx": {
-    "3d9d4fce115bbdf1ad3ed4af51c49b19e7e1bcefefe25c373a7270dec8d73de3": 1,
-    "41f50f1679049edf1f4a18e936df5a2ceb2de04f1e43a4fad07d8e93578d2cc6": 1
-  },
   "packages/client/ui-plan/tests/plan-mode-control.client.spec.tsx": {
     "b1db56322d2f3e549d59e65fd4b0a61e7c5d959f9f9bdfa5157a33e3ed1f3e9b": 1
+  },
+  "packages/client/ui-plan/tests/plan-preview.client.spec.tsx": {
+    "3b2258b8a75570daf0fa8c497d23f274d8e414f35508a6275932c3806c4c4484": 1,
+    "3d9d4fce115bbdf1ad3ed4af51c49b19e7e1bcefefe25c373a7270dec8d73de3": 1,
+    "41f50f1679049edf1f4a18e936df5a2ceb2de04f1e43a4fad07d8e93578d2cc6": 1,
+    "53f1197af19938d444b06ebf666a8751240d0b5e5ea13edf6100316d1bc5ede2": 5,
+    "9bb8efa3dd59e674ef31f5af43d4aac13ca59d96dd418fe3bf07199c8963c31c": 2,
+    "bd4e8147a13bee681bd192d1558f4a79de23d5edeafb616e8acccd725465ef98": 1,
+    "e01c2c40d53d557b621628de47a0a6677e11b4f151fbefd865c97be99a7b6c48": 1,
+    "e69e0ec4368790661e1f7cae5c2059f757c213f0ebb0bd40ec23af982bc73d20": 1
   },
   "packages/client/ui-primitives/tests/highlight-viewport.client.spec.tsx": {
     "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1
@@ -551,6 +557,9 @@
   "packages/client/ui-settings/tests/schema.client.spec.ts": {
     "0584be4cde4cd33049ef7c02e9d1562a30ec48ef2176f2f22b328b5be2903407": 1
   },
+  "packages/client/ui-sidebar-documentpreview/tests/document-toolbar.client.spec.tsx": {
+    "fb9804cc2774409af6935d5a1369497b433c34cd9305cac88e3400eae0f70936": 1
+  },
   "packages/client/ui-sidebar-documentpreview/tests/failure-line.client.spec.ts": {
     "fd6a096d3e7b6ef3e57058b9246118020d10aab852ba64f3296ba07d9e8e7116": 1
   },
@@ -559,7 +568,8 @@
   },
   "packages/client/ui-sidebar-documentpreview/tests/html-body.client.spec.tsx": {
     "22b3974b8491b34e461c2800076ba37bdc78d803305e0a5152f7439b8393653e": 1,
-    "35eac0d83b9e2deeeaa8db085d1c9b2577255350e10e4d8b801846ae5a9aab3a": 2
+    "35eac0d83b9e2deeeaa8db085d1c9b2577255350e10e4d8b801846ae5a9aab3a": 2,
+    "fb9804cc2774409af6935d5a1369497b433c34cd9305cac88e3400eae0f70936": 1
   },
   "packages/client/ui-sidebar-documentpreview/tests/pdf-body.client.spec.tsx": {
     "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1,
@@ -580,7 +590,8 @@
     "9173285d1c600b0eeb00bc3f852d2e3c8c46ea83cd36488a422d5fd05194935a": 1
   },
   "packages/client/ui-sidebar-documentpreview/tests/text-preview.client.spec.tsx": {
-    "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1
+    "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1,
+    "fb9804cc2774409af6935d5a1369497b433c34cd9305cac88e3400eae0f70936": 2
   },
   "packages/client/ui-sidebar-documentpreview/tests/text-title.client.spec.tsx": {
     "1bbd18e22567ce0529d02b770533f9bda84ff379b161dda8b9548053a18a0e97": 1

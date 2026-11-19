@@ -19,16 +19,8 @@
 /** The values of a record, as one union. */
 type ValuesOf<T> = T[keyof T]
 
-/** Content owned by the open tab; bytes and text are not persisted in layout. */
-export type PreviewContent =
-  | { readonly mediaType: string; readonly text: string }
-  | { readonly mediaType: string; readonly bytes: Uint8Array<ArrayBuffer> }
-
 /** Resource type → the parameters a resource of that type accepts. Merge-extensible. */
-export interface SidebarRightResourceParamsMap {
-  /** Transient input supplied by sidebarRight.openContent for this navigation. */
-  'content-preview': { readonly previewContent: PreviewContent; readonly previewTitle: string }
-}
+export interface SidebarRightResourceParamsMap {}
 
 /** What `openResource` accepts as `params`: a declared resource type's parameters, or `undefined` for none. */
 export type SidebarRightResourceParams = ValuesOf<{

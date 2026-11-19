@@ -77,12 +77,6 @@
     },
     {
       "path": "../ui-context-menu"
-    },
-    {
-      "path": "../../typert/protocol"
-    },
-    {
-      "path": "../../util/crypto"
     }
   ]
 }

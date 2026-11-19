@@ -213,7 +213,7 @@ function withCompaction(raw: string, meter: TokenMeter): string {
   return renderSeedFixture(decoded.headerLine, events)
 }
 
-const SUMMARY_PREVIEW = '[data-contentpreview-url^="dsh-resource://content-preview/compaction%3A"]'
+const SUMMARY_PREVIEW = '[data-compaction-preview]'
 
 /** The manual compaction marker; its hidden label names the Sidebar action. */
 function compactionMarker(page: Page): Locator {
@@ -583,6 +583,8 @@ describe('web e2e: seeded history renders through cold resume', () => {
     try {
       await marker.click()
       await preview.locator('[data-document-markdown]').waitFor({ state: 'visible', timeout: 10_000 })
+      await marker.click()
+      await expect.poll(() => marker.isEnabled()).toBe(true)
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])
       await expect.poll(() => preview.locator('[data-document-markdown]').textContent())
         .toContain('Cold resume compact summary')
@@ -602,6 +604,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
         await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
       }
       await page.getByRole('button', { name: 'Open right sidebar', exact: true }).waitFor({ state: 'visible' })
+      await page.getByRole('navigation', { name: 'Turn navigation', exact: true }).waitFor()
     }
   })
 
@@ -722,7 +725,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
-      await column.locator(`${SUMMARY_PREVIEW}[data-contentpreview-state="expired"]`).waitFor()
+      await column.locator(`${SUMMARY_PREVIEW} [role="status"]`).waitFor()
       await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 15_000 })
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])

@@ -5144,10 +5144,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'rightbar.session\' (client-ui-sidebar-right), so it exists while that entry is mounted',
     occupants: [
       'client-ui-deliverables ReviewTab',
+      'client-ui-plan PlanPreview',
       'client-ui-schedule ScheduleTaskTab',
       'client-ui-sidebar-browser BrowserBody',
-      'client-ui-sidebar-documentpreview ContentPreview',
       'client-ui-sidebar-documentpreview TextPreview',
+      'client-ui-sidebar-documentpreview SummaryPreview',
       'client-ui-sidebar-files FilesBody',
       'client-ui-sidebar-right GuideBody',
       'client-ui-sidebar-terminal LazyTerminalBody',
@@ -5202,10 +5203,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: 'SidebarRightTabInjected',
     declaredBy: 'an entry in \'rightbar.session\' (client-ui-sidebar-right), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-plan PlanTitle',
       'client-ui-schedule ScheduleTaskTabTitle',
       'client-ui-sidebar-browser BrowserTitle',
-      'client-ui-sidebar-documentpreview ContentTitle',
       'client-ui-sidebar-documentpreview TextTitle',
+      'client-ui-sidebar-documentpreview SummaryTitle',
       'client-ui-sidebar-files FilesTitle',
       'client-ui-sidebar-right GuideTitle',
       'client-ui-sidebar-terminal TerminalTitle',
@@ -5219,8 +5221,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'sidebar.right.tab.document',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Document body selected by a registered implementation id; the `sidebar.right.document.body` Factory renders it.',
-    doc: 'Document body selected by a registered implementation id; the `sidebar.right.document.body` Factory renders it.',
+    summary: 'Document body selected by a registered implementation id.',
+    doc: 'Document body selected by a registered implementation id.',
     registerOptions: [
       {
         name: 'key',
@@ -5230,7 +5232,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Content and viewing inputs shared by document bodies and nested PDF presentation. */\nexport interface DocumentBodyOwner {\n  /** Observe a file read by this renderer. @param address - complete file resource address. */\n  readonly addResource: (address: string) => void\n  /** Replace this renderer\'s dependencies. @param addresses - complete file resource addresses. */\n  readonly setResources: (addresses: readonly string[]) => void\n  /**\n   * The tab\'s content address. Only in a file preview is it a file resource\n   * address, readable through the standard useResource hook; implementations\n   * that resolve it as a file declare no `mediaTypes` and therefore render\n   * only in file previews.\n   */\n  readonly resourceAddress: string\n  /**\n   * Address that relative references, such as Markdown images and HTML\n   * dependencies, resolve against. A file preview passes the file\'s resource\n   * address; content without a base omits it, and renderers then leave\n   * relative references unresolved.\n   */\n  readonly baseAddress?: string\n  /** Ordinary file content or a renderer-owned loading request; text accumulates until eof. */\n  readonly content: DocumentContent\n  /** The document tool /* …truncated — full shape in source */',
+      '/** Content and viewing inputs shared by document bodies and nested PDF presentation. */\nexport interface DocumentBodyOwner {\n  /** Observe a file read by this renderer. @param address - complete file resource address. */\n  readonly addResource: (address: string) => void\n  /** Replace this renderer\'s dependencies. @param addresses - complete file resource addresses. */\n  readonly setResources: (addresses: readonly string[]) => void\n  /** Original file address, also readable through the standard useResource hook. */\n  readonly resourceAddress: string\n  /** Ordinary file content or a renderer-owned loading request; text accumulates until eof. */\n  readonly content: DocumentContent\n  /** The document toolbar\'s current wrapping preference. */\n  readonly wrap: boolean\n  /** Report a renderer-owned scrollport; passing `null` restores the shared body as the owner. */\n  readonly scrollportRef: RefCallback<HTMLElement>\n}',
     ],
     ownerPropsReferences: [
       'DocumentContent',
@@ -5259,7 +5261,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     keyDomain: 'open: any string the owner dispatches (no compile-time key set), none are taken yet',
     hookContext: 'UseSidebarRightTabInfo',
     slotInject: '{ hooks: { tabInfo: SlotHookFactory<\'sidebar.right.tab.document\', UseSidebarRightTabInfo> } }',
-    declaredBy: 'factory \'sidebar.right.document.body\' (client-ui-sidebar-documentpreview), so it exists while that definition is registered',
+    declaredBy: 'an entry in \'sidebar.right.pane.tab\' (client-ui-sidebar-documentpreview), so it exists while that entry is mounted',
     occupants: [
       'client-ui-sidebar-documentpreview CodeBody',
       'client-ui-sidebar-documentpreview LazyExcelBody',
@@ -5272,7 +5274,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.document\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.document\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:94',
+    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:51',
   },
   {
     key: 'sidebar.right.tab.document.action',
@@ -5324,7 +5326,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.document.action\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.document.action\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:130',
+    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:87',
   },
   {
     key: 'sidebar.right.tab.document.actions',
@@ -5384,7 +5386,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.document.actions\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.document.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:109',
+    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:66',
   },
   {
     key: 'sidebar.right.tab.document.office.pdf',
@@ -5401,7 +5403,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Content and viewing inputs shared by document bodies and nested PDF presentation. */\nexport interface DocumentBodyOwner {\n  /** Observe a file read by this renderer. @param address - complete file resource address. */\n  readonly addResource: (address: string) => void\n  /** Replace this renderer\'s dependencies. @param addresses - complete file resource addresses. */\n  readonly setResources: (addresses: readonly string[]) => void\n  /**\n   * The tab\'s content address. Only in a file preview is it a file resource\n   * address, readable through the standard useResource hook; implementations\n   * that resolve it as a file declare no `mediaTypes` and therefore render\n   * only in file previews.\n   */\n  readonly resourceAddress: string\n  /**\n   * Address that relative references, such as Markdown images and HTML\n   * dependencies, resolve against. A file preview passes the file\'s resource\n   * address; content without a base omits it, and renderers then leave\n   * relative references unresolved.\n   */\n  readonly baseAddress?: string\n  /** Ordinary file content or a renderer-owned loading request; text accumulates until eof. */\n  readonly content: DocumentContent\n  /** The document tool /* …truncated — full shape in source */',
+      '/** Content and viewing inputs shared by document bodies and nested PDF presentation. */\nexport interface DocumentBodyOwner {\n  /** Observe a file read by this renderer. @param address - complete file resource address. */\n  readonly addResource: (address: string) => void\n  /** Replace this renderer\'s dependencies. @param addresses - complete file resource addresses. */\n  readonly setResources: (addresses: readonly string[]) => void\n  /** Original file address, also readable through the standard useResource hook. */\n  readonly resourceAddress: string\n  /** Ordinary file content or a renderer-owned loading request; text accumulates until eof. */\n  readonly content: DocumentContent\n  /** The document toolbar\'s current wrapping preference. */\n  readonly wrap: boolean\n  /** Report a renderer-owned scrollport; passing `null` restores the shared body as the owner. */\n  readonly scrollportRef: RefCallback<HTMLElement>\n}',
     ],
     ownerPropsReferences: [
       'DocumentContent',
@@ -5496,7 +5498,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.document.unpreviewable\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.document.unpreviewable\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:121',
+    source: 'packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts:78',
   },
   {
     key: 'sidebar.right.tab.files.actions',

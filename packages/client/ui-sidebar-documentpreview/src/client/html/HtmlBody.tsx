@@ -23,7 +23,7 @@ export interface HtmlBodyInjected {
   readonly readRelated: ReadHtmlRelated
 }
 
-type FrameInput = Pick<HtmlBodyProps, 'baseAddress' | 'readRelated' | 'addResource' | 'setResources'> & {
+type FrameInput = Pick<HtmlBodyProps, 'resourceAddress' | 'readRelated' | 'addResource' | 'setResources'> & {
   readonly data: Uint8Array<ArrayBuffer>
   readonly signal: AbortSignal
   readonly frameName: string
@@ -31,24 +31,20 @@ type FrameInput = Pick<HtmlBodyProps, 'baseAddress' | 'readRelated' | 'addResour
 
 type FrameState = Pick<FrameInput, 'data' | 'readRelated'> & { readonly url: string | undefined }
 
-/**
- * One mounted document owns its root Blob; replacing content also replaces the
- * browsing context. Relative dependencies are read beside `baseAddress`;
- * without one, the document renders without them.
- */
-function HtmlFrame({ data, baseAddress, readRelated, addResource, setResources, signal, frameName, t }: FrameInput & { t: HtmlBodyProps['t'] }): ReactNode {
+/** One mounted file owns its root Blob; replacing content also replaces the browsing context. */
+function HtmlFrame({ data, resourceAddress, readRelated, addResource, setResources, signal, frameName, t }: FrameInput & { t: HtmlBodyProps['t'] }): ReactNode {
   const [frame, setFrame] = useState<FrameState>()
   useEffect(() => {
     const controller = new AbortController()
     const resources = new Set<string>()
-    const readRelative = baseAddress === undefined ? undefined : createReadHtmlRelative(readRelated, baseAddress, signal, (address) => {
+    const readRelative = createReadHtmlRelative(readRelated, resourceAddress, signal, (address) => {
       resources.add(address)
       addResource(address)
     })
     let url: string | undefined
     void (async () => {
       try {
-        const bundle = readRelative === undefined ? { data, assets: [] } : await packHtml(data, readRelative, controller.signal)
+        const bundle = await packHtml(data, readRelative, controller.signal)
         controller.signal.throwIfAborted()
         const html = createHtmlDocument(bundle)
         url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
@@ -63,7 +59,7 @@ function HtmlFrame({ data, baseAddress, readRelated, addResource, setResources, 
       controller.abort()
       if (url !== undefined) URL.revokeObjectURL(url)
     }
-  }, [data, readRelated, baseAddress, addResource, setResources, signal])
+  }, [data, readRelated, resourceAddress, addResource, setResources, signal])
 
   if (frame?.data !== data || frame.readRelated !== readRelated) {
     return <LoadingIndicator label={t('loading')} />
@@ -78,7 +74,7 @@ function HtmlFrame({ data, baseAddress, readRelated, addResource, setResources, 
  * @returns an isolated HTML document, or nothing for text delivery.
  */
 export function HtmlBody({
-  content, resourceAddress, baseAddress, readRelated, useTabInfo, useInteractivePreview, addResource, setResources, t,
+  content, resourceAddress, readRelated, useTabInfo, useInteractivePreview, addResource, setResources, t,
 }: HtmlBodyProps): ReactNode {
   const interactivePreview = useInteractivePreview(value => value)
   const { tab } = useTabInfo()
@@ -88,7 +84,7 @@ export function HtmlBody({
   if (content.kind !== 'bytes') return null
   const frameName = `dsh-sidebar-html-${tab.id}`
   if (!interactivePreview) return <BasicHtmlFrame data={content.data} frameName={frameName} t={t} />
-  return <HtmlFrame key={resourceAddress} data={content.data} {...(baseAddress === undefined ? {} : { baseAddress })}
+  return <HtmlFrame key={resourceAddress} data={content.data} resourceAddress={resourceAddress}
     readRelated={readRelated} signal={tab.signal} frameName={frameName} addResource={addResource} setResources={setResources} t={t} />
 }
 

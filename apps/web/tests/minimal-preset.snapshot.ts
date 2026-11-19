@@ -305,7 +305,7 @@ describe('minimal manual compaction', () => {
     const summary = handle.agent.session.snapshotEvents().find(event => event.type === 'compaction/summary')
     if (summary === undefined) throw new Error('manual compaction produced no summary')
     const markdown = summary.data.summary.map(block => block.type === 'text' ? block.text : '').join('')
-    const summaryPreview = '[data-contentpreview-url^="dsh-resource://content-preview/compaction%3A"]'
+    const summaryPreview = '[data-compaction-preview]'
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     // Capture the final Sidebar layout, not the grid transition.
@@ -326,7 +326,6 @@ describe('minimal manual compaction', () => {
     expect(await card.getAttribute('aria-expanded')).toBeNull()
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['Context summary'])
     expect(await preview.getAttribute('aria-label')).toBe('Context summary')
-    expect(await preview.locator('[data-contentpreview-toolbar]').count()).toBe(0)
     expect(await column.locator('[data-dockkit-tab-title] svg[width="16"] [data-file-type-mark]').count()).toBe(1)
     const body = preview.locator('[data-document-markdown]')
     const words = (text: string): string => text.replace(/\s+/g, ' ').trim()
@@ -339,7 +338,7 @@ describe('minimal manual compaction', () => {
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    await preview.locator('[data-contentpreview-status="expired"]').waitFor()
+    await preview.getByRole('status').waitFor()
     await card.click()
     await rendered.waitFor({ state: 'visible', timeout: 15_000 })
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['Context summary'])

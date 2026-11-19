@@ -10,6 +10,7 @@ import type { Resources, ResourceSnapshot } from '@deepseek-ai/dsh-client-resour
 import type { WorkspaceFileStat } from '@deepseek-ai/dsh-api-workspace-files/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TextPreview } from '../src/client/TextPreview.tsx'
+import type { DocumentBodyOwner } from '../src/client/document/contract.ts'
 import { textFace } from '../src/client/face.ts'
 import { HtmlBody } from '../src/client/html/HtmlBody.tsx'
 import type { HtmlBodyProps } from '../src/client/html/HtmlBody.tsx'
@@ -46,7 +47,6 @@ function props(text = '<p>hello</p>'): HtmlBodyProps {
   return {
     useInteractivePreview: select => select(true),
     resourceAddress: 'dsh-resource://file/session/html/index.html',
-    baseAddress: 'dsh-resource://file/session/html/index.html',
     content: { kind: 'bytes', data: utf8(text) },
     wrap: false,
     sessionId: 'html' as SessionId,
@@ -96,7 +96,7 @@ describe('HtmlBody', () => {
     let interactive = true
     const preview = () => <TextPreview {...previewProps} {...face}
       useDocumentPreviews={select => select([definition])}
-      renderFactorySlot={documentSlots((_key, owner) => <HtmlBody {...htmlProps} {...owner}
+      renderSlot={documentSlots((_key, owner) => <HtmlBody {...htmlProps} {...owner as unknown as DocumentBodyOwner}
         useTabInfo={previewProps.useTabInfo} useInteractivePreview={select => select(interactive)} readRelated={readRelated} />)} />
     const view = render(preview())
     await waitFor(() => {
@@ -248,22 +248,6 @@ describe('HtmlBody', () => {
     expect(readSignal.aborted).toBe(true)
     await act(async () => { pending.reject(new Error('cancelled')) })
     expect(create).not.toHaveBeenCalled()
-  })
-
-  it('renders interactive HTML without reading relative dependencies when no base address is given', async () => {
-    const { baseAddress: _baseAddress, ...initial } = props('<link rel="stylesheet" href="./app.css"><p>Hello</p><script src="./app.js"></script>')
-    const view = render(<HtmlBody {...initial} />)
-    const iframe = await screen.findByTitle(en.frame)
-    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts')
-    expect(initial.readRelated).not.toHaveBeenCalled()
-    expect(initial.addResource).not.toHaveBeenCalled()
-    expect(initial.setResources).toHaveBeenLastCalledWith([])
-    const payload = /text\("([^"]*)"\)/u.exec(await create.mock.calls[0]![0].text())![1]!
-    const json = new TextDecoder().decode(Uint8Array.from(atob(payload), character => character.charCodeAt(0)))
-    const bundle = JSON.parse(json) as { html: string; assets: unknown[] }
-    expect(bundle.assets).toEqual([])
-    expect(bundle.html).toContain('<script src="./app.js">')
-    view.unmount()
   })
 
   it('packages the declared local script without waiting for metadata', async () => {

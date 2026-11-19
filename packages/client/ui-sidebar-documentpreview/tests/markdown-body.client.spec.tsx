@@ -21,13 +21,9 @@ function content(pageTexts: readonly string[], eof: boolean): DocumentContent {
 }
 
 // Unused framework seats belong to the slot integration tests.
-const ADDRESS = 'dsh-resource://file/session/markdown/notes.md'
-
-function props(
-  value: DocumentContent, t: MarkdownBodyProps['t'] = makeTranslate(en), absolutePath?: string, baseAddress: string | null = ADDRESS,
-): MarkdownBodyProps {
+function props(value: DocumentContent, t: MarkdownBodyProps['t'] = makeTranslate(en), absolutePath?: string): MarkdownBodyProps {
   return {
-    resourceAddress: ADDRESS, ...(baseAddress === null ? {} : { baseAddress }), content: value, wrap: false, t,
+    resourceAddress: 'dsh-resource://file/session/markdown/notes.md', content: value, wrap: false, t,
     useResource: () => ({
       status: absolutePath === undefined ? 'loading' : 'live',
       value: absolutePath === undefined ? undefined : { absolutePath, version: 'v1' },
@@ -48,21 +44,6 @@ describe('MarkdownBody', () => {
     expect(view.getByAltText('external').getAttribute('src')).toBe('https://example.test/a.png')
     fireEvent.error(view.getByAltText('relative'))
     expect(view.getByText('relative').tagName).toBe('SPAN')
-  })
-
-  it('leaves relative images unresolved without a base address and renders other destinations as with one', () => {
-    const text = '![relative](images/a.png) ![absolute](/tmp/a.png) ![external](https://example.test/a.png) ![inline](data:image/png;base64,AA==)'
-    const based = render(<MarkdownBody {...props(content([text], true), undefined, '/work/guide/notes.md')} />)
-    const inline = based.getByText('inline').outerHTML
-    based.unmount()
-    const useResource = vi.fn()
-    const view = render(<MarkdownBody {...props(content([text], true), undefined, '/work/guide/notes.md', null)} useResource={useResource} />)
-    expect(view.getByText('relative').tagName).toBe('SPAN')
-    expect(view.queryByAltText('relative')).toBeNull()
-    expect(new URL(view.getByAltText('absolute').getAttribute('src')!).searchParams.get('path')).toBe('/tmp/a.png')
-    expect(view.getByAltText('external').getAttribute('src')).toBe('https://example.test/a.png')
-    expect(view.getByText('inline').outerHTML).toBe(inline)
-    expect(useResource).not.toHaveBeenCalled()
   })
 
   it('resolves reference images at EOF and updates their directory when metadata changes', () => {

@@ -15,6 +15,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { FileNavigatorInput } from '@deepseek-ai/dsh-client-ui-sidebar-files/client'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { TextPreview } from '../src/client/TextPreview.tsx'
 import type { TextPreviewProps } from '../src/client/TextPreview.tsx'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
@@ -104,7 +105,7 @@ function codeProps(h: ReturnType<typeof harness>, navigation: { params?: unknown
   return {
     ...props,
     useDocumentPreviews: selector => selector([definition]),
-    renderFactorySlot: documentSlots((_key, owner) => <CodeBody {...props} {...owner} t={key => key} />),
+    renderSlot: documentSlots((_key, owner) => <CodeBody {...props} {...owner as unknown as OwnerOf<'sidebar.right.tab.document'>} t={key => key} />),
   }
 }
 
@@ -472,7 +473,7 @@ describe('TextPreview — navigation and view', () => {
   it('rebinds scrolling when the selected Slot body is replaced without changing the renderer id', async () => {
     const h = harness({ 1: page(1, ['a', 'b', 'c'], true) })
     const code = codeProps(h, { revision: 1 })
-    const fallback: TextPreviewProps = { ...code, renderFactorySlot: documentSlots(() => <div data-late-renderer />) }
+    const fallback: TextPreviewProps = { ...code, renderSlot: documentSlots(() => <div data-late-renderer />) }
     const view = render(<TextPreview {...fallback} />)
     await settle()
     const outer = body(view.container)
@@ -513,9 +514,10 @@ describe('TextPreview — navigation and view', () => {
     return {
       ...base,
       useDocumentPreviews: selector => selector(definitions),
-      renderFactorySlot: documentSlots((_key, owner, opts) => {
-        if (opts.entryKey === 'code' && codeDrawsLines) return <CodeBody {...base} {...owner} t={key => key} />
-        if (opts.entryKey === PLAIN_BODY_ID) return <TextBody {...base} {...owner} />
+      renderSlot: documentSlots((_key, owner, opts) => {
+        const documentOwner = owner as unknown as OwnerOf<'sidebar.right.tab.document'>
+        if (opts.entryKey === 'code' && codeDrawsLines) return <CodeBody {...base} {...documentOwner} t={key => key} />
+        if (opts.entryKey === PLAIN_BODY_ID) return <TextBody {...base} {...documentOwner} />
         return <div data-test-no-lines />
       }),
     }
@@ -967,7 +969,7 @@ describe('TextPreview — workspace navigator Factories', () => {
     expect(nodes().toggle).toBe(first.toggle)
   })
 
-  it('re-renders only the document body Factory for a preview-only update', async () => {
+  it('does not re-render the navigator Factories for a preview-only update', async () => {
     const h = harness({ 1: page(1, ['a', 'b'], true) })
     const props = h.props()
     const renderFactorySlot = vi.fn(props.renderFactorySlot)
@@ -979,8 +981,7 @@ describe('TextPreview — workspace navigator Factories', () => {
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.scrollTop).toBe(40)
     // The preview read its metadata again, so it re-rendered.
     expect(h.useResource).toHaveBeenCalled()
-    // Only the document body Factory re-renders with the preview.
-    expect(renderFactorySlot.mock.calls.map(([name]) => name)).toEqual(['sidebar.right.document.body'])
+    expect(renderFactorySlot).not.toHaveBeenCalled()
   })
 
 })
