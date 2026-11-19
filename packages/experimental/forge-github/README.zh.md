@@ -66,6 +66,8 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 `viewer` 在每个已配置主机上提供 `review-requested`、`authored` 与 `involved` 三个列表，每次读取最多 `maxViewerItems`（默认 50）个拉取请求。`listForViewer` 用一次 GraphQL `search` 读取一个列表：未归档仓库中打开的拉取请求，按最近更新在前；三个列表的限定词分别为 `review-requested:@me`（也匹配请求给用户所在团队的评审）、`author:@me` 与 `involves:@me -author:@me -review-requested:@me`，因此互不重叠；限定仓库时追加 `repo:<owner>/<name>`，owner 或仓库名不是合法片段时不发请求，直接返回 `not-found`。GitHub 对在一个文档里搜索多个列表的请求返回网关错误，所以每个列表单独请求。每项带有当前用户最近提交的评审、请求当前用户或其所在团队评审的那条请求，以及 head 提交的检查汇总；不是拉取请求的结果被忽略。`countForViewer` 在一次请求中读取每个列表的 `issueCount`。search 读的是搜索索引，所以拉取请求在变化后可能要过几分钟才进入或离开列表。`readDescription` 用一次 GraphQL 查询读取 `body`、`bodyHTML`、`createdAt` 与最多 100 个标签。私有仓库中，上传图片在 Markdown 里的地址 `https://<host>/user-attachments/assets/<uuid>` 只在带有用户 GitHub 会话时才返回图片，而 `bodyHTML` 为同一上传给出带签名的 `private-user-images` 地址，五分钟内无需会话即可加载；`images` 把每个 Markdown 地址映射到同一上传的签名地址，`imagesExpireAt` 为这些令牌中最早的 `exp`。读取 `bodyHTML` 只为得到这些地址。
 
+`readActivity` 用一次 GraphQL 查询读取 pull request 时间线上最近的 100 条记录，即只含所映射条目类型的 `timelineItems(last: 100)`，并由 `pageInfo.hasPreviousPage` 得出 `truncated`。记录保持 GitHub 的顺序，即按时间从早到晚：提交取提交者日期，评审取 `submittedAt`，其余记录取 `createdAt`。`PullRequestCommit` 映射为 `commit`，标题取 `messageHeadline`（过长时 GitHub 会以省略号截短），actor 为提交作者的 GitHub 账号，作者没有账号时为空；`IssueComment` 映射为 `comment`；`PullRequestReview` 映射为 `review`，带有结论以及它在行和文件上留下的评论数，`PENDING` 评审被略去；`ReviewRequestedEvent` 映射为 `review-requested`，带有被请求账号的登录名或 `organization/slug` 形式的团队名；`RenamedTitleEvent` 映射为 `renamed`；`MergedEvent`、`ClosedEvent`、`ReopenedEvent`、`ReadyForReviewEvent`、`ConvertToDraftEvent`、`HeadRefForcePushedEvent`、`AutoMergeEnabledEvent` 与 `AutoMergeDisabledEvent` 映射为含义相同的类型。GitHub 每次合并都会同时记录一个 `ClosedEvent`，因此在已合并的 pull request 上，之后没有 `ReopenedEvent` 的 `ClosedEvent` 被略去。GitHub 把账号的类型标为 `Bot`，或账号的登录名以 `[bot]` 结尾（GitHub 对作为提交作者的应用如此拼写）时，该账号是 bot。GitHub 的 schema 没有说明当前登录用户能否在 pull request 上评论的字段，因此 `viewerCanComment` 沿用 `readReview` 的规则：仓库已归档，或对话已锁定且用户没有 `ADMIN`、`MAINTAIN` 或 `WRITE` 权限时为 false。`addComment` 经 `gh api` 向 `repos/<owner>/<name>/issues/<number>/comments` POST 一次，评论文本以 JSON 形式经 stdin 传入，且从不重试：提到认证的诊断信息返回 `unauthenticated`；HTTP 400、403、404、409 或 422 拒绝以及 `gh` 无法启动返回 `failed`；`gh` 超时、服务端错误、发送后被取消的请求以及没有已保存评论 `id` 的答复返回 `unknown`，都附 GitHub 的原因或诊断信息。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -89,6 +91,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 | [`src/gh.ts`](src/gh.ts) | 在宿主上执行 `gh`，清理环境变量并施加限制 |
 | [`src/viewed.ts`](src/viewed.ts) | 读取与写入已审阅文件 |
 | [`src/overview.ts`](src/overview.ts) | 评审请求、评审者搜索与分支更新 |
+| [`src/activity.ts`](src/activity.ts) | 读取时间线，并映射为活动记录 |
 | [`src/pull-request-node.ts`](src/pull-request-node.ts) | 在核对过的 head 上读取 pull request 节点 id，供写操作使用 |
 | [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL，并校验写入请求的名称与提交 |
 
@@ -124,8 +127,10 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 - **简报的检查结果**——简报报告 GitHub 的检查汇总状态，检查列表完整的快照则自行得出结果；同一个 pull request 的两个结果不一致时，没有机制去对齐它们。
 - **基准分支被改写**——diff 从 head 与 GitHub 在 pull request 最后一次更新时记录的基准提交的合并基准开始。基准分支被强制推送后，该合并基准可能不同于 GitHub pull request 页面使用的合并基准，因此在 pull request 更新前，补丁可能多出或缺少提交。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
-- **速率限制**——每次简报轮询为每个主机的每 `briefBatchSize` 个 pull request 消耗一次 GraphQL 查询；每次快照轮询为每个主机的每 `snapshotBatchSize` 个 pull request 消耗一次，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。
+- **速率限制**——每次简报轮询为每个主机的每 `briefBatchSize` 个 pull request 消耗一次 GraphQL 查询；每次快照轮询为每个主机的每 `snapshotBatchSize` 个 pull request 消耗一次，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。每次活动读取消耗一次 GraphQL 查询，每次添加评论消耗一次 REST 请求。
 - **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
+- **活动记录上限**——每次活动读取只列出所映射类型中最近的 100 条时间线记录，`truncated` 标出还有更早记录的 pull request，更早的记录无法读取。标签变更、指派、来自其他 issue 与 pull request 的引用，以及其他各类时间线记录都不列出。读取只有一次请求，因此这些记录的输出合计超过 `maxOutputBytes` 时，读取以 `too-large` 失败。
+- **评论权限**——GitHub 没有说明当前登录用户能否评论的字段，因此对被仓库所有者屏蔽、或被互动限制排除的用户，`viewerCanComment` 仍为 true；GitHub 只在评论发出时才拒绝该用户的评论。
 
 <a id="dev-note"></a>
 ### 开发备注

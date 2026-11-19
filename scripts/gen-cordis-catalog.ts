@@ -469,6 +469,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeViewerQuery: 'forge.md',
   ForgeViewerList: 'forge.md',
   ForgeViewerSource: 'forge.md',
+  ChangeRequestActivity: 'forge.md',
+  ChangeRequestActivityItem: 'forge.md',
   ChangeRequestDescription: 'forge.md',
   ForgeReviewChange: 'forge.md',
   ForgeLens: 'forge.md',

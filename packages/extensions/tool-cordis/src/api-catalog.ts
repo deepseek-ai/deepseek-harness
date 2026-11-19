@@ -1521,6 +1521,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>',
+        description: 'Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Add a comment to a change request\'s conversation, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
         description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1630,6 +1644,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the description.',
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>',
+        description: 'Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the activity, or null when the change request\'s provider reads none.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>',
+        description: 'Add a comment to the conversation of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is blank, or with the host\'s reason; `forgePanel/action-unknown` when the host\'s answer did not confirm the comment.'],
       },
       {
         signature: '@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
@@ -6710,6 +6737,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ButtonProps {\n    readonly label: string;\n    readonly hotkey?: string | undefined;\n    readonly disabled?: boolean | undefined;\n    readonly onPress?: (() => unknown) | undefined;\n}',
   },
   {
+    name: 'ChangeRequestActivity',
+    declaration: 'export interface ChangeRequestActivity {\n    readonly items: readonly ChangeRequestActivityItem[];\n    readonly truncated: boolean;\n    readonly viewerCanComment: boolean;\n}',
+  },
+  {
+    name: 'ChangeRequestActivityItem',
+    declaration: 'export type ChangeRequestActivityItem = {\n    readonly at: string;\n    readonly actor: ForgeCommentAuthor | null;\n} & ({\n    readonly kind: \'comment\';\n    readonly body: string;\n    readonly url: string | null;\n} | {\n    readonly kind: \'review\';\n    readonly verdict: ReviewVerdict;\n    readonly body: string;\n    readonly comments: number;\n    readonly url: string | null;\n} | {\n    readonly kind: \'commit\';\n    readonly sha: string;\n    readonly title: string;\n} | {\n    readonly kind: \'merged\' | \'closed\' | \'reopened\' | \'ready-for-review\' | \'converted-to-draft\' | \'force-pushed\';\n} | {\n    readonly kind: \'auto-merge-enabled\' | \'auto-merge-disabled\';\n} | {\n    readonly kind: \'review-requested\';\n    readonly reviewer: string | null;\n} | {\n    readonly kind: \'renamed\';\n    readonly from: string;\n    readonly to: string;\n} | {\n    readonly kind: \'other\';\n    readonly text: string;\n});',
+  },
+  {
     name: 'ChangeRequestBrief',
     declaration: 'export type ChangeRequestBrief = Pick<ChangeRequestSnapshot, \'ref\' | \'url\' | \'title\' | \'state\' | \'draft\' | \'mergeability\' | \'reviewDecision\' | \'checksRollup\'>;',
   },
@@ -7707,7 +7742,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    readonly snapshotBatchSize?: number;\n    readonly briefBatchSize?: number;\n    fetchCh /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>;\n    addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBrie /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',

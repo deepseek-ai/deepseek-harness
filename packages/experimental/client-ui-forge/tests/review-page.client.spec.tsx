@@ -166,6 +166,8 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
       return refresh.promise
     }),
     readDescription: vi.fn(async () => ok(description('Body'))),
+    readActivity: vi.fn(async () => ok(null)),
+    addComment: vi.fn(async () => ok(undefined)),
     openHostSettings: vi.fn(),
     actionsFor: vi.fn((_url: string, showChanges: () => void): ChangeRequestActions => {
       shown.push(showChanges)

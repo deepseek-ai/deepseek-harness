@@ -68,6 +68,17 @@ interface ForgeProvider {
   countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
   /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
   readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+  /**
+   * Read the activity of a change request: the comments in its conversation, its submitted reviews, its commits, and
+   * the changes of its state. Omission declares that this provider reads no activity.
+   */
+  readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+  /**
+   * Add a comment of Markdown source `body` to a change request's conversation, resolving to undefined once the host
+   * saved it. A comment is never retried. Omission declares that this provider adds no comments, and its `readActivity`
+   * then denies `viewerCanComment`.
+   */
+  addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -997,6 +1008,55 @@ interface ChangeRequestLabel {
 }
 ```
 
+## Activity and comments
+
+`ctx.forge.readActivity` reads what happened on a change request: the comments in its conversation, its submitted reviews, its commits, and the changes of its state, oldest first, at most the provider's limit with the latest entries kept. `ctx.forge.addComment` adds a comment to the conversation and then polls the change request at once when it is watched. A provider implements either method or both: `readActivity` of a provider without it returns `unsupported`, `addComment` of one without it fails, and an activity's `viewerCanComment` says whether the signed-in user can add a comment. The text of a comment or review is Markdown source whose raw HTML must not render as HTML. The [GitHub](../../packages/experimental/forge-github/README.md#use-this-package) and [GitLab](../../packages/experimental/forge-gitlab/README.md#use-this-package) provider READMEs own the requests and how each host's records become entries.
+
+```ts type-equiv
+/**
+ * One entry of a change request's activity: a comment in its conversation, a submitted review, a commit, a change of
+ * its state, or a record the host words itself.
+ */
+type ChangeRequestActivityItem = {
+  /** ISO 8601 time of the entry. */
+  readonly at: string
+  /** Account the entry is by, or null when the host names none or the account no longer exists. */
+  readonly actor: ForgeCommentAuthor | null
+} & (
+  /** A comment in the conversation. `body` is Markdown source; it may contain raw HTML, which readers must not render as HTML. */
+  | { readonly kind: 'comment'; readonly body: string; readonly url: string | null }
+  /**
+   * A submitted review: its decision, its own Markdown text, which follows the rule of a comment's `body` and is empty
+   * without one, and the number of comments it left on lines and files.
+   */
+  | { readonly kind: 'review'; readonly verdict: ReviewVerdict; readonly body: string; readonly comments: number; readonly url: string | null }
+  /**
+   * A commit added to the change request: its object name, abbreviated when the host records only an abbreviation, and
+   * the first line of its message.
+   */
+  | { readonly kind: 'commit'; readonly sha: string; readonly title: string }
+  | { readonly kind: 'merged' | 'closed' | 'reopened' | 'ready-for-review' | 'converted-to-draft' | 'force-pushed' }
+  | { readonly kind: 'auto-merge-enabled' | 'auto-merge-disabled' }
+  /** A review was requested from an account or a team, named as the host spells it; null when the host names neither. */
+  | { readonly kind: 'review-requested'; readonly reviewer: string | null }
+  | { readonly kind: 'renamed'; readonly from: string; readonly to: string }
+  /** A record with no kind of its own, as plain text in the host's own words. */
+  | { readonly kind: 'other'; readonly text: string }
+)
+```
+
+```ts type-equiv
+/** The activity of a change request. */
+interface ChangeRequestActivity {
+  /** Entries oldest first, at most the provider's limit; the latest ones when the change request has more. */
+  readonly items: readonly ChangeRequestActivityItem[]
+  /** Whether the change request has entries older than `items` holds. */
+  readonly truncated: boolean
+  /** Whether the signed-in user can add a comment through `addComment`; false for a provider without it. */
+  readonly viewerCanComment: boolean
+}
+```
+
 ## Session bindings
 
 `ctx.forgeSession` derives each Session's bindings from its own log by the command rules that providers register: forge-github's `gh` rule and forge-gitlab's `glab` rule bind the URLs that `gh pr create` and `glab mr create` results print and the change request that `gh pr view`, `glab mr view`, and their sibling reference commands act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection's client view, which the Session summary carries, lists the bindings without their status. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
@@ -1616,7 +1676,7 @@ interface ForgeLocalChanges {
 
 ### Review page
 
-The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, while the other hosts keep their cadence; the count reads every `reviewCountIntervalMs` in the same way, and lists of every repository refresh it too. A scope is every repository of every host or one `ForgeReviewRepository`, which names its host and is read on that host only. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, the failure of the latest read, and, for a host that refused the viewer, the sign-in command its provider's `readiness` names; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
+The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, `reviewActivity`, `reviewComment`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, while the other hosts keep their cadence; the count reads every `reviewCountIntervalMs` in the same way, and lists of every repository refresh it too. A scope is every repository of every host or one `ForgeReviewRepository`, which names its host and is read on that host only. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, the failure of the latest read, and, for a host that refused the viewer, the sign-in command its provider's `readiness` names; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
 
 The chat tab starts in the blank Session `connectWorkspace` resolves and records the change request with `reviewStage`; the Host keeps that choice in memory and binds the change request once the Session's next message enters its inbox, so an untouched blank stays unbound.
 
@@ -2015,6 +2075,25 @@ async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<
 async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
 
 /**
+ * Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+
+/**
+ * Add a comment to a change request's conversation, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param body - Markdown source of the comment.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
  * with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
@@ -2201,6 +2280,27 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * host's reason when the host does not provide it.
  */
 @Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>
+
+/**
+ * Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes
+ * of state.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the activity, or null when the change request's provider reads none.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the
+ * host's reason when the host does not provide it.
+ */
+@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>
+
+/**
+ * Add a comment to the conversation of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param body - Markdown source of the comment.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is
+ * blank, or with the host's reason; `forgePanel/action-unknown` when the host's answer did not confirm the comment.
+ */
+@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>
 
 /**
  * Read every check of a change request the review page shows.

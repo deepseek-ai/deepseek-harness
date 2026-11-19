@@ -6,8 +6,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateMethod, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot,
-  ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
+  BranchUpdateMethod, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer,
+  ChangeRequestSnapshot, ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
   ForgeFailure,
   ForgeLineComment, ForgeReadiness, ForgeRerunRequest, ForgeReviewChange, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest,
   ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
@@ -414,6 +414,41 @@ export class ForgePanelController extends TypertRemoteService {
     const result = await this.home.forge.readDescription(this.served(url).ref, signal)
     if ('code' in result) throw new RemoteError('forgePanel/description-failed', result.message, {})
     return result
+  }
+
+  /**
+   * Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes
+   * of state.
+   * @param url - web URL of the change request.
+   * @param signal - request cancellation.
+   * @returns the activity, or null when the change request's provider reads none.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the
+   * host's reason when the host does not provide it.
+   */
+  @Remote
+  async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.readActivity(this.served(url).ref, signal)
+    if (!('code' in result)) return result
+    if (result.code === 'unsupported') return null
+    throw new RemoteError('forgePanel/activity-failed', result.message, {})
+  }
+
+  /**
+   * Add a comment to the conversation of a change request the review page shows.
+   * @param url - web URL of the change request.
+   * @param body - Markdown source of the comment.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is
+   * blank, or with the host's reason; `forgePanel/action-unknown` when the host's answer did not confirm the comment.
+   */
+  @Remote
+  async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.served(url)
+    if (body.trim() === '') throw new RemoteError('forgePanel/action-failed', 'The comment is empty', {})
+    const failure = await this.home.forge.addComment(ref, body, signal)
+    if (failure !== undefined) throw actionError(failure)
   }
 
   /**

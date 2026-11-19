@@ -1,7 +1,7 @@
 /**
  * The review page's detail of one change request: its header with state, repository, labels, title, author, times, and
  * branches; the ready-or-merge and more actions; and the summary, changes, and chat tabs. The summary shows the
- * description beside the status column.
+ * description and the activity beside the status column.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -11,7 +11,9 @@ import {
   StateDot, Tooltip, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChangeRequestDescription, ChangeRequestSnapshot, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestSnapshot, ForgeFailure,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeReviewChangeRequest } from '../../types.ts'
 import { ChangeRequestPrimary, type ChangeRequestActions } from '../ChangeRequestCard.tsx'
@@ -21,6 +23,7 @@ import type { StreamRead } from './host-stream.ts'
 import type { ForgePanelKey, NS } from '../locales.ts'
 import { descriptionMarkdown } from './review-lists.ts'
 import type { ReviewTab } from './review-store.ts'
+import { ReviewActivity } from './ReviewActivity.tsx'
 import { ReviewLabels } from './ReviewLabels.tsx'
 import { ReviewStatus } from './ReviewStatus.tsx'
 import { TONE_LABEL, toneOf } from '../status.ts'
@@ -43,8 +46,18 @@ const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
 
 const TAB_ORDER: readonly ReviewTab[] = ['summary', 'changes', 'chat']
 
+/** What the summary tab reads and writes on the code host. */
+export interface ReviewSummaryFace {
+  /** Read the description and labels of a change request. */
+  readonly readDescription: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestDescription>>
+  /** Read the activity of a change request; null for a provider that reads none. */
+  readonly readActivity: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestActivity | null>>
+  /** Add a comment to a change request's conversation. */
+  readonly addComment: (url: string, body: string) => Promise<RemoteResult<void>>
+}
+
 /** Props of the detail. */
-export interface ReviewDetailProps {
+export interface ReviewDetailProps extends ReviewSummaryFace {
   /** URL of the change request. */
   readonly url: string
   /** The change request stream. */
@@ -65,8 +78,6 @@ export interface ReviewDetailProps {
   readonly locale: string
   /** The card actions, acting on this change request. */
   readonly actions: ChangeRequestActions
-  /** Read the description and labels. */
-  readonly readDescription: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestDescription>>
   /** Open the providers' host lists, offered for a URL no provider serves; undefined while they cannot be opened. */
   readonly onAddHost: (() => void) | undefined
   /** The changes tab's content, kept while the detail shows so pending review comments survive tab switches. */
@@ -172,11 +183,14 @@ function MoreMenu({ url, actions, t }: { readonly url: string; readonly actions:
   )
 }
 
-/** The summary tab: the description beside the card rows. */
-function Summary({ frame, snapshot, description, now, locale, actions, t }: {
+/** The summary tab: the description and the activity beside the card rows. */
+function Summary({ frame, snapshot, description, readActivity, addComment, onOpenChanges, now, locale, actions, t }: {
   readonly frame: ForgeReviewChangeRequest
   readonly snapshot: ChangeRequestSnapshot
   readonly description: ReturnType<typeof useDescription>
+  readonly readActivity: ReviewDetailProps['readActivity']
+  readonly addComment: ReviewDetailProps['addComment']
+  readonly onOpenChanges: () => void
   readonly now: number
   readonly locale: string
   readonly actions: ChangeRequestActions
@@ -195,21 +209,27 @@ function Summary({ frame, snapshot, description, now, locale, actions, t }: {
   const name = t('change.number', { number: frame.ref.number })
   return (
     <div className={css.summary}>
-      <section className={css.document} aria-label={t('reviewPage.description')}>
-        <h3 className={css.caption}>{t('reviewPage.description')}</h3>
-        {markdown === null
-          ? description.failure === null
-            ? <StateDot state="ongoing" />
-            : (
-              <div className={css.notice} role="status">
-                <span>{t('reviewPage.descriptionFailed', { message: description.failure })}</span>
-                <Button size="sm" variant="outline" onClick={description.retry}>{t('retry')}</Button>
-              </div>
-            )
-          : markdown.trim() === ''
-            ? <p className={css.muted}>{t('reviewPage.descriptionEmpty')}</p>
-            : <MarkdownText text={markdown} labels={labels} omitHtml />}
-      </section>
+      <div className={css.document}>
+        <section aria-label={t('reviewPage.description')}>
+          <h3 className={css.caption}>{t('reviewPage.description')}</h3>
+          {markdown === null
+            ? description.failure === null
+              ? <StateDot state="ongoing" />
+              : (
+                <div className={css.notice} role="status">
+                  <span>{t('reviewPage.descriptionFailed', { message: description.failure })}</span>
+                  <Button size="sm" variant="outline" onClick={description.retry}>{t('retry')}</Button>
+                </div>
+              )
+            : markdown.trim() === ''
+              ? <p className={css.muted}>{t('reviewPage.descriptionEmpty')}</p>
+              : <MarkdownText text={markdown} labels={labels} omitHtml />}
+        </section>
+        {/* A submitted review or a new comment changes the activity, and each moves one of the two values. */}
+        <ReviewActivity url={frame.url} revision={`${snapshot.updatedAt}\n${frame.reviewRevision}`} forge={frame.forge?.label ?? null}
+          read={readActivity} comment={addComment} onOpenChanges={onOpenChanges} openLink={actions.openLink} now={now} markdown={labels}
+          t={t} />
+      </div>
       <aside className={css.facts} aria-label={t('reviewPage.status')}>
         <ReviewStatus frame={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       </aside>
@@ -223,8 +243,8 @@ function Summary({ frame, snapshot, description, now, locale, actions, t }: {
  * @returns the detail.
  */
 export function ReviewDetail({
-  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, onAddHost, renderChanges, renderChat,
-  unseenQuotes, t,
+  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, readActivity, addComment, onAddHost,
+  renderChanges, renderChat, unseenQuotes, t,
 }: ReviewDetailProps): ReactNode {
   const frame = read.frame
   const snapshot = frame?.snapshot ?? null
@@ -331,7 +351,8 @@ export function ReviewDetail({
       <div className={clsx(css.panel, tab !== 'summary' && css.panelFill)} role="tabpanel" id="forge-review-panel"
         aria-labelledby={`forge-review-tab-${tab}`}>
         {tab === 'summary' && (
-          <Summary frame={frame} snapshot={snapshot} description={description} now={now} locale={locale} actions={actions} t={t} />
+          <Summary frame={frame} snapshot={snapshot} description={description} readActivity={readActivity} addComment={addComment}
+            onOpenChanges={() => { onTab('changes') }} now={now} locale={locale} actions={actions} t={t} />
         )}
         <div className={css.changes} hidden={tab !== 'changes'}>{renderChanges(frame)}</div>
         {tab === 'chat' && renderChat(frame)}

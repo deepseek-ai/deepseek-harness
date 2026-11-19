@@ -143,6 +143,13 @@ if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vn
   process.stdout.write(text)
   process.exit(0)
 }
+if (args[0] === 'api' && args[3] === '--method' && args[4] === 'POST' && args[5] === 'repos/octo/demo/issues/7/comments') {
+  const { body } = JSON.parse(readFileSync(0, 'utf8'))
+  state.comments = [...state.comments ?? [], { body, at: new Date().toISOString() }]
+  save()
+  process.stdout.write(JSON.stringify({ id: 1000 + state.comments.length, html_url: 'https://github.com/octo/demo/pull/7#issuecomment-1' }))
+  process.exit(0)
+}
 if (args[0] === 'api' && args[3] === '--method' && args[4] === 'POST' && args[5].startsWith('repos/octo/demo/actions/')) {
   appendFileSync(join(here, 'reruns.jsonl'), args[5] + '\\n')
   state.reruns = [...state.reruns ?? [], args[5]]
@@ -230,6 +237,30 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   })
   const overview = existsSync(join(here, 'overview.json')) ? JSON.parse(readFileSync(join(here, 'overview.json'), 'utf8')) : {}
   const none = { totalCount: 0, nodes: [] }
+  if (query.includes('bodyHTML')) {
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: {
+      body: 'Adds the panel.', bodyHTML: '<p>Adds the panel.</p>', createdAt: '2026-10-08T00:00:00Z', labels: none,
+    } } } }))
+    process.exit(0)
+  }
+  if (query.includes('timelineItems(')) {
+    const account = login => ({ __typename: 'User', login, avatarUrl: null })
+    const commit = (oid, messageHeadline) => ({ __typename: 'PullRequestCommit',
+      commit: { oid: oid.repeat(40), messageHeadline, committedDate: '2026-10-08T01:00:00Z', author: { user: account('octo') } } })
+    const comment = (body, createdAt, login) => ({ __typename: 'IssueComment', createdAt, body, author: account(login),
+      url: 'https://github.com/octo/demo/pull/7#issuecomment-1' })
+    process.stdout.write(JSON.stringify({ data: { repository: { isArchived: false, viewerPermission: 'WRITE', pullRequest: {
+      locked: false, merged: false, timelineItems: { pageInfo: { hasPreviousPage: false }, nodes: [
+        commit('d', 'Add the panel'), commit('e', 'Fix the build'),
+        { __typename: 'ReviewRequestedEvent', createdAt: '2026-10-08T02:00:00Z', actor: account('octo'), requestedReviewer: { login: 'mona' } },
+        { __typename: 'PullRequestReview', createdAt: '2026-10-08T03:00:00Z', submittedAt: '2026-10-08T03:00:00Z', body: '', state: 'APPROVED',
+          url: 'https://github.com/octo/demo/pull/7#pullrequestreview-1', author: account('mona'), comments: { totalCount: 0 } },
+        comment('Looks **good** to me.', '2026-10-08T04:00:00Z', 'mona'),
+        ...(state.comments ?? []).map(posted => comment(posted.body, posted.at, 'octocat')),
+      ] },
+    } } } }))
+    process.exit(0)
+  }
   if (query.includes('search(type: ISSUE')) {
     // The review page's lists and their count, which only a case that writes lists.json shows.
     if (!existsSync(join(here, 'lists.json'))) {
@@ -874,6 +905,43 @@ it.skipIf(MODE === 'record')('lists the change requests of a GitHub and a GitLab
   await expect.poll(shown).toEqual([expect.stringMatching(/^Fix the gateway timeout#12·mona\d+分钟$/)])
   expect(await list.locator('[data-forge-review-item]').count()).toBe(1)
   expect(await list.locator('[data-forge-review-failure]').count()).toBe(0)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code review page and adds a comment to it', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-activity', 'normal', {
+    lists: { 'review-requested': [7], 'authored': [], 'involved': [] },
+  })
+  // The scaffold expects its recorded model call to be consumed, so the borrowed conversation runs first.
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '代码评审', exact: true }).click()
+  await page.locator(`[data-forge-review-item="${PULL}"]`).click()
+  const activity = page.locator(`[data-forge-review-detail="${PULL}"]`).getByRole('region', { name: '动态', exact: true })
+
+  // Commits fold into one line; the review request, the approval, and the comment follow in the code host's order.
+  const lines = async (): Promise<string[]> => await activity.locator('[data-forge-review-line]')
+    .evaluateAll(rows => rows.map(row => (row.textContent ?? '').replace(/\d+ ?(天|个月|年)前.*$/, '')))
+  await expect.poll(lines).toEqual(['2 次提交', 'octo 请求 mona 评审', 'mona 批准了这些更改'])
+  const comments = activity.locator('[data-forge-review-comment]')
+  await expect.poll(async () => await comments.count()).toBe(1)
+  expect(await comments.first().locator('strong').textContent()).toBe('good')
+  await activity.getByRole('button', { name: '2 次提交', exact: true }).click()
+  await expect.poll(lines).toEqual(['2 次提交', 'Add the panel', 'Fix the build', 'octo 请求 mona 评审', 'mona 批准了这些更改'])
+
+  // A comment goes to the pull request's conversation in one request and then shows at the end of the activity.
+  const field = activity.getByRole('textbox', { name: '留下评论', exact: true })
+  const send = activity.getByRole('button', { name: '评论', exact: true })
+  expect(await send.isDisabled()).toBe(true)
+  await field.fill('Thanks for the fix')
+  await send.click()
+  await expect.poll(async () => await comments.count()).toBe(2)
+  expect(await comments.last().textContent()).toContain('Thanks for the fix')
+  expect(await field.inputValue()).toBe('')
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+  expect(calls.filter(call => call[4] === 'POST'))
+    .toEqual([['api', '--hostname', 'github.com', '--method', 'POST', 'repos/octo/demo/issues/7/comments', '--input', '-']])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })

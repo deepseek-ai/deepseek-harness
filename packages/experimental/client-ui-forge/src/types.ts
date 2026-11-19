@@ -734,6 +734,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/reviewers-failed': Record<string, never>
     /** The code host did not provide a change request's description; the message says why. */
     'forgePanel/description-failed': Record<string, never>
+    /** The code host did not provide a change request's activity; the message says why. */
+    'forgePanel/activity-failed': Record<string, never>
     /** The code host's provider cannot read review threads, so the changes view shows none. */
     'forgePanel/review-unsupported': Record<string, never>
     /** The code host did not provide the change request's review threads, or its status has not been read yet; the message says why. */

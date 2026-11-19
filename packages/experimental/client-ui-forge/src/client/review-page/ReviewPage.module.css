@@ -804,6 +804,207 @@
   min-width: 0;
 }
 
+/* The activity under the description: one line per commit run, review, and change of state, and a card per comment. */
+.activity {
+  margin-top: 28px;
+}
+
+.activityLines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.activityLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+  text-align: left;
+}
+
+button.activityLine {
+  cursor: pointer;
+}
+
+button.activityLine:focus-visible,
+.activityMore:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  button.activityLine:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.activityNested {
+  padding-left: 32px;
+}
+
+.activityGlyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.activityGlyph[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.activityGlyph[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.activityText {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activityActor {
+  font-weight: 500;
+}
+
+.activityRest {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.activityTime {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activityEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activitySha {
+  font-family: var(--dsw-font-mono, ui-monospace, monospace);
+}
+
+.activityComment {
+  margin: 6px 8px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md, 8px);
+}
+
+.activityCommentHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+
+.activityTag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-card-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* A long comment starts as its first lines; the control under it shows the rest. */
+.activityClamp {
+  max-height: 120px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+
+.activityMore {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-link);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.activityOlder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.activityOlder > .activityMore {
+  margin: 0;
+}
+
+.activityCompose {
+  margin-top: 10px;
+}
+
+.activityComposer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md, 8px);
+}
+
+.activityComposer:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.activityComposer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 160px;
+  padding: 4px 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.activityComposer textarea::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.activityError {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+}
+
 /* The status column: bordered blocks. A card holds rows of the Session panel's change request card on that card's
    row grid, without the indent that aligns them under the card's title there. */
 .statusCard,

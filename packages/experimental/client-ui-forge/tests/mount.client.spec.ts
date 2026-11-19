@@ -13,7 +13,8 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeReadiness, ForgeRerunRequest,
+  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeReadiness,
+  ForgeRerunRequest,
   ForgeReviewData,
   ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles,
   ForgeViewedRequest,
@@ -277,6 +278,8 @@ async function base() {
     reviewRefresh: vi.fn(async (): Promise<RemoteResult<void>> => OK),
     reviewDescription: vi.fn(async (_url: string, _signal: AbortSignal): Read<ChangeRequestDescription> =>
       ({ ok: true, value: description('Body') })),
+    reviewActivity: vi.fn(async (_url: string, _signal: AbortSignal): Read<ChangeRequestActivity | null> => ({ ok: true, value: null })),
+    reviewComment: vi.fn(async (_url: string, _body: string): Promise<RemoteResult<void>> => OK),
     reviewPoll: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMarkReady: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMerge: vi.fn(async (_url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
@@ -1632,7 +1635,7 @@ describe('mountForgePanel review page', () => {
     await f.dispose()
   })
 
-  it('reads the lists of every repository or one, the change request, and its description through the Remote', async () => {
+  it('reads the lists, the change request, its description and activity, and adds a comment through the Remote', async () => {
     const f = await fixture()
     const page = reviewPage(f)
     const signal = new AbortController().signal
@@ -1644,6 +1647,10 @@ describe('mountForgePanel review page', () => {
     expect(f.forgePanel.reviewChangeRequest).toHaveBeenCalledWith(url, signal)
     expect(await page.readDescription(url, signal)).toEqual({ ok: true, value: description('Body') })
     expect(f.forgePanel.reviewDescription).toHaveBeenCalledWith(url, signal)
+    expect(await page.readActivity(url, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.reviewActivity).toHaveBeenCalledWith(url, signal)
+    expect(await page.addComment(url, 'Thanks')).toEqual({ ok: true, value: undefined })
+    expect(f.forgePanel.reviewComment).toHaveBeenCalledWith(url, 'Thanks')
     expect(page.hooks.locale.getSnapshot()).toBe(f.ctx.locale.getLocale().active)
     const reset = vi.fn()
     const unsubscribe = page.subscribeReset(reset)

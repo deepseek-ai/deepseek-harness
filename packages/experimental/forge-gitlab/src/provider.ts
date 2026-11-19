@@ -2,12 +2,13 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot,
-  ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData,
-  ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
-  ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery, MergeRequest,
+  BranchUpdateRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef,
+  ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
+  ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult,
+  ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
+import { readActivity } from './activity.ts'
 import { GitLabApi } from './api.ts'
 import { readCommits } from './commits.ts'
 import { readDescription } from './description.ts'
@@ -138,6 +139,32 @@ export class GitLabProvider implements ForgeProvider {
     const failure = this.hostFailure(ref.repository.host)
     if (failure !== undefined) return failure
     return await readDescription(this.api, ref, signal)
+  }
+
+  /**
+   * Read a merge request's latest notes through GraphQL and its state changes through REST.
+   * @see readActivity
+   */
+  async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readActivity(this.api, ref, signal)
+  }
+
+  /**
+   * Add a comment through one REST request that creates a note. The comment is saved once GitLab answers with the
+   * note's id; an accepted request whose answer names no note is `unknown`. GitLab runs the quick actions in `body`,
+   * such as `/close`, and removes them from the note.
+   */
+  async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const refused = this.writable(ref, null)
+    if (refused !== undefined) return refused
+    const written = await this.api.write(ref.repository.host, [
+      '-X', 'POST', `${mergeRequestPath(ref)}/notes`, '--input', '-', '-H', 'Content-Type: application/json',
+    ], signal, JSON.stringify({ body }))
+    if (!written.ok) return written.failure
+    return z.object({ id: z.number() }).safeParse(written.body).success ? undefined
+      : { code: 'unknown', message: 'unexpected GitLab response to the comment' }
   }
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {

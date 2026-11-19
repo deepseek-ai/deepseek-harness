@@ -8,8 +8,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import clsx from 'clsx'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
-import type { ChangeRequestDescription, ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeReviewChangeRequest, ForgeReviewFrame } from '../../types.ts'
 import type { ChangeRequestActions } from '../ChangeRequestCard.tsx'
 import type { ForgeLensDescription } from '../changes-service.ts'
@@ -17,7 +16,7 @@ import { ChangesView, type ChangesTabInjected, type ChangesViewTab } from '../Ch
 import { useHostStream, type StreamRead } from './host-stream.ts'
 import type { NS } from '../locales.ts'
 import { ReviewChat, useReviewConversation, type ReviewChatFace } from './ReviewChat.tsx'
-import { ReviewDetail } from './ReviewDetail.tsx'
+import { ReviewDetail, type ReviewSummaryFace } from './ReviewDetail.tsx'
 import { ReviewList } from './ReviewList.tsx'
 import type { QuoteCopy, ReviewSelection } from '../review.ts'
 import { reviewListsComplete, reviewRepositories, scopeRepository, type ReviewRepository } from './review-lists.ts'
@@ -38,7 +37,7 @@ export type ReviewChangesFace = Omit<ChangesTabInjected, 'keyedHooks' | 'hooks' 
 const CHAT_QUOTE_COPY: QuoteCopy = { add: 'reviewPage.addToChat', added: 'reviewPage.addedToChat', failed: 'reviewPage.addToChatFailed' }
 
 /** Business face of the review page. */
-export interface ReviewPageInjected {
+export interface ReviewPageInjected extends ReviewSummaryFace {
   readonly hooks: {
     /** The UI language; the renderer binds it as `useLocale`. */
     readonly locale: HostObservable<string>
@@ -53,8 +52,6 @@ export interface ReviewPageInjected {
   readonly subscribeReset: (listener: () => void) => () => void
   /** Read every list again; settles once the Host accepted the request, after reporting a failure. */
   readonly refresh: () => Promise<void>
-  /** Read the description and labels of a change request. */
-  readonly readDescription: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestDescription>>
   /** Open the Plugins page where the providers' hosts are listed, while `pluginNavigation` holds. */
   readonly openHostSettings: () => void
   /** The card actions acting on one change request; `showChanges` opens the changes tab. */
@@ -154,7 +151,8 @@ interface DetailPaneProps {
 function DetailPane({
   url, read, tab, listHidden, now, locale, cardActions, conversationId, onConversation, unseenQuotes, page,
 }: DetailPaneProps): ReactNode {
-  const { actions, changes, chat, quoteReview, quoteThread, readDescription, renderSlot, SessionProvider, useStore, t } = page
+  const { actions, changes, chat, quoteReview, quoteThread, readDescription, readActivity, addComment, renderSlot } = page
+  const { SessionProvider, useStore, t } = page
   const hostSettings = page.usePluginNavigation(value => value)
   const conversation = useReviewConversation(read.frame, conversationId, onConversation, chat)
   const { start } = conversation
@@ -185,6 +183,8 @@ function DetailPane({
       locale={locale}
       actions={cardActions}
       readDescription={readDescription}
+      readActivity={readActivity}
+      addComment={addComment}
       onAddHost={hostSettings ? page.openHostSettings : undefined}
       renderChanges={frame => (
         <ReviewChanges frame={frame} visible={tab === 'changes'} changes={quoteChanges} useStore={useStore} actions={actions} t={t} />

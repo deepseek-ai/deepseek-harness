@@ -14,7 +14,7 @@ export const DESCRIPTION_QUERY = `query($path: ID!, $iid: String!) {
 }`
 
 /** Global id of a project, which ends in the number that names the project in upload addresses. */
-const PROJECT_ID = /^gid:\/\/gitlab\/Project\/\d+$/
+export const PROJECT_ID = /^gid:\/\/gitlab\/Project\/\d+$/
 
 const descriptionSchema = z.object({
   project: z.object({
@@ -40,9 +40,21 @@ const UPLOAD = /(\]\(|\bsrc=")(\/uploads\/[0-9a-f]{32}\/)/g
 const COLOR = /^#([0-9a-f]{6})$/i
 
 /**
+ * Give the uploads that a Markdown text names the addresses GitLab's own rendering gives them,
+ * `https://<host>/-/project/<project id>/uploads/…`; an upload of a private project answers only with a GitLab session.
+ * @param text - Markdown source of a description or a comment as GitLab stores it.
+ * @param host - host of the project.
+ * @param project - global id of the project the text belongs to, which {@link PROJECT_ID} accepts.
+ * @returns the text with those addresses in place of the ones without host and project.
+ */
+export function withUploadAddresses(text: string, host: string, project: string): string {
+  const uploads = `https://${host}/-/project/${project.slice(project.lastIndexOf('/') + 1)}`
+  return text.replace(UPLOAD, (_, lead: string, upload: string) => `${lead}${uploads}${upload}`)
+}
+
+/**
  * Read a merge request's description and labels through one request. Upload addresses in the description become the
- * ones GitLab's own rendering gives them, `https://<host>/-/project/<project id>/uploads/…`; an upload of a private
- * project answers only with a GitLab session, and `images` maps none.
+ * ones {@link withUploadAddresses} gives them, and `images` maps none.
  * @param api - GitLab reads.
  * @param ref - merge request.
  * @param signal - cancellation of the read.
@@ -60,9 +72,8 @@ export async function readDescription(
   const { project } = parsed.data
   const merge = project?.mergeRequest
   if (project === null || merge == null) return { code: 'not-found', message: `merge request ${ref.number} was not found` }
-  const uploads = `https://${ref.repository.host}/-/project/${project.id.slice(project.id.lastIndexOf('/') + 1)}`
   return {
-    body: (merge.description ?? '').replace(UPLOAD, (_, lead: string, upload: string) => `${lead}${uploads}${upload}`),
+    body: withUploadAddresses(merge.description ?? '', ref.repository.host, project.id),
     labels: merge.labels.nodes.map(label => ({ name: label.title, color: COLOR.exec(label.color)?.[1]?.toLowerCase() ?? null })),
     labelsTruncated: merge.labels.count > merge.labels.nodes.length,
     images: {},

@@ -214,6 +214,8 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
         subscribeReset,
         refresh: async () => { settled(await remote.reviewRefresh(), 'toast.refreshFailed') },
         readDescription: (url, signal) => remote.reviewDescription(url, signal),
+        readActivity: (url, signal) => remote.reviewActivity(url, signal),
+        addComment: (url, body) => remote.reviewComment(url, body),
         openHostSettings: () => { ctx.get('pluginNavigation')?.openBundle(deps.hostSettings) },
         actionsFor,
         changes,

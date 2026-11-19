@@ -4,7 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider,
+  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
+  ForgeFailure, ForgeProvider,
   ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewerFilter,
   ForgeViewerList, ForgeViewerQuery,
 } from '@deepseek-ai/dsh-experimental-forge'
@@ -279,6 +280,30 @@ describe('forgePanel review page reads', () => {
     Object.assign(opened.provider, { readDescription: () => Promise.resolve(description) })
     await expect(panel.reviewDescription(url, signal)).resolves.toEqual(description)
 
+    // A provider that reads no activity has none to show; a read the host refused names the host's reason.
+    await expect(panel.reviewActivity(url, signal)).resolves.toBeNull()
+    const activity: ChangeRequestActivity = {
+      items: [{ kind: 'comment', at: '2026-11-02T00:00:00Z', actor: { login: 'mona', avatarUrl: null, bot: false }, body: 'Looks good', url: null }],
+      truncated: false, viewerCanComment: true,
+    }
+    const readActivity = vi.fn<() => Promise<ChangeRequestActivity | ForgeFailure>>(() => Promise.resolve(activity))
+    Object.assign(opened.provider, { readActivity })
+    await expect(panel.reviewActivity(url, signal)).resolves.toEqual(activity)
+    readActivity.mockResolvedValueOnce({ code: 'rate-limited', message: 'slow down' })
+    await expect(panel.reviewActivity(url, signal)).rejects.toMatchObject({ code: 'forgePanel/activity-failed', message: 'slow down' })
+
+    // A comment reaches the provider as written; a blank one is refused before the host is asked.
+    await expect(panel.reviewComment(url, 'Thanks', signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider adds no comments' })
+    const addComment = vi.fn<() => Promise<ForgeActionFailure | undefined>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { addComment })
+    await expect(panel.reviewComment(url, ' Thanks\n', signal)).resolves.toBeUndefined()
+    expect(addComment).toHaveBeenCalledWith(ref(7), ' Thanks\n', expect.any(AbortSignal))
+    await expect(panel.reviewComment(url, ' \n', signal)).rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'The comment is empty' })
+    expect(addComment).toHaveBeenCalledTimes(1)
+    addComment.mockResolvedValueOnce({ code: 'unknown', message: 'no answer' })
+    await expect(panel.reviewComment(url, 'Thanks', signal)).rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'no answer' })
+
     await expect(panel.reviewChecks(url, HEAD, signal))
       .rejects.toMatchObject({ code: 'forgePanel/checks-failed', message: 'This provider does not support complete check reads' })
     Object.assign(opened.provider, { fetchChecks: () => Promise.resolve(snapshot(ref(7))) })
@@ -435,6 +460,8 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewPoll(UNSERVED, signal),
       () => changeRequest(opened, UNSERVED).pull(),
       () => panel.reviewDescription(UNSERVED, signal),
+      () => panel.reviewActivity(UNSERVED, signal),
+      () => panel.reviewComment(UNSERVED, 'Thanks', signal),
       () => panel.reviewChecks(UNSERVED, HEAD, signal),
       () => panel.reviewThreads(UNSERVED, HEAD, false, signal),
       () => panel.reviewThreadWrite(UNSERVED, write, signal),
@@ -472,6 +499,8 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewRefresh(aborted),
       () => panel.reviewPoll(url, aborted),
       () => panel.reviewDescription(url, aborted),
+      () => panel.reviewActivity(url, aborted),
+      () => panel.reviewComment(url, 'Thanks', aborted),
       () => panel.reviewChecks(url, HEAD, aborted),
       () => panel.reviewThreads(url, HEAD, false, aborted),
       () => panel.reviewDiff(url, null, aborted),

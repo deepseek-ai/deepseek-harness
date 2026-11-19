@@ -3096,6 +3096,16 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestActivityItem",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestActivity",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeReviewChange",
       "source": "packages/experimental/forge/src/types.ts"
     },

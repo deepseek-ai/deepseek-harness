@@ -68,6 +68,17 @@ interface ForgeProvider {
   countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
   /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
   readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+  /**
+   * Read the activity of a change request: the comments in its conversation, its submitted reviews, its commits, and
+   * the changes of its state. Omission declares that this provider reads no activity.
+   */
+  readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+  /**
+   * Add a comment of Markdown source `body` to a change request's conversation, resolving to undefined once the host
+   * saved it. A comment is never retried. Omission declares that this provider adds no comments, and its `readActivity`
+   * then denies `viewerCanComment`.
+   */
+  addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -1001,6 +1012,55 @@ interface ChangeRequestLabel {
 }
 ```
 
+## 动态与评论
+
+`ctx.forge.readActivity` 读取变更请求上发生过的事：对话中的评论、已提交的评审、提交，以及状态的变化，按时间从旧到新，最多为提供方的上限，超出时保留最新的条目。`ctx.forge.addComment` 向对话添加一条评论，之后如果该变更请求正被监视，就立即轮询一次。提供方可以实现其中一个或两个方法：没有 `readActivity` 的提供方返回 `unsupported`，没有 `addComment` 的提供方返回失败；动态的 `viewerCanComment` 说明当前用户能否添加评论。评论和评审的正文是 Markdown 源文本，其中的原始 HTML 不得作为 HTML 渲染。请求以及各主机的记录如何变成条目，由 [GitHub](../../packages/experimental/forge-github/README.zh.md#use-this-package) 与 [GitLab](../../packages/experimental/forge-gitlab/README.zh.md#use-this-package) 提供方的 README 说明。
+
+```ts type-equiv
+/**
+ * One entry of a change request's activity: a comment in its conversation, a submitted review, a commit, a change of
+ * its state, or a record the host words itself.
+ */
+type ChangeRequestActivityItem = {
+  /** ISO 8601 time of the entry. */
+  readonly at: string
+  /** Account the entry is by, or null when the host names none or the account no longer exists. */
+  readonly actor: ForgeCommentAuthor | null
+} & (
+  /** A comment in the conversation. `body` is Markdown source; it may contain raw HTML, which readers must not render as HTML. */
+  | { readonly kind: 'comment'; readonly body: string; readonly url: string | null }
+  /**
+   * A submitted review: its decision, its own Markdown text, which follows the rule of a comment's `body` and is empty
+   * without one, and the number of comments it left on lines and files.
+   */
+  | { readonly kind: 'review'; readonly verdict: ReviewVerdict; readonly body: string; readonly comments: number; readonly url: string | null }
+  /**
+   * A commit added to the change request: its object name, abbreviated when the host records only an abbreviation, and
+   * the first line of its message.
+   */
+  | { readonly kind: 'commit'; readonly sha: string; readonly title: string }
+  | { readonly kind: 'merged' | 'closed' | 'reopened' | 'ready-for-review' | 'converted-to-draft' | 'force-pushed' }
+  | { readonly kind: 'auto-merge-enabled' | 'auto-merge-disabled' }
+  /** A review was requested from an account or a team, named as the host spells it; null when the host names neither. */
+  | { readonly kind: 'review-requested'; readonly reviewer: string | null }
+  | { readonly kind: 'renamed'; readonly from: string; readonly to: string }
+  /** A record with no kind of its own, as plain text in the host's own words. */
+  | { readonly kind: 'other'; readonly text: string }
+)
+```
+
+```ts type-equiv
+/** The activity of a change request. */
+interface ChangeRequestActivity {
+  /** Entries oldest first, at most the provider's limit; the latest ones when the change request has more. */
+  readonly items: readonly ChangeRequestActivityItem[]
+  /** Whether the change request has entries older than `items` holds. */
+  readonly truncated: boolean
+  /** Whether the signed-in user can add a comment through `addComment`; false for a provider without it. */
+  readonly viewerCanComment: boolean
+}
+```
+
 ## Session 绑定
 
 `ctx.forgeSession` 按提供方注册的命令规则，从每个 Session 自己的日志派生其绑定：forge-github 的 `gh` 规则与 forge-gitlab 的 `glab` 规则绑定 `gh pr create` 与 `glab mr create` 结果输出的 URL，以及 `gh pr view`、`glab mr view` 及其同类引用命令所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影的客户端视图随 Session 摘要下发，列出绑定但不含其状态。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
@@ -1620,7 +1680,7 @@ interface ForgeLocalChanges {
 
 ### 代码评审页
 
-[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`、`reviewActivity`、`reviewComment`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
 
 对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
 
@@ -2019,6 +2079,25 @@ async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<
 async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
 
 /**
+ * Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+
+/**
+ * Add a comment to a change request's conversation, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param body - Markdown source of the comment.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
  * with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
@@ -2205,6 +2284,27 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * host's reason when the host does not provide it.
  */
 @Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>
+
+/**
+ * Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes
+ * of state.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the activity, or null when the change request's provider reads none.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the
+ * host's reason when the host does not provide it.
+ */
+@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>
+
+/**
+ * Add a comment to the conversation of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param body - Markdown source of the comment.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is
+ * blank, or with the host's reason; `forgePanel/action-unknown` when the host's answer did not confirm the comment.
+ */
+@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>
 
 /**
  * Read every check of a change request the review page shows.

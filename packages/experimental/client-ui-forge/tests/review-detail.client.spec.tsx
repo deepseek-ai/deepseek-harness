@@ -6,7 +6,7 @@
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ChangeRequestDescription, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestActivity, ChangeRequestDescription, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
@@ -64,7 +64,8 @@ function renderDetail(overrides: Partial<ReviewDetailProps> = {}) {
   const read = stream(reviewed(7))
   const props: ReviewDetailProps = {
     url: URL7, read, tab: 'summary', onTab: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
-    actions, readDescription: vi.fn(async () => ok(description('Body'))), onAddHost: undefined,
+    actions, readDescription: vi.fn(async () => ok(description('Body'))), readActivity: vi.fn(async () => ok(null)),
+    addComment: vi.fn(async () => ok(undefined)), onAddHost: undefined,
     renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, t, ...overrides,
   }
   const view = render(<ReviewDetail {...props} />)
@@ -242,6 +243,53 @@ describe('ReviewDetail tabs', () => {
     expect(within(chat()).getByLabelText('2 quotes to send').matches(`.${css.tabBadge}`)).toBe(true)
     b.rerender({ unseenQuotes: 0 })
     expect(chat().textContent).toBe('Chat')
+  })
+})
+
+describe('ReviewDetail activity', () => {
+  it('shows the activity under the description, reads it again when the change request or its reviews change, and opens the changes tab', async () => {
+    const activity: ChangeRequestActivity = {
+      items: [{ kind: 'review', at: '2026-10-09T01:00:00Z', actor: { login: 'mona', avatarUrl: null, bot: false }, verdict: 'commented', body: '',
+        comments: 1, url: null }],
+      truncated: false, viewerCanComment: true,
+    }
+    const readActivity = vi.fn<ReviewDetailProps['readActivity']>(async () => ok(activity))
+    const addComment = vi.fn<ReviewDetailProps['addComment']>(async () => ok(undefined))
+    const b = renderDetail({ readActivity, addComment })
+    await settle()
+    const region = b.view.getByRole('region', { name: 'Activity' })
+    expect(region.compareDocumentPosition(b.view.getByRole('region', { name: 'Description' })) & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
+    expect(readActivity).toHaveBeenCalledWith(URL7, expect.any(AbortSignal))
+    fireEvent.click(within(region).getByRole('button', { name: 'mona reviewed · Inline comments: 1, View in Changes' }))
+    expect(b.props.onTab).toHaveBeenCalledWith('changes')
+
+    // A comment goes to the change request the detail shows, and the activity is read again after it.
+    fireEvent.change(within(region).getByRole('textbox', { name: 'Leave a comment' }), { target: { value: 'Thanks' } })
+    fireEvent.click(within(region).getByRole('button', { name: 'Comment' }))
+    await settle()
+    expect(addComment).toHaveBeenCalledWith(URL7, 'Thanks')
+    expect(readActivity).toHaveBeenCalledTimes(2)
+
+    b.rerender({ read: stream(changed({ updatedAt: '2026-10-09T01:30:00Z' })) })
+    await settle()
+    expect(readActivity).toHaveBeenCalledTimes(3)
+    b.rerender({ read: stream({ ...changed({ updatedAt: '2026-10-09T01:30:00Z' }), reviewRevision: 4 }) })
+    await settle()
+    expect(readActivity).toHaveBeenCalledTimes(4)
+    // The link in the activity opens through the detail's own link action.
+    readActivity.mockResolvedValueOnce(ok({ ...activity, truncated: true }))
+    b.rerender({ read: stream({ ...changed({ updatedAt: '2026-10-09T01:30:00Z' }), reviewRevision: 5 }) })
+    await settle()
+    fireEvent.click(within(region).getByRole('button', { name: 'Open in browser' }))
+    expect(b.actions.openLink).toHaveBeenCalledWith(URL7)
+
+    // Once the provider left, a comment whose outcome is unknown has no product name to point at.
+    addComment.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/action-unknown', 'no answer', {}) })
+    b.rerender({ read: stream({ ...changed({ updatedAt: '2026-10-09T01:30:00Z' }), reviewRevision: 5, forge: null }) })
+    fireEvent.change(within(region).getByRole('textbox', { name: 'Leave a comment' }), { target: { value: 'Again' } })
+    fireEvent.click(within(region).getByRole('button', { name: 'Comment' }))
+    await settle()
+    expect(within(region).getByRole('alert').textContent).toBe('The comment was not posted: no answer')
   })
 })
 

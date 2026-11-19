@@ -264,6 +264,38 @@ describe('GitLab provider actions', () => {
     await expect(provider(() => json({})).subject.markReady(unserved, signal)).resolves.toMatchObject({ code: 'failed' })
     await expect(provider(() => json({})).subject.merge(merge(6), { method: 'merge', headSha: 'HEAD' }, signal)).rejects.toThrow('forge-gitlab: invalid head commit "HEAD"')
   })
+
+  it('adds a comment through one request that creates a note', async () => {
+    const { subject, calls } = provider(() => json({ id: 41, body: 'Thanks.\n\nMerging after the pipeline.' }))
+    await expect(subject.addComment(merge(6), 'Thanks.\n\nMerging after the pipeline.', signal)).resolves.toBeUndefined()
+    expect(calls.map(call => call.args)).toEqual([
+      ['api', '--hostname', HOST, '-X', 'POST', `${mrPath(6)}/notes`, '--input', '-', '-H', 'Content-Type: application/json'],
+    ])
+    expect(JSON.parse(calls[0]?.input ?? '')).toEqual({ body: 'Thanks.\n\nMerging after the pipeline.' })
+  })
+
+  it.each([
+    ['refused', output('{"message":"400 Bad request - Note {:note=>[\\"can\'t be blank\\"]}"}', 1, 'glab: 400 Bad request (HTTP 400)'),
+      { code: 'failed', message: '400 Bad request (HTTP 400)' }],
+    ['refused for its credentials', output('', 1, 'glab: 401 Unauthorized (HTTP 401)'),
+      { code: 'unauthenticated', message: '401 Unauthorized (HTTP 401)' }],
+    ['answered with a server error', output('', 1, 'glab: 502 Bad Gateway (HTTP 502)'),
+      { code: 'unknown', message: '502 Bad Gateway (HTTP 502)' }],
+    ['accepted without a note in the answer', json({ commands_changes: {}, summary: ['Closed this merge request.'] }),
+      { code: 'unknown', message: 'unexpected GitLab response to the comment' }],
+  ])('reports a comment GitLab %s, sending it once', async (_label, answer, failure) => {
+    const { subject, calls } = provider(() => answer)
+    await expect(subject.addComment(merge(6), '/close', signal)).resolves.toEqual(failure)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('refuses a comment on an unserved host without a request', async () => {
+    const { subject, calls } = provider(() => json({ id: 41 }))
+    await expect(subject.addComment(merge(6, { ...app, host: 'elsewhere.test' }), 'Thanks.', signal)).resolves.toEqual({
+      code: 'failed', message: 'forge-gitlab does not serve elsewhere.test; add it to the provider\'s hosts setting',
+    })
+    expect(calls).toEqual([])
+  })
 })
 
 /** The REST body of a diff version at `sha('a')` from `sha('b')` that changes `diffs`, each with GitLab's other file fields. */
@@ -523,7 +555,7 @@ function counted(call: GlabCall): Record<string, unknown> {
   return { reviewed: { count: sent(call).variables.me === 'lin' ? 1 : 10 }, assigned: { count: 4 } }
 }
 
-describe('GitLab provider viewer lists and descriptions', () => {
+describe('GitLab provider viewer lists, descriptions, and activity', () => {
   const involved = { host: HOST, filter: 'involved', repository: null, limit: 20 } as const
   const counts = (reviewed: number) => new Map([['review-requested', 2], ['authored', 2], ['involved', reviewed + 4]])
 
@@ -533,12 +565,13 @@ describe('GitLab provider viewer lists and descriptions', () => {
     })
   })
 
-  it('refuses lists, counts, and descriptions on an unserved host without a request', async () => {
+  it('refuses lists, counts, descriptions, and activity on an unserved host without a request', async () => {
     const { subject, calls } = provider(() => json({}))
     const refused = { code: 'unavailable', message: 'forge-gitlab does not serve elsewhere.test; add it to the provider\'s hosts setting' }
     await expect(subject.listForViewer({ ...involved, host: 'elsewhere.test' }, signal)).resolves.toEqual(refused)
     await expect(subject.countForViewer('elsewhere.test', signal)).resolves.toEqual(refused)
     await expect(subject.readDescription(merge(6, { ...app, host: 'elsewhere.test' }), signal)).resolves.toEqual(refused)
+    await expect(subject.readActivity(merge(6, { ...app, host: 'elsewhere.test' }), signal)).resolves.toEqual(refused)
     expect(calls).toEqual([])
   })
 
@@ -623,6 +656,26 @@ describe('GitLab provider viewer lists and descriptions', () => {
       createdAt: '2026-11-08T12:00:00Z',
     })
     expect(calls.map(call => sent(call).variables)).toEqual([{ path: 'group/sub/app', iid: '6' }])
+  })
+
+  it('reads activity through a note query and a state change read', async () => {
+    const author = { username: 'lin', avatarUrl: null, bot: false }
+    const { subject, calls } = provider(path => path !== 'graphql' ? json([]) : json({ data: { project: {
+      id: 'gid://gitlab/Project/278',
+      mergeRequest: { userPermissions: { createNote: true }, notes: { pageInfo: { hasPreviousPage: false }, nodes: [{
+        system: false, body: 'Ready for another look.', createdAt: '2026-11-08T12:00:00Z', url: null, author, position: null,
+        systemNoteMetadata: null,
+      }] } },
+    } } }))
+    await expect(subject.readActivity(merge(6), signal)).resolves.toEqual({
+      items: [{
+        at: '2026-11-08T12:00:00Z', actor: { login: 'lin', avatarUrl: null, bot: false }, kind: 'comment',
+        body: 'Ready for another look.', url: null,
+      }],
+      truncated: false,
+      viewerCanComment: true,
+    })
+    expect(calls.map(call => pathOf(call.args))).toEqual(['graphql', `${mrPath(6)}/resource_state_events?per_page=100`])
   })
 })
 
