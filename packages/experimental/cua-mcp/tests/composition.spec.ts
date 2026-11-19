@@ -209,7 +209,9 @@ describe('Computer Use MCP composition', () => {
     release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'MCP release refused' })
     const result = await running
     expect(result.isError).toBe(true)
-    expect(texts(result).join('')).toContain('MCP release refused')
+    const message = texts(result).join('')
+    expect(message).toContain('program failed')
+    expect(message.match(/MCP release refused/g)).toHaveLength(1)
   })
 
   it('cleans up a cancelled MCP request even after its program has finished and image delivery is pending', async () => {

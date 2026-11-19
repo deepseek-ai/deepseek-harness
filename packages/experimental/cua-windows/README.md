@@ -83,7 +83,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - Hover, click, scroll and drag use the system pointer. `requireSystemPointerApproval` does not prompt separately for Windows pointer operations.
 - Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.
 - Windows routes input through the desktop. After focus changes or the original window closes, a confirmed release means the desktop accepted the up. The original window may not receive the event. If the desktop is unavailable or refuses to confirm release, further CUA input for the task is blocked. Inspect the desktop before starting another task.
-- The helper does not check each key or button release during cleanup. If an input remains held after a failure, release it manually before continuing.
+- Cleanup of temporary input inside complete actions does not check each key or button release. If an input remains held after a failure, release it manually before continuing.
 - Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.
 - The Windows handshake requires a positive `maxClickHoldMs`. With zero, it fails with `INVALID_CONFIG` before ordinary clicks or status queries can run.
 - `findApps`, application launch, and app-level accessibility are unavailable. Ask the user to open the required application or window.

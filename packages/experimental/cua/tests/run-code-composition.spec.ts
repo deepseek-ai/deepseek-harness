@@ -111,7 +111,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
           acceptsPidSelector: selectorPid !== undefined, heldInputState,
           ...disposeNative ? { disposeNative: () => disposeNative(native.state) } : {},
           capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
-            appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
+            appLevelAccessibility: platform !== 'windows', keyboard: platform === 'windows' ? ['window'] : ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
       },
@@ -360,6 +360,7 @@ it('forwards per-read accessibility limits to the Windows backend', async () => 
 })
 
 const holdProgram = 'var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")'
+const holdWindowProgram = 'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.sendKeyEvent("w", "down")'
 
 function reminders(agent: { session: { snapshotEvents(): readonly import('@deepseek-ai/dsh-session').SessionEvent[] } },
   kind: 'cua-held-inputs' | 'cua-inputs-released' = 'cua-held-inputs') {
@@ -383,8 +384,7 @@ it('reports native held input after programs, keeps it across turns, and stops r
 })
 
 it('reports the Windows keyboard window and desktop input mode and supports a later explicit up', async () => {
-  const f = await setup(['var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.sendKeyEvent("w", "down")'],
-    'windows', undefined, true, true)
+  const f = await setup([holdWindowProgram], 'windows', undefined, true, true)
   await f.run()
   expect(f.native.events).toEqual(['w:down'])
   expect(reminders(f.agent)[0]).toContain('Key "w", appHandle "fixture-app", windowId "7" (system input)')
@@ -492,7 +492,7 @@ it('reports failed native state inspection and releases held input instead of cl
 
 it('keeps the Windows helper runtime alive until its Agent connection confirms release', async () => {
   const disposed = vi.fn(async (state: { closedChannels: number }) => state.closedChannels)
-  const f = await setup([holdProgram], 'windows', undefined, true, true, undefined, async (state) => { await disposed(state) })
+  const f = await setup([holdWindowProgram], 'windows', undefined, true, true, undefined, async (state) => { await disposed(state) })
   await f.run()
   const release = f.native.controlNext('releaseHeldInputs')
   const closing = f.provider.dispose()
@@ -521,7 +521,7 @@ it.each(['agent', 'provider', 'context'] as const)('awaits native release when t
 })
 
 it('leaves providers without held-input state support on their existing protocol', async () => {
-  const f = await setup([holdProgram, 'await app.sendKeyEvent("w", "up")'], 'windows', undefined, true)
+  const f = await setup([holdWindowProgram, 'await win.sendKeyEvent("w", "up")'], 'windows', undefined, true)
   await f.run()
   for (const call of f.native.calls.filter(call => call.method === 'sendKeyEvent')) expect(call.params).not.toHaveProperty('taskId')
   expect(f.native.calls.some(call => ['getHeldInputs', 'releaseHeldInputs'].includes(call.method))).toBe(false)
