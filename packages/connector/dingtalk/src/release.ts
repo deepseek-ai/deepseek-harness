@@ -108,6 +108,7 @@ export class DwsRelease {
   private readonly owned: string | undefined
   private readonly entry: Buffer
   private readonly archive: DwsArchive | undefined
+  private pruned = false
 
   /**
    * Publish the skill root at once when the upstream skills are already present, so the first skill catalog lists it.
@@ -123,7 +124,7 @@ export class DwsRelease {
     private readonly release: DwsReleaseManifest = DWS_RELEASE,
   ) {
     const { profile } = options
-    // A profile holds one version of the plugin, so no other installation reads its cache directory.
+    // Only the processes of the profile read its cache directory.
     this.owned = profile === undefined ? undefined : dshCachePath({ dshHome: profile.home }, 'dingtalk', profile.name)
     const cache = this.owned ?? dshCachePath('dingtalk')
     if (options.binDir === undefined) {
@@ -179,14 +180,17 @@ export class DwsRelease {
 
   /**
    * Delete from the profile's own cache directory every published dws, skills directory, and skill root that this
-   * release does not use. It deletes nothing without a profile, or while {@link installed} is false, so an earlier
-   * release stays until this one is in place. An entry that cannot be deleted, such as a `dws.exe` that still runs on
-   * Windows, is logged as a warning and stays until the next load or installation.
+   * release does not use, once: on the first call that finds {@link installed} true. It deletes nothing without a
+   * profile, while {@link installed} is false, so an earlier release stays until this one is in place, or after that
+   * call. A process whose release a process running another plugin version deleted therefore installs it again without
+   * deleting that process's release. An entry that cannot be deleted, such as a `dws.exe` that still runs on Windows,
+   * is logged as a warning and stays until a later load.
    * @returns after the deletion finishes or stops at an entry it cannot delete; it never rejects.
    */
   async prune(): Promise<void> {
     const { owned } = this
-    if (owned === undefined || !this.installed()) return
+    if (owned === undefined || this.pruned || !this.installed()) return
+    this.pruned = true
     const used = new Set([resolve(this.directory), this.guides, this.skillRoot])
     try {
       for (const name of await readdir(owned)) {

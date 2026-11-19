@@ -523,6 +523,20 @@ describe("a profile's own cache directory", () => {
     expect(warnings()).toEqual([])
   })
 
+  it('deletes the other releases once, so a process whose release another one deleted installs it again beside that one', async () => {
+    const managed = await served()
+    await managed.install(signal())
+    await vi.waitFor(async () => { expect(await entries(owned())).toEqual(published(managed).toSorted()) })
+    await rm(managed.directory, { recursive: true })
+    await earlier()
+
+    await managed.install(signal())
+    await managed.prune()
+
+    expect(managed.installed()).toBe(true)
+    expect(await entries(owned())).toEqual([...EARLIER, ...published(managed)].toSorted())
+  })
+
   it('keeps the earlier releases while this one is not installed', async () => {
     await earlier()
     const managed = await served()
