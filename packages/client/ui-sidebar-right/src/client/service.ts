@@ -41,7 +41,7 @@ import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPan
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor, SidebarRightTabParamsMap } from './contract/params.ts'
-import { pageAddress } from './contract/seed.ts'
+import { contentPrefix, pageAddress } from './contract/seed.ts'
 import type { SidebarRightDestination } from './contract/slots.ts'
 import type { SidebarRightTabClaim, SidebarRightTabRegistry } from './tab-registry.ts'
 import { canCloseTab, findHostContentTab, type SidebarRightState, type SurfaceState } from './stores.ts'
@@ -250,7 +250,7 @@ export interface ISidebarRight {
    */
   openResource(address: string, options?: SidebarRightOpenResourceOptions): void
   /**
-   * Open transient content with its registered tab kind. Only the tab identity survives a reload.
+   * Open transient content with its registered tab kind. The visited body stays mounted across Session switches. Reload closes its tab.
    * @param kind - tab kind declaring the content in SidebarRightTabParamsMap.
    * @param content - input delivered to the tab body as navigation parameters.
    * @param options - reuse key and destination host.
@@ -403,7 +403,7 @@ export class SidebarRightController implements ISidebarRight {
     kind: K, content: SidebarRightTabParamsMap[K], options: SidebarRightOpenContentOptions = {},
   ): void {
     const { sessionId, actions } = this.require()
-    const address = `${pageAddress(kind)}/content/${encodeURIComponent(options.key ?? randomUUID())}`
+    const address = `${contentPrefix(kind)}${encodeURIComponent(options.key ?? randomUUID())}`
     this.placeIn(sessionId, actions, this.tabs.claim(address, kind), address, options.destination ?? 'sidebar', content)
   }
 

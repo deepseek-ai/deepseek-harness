@@ -28,7 +28,7 @@ Preview files in the right Sidebar and choose among registered renderers. Markdo
 <a id="what-it-registers"></a>
 ## What it registers
 
-The compaction summary tab shows the Markdown supplied by the selected Chat row. Its navigation content expires on reload. Reopen the row to read the same event again.
+The compaction summary tab shows the Markdown supplied by the selected Chat row. It stays open across Session switches and closes on reload. Reopen the row to read the same event again.
 
 Image drag actions arrive through the image entry’s inject face from [ui-file-drag](../ui-file-drag/README.md).
 

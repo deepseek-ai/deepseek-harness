@@ -712,7 +712,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(restoredPreview).toBe(preview)
   })
 
-  it.skipIf(MODE === 'record')('reopens the expired summary from its chat row after reload', async () => {
+  it.skipIf(MODE === 'record')('restores the file tab and reopens the summary from its chat row after reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-compaction-reload'))
     // Runs after the cases that capture Chat goldens: reloading resets their
     // expanded rows. The previous case left the Sidebar open on the file tab.
@@ -725,7 +725,9 @@ describe('web e2e: seeded history renders through cold resume', () => {
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
-      await column.locator(`${SUMMARY_PREVIEW} [role="status"]`).waitFor()
+      await column.locator('[data-textpreview-line="1"]').waitFor()
+      expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt'])
+      expect(await rendered.count()).toBe(0)
       await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 15_000 })
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])

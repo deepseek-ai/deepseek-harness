@@ -1,6 +1,7 @@
 /** Validated current-layout snapshots; undo history belongs to the live window. */
 import { z } from 'zod'
-import { EMPTY_HISTORY, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { applyOp, createIdMinter, EMPTY_HISTORY, planSettle, replay, type LayoutState } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { isContentTab } from './contract/seed.ts'
 import type { SurfaceState } from './stores.ts'
 
 /** Persistence namespace shared by scoped stores and startup discovery. */
@@ -55,6 +56,19 @@ function validateReferences(value: z.infer<typeof surface>): void {
     || layout.nodes[layout.activePaneId]?.kind !== 'pane') reject()
 }
 
+function restoredLayout(layout: LayoutState, minted: number): LayoutState {
+  const transient = Object.values(layout.tabs).filter(isContentTab)
+  if (transient.length === 0) return layout
+  let restored = layout
+  for (const tab of transient) restored = applyOp(restored, { type: 'closeTab', tabId: tab.id }).state
+  restored = replay(restored, planSettle(restored, createIdMinter(minted).next))
+  const root = restored.nodes[restored.rootId]
+  if (root?.kind === 'pane' && root.tabs.length === 0) {
+    return { ...restored, expanded: false, mode: 'push' }
+  }
+  return restored
+}
+
 /**
  * Restore one validated Session layout with a fresh in-window undo history.
  * @param sessionId - storage scope.
@@ -71,7 +85,7 @@ export function readSidebarLayout(sessionId: string): SurfaceState | undefined {
     if (saved === undefined) return undefined
     const parsed = surface.parse(saved)
     validateReferences(parsed)
-    return { layout: parsed.layout as unknown as LayoutState, minted: parsed.minted, history: EMPTY_HISTORY }
+    return { layout: restoredLayout(parsed.layout as unknown as LayoutState, parsed.minted), minted: parsed.minted, history: EMPTY_HISTORY }
   } catch (_invalidLayout) {
     clearSidebarLayout(sessionId)
     return undefined

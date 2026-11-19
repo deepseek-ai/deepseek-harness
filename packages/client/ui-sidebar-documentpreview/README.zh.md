@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="what-it-registers"></a>
 ## 注册了什么
 
-压缩摘要标签显示所选聊天行提供的 Markdown。刷新页面后临时正文失效，从原行重新打开即可再次读取对应事件。
+压缩摘要标签显示所选聊天行提供的 Markdown。切换会话时保留标签，刷新页面后标签关闭，从原行重新打开即可再次读取对应事件。
 
 图片拖放回调通过图片入口的注入接口从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。
 

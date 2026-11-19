@@ -338,7 +338,9 @@ describe('minimal manual compaction', () => {
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    await preview.getByRole('status').waitFor()
+    await card.waitFor()
+    expect(await preview.count()).toBe(0)
+    expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).not.toContain('Context summary')
     await card.click()
     await rendered.waitFor({ state: 'visible', timeout: 15_000 })
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['Context summary'])

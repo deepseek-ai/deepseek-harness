@@ -13,4 +13,4 @@ Chat compaction markers retain counts and the summary event sequence. Their view
 
 ## Migration
 
-Use the marker’s non-null `summaryEventSeq` and its Session address to read the corresponding `compaction/summary` event. In Chat, select the completed compaction row to read the summary in the sidebar. Reopen it from the same row after a browser reload.
+Use the marker’s non-null `summaryEventSeq` and its Session address to read the corresponding `compaction/summary` event. In Chat, select the completed compaction row to read the summary in the sidebar. Switching Sessions retains the open preview. Reloading closes its tab; reopen it from the same row.
