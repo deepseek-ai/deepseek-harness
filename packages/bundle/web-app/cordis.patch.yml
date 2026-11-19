@@ -351,6 +351,9 @@
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
 
+    - id: remote-connection
+      name: '@deepseek-ai/dsh-client-remote-connection'
+
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 

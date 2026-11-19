@@ -140,6 +140,20 @@ export interface SessionHeader {
 }
 
 /**
+ * Caller-supplied storage fields that `buildSessionHeader` folds into a new {@link SessionHeader}.
+ * `isSeeded` marks fork lineage; supplying replay history alone does not make it inherited.
+ */
+export interface SessionHeaderMeta {
+  readonly cwd?: string
+  readonly parentSession?: SessionId
+  readonly createdAt?: number
+  readonly isSeeded?: boolean
+  readonly origin?: 'subagent'
+  readonly delegationDepth?: number
+  readonly agentPreset?: string
+}
+
+/**
  * Options for creating a {@link Session} via the store. `seed` replays/forks
  * an existing event log; `meta` carries the caller-supplied storage fields the
  * store folds into a {@link SessionHeader}.
@@ -157,15 +171,7 @@ export interface CreateSessionOptions {
    * Storage metadata read once before publication. `isSeeded` marks fork
    * lineage; supplying replay history alone does not make it inherited.
    */
-  readonly meta?: {
-    readonly cwd?: string
-    readonly parentSession?: SessionId
-    readonly createdAt?: number
-    readonly isSeeded?: boolean
-    readonly origin?: 'subagent'
-    readonly delegationDepth?: number
-    readonly agentPreset?: string
-  }
+  readonly meta?: SessionHeaderMeta
 }
 
 /**

@@ -26,6 +26,7 @@ const PREFIX = 'remote.'
 /** Namespaces a roster package mounts through its own generated Remote client; a proxy would collide with that mount. */
 const SELF_MOUNTED_NAMESPACES: Readonly<Record<string, string>> = {
   pluginEvents: '@deepseek-ai/dsh-client-hmr',
+  remoteConnection: '@deepseek-ai/dsh-client-remote-connection',
 }
 
 /**

@@ -219,15 +219,25 @@ interface CreateSessionOptions {
    * Storage metadata read once before publication. `isSeeded` marks fork
    * lineage; supplying replay history alone does not make it inherited.
    */
-  readonly meta?: {
-    readonly cwd?: string
-    readonly parentSession?: SessionId
-    readonly createdAt?: number
-    readonly isSeeded?: boolean
-    readonly origin?: 'subagent'
-    readonly delegationDepth?: number
-    readonly agentPreset?: string
-  }
+  readonly meta?: SessionHeaderMeta
+}
+```
+
+`SessionHeaderMeta` names these caller-supplied fields; `buildSessionHeader` folds the same fields into the header of a new Session.
+
+```ts type-equiv
+/**
+ * Caller-supplied storage fields that `buildSessionHeader` folds into a new {@link SessionHeader}.
+ * `isSeeded` marks fork lineage; supplying replay history alone does not make it inherited.
+ */
+interface SessionHeaderMeta {
+  readonly cwd?: string
+  readonly parentSession?: SessionId
+  readonly createdAt?: number
+  readonly isSeeded?: boolean
+  readonly origin?: 'subagent'
+  readonly delegationDepth?: number
+  readonly agentPreset?: string
 }
 ```
 

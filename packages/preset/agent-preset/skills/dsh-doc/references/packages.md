@@ -72,6 +72,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-locale` | no | Locale plugin: Host-backed preference, extensible language catalog, browser fallback, and typed built-in dictionaries |
 | `@deepseek-ai/dsh-client-modules` | no | Client module system, dual-face: node half composes the __DSH_BOOT__ entry graph (incremental dsh.client scan, bundle route, index tap, webPlugins service); browser half is the lazy-CJS module table the vendored cordis Loader consumes as its internal seam |
 | `@deepseek-ai/dsh-client-product-analytics` | yes | Desktop product event collection and authenticated Host reporting |
+| `@deepseek-ai/dsh-client-remote-connection` | yes | QR login, private login links, and owner-approved browser pairing |
 | `@deepseek-ai/dsh-client-resources` | no | Unified client resource model: protocol-registered providers turn URL addresses into live values, consumed through the useResource global standard hook |
 | `@deepseek-ai/dsh-client-script-realm` | no | Direct-reference script environments and Cordis-owned provider registration |
 | `@deepseek-ai/dsh-client-script-realm-iframe` | no | Optional iframe ScriptRealm provider |

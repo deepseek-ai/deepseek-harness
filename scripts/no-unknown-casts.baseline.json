@@ -784,7 +784,7 @@
   "packages/core/scope/tests/store.spec.ts": {
     "612bd4047fa63f957ecb33d7fc7544c489301c3c0592e9a42dafe2cb85311165": 1
   },
-  "packages/core/session/src/index.ts": {
+  "packages/core/session/src/validation.ts": {
     "487a58a6269113d4cbfd31915a9abdbf016e672be9a2af2c6d5d57b087d0b011": 1
   },
   "packages/core/session/tests/canonical-envelopes.spec.ts": {

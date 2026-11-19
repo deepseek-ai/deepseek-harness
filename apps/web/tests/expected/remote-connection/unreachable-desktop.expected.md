@@ -1,0 +1,11 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - status:
+    - paragraph: 当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - code: {{access-address}}
+    - button "复制链接"
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准
