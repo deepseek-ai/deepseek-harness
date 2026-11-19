@@ -14,7 +14,7 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import type { SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import type { ViewAnnotations } from '../src/client/annotations.ts'
@@ -136,6 +136,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     openInMain: vi.fn<ReviewChatFace['openInMain']>(),
     requestWorktree: vi.fn<ReviewChatFace['requestWorktree']>(),
   }
+  const pluginNavigation = createSnapshotStore(false)
   const conversations: ForgeReviewConversationProps[] = []
   const renderSlot = ((_key: string, owner: ForgeReviewConversationProps) => {
     conversations.push(owner)
@@ -146,6 +147,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
   }
   const props: ReviewPageProps = {
     useLocale: bindSnapshotSelector(createSnapshotStore('en')),
+    usePluginNavigation: bindSnapshotSelector(pluginNavigation),
     openLists: vi.fn((scope: string, signal: AbortSignal) => {
       const stream = fed<ForgeReviewFrame>(scope, signal)
       lists.push(stream)
@@ -163,6 +165,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
       return refresh.promise
     }),
     readDescription: vi.fn(async () => ok(description('Body'))),
+    openHostSettings: vi.fn(),
     actionsFor: vi.fn((_url: string, showChanges: () => void): ChangeRequestActions => {
       shown.push(showChanges)
       return { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), viewChanges: () => { showChanges() } }
@@ -190,7 +193,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     return element
   }
   return {
-    view, props, store, lists, details, refreshes, shown, changes, chat, conversations, page,
+    view, props, store, lists, details, refreshes, shown, changes, chat, conversations, page, pluginNavigation,
     list: () => last(lists), detail: () => last(details),
   }
 }
@@ -334,6 +337,22 @@ describe('ReviewPage lists', () => {
 })
 
 describe('ReviewPage detail', () => {
+  it('offers the host lists for a link no provider serves only while the Plugins page can be opened', async () => {
+    const b = renderPage()
+    b.list().push(frame(host({ 'review-requested': list([summary(7)]) })))
+    await settle()
+    fireEvent.click(b.view.container.querySelector(`[data-forge-review-item="${URL7}"]`) ?? document.body)
+    b.detail().fail(new RemoteError('forgePanel/unrecognized-url', 'no provider serves it', {}))
+    await settle()
+    expect(b.view.getByText('Unknown code host')).toBeTruthy()
+    expect(b.view.queryByRole('button', { name: 'Add host…' })).toBeNull()
+
+    act(() => { b.pluginNavigation.set(true) })
+    fireEvent.click(b.view.getByRole('button', { name: 'Add host…' }))
+
+    expect(b.props.openHostSettings).toHaveBeenCalledOnce()
+  })
+
   it('shows the chosen change request with its card actions, and goes back to the list', async () => {
     const b = renderPage()
     await select(b)

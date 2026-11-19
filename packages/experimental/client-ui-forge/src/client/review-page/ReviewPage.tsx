@@ -39,8 +39,12 @@ const CHAT_QUOTE_COPY: QuoteCopy = { add: 'reviewPage.addToChat', added: 'review
 
 /** Business face of the review page. */
 export interface ReviewPageInjected {
-  /** The UI language; the renderer binds it as `useLocale`. */
-  readonly hooks: { readonly locale: HostObservable<string> }
+  readonly hooks: {
+    /** The UI language; the renderer binds it as `useLocale`. */
+    readonly locale: HostObservable<string>
+    /** Whether the Plugins page can be opened; the renderer binds it as `usePluginNavigation`. */
+    readonly pluginNavigation: HostObservable<boolean>
+  }
   /** Open the list stream of one repository, named `owner/name`, or of every repository for the empty string. */
   readonly openLists: (scope: string, signal: AbortSignal) => HostStream<ForgeReviewFrame>
   /** Open the stream of one change request by URL. */
@@ -51,6 +55,8 @@ export interface ReviewPageInjected {
   readonly refresh: () => Promise<void>
   /** Read the description and labels of a change request. */
   readonly readDescription: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestDescription>>
+  /** Open the Plugins page where the providers' hosts are listed, while `pluginNavigation` holds. */
+  readonly openHostSettings: () => void
   /** The card actions acting on one change request; `showChanges` opens the changes tab. */
   readonly actionsFor: (url: string, showChanges: () => void) => ChangeRequestActions
   /** Reads and writes of the changes view. */
@@ -149,6 +155,7 @@ function DetailPane({
   url, read, tab, listHidden, now, locale, cardActions, conversationId, onConversation, unseenQuotes, page,
 }: DetailPaneProps): ReactNode {
   const { actions, changes, chat, quoteReview, quoteThread, readDescription, renderSlot, SessionProvider, useStore, t } = page
+  const hostSettings = page.usePluginNavigation(value => value)
   const conversation = useReviewConversation(read.frame, conversationId, onConversation, chat)
   const { start } = conversation
   const quoteChanges = useMemo(() => {
@@ -178,6 +185,7 @@ function DetailPane({
       locale={locale}
       actions={cardActions}
       readDescription={readDescription}
+      onAddHost={hostSettings ? page.openHostSettings : undefined}
       renderChanges={frame => (
         <ReviewChanges frame={frame} visible={tab === 'changes'} changes={quoteChanges} useStore={useStore} actions={actions} t={t} />
       )}

@@ -25,7 +25,7 @@ Read GitHub and GitHub Enterprise pull requests for `ctx.forge` with the GitHub 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the provider after the forge registry and list every GitHub Enterprise host explicitly.
+Mount the provider after the forge registry and list every GitHub Enterprise host explicitly. `hosts` lists at least one host name, each with an optional port, and is editable while the provider runs: the [forge panel](../client-ui-forge/README.md) draws the list on this row's page on the Plugins page, and a saved list replaces the registered provider without mounting the plugin again. A list that names a host the GitLab provider serves is not registered: the Loader logs the refusal and the previous list keeps being served until a restart, where the provider that mounts second fails to load.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-forge'

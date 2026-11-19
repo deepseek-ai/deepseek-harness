@@ -8,7 +8,8 @@ import { nextPollDelay } from './schedule.ts'
 import type {
   BranchUpdateRequest, ChangeRequestDescription, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot,
   ChangeRequestUpdate, Config,
-  ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest,
+  ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRegistrationHandle,
+  ForgeRepository, ForgeRerunRequest,
   ForgeReviewData,
   ForgeReviewChange, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
   ForgeReviewWriteResult,
@@ -24,7 +25,7 @@ declare module '@deepseek-ai/cordis' {
   }
   interface Events {
     /**
-     * Announces a provider registration or withdrawal after the registry changes.
+     * Announces a provider registration, replacement, or withdrawal after the registry changes.
      * Listener failures are logged without preventing other listeners from running.
      * @param forge - family whose provider changed.
      * @mode parallel
@@ -119,36 +120,67 @@ export class ForgeService extends Service {
    * registration ends. Unregistering cancels and awaits its in-flight calls;
    * results from the withdrawn registration are discarded.
    * @param provider - provider to serve `provider.forge` on `provider.hosts`.
-   * @returns the disposer that unregisters the provider and waits for its calls to finish.
+   * @returns the disposer that unregisters the provider and waits for its calls to finish, carrying
+   *   {@link ForgeRegistrationHandle.replace}.
    * @throws when another provider already serves the same forge or one of the same hosts, compared without case.
    */
-  register(provider: ForgeProvider): () => Promise<void> {
+  register(provider: ForgeProvider): ForgeRegistrationHandle {
+    const { forge } = provider
+    // The registration this handle holds; `replace` swaps it and the disposer clears it.
+    let held: Registration | undefined
+    // Calls of replaced providers still in flight, which the disposer waits for.
+    const retired = new Set<Promise<void>>()
     const dispose = this.ctx.effect(() => {
-      if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
-      for (const { provider: other } of this.providers.values()) {
-        const taken = new Set(other.hosts.map(host => host.toLowerCase()))
-        const host = provider.hosts.find(candidate => taken.has(candidate.toLowerCase()))
-        if (host !== undefined) throw new Error(`forge: host "${host}" is already served by the "${other.forge}" provider`)
-      }
-      const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set() }
-      this.providers.set(provider.forge, registration)
-      for (const watch of this.watches.values()) {
-        if (watch.ref.repository.forge === provider.forge) watch.dueAt = Date.now()
-      }
-      this.providersChanged(provider.forge)
-      this.schedule()
+      if (this.providers.has(forge)) throw new Error(`forge: a provider for "${forge}" is already registered`)
+      held = this.admit(provider)
       return async () => {
-        this.providers.delete(provider.forge)
-        registration.lifetime.abort(new Error(`forge: provider "${provider.forge}" was unregistered`))
+        const registration = held as Registration
+        held = undefined
+        this.providers.delete(forge)
+        registration.lifetime.abort(new Error(`forge: provider "${forge}" was unregistered`))
         for (const watch of [...this.watches.values()]) {
-          if (watch.ref.repository.forge === provider.forge) this.settle(watch, this.missing(provider.forge), undefined)
+          if (watch.ref.repository.forge === forge) this.settle(watch, this.missing(forge), undefined)
         }
-        this.providersChanged(provider.forge)
+        this.providersChanged(forge)
         this.schedule()
-        await Promise.allSettled(registration.pending)
+        await Promise.allSettled([...registration.pending, ...retired])
       }
-    }, `forge.register(${provider.forge})`)
-    return async () => { await dispose() }
+    }, `forge.register(${forge})`)
+    const handle = (async () => { await dispose() }) as ForgeRegistrationHandle
+    handle.replace = (next) => {
+      if (held === undefined) throw new Error(`forge: the withdrawn registration of "${forge}" cannot replace its provider`)
+      if (next.forge !== forge) throw new Error(`forge: the registration of "${forge}" cannot serve "${next.forge}"`)
+      const previous = held
+      held = this.admit(next)
+      previous.lifetime.abort(new Error(`forge: provider "${forge}" was replaced`))
+      for (const call of previous.pending) {
+        retired.add(call)
+        void call.then(() => retired.delete(call))
+      }
+    }
+    return handle
+  }
+
+  /**
+   * Make `provider` the provider of its forge family, in place of the family's current one when there is one: its
+   * watches poll at once and `forge/providers-changed` announces the change.
+   * @throws when another family's provider serves one of `provider.hosts`, compared without case; the registry is unchanged.
+   */
+  private admit(provider: ForgeProvider): Registration {
+    for (const { provider: other } of this.providers.values()) {
+      if (other.forge === provider.forge) continue
+      const taken = new Set(other.hosts.map(host => host.toLowerCase()))
+      const host = provider.hosts.find(candidate => taken.has(candidate.toLowerCase()))
+      if (host !== undefined) throw new Error(`forge: host "${host}" is already served by the "${other.forge}" provider`)
+    }
+    const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set() }
+    this.providers.set(provider.forge, registration)
+    for (const watch of this.watches.values()) {
+      if (watch.ref.repository.forge === provider.forge) watch.dueAt = Date.now()
+    }
+    this.providersChanged(provider.forge)
+    this.schedule()
+    return registration
   }
 
   /**
@@ -211,13 +243,13 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Report whether the provider can reach the repository's host with current credentials.
-   * @param repository - repository served by a registered provider.
+   * Report whether a provider can reach one host with current credentials.
+   * @param repository - forge family of a registered provider and the host to probe; a repository names both.
    * @param signal - cancellation for the probe.
    * @returns the provider's readiness for the host.
-   * @throws when no provider serves the repository's forge.
+   * @throws when no provider serves the forge.
    */
-  async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness> {
+  async readiness(repository: Pick<ForgeRepository, 'forge' | 'host'>, signal: AbortSignal): Promise<ForgeReadiness> {
     return await this.invoke(this.registration(repository.forge), signal,
       (provider, operation) => provider.readiness(repository.host, operation))
   }

@@ -9,7 +9,8 @@ import type {
   BranchUpdateMethod, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot,
   ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
   ForgeFailure,
-  ForgeLineComment, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
+  ForgeLineComment, ForgeReadiness, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult,
+  ForgeReviewWrite,
   ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
@@ -19,7 +20,7 @@ import type { Session, SessionEvent, SessionId, UserMessage } from '@deepseek-ai
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { gitIn, hasBranch, inspectCheckout } from './git.ts'
@@ -313,6 +314,28 @@ export class ForgePanelController extends TypertRemoteService {
   async reviewRefresh(signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     this.viewerLists.refresh()
+  }
+
+  /**
+   * Report whether a provider reaches one of its hosts with the Host's current credentials, for the host list on the
+   * Plugins page of that provider's row. The read names no Session, so, like the review page reads, only callers that
+   * may use the Host's code host credentials reach it.
+   * @param forge - forge family of a registered provider, such as `gitlab`.
+   * @param host - host name as the provider's configuration lists it.
+   * @param signal - request cancellation.
+   * @returns the provider's readiness for the host; `unavailable` with the reason when no provider serves the family,
+   * the probe fails, or it runs past `readinessTimeoutMs`.
+   */
+  @Remote
+  async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness> {
+    signal.throwIfAborted()
+    try {
+      using timeout = deadline(signal, this.config.readinessTimeoutMs, 'FORGE_PANEL_READINESS_TIMEOUT')
+      return await this.home.forge.readiness({ forge, host: host.toLowerCase() }, timeout.signal)
+    } catch (error) {
+      signal.throwIfAborted()
+      return { state: 'unavailable', message: messageOf(error), signIn: null }
+    }
   }
 
   /**

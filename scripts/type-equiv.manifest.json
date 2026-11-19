@@ -2456,6 +2456,11 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRegistrationHandle",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeCommit",
       "source": "packages/experimental/forge/src/types.ts"
     },

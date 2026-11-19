@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 forge 注册表之后挂载提供方，并显式列出每个自建主机。Forge 插件包以 `gitlab.com` 挂载它。
+在 forge 注册表之后挂载提供方，并显式列出每个自建主机。Forge 插件包以 `gitlab.com` 挂载它。`hosts` 至少列出一个主机名，每个可带端口，并且可以在提供方运行期间修改：[forge 面板](../client-ui-forge/README.zh.md)在插件页上这一行的页面里绘制该列表，保存后的列表会替换已注册的提供方，无需重新挂载插件。列出 GitHub 提供方所服务主机的列表不会被注册：Loader 记录这次拒绝，之前的列表继续服务，直到重启；重启时后挂载的提供方加载失败。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-forge'

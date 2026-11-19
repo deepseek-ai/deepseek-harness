@@ -67,6 +67,8 @@ export interface ReviewDetailProps {
   readonly actions: ChangeRequestActions
   /** Read the description and labels. */
   readonly readDescription: (url: string, signal: AbortSignal) => Promise<RemoteResult<ChangeRequestDescription>>
+  /** Open the providers' host lists, offered for a URL no provider serves; undefined while they cannot be opened. */
+  readonly onAddHost: (() => void) | undefined
   /** The changes tab's content, kept while the detail shows so pending review comments survive tab switches. */
   readonly renderChanges: (frame: ForgeReviewChangeRequest) => ReactNode
   /** The chat tab's content. */
@@ -221,8 +223,8 @@ function Summary({ frame, snapshot, description, now, locale, actions, t }: {
  * @returns the detail.
  */
 export function ReviewDetail({
-  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, renderChanges, renderChat, unseenQuotes,
-  t,
+  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, onAddHost, renderChanges, renderChat,
+  unseenQuotes, t,
 }: ReviewDetailProps): ReactNode {
   const frame = read.frame
   const snapshot = frame?.snapshot ?? null
@@ -244,7 +246,15 @@ export function ReviewDetail({
     const failure = frame?.update !== undefined && frame.update !== null && 'failure' in frame.update ? frame.update.failure : undefined
     let body: ReactNode = <StateDot state="ongoing" />
     if (read.stopped?.code === 'forgePanel/unrecognized-url') {
-      body = <><p className={css.emptyTitle}>{t('reviewPage.unrecognized')}</p><p className={css.emptyHint}>{t('reviewPage.unrecognizedHint')}</p></>
+      body = (
+        <>
+          <p className={css.emptyTitle}>{t('reviewPage.unrecognized')}</p>
+          <p className={css.emptyHint}>{t('reviewPage.unrecognizedHint')}</p>
+          {onAddHost !== undefined && (
+            <div className={css.actions}><Button size="sm" variant="outline" onClick={onAddHost}>{t('reviewPage.addHost')}</Button></div>
+          )}
+        </>
+      )
     } else if (read.stopped !== null || failure !== undefined) {
       body = (
         <>

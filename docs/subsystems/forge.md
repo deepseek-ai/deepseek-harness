@@ -167,6 +167,28 @@ interface ForgeProvider {
 }
 ```
 
+`ctx.forge.register` returns the disposer of the registration. Its `replace` puts another provider of the same family in the registered one's place; a provider whose host list is edited while it runs calls it to serve the new list:
+
+```ts type-equiv
+/**
+ * What `ctx.forge.register` returns: the disposer, plus the replacement of the registered provider by another provider
+ * of the same forge family, for a provider whose configuration changes while it runs.
+ */
+interface ForgeRegistrationHandle {
+  /** Unregister the provider this registration holds and wait for its calls, and those of the providers it replaced, to finish. */
+  (): Promise<void>
+  /**
+   * Replace the registered provider in one synchronous step, so no reader finds the family without a provider. The
+   * replaced provider's in-flight calls are cancelled and their results discarded; watches of the family poll at once
+   * and `forge/providers-changed` announces the change.
+   * @param provider - provider of the same forge family.
+   * @throws when the registration was withdrawn, `provider.forge` is another family, or another family's provider
+   *   serves one of `provider.hosts`, compared without case; the registered provider then keeps serving.
+   */
+  replace(provider: ForgeProvider): void
+}
+```
+
 ```ts type-equiv
 /** One commit of a change request. */
 interface ForgeCommit {
@@ -1661,10 +1683,11 @@ Registry of forge providers. Watchers of one change request share a single polli
  * registration ends. Unregistering cancels and awaits its in-flight calls;
  * results from the withdrawn registration are discarded.
  * @param provider - provider to serve `provider.forge` on `provider.hosts`.
- * @returns the disposer that unregisters the provider and waits for its calls to finish.
+ * @returns the disposer that unregisters the provider and waits for its calls to finish, carrying
+ *   {@link ForgeRegistrationHandle.replace}.
  * @throws when another provider already serves the same forge or one of the same hosts, compared without case.
  */
-register(provider: ForgeProvider): () => Promise<void>
+register(provider: ForgeProvider): ForgeRegistrationHandle
 
 /**
  * Name a forge family and its change requests for readers.
@@ -1706,13 +1729,13 @@ changeRequestUrl(ref: ChangeRequestRef): string
 async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
 
 /**
- * Report whether the provider can reach the repository's host with current credentials.
- * @param repository - repository served by a registered provider.
+ * Report whether a provider can reach one host with current credentials.
+ * @param repository - forge family of a registered provider and the host to probe; a repository names both.
  * @param signal - cancellation for the probe.
  * @returns the provider's readiness for the host.
- * @throws when no provider serves the repository's forge.
+ * @throws when no provider serves the forge.
  */
-async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>
+async readiness(repository: Pick<ForgeRepository, 'forge' | 'host'>, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
  * Mark a draft change request ready for review, then poll it at once when it is watched.
@@ -2034,6 +2057,18 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  */
 @Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>
+
+/**
+ * Report whether a provider reaches one of its hosts with the Host's current credentials, for the host list on the
+ * Plugins page of that provider's row. The read names no Session, so, like the review page reads, only callers that
+ * may use the Host's code host credentials reach it.
+ * @param forge - forge family of a registered provider, such as `gitlab`.
+ * @param host - host name as the provider's configuration lists it.
+ * @param signal - request cancellation.
+ * @returns the provider's readiness for the host; `unavailable` with the reason when no provider serves the family,
+ * the probe fails, or it runs past `readinessTimeoutMs`.
+ */
+@Remote async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
  * Poll one change request the review page shows at once; its stream reports the result.
@@ -2759,11 +2794,11 @@ Source: [`packages/experimental/forge-session/src/index.ts`](../../packages/expe
 
 #### `forge/providers-changed` — parallel
 
-Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
+Announces a provider registration, replacement, or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
 
 ```ts cordis-catalog
 /**
- * Announces a provider registration or withdrawal after the registry changes.
+ * Announces a provider registration, replacement, or withdrawal after the registry changes.
  * Listener failures are logged without preventing other listeners from running.
  * @param forge - family whose provider changed.
  * @mode parallel

@@ -767,6 +767,46 @@ it.skipIf(MODE === 'record')('reports incomplete filter configuration and retrie
   expect(tripwire.warnings).toEqual([])
 })
 
+it.skipIf(MODE === 'record')('adds a host on the GitLab row of the Plugins page, which the provider serves without a restart', async () => {
+  const { scaffold, page, tripwire } = await launchPanel('web-e2e-forge-hosts')
+  // The scaffold expects its recorded model call to be consumed, so the borrowed conversation runs first.
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  const merge = 'https://gitlab.example.test/group/app/-/merge_requests/3'
+  expect(scaffold.ctx.forge.changeRequestFromUrl(merge)).toBeUndefined()
+  await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+  await page.locator('[data-plugin-panel]').getByText('变更请求与工作树', { exact: true }).first().click()
+  await page.getByRole('button', { name: '配置 GitLab 变更请求', exact: true }).click()
+  const hosts = page.getByRole('list', { name: '主机', exact: true })
+  await hosts.locator('[data-forge-host="gitlab.com"]').waitFor()
+  const input = page.getByRole('textbox', { name: '要添加的主机', exact: true })
+
+  // The GitHub row serves github.com, and a host has one provider.
+  await input.fill('github.com')
+  await input.press('Enter')
+  await page.getByRole('alert').filter({ hasText: 'github.com 已由 GitHub 组件使用' }).waitFor()
+  expect(await hosts.getByRole('listitem').count()).toBe(1)
+
+  await input.fill(merge)
+  await input.press('Enter')
+  const added = hosts.locator('[data-forge-host="gitlab.example.test"]')
+  const unsaved = added.getByText('未保存', { exact: true })
+  await unsaved.waitFor()
+  expect(scaffold.ctx.forge.changeRequestFromUrl(merge)).toBeUndefined()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  // The sign-in state that takes the mark's place depends on the GitLab CLI of the machine, so only the mark's removal is expected.
+  await unsaved.waitFor({ state: 'detached' })
+
+  expect(scaffold.ctx.forge.changeRequestFromUrl(merge)).toEqual({
+    repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' }, number: 3,
+  })
+  expect(scaffold.ctx.forge.changeRequestFromUrl('https://gitlab.com/group/app/-/merge_requests/3')).toBeDefined()
+  expect(scaffold.ctx.forge.changeRequestFromUrl(PULL)).toBeDefined()
+  expect(await readFile(scaffold.ctx.settings.documentPath, 'utf8')).toMatch(/- id: forge-gitlab\n(?: .*\n)* +hosts:\n +- gitlab\.com\n +- gitlab\.example\.test\n/)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 /**
  * Expect the panel to show PR 7, which the model viewed by number without its URL in the output, and the lookup that resolved it.
  * @param launch - the panel launched for a reference scenario.

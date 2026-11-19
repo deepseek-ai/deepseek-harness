@@ -1328,7 +1328,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:767`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:785`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1351,15 +1351,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-github`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-github/src/index.ts:19`](../packages/experimental/forge-github/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-github/src/index.ts:22`](../packages/experimental/forge-github/src/index.ts)
 
 ```ts config-catalog
 /** GitHub CLI executable, served hosts, and invocation limits. */
 export interface Config {
   /** GitHub CLI executable name or absolute host path. */
   ghCommand?: string
-  /** Host names this provider serves; list GitHub Enterprise hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list GitHub Enterprise hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
@@ -1695,15 +1699,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-forge-gitlab`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-gitlab/src/index.ts:19`](../packages/experimental/forge-gitlab/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-gitlab/src/index.ts:22`](../packages/experimental/forge-gitlab/src/index.ts)
 
 ```ts config-catalog
 /** GitLab CLI executable, served hosts, and read limits. */
 export interface Config {
   /** GitLab CLI executable name or absolute host path. */
   glabCommand?: string
-  /** Host names this provider serves; list self-managed GitLab hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list self-managed GitLab hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `glab` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `glab` output stream and combined JSON bytes of one complete check read or review read. */

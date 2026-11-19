@@ -1343,10 +1343,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry of forge providers. Watchers of one change request share a single polling loop; each forge has at most one fetch in flight, which batches every due change request of that forge.',
     methods: [
       {
-        signature: 'register(provider: ForgeProvider): () => Promise<void>',
+        signature: 'register(provider: ForgeProvider): ForgeRegistrationHandle',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
         parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
-        returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
+        returns: 'the disposer that unregisters the provider and waits for its calls to finish, carrying {@link ForgeRegistrationHandle.replace}.',
         throws: ['when another provider already serves the same forge or one of the same hosts, compared without case.'],
       },
       {
@@ -1382,11 +1382,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the repository\'s forge or the lookup fails.'],
       },
       {
-        signature: 'async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>',
-        description: 'Report whether the provider can reach the repository\'s host with current credentials.',
-        parameters: [{ name: 'repository', description: 'repository served by a registered provider.' }, { name: 'signal', description: 'cancellation for the probe.' }],
+        signature: 'async readiness(repository: Pick<ForgeRepository, \'forge\' | \'host\'>, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider can reach one host with current credentials.',
+        parameters: [{ name: 'repository', description: 'forge family of a registered provider and the host to probe; a repository names both.' }, { name: 'signal', description: 'cancellation for the probe.' }],
         returns: 'the provider\'s readiness for the host.',
-        throws: ['when no provider serves the repository\'s forge.'],
+        throws: ['when no provider serves the forge.'],
       },
       {
         signature: 'async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
@@ -1593,6 +1593,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>',
         description: 'Read every streamed review page list and the count again at once.',
         parameters: [{ name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider reaches one of its hosts with the Host\'s current credentials, for the host list on the Plugins page of that provider\'s row. The read names no Session, so, like the review page reads, only callers that may use the Host\'s code host credentials reach it.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider, such as `gitlab`.' }, { name: 'host', description: 'host name as the provider\'s configuration lists it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the provider\'s readiness for the host; `unavailable` with the reason when no provider serves the family, the probe fails, or it runs past `readinessTimeoutMs`.',
       },
       {
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>',
@@ -5754,8 +5760,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'forge/providers-changed',
     mode: 'parallel',
     signature: '\'forge/providers-changed\'(forge: string): void | Promise<void>',
-    summary: 'Announces a provider registration or withdrawal after the registry changes.',
-    description: 'Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
+    summary: 'Announces a provider registration, replacement, or withdrawal after the registry changes.',
+    description: 'Announces a provider registration, replacement, or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
     parameters: [{ name: 'forge', description: 'family whose provider changed.' }],
   },
   {
@@ -7673,6 +7679,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRegisteredLens',
     declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'ForgeRegistrationHandle',
+    declaration: 'export interface ForgeRegistrationHandle {\n    (): Promise<void>;\n    replace(provider: ForgeProvider): void;\n}',
   },
   {
     name: 'ForgeRemoteBranches',

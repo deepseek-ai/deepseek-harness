@@ -7,7 +7,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remote-access/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
@@ -66,6 +68,8 @@ export interface ReviewPageDeps {
   readonly quoteThread: ReviewPageInjected['quoteThread']
   /** The UI language. */
   readonly locale: HostObservable<string>
+  /** Package name of the bundle whose page on the Plugins page lists the provider rows with their host lists. */
+  readonly hostSettings: string
 }
 
 /**
@@ -183,6 +187,14 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       void remote.requestWorktree(sessionId, null, null).then(result => settled(result, 'toast.worktreeFailed'))
     },
   }
+  // The Plugins page provides its navigation only while the current Peer may use it.
+  const pluginNavigation = createSnapshotStore(false)
+  ctx.inject(['pluginNavigation'], (scope: Context) => {
+    scope.effect(() => {
+      pluginNavigation.set(true)
+      return () => { pluginNavigation.set(false) }
+    }, 'forge-panel: plugin navigation presence')
+  })
   const count = createStreamSource<ForgeReviewCountFrame, number | null>({
     open: signal => remote.reviewCount(signal),
     subscribeReset,
@@ -195,7 +207,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       locale: NS,
       store: createReviewStore(),
       inject: (): ReviewPageInjected => ({
-        hooks: { locale: deps.locale },
+        hooks: { locale: deps.locale, pluginNavigation },
         openLists: (scope, signal) => {
           const slash = scope.indexOf('/')
           return remote.reviewLists(slash < 0 ? null : { owner: scope.slice(0, slash), name: scope.slice(slash + 1) }, signal)
@@ -204,6 +216,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
         subscribeReset,
         refresh: async () => { settled(await remote.reviewRefresh(), 'toast.refreshFailed') },
         readDescription: (url, signal) => remote.reviewDescription(url, signal),
+        openHostSettings: () => { ctx.get('pluginNavigation')?.openBundle(deps.hostSettings) },
         actionsFor,
         changes,
         copyText,

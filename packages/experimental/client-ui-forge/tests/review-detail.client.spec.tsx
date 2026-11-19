@@ -64,7 +64,7 @@ function renderDetail(overrides: Partial<ReviewDetailProps> = {}) {
   const read = stream(reviewed(7))
   const props: ReviewDetailProps = {
     url: URL7, read, tab: 'summary', onTab: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
-    actions, readDescription: vi.fn(async () => ok(description('Body'))),
+    actions, readDescription: vi.fn(async () => ok(description('Body'))), onAddHost: undefined,
     renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, t, ...overrides,
   }
   const view = render(<ReviewDetail {...props} />)
@@ -100,10 +100,18 @@ describe('ReviewDetail before a status', () => {
     expect(polled.view.getByRole('status').textContent).toBe('')
   })
 
-  it('explains a link no enabled code host serves', () => {
+  it('explains a link whose host no code host component serves', () => {
     const b = renderDetail({ read: stream(undefined, { code: 'forgePanel/unrecognized-url', message: 'no provider' }) })
-    expect(b.view.getByRole('status').textContent).toBe(`${en['reviewPage.unrecognized']}${en['reviewPage.unrecognizedHint']}`)
+    expect(b.view.getByRole('status').textContent).toBe('Unknown code hostThis link\'s host has not been added to a code host component.')
     expect(b.view.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(b.view.queryByRole('button', { name: 'Add host…' })).toBeNull()
+  })
+
+  it('offers the host lists for such a link while they can be opened', () => {
+    const onAddHost = vi.fn()
+    const b = renderDetail({ read: stream(undefined, { code: 'forgePanel/unrecognized-url', message: 'no provider' }), onAddHost })
+    fireEvent.click(within(b.view.getByRole('status')).getByRole('button', { name: 'Add host…' }))
+    expect(onAddHost).toHaveBeenCalledOnce()
   })
 
   it('offers to open the stream again or the browser once the stream stopped', () => {

@@ -1,9 +1,10 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import type { ForgeCommandRule } from '@deepseek-ai/dsh-experimental-forge-session'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GLAB_COMMANDS } from '../src/commands.ts'
 import * as ForgeGitLab from '../src/index.ts'
+import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 
 let ctx: Context | undefined
 
@@ -79,8 +80,8 @@ describe('forge-gitlab plugin', () => {
 
   it.each([
     [{ glabCommand: '  ' }, 'forge-gitlab: glabCommand must not be empty'],
-    [{ hosts: [] }, 'forge-gitlab: hosts must list at least one host'],
-    [{ hosts: ['https://gitlab.com'] }, 'forge-gitlab: invalid host "https://gitlab.com"'],
+    [{ hosts: [] }, '$.hosts expected array length >= 1 but got 0'],
+    [{ hosts: ['https://gitlab.com'] }, '$.hosts[0] expect string to match regexp'],
     [{ timeoutMs: 0 }, 'forge-gitlab: timeoutMs must be a positive integer no greater than 2147483647'],
     [{ timeoutMs: 2_147_483_648 }, 'forge-gitlab: timeoutMs must be a positive integer no greater than 2147483647'],
     [{ maxOutputBytes: 0 }, 'forge-gitlab: maxOutputBytes must be a positive safe integer'],
@@ -94,9 +95,46 @@ describe('forge-gitlab plugin', () => {
     await expect(context.plugin(ForgeGitLab, config)).rejects.toThrow(message)
   })
 
+  it('serves the host list a live edit sets without mounting again', async () => {
+    const context = await forge()
+    const live = await liveConfig(context, ForgeGitLab)
+    expect(context.forge.repositoryFromRemote('git@gitlab.example.test:group/app.git')).toBeUndefined()
+
+    await live.update({ hosts: ['gitlab.com', 'gitlab.example.test'] })
+
+    expect(context.forge.repositoryFromRemote('git@gitlab.example.test:group/app.git')).toEqual({ forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' })
+    expect(context.forge.repositoryFromRemote('git@gitlab.com:group/app.git')).toBeDefined()
+    // Identity only: printing a Fiber walks Context proxies.
+    expect(Object.is(live.entry.fiber, live.fiber)).toBe(true)
+
+    await live.update({ hosts: ['gitlab.com'] })
+    expect(context.forge.repositoryFromRemote('git@gitlab.example.test:group/app.git')).toBeUndefined()
+  })
+
+  it('keeps serving its previous hosts when a live edit adds one another provider serves', async () => {
+    const context = await forge()
+    context.forge.register({ ...otherProvider(), hosts: ['code.example.test'] })
+    const live = await liveConfig(context, ForgeGitLab)
+    const warned = vi.spyOn(context.logger, 'warn').mockImplementation(() => {})
+
+    await live.update({ hosts: ['gitlab.com', 'code.example.test'] })
+
+    expect(context.forge.repositoryFromRemote('git@gitlab.com:group/app.git')).toMatchObject({ forge: 'gitlab', host: 'gitlab.com' })
+    expect(context.forge.changeRequestFromUrl('https://code.example.test/group/app/-/merge_requests/1')).toBeUndefined()
+    expect(warned.mock.calls.map((call): unknown => call[0]))
+      .toContainEqual(new Error('forge: host "code.example.test" is already served by the "github" provider'))
+  })
+
+  it('keeps its own instance off the generated Settings pages', async () => {
+    await omitsGeneratedPage(async (context) => {
+      await context.plugin(ForgeService)
+      return context.plugin(ForgeGitLab, {})
+    })
+  })
+
   it('refuses a host the GitHub provider already serves', async () => {
     const context = await forge()
-    context.forge.register({ ...stubProvider(), hosts: ['code.example.test'] })
+    context.forge.register({ ...otherProvider(), hosts: ['code.example.test'] })
 
     await expect(context.plugin(ForgeGitLab, { hosts: ['code.example.test'] }))
       .rejects.toThrow('forge: host "code.example.test" is already served by the "github" provider')
@@ -104,7 +142,7 @@ describe('forge-gitlab plugin', () => {
 })
 
 /** A provider of the `github` family that serves nothing it is asked. */
-function stubProvider(): Parameters<Context['forge']['register']>[0] {
+function otherProvider(): Parameters<Context['forge']['register']>[0] {
   const never = (): never => { throw new Error('not called') }
   return {
     forge: 'github', hosts: [], label: 'GitHub', changeRequestNoun: 'pull-request',

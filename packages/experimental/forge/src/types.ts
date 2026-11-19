@@ -758,6 +758,24 @@ export interface ForgeProvider {
 }
 
 /**
+ * What `ctx.forge.register` returns: the disposer, plus the replacement of the registered provider by another provider
+ * of the same forge family, for a provider whose configuration changes while it runs.
+ */
+export interface ForgeRegistrationHandle {
+  /** Unregister the provider this registration holds and wait for its calls, and those of the providers it replaced, to finish. */
+  (): Promise<void>
+  /**
+   * Replace the registered provider in one synchronous step, so no reader finds the family without a provider. The
+   * replaced provider's in-flight calls are cancelled and their results discarded; watches of the family poll at once
+   * and `forge/providers-changed` announces the change.
+   * @param provider - provider of the same forge family.
+   * @throws when the registration was withdrawn, `provider.forge` is another family, or another family's provider
+   *   serves one of `provider.hosts`, compared without case; the registered provider then keeps serving.
+   */
+  replace(provider: ForgeProvider): void
+}
+
+/**
  * Receives every polling result for one watched change request.
  * @param update - the settled result.
  */
