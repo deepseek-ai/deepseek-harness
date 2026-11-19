@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Computer Use",
+    "title": "自动电脑操作",
     "description": "允许 agent 直接操作电脑上的应用程序。",
     "detail": "docs/DETAIL.zh.md"
   }

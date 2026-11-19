@@ -1,1 +1,1 @@
-- status: 正在应用 Computer Use 的更改
+- status: 正在应用自动电脑操作的更改
