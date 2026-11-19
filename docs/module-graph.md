@@ -244,6 +244,7 @@ flowchart TD
   end
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
+    pkg_feishu["feishu"]
     pkg_linear["linear"]
     pkg_notion["notion"]
     pkg_tencent_docs["tencent-docs"]
@@ -688,6 +689,8 @@ flowchart TD
   pkg_api_workspace_controller --> pkg_storage_domain
   pkg_api_workspace_controller --> pkg_typert_protocol
   pkg_api_workspace_controller --> pkg_workspace
+  pkg_feishu --> pkg_cli_account
+  pkg_feishu --> pkg_skill
   pkg_experimental_api_speech_to_text --> pkg_experimental_speech_to_text
   pkg_experimental_api_speech_to_text --> pkg_typert_protocol
   pkg_experimental_client_ui_cot_translation --> pkg_experimental_translator
@@ -1847,6 +1850,7 @@ flowchart TD
 | [`skill-filesystem`](../packages/skill/skill-filesystem) | `skill` | [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`skill`](../packages/skill/skill) |
 | [`deepseek-auth`](../packages/account/deepseek-auth) | `account` | [`credentials`](../packages/credentials/credentials), [`deepseek-account`](../packages/account/deepseek-account), [`error`](../packages/util/error), [`launch-environment`](../packages/util/launch-environment) |
 | [`api-workspace-controller`](../packages/api/workspace-controller) | `api` | [`api-gateway`](../packages/api/gateway), [`client-connection`](../packages/client/connection), [`host-directory-picker`](../packages/host/directory-picker), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`typert-protocol`](../packages/typert/protocol), [`workspace`](../packages/workspace/workspace) |
+| [`feishu`](../packages/connector/feishu) | `connector` | [`cli-account`](../packages/connector/cli-account), [`skill`](../packages/skill/skill) |
 | [`experimental-api-speech-to-text`](../packages/experimental/api-speech-to-text) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`typert-protocol`](../packages/typert/protocol) |
 | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | `experimental` | [`experimental-translator`](../packages/experimental/translator) |
 | [`experimental-speech-to-text-sensevoice`](../packages/experimental/speech-to-text-sensevoice) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`subprocess`](../packages/subprocess/subprocess) |
