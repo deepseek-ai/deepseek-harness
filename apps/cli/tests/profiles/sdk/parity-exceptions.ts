@@ -1,6 +1,6 @@
 /**
  * Recorded differences between the SDK and Desktop model context. An entry with `debt` is an inconsistency to fix;
- * fixing it makes the entry stale, so the fix removes it. Team mode is not compared until #7172 is fixed.
+ * fixing it makes the entry stale, so the fix removes it. Each mode's entries also apply to its Team-on comparison.
  */
 import type { ParityException } from './parity.ts'
 

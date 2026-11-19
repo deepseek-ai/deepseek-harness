@@ -1,9 +1,8 @@
 /**
  * Keyless comparison of the step-admitted model context of the shipped SDK and Desktop profiles: tool names, tool
- * schemas, system prompt sections and runtime context names. Record differences in parity-exceptions.ts; unused
- * exceptions fail. Team mode is excluded while its known composition mismatch is tracked in #7172.
- * SDK minimal, other presets, graphical context and optional runtime payloads
- * are outside this fixed standard/PTC, top-level-session comparison.
+ * schemas, system prompt sections, runtime context names and the session skill catalog, for the top-level Agent with
+ * Team off and on. Record differences in parity-exceptions.ts; unused exceptions fail. Teammate scopes, SDK minimal,
+ * other presets, graphical context and optional runtime payloads are outside this standard/PTC comparison.
  */
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -188,6 +187,15 @@ it.for(['standard', 'ptc'] as const)('compares the shipped %s model context and 
   expect(names(optOut)).not.toContain('plugin_manager')
   expect(() => { assertContextParity(mode, optOut, desktop) }).toThrow(
     mode === 'ptc' ? /Stale exceptions:.*tool plugin_manager \(sdk only\)/ : 'tool plugin_manager (desktop only)')
+})
+
+it.for(['standard', 'ptc'] as const)('compares the shipped %s top-level Agent context with Team on', async (mode, test) => {
+  const collect = await fixture(test)
+  const team = [{ id: 'agent-team', config: { maxTasks: 256, defaultEnabled: true } }]
+  const sdk = await collect('sdk', mode, team)
+  const desktop = await collect('desktop', mode, team)
+  for (const side of [sdk, desktop]) expect(names(side)).toEqual(expect.arrayContaining(['team_task_create', 'team_task_list']))
+  assertContextParity(mode, sdk, desktop)
 })
 
 it.for(['standard', 'ptc'] as const)('detects missing shared tools in %s', async (mode, test) => {

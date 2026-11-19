@@ -78,6 +78,6 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-[SDK/Desktop 模型上下文比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts)与 [agent 配置项比较](../../../apps/cli/tests/profiles/sdk/agent-config-parity.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。前者比较首个模型请求的工具名、工具 schema、系统提示词段落、运行时上下文名称和会话 skill 目录；后者用 `--dump-config` 比较每个 Desktop agent preset 声明的配置项与 SDK 中同 id 的配置项，覆盖默认回合看不到的段落，例如 plan mode。两者都覆盖关闭 Team 的 standard/PTC 主会话；Team 对齐暂由 #7172 跟踪。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/`。每项接受的差异都在相邻的 `parity-exceptions.ts` 中带理由登记；暂不修复的不一致还要在 `debt` 中写明跟踪 issue。差异修复后对应例外变为 stale，修复改动需同时删除它。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
+[SDK/Desktop 模型上下文比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts)与 [agent 配置项比较](../../../apps/cli/tests/profiles/sdk/agent-config-parity.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。前者比较首个模型请求的工具名、工具 schema、系统提示词段落、运行时上下文名称和会话 skill 目录；后者用 `--dump-config` 比较每个 Desktop agent preset 声明的配置项与 SDK 中同 id 的配置项，覆盖默认回合看不到的段落，例如 plan mode。两者都覆盖 standard/PTC 主会话；运行时比较还会在开启 Team 时比较顶层 Agent，不比较 teammate 作用域。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/`。每项接受的差异都在相邻的 `parity-exceptions.ts` 中带理由登记；暂不修复的不一致还要在 `debt` 中写明跟踪 issue。差异修复后对应例外变为 stale，修复改动需同时删除它。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
 
 </details>
