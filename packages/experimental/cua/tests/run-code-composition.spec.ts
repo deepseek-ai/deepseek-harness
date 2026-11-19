@@ -446,9 +446,13 @@ it.each([
 ] as const)('returns to idle after %s while new CUA input waits for cleanup (%s)', async (ending, outcome) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  if (ending === 'model failure') {
+    await f.run()
+    f.model.restart([])
+  }
   f.model.beforeStream = async (index, options) => {
+    if (ending === 'model failure') throw new Error('Model failed with W held from an earlier turn')
     if (index !== 1) return
-    if (ending === 'model failure') throw new Error('Model failed with W held')
     thinking.resolve()
     const signal = options.signal!
     await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
@@ -468,7 +472,7 @@ it.each([
     await idle
     expect(f.native.held.map(press => press.key)).toEqual(['w'])
     expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-inputs-released')).toBe(false)
-    const terminal = f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')
+    const terminal = f.agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
     expect(terminal?.data.reason.kind).toBe(ending === 'thinking stop' ? 'aborted' : 'error')
 
     const admitted: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -735,6 +739,7 @@ it('removes a pending held reminder when a pause preserves the inbox', async () 
   const running = f.run()
   await inserted.promise
   await release.entered
+  f.agent.inject(createUserMessage({ content: [{ type: 'text', text: 'Keep this pending instruction' }], source: { kind: 'user' } }))
   release.reply()
   await Promise.all([running, notice])
   expect(f.agent.inbox.nextStep.map(message => message.source.kind)).toContain('cua-inputs-released')
@@ -742,6 +747,7 @@ it('removes a pending held reminder when a pause preserves the inbox', async () 
   f.model.restart(['inspect("resumed")'])
   await f.run()
   const resumed = JSON.stringify(f.model.requests[0]?.messages)
+  expect(resumed).toContain('Keep this pending instruction')
   expect(resumed).toContain('CUA inputs were released during cleanup')
   expect(resumed).not.toContain('CUA inputs are still held')
 })
