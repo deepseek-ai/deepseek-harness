@@ -475,6 +475,7 @@ export class ClientSessions implements ISessions {
    *   the latest completed-turn prefix), and whether to increment an
    *   inherited durable title, skipping numbers Host-listed titles already use,
    *   before resolving, plus permission to start source migration and the child origin.
+   *   `onCreated` also observes a child published before Workspace attachment failed.
    * @returns the child session id.
    * @throws {SessionForkError} with the source id.
    * @throws {Error} when a requested child-title rename fails after creation.
@@ -496,7 +497,14 @@ export class ClientSessions implements ISessions {
       ...(opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration }),
       ...(opts.origin === undefined ? {} : { origin: opts.origin }),
     })
-    if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
+    if (!result.ok) {
+      // A Workspace attachment failure still published the child, so the caller can open it.
+      if (result.error.code === 'session/workspace-attach-failed') {
+        this.projectList()
+        opts.onCreated?.(result.error.details.sessionId)
+      }
+      throw new SessionForkError(result.error, opts.sessionId)
+    }
     this.projectList()
     const childId = result.value.sessionId
     opts.onCreated?.(childId)

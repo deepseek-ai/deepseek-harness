@@ -111,7 +111,7 @@ describe('SidechatControl.fork', () => {
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }]) })
     expect(h.control.notice.getSnapshot()).toBeNull()
-    expect(h.error).toHaveBeenCalledWith('Side conversation title rename failed', expect.any(Error))
+    expect(h.error).toHaveBeenCalledWith('Side conversation setup failed after creation', expect.any(Error))
   })
 
   it('neither opens nor reports after disposal', async () => {

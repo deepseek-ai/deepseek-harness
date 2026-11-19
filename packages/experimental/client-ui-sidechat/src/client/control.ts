@@ -60,16 +60,17 @@ export class SidechatControl {
   private async create(sessionId: SessionId, main: SessionId): Promise<void> {
     let childId: SessionId | undefined
     try {
-      // `onCreated` runs before the child title rename, so a rename failure still opens the created child.
+      // `onCreated` runs before the child title rename and also reports a child whose Workspace attachment
+      // failed, so either failure still opens the created child.
       await this.ctx.sessions.fork({ sessionId, origin: 'side', increaseTitle: true, onCreated: (id) => { childId = id } })
     } catch (error) {
       if (childId === undefined && !this.closed) {
         this.notice.set({ serial: ++this.serial, key: forkUnavailable(error) ? 'noTurn' : 'createFailed' })
       }
       if (forkUnavailable(error)) return
-      this.ctx.logger.error(childId === undefined ? 'Side conversation creation failed' : 'Side conversation title rename failed', error)
+      this.ctx.logger.error(childId === undefined ? 'Side conversation creation failed' : 'Side conversation setup failed after creation', error)
     }
-    // A released main Session store makes the open a no-op; the child remains in the Session list.
+    // A released main Session store makes the open a no-op; the stored child then has no left sidebar row.
     if (childId !== undefined && !this.closed) this.ctx.sidebarRight.openResourceIn(main, sidechatAddress(childId))
   }
 }
