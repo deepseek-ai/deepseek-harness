@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "飞书插件",
+    "description": "在对话中使用飞书文档、消息及其他已授权的功能。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

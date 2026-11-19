@@ -3698,12 +3698,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a caller-owned observation lease.',
       },
       {
-        signature: 'inspectSession<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T>',
-        description: 'Inspect domain-owned state without attaching or resuming a cold Session. The getter runs synchronously after preparation and must not mutate or retain the Session.',
-        parameters: [{ name: 'sessionId', description: 'logical Session identity.' }, { name: 'read', description: 'domain getter returning detached data.' }, { name: 'signal', description: 'preparation cancellation.' }],
-        returns: 'the getter\'s value at the current live or prepared cut.',
-      },
-      {
         signature: 'abstract searchSessions( request: SessionSearchRequest, exec?: SessionSearchExecContext, ): Promise<SessionSearchPage<SessionSearchHit>>',
         description: 'Search the live-preferred logical corpus and group by session.',
         parameters: [{ name: 'request', description: 'query text, metadata filters, page size, and cursor.' }, { name: 'exec', description: 'optional cancellation control.' }],
