@@ -3182,6 +3182,49 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteConnection',
+    summary: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
+    description: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
+    methods: [
+      {
+        signature: '@Remote status(id: RemoteLoginId | null): RemoteConnectionStatus',
+        description: 'Read prerequisites and the state of one invitation without disclosing its credential.',
+        parameters: [{ name: 'id', description: 'invitation to inspect, or null to inspect only deployment prerequisites.' }],
+        returns: 'deployment availability and invitation state, with the polling interval.',
+      },
+      {
+        signature: '@Remote create(): RemoteLoginTicket',
+        description: 'Authorize a new browser by generating a one-use login invitation; replaces any older invitation.',
+        parameters: [],
+        returns: 'the invitation credential and its fixed expiry.',
+      },
+      {
+        signature: '@Remote loginUrl(): string',
+        description: 'Read the advertised URL carrying the process launch token; QR invitations are unchanged.',
+        parameters: [],
+        returns: 'owner-only login URL, reusable until the Host process restarts; never persist or log it.',
+      },
+      {
+        signature: '@Remote cancel(id: RemoteLoginId): RemoteLoginState',
+        description: 'Cancel an unused invitation; this never revokes a browser session already issued.',
+        parameters: [{ name: 'id', description: 'invitation being cancelled; an older ID cannot cancel a replacement.' }],
+        returns: 'the invitation\'s final state, including used when a redemption won the race.',
+      },
+      {
+        signature: '@Remote pairingRequests(signal: AbortSignal): PairingRequestsValue',
+        description: 'Read pending requests without the credentials used to collect their sessions.',
+        parameters: [{ name: 'signal', description: 'current Remote call\'s cancellation.' }],
+        returns: 'pending codes and the deployment\'s refresh interval.',
+      },
+      {
+        signature: '@Remote decidePairing(id: PairingRequestId, decision: PairingDecision, signal: AbortSignal): PairingDecisionResult',
+        description: 'Approve or deny one displayed code; the first decision is retained across retries.',
+        parameters: [{ name: 'id', description: 'request selected after comparing its code with the applicant\'s screen.' }, { name: 'decision', description: 'allow or deny full owner access for the requesting browser.' }, { name: 'signal', description: 'current Remote call\'s cancellation before the decision commits.' }],
+        returns: 'committed decision, or unavailable after cancellation, expiry, or collection.',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -8884,6 +8927,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PaidTranslationSpec extends TranslationSpecFields {\n    readonly provider: PaidTranslationProvider;\n    readonly sessionId: SessionId;\n}',
   },
   {
+    name: 'PairingDecision',
+    declaration: 'export type PairingDecision = \'allow\' | \'deny\';',
+  },
+  {
+    name: 'PairingDecisionResult',
+    declaration: 'export type PairingDecisionResult = \'approved\' | \'denied\' | \'unavailable\';',
+  },
+  {
+    name: 'PairingRequestId',
+    declaration: 'export type PairingRequestId = Branded<\'PairingRequestId\'>;',
+  },
+  {
+    name: 'PairingRequestsValue',
+    declaration: 'export interface PairingRequestsValue {\n    readonly requests: readonly PendingPairingRequest[];\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
     name: 'PaneOpenArgs',
     declaration: 'export interface PaneOpenArgs {\n    id: string;\n    title?: string;\n    focus?: true;\n    closeOnEscape?: true;\n    holdToasts?: true;\n    rows?: number;\n    columns?: number;\n}',
   },
@@ -8910,6 +8969,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PendingModule',
     declaration: 'export interface PendingModule {\n    url: string;\n    reason: \'host-module\' | \'unmanaged-plugin\' | \'module-comparison\';\n}',
+  },
+  {
+    name: 'PendingPairingRequest',
+    declaration: 'export interface PendingPairingRequest {\n    readonly id: PairingRequestId;\n    readonly code: string;\n    readonly authority: string;\n    readonly sourceIp: string | null;\n    readonly expiresInMs: number;\n}',
   },
   {
     name: 'PendingRemoteEventInfo',
@@ -9364,6 +9427,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
   },
   {
+    name: 'RemoteConnectionStatus',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
+    name: 'RemoteConnectionUnavailable',
+    declaration: 'export type RemoteConnectionUnavailable = \'unreachable-host\' | \'untrusted-host\';',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {\n    readonly isDSHRemoteError: true;\n    constructor(override readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -9382,6 +9453,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RemoteEventHostInfo',
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+  },
+  {
+    name: 'RemoteLoginId',
+    declaration: 'export type RemoteLoginId = Branded<\'remote-login-id\'>;',
+  },
+  {
+    name: 'RemoteLoginState',
+    declaration: 'export type RemoteLoginState = \'none\' | \'pending\' | \'used\' | \'expired\' | \'cancelled\' | \'replaced\';',
+  },
+  {
+    name: 'RemoteLoginTicket',
+    declaration: 'export interface RemoteLoginTicket {\n    readonly id: RemoteLoginId;\n    readonly url: string;\n    readonly lifetimeMs: number;\n}',
   },
   {
     name: 'RemoteStream',

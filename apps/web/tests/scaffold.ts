@@ -80,8 +80,9 @@ import {
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-// Empty type imports carry the webServer/agents/sessionPersistence Context merges.
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
+// Empty type imports carry the webApp/agents Context merges.
+import type {} from '@deepseek-ai/dsh-web-app'
 import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { startPrefixProxy, type PrefixProxy } from './prefix-proxy.ts'
@@ -653,11 +654,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       },
     },
     // The bundle's web-runtime row resolves the same built dist under test
-    // (apps/web IS @deepseek-ai/dsh-web-frontend). The scaffold captures the real
-    // WebApp-published login URL; Playwright owns browser opening.
+    // (apps/web IS @deepseek-ai/dsh-web-frontend). Collect Token entries through
+    // WebApp's event without printing credentials; Playwright owns browser opening.
     // Preserve the composed surface-context choice because a patch replaces
     // the row's complete config.
-    { id: 'web-runtime', config: { surfaceContext, openBrowser: false, printUrl: true } },
+    { id: 'web-runtime', config: { surfaceContext, openBrowser: false, printUrl: false } },
     ...publicHost === undefined && options.remoteAuthority === undefined
       ? []
       : [{
@@ -852,37 +853,21 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       resolution,
     })
     await ctx.plugin(Loader)
-    // Scaffold boots already own process.cwd() exclusively within their test worker.
-    // Capture only this listener's login line, and restore console on failed boot too.
-    const startupLogin = Promise.withResolvers<URL>()
-    let startupLoginUrl: URL
-    const originalLog = console.log
-    console.log = (...args: unknown[]) => {
-      const line = args.length === 1 && typeof args[0] === 'string' ? args[0] : ''
-      const match = /^dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+)$/u.exec(line)
-      if (match !== null) {
-        const url = new URL(match[1]!)
-        const boundPort = ctx.get('webServer')?.port
-        if (boundPort !== undefined && url.port === String(boundPort)) {
-          startupLogin.resolve(url)
-          return
-        }
-      }
-      originalLog(...args)
+    await mountRootInclude(ctx, rootConfig, readProfilePatches('dsh', profileContext))
+    await ctx.loader.await()
+    await auditStartupEntries(ctx, 'web e2e scaffold')
+    const advertised = new URL(ctx.webApp.getAdvertisedUrl())
+    const entries: WebEntryUrl[] = []
+    ctx.emit(ctx.webServer, 'webserver/entry-url', advertised.href, entries)
+    const tokenEntries = entries.filter((entry) => {
+      const url = new URL(entry.url)
+      return url.origin === advertised.origin && url.pathname === advertised.pathname
+        && url.searchParams.getAll('token').length === 1 && Boolean(url.searchParams.get('token'))
+    })
+    if (tokenEntries.length !== 1) {
+      throw new Error('web e2e scaffold: expected one Token provider login URL for this application')
     }
-    let startupTimer: ReturnType<typeof setTimeout> | undefined
-    try {
-      await mountRootInclude(ctx, rootConfig, readProfilePatches('dsh', profileContext))
-      await ctx.loader.await()
-      await auditStartupEntries(ctx, 'web e2e scaffold')
-      startupTimer = setTimeout(() => {
-        startupLogin.reject(new Error('web e2e scaffold: token plugin did not publish its login URL'))
-      }, 10_000)
-      startupLoginUrl = await startupLogin.promise
-    } finally {
-      clearTimeout(startupTimer)
-      console.log = originalLog
-    }
+    const startupLoginUrl = new URL(tokenEntries[0]!.url)
     if (options.developerTools !== undefined) {
       await ctx.settings.update('ui-settings', { enabled: options.developerTools })
     }
