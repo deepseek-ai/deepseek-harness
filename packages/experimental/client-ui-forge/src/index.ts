@@ -42,7 +42,7 @@ import { PatchCache } from './patch-cache.ts'
 import { ReviewCache } from './review-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import { Reader, ViewerLists } from './viewer-lists.ts'
-import type { PanelConfig } from './panel.ts'
+import type { KeptPanel, PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
   ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame,
@@ -127,6 +127,8 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly home: Context
   private readonly config: ControllerConfig
   private readonly panels = new Map<Session, SessionPanel>()
+  /** What the last panel of a Session kept when its last follower left. */
+  private readonly keptPanels = new WeakMap<Session, KeptPanel>()
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
   private readonly patches: PatchCache
@@ -725,6 +727,21 @@ export class ForgePanelController extends TypertRemoteService {
   async refresh(sessionId: SessionId, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     for (const [session, panel] of this.panels) if (session.id === sessionId) await panel.refresh()
+  }
+
+  /**
+   * Bring a followed Session's panel up to date after its surface showed again: reinspect the checkout, poll the
+   * change requests whose latest poll is older than `statusMaxAgeMs`, probe sign-in again unless the last probe found
+   * the host ready, and look the upstream branch up again while the Session shows no change request; an unfollowed
+   * Session is unchanged.
+   * @param sessionId - Session whose panel is revisited; revisiting neither loads nor resumes it.
+   * @param signal - request cancellation.
+   * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
+   */
+  @Remote
+  async revisit(sessionId: SessionId, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    for (const [session, panel] of this.panels) if (session.id === sessionId) await panel.revisit()
   }
 
   /**
@@ -1730,11 +1747,15 @@ export class ForgePanelController extends TypertRemoteService {
     let panel = this.panels.get(session)
     if (panel === undefined) {
       const revision = (ref: ChangeRequestRef): number => this.reviewRevisions.get(changeRequestKey(ref)) ?? 0
-      const created: SessionPanel = new SessionPanel(this.home, this.config, session, this.worktreeStates, this.creations, revision, () => {
+      const idle = (): void => {
         if (this.panels.get(session) !== created) return
         this.panels.delete(session)
+        this.keptPanels.set(session, created.keep())
         void created.dispose()
-      })
+      }
+      const created: SessionPanel = new SessionPanel(
+        this.home, this.config, session, this.worktreeStates, this.creations, revision, this.keptPanels.get(session), idle,
+      )
       panel = created
       this.panels.set(session, panel)
     }

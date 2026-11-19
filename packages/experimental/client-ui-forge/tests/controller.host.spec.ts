@@ -385,7 +385,7 @@ describe('forgePanel.follow', () => {
     expect(follower.states.every(state => state.checkout.state !== 'ready' || state.directory === linked)).toBe(true)
   })
 
-  it('shares one panel among followers and starts a fresh one after the last leaves', async () => {
+  it('shares one panel among followers and starts the next one from the kept state after the last leaves', async () => {
     const { repo } = await project()
     const opened = await open(repo)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
@@ -401,7 +401,9 @@ describe('forgePanel.follow', () => {
     expect(opened.ctx.forge.latest(ref)).toBeUndefined()
 
     const third = reader(opened)
-    await expect(third.until(() => true)).resolves.toMatchObject({ checkout: { state: 'pending' } })
+    await expect(third.until(() => true)).resolves.toMatchObject({
+      checkout: { state: 'ready' }, changeRequests: [{ url: pullUrl(7), update: null, snapshot: snapshot(ref) }],
+    })
   })
 
   it('ends followers whose signal aborts while waiting and when the Remote stops', async () => {

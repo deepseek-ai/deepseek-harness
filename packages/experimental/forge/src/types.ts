@@ -799,11 +799,13 @@ export type ChangeRequestListener = (update: ChangeRequestUpdate) => void
  */
 export type ChangeRequestBriefListener = (update: ChangeRequestBriefUpdate) => void
 
-/** When a watcher that joins a watched change request needs a status newer than the latest one. */
+/** When a watcher that joins a watched change request, or a refresh of one, needs a status newer than the latest one. */
 export interface ChangeRequestWatchOptions {
   /**
-   * Poll at once when the latest snapshot or failure is older than this many milliseconds. Without it, a watcher
-   * that joins a change request whose snapshot was already read waits for the regular poll.
+   * Age in milliseconds past which the latest status is too old. A watcher that joins a change request whose
+   * snapshot was already read polls at once when the latest snapshot or failure is older and no snapshot poll is in
+   * flight; without it, the watcher waits for the regular poll. A refresh polls at once unless a poll is in flight or
+   * the latest poll at either level settled within it; without it, a refresh always polls.
    */
   readonly maxAgeMs?: number
 }
@@ -819,7 +821,7 @@ export interface ChangeRequestKnownState extends Pick<ChangeRequestBrief, 'state
 
 /** Poll cadence and fetch deadline for watched change requests. */
 export interface Config {
-  /** Poll interval in milliseconds while checks run or mergeability is unknown. */
+  /** Poll interval in milliseconds while checks run, and for one poll after a status first reports an unknown mergeability. */
   activeIntervalMs?: number
   /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number

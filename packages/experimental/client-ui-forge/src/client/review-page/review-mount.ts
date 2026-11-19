@@ -23,7 +23,7 @@ import { createReviewStore } from './review-store.ts'
 import { ReviewNavCount, ReviewNavIcon, type ReviewNavCountInjected } from './ReviewNav.tsx'
 import { ReviewConversation, type ReviewChatFace } from './ReviewChat.tsx'
 import { ReviewPage, type ReviewChangesFace, type ReviewPageInjected } from './ReviewPage.tsx'
-import { createStreamSource, type NoticeSource } from '../source.ts'
+import { createStreamSource, pageVisibility, type NoticeSource } from '../source.ts'
 import type { ChangeRequestEntry } from '../status.ts'
 import { ViewedFiles } from '../viewed-files.ts'
 import type { ForgeReviewCountFrame } from '../../types.ts'
@@ -186,6 +186,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
   const count = createStreamSource<ForgeReviewCountFrame, number | null>({
     open: signal => remote.reviewCount(signal),
     subscribeReset,
+    visibility: pageVisibility,
   }, null, (_previous, frame) => frame.reviewRequested)
   ctx.effect(() => () => { count.close() }, 'forge-panel: review count')
   ctx.effect(() => ctx.remoteAccess.whenAccess('forgePanel/reviewLists', function* () {

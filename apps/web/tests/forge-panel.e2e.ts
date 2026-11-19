@@ -875,6 +875,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     await captureStableAria(page, '[data-forge-session-hover]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
   await page.mouse.move(0, 0)
   await rowHover.waitFor({ state: 'detached' })
+  // The Host's sign-in probe has answered once the panel state names a readiness, so a later probe would come from showing the panel.
+  for await (const state of scaffold.ctx.forgePanel.follow(session, AbortSignal.timeout(20_000))) if (state.readiness !== null) break
+  const probes = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.startsWith('["auth"')).length
   const panel = await showSessionPanel(page)
   const checkout = panel.locator('[data-forge-checkout]')
   const checkoutName = checkout.getByText(branch, { exact: true })
@@ -895,6 +898,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     }), MODE)
   const beforeChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(beforeChecks.some(args => args.includes('id=rollup-7'))).toBe(false)
+  // Showing the panel revisited it on the Host, which probes sign-in again only while the host is not ready.
+  expect(beforeChecks.filter(args => args[0] === 'auth')).toHaveLength(probes)
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')

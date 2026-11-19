@@ -705,9 +705,10 @@ export function ChangesView({
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
   // A read starts once the panel state arrives and again when what it describes moves. A change request's read
-  // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
+  // also waits for the first status of the panel stream, which names the head the Host reads at, unless no provider
+  // serves it or its first poll failed; until then the entry may show a snapshot the Host kept from an earlier stream.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
-  const head = entry?.snapshot?.headSha ?? (pending ? null : '')
+  const head = pending ? null : entry?.snapshot?.headSha ?? ''
   // An accepted review change the host announced, from any plugin, reads a change request's viewed marks again.
   const hostRevision = entry?.reviewRevision ?? 0
   const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}`
@@ -755,7 +756,7 @@ export function ChangesView({
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   // Threads show only while they were read at the head of the latest status and, for the whole change request, at
   // the head the shown diff was read at, so their positions number the shown files.
-  const prHead = entry?.snapshot?.headSha ?? null
+  const prHead = pending ? null : entry?.snapshot?.headSha ?? null
   const prAuthor = entry?.snapshot?.author ?? null
   const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
     updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision + hostRevision, read: changeRequestReview })

@@ -48,7 +48,7 @@ import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
 import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource, type PanelStream,
+  createNoticeSource, createPanelSource, createStreamSource, foldStates, pageVisibility, type PanelSource, type PanelStream,
 } from './source.ts'
 import { numberOf, type ChangeRequestEntry } from './status.ts'
 import type { WorktreeRequestResult } from './WorktreeNameDialog.tsx'
@@ -79,7 +79,7 @@ interface SessionStores {
   readonly panel: PanelSource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
   readonly viewed: ViewedFiles
-  /** Refresh unless an automatic refresh of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
+  /** Revisit the Session's panel on the Host unless an automatic revisit of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
   readonly refreshIfStale: () => void
   /** Plugin annotations of each changes view of the Session, by address. */
   readonly annotations: Map<string, AnnotationView>
@@ -87,9 +87,9 @@ interface SessionStores {
 }
 
 /**
- * Least time between automatic refreshes of one Session, which run when the
+ * Least time between automatic revisits of one Session, which run when the
  * Session panel opens and when the window regains focus; repeated focus
- * changes then cost one checkout inspection and code host poll.
+ * changes then cost one checkout inspection.
  */
 const AUTO_REFRESH_MIN_MS = 10_000
 
@@ -162,6 +162,7 @@ function registerUi(ctx: Context): void {
           refreshIfStale()
         }),
         subscribeReset: listener => ctx.on('connection/reset', listener),
+        visibility: pageVisibility,
       })
       const dispose = scope.effect(() => () => {
         panel.close()
@@ -176,7 +177,7 @@ function registerUi(ctx: Context): void {
         const now = Date.now()
         if (refreshedAt !== undefined && now - refreshedAt < AUTO_REFRESH_MIN_MS) return
         refreshedAt = now
-        void refreshOf(sessionId)()
+        void ctx.remote.forgePanel.revisit(sessionId).then((result) => { settled(result, 'toast.refreshFailed') })
       }
       store = {
         panel, reviews: new WeakMap(), viewed: new ViewedFiles(sessionId), annotations: new Map(), refreshIfStale,
@@ -513,6 +514,7 @@ function registerUi(ctx: Context): void {
   const states = createStreamSource<ForgeChangeRequestStatesFrame, ReadonlyMap<string, ForgeChangeRequestListState>>({
     open: signal => ctx.remote.forgePanel.changeRequestStates(signal),
     subscribeReset: listener => ctx.on('connection/reset', listener),
+    visibility: pageVisibility,
   }, new Map(), foldStates)
   ctx.effect(() => () => { states.close() }, 'forge-panel: change request states')
   const listFace = (): SessionListInjected => ({ hooks: { states: states.observable } })

@@ -1554,6 +1554,19 @@ describe('ChangesTab change requests', () => {
     expect(within(failed.view.container).getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${en['diff.viewInBrowser']}`)
   })
 
+  it('waits for the first status of a change request whose entry shows a snapshot kept from an earlier panel stream', async () => {
+    const m = mount({ source, state: ready({ changeRequests: [{ ...entry(7, null), snapshot: snapshot(7) }] }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).not.toHaveBeenCalled()
+    expect(m.faces.changeRequestReview).not.toHaveBeenCalled()
+    expect(reading(m.view)).toBe(true)
+
+    act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7))] }), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledOnce()
+  })
+
   it('names a change request without a snapshot by its URL and the number the URL ends in', async () => {
     const m = mount({ source, state: ready() })
     expect(m.view.getByRole('img', { name: 'Change request state: Unknown' })).toBeTruthy()

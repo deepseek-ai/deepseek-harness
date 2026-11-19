@@ -203,8 +203,9 @@ describe('forge brief watch', () => {
 
     await vi.advanceTimersByTimeAsync(2_999)
     expect(provider.briefFetches).toEqual([[ref(3)]])
+    // The third one, read 3 of its 5 seconds ago, rides along.
     await vi.advanceTimersByTimeAsync(1)
-    expect(provider.briefFetches).toEqual([[ref(3)], [ref(2)]])
+    expect(provider.briefFetches).toEqual([[ref(3)], [ref(2), ref(3)]])
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(provider.briefFetches.flat()).not.toContainEqual(ref(1))
