@@ -54,6 +54,20 @@ interface ForgeProvider {
   readonly label: string
   /** What this provider's hosts call a change request. */
   readonly changeRequestNoun: ChangeRequestNoun
+  /**
+   * Where and which lists of the signed-in user's change requests this provider reads. A provider declares `viewer` and
+   * implements `listForViewer` and `countForViewer` together; omitting any declares that it reads no viewer lists.
+   */
+  readonly viewer?: ForgeViewerCapability
+  /**
+   * Read one viewer list, most recently updated first. A query outside {@link ForgeProvider.viewer} resolves to an
+   * `unsupported` failure.
+   */
+  listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>
+  /** Count the change requests in every list of {@link ForgeViewerCapability.filters} on one of its hosts. */
+  countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+  /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
+  readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -349,9 +363,11 @@ interface ForgeFailure {
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
    * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
-   * a later status can succeed; `unsupported`: the provider does not offer the read; `unavailable`: any other failure.
+   * a later status can succeed; `rate-limited`: the host refused the read under its rate limit, so reading again
+   * succeeds only after the limit resets; `unsupported`: the provider does not offer the read; `unavailable`: any other
+   * failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unsupported' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'rate-limited' | 'unsupported' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -752,6 +768,145 @@ interface ForgeViewedRequest {
 }
 ```
 
+<a id="viewer-lists-and-descriptions"></a>
+
+## 登录用户的列表与描述
+
+声明了 `viewer` 的提供方在它的每个主机上读取与登录用户有关的三类打开的变更请求：`review-requested`、`authored` 与 `involved`，三者互不重叠。`ctx.forge.viewerSources()` 列出每个提供方的主机、列表与 `maxItems`；`ctx.forge.listForViewer` 按最近更新在前读取一个列表，每项是 `ChangeRequestSummary`，不含快照的检查、评审者与合并状态；`ctx.forge.countForViewer` 读取一个主机上每个列表的总数。两者都不进入状态轮询：调用方自行轮询列表，并对完整展示的变更请求单独 watch。提供方、主机或列表不提供查看者列表时返回 `unsupported`，主机按限流拒绝时返回 `rate-limited`。
+
+`ctx.forge.readDescription` 读取变更请求的 Markdown 描述与标签；`body` 中的原始 HTML 不得按 HTML 渲染。`images` 把浏览器在没有用户托管平台会话时无法加载的图片地址，映射为托管平台签发、无需会话即可加载该图片的地址；这些地址在 `imagesExpireAt` 之后失效，之后读者应重新读取描述。搜索与图片配对由 [GitHub 提供方 README](../../packages/experimental/forge-github/README.zh.md#use-this-package) 说明。
+
+```ts type-equiv
+/**
+ * A list of open change requests that involve the signed-in user: `review-requested` asks the user or one of the user's
+ * teams for a review; `authored` names the user as author; `involved` names the user in any other way, as an assignee,
+ * a commenter, a reviewer, or a mention, and holds none of the other two lists' change requests.
+ */
+type ForgeViewerFilter = 'review-requested' | 'authored' | 'involved'
+```
+
+```ts type-equiv
+/** Hosts a provider lists change requests on for the signed-in user, and the lists it offers there. */
+interface ForgeViewerCapability {
+  /** Lowercase host names, each one this provider serves. */
+  readonly hosts: readonly string[]
+  /** The lists the provider reads on each of `hosts`. */
+  readonly filters: ReadonlySet<ForgeViewerFilter>
+  /** Most change requests one read returns, a positive integer. */
+  readonly maxItems: number
+}
+```
+
+```ts type-equiv
+/** A registered provider's viewer lists, as {@link ForgeViewerCapability} with the forge family that offers them. */
+interface ForgeViewerSource extends ForgeViewerCapability {
+  /** Forge family of the provider. */
+  readonly forge: string
+}
+```
+
+```ts type-equiv
+/** One read of a list of open change requests that involve the signed-in user on one host. */
+interface ForgeViewerQuery {
+  /** Lowercase host name from the provider's {@link ForgeViewerCapability.hosts}. */
+  readonly host: string
+  /** The list to read, from the provider's {@link ForgeViewerCapability.filters}. */
+  readonly filter: ForgeViewerFilter
+  /** One repository to read in, or null for every repository the user can read on `host`. */
+  readonly repository: Pick<ForgeRepository, 'owner' | 'name'> | null
+  /** Most change requests returned, a positive integer no greater than {@link ForgeViewerCapability.maxItems}. */
+  readonly limit: number
+}
+```
+
+```ts type-equiv
+/** The signed-in user's latest submitted review of a change request. */
+interface ChangeRequestViewerReview {
+  /** Outcome of the review. */
+  readonly verdict: ReviewVerdict
+  /** Commit the review was on, or null when the host reports none. */
+  readonly reviewedSha: string | null
+}
+```
+
+```ts type-equiv
+/** Status of one change request as a viewer list reports it, without the checks, reviewers, and merge state of a snapshot. */
+interface ChangeRequestSummary {
+  /** The change request. */
+  readonly ref: ChangeRequestRef
+  /** Web page of the change request. */
+  readonly url: string
+  /** Title as the author wrote it. */
+  readonly title: string
+  /** Whether the author marked the change request as a draft. */
+  readonly draft: boolean
+  /** Author, or null when the host hides the account. */
+  readonly author: ForgeCommentAuthor | null
+  /** Commit object name at the head of the change request. */
+  readonly headSha: string
+  /** Combined check outcome on the head commit. */
+  readonly checksRollup: ChecksRollup
+  /** Aggregate review outcome. */
+  readonly reviewDecision: ReviewDecision
+  /** The signed-in user's latest submitted review, or null before the first. */
+  readonly viewerReview: ChangeRequestViewerReview | null
+  /**
+   * The review request that asks the signed-in user, or null when none does: `team` names the team, as
+   * `organization/slug`, when the request asks a team the user belongs to rather than the user.
+   */
+  readonly viewerRequest: { readonly team: string | null } | null
+  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
+  readonly closingIssues: readonly ChangeRequestIssue[]
+  /** Whether the host reported more closing issues than `closingIssues` holds. */
+  readonly closingIssuesTruncated: boolean
+  /** ISO 8601 time of the host's last update to the change request. */
+  readonly updatedAt: string
+}
+```
+
+```ts type-equiv
+/** One page of a viewer list, most recently updated first. */
+interface ForgeViewerList {
+  /** Login of the signed-in user the provider read as. */
+  readonly viewer: string
+  /** Change requests most recently updated first, at most the query's limit. */
+  readonly items: readonly ChangeRequestSummary[]
+  /** Number of change requests the host reports in the whole list; more than `items` holds when the list was cut. */
+  readonly total: number
+}
+```
+
+```ts type-equiv
+/** The description of a change request as its author wrote it. */
+interface ChangeRequestDescription {
+  /** Markdown source; it may contain raw HTML, which readers must not render as HTML. Empty without a description. */
+  readonly body: string
+  /** Labels in host order, at most the provider's limit. */
+  readonly labels: readonly ChangeRequestLabel[]
+  /** Whether the change request has more labels than `labels` holds. */
+  readonly labelsTruncated: boolean
+  /**
+   * Image addresses that a browser cannot load without the user's host session, each mapped to an address the host
+   * issued for loading that image without one. Addresses not listed load as written.
+   */
+  readonly images: Readonly<Record<string, string>>
+  /** ISO 8601 time after which the addresses in `images` stop loading, or null when there are none or the host names no time. */
+  readonly imagesExpireAt: string | null
+  /** ISO 8601 time the change request was created. */
+  readonly createdAt: string
+}
+```
+
+```ts type-equiv
+/** One label of a change request. */
+interface ChangeRequestLabel {
+  /** Name as the host spells it. */
+  readonly name: string
+  /** Six-digit hexadecimal color without `#`, or null when the host reports none. */
+  readonly color: string | null
+}
+```
+
 ## Session 绑定
 
 `ctx.forgeSession` 按提供方注册的命令规则，从每个 Session 自己的日志派生其绑定：forge-github 的 `gh` 规则与 forge-gitlab 的 `glab` 规则绑定 `gh pr create` 与 `glab mr create` 结果输出的 URL，以及 `gh pr view`、`glab mr view` 及其同类引用命令所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影的客户端视图随 Session 摘要下发，列出绑定但不含其状态。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
@@ -917,7 +1072,10 @@ interface ForgeSessionWorktree {
   readonly path: string
   /** Branch created for the checkout. */
   readonly branch: string
-  /** Requested base branch, or null when the checkout started from HEAD of the source checkout. */
+  /**
+   * Requested base: the full name of a local or remote-tracking branch, a short branch name that earlier panels
+   * recorded, or null when the checkout started from HEAD of the source checkout.
+   */
   readonly from: string | null
   /** Commit object name the branch started from. */
   readonly baseCommit: string
@@ -930,8 +1088,11 @@ interface ForgeSessionWorktree {
 ```ts type-equiv
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
 type WorktreeRecord =
-  /** Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null. */
-  | { readonly action: 'request'; readonly from: string | null }
+  /**
+   * Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null, on the
+   * branch `name`, or on a generated branch name when `name` is absent.
+   */
+  | { readonly action: 'request'; readonly from: string | null; readonly name?: string }
   /** Withdraw the open request. */
   | { readonly action: 'cancel' }
   /** The requested worktree was created and became the Session's working directory. */
@@ -945,8 +1106,13 @@ type WorktreeRecord =
 ```ts type-equiv
 /** One open worktree request. */
 interface ForgeWorktreeRequest {
-  /** Base branch, or null for HEAD of the source checkout. */
+  /**
+   * Base: the full name of a local or remote-tracking branch, a short branch name that earlier panels recorded, or
+   * null for HEAD of the source checkout. A remote-tracking branch is fetched before each attempt that does not skip it.
+   */
   readonly from: string | null
+  /** New branch name the user chose, which every attempt uses, or null for a generated name per attempt. */
+  readonly name: string | null
 }
 ```
 
@@ -964,12 +1130,17 @@ type ForgeWorktreeBlocker =
 ```ts type-equiv
 /** One running worktree creation. */
 interface ForgeWorktreeCreation {
-  /** Running step: `prepare` validates and creates the branch, then `checkout` writes the files. */
-  readonly phase: 'prepare' | 'checkout'
+  /**
+   * Running step: `fetch` fetches a remote base branch, `prepare` validates and creates the branch, then
+   * `checkout` writes the files.
+   */
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Branch the attempt creates. */
   readonly branch: string
-  /** Base branch, or null for HEAD. */
+  /** Base as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetches its remote base branch first. */
+  readonly fetch: boolean
   /**
    * Whether a message waits for the creation before its turn starts. Only
    * such a creation can be stopped, after which the message keeps waiting; a
@@ -992,12 +1163,16 @@ interface ForgeWorktreeRestoration {
 interface ForgeWorktreeFailure {
   /** Branch the attempt created, or null when it failed before naming one. */
   readonly branch: string | null
-  /** Base branch of the attempt, or null for HEAD. */
+  /** Base of the attempt as the request names it, or null for HEAD. */
   readonly from: string | null
+  /** Whether the attempt fetched, or tried to fetch, its remote base branch first. */
+  readonly fetch: boolean
   /** Step that failed. */
-  readonly phase: 'prepare' | 'checkout'
+  readonly phase: 'fetch' | 'prepare' | 'checkout'
   /** Failure text. */
   readonly message: string
+  /** Whether the branch or the checkout directory of that name already existed, which another name avoids. */
+  readonly exists: boolean
 }
 ```
 
@@ -1028,6 +1203,8 @@ interface ForgePanelWorktree {
   readonly editable: boolean
   /** Why the checkout cannot host a worktree, or null when it can, before the first inspection, and after a failed one. */
   readonly blocker: ForgeWorktreeBlocker | null
+  /** Prefix of generated branch names, the Config `worktreePrefix`, which a name the user types starts from. */
+  readonly namePrefix: string
   /** Open request, or null without one. */
   readonly request: ForgeWorktreeRequest | null
   /** Created worktree, or null before creation. */
@@ -1088,12 +1265,39 @@ interface ForgePanelState {
 ```
 
 ```ts type-equiv
-/** Local branches offered as the base of a new worktree. */
-interface ForgeBranches {
-  /** Checked-out branch, or null when HEAD is detached. */
-  readonly current: string | null
-  /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
-  readonly branches: readonly string[]
+/** Branches offered as the base of a new worktree whose names contain a query. */
+interface ForgeWorktreeBases {
+  /** Checked-out branch, or null when HEAD is detached or its name does not contain the query. */
+  readonly current: ForgeBaseBranch | null
+  /** Default branch of each remote that names one with `refs/remotes/<remote>/HEAD`, in remote order. */
+  readonly defaults: readonly ForgeRemoteDefault[]
+  /** Other local branches, most recently committed first, at most `maxBranches`. */
+  readonly local: readonly ForgeBaseBranch[]
+  /**
+   * Remote-tracking branches of each configured remote in remote order: the remote the checked-out branch tracks,
+   * then `origin`, then the others as Git lists them. Remotes without a matching branch are left out.
+   */
+  readonly remotes: readonly ForgeRemoteBranches[]
+}
+```
+
+```ts type-equiv
+/** A remote's default branch, which `refs/remotes/<remote>/HEAD` names. */
+interface ForgeRemoteDefault extends ForgeBaseBranch {
+  /** Remote the branch belongs to; it may contain `/`. */
+  readonly remote: string
+}
+```
+
+```ts type-equiv
+/** Remote-tracking branches of one remote, without its default branch. */
+interface ForgeRemoteBranches {
+  /** Remote name such as `origin`; it may contain `/`. */
+  readonly name: string
+  /** `owner/name` of the repository a provider recognizes from the remote's URLs, else its fetch URL, or null without one. */
+  readonly repository: string | null
+  /** Branches named `<remote>/<branch>`, most recently committed first, at most `maxBranches`. */
+  readonly branches: readonly ForgeBaseBranch[]
 }
 ```
 
@@ -1319,6 +1523,12 @@ interface ForgeLocalChanges {
   readonly files: readonly ForgeChangedFile[]
 }
 ```
+
+### 代码评审页
+
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；连续失败的轮次按 `reviewMaxBackoffMs` 为上限退避。计数每隔 `reviewCountIntervalMs` 读取一次，全部仓库范围的列表读取也会更新它。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目以及最近一次读取的失败；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+
+对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
 
 <a id="extension-api"></a>
 
@@ -1678,6 +1888,41 @@ async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSi
 async mergeBase(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
+ * List the viewer lists every registered provider offers; `forge/providers-changed` announces a change.
+ * @returns one source per provider that declares viewer lists and reads them, in registration order.
+ */
+viewerSources(): ForgeViewerSource[]
+
+/**
+ * Read one list of open change requests that involve the signed-in user.
+ * @param forge - forge family of a registered provider.
+ * @param query - host, list, repository, and limit of the read.
+ * @param signal - cancellation of the read.
+ * @returns the list, or why the host did not provide it; `unsupported` when the provider does not offer the host or list.
+ * @throws when no provider serves `forge`, or with `signal.reason` when it aborts.
+ */
+async listForViewer(forge: string, query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>
+
+/**
+ * Count the change requests in each viewer list a provider offers on one host.
+ * @param forge - forge family of a registered provider.
+ * @param host - lowercase host name the provider lists on.
+ * @param signal - cancellation of the read.
+ * @returns the count of each list, or why the host did not provide them; `unsupported` when the provider does not list on `host`.
+ * @throws when no provider serves `forge`, or with `signal.reason` when it aborts.
+ */
+async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+
+/**
+ * Read the description and labels of a change request.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns the description, or why the host did not provide it; `unsupported` when the provider reads no descriptions.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+
+/**
  * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
  * with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
@@ -1769,21 +2014,250 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
+ * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
+ * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
+ * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
+ * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
+ * @param repository - one repository to list in, or null for every repository the user can read.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ */
+@Remote({ mode: 'stream' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
+
+/**
+ * Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read:
+ * the latest count first, then each change. It is read every `reviewCountIntervalMs` while some stream lasts, and a
+ * list stream of every repository updates it as well. The stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ */
+@Remote({ mode: 'stream' }) async *reviewCount(signal: AbortSignal): AsyncIterable<ForgeReviewCountFrame>
+
+/**
+ * Read every streamed review page list and the count again at once.
+ * @param signal - request cancellation.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>
+
+/**
+ * Poll one change request the review page shows at once; its stream reports the result.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Stream one change request the review page shows in full: its latest polling result first, then each later result
+ * and each review change `forge/review-changed` announces for it. The change request is polled through `ctx.forge`
+ * while the stream lasts. Review page reads and actions name a change request by URL and need no Session binding, so
+ * only callers that may use the Host's code host credentials reach them.
+ * @param url - web URL of the change request.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote({ mode: 'stream' }) async *reviewChangeRequest(url: string, signal: AbortSignal): AsyncIterable<ForgeReviewChangeRequest>
+
+/**
+ * Read the description and labels of a change request for the review page.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the description.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the
+ * host's reason when the host does not provide it.
+ */
+@Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>
+
+/**
+ * Read every check of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit whose checks the page shows.
+ * @param signal - request cancellation.
+ * @returns the snapshot with every check.
+ * @throws as {@link ForgePanelController.changeRequestChecks} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>
+
+/**
+ * Read the review threads of a change request the review page shows, at the head of its latest status.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit the page shows.
+ * @param fresh - whether to read from the host even when threads at this head and update time are kept.
+ * @param signal - request cancellation.
+ * @returns the threads at `headSha`.
+ * @throws as {@link ForgePanelController.changeRequestReview} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewThreads(url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>
+
+/**
+ * Write to the review threads or the pending review of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param write - the write and the head commit the user saw.
+ * @param signal - request cancellation.
+ * @returns whether the host took the write, as {@link ForgePanelController.changeRequestReviewWrite} does.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid write.
+ */
+@Remote async reviewThreadWrite(url: string, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
+
+/**
+ * Publish a line comment or a completed review on a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure, as {@link ForgePanelController.submitReview} does.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid review.
+ */
+@Remote async reviewSubmit(url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
+ * Read the changes of a change request the review page shows, or of consecutive commits of it.
+ * @param url - web URL of the change request.
+ * @param commits - consecutive commits of the change request, or null for all of it.
+ * @param signal - request cancellation.
+ * @returns the files and the commit they end at, without a local checkout count.
+ * @throws as {@link ForgePanelController.changeRequestDiff} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewDiff(url: string, commits: ForgeCommitRange | null, signal: AbortSignal): Promise<ForgeChangeRequestDiff>
+
+/**
+ * List the commits of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the commits, or null when the provider does not read commits.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-failed` when the host does
+ * not list them.
+ */
+@Remote async reviewCommits(url: string, signal: AbortSignal): Promise<ForgeCommitList | null>
+
+/**
+ * Read one file of a change request's repository at a commit for the review page.
+ * @param url - web URL of the change request.
+ * @param commit - commit object name.
+ * @param path - path relative to the repository root.
+ * @param signal - request cancellation.
+ * @returns the text.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-too-large` or
+ * `forgePanel/diff-failed` when the host does not provide the file.
+ */
+@Remote async reviewText(url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Read the signed-in user's viewed marks on the files of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit of the shown diff.
+ * @param signal - request cancellation.
+ * @returns the marks, or null when the provider keeps no viewed marks.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head` or
+ * `forgePanel/viewed-failed` as {@link ForgePanelController.changeRequestViewed} does.
+ */
+@Remote async reviewViewed(url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>
+
+/**
+ * Set or clear the signed-in user's viewed mark on one file of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - the file, its mark, and the head commit of the shown diff.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; the action errors of
+ * {@link ForgePanelController.setFileViewed}.
+ */
+@Remote async reviewSetViewed(url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void>
+
+/**
+ * Mark a draft change request the review page shows ready for review.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or
+ * `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewMarkReady(url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Merge a change request the review page shows while its head is still `headSha`.
+ * @param url - web URL of the change request.
+ * @param method - how the commits enter the base branch.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Rerun the failed checks of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - the head commit whose checks the user saw.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewRerunChecks(url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>
+
+/**
+ * Request reviews of a change request the review page shows from more reviewers.
+ * @param url - web URL of the change request.
+ * @param reviewers - the reviewers to ask, by kind and login.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or
+ * `forgePanel/action-unknown` with the host's reason; an error without reviewers.
+ */
+@Remote async reviewRequestReviews(url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal): Promise<void>
+
+/**
+ * List accounts a review of a change request the review page shows can be requested from.
+ * @param url - web URL of the change request.
+ * @param query - text the login or name contains; empty for the host's suggestions.
+ * @param signal - request cancellation.
+ * @returns the accounts, the host's suggestions first.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/reviewers-failed` when the host
+ * does not list them.
+ */
+@Remote async reviewReviewerCandidates(url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]>
+
+/**
+ * Bring the base branch's new commits into the head branch of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param method - merge or rebase.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewUpdateBranch(url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Remember the change request a review conversation's draft quotes, or forget it with null. When the Session's next
+ * message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts;
+ * a Session that already started is bound at its next message. The choice lives in memory until then.
+ * @param sessionId - the Session whose draft quotes the change request; staging neither loads nor resumes it.
+ * @param url - web URL of the change request, or null.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(sessionId: SessionId, url: string | null, signal: AbortSignal): Promise<void>
+
+/**
  * Read or await the worktree service's archive cleanup of the Session's checkout.
- * @param session - Session whose cleanup is visible to the caller.
+ * @param sessionId - Session whose cleanup is visible to the caller; reading neither loads nor resumes it.
  * @param revision - null reads now; a matching revision waits for completion.
  * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
  */
-@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
+@Remote async worktreeCleanup(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null>
 
 /**
- * List the local branches that can start a worktree of the Session's current checkout.
- * @param session - Session whose current directory is listed.
+ * List the branches that can start a worktree of the Session's current checkout: the checked-out branch, each
+ * remote's default branch, other local branches, and each remote's other remote-tracking branches, remotes in the
+ * order the panel recognizes code hosts.
+ * @param session - Session whose checkout is read.
+ * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param signal - request cancellation.
- * @returns the checked-out branch and at most `maxBranches` local branches, the checked-out one first.
- * @throws when the current directory is not inside a checkout or Git fails.
+ * @returns the branches, at most `maxBranches` local branches and `maxBranches` per remote, most recently committed first.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
  */
-@Remote async branches(session: Session, signal: AbortSignal): Promise<ForgeBranches>
+@Remote async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases>
 
 /**
  * List the branches the `branch` scope of the Session's current checkout can compare with.
@@ -1816,11 +2290,11 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Reinspect a followed Session's checkout, probe sign-in again, and poll its
  * change requests at once; an unfollowed Session is unchanged.
- * @param session - Session whose panel refreshes.
+ * @param sessionId - Session whose panel refreshes; refreshing neither loads nor resumes it.
  * @param signal - request cancellation.
  * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
  */
-@Remote async refresh(session: Session, signal: AbortSignal): Promise<void>
+@Remote async refresh(sessionId: SessionId, signal: AbortSignal): Promise<void>
 
 /**
  * Read the changes one scope covers in the checkout of the Session's
@@ -2116,18 +2590,23 @@ registerLens(lens: ForgeLens): () => Promise<void>
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open
  * request and forgetting a failed attempt. While the next message waits in
- * the inbox, or else at the first step proposal, the panel creates a branch
- * from `from`, or from HEAD of the current checkout when it is null, and
- * enters its checkout. A message that already waits after a failed or
- * stopped attempt keeps waiting for {@link ForgePanelController.retryWorktree}.
+ * the inbox, or else at the first step proposal, the panel creates the
+ * branch `name`, or a generated branch per attempt when it is null, from
+ * `from`, or from HEAD of the current checkout when it is null, and enters
+ * its checkout; a remote-tracking `from` is fetched first. A message that
+ * already waits after a failed or stopped attempt keeps waiting for
+ * {@link ForgePanelController.retryWorktree}.
  * @param session - Session without a started turn.
- * @param from - local base branch, or null for HEAD.
+ * @param from - full name of a local or remote-tracking base branch, or null for HEAD.
+ * @param name - new branch name, or null to generate one per attempt.
  * @param signal - request cancellation.
- * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/worktrees-unavailable`
+ * @throws `forgePanel/invalid-branch` when `from` is empty; `forgePanel/invalid-name` when `name` breaks
+ * a branch-name rule; `forgePanel/branch-exists` when the checkout has a local branch named `name`;
+ * `forgePanel/not-a-checkout` when a name is checked outside a checkout; `forgePanel/worktrees-unavailable`
  * without a worktree service; `forgePanel/session-started` after a turn started or the worktree was
  * created; `forgePanel/session-busy` while the worktree is being created.
  */
-@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>
+@Remote async requestWorktree(session: Session, from: string | null, name: string | null, signal: AbortSignal): Promise<void>
 
 /**
  * Withdraw the open worktree request of a Session with its failed attempt,
@@ -2150,13 +2629,16 @@ registerLens(lens: ForgeLens): () => Promise<void>
 @Remote async stopCreation(session: Session, signal: AbortSignal): Promise<void>
 
 /**
- * Make another attempt, with a new branch name, at the worktree a message
- * of the Session waits for after a failed or stopped attempt.
+ * Make another attempt, on the requested branch name or a new generated
+ * one, at the worktree a message of the Session waits for after a failed or
+ * stopped attempt.
  * @param session - Session whose message waits.
+ * @param fetch - false skips fetching a remote-tracking base branch for this attempt, which then starts from the
+ * commit last fetched.
  * @param signal - request cancellation.
  * @throws `forgePanel/not-waiting` when no message waits or an attempt is running.
  */
-@Remote async retryWorktree(session: Session, signal: AbortSignal): Promise<void>
+@Remote async retryWorktree(session: Session, fetch: boolean, signal: AbortSignal): Promise<void>
 
 /**
  * Check out the created worktree of a Session again at its recorded
@@ -2187,7 +2669,7 @@ registerLens(lens: ForgeLens): () => Promise<void>
 @Remote async continueInProject(session: Session, signal: AbortSignal): Promise<void>
 ```
 
-Types: [Session](session.zh.md) · [WorktreeCleanup](worktrees.zh.md)
+Types: [Session](session.zh.md) · [SessionId](core.zh.md) · [WorktreeCleanup](worktrees.zh.md)
 
 Source: [`packages/experimental/client-ui-forge/src/index.ts`](../../packages/experimental/client-ui-forge/src/index.ts)
 

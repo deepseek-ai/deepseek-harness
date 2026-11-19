@@ -262,6 +262,47 @@ describe('text selections', () => {
 })
 
 describe('element action queries', () => {
+  const schema = { type: 'object', properties: { argument: { type: 'null' } }, required: [], additionalProperties: false }
+
+  it.each([true, false])('queries action schemas on apps and windows without an observation (app AX: %s)', async (appLevelAccessibility) => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, appLevelAccessibility })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    f.dispatch.mockClear()
+    for (const surface of [app, window]) {
+      f.dispatch.mockResolvedValueOnce(schema)
+      expect(await surface.getActionSchema('AXPress')).toEqual(schema)
+    }
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+    ])
+  })
+
+  it('rejects an empty schema action name before dispatch', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await expect(app.getActionSchema('')).rejects.toThrow('getActionSchema action')
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('preserves parameter types, descriptions and native schema lookup failures', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const valueSchema = { ...schema, properties: { argument: {
+      type: 'string', description: 'One of: Normal, Maximized, Minimized. Names are case-sensitive.',
+    } }, required: ['argument'] }
+    f.dispatch.mockResolvedValueOnce(valueSchema)
+    expect(await app.getActionSchema('Window.SetWindowVisualState')).toEqual(valueSchema)
+    const failure = new NativeError('UNSUPPORTED', 'Unknown action')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.getActionSchema('Window.Unknown')).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: true })
+    await expect(app.getActionSchema('AXPress')).rejects.toThrow()
+  })
+
   it('returns raw provider action names including attribute-setting operations without reading new state', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
@@ -953,6 +994,39 @@ describe('input actions', () => {
     expect(windowFixture.dispatch).not.toHaveBeenCalled()
   })
 
+  it.each(['left', 'right', 'middle'] as const)('dispatches one %s mouse-button event without an observation', async (mouseButton) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    expect(app).not.toHaveProperty('toggleMouse')
+    expectTypeOf<CuaApp>().not.toHaveProperty('toggleMouse')
+    for (const direction of ['down', 'up'] as const) {
+      f.dispatch.mockClear()
+      await expect(window.toggleMouse(mouseButton, direction)).resolves.toEqual(delivered)
+      expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'toggleMouse', params: {
+        appHandle: 'app-17', windowId: '23', mouseButton, direction,
+      } })
+      await window.toggleMouse(mouseButton, direction, { useSystemPointer: true })
+      expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'toggleMouse', params: {
+        appHandle: 'app-17', windowId: '23', mouseButton, direction, useSystemPointer: true,
+      } })
+    }
+  })
+
+  it('preserves mouse-button dispatch failures without retries or an opposite event', async () => {
+    const f = fixture()
+    const window = await (await f.api.getApp('Editor')).getWindow('23')
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce({ dispatched: false })
+    await expect(window.toggleMouse('left', 'down')).resolves.toEqual({ dispatched: false })
+    const failure = new Error('Mouse-button input is not supported')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(window.toggleMouse('left', 'up')).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
+    await expect(window.toggleMouse('right', 'up')).rejects.toThrow()
+    expect(f.dispatch).toHaveBeenCalledTimes(3)
+  })
+
   it('retains the snapshot identity for element right and double clicks', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
@@ -1055,6 +1129,7 @@ it('keeps ordinary Windows drags portable and rejects explicit system-pointer op
   await win.getAccessibilityTree()
   f.dispatch.mockClear()
   for (const useSystemPointer of [true, false]) {
+    await expect(win.toggleMouse('left', 'down', { useSystemPointer })).rejects.toThrow('toggleMouse useSystemPointer: not accepted')
     await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
   }
   expect(f.dispatch).not.toHaveBeenCalled()

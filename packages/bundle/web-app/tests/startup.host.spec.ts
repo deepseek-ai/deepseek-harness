@@ -17,7 +17,7 @@ async function setup(options: { origin?: string; ssh?: 'SSH_CONNECTION' | 'SSH_T
     { source: 'process', values: options.ssh === undefined ? {} : { [options.ssh]: 'remote-launch' } },
     { source: 'project-env', path: '/project/.env', values: { SSH_TTY: 'project-setting' } },
   ]))
-  if (options.settle !== undefined) ctx.provide('loader', { await: options.settle, entries: () => [] } as never)
+  if (options.settle !== undefined) ctx.provide('loader', { await: options.settle, entries: () => [], root: { data: [] } } as never)
   const server: Pick<WebServer, 'host' | 'protocol' | 'registerFallback'> = {
     host: '127.0.0.1', protocol: 'http:', registerFallback: () => () => {},
   }

@@ -181,7 +181,7 @@ describe('PluginInventoryGateway', () => {
       name: 'cordis:not-installed',
       disabled: true,
     })
-    await ctx.loader.create({ name: 'cordis:active', group: true })
+    await ctx.loader.create({ name: 'cordis:active', group: true, config: [] })
 
     const snapshot = await inventory.list()
     // No agent-preset roster is composed, so the snapshot carries no presets.

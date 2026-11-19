@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Плагин Notion",
+    "description": "Используйте страницы, базы данных и другой разрешённый контент Notion в беседах.",
+    "detail": "docs/DETAIL.md"
+  }
+}

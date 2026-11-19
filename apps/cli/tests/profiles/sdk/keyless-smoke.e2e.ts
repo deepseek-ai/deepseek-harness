@@ -392,7 +392,6 @@ describe('Python SDK dsh profile keyless smoke', () => {
         process.platform === 'win32' ? 'pwsh' : 'bash',
         ...(optOut ? [] : ['read_image']),
         ...(editorEnabled ? ['str_replace_editor'] : []),
-        'working_directory',
       ])
       expect(modelRequests).toHaveLength(editorEnabled ? 3 : imageEnabled ? 2 : 1)
       if (imageEnabled) {

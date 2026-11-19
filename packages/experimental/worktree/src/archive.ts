@@ -3,6 +3,7 @@
  * the service constructor, as the job and Agent registries install their own
  * archive-admission families, so it holds for every Session the Workspace archives.
  */
+import { sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -46,11 +47,14 @@ interface Attempt {
 
 /**
  * Whether `path` is `root` or lies below it. Both are canonical absolute
- * directories of one execution world without a trailing separator, so string
- * prefixing is exact.
+ * process paths without a trailing separator, so prefixing with the platform
+ * separator is exact.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute directory to test.
+ * @returns whether `root` contains `path`.
  */
-function within(root: string, path: string): boolean {
-  return path === root || path.startsWith(`${root}/`)
+export function within(root: string, path: string): boolean {
+  return path === root || path.startsWith(`${root}${sep}`)
 }
 
 /** Owns pending cleanup, gates directory entry into a checkout being removed, and drains before the service is released. */
@@ -101,16 +105,16 @@ export class WorktreeReclamation {
 
   /**
    * Read the most recent cleanup attempt of a Session; waiting never starts one.
-   * @param session - archived Session whose attempt is read.
+   * @param sessionId - archived Session whose attempt is read.
    * @param revision - null reads at once; a matching revision waits for that attempt to settle.
    * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    const attempt = this.attempts.get(session.id)
+  async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    const attempt = this.attempts.get(sessionId)
     if (attempt === undefined || (revision !== null && revision !== attempt.revision)) return null
     if (revision !== null) await attempt.done
     // A cold Session without creations withdraws its placeholder while it settles.
-    if (this.lifetime.signal.aborted || this.attempts.get(session.id) !== attempt) return null
+    if (this.lifetime.signal.aborted || this.attempts.get(sessionId) !== attempt) return null
     return { revision: attempt.revision, status: attempt.status }
   }
 

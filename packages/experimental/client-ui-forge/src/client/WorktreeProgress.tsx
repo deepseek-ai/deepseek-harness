@@ -11,9 +11,11 @@ import {
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { branchLabel } from '../branch-name.ts'
 import type { ForgeMissingWorktree, ForgePanelWorktree, ForgeSessionWorktree, ForgeWorktreeRestoration } from '../types.ts'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
+import { WorktreeNameDialog, type WorktreeRequestResult } from './WorktreeNameDialog.tsx'
 import css from './WorktreeProgress.module.css'
 
 /** Business face of the card. */
@@ -22,8 +24,18 @@ export interface WorktreeProgressInjected {
   readonly hooks: { readonly panel: HostObservable<PanelSnapshot> }
   /** Stop the running attempt a message waits for; the message keeps waiting. */
   readonly stop: () => void
-  /** Make another attempt at the worktree a message waits for. */
-  readonly retry: () => void
+  /**
+   * Make another attempt at the worktree a message waits for.
+   * @param fetch - false starts from the remote base branch as last fetched, without fetching it.
+   */
+  readonly retry: (fetch: boolean) => void
+  /**
+   * Request the worktree again from the same base on another branch name, before another attempt.
+   * @param from - base of the open request, or null for HEAD.
+   * @param name - new branch name.
+   * @returns the outcome; a failure other than a refused name is already reported.
+   */
+  readonly request: (from: string | null, name: string | null) => Promise<WorktreeRequestResult>
   /** Withdraw the worktree request, so the waiting message goes on without a worktree. */
   readonly withdraw: () => void
   /**
@@ -42,41 +54,55 @@ type Translate = WorktreeProgressProps['t']
 
 type StepState = 'done' | 'running' | 'waiting' | 'failed'
 
-type Phase = 'prepare' | 'checkout'
+type Phase = 'fetch' | 'prepare' | 'checkout'
 
-type StepList = readonly { readonly phase: Phase; readonly label: ForgePanelKey }[]
+/** Steps in the order they run, each with its label. */
+type StepList = readonly { readonly phase: Phase; readonly label: ReactNode }[]
 
-const CREATION_STEPS: StepList = [
-  { phase: 'prepare', label: 'creation.prepare' },
-  { phase: 'checkout', label: 'creation.checkout' },
-]
-
-const RESTORATION_STEPS: StepList = [
-  { phase: 'prepare', label: 'restoration.prepare' },
-  { phase: 'checkout', label: 'creation.checkout' },
-]
-
-function stepState(current: 'prepare' | 'checkout', failed: boolean, phase: 'prepare' | 'checkout'): StepState {
-  if (phase === current) return failed ? 'failed' : 'running'
-  return phase === 'prepare' ? 'done' : 'waiting'
+function stepState(steps: StepList, current: Phase, failed: boolean, phase: Phase): StepState {
+  const at = steps.findIndex(step => step.phase === current)
+  const index = steps.findIndex(step => step.phase === phase)
+  if (index === at) return failed ? 'failed' : 'running'
+  return index < at ? 'done' : 'waiting'
 }
 
-function Steps({ steps, phase, failed, t }: {
+function Steps({ steps, phase, failed }: {
   readonly steps: StepList
   readonly phase: Phase
   readonly failed: boolean
-  readonly t: Translate
 }): ReactNode {
   return (
     <ul className={css.steps}>
-      {steps.map(step => (
-        <li key={step.phase} className={css.step} data-state={stepState(phase, failed, step.phase)}>
-          <StepIcon state={stepState(phase, failed, step.phase)} />
-          <span>{t(step.label)}</span>
-        </li>
-      ))}
+      {steps.map((step) => {
+        const state = stepState(steps, phase, failed, step.phase)
+        return (
+          <li key={step.phase} className={css.step} data-state={state} data-forge-step={step.phase}>
+            <StepIcon state={state} />
+            <span>{step.label}</span>
+          </li>
+        )
+      })}
     </ul>
   )
+}
+
+/** The steps of a creation, which fetches a remote base branch first when it asks to. */
+function creationSteps(creation: CreationView, t: Translate): StepList {
+  const from = creation.from === null ? null : branchLabel(creation.from)
+  return [
+    ...creation.fetch && from !== null
+      ? [{ phase: 'fetch' as const, label: t('creation.fetch', { branch: from }) }]
+      : [],
+    { phase: 'prepare', label: t('creation.prepare') },
+    { phase: 'checkout', label: t('creation.checkout') },
+  ]
+}
+
+function restorationSteps(t: Translate): StepList {
+  return [
+    { phase: 'prepare', label: t('restoration.prepare') },
+    { phase: 'checkout', label: t('creation.checkout') },
+  ]
 }
 
 function StepIcon({ state }: { readonly state: StepState }): ReactNode {
@@ -93,11 +119,15 @@ function StepIcon({ state }: { readonly state: StepState }): ReactNode {
 /** One creation as the card shows it: the running attempt, or the failed or stopped one a message waits after. */
 interface CreationView {
   readonly state: 'running' | 'failed' | 'stopped'
-  readonly phase: 'prepare' | 'checkout'
+  readonly phase: Phase
   readonly branch: string | null
   readonly from: string | null
+  /** Whether the attempt fetches its remote base branch first. */
+  readonly fetch: boolean
   /** Failure text, or null unless the attempt failed. */
   readonly message: string | null
+  /** Whether the failed attempt found its branch or checkout directory taken. */
+  readonly exists: boolean
   /** Whether a message waits for the running attempt, which can then be stopped. */
   readonly held: boolean
 }
@@ -105,10 +135,12 @@ interface CreationView {
 /** The running attempt, else the failed or stopped one a message waits after, or undefined without either. */
 function creationOf(worktree: ForgePanelWorktree): CreationView | undefined {
   const { creation, failure, waiting } = worktree
-  if (creation !== null) return { ...creation, state: 'running', message: null }
+  if (creation !== null) return { ...creation, state: 'running', message: null, exists: false }
   if (waiting !== 'creation') return undefined
   if (failure !== null) return { ...failure, state: 'failed', held: false }
-  return { state: 'stopped', phase: 'prepare', branch: null, from: worktree.request?.from ?? null, message: null, held: false }
+  return {
+    state: 'stopped', phase: 'prepare', branch: null, from: worktree.request?.from ?? null, fetch: false, message: null, exists: false, held: false,
+  }
 }
 
 function Details({ creation, t }: { readonly creation: CreationView; readonly t: Translate }): ReactNode {
@@ -121,7 +153,7 @@ function Details({ creation, t }: { readonly creation: CreationView; readonly t:
         </>
       )}
       <dt>{t('creation.base')}</dt>
-      <dd className={css.code}>{creation.from ?? t('creation.head')}</dd>
+      <dd className={css.code}>{creation.from === null ? t('creation.head') : branchLabel(creation.from)}</dd>
       {creation.message !== null && (
         <>
           <dt>{t('creation.error')}</dt>
@@ -138,17 +170,38 @@ const CREATION_TITLE: Record<CreationView['state'], ForgePanelKey> = {
   stopped: 'creation.stopped',
 }
 
-function CreationCard({ creation, stop, retry, withdraw, t }: {
+/** The buttons of a failed or stopped attempt before withdrawing; the first one is the primary action. */
+function waitingActions(creation: CreationView, named: boolean, retry: WorktreeProgressInjected['retry'], rename: () => void, t: Translate): ReactNode {
+  const again = { key: 'retry', label: t('creation.retry'), act: () => { retry(true) } }
+  const actions = creation.state === 'failed' && creation.phase === 'fetch'
+    ? [again, { key: 'fetched', label: t('creation.useFetched'), act: () => { retry(false) } }]
+    : creation.state === 'failed' && creation.exists && named
+      ? [{ key: 'rename', label: t('creation.rename'), act: rename }, again]
+      : [again]
+  return actions.map((action, index) => (
+    <Button key={action.key} size="sm" variant={index === 0 ? 'primary' : 'ghost'} onClick={action.act}>{action.label}</Button>
+  ))
+}
+
+function CreationCard({ creation, open: openRequest, prefix, stop, retry, withdraw, request, t }: {
   readonly creation: CreationView
+  /** The open request, whose base a rename keeps and whose branch name it replaces. */
+  readonly open: ForgePanelWorktree['request']
+  /** Prefix of generated branch names. */
+  readonly prefix: string
   readonly stop: WorktreeProgressInjected['stop']
   readonly retry: WorktreeProgressInjected['retry']
   readonly withdraw: WorktreeProgressInjected['withdraw']
+  readonly request: WorktreeProgressInjected['request']
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
+  const [renaming, setRenaming] = useState(false)
   const running = creation.state === 'running'
   const failed = creation.state === 'failed'
   const title = t(CREATION_TITLE[creation.state])
+  const name = openRequest?.name ?? null
+  const from = openRequest?.from ?? null
   return (
     <div className={css.dock} data-forge-creation={running ? creation.phase : creation.state}>
       <section className={css.card} aria-label={title} aria-busy={running}>
@@ -157,7 +210,7 @@ function CreationCard({ creation, stop, retry, withdraw, t }: {
           <span className={css.title}>{title}</span>
           {creation.branch !== null && <span className={css.branch}>{creation.branch}</span>}
         </div>
-        {creation.state !== 'stopped' && <Steps steps={CREATION_STEPS} phase={creation.phase} failed={failed} t={t} />}
+        {creation.state !== 'stopped' && <Steps steps={creationSteps(creation, t)} phase={creation.phase} failed={failed} />}
         {(open || failed) && <Details creation={creation} t={t} />}
         {!running && <p className={css.note}>{t('creation.waiting')}</p>}
         <div className={css.footer}>
@@ -169,7 +222,7 @@ function CreationCard({ creation, stop, retry, withdraw, t }: {
           )}
           {!running && (
             <span className={css.actions}>
-              <Button size="sm" variant="primary" onClick={retry}>{t('creation.retry')}</Button>
+              {waitingActions(creation, name !== null, retry, () => { setRenaming(true) }, t)}
               <Button size="sm" variant="ghost" onClick={withdraw}>{t('creation.skip')}</Button>
             </span>
           )}
@@ -180,6 +233,15 @@ function CreationCard({ creation, stop, retry, withdraw, t }: {
           )}
         </div>
       </section>
+      {renaming && name !== null && (
+        <WorktreeNameDialog mode="retry" initial={name} prefix={prefix} from={from} named
+          submit={async (next) => {
+            const result = await request(from, next)
+            if (result === 'accepted') retry(true)
+            return result
+          }}
+          close={() => { setRenaming(false) }} t={t} />
+      )}
     </div>
   )
 }
@@ -222,7 +284,7 @@ function MissingCard({ created, missing, restoration, waiting, restore, leave, t
             <span className={css.title}>{t('restoration.title')}</span>
             <span className={css.branch}>{created.branch}</span>
           </div>
-          <Steps steps={RESTORATION_STEPS} phase={phase} failed={false} t={t} />
+          <Steps steps={restorationSteps(t)} phase={phase} failed={false} />
         </section>
       </div>
     )
@@ -260,11 +322,14 @@ function MissingCard({ created, missing, restoration, waiting, restore, leave, t
  * @param props - panel hook, actions, and copy.
  * @returns the card, or nothing while no attempt runs, no message waits, and the worktree exists.
  */
-export function WorktreeProgress({ usePanel, stop, retry, withdraw, restore, leave, t }: WorktreeProgressProps): ReactNode {
+export function WorktreeProgress({ usePanel, stop, retry, withdraw, request, restore, leave, t }: WorktreeProgressProps): ReactNode {
   const worktree = usePanel(snapshot => snapshot.state?.worktree ?? null)
   if (worktree === null) return null
   const creation = creationOf(worktree)
-  if (creation !== undefined) return <CreationCard creation={creation} stop={stop} retry={retry} withdraw={withdraw} t={t} />
+  if (creation !== undefined) {
+    return <CreationCard creation={creation} open={worktree.request} prefix={worktree.namePrefix} stop={stop} retry={retry}
+      withdraw={withdraw} request={request} t={t} />
+  }
   if (worktree.missing === null || worktree.created === null) return null
   return (
     <MissingCard

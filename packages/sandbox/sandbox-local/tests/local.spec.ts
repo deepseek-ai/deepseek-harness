@@ -447,6 +447,7 @@ describe('the windows-acl probe (runner invocation contract)', () => {
       })).resolves.toEqual(original)
     } finally {
       await ctx.fiber.dispose()
+      rmSync(extra, { recursive: true, force: true })
     }
   })
   // The product chain reaches windows-acl only unprobed (win32's sole

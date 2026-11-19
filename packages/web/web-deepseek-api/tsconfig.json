@@ -8,10 +8,6 @@
     "src"
   ],
   "references": [
-    { "path": "../../llm/llm-deepseek" },
-    {
-      "path": "../../util/launch-environment"
-    },
     {
       "path": "../../../vendor/cosmokit"
     },
@@ -34,22 +30,13 @@
       "path": "../../credentials/credentials"
     },
     {
-      "path": "../../credentials/deepseek-account"
-    },
-    {
       "path": "../../util/http-proxy"
-    },
-    {
-      "path": "../../../vendor/loader"
     },
     {
       "path": "../../llm/llm"
     },
     {
-      "path": "../../llm/llm-deepseek-api-key"
-    },
-    {
-      "path": "../../llm/llm-deepseek-account"
+      "path": "../../account/deepseek-auth"
     }
   ]
 }

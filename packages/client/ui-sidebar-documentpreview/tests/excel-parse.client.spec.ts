@@ -1,9 +1,9 @@
 /** Parser Worker allocation, cancellation, timeout, and message failures. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parseExcel } from '../src/client/excel/parse.ts'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 const preview = { sheets: [{ name: 'Sheet', celldata: [] }], missingResults: 0, unsupportedFeatures: ['charts'] }
 let instance: ParserWorker
 const revokeUrl = vi.fn()

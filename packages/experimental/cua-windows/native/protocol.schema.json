@@ -325,6 +325,37 @@
         },
         "method": {
           "type": "string",
+          "const": "getActionSchema"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
           "const": "performAction"
         },
         "params": {
@@ -440,6 +471,59 @@
             "appHandle",
             "snapshotId",
             "elementId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "toggleMouse"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "windowId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mouseButton": {
+              "type": "string",
+              "enum": [
+                "left",
+                "right",
+                "middle"
+              ]
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "down",
+                "up"
+              ]
+            }
+          },
+          "required": [
+            "appHandle",
+            "windowId",
+            "mouseButton",
+            "direction"
           ],
           "additionalProperties": false
         }

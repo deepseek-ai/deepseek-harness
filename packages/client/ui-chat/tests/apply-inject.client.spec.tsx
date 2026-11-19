@@ -1,3 +1,4 @@
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AssistantNodeInjected } from '../src/client/chat/AssistantNodeView.tsx'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -46,6 +47,7 @@ type ChatActions = ChatInstance['actions']
 function sessionFakeFor() {
   return {
     loadOlder: vi.fn<ISession['loadOlder']>(() => Promise.resolve()),
+    consumeOlder: vi.fn<ISession['consumeOlder']>(() => true),
     loadThrough: vi.fn<ISession['loadThrough']>(() => Promise.resolve()),
     readAttachment: vi.fn<ISession['readAttachment']>(() => Promise.resolve({
       ok: true,
@@ -105,12 +107,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'settings.general.item': { kind: 'list', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
-  await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   const registerGroups = withProcessGroups ? undefined
     : vi.spyOn(runtime.ctx.uiConversation.groups, 'register').mockImplementation(() => () => {})
   const chat = await runtime.mount({ inject: [...injectChat], apply: applyChat })
@@ -256,6 +258,8 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     injected.loadOlder()
     expect(b.session.loadOlder).toHaveBeenCalledExactlyOnceWith({ deferConsumption: true })
+    expect(injected.consumeOlder()).toBe(true)
+    expect(b.session.consumeOlder).toHaveBeenCalledOnce()
 
     void injected.loadThrough(SessionSeq(42))
     expect(b.session.loadThrough).toHaveBeenCalledWith(42)
@@ -322,8 +326,9 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     vi.spyOn(b.runtime.ctx.contextMenus, 'open')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/proj/.agents/worktrees/w')
+    // The address is relative to the same directory the Host resolves it from.
     await injected.openFile('src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
     expect(injected.resolveFilePath('src/a.ts')).toBe('/proj/.agents/worktrees/w/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', null)
     expect(injected.resolveFilePath('file.ts')).toBe('/proj/file.ts')
@@ -331,14 +336,14 @@ describe('Chat inject API', () => {
 
     // A leading `./` names the same file, so the Sidebar reuses its tab.
     await injected.openFile('./src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
-    await injected.openFile('/proj/src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
 
-    // Outside the workspace, the address carries the absolute path after the Session id.
+    // Outside the Session's directory, the address carries the absolute path after the Session id.
+    await injected.openFile('/proj/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/elsewhere')
     await injected.openFile('src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//elsewhere/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
     await b.runtime.dispose()
   })
 

@@ -8,6 +8,7 @@ enum NativeProtocol {
         "click": ["appHandle", "clickCount", "elementId", "holdMs", "modifiers", "mouseButton", "snapshotId", "windowId", "x", "y"],
         "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "useSystemPointer", "windowId"],
         "findApps": ["maxAppMatches", "query"],
+        "getActionSchema": ["action"],
         "getApp": ["selector"],
         "getCapabilities": [],
         "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
@@ -23,6 +24,7 @@ enum NativeProtocol {
         "permissionStatus": [],
         "pressKey": ["appHandle", "key", "modifiers", "windowId"],
         "releaseHeldKeys": ["runId"],
+        "releaseSystemButton": [],
         "requestPermission": ["backLabel", "finderLabel", "instruction", "permission", "pollIntervalMs", "settingsMessage", "unavailableMessage"],
         "screenshot": ["appHandle", "windowId"],
         "scroll": ["appHandle", "deltaLinesX", "deltaLinesY", "snapshotId", "windowId", "x", "y"],
@@ -30,6 +32,7 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
+        "toggleMouse": ["appHandle", "direction", "mouseButton", "useSystemPointer", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]
     static let stringEnums: [String: [String: Set<String>]] = [
@@ -40,5 +43,6 @@ enum NativeProtocol {
         "requestPermission": ["permission": ["accessibility", "screenRecording"]],
         "selectText": ["selectionType": ["cursor_after", "cursor_before", "text"]],
         "sendKeyEvent": ["direction": ["down", "up"]],
+        "toggleMouse": ["direction": ["down", "up"], "mouseButton": ["left", "middle", "right"]],
     ]
 }

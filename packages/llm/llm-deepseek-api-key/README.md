@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Register authentication, model discovery, and the official model listing for `deepseek-official`. This plugin shares the [Messages transport](../llm-deepseek/README.md) and owns credential resolution, catalog availability, and model admission.
 
-Authentication resolution returns the validated API key in `x-api-key` for both Messages and Files requests.
+Authentication resolution asks [`ctx.deepseekAuth`](../../account/deepseek-auth/README.md) for the validated API key in `x-api-key` for Messages, Files, and listing requests. The route connects its route id, base URL, and `apiKeyEnv` reference to that service, so the DeepSeek web providers send the same key as a bearer token to the same deployment. The key is released only for destinations under the origin of that base URL.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Authentication resolution returns the validated API key in `x-api-key` for both 
 <a id="use-this-package"></a>
 ## Use this package
 
-`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request and model discovery. When the credentials service exists, its precedence applies; only compositions without that service read the launch environment directly. Requests with missing credentials fail with `MISSING_CREDENTIAL`; malformed credentials fail with `INVALID_CREDENTIAL`. Model discovery returns an empty catalog when the credential is missing, hiding the route from model selectors while retaining its settings entry. Malformed credentials and other lookup failures propagate. Adding or removing a key affects the next discovery call.
+`apiKeyEnv` defaults to `DEEPSEEK_API_KEY` and resolves per request and model discovery. `ctx.deepseekAuth` reads the key through the credential reference helpers of [`dsh-credentials`](../../credentials/credentials/README.md): when the credentials service exists, its precedence applies, and only compositions without that service read the launch environment directly. Requests with missing credentials fail with `MISSING_CREDENTIAL`; malformed credentials fail with `INVALID_CREDENTIAL`, whose diagnostic names this plugin's settings namespace and the credential reference. Model discovery returns an empty catalog when the credential is missing, hiding the route from model selectors while retaining its settings entry. Malformed credentials and other lookup failures propagate. Adding or removing a key affects the next discovery call. The plugin starts only in a composition that mounts `@deepseek-ai/dsh-deepseek-auth`; the `base` and `sdk-minimal` bundles mount it.
 
 ```yaml
 - id: llm-deepseek
@@ -35,7 +35,7 @@ Authentication resolution returns the validated API key in `x-api-key` for both 
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
-The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential.
+The endpoint and credential reference come from one configuration resolution. In-flight requests retain that snapshot; subsequent updates affect subsequent calls. Account login state cannot change this route’s credential. For a destination at another origin, or a URL that embeds credentials, `ctx.deepseekAuth` releases no key and does not read the credential store.
 
 `models` is an independently configurable catalog for this provider; defaults and protocol capabilities come from the shared transport. While `models` equals the built-in catalog and the Messages origin is the official API, `https://api.deepseek.com`, the route serves the official `GET https://api.deepseek.com/models` listing instead. Listing requests carry the API key in `x-api-key` and the harness `User-Agent`, and reject redirects; without an API key the route requests nothing. Any other endpoint, including one named by `baseURL` or `$DEEPSEEK_BASE_URL`, serves `models` and requests no listing. Discovery does not probe inference endpoints.
 
@@ -55,7 +55,7 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-API-key lookup calls `resolveDeepSeekApiKey` from the [shared credential module](../llm-deepseek/src/credential.ts). Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the listed catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport; the cache lives in memory and is keyed by endpoint and a SHA-256 of the key, so another key loads its own listing. A `loader/volatile-update` listener discards the cached listing whenever the route starts or stops following it.
+API-key lookup goes through `ctx.deepseekAuth`, which reads the key under the route's `apiKeyEnv` reference and checks that it can travel in an HTTP header; this plugin reports an unusable key as `INVALID_CREDENTIAL`, and the shared transport reads no credential. Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the listed catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport; the cache lives in memory and is keyed by endpoint and a SHA-256 of the key, so another key loads its own listing. A `loader/volatile-update` listener discards the cached listing whenever the route starts or stops following it.
 
 <a id="further-exploration"></a>
 ## Further Exploration

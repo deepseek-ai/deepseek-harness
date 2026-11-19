@@ -104,6 +104,72 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-output-limit",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst window = await app.getWindow('7');\\nconst tree = await window.getAccessibilityTree();\\nif (!tree.includes('Count: 1')) throw new Error('Unexpected initial action count');\\nawait window.click('0');\\ninspect(await window.getScreenshot());\\ninspect('x'.repeat(8192));\\nawait window.getAccessibilityTree();\\nawait window.click('0');\",\"description\":\"Complete planned clicks before and after output truncation\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-observe-after-limit",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst tree = await app.getAccessibilityTree();\\nif (!tree.includes('Count: 3')) throw new Error('Output overflow changed the action count');\\ninspect({ count: 3, repeated: false });\",\"description\":\"Verify both planned actions completed without replaying input\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {
@@ -111,7 +177,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot. Both writability probe failures left the tree readable with unknown fields and kept writes strict."
+          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot. Both writability probe failures left the tree readable with unknown fields and kept writes strict. Output truncation retained the inspected screenshot and the program completed both planned clicks. A fresh observation confirmed exactly three clicks in total, without replaying input."
         }
       },
       {

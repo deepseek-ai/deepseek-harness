@@ -1,8 +1,9 @@
 /** Host-owned connector and independently disposable Agent connections to a shared Windows helper. */
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { closeSync, createReadStream, fstatSync, openSync, readSync } from 'node:fs'
 import { addAbortListener } from 'node:events'
 import { realpath } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { PassThrough, Writable, type Readable, type Duplex } from 'node:stream'
 import assert from 'node:assert/strict'
 import type { SubprocessHandle, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
@@ -19,6 +20,43 @@ const closedFrame = Buffer.from('{"type":"closed"}\n')
 type Owner = { subprocess: Pick<SubprocessRuntime, 'spawn'> }
 
 function failure(error: unknown): Error { return error instanceof Error ? error : new Error(String(error)) }
+
+const windowsLogAttached = Symbol('windows-native-log-attached')
+
+/* v8 ignore start -- Temporary VM diagnostics; current transport fixtures do not exercise real log tails. */
+function readWindowsLogTail(logPath: string): string {
+  const file = openSync(logPath, 'r')
+  try {
+    const size = fstatSync(file).size
+    const start = Math.max(0, size - 64 * 1024)
+    const buffer = Buffer.alloc(size - start)
+    let length = 0
+    while (length < buffer.length) {
+      const count = readSync(file, buffer, length, buffer.length - length, start + length)
+      if (count === 0) break
+      length += count
+    }
+    let offset = 0
+    // A tail may start inside a UTF-8 character.
+    if (start > 0) while (offset < length && (buffer.readUInt8(offset) & 0xc0) === 0x80) offset++
+    const contents = buffer.subarray(offset, length).toString('utf8')
+    return start > 0 ? `[Earlier log content omitted; showing the tail.]\n${contents}` : contents
+  } finally { closeSync(file) }
+}
+/* v8 ignore stop */
+
+function withWindowsLog(error: unknown, logPath: string): NativeError {
+  const original = failure(error)
+  const cause = original instanceof NativeError ? original : new NativeError('NATIVE_IO', original.message, { cause: original })
+  if (Object.hasOwn(cause, windowsLogAttached)) return cause
+  let diagnostics: string
+  // The shared client can reject immediately when a stream error or write callback fires.
+  try { diagnostics = readWindowsLogTail(logPath) }
+  catch (logError) { diagnostics = `Could not read the exception log: ${failure(logError).message}` }
+  cause.message += `\nWindows CUA exception log (${logPath}):\n${diagnostics}`
+  Object.defineProperty(cause, windowsLogAttached, { value: true })
+  return cause
+}
 
 async function interruptible<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   const cancelled = Promise.withResolvers<T>()
@@ -55,6 +93,7 @@ function firstFrame(stream: Readable, signal: AbortSignal): Promise<{ value: unk
 }
 
 class WindowsHelper {
+  logPath: string
   readonly ready: Promise<z.infer<typeof Started>>
   readonly done: Promise<void>
   readonly sockets = new Set<Duplex>()
@@ -66,6 +105,7 @@ class WindowsHelper {
   private error: Error | undefined
 
   constructor(private readonly owner: Owner, private readonly config: NativeClientConfig) {
+    this.logPath = join(dirname(config.helperPath), 'dsh-cua-windows.log')
     this.ready = this.readiness.promise
     void this.ready.catch(() => {})
     this.done = this.run()
@@ -90,6 +130,7 @@ class WindowsHelper {
     }, this.config.connectTimeoutMs)
     try {
       const helperPath = await realpath(this.config.helperPath)
+      this.logPath = join(dirname(helperPath), 'dsh-cua-windows.log')
       const digest = createHash('sha256')
       for await (const chunk of createReadStream(helperPath, { signal: this.startup.signal })) digest.update(chunk as Buffer)
       const runtimeKey = digest.digest('hex')
@@ -134,7 +175,8 @@ class WindowsHelper {
     finally {
       clearTimeout(startupTimer)
       this.phase = 'closing'
-      const error = this.error ?? new NativeError('NATIVE_CLOSED', 'Windows helper closed; select applications again')
+      const error = this.error ? withWindowsLog(this.error, this.logPath)
+        : new NativeError('NATIVE_CLOSED', 'Windows helper closed; select applications again')
       for (const socket of this.sockets) socket.destroy(error)
       const handle = this.handle
       try {
@@ -146,7 +188,8 @@ class WindowsHelper {
             if (!await handle.waitForExit()) throw new NativeError('NATIVE_CLEANUP', 'Windows helper process range did not exit')
           } finally { clearTimeout(timer) }
         }
-      } finally {
+      } catch (cleanupError) { throw withWindowsLog(cleanupError, this.logPath) }
+      finally {
         clearTimeout(this.stopTimer)
         this.phase = 'closed'
         this.readiness.reject(error)
@@ -156,6 +199,7 @@ class WindowsHelper {
 }
 
 class WindowsChannel implements NativeChannel {
+  private logPath: string
   readonly stdout = new PassThrough()
   readonly stdin: Writable
   readonly done: Promise<void>
@@ -168,11 +212,16 @@ class WindowsChannel implements NativeChannel {
 
   constructor(helper: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number, launchWaitMs: number,
     owner: Owner, transport: WindowsTransport) {
+    this.logPath = join(dirname(config.helperPath), 'dsh-cua-windows.log')
     this.stdin = new Writable({
       write: (chunk: Buffer, _encoding, callback) => {
         void this.readiness.promise.then((socket) => {
           if (this.closing) { callback(new NativeError('NATIVE_CLOSED', 'Native connection is closing')); return }
-          socket.write(chunk, callback)
+          /* v8 ignore start -- Temporary VM diagnostics; current transport fixtures do not inject socket write failures. */
+          try {
+            socket.write(chunk, (error) => { callback(error ? withWindowsLog(error, this.logPath) : error) })
+          } catch (error) { callback(withWindowsLog(error, this.logPath)) }
+          /* v8 ignore stop */
         }, callback)
       },
       final: (callback) => { this.close(); callback() },
@@ -208,6 +257,7 @@ class WindowsChannel implements NativeChannel {
     try {
       helper = await interruptible(helperPromise, this.startup.signal)
       const ready = await interruptible(helper.ready, this.startup.signal)
+      this.logPath = helper.logPath
       this.startup.signal.throwIfAborted()
       connection = connectWindowsPipe(owner.subprocess, config, ready.endpoint, ready.runtimeKey, transport)
       const socket = connection.stream
@@ -278,23 +328,25 @@ class WindowsChannel implements NativeChannel {
         try { await closed } finally { this.startup.signal.removeEventListener('abort', close) }
       } finally { this.startup.signal.removeEventListener('abort', abort) }
     } catch (error) {
+      if (helper) this.logPath = helper.logPath
       const cause = failure(error)
-      if (!this.closing || admitted) caught = cause
-      this.readiness.reject(cause)
+      if (!this.closing || admitted) caught = withWindowsLog(cause, this.logPath)
+      this.readiness.reject(caught ?? cause)
     }
     finally {
+      if (helper) this.logPath = helper.logPath
       clearTimeout(timer)
       clearTimeout(this.closeTimer)
       this.closing = true
       this.socket?.destroy()
       if (closed) {
-        try { await closed } catch (error) { if (admitted) caught ??= failure(error) }
+        try { await closed } catch (error) { if (admitted) caught ??= withWindowsLog(error, this.logPath) }
       }
       if (this.socket) helper?.sockets.delete(this.socket)
       let cleanupError: Error | undefined
-      try { await connection?.dispose() } catch (error) { cleanupError = failure(error); caught ??= cleanupError }
+      try { await connection?.dispose() } catch (error) { cleanupError = withWindowsLog(error, this.logPath); caught ??= cleanupError }
       if (admitted && !observation.acknowledged) {
-        cleanupError = new NativeError('NATIVE_CLEANUP', 'Windows pipe ended without native cleanup acknowledgement')
+        cleanupError = withWindowsLog(new NativeError('NATIVE_CLEANUP', 'Windows pipe ended without native cleanup acknowledgement'), this.logPath)
       }
       this.stdin.destroy()
       if (caught) this.stdout.destroy(caught)

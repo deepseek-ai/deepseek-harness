@@ -1,0 +1,73 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/linear/README.md
+/:
+  en: 939da448d3c75854
+  zh: 18d990b86d0a14fe
+/deepseek-ai-dsh-linear:
+  en: 4030a35e9e9eba0c
+  zh: e38262e0e0943994
+/deepseek-ai-dsh-linear/summary:
+  en: f25efa86e65d612e
+  zh: 34d941e6108776fc
+/deepseek-ai-dsh-linear/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-linear/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-linear/use-this-package/install-into-a-profile:
+  en: 94724890eb42aed2
+  zh: 49aef9822a7149c5
+/deepseek-ai-dsh-linear/use-this-package/authorize-and-sign-out:
+  en: 28da3a802b35be1d
+  zh: b925860d660b8e97
+/deepseek-ai-dsh-linear/use-this-package/turn-off-and-uninstall:
+  en: 408e2b369ddb5254
+  zh: 2efc008fa32d09a9
+/deepseek-ai-dsh-linear/use-this-package/configure:
+  en: db9b1515054d7b0d
+  zh: 27bd7ddb4fd0ff24
+/deepseek-ai-dsh-linear/understand-the-implementation:
+  en: 9f8f1f804db227ad
+  zh: 495a69874f52bc81
+/deepseek-ai-dsh-linear/further-exploration:
+  en: ed7d1edadf2feef5
+  zh: 6746823e51e4f4f3
+/deepseek-ai-dsh-linear/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-linear/model-experience/naming-and-connection-guidance:
+  en: 01b6ec6d681e457b
+  zh: 7fe0d1c9d1037bd4
+/deepseek-ai-dsh-linear/model-experience/naming-and-connection-guidance/what-the-model-sees:
+  en: 49e8c3a79ec569f7
+  zh: 9db165a86fa1ade2
+/deepseek-ai-dsh-linear/model-experience/naming-and-connection-guidance/what-the-model-sees/guidance-text:
+  en: 8f57292f6821da96
+  zh: b2d3bc7e5c9cbc05
+/deepseek-ai-dsh-linear/model-experience/naming-and-connection-guidance/token-effect:
+  en: 871fd5b39ce9299a
+  zh: f73294aa75132999
+/deepseek-ai-dsh-linear/model-experience/naming-and-connection-guidance/kv-cache-effect:
+  en: 9c7a599f4647412c
+  zh: 673c0dff65e62cd8
+/deepseek-ai-dsh-linear/model-experience/linear-server-tools-and-instructions:
+  en: b7d3a70c835efa15
+  zh: cfea216bf67f9d43
+/deepseek-ai-dsh-linear/model-experience/linear-server-tools-and-instructions/what-the-model-sees:
+  en: 6258c3e0a743b59e
+  zh: 1aa9fabe7040246c
+/deepseek-ai-dsh-linear/model-experience/linear-server-tools-and-instructions/token-effect:
+  en: 738480c7888daeaa
+  zh: c06ff095165990f6
+/deepseek-ai-dsh-linear/model-experience/linear-server-tools-and-instructions/kv-cache-effect:
+  en: e7ac075c511418ef
+  zh: 50ff737d29e63782
+/deepseek-ai-dsh-linear/known-limitations-and-deferred-work:
+  en: a743c3bd328a39cc
+  zh: d897eb426678f207
+/deepseek-ai-dsh-linear/known-limitations-and-deferred-work/dev-note:
+  en: 34edaa192d4de759
+  zh: 276357d32049ebcf

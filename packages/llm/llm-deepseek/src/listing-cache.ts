@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
+import { serializeAuthHeaders } from './auth-headers.ts'
 import type { ListingSettings } from './listing-config.ts'
 import { LISTING_TIMEOUT } from './listing.ts'
 import type { ModelListing } from './listing.ts'
@@ -10,10 +11,10 @@ import type { ModelListing } from './listing.ts'
 export interface ListingCacheDependencies {
   /** Latest route configuration for automatic refresh; `undefined` stops following the listing. */
   readonly settings: () => ListingSettings | undefined
-  /** The credential the route sends to `url`, or `undefined` when it has none. */
-  readonly credential: (url: string) => Promise<string | undefined>
-  /** Perform one listing request authenticated with `credential`; `signal` carries the {@link LISTING_TIMEOUT} request deadline. */
-  readonly load: (url: string, credential: string, signal: AbortSignal) => Promise<ModelListing>
+  /** Headers carrying the credential the route sends to `url`, or `undefined` when it has none. */
+  readonly credential: (url: string) => Promise<Readonly<Record<string, string>> | undefined>
+  /** Perform one listing request sending `headers`; `signal` carries the {@link LISTING_TIMEOUT} request deadline. */
+  readonly load: (url: string, headers: Readonly<Record<string, string>>, signal: AbortSignal) => Promise<ModelListing>
   /** Wall clock used for listing age. */
   readonly now: () => number
   /** Report a loaded listing. */
@@ -80,14 +81,16 @@ export class ModelListingCache {
    * @returns the view after any first load of the scope settles.
    */
   async view(settings: ListingSettings, signal?: AbortSignal): Promise<ListingView> {
-    const credential = await this.dependencies.credential(settings.url)
+    const headers = await this.dependencies.credential(settings.url)
     signal?.throwIfAborted()
     if (this.closed) return this.current()
-    const scope = credential === undefined ? undefined : `${settings.url}\n${createHash('sha256').update(credential).digest('hex')}`
+    const scope = headers === undefined
+      ? undefined
+      : `${settings.url}\n${createHash('sha256').update(serializeAuthHeaders(headers)).digest('hex')}`
     if (scope !== this.scope) this.rescope(scope)
-    if (credential !== undefined) {
-      if (this.settledAt === undefined) await abandonable(this.start(settings, credential), signal)
-      else if (this.dependencies.now() - this.settledAt >= settings.maxAgeMs) void this.start(settings, credential)
+    if (headers !== undefined) {
+      if (this.settledAt === undefined) await abandonable(this.start(settings, headers), signal)
+      else if (this.dependencies.now() - this.settledAt >= settings.maxAgeMs) void this.start(settings, headers)
     }
     return this.current()
   }
@@ -120,7 +123,7 @@ export class ModelListingCache {
     this.generation += 1
   }
 
-  private start(settings: ListingSettings, credential: string): Promise<void> {
+  private start(settings: ListingSettings, headers: Readonly<Record<string, string>>): Promise<void> {
     if (this.inflight !== undefined) return this.inflight
     clearTimeout(this.timer)
     this.generation += 1
@@ -128,7 +131,7 @@ export class ModelListingCache {
     const request = new AbortController()
     this.request = request
     const limit = deadline(request.signal, settings.timeoutMs, LISTING_TIMEOUT)
-    const run = this.dependencies.load(settings.url, credential, limit.signal)
+    const run = this.dependencies.load(settings.url, headers, limit.signal)
       .then((listing) => {
         if (generation !== this.generation) return
         const changed = !deepEqualJson(this.listing, listing)

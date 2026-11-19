@@ -271,7 +271,20 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     const opened = await context.newPage()
     tripwires.push(watchConsole(opened))
     await opened.addInitScript(() => {
-      Object.defineProperty(globalThis, 'dshDesktop', { value: { protocolVersion: 1 } })
+      // The update carrier stays idle until a scenario publishes a status for the account row.
+      let update: { phase: string; version?: string } = { phase: 'idle' }
+      const updateListeners = new Set<(state: typeof update) => void>()
+      Object.defineProperty(globalThis, '__bonusPublishUpdate', {
+        value: (state: typeof update) => { update = state; for (const listener of updateListeners) listener(state) },
+      })
+      Object.defineProperty(globalThis, 'dshDesktop', { value: { protocolVersion: 1, updates: {
+        status: () => Promise.resolve(update),
+        open: () => Promise.resolve(),
+        subscribe: (listener: (state: typeof update) => void) => {
+          updateListeners.add(listener)
+          return () => { updateListeners.delete(listener) }
+        },
+      } } })
       // The embedded Platform view is a native child window owned by the Desktop shell.
       // The double answers immediately and records the calls, so the scenario observes
       // which page was opened and that returning destroyed the view.
@@ -667,6 +680,30 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     })
     expect(transition).toBe('0.25s ease-out')
     observations.push(`stack.initial cards=3 acks=stack-first widths=260,252 inset=10 offset=-4 transition=${transition}`)
+    // A Desktop update status shares the account row and leaves the card row at full width.
+    const publishUpdate = (state: { phase: string; version?: string }) => stackPage.evaluate((value) => {
+      (globalThis as typeof globalThis & { __bonusPublishUpdate: (next: typeof value) => void }).__bonusPublishUpdate(value)
+    }, state)
+    await publishUpdate({ phase: 'installing', version: '0.1.5' })
+    const updateTag = stackPage.getByText('正在准备重启…', { exact: true })
+    await updateTag.waitFor()
+    const artifactDir = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+    await mkdir(artifactDir, { recursive: true })
+    await stackPage.screenshot({ path: join(artifactDir, 'bonus-notice-update-tag.png'), clip: { x: 0, y: 560, width: 420, height: 400 } })
+    const taggedBox = await cards.first().boundingBox()
+    const tagBox = await updateTag.boundingBox()
+    const accountBox = await stackPage.getByRole('button', { name: '账号菜单', exact: true }).boundingBox()
+    expect(taggedBox!.x).toBeCloseTo(10, 0)
+    expect(taggedBox!.width).toBeCloseTo(260, 0)
+    expect(taggedBox!.y + taggedBox!.height).toBeLessThanOrEqual(accountBox!.y)
+    expect(tagBox!.y).toBeGreaterThanOrEqual(accountBox!.y)
+    expect(tagBox!.y + tagBox!.height).toBeLessThanOrEqual(accountBox!.y + accountBox!.height)
+    // The card floats over the session list: the list still reaches down to the card's bottom edge.
+    const listBottom = await stackPage.locator('[class*="scrollRegion"]').first().evaluate(element => element.getBoundingClientRect().bottom)
+    expect(listBottom).toBeGreaterThanOrEqual(taggedBox!.y + taggedBox!.height - 1)
+    observations.push('stack.update-tag card=260 left-inset=10 card-above-account-row=true tag-in-account-row=true floats-over-list=true')
+    await publishUpdate({ phase: 'idle' })
+    await updateTag.waitFor({ state: 'detached' })
     for (const [delta, width, edge] of [[80, 280, 360], [-80, 260, 280]] as const) {
       const handle = await stackPage.locator('[data-side="sidebar"]').boundingBox()
       const x = handle!.x + handle!.width / 2
@@ -700,8 +737,6 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     expect(platform.acks.length).toBe(beforeCollapseAcks)
     expect(platform.dismissals.length).toBe(beforeCollapseDismissals)
     observations.push('stack.expanded cards=3 duplicate-acks=0 dismissed=0')
-    const artifactDir = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
-    await mkdir(artifactDir, { recursive: true })
     await stackPage.screenshot({ path: join(artifactDir, 'bonus-notice-stack-light.png') })
     await stackPage.emulateMedia({ colorScheme: 'dark' })
     await expect.poll(() => stackPage.locator('body').getAttribute('data-ds-dark-theme')).not.toBeNull()
@@ -736,6 +771,16 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     await expect.poll(() => platform.acks.length).toBe(ackStart + 2)
     expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['a1111111-1111-4111-8111-111111111111', 'a2222222-2222-4222-8222-222222222222'])
     observations.push('stack.promoted cards=2 acks=stack-first,stack-second width=260 same-node=true')
+    // In a short window the long card scrolls its copy instead of pushing the account row out of view.
+    await stackPage.setViewportSize({ width: 1440, height: 390 })
+    const shortAccount = await stackPage.getByRole('button', { name: '账号菜单', exact: true }).boundingBox()
+    const shortCard = await second.boundingBox()
+    const copyScrolls = await second.getByRole('status').evaluate(element => element.scrollHeight > element.clientHeight)
+    expect(shortAccount!.y + shortAccount!.height).toBeLessThanOrEqual(390)
+    expect(shortCard!.y + shortCard!.height).toBeLessThanOrEqual(shortAccount!.y)
+    expect(copyScrolls).toBe(true)
+    observations.push('stack.short-window account-row-visible=true card-above-account-row=true copy-scrolls=true')
+    await stackPage.setViewportSize({ width: 1440, height: 960 })
     await second.getByRole('button', { name: '关闭', exact: true }).click()
     await expect.poll(() => platform.acks.length).toBe(ackStart + 3)
     expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['a1111111-1111-4111-8111-111111111111', 'a2222222-2222-4222-8222-222222222222', 'a3333333-3333-4333-8333-333333333333'])

@@ -111,7 +111,7 @@ describe('SidebarRoot.module.css', () => {
   it('keeps the reviewed expanded spacing separate from rail and caption controls', () => {
     expect(declarations('.logoRow')?.get('padding')).toBe('8px 0 8px 8px')
     expect(declarations('.logoRow')?.get('margin-bottom')).toBe('0')
-    expect(declarations('.newSessionRow')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px)')
+    expect(declarations('.newSessionRow')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px) 6px')
     expect(declarations('.newSession')?.get('margin')).toBe('0')
     expect(declarations('.newSessionContent')?.get('justify-content')).toBe('center')
     expect(declarations(":global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle")?.get('transform')).toBe('translateX(4px)')
@@ -193,5 +193,38 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.brandName')?.get('font-size')).toBe('18px')
     expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
+  })
+
+  it('lays panel trailing content out after the title like a Session row, reserving no room without content', () => {
+    const trailing = declarations('.panelTrailing')
+    expect(trailing?.get('flex')).toBe('none')
+    expect(trailing?.get('margin-left')).toBe('auto')
+    expect(trailing?.has('position')).toBe(false)
+    expect(declarations('.panelEntryWide .panelRow')?.get('padding-right')).toBe('38px')
+    expect(css).not.toMatch(/\.panelTrailing:(?:not\()?:?empty/)
+    expect(css).not.toMatch(/\.panelRow\s*\{[^}]*padding-right:\s*72px/)
+  })
+
+  it('rests panel trailing content in the unpin action\'s place where the pointer hovers, and swaps the two on hover or keyboard focus', () => {
+    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    // The block that also reveals the unpin action on hover.
+    const hover = /@media \(hover: hover\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*\.panelUnpin \{ opacity: 0; \}(?:[^{}]*\{[^{}]*\})*)\s*\}/.exec(withoutComments)?.[1] ?? ''
+    const rule = (selector: string): string => new RegExp(`${selector.replace(/[.()[\]:]/g, '\\$&')}\\s*\\{([^{}]*)\\}`).exec(hover)?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
+    // 7px to the unpin glyph's trailing edge and 31px of content box fill the 38px a row keeps for the action elsewhere.
+    expect(rule('.panelEntryWide .panelRow')).toBe('padding-right: 7px;')
+    expect(rule('.panelEntryWide .panelTrailing')).toBe('justify-content: flex-end; min-width: 31px;')
+    // Only a row that has the action hides its content, on hover and on keyboard focus alike.
+    expect(hover.replace(/\s+/g, ' ')).toContain(
+      '.panelEntry:has(.panelUnpin):hover .panelTrailing, .panelEntry:has(.panelUnpin):has(:focus-visible) .panelTrailing { opacity: 0; }',
+    )
+    // Outside that block, where the action always shows, the content stays before the 38px.
+    expect(withoutComments.replace(hover, '')).not.toMatch(/\.panelTrailing[^{}]*\{[^{}]*(?:opacity|min-width)/)
+  })
+
+  it('pins panel trailing content over the collapsed rail icon\'s top trailing corner', () => {
+    const collapsed = declarations('.collapsed .panelTrailing')
+    expect(collapsed?.get('position')).toBe('absolute')
+    expect(collapsed?.get('right')).toBe('5px')
+    expect(collapsed?.get('top')).toBe('5px')
   })
 })

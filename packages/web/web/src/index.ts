@@ -1,8 +1,9 @@
 /**
  * Service Definition for the web access capability seam (`ctx.web`): registries and provider-selecting execution for search and
  * fetch. Duplicate ids are rejected. At execution time, a configured provider must exist and
- * be usable; without one, exactly one usable provider is required, so selection never depends
- * on registration order.
+ * be usable; without one, exactly one usable provider is required, except that a search prefers the
+ * usable DeepSeek provider assigned to the route of the model request it serves, so selection never
+ * depends on registration order.
  * @module @deepseek-ai/dsh-web
  */
 
@@ -49,7 +50,21 @@ interface Selection<P> {
   readonly configuredId?: string
   /** Providers registered for this capability kind. */
   readonly providers: ReadonlyMap<string, P>
+  /** The provider that wins among the usable ones while none is configured, if it is usable. */
+  readonly preferredId?: string
 }
+
+/** Provider routes of the DeepSeek API-key and account models. */
+const DEEPSEEK_MODEL_ROUTES: ReadonlySet<string> = new Set(['deepseek-official', 'deepseek-account'])
+
+/**
+ * Search provider preferred for a model request on a DeepSeek model route while none is configured: DeepSeek
+ * Messages search, which DeepSeek serves without a per-search charge.
+ */
+const DEEPSEEK_ROUTE_SEARCH_PROVIDER = 'deepseek-official'
+
+/** Search provider preferred on every other route and outside a model request while none is configured. */
+const OTHER_ROUTE_SEARCH_PROVIDER = 'deepseek-search-api'
 
 /**
  * Config for the web seam. `searchProvider` / `fetchProvider` pin which provider
@@ -60,7 +75,10 @@ interface Selection<P> {
  * fields rather than introduce a hidden priority chain.
  */
 export interface WebRuntimeConfig {
-  /** Explicit search provider id. Omitted = auto-select when exactly one usable. */
+  /**
+   * Explicit search provider id. Omitted = the usable DeepSeek provider assigned to the route of the model
+   * request, and otherwise auto-select when exactly one usable.
+   */
   readonly searchProvider: Volatile<string | undefined>
   /** Explicit fetch provider id. Omitted = auto-select when exactly one usable. */
   readonly fetchProvider: Volatile<string | undefined>
@@ -75,6 +93,10 @@ export interface WebRuntimeConfig {
  * - A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.
  * - A configured id registered but unavailable →
  *   `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.
+ * - No search id configured, and the provider assigned to the route of the model request
+ *   the search serves is usable → that provider: `deepseek-official` (Messages search) on the
+ *   `deepseek-official` and `deepseek-account` routes, `deepseek-search-api` on every other
+ *   route and outside a model request.
  * - No id configured, exactly one registered usable provider → that provider.
  * - No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.
  * - No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.
@@ -178,12 +200,12 @@ export class WebRuntime extends TypertRemoteService {
    * time with the selection rules above; throws {@link WebError} when the
    * capability cannot run. The seam enforces `request.maxResults` on the result:
    * if the provider over-returns, `sources[]` is truncated and `truncated` set.
-   * @param request - the query and optional result limit.
+   * @param request - the query, the optional result limit, and the route of the model request the search serves.
    * @param signal - optional cancellation signal forwarded to the provider.
    * @returns the provider's results, capped to `request.maxResults`.
    */
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
-    const result = await this.selectSearchProvider().search(request, signal)
+    const result = await this.selectSearchProvider(request.llmProvider).search(request, signal)
     return capSources(result, request.maxResults)
   }
 
@@ -196,14 +218,22 @@ export class WebRuntime extends TypertRemoteService {
    * @returns false only when the selected provider reports that it cannot authenticate.
    */
   async searchReady(llmProvider?: string): Promise<boolean> {
-    return await selectedProviderReady(() => this.selectSearchProvider(), llmProvider)
+    return await selectedProviderReady(() => this.selectSearchProvider(llmProvider), llmProvider)
   }
 
-  /** Select the search provider with the rules above, throwing the matching {@link WebError}. */
-  private selectSearchProvider(): WebSearchProvider {
+  /**
+   * Select the search provider with the rules above, throwing the matching {@link WebError}.
+   * @param llmProvider - provider route id of the model request the search serves, when known.
+   * @returns the provider the search runs through.
+   */
+  private selectSearchProvider(llmProvider: string | undefined): WebSearchProvider {
     const configuredId = this.config.searchProvider.get() ?? this.searchProviderEnv
+    const preferredId = llmProvider !== undefined && DEEPSEEK_MODEL_ROUTES.has(llmProvider)
+      ? DEEPSEEK_ROUTE_SEARCH_PROVIDER
+      : OTHER_ROUTE_SEARCH_PROVIDER
     return resolveProvider({
       providers: this.searchProviders,
+      preferredId,
       ...configuredId !== undefined ? { configuredId } : {},
     })
   }
@@ -285,6 +315,8 @@ function resolveProvider<P extends ResolvableProvider>(selection: Selection<P>):
     return provider
   }
   const usable = [...providers.values()].filter(provider => provider.available())
+  const preferred = usable.find(provider => provider.id === selection.preferredId)
+  if (preferred !== undefined) return preferred
   const [single] = usable
   if (single === undefined) {
     throw new WebError('no usable web provider is registered', 'WEB_PROVIDER_UNAVAILABLE')

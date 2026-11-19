@@ -1,21 +1,21 @@
 /** API-key authentication, credential-gated discovery, and the official model listing for the official DeepSeek route. */
 import type { Context } from '@deepseek-ai/cordis'
-import { APP_IDENTITY, LlmError } from '@deepseek-ai/dsh-llm'
+import { APP_IDENTITY, INVALID_CREDENTIAL_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { DeepSeekAuthError } from '@deepseek-ai/dsh-deepseek-auth'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
-  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveListedCatalog,
-  resolveDeepSeekApiKey,
+  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, resolveListedCatalog,
 } from '@deepseek-ai/dsh-llm-deepseek'
-import type { CatalogRefusal, DeepSeekCatalogModel, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
+import type { CatalogRefusal, DeepSeekCatalogModel, DeepSeekRequestAuth, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 import type { ResolvedDeepSeekOptions } from './config.ts'
 
-export { Config, plainOptions, resolveAdapterOptions } from './config.ts'
+export { Config } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export const name = 'llm-deepseek-api-key'
-export const inject = ['llm']
+export const inject = ['llm', 'deepseekAuth']
 
 const PROVIDER = 'deepseek-official'
 /** Console tag of listing diagnostics; product profiles mount no console exporter for `ctx.logger`. */
@@ -32,30 +32,42 @@ interface OfficialConnection extends ResolvedDeepSeekOptions {
 }
 
 export function apply(ctx: Context, config: Config): void {
+  /** Settings namespace of this mount, which the provider directory lists and credential diagnostics name. */
+  const settingsNs = ctx.fiber.entry?.options.id ?? name
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
-  const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string> => {
-    const ref = connection.apiKeyEnv
-    const key = await resolveDeepSeekApiKey(ctx, ref)
-    if (key !== undefined) return key
-    throw new LlmError(
-      `llm-deepseek: no API key for provider route "${PROVIDER}"; store ${ref} through the credentials`
-      + ` service (the web Models page writes it), or export ${ref} in the launching environment`,
-      'MISSING_CREDENTIAL',
-    )
-  }
-  /** The API key, or `undefined` when none is configured; other credential failures propagate. */
-  const presentApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
-    try { return await resolveApiKey(connection) }
-    catch (error) {
-      if (error instanceof LlmError && error.code === 'MISSING_CREDENTIAL') return undefined
+  // Every other DeepSeek consumer billed by the API key sends this route's key to this route's deployment.
+  ctx.effect(() => ctx.deepseekAuth.connect('api-key', PROVIDER, () => {
+    const connection = options()
+    return { baseURL: connection.baseURL, reference: connection.apiKeyEnv, owner: settingsNs }
+  }), 'llm-deepseek-api-key: API-key deployment')
+  /**
+   * The key `ctx.deepseekAuth` releases for `endpoint` from one configuration generation, in the header Messages
+   * expects; `undefined` when none is configured or `endpoint` is outside the route's deployment. An unusable key fails
+   * as this route's `INVALID_CREDENTIAL`; store failures propagate.
+   */
+  const resolveAuth = async (connection: ResolvedDeepSeekOptions, endpoint: string): Promise<DeepSeekRequestAuth | undefined> => {
+    try {
+      return await ctx.deepseekAuth.authorize({
+        consumer: settingsNs, accepts: ['api-key'], billing: 'api-key', destination: { url: endpoint },
+        connections: { 'api-key': { baseURL: connection.baseURL, reference: connection.apiKeyEnv } },
+        apiKeyHeaders: ['x-api-key'],
+      })
+    } catch (error) {
+      if (error instanceof DeepSeekAuthError && error.code === 'INVALID_CREDENTIAL') {
+        throw new LlmError(error.message, INVALID_CREDENTIAL_CODE, { cause: error })
+      }
       throw error
     }
   }
+  const missingCredential = (connection: ResolvedDeepSeekOptions) => new LlmError(
+    `llm-deepseek: no API key for provider route "${PROVIDER}"; store ${connection.apiKeyEnv} through the credentials`
+    + ` service (the web Models page writes it), or export ${connection.apiKeyEnv} in the launching environment`,
+    'MISSING_CREDENTIAL',
+  )
   const listings = createModelListingCache(ctx, name, PROVIDER, {
     settings: () => options().listing,
-    credential: async () => presentApiKey(options()),
-    load: (url, apiKey, signal) => requestModelListing(url, { 'x-api-key': apiKey }, signal),
+    credential: async url => (await resolveAuth(options(), url))?.headers,
   })
   let reportedListing: ModelListing | undefined
   /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
@@ -75,7 +87,7 @@ export function apply(ctx: Context, config: Config): void {
     return { ...connection, models: catalog.resolution, offered: catalog.offered, refusals: catalog.refusals, badges: catalog.badges }
   }
   ctx.llm.registerConfigurableProviders([
-    { provider: PROVIDER, displayName: 'DeepSeek', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] },
+    { provider: PROVIDER, displayName: 'DeepSeek', settingsNs, settingsPath: [] },
   ])
   registerDeepSeekProvider<OfficialConnection>(ctx, PROVIDER, {
     providerName: 'DeepSeek',
@@ -96,12 +108,13 @@ export function apply(ctx: Context, config: Config): void {
       }
       return connectionOf(connection, view)
     },
-    resolveAuth: async connection => ({ headers: { 'x-api-key': await resolveApiKey(connection) } }),
+    resolveAuth,
+    missingCredential,
     admit: (connection, model) => { refuseListedModel(model, connection.refusals.get(model)) },
     discoverModels: async (provider) => {
       const connection = options()
       if (connection.listing === undefined) {
-        if (await presentApiKey(connection) === undefined) return []
+        if (await resolveAuth(connection, connection.baseURL) === undefined) return []
         return connection.models.map(model => catalogModelInfo(provider, model))
       }
       const view = await listings.view(connection.listing)

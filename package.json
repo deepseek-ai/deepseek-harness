@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.5",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -249,6 +249,10 @@
     "@deepseek-ai/dsh-subagent-dsh-sdk": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-mcp-client": "workspace:*",
+    "@deepseek-ai/dsh-mcp-manager": "workspace:*",
+    "@deepseek-ai/dsh-linear": "workspace:*",
+    "@deepseek-ai/dsh-notion": "workspace:*",
+    "@deepseek-ai/dsh-tencent-docs": "workspace:*",
     "@deepseek-ai/dsh-tool-session-query": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
@@ -300,7 +304,6 @@
     "vitest": "^4.1.11",
     "@deepseek-ai/dsh-skill-office": "workspace:*",
     "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
-    "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
@@ -314,6 +317,7 @@
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
-    "@deepseek-ai/dsh-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-tool-session-list": "workspace:*"
   }
 }

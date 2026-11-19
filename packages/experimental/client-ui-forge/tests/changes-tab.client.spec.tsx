@@ -224,6 +224,16 @@ function hostStream<F>(frames: readonly F[], failure?: unknown): HostStream<F> {
   }
 }
 
+/**
+ * Whether the view shows its reading state: the reading status above file card placeholders, with the files menu naming
+ * no count.
+ */
+function reading(view: ReturnType<typeof render>): boolean {
+  return view.queryByRole('status')?.textContent === en['diff.loading']
+    && view.container.querySelector('[data-forge-changes-skeleton]') !== null
+    && view.queryByRole('button', { name: en['diff.allFilesLoading'] }) !== null
+}
+
 /** Let the Remote reads the view awaits settle. */
 async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
@@ -576,9 +586,18 @@ describe('ChangesTab tooltips', () => {
 })
 
 describe('ChangesTab local reads', () => {
+  it('draws the placeholders of a changed file in two columns only while sides are split', async () => {
+    const m = mount({ state: null })
+    const columns = (): number => m.view.container.querySelectorAll('[data-forge-changes-skeleton] > :first-child > :last-child > *').length
+    expect(reading(m.view)).toBe(true)
+    expect(columns()).toBe(2)
+    act(() => { m.store.actions.toggledSplit(TAB) })
+    expect(columns()).toBe(1)
+  })
+
   it('waits for the panel state, then reads the branch scope and draws its files', async () => {
     const m = mount({ state: null })
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
     expect(m.view.container.querySelector('[data-forge-head]')?.textContent).toBe('HEAD')
     expect(m.faces.localDiff).not.toHaveBeenCalled()
@@ -627,7 +646,7 @@ describe('ChangesTab local reads', () => {
     fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'Staged' }))
     expect(m.store.getSnapshot().byTab[TAB]?.scope).toBe('staged')
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.view.getByText('The index compared with HEAD')).toBeTruthy()
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'staged' }, expect.any(AbortSignal))
     await settle()
@@ -858,7 +877,7 @@ describe('ChangesTab base branch', () => {
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
-    expect(m.view.container.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(reading(m.view)).toBe(true)
     await settle()
     expect(m.paths()).toHaveLength(6)
 
@@ -1273,7 +1292,7 @@ describe('ChangesTab unchanged lines', () => {
     const app = m.section('src/app.ts')
     fireEvent.click(within(app).getByRole('button', { name: '2 unchanged lines' }))
     await settle()
-    expect(m.faces.report).toHaveBeenLastCalledWith('toast.expandFailed', { message: 'gone' })
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.expandFailed', { params: { message: 'gone' } })
     const gap = within(app).getByRole('button', { name: '2 unchanged lines' })
     expect(gap.hasAttribute('disabled')).toBe(false)
 
@@ -1453,7 +1472,7 @@ describe('ChangesTab change requests', () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.staleHead) } })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
     expect(m.paths()).toEqual([])
 
     // A later status with the same head reads again, as when the host's answers disagreed for a moment.
@@ -1465,7 +1484,7 @@ describe('ChangesTab change requests', () => {
     act(() => { m.panel.set({ state: later(2, HEAD), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledTimes(2)
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
 
     act(() => { m.panel.set({ state: later(3, 'b'.repeat(40)), disconnected: false }) })
     await settle()
@@ -1520,7 +1539,7 @@ describe('ChangesTab change requests', () => {
     const m = mount({ source, state: ready({ changeRequests: [entry(7, null)] }) })
     await settle()
     expect(m.faces.changeRequestDiff).not.toHaveBeenCalled()
-    expect(m.view.queryByRole('status')).toBeNull()
+    expect(reading(m.view)).toBe(true)
     act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7))] }), disconnected: false }) })
     await settle()
     expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
@@ -1579,7 +1598,7 @@ describe('line review actions', () => {
     m.publish()
     await settle()
     expect(m.sectionQueries.queryByRole('textbox')).toBeNull()
-    expect(m.faces.report).toHaveBeenCalledWith('review.published', { forge: 'GitHub', noun: 'PR' })
+    expect(m.faces.report).toHaveBeenCalledWith('review.published', { tone: 'success', params: { forge: 'GitHub', noun: 'PR' } })
     expect(m.section('src/app.ts').querySelector('[data-forge-review-thread="published"]')).not.toBeNull()
   })
   it.each(['rejected', 'remote-error', 'receipt-storage'] as const)('holds an uncertain %s result for explicit reconciliation', async (kind) => {
@@ -1722,7 +1741,7 @@ describe('line review actions', () => {
     await settle()
     expect(m.faces.changeRequestReviewWrite).toHaveBeenLastCalledWith(URL7,
       { kind: 'submit-pending', headSha: HEAD, review: 'review-1', event: 'request-changes', body: 'Needs a fix' })
-    expect(m.faces.report).toHaveBeenCalledWith('review.submitted')
+    expect(m.faces.report).toHaveBeenCalledWith('review.submitted', { tone: 'success' })
     expect(m.view.queryByRole('dialog')).toBeNull()
     expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot()).toMatchObject({ body: '', event: 'comment' })
     expect(m.view.getByRole('button', { name: 'Submit review' })).toBeTruthy()
@@ -1747,7 +1766,7 @@ describe('line review actions', () => {
     expect(m.faces.report).not.toHaveBeenCalled()
     fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
     await settle()
-    expect(m.faces.report).toHaveBeenCalledWith('review.discarded')
+    expect(m.faces.report).toHaveBeenCalledWith('review.discarded', { tone: 'success' })
     expect(m.view.queryByRole('dialog')).toBeNull()
   })
   it('submits a pending review once when two activations arrive in the same render batch', async () => {
@@ -1844,7 +1863,7 @@ describe('line review actions', () => {
     } })
     await settle()
     const drafts = [...m.section('src/app.ts').querySelectorAll<HTMLElement>('[data-forge-review-thread="pending"]')]
-    for (const draft of drafts) fireEvent.click(within(draft).getByRole('button', { name: 'Add to review' }))
+    for (const draft of drafts) fireEvent.click(within(draft).getByRole('button', { name: 'Start review' }))
     await settle()
     expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledTimes(1)
     first.settle(ok({ ok: false, code: 'failed', message: 'Busy' }))
@@ -1910,7 +1929,7 @@ describe('line review actions', () => {
     const draft = within(m.section('src/app.ts').querySelector('[data-forge-review-thread="pending"]')!)
     expect(draft.getByText(en['review.browserDraft'])).toBeTruthy()
     expect(m.view.getByRole('button', { name: 'Submit review (1)' })).toBeTruthy()
-    fireEvent.click(draft.getByRole('button', { name: 'Add to review' }))
+    fireEvent.click(draft.getByRole('button', { name: 'Start review' }))
     await settle()
     expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledWith(URL7, { kind: 'add-pending', headSha: HEAD,
       comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body: 'Kept from before' } })
@@ -1936,8 +1955,55 @@ describe('line review actions', () => {
     await settle()
     const record = within(m.view.container.querySelector('[data-forge-review-file="src/app.ts"]')!)
     expect(record.getByText('Keep this draft')).toBeTruthy()
-    fireEvent.click(record.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(record.getByRole('button', { name: 'Actions for the comment on R4' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Delete' }))
+    fireEvent.click(within(record.getByRole('group', { name: en['thread.deleteConfirm'] })).getByRole('button', { name: 'Delete' }))
     expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().comments).toHaveLength(0)
+  })
+  it('removes a reference from the view, offers to undo it, and puts it back at its line', async () => {
+    const m = mount()
+    await settle()
+    const section = within(m.section('src/app.ts'))
+    for (const [line, body] of [['R4', 'First'], ['R5', 'Second']] as const) {
+      fireEvent.click(section.getByRole('button', { name: `Select line ${line}` }))
+      fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+      fireEvent.change(section.getByRole('textbox'), { target: { value: body } })
+      fireEvent.click(within(m.section('src/app.ts').querySelector('[data-forge-comment]')!).getByRole('button', { name: 'Add to input' }))
+    }
+    const bodies = (): (string | null)[] => [...m.section('src/app.ts').querySelectorAll('[data-forge-review-thread="agent"]')]
+      .map(card => within(card as HTMLElement).getByText(/First|Second/).textContent)
+    expect(bodies()).toEqual(['First', 'Second'])
+    fireEvent.click(section.getByRole('button', { name: 'Actions for the comment on R4' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Remove' }))
+    expect(bodies()).toEqual(['Second'])
+    expect(m.faces.addReviewToInput).toHaveBeenCalledTimes(2)
+    expect(m.faces.report.mock.lastCall).toMatchObject(['review.recordRemoved', { tone: 'success' }])
+    const undo = m.faces.report.mock.lastCall![1]!.undo!
+    act(() => { undo() })
+    expect(bodies()).toEqual(['First', 'Second'])
+    expect(m.faces.report).toHaveBeenCalledTimes(1)
+  })
+  it('removes the reference of a file that left the diff with its section and says when undoing came too late', async () => {
+    const m = mount()
+    await settle()
+    const section = within(m.section('src/app.ts'))
+    fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+    fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+    fireEvent.change(section.getByRole('textbox'), { target: { value: 'Left behind' } })
+    fireEvent.click(within(m.section('src/app.ts').querySelector('[data-forge-comment]')!).getByRole('button', { name: 'Add to input' }))
+    m.faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files: [] }))
+    fireEvent.click(m.view.getByRole('button', { name: 'Refresh changes' }))
+    await settle()
+    const orphan = within(m.view.container.querySelector('[data-forge-review-file="src/app.ts"]')!)
+    expect(orphan.getByText('Left behind')).toBeTruthy()
+    fireEvent.click(orphan.getByRole('button', { name: 'Actions for the comment on R4' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Remove' }))
+    expect(m.view.container.querySelector('[data-forge-review-file]')).toBeNull()
+    const undo = m.faces.report.mock.lastCall![1]!.undo!
+    m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).close()
+    act(() => { undo() })
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.undoFailed')
+    expect(m.view.container.querySelector('[data-forge-review-file]')).toBeNull()
   })
   it('retains an uncertain write across tab remount and requires explicit reconciliation', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }),
@@ -2083,8 +2149,8 @@ describe('ChangesTab viewed marks the host keeps', () => {
   })
 
   it.each([
-    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'Resource not accessible' }]],
-    ['stale', REFUSED.staleHead, ['viewed.syncStale', { forge: 'GitHub', noun: 'PR' }]],
+    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { params: { forge: 'GitHub', noun: 'PR', message: 'Resource not accessible' } }]],
+    ['stale', REFUSED.staleHead, ['viewed.syncStale', { params: { forge: 'GitHub', noun: 'PR' } }]],
   ] as const)('returns a %s mark to what the host keeps and says why', async (_label, result, report) => {
     const m = mount({ source, setup: (faces) => {
       faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' }))
@@ -2199,7 +2265,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(marks(m).map(row => row[1])).toEqual(['viewed', 'viewed', 'unviewed'])
     expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(true)
-    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { forge: 'GitHub', noun: 'PR', message: 'late' })
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { params: { forge: 'GitHub', noun: 'PR', message: 'late' } })
     await act(async () => { next.resolve(ok(undefined)); await Promise.resolve() })
     expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(false)
   })
@@ -2263,7 +2329,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     await settle()
     expect(marks(m)[2]?.[1]).toBe('viewed')
     expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
-    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncUnknown', { message: 'Something went wrong' })
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncUnknown', { params: { message: 'Something went wrong' } })
   })
 })
 
@@ -2857,7 +2923,7 @@ describe('ChangesTab extensions', () => {
     act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED] }, disconnected: false }) })
     expect(m.paths()).toHaveLength(6)
     expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
-    expect(m.faces.report).toHaveBeenCalledWith('filterLens.removed', { lens: 'Exports' })
+    expect(m.faces.report).toHaveBeenCalledWith('filterLens.removed', { params: { lens: 'Exports' } })
   })
 
   it('asks again for a lens registered at another version and for equal files of another scope', async () => {

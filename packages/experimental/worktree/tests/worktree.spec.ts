@@ -42,7 +42,7 @@ describe('creating and entering retained worktrees', () => {
     expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
     const events = agent.session.snapshotEvents()
     const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
-    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'working-directory/change'))
+    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'workspace-root/change'))
     expect(pluginRecordOf(events[created]!)?.data).toEqual(result)
     expect(await git(result.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
@@ -52,9 +52,161 @@ describe('creating and entering retained worktrees', () => {
     expect(await contents(join(root, '.agents/worktrees/.gitignore'))).toBe('*\n')
     expect(await git(root, 'check-ignore', '.agents/worktrees/.gitignore')).toBe('.agents/worktrees/.gitignore')
 
-    await ctx.workingDirectory.set(agent, root)
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(result)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await git(root, 'rev-parse', 'topic')).toBe(baseCommit)
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
+  })
+
+  it('exits a nested worktree to the worktree it was created in, then to the source checkout, and refuses outside one', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const outer = await ctx.worktrees.create(agent, { name: 'outer' })
+    const inner = await ctx.worktrees.create(agent, { name: 'inner' })
+    expect(inner.repositoryRoot).toBe(outer.path)
+
+    await expect(ctx.worktrees.exit(agent, new AbortController().signal)).resolves.toEqual(inner)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(outer.path)
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(outer)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+    await expect(ctx.worktrees.exit(agent)).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_NOT_ENTERED',
+      message: `cannot exit a worktree: no recorded worktree contains the working directory ${JSON.stringify(root)}`,
+    })
+    expect(existsSync(inner.path)).toBe(true)
+    expect(await git(root, 'rev-parse', '--verify', 'refs/heads/inner')).toBe(inner.baseCommit)
+  })
+
+  it('exits a worktree from one of its subdirectories', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await mkdir(join(created.path, 'src'))
+    await ctx.workingDirectory.set(agent, join(created.path, 'src'))
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(created)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+  })
+
+  it('enters an existing worktree of the pool by name, records the entry, and exits to the checkout it entered from', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const path = join(root, '.agents/worktrees/other')
+    await git(root, 'worktree', 'add', '-b', 'other', path)
+    await writeFile(join(path, 'local.txt'), 'kept\n')
+    const before = await git(root, 'worktree', 'list', '--porcelain')
+
+    const entered = await ctx.worktrees.enter(agent, { name: 'other' }, new AbortController().signal)
+    expect(entered).toEqual({ path, branch: 'other', repositoryRoot: root })
+    expect(ctx.workingDirectory.get(agent.session)).toBe(path)
+    const events = agent.session.snapshotEvents()
+    const record = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/entered')
+    expect(record).toBeGreaterThan(events.findIndex(event => event.type === 'workspace-root/change'))
+    expect(pluginRecordOf(events[record]!)?.data).toEqual(entered)
+    expect(events.some(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')).toBe(false)
+    expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
+    expect(await contents(join(path, 'local.txt'))).toBe('kept\n')
+
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(entered)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+    await expect(ctx.worktrees.exit(agent)).rejects.toMatchObject({ code: 'WORKTREE_NOT_ENTERED' })
+  })
+
+  it('enters a worktree again after leaving it, reporting its creation on exit, and lets another Session enter it', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await ctx.worktrees.exit(agent)
+    const entered = { path: created.path, branch: 'topic', repositoryRoot: root }
+    await expect(ctx.worktrees.enter(agent, { name: 'topic' })).resolves.toEqual(entered)
+    await expect(ctx.worktrees.enter(agent, { name: 'topic' })).rejects.toMatchObject({ code: 'WORKTREE_NOT_FOUND' })
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(created)
+
+    const other = testAgent(ctx, root, 'second-session')
+    await ctx.worktrees.enter(other, { name: 'topic' })
+    await ctx.worktrees.exit(other)
+    await ctx.worktrees.enter(other, { name: 'topic' })
+    expect(other.session.snapshotEvents().filter(event => pluginRecordOf(event)?.type === 'plugin:worktree/entered')).toHaveLength(2)
+    await expect(ctx.worktrees.exit(other)).resolves.toEqual(entered)
+    expect(ctx.workingDirectory.get(other.session)).toBe(root)
+  })
+
+  it('enters a detached worktree without a branch, and a nested worktree only from the checkout that holds it', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const detached = join(root, '.agents/worktrees/detached')
+    await git(root, 'worktree', 'add', '--detach', detached)
+    const entered = await ctx.worktrees.enter(agent, { name: 'detached' })
+    expect(entered).toEqual({ path: detached, repositoryRoot: root })
+    expect(entered).not.toHaveProperty('branch')
+    await ctx.worktrees.exit(agent)
+
+    const outer = await ctx.worktrees.create(agent, { name: 'outer' })
+    const inner = await ctx.worktrees.create(agent, { name: 'inner' })
+    await ctx.worktrees.exit(agent)
+    await expect(ctx.worktrees.enter(agent, { name: 'outer' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_NOT_FOUND',
+      message: `cannot enter worktree "outer": ${join(outer.path, '.agents/worktrees')} holds no registered worktree of that name`,
+    })
+    await expect(ctx.worktrees.enter(agent, { name: 'inner' })).resolves.toEqual({ path: inner.path, branch: 'inner', repositoryRoot: outer.path })
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(inner)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(outer.path)
+  })
+
+  it('refuses a name outside the pool, an unregistered directory, and a link that leaves the pool, without moving', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const pool = join(root, '.agents/worktrees')
+    await mkdir(join(pool, 'plain'), { recursive: true })
+    const outside = join(root, 'elsewhere')
+    await git(root, 'worktree', 'add', '-b', 'elsewhere', outside)
+    await symlink(outside, join(pool, 'redirect'), 'junction')
+
+    for (const name of ['', '.', '..', '../elsewhere', 'plain/../redirect', '/elsewhere', 'a\\b', 'c:d']) {
+      await expect(ctx.worktrees.enter(agent, { name })).rejects.toMatchObject({
+        name: 'WorktreeError', code: 'WORKTREE_INVALID_ARGUMENT', message: 'worktree name must be a relative path inside the worktree pool',
+      })
+    }
+    for (const name of ['missing', 'plain', 'redirect']) {
+      await expect(ctx.worktrees.enter(agent, { name })).rejects.toMatchObject({
+        name: 'WorktreeError', code: 'WORKTREE_NOT_FOUND',
+        message: `cannot enter worktree ${JSON.stringify(name)}: ${pool} holds no registered worktree of that name`,
+      })
+    }
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'workspace-root/change' || pluginRecordOf(event) !== undefined)).toBe(false)
+  })
+
+  it('rejects an entry cancelled before it starts, and every entry after service disposal, without changing the directory', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    await git(root, 'worktree', 'add', '-b', 'other', join(root, '.agents/worktrees/other'))
+    await expect(ctx.worktrees.enter(agent, { name: 'other' }, AbortSignal.abort(new Error('caller left')))).rejects.toThrow('caller left')
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+    const worktrees = ctx.worktrees
+    await ctx.fiber.dispose()
+    ctx = undefined
+    await expect(worktrees.enter(agent, { name: 'other' })).rejects.toMatchObject({ name: 'WorktreeError', code: 'WORKTREE_UNAVAILABLE', message: 'worktree service disposed' })
+  })
+
+  it('rejects an exit cancelled before it starts, and every exit after service disposal, without changing the directory', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await expect(ctx.worktrees.exit(agent, AbortSignal.abort(new Error('caller left')))).rejects.toThrow('caller left')
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
+    const worktrees = ctx.worktrees
+    await ctx.fiber.dispose()
+    ctx = undefined
+    await expect(worktrees.exit(agent)).rejects.toMatchObject({ name: 'WorktreeError', code: 'WORKTREE_UNAVAILABLE', message: 'worktree service disposed' })
   })
 
   it('reports the prepare stage, then the checkout stage, before each begins', async () => {
@@ -423,6 +575,93 @@ describe('creating and entering retained worktrees', () => {
     } finally {
       probe.mockRestore()
     }
+  })
+})
+
+describe('fetching the remote base branch first', () => {
+  /** A clone of a new repository, which then gains a commit, a tag, and a branch that the clone has not fetched. */
+  async function behindClone(origin = 'origin'): Promise<{ upstream: string; clone: string; fetched: string }> {
+    const upstream = await repo()
+    const clone = join(upstream, 'clone')
+    await git(upstream, 'clone', '--origin', origin, pathToFileURL(upstream).href, clone)
+    // As `repository` does: a runner's global newline conversion would otherwise rewrite the files a worktree checks out.
+    await git(clone, 'config', 'core.autocrlf', 'false')
+    await writeFile(join(upstream, 'tracked.txt'), 'remote\n')
+    await git(upstream, 'commit', '-am', 'remote')
+    await git(upstream, 'tag', 'v1')
+    await git(upstream, 'branch', 'other')
+    return { upstream, clone, fetched: await git(upstream, 'rev-parse', 'HEAD') }
+  }
+
+  it('fetches only the chosen branch, without tags, then pins and checks out the fetched commit without an upstream', async () => {
+    const { clone, fetched } = await behindClone()
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+
+    const result = await ctx.worktrees.create(agent, { name: 'fresh', from: 'refs/remotes/origin/main', fetch: true }, undefined, (phase) => {
+      phases.push(phase)
+    })
+
+    expect(phases).toEqual(['fetch', 'prepare', 'checkout'])
+    expect(result.baseCommit).toBe(fetched)
+    expect(await git(clone, 'rev-parse', 'refs/remotes/origin/main')).toBe(fetched)
+    expect(await contents(join(result.path, 'tracked.txt'))).toBe('remote\n')
+    expect(await git(clone, 'tag', '--list')).toBe('')
+    expect(await git(clone, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin/other')).toBe('')
+    expect(existsSync(join(clone, '.git', 'FETCH_HEAD'))).toBe(false)
+    await expect(git(clone, 'config', '--get', 'branch.fresh.merge')).rejects.toThrow()
+  })
+
+  it('fetches from the longest configured remote name that owns the branch', async () => {
+    const { upstream, clone, fetched } = await behindClone('team/fork')
+    // Newer `git remote add` refuses a name nested with another remote's, but configuration written earlier or by hand
+    // can hold both.
+    await git(clone, 'config', 'remote.team.url', join(upstream, 'missing.git'))
+    await git(clone, 'config', 'remote.team.fetch', '+refs/heads/*:refs/remotes/team/*')
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+
+    const result = await ctx.worktrees.create(agent, { name: 'forked', from: 'refs/remotes/team/fork/main', fetch: true })
+
+    expect(result.baseCommit).toBe(fetched)
+    expect(await git(clone, 'rev-parse', 'refs/remotes/team/fork/main')).toBe(fetched)
+  })
+
+  it('refuses a base that is not a remote-tracking branch of a configured remote', async () => {
+    const { clone } = await behindClone()
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+    const record = (phase: string): void => { phases.push(phase) }
+
+    await expect(ctx.worktrees.create(agent, { name: 'local', from: 'main', fetch: true }, undefined, record))
+      .rejects.toMatchObject({ code: 'WORKTREE_INVALID_ARGUMENT' })
+    expect(phases).toEqual([])
+    for (const from of ['refs/remotes/gone/main', 'refs/remotes/origin/']) {
+      await expect(ctx.worktrees.create(agent, { name: 'stray', from, fetch: true }, undefined, record))
+        .rejects.toMatchObject({ code: 'WORKTREE_INVALID_ARGUMENT', message: expect.stringContaining(from) as string })
+    }
+    expect(phases).toEqual(['fetch', 'fetch'])
+    expect(ctx.workingDirectory.get(agent.session)).toBe(clone)
+    expect(await git(clone, 'branch', '--list', 'stray')).toBe('')
+  })
+
+  it('reports a failed fetch without creating a branch, a checkout, or the pool', async () => {
+    const { upstream, clone } = await behindClone()
+    await git(clone, 'remote', 'set-url', 'origin', join(upstream, 'missing.git'))
+    ctx = await harness(clone)
+    const agent = testAgent(ctx, clone)
+    const phases: string[] = []
+
+    await expect(ctx.worktrees.create(agent, { name: 'offline', from: 'refs/remotes/origin/main', fetch: true }, undefined, (phase) => {
+      phases.push(phase)
+    })).rejects.toMatchObject({ code: 'WORKTREE_COMMAND_FAILED' })
+
+    expect(phases).toEqual(['fetch'])
+    expect(await git(clone, 'branch', '--list', 'offline')).toBe('')
+    expect(existsSync(join(clone, '.agents'))).toBe(false)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(clone)
   })
 })
 

@@ -57,7 +57,7 @@ try {
 
 第二个参数传入 `{ permissionMode: "danger-full-access" }` 可在恢复后的执行开始前覆盖已保存的权限预设；省略时保留历史权限。profile 必须通过权限服务提供该预设；选择会同时更新 sandbox 和审批策略，并持久化供后续恢复使用。缺少该服务的 profile 和已被提醒任务恢复的会话会拒绝显式覆盖。
 
-`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
+`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据与已有进程保持不变；`workspace-write` 边界移到新目录。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
 
 ### 用 DeepSeekHarness 运行 agent 轮次
 

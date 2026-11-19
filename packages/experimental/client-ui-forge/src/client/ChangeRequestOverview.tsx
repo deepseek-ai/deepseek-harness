@@ -17,11 +17,10 @@ import type {
   BranchUpdateMethod, BranchUpdateRequest, ChangeRequestCheck, ChangeRequestIssue, ChangeRequestReviewer, ChangeRequestSnapshot,
   ForgeRerunRequest, ForgeReviewerCandidate, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgePanelChangeRequest } from '../types.ts'
 import { formatDuration } from './format.ts'
 import { CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
-import { checkCounts, checkDuration } from './status.ts'
+import { checkCounts, checkDuration, type ChangeRequestEntry } from './status.ts'
 import { searchFieldKeyDown } from './menu-search.ts'
 import css from './Forge.module.css'
 import overview from './ChangeRequestOverview.module.css'
@@ -35,7 +34,7 @@ const SEARCH_DELAY_MS = 150
 const AVATARS = 3
 
 /** Requests reviews of a change request from more reviewers; settles once the outcome is reported. */
-type RequestReviews = (entry: ForgePanelChangeRequest, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]) => Promise<void>
+type RequestReviews = (entry: ChangeRequestEntry, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]) => Promise<void>
 
 /** Lists the accounts a review of the change request at `url` can be requested from. */
 type ListCandidates = (url: string, query: string, signal: AbortSignal) => Promise<readonly ForgeReviewerCandidate[]>
@@ -43,17 +42,20 @@ type ListCandidates = (url: string, query: string, signal: AbortSignal) => Promi
 /** Overview actions of a card; a surface without a Session binding omits them. */
 export interface OverviewActions {
   /** Rerun the failed checks; settles once the outcome is reported. */
-  readonly rerunChecks?: ((entry: ForgePanelChangeRequest, request: ForgeRerunRequest) => Promise<void>) | undefined
+  readonly rerunChecks?: ((entry: ChangeRequestEntry, request: ForgeRerunRequest) => Promise<void>) | undefined
   /** Request reviews from more reviewers; settles once the outcome is reported. */
   readonly requestReviews?: RequestReviews | undefined
   /** List accounts a review can be requested from; rejects with the host's reason. */
   readonly reviewerCandidates?: ListCandidates | undefined
   /** Bring the base branch's new commits into the head branch; settles once the outcome is reported. */
-  readonly updateBranch?: ((entry: ForgePanelChangeRequest, request: BranchUpdateRequest) => Promise<void>) | undefined
+  readonly updateBranch?: ((entry: ChangeRequestEntry, request: BranchUpdateRequest) => Promise<void>) | undefined
 }
 
-/** One action at a time per control: it stays disabled until the previous action settles. */
-function useBusy(): readonly [boolean, (action: () => Promise<void>) => void] {
+/**
+ * One action at a time per control: it stays disabled until the previous action settles.
+ * @returns whether an action runs, and the function that runs one.
+ */
+export function useBusy(): readonly [boolean, (action: () => Promise<void>) => void] {
   const [busy, setBusy] = useState(false)
   return [busy, (action) => {
     setBusy(true)
@@ -105,6 +107,26 @@ const GROUP_LABEL: Record<CheckGroup, ForgePanelKey> = {
   other: 'checks.group.other',
 }
 
+/** Checks of one outcome group. */
+export interface CheckGroupList {
+  readonly group: CheckGroup
+  /** Name of the group. */
+  readonly label: ForgePanelKey
+  readonly checks: readonly ChangeRequestCheck[]
+}
+
+/**
+ * Group checks by outcome, leaving out empty groups.
+ * @param checks - the checks of the head commit.
+ * @param kind - the failed, running, and cancelled groups, which need attention, or the passed and skipped ones.
+ * @returns the groups in display order.
+ */
+export function checkGroups(checks: readonly ChangeRequestCheck[], kind: 'attention' | 'quiet'): readonly CheckGroupList[] {
+  return (kind === 'attention' ? ATTENTION : QUIET)
+    .map(group => ({ group, label: GROUP_LABEL[group], checks: checks.filter(check => groupOf(check) === group) }))
+    .filter(entry => entry.checks.length > 0)
+}
+
 function groupOf(check: ChangeRequestCheck): CheckGroup {
   switch (check.state) {
     case 'failure': return 'failed'
@@ -116,14 +138,25 @@ function groupOf(check: ChangeRequestCheck): CheckGroup {
   }
 }
 
-function checkTime(check: ChangeRequestCheck, t: Translate): string {
+/**
+ * How long a check took, or that it is queued or running.
+ * @param check - the check.
+ * @param t - forge panel copy.
+ * @returns the text, empty for a finished check without times.
+ */
+export function checkTime(check: ChangeRequestCheck, t: Translate): string {
   if (check.state === 'pending') return t(check.startedAt === null ? 'change.check.queued' : 'change.check.running')
   const elapsed = checkDuration(check)
   return elapsed === undefined ? '' : formatDuration(elapsed, t)
 }
 
-/** The checks outcome in a few words: what needs attention, else that all passed. */
-function checksValue(snapshot: ChangeRequestSnapshot, t: Translate): string {
+/**
+ * The checks outcome in a few words: what needs attention, else that all passed.
+ * @param snapshot - the snapshot whose checks are summarized.
+ * @param t - forge panel copy.
+ * @returns the summary.
+ */
+export function checksValue(snapshot: ChangeRequestSnapshot, t: Translate): string {
   if (snapshot.checksTruncated) return t('change.checks.truncated', { count: snapshot.checks.length })
   const counts = checkCounts(snapshot.checks)
   const parts = [
@@ -138,13 +171,74 @@ type CheckRead = { readonly kind: 'idle' | 'loading' }
   | { readonly kind: 'ready'; readonly snapshot: ChangeRequestSnapshot }
   | { readonly kind: 'failed'; readonly message: string }
 
+type ReadChecks = ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
+
+/**
+ * Complete a check list the poll read only in part: while `active`, read the complete list of the snapshot's head
+ * independently of polling, and stop when `active` ends or the head moves.
+ * @param snapshot - the polled snapshot.
+ * @param active - whether the checks are shown in full.
+ * @param readChecks - loads the complete checks, or undefined on a surface that cannot.
+ * @returns the snapshot to display, the state of the read, and a function that reads again.
+ */
+export function useCompleteChecks(snapshot: ChangeRequestSnapshot, active: boolean, readChecks: ReadChecks): {
+  readonly displayed: ChangeRequestSnapshot
+  readonly read: CheckRead
+  readonly retry: () => void
+} {
+  const [read, setRead] = useState<CheckRead>({ kind: 'idle' })
+  const [attempt, setAttempt] = useState(0)
+  const { url, headSha, checksTruncated } = snapshot
+  useEffect(() => {
+    if (!active || !checksTruncated || readChecks === undefined) { setRead({ kind: 'idle' }); return }
+    const controller = new AbortController()
+    setRead({ kind: 'loading' })
+    void (async () => {
+      try {
+        const result = await readChecks(url, headSha, controller.signal)
+        if (!controller.signal.aborted) setRead({ kind: 'ready', snapshot: result })
+      } catch (error) {
+        if (!controller.signal.aborted) setRead({ kind: 'failed', message: error instanceof Error ? error.message : String(error) })
+      }
+    })()
+    return () => { controller.abort() }
+  }, [active, url, headSha, checksTruncated, readChecks, attempt])
+  return {
+    displayed: read.kind === 'ready' && read.snapshot.headSha === headSha ? read.snapshot : snapshot,
+    read,
+    retry: () => { setAttempt(value => value + 1) },
+  }
+}
+
+/**
+ * Render the state of a complete-checks read that has not finished: that it loads, or why it failed with a retry.
+ * @param props - the read, the retry, and copy.
+ * @returns the status line, or null when nothing is being read or the read finished.
+ */
+export function ChecksReadStatus({ read, retry, t }: {
+  readonly read: CheckRead
+  readonly retry: () => void
+  readonly t: Translate
+}): ReactNode {
+  if (read.kind === 'loading') {
+    return <div className={overview.menuStatus} role="status"><StateDot state="ongoing" size={12} />{t('change.checks.loading')}</div>
+  }
+  if (read.kind !== 'failed') return null
+  return (
+    <div className={overview.menuStatus} role="status">
+      <span>{t('change.checks.loadFailed', { message: read.message })}</span>
+      <Button size="sm" variant="outline" onClick={retry}>{t('change.checks.retry')}</Button>
+    </div>
+  )
+}
+
 /** Props of the checks row. */
 export interface ChecksRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly openLink: (url: string) => void
   /** Load complete check details independently of polling; cancellation follows the open menu. */
-  readonly readChecks: ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
+  readonly readChecks: ReadChecks
   readonly rerunChecks: OverviewActions['rerunChecks']
   readonly t: Translate
 }
@@ -161,6 +255,16 @@ function rerunnable(checks: readonly ChangeRequestCheck[]): boolean {
 }
 
 /**
+ * The rerun of failed checks, when the change request is open, the signed-in user may rerun, and a rerun can start.
+ * @param displayed - the snapshot whose checks are shown.
+ * @param rerunChecks - the surface's rerun action.
+ * @returns the action, or undefined when no rerun is offered.
+ */
+export function rerunOf(displayed: ChangeRequestSnapshot, rerunChecks: OverviewActions['rerunChecks']): OverviewActions['rerunChecks'] {
+  return displayed.state === 'open' && displayed.canRerunChecks && rerunnable(displayed.checks) ? rerunChecks : undefined
+}
+
+/**
  * Render the checks outcome as a row whose menu lists the failed, running, and cancelled checks by group, offers to
  * rerun the failed ones, and lists the passed and skipped ones on request. A list the poll read only in part is
  * completed while the menu is open.
@@ -170,41 +274,22 @@ function rerunnable(checks: readonly ChangeRequestCheck[]): boolean {
 export function ChecksRow({ entry, snapshot, openLink, readChecks, rerunChecks, t }: ChecksRowProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [quiet, setQuiet] = useState(false)
-  const [read, setRead] = useState<CheckRead>({ kind: 'idle' })
-  const [attempt, setAttempt] = useState(0)
   const [busy, run] = useBusy()
-  const { url, headSha, checksTruncated } = snapshot
-  useEffect(() => {
-    if (!open || !checksTruncated || readChecks === undefined) { setRead({ kind: 'idle' }); return }
-    const controller = new AbortController()
-    setRead({ kind: 'loading' })
-    void (async () => {
-      try {
-        const result = await readChecks(url, headSha, controller.signal)
-        if (!controller.signal.aborted) setRead({ kind: 'ready', snapshot: result })
-      } catch (error) {
-        if (!controller.signal.aborted) setRead({ kind: 'failed', message: error instanceof Error ? error.message : String(error) })
-      }
-    })()
-    return () => { controller.abort() }
-  }, [open, url, headSha, checksTruncated, readChecks, attempt])
-  const displayed = read.kind === 'ready' && read.snapshot.headSha === headSha ? read.snapshot : snapshot
+  const { headSha } = snapshot
+  const { displayed, read, retry } = useCompleteChecks(snapshot, open, readChecks)
   if (displayed.checks.length === 0 && !displayed.checksTruncated) {
     return <div className={css.row}><RowParts label={t('change.row.checks')} icon={<CheckGlyph state="neutral" />} value={t('change.ci.none')} opens={false} /></div>
   }
   const counts = checkCounts(displayed.checks)
-  const rerun = displayed.state === 'open' && displayed.canRerunChecks && rerunnable(displayed.checks) ? rerunChecks : undefined
-  const groups = (list: readonly CheckGroup[]): { readonly group: CheckGroup; readonly checks: ChangeRequestCheck[] }[] =>
-    list.map(group => ({ group, checks: displayed.checks.filter(check => groupOf(check) === group) }))
-      .filter(({ checks }) => checks.length > 0)
+  const rerun = rerunOf(displayed, rerunChecks)
   const quietCount = counts.passed + counts.other
   const close = (): void => {
     setOpen(false)
     setQuiet(false)
   }
-  const rows = (list: readonly CheckGroup[]): ReactNode => groups(list).map(({ group, checks }) => (
-    <div key={group} role="group" aria-label={t(GROUP_LABEL[group])} data-forge-check-group={group}>
-      <div className={overview.menuLabel} role="presentation">{`${t(GROUP_LABEL[group])} · ${checks.length}`}</div>
+  const rows = (kind: 'attention' | 'quiet'): ReactNode => checkGroups(displayed.checks, kind).map(({ group, label, checks }) => (
+    <div key={group} role="group" aria-label={t(label)} data-forge-check-group={group}>
+      <div className={overview.menuLabel} role="presentation">{`${t(label)} · ${checks.length}`}</div>
       {checks.map((check, index) => {
         const link = check.url
         return (
@@ -241,21 +326,15 @@ export function ChecksRow({ entry, snapshot, openLink, readChecks, rerunChecks, 
           {t('checks.rerunFailed')}
         </MenuItemButton>
       )}
-      {rows(ATTENTION)}
-      {quiet ? rows(QUIET) : quietCount > 0 && (
+      {rows('attention')}
+      {quiet ? rows('quiet') : quietCount > 0 && (
         <MenuItemButton separatorBefore={counts.failed + counts.running + counts.cancelled > 0}
           icon={<CheckGlyph state={counts.passed > 0 ? 'success' : 'skipped'} size={14} />}
           onSelect={() => { setQuiet(true) }}>
           {t('checks.showQuiet', { count: quietCount })}
         </MenuItemButton>
       )}
-      {read.kind === 'loading' && <div className={overview.menuStatus} role="status"><StateDot state="ongoing" size={12} />{t('change.checks.loading')}</div>}
-      {read.kind === 'failed' && (
-        <div className={overview.menuStatus} role="status">
-          <span>{t('change.checks.loadFailed', { message: read.message })}</span>
-          <Button size="sm" variant="outline" onClick={() => { setAttempt(value => value + 1) }}>{t('change.checks.retry')}</Button>
-        </div>
-      )}
+      <ChecksReadStatus read={read} retry={retry} t={t} />
     </Menu>
   )
 }
@@ -283,7 +362,7 @@ function Avatar({ url, login, size = 20 }: { readonly url: string | null; readon
 
 /** Props of the review row. */
 export interface ReviewRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   /** The aggregate review outcome. */
   readonly value: string
@@ -331,8 +410,7 @@ export function ReviewRow({ entry, snapshot, value, tone, requestReviews, review
     close()
     run(() => ask(entry, [reviewer]))
   }
-  // Asking again suits people who reviewed and are not asked now; bots review on their own triggers.
-  const again = reviewers.filter(reviewer => reviewer.kind !== 'bot' && !reviewer.requested && reviewer.verdict !== null)
+  const again = reviewersToAskAgain(reviewers)
   return (
     <Menu open={open} onClose={close} portal dense align="end" className={overview.rowAnchor} listClassName={overview.menu}
       anchor={(
@@ -357,17 +435,8 @@ export function ReviewRow({ entry, snapshot, value, tone, requestReviews, review
                 {t('reviewers.truncated')}
               </MenuItemButton>
             )}
-            {request !== undefined && again.map((reviewer, index) => (
-              <MenuItemButton key={`${reviewer.kind}:${reviewer.login}`} separatorBefore={index === 0} icon={<IconRefreshOutlineRegular size={14} />}
-                onSelect={() => { request(reviewer) }}>
-                {t('reviewers.rerequestAria', { login: reviewer.login })}
-              </MenuItemButton>
-            ))}
-            {canRequest && (
-              <MenuItemButton separatorBefore={again.length === 0} icon={<IconPlusOutlineRegular size={14} />}
-                onSelect={() => { setSearching(true) }}>
-                {t('reviewers.requestMore')}
-              </MenuItemButton>
+            {request !== undefined && (
+              <ReviewRequestItems again={again} separated onRequest={request} onSearch={() => { setSearching(true) }} t={t} />
             )}
           </>
         )}
@@ -375,8 +444,50 @@ export function ReviewRow({ entry, snapshot, value, tone, requestReviews, review
   )
 }
 
-/** One reviewer in the review menu: avatar, login, what kind of reviewer, and their latest outcome or pending request. */
-function ReviewerLine({ reviewer, headSha, t }: {
+/**
+ * The reviewers a review can be asked of again: people who reviewed and are not asked now. Bots review on their own
+ * triggers.
+ * @param reviewers - the change request's reviewers.
+ * @returns the reviewers to offer.
+ */
+export function reviewersToAskAgain(reviewers: readonly ChangeRequestReviewer[]): readonly ChangeRequestReviewer[] {
+  return reviewers.filter(reviewer => reviewer.kind !== 'bot' && !reviewer.requested && reviewer.verdict !== null)
+}
+
+/**
+ * Render the menu items that request reviews: one per reviewer to ask again, then the search for someone else.
+ * @param props - the reviewers to ask again, whether a separator precedes the first item, the request and search
+ * handlers, and copy.
+ * @returns the items.
+ */
+export function ReviewRequestItems({ again, separated, onRequest, onSearch, t }: {
+  readonly again: readonly ChangeRequestReviewer[]
+  readonly separated: boolean
+  readonly onRequest: (reviewer: Pick<ChangeRequestReviewer, 'kind' | 'login'>) => void
+  readonly onSearch: () => void
+  readonly t: Translate
+}): ReactNode {
+  return (
+    <>
+      {again.map((reviewer, index) => (
+        <MenuItemButton key={`${reviewer.kind}:${reviewer.login}`} separatorBefore={separated && index === 0}
+          icon={<IconRefreshOutlineRegular size={14} />} onSelect={() => { onRequest(reviewer) }}>
+          {t('reviewers.rerequestAria', { login: reviewer.login })}
+        </MenuItemButton>
+      ))}
+      <MenuItemButton separatorBefore={separated && again.length === 0} icon={<IconPlusOutlineRegular size={14} />} onSelect={onSearch}>
+        {t('reviewers.requestMore')}
+      </MenuItemButton>
+    </>
+  )
+}
+
+/**
+ * Render one reviewer: avatar, login, what kind of reviewer, and their latest outcome or pending request.
+ * @param props - the reviewer, the head commit their outcome is compared with, and copy.
+ * @returns the line.
+ */
+export function ReviewerLine({ reviewer, headSha, t }: {
   readonly reviewer: ChangeRequestReviewer
   readonly headSha: string
   readonly t: Translate
@@ -408,8 +519,13 @@ function ReviewerLine({ reviewer, headSha, t }: {
 type Listing = { readonly query: string } & (
   { readonly ok: true; readonly value: readonly ForgeReviewerCandidate[] } | { readonly ok: false })
 
-/** The searchable account list of a review request: the host's suggestions first, then accounts matching the search. */
-function ReviewerSearch({ url, list, choose, t }: {
+/**
+ * Render the searchable account list of a review request: the host's suggestions first, then accounts matching the
+ * search.
+ * @param props - the change request URL, the listing, the choice handler, and copy.
+ * @returns the search field and its list.
+ */
+export function ReviewerSearch({ url, list, choose, t }: {
   readonly url: string
   readonly list: ListCandidates
   readonly choose: (login: string) => void
@@ -480,7 +596,7 @@ function ReviewerSearch({ url, list, choose, t }: {
 
 /** Props of the merge row. */
 export interface MergeRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   /** Glyph of the row. */
   readonly icon: ReactNode

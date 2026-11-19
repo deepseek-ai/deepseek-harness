@@ -33,7 +33,9 @@ async function fixture() {
   cleanups.push(() => ctx.fiber.dispose())
   const session: { cwd?: string } = { cwd }
   await ctx.plugin(LocalFileSystem, { cwd })
-  ctx.provide('sandboxPolicy', { workspaceRoot: cwd } as never)
+  // The workspace scope asks the policy for a live Session's root; this one applies the header directory, then the deployment root.
+  const resolvePolicy = ({ session: live }: { session: { header: { cwd?: string } } }) => ({ mode: 'read-only', workspaceRoot: live.header.cwd ?? cwd })
+  ctx.provide('sandboxPolicy', { workspaceRoot: cwd, resolve: resolvePolicy } as never)
   await ctx.plugin({
     inject: ['fs', 'sandboxPolicy'],
     apply: (scope) => {
@@ -53,6 +55,9 @@ async function fixture() {
     return { session, target: { type: 'deliverables/presented', data: { turn: 1, callId: 'present-call', files: [file] } } as SessionEvent }
   })
   ctx.provide('sessionQuery', { readEvent } as never)
+  // Every viewed Session is live with that header, so the workspace scope reads its original project without an Agent.
+  const live = vi.fn((id: SessionId) => ({ id, header: session }))
+  ctx.provide('sessions', { get: live } as never)
   const opener = vi.fn(async (_request: { path: string; action?: 'reveal' }, _signal: AbortSignal) => ({ opened: true as const }))
   const applications = vi.fn(async () => [{ id: 'player', name: 'Player', default: true, icon: null }])
   ctx.provide('sessionController', { workspacePathApplications: applications, resolveAgent, openWorkspacePath: opener, workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }) } as never)
@@ -65,7 +70,8 @@ async function fixture() {
     `http://localhost${PRESENT_OPEN_PATH}${query}`, { method: 'POST', signal: signal ?? null },
   ), connection.browserPeer)
   return {
-    browserPeer: connection.browserPeer, applications, root, cwd, ctx, fiber, file, session, readEvent, open, opener, handler, resolveAgent,
+    browserPeer: connection.browserPeer, applications, root, cwd, ctx, fiber, file, session, readEvent, open, opener, handler,
+    resolveAgent, live,
   }
 }
 
@@ -237,6 +243,14 @@ it('opens a viewed child Session without activating an Agent', async () => {
   expect((await open('?sessionId=child&seq=7&index=0')).status).toBe(204)
   expect(opener).toHaveBeenCalledOnce()
   expect(resolveAgent).not.toHaveBeenCalled()
+})
+
+it('refuses a presented file whose Session is neither live nor stored once its event was read', async () => {
+  const { session, readEvent, live, open, opener } = await fixture()
+  readEvent.mockResolvedValueOnce({ session, target: { type: 'deliverables/presented', data: { turn: 1, callId: 'gone', files: [{ path: '日记模板.docx' }] } } as SessionEvent })
+  live.mockReturnValueOnce(undefined as never)
+  expect((await open('?sessionId=gone&seq=7&index=0')).status).toBe(404)
+  expect(opener).not.toHaveBeenCalled()
 })
 
 it('uses the deployment workspace root when the viewed Session has no cwd', async () => {

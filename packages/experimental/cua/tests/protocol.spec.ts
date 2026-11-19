@@ -71,6 +71,34 @@ it('admits arbitrary key names with an explicit key-event direction', () => {
   expect(Request.parse(request)).toEqual(request)
 })
 
+it.each(['left', 'right', 'middle'])('admits explicit %s mouse-button events without coordinates', (mouseButton) => {
+  for (const schema of [Request, SystemPointerRequest]) {
+    for (const direction of ['down', 'up']) {
+      const request = { method: 'toggleMouse', params: { appHandle: 'app', windowId: '23', mouseButton, direction } }
+      expect(schema.parse(request)).toEqual(request)
+    }
+  }
+})
+
+it.each([true, false])('admits the system button option only for capable providers (%s)', (useSystemPointer) => {
+  const request = { method: 'toggleMouse', params: { appHandle: 'a', windowId: '1', mouseButton: 'left', direction: 'down', useSystemPointer } }
+  expect(Request.safeParse(request).success).toBe(false)
+  expect(SystemPointerRequest.parse(request)).toEqual(request)
+})
+
+it.each([
+  { mouseButton: undefined }, { mouseButton: 'back' },
+  { direction: undefined }, { direction: 'press' },
+  { appHandle: undefined }, { windowId: undefined },
+  { x: 1 }, { y: 2 }, { relative: true }, { elementId: '0' }, { snapshotId: 'snapshot' },
+  { modifiers: [] }, { useSystemPointer: 'yes' },
+])('rejects invalid mouse-button event parameters %j', (invalid) => {
+  const params = { appHandle: 'app', windowId: '23', mouseButton: 'left', direction: 'down', ...invalid }
+  for (const schema of [Request, SystemPointerRequest]) {
+    expect(schema.safeParse({ method: 'toggleMouse', params }).success).toBe(false)
+  }
+})
+
 it.each([
   { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
   { appHandle: 'app', windowId: '23', x: 1, y: 2 },
@@ -137,6 +165,18 @@ it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element i
   const params = { appHandle: 'app', snapshotId: 'snapshot', elementId }
   expect(Request.parse({ method: 'click', params })).toEqual({ method: 'click', params })
   expect(Request.safeParse({ method: 'click', params: { ...params, elementId: '' } }).success).toBe(false)
+})
+
+it('admits action schema queries with only a nonempty action name', () => {
+  const params = { action: 'Transform.Resize' }
+  for (const schema of [Request, SystemPointerRequest]) {
+    expect(schema.parse({ method: 'getActionSchema', params })).toEqual({ method: 'getActionSchema', params })
+    for (const invalid of [
+      {}, { action: '' }, { action: 1 }, { ...params, appHandle: 'app' },
+      { ...params, windowId: '23' }, { ...params, snapshotId: 'snapshot' },
+      { ...params, elementId: '0' }, { ...params, argument: null },
+    ]) expect(schema.safeParse({ method: 'getActionSchema', params: invalid }).success).toBe(false)
+  }
 })
 
 it('admits an element action query only with a retained snapshot identity', () => {

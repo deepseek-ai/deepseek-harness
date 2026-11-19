@@ -60,6 +60,8 @@ provider 可以实现 `submitReview`，在指定的 head 提交上发布行内�
 
 提供方可以实现 `writeReview`，修改变更请求的评审讨论和当前登录用户的待提交评审。`writeReview(ref, write, signal)` 接收一个 `ForgeReviewWrite`：回复讨论，立即发布，或在 `pending` 时加入待提交评审；把讨论标记为已解决或取消解决；编辑或删除评论；在 head 上添加一条行内评论到待提交评审；或提交、丢弃待提交评审。用户还没有待提交评审时，待提交的回复或评论会先开始一个评审。只有 head 仍是 `write.headSha` 时提供方才会写入；否则返回 `stale`，并像读取遇到 `stale` 时那样重新轮询被关注的变更请求；其他结果之后，注册表都会立即重新轮询被关注的变更请求。写操作从不重试；结果为 `unknown` 时，必须先在托管平台上核对，再重试。提供方未实现该方法时，注册表返回 `unsupported`。`ForgeReviewData` 给出用户的待提交评审，以及用户能否回复和解决每个讨论、编辑和删除每条评论、向待提交评审添加评论并提交或丢弃它；未实现 `writeReview` 的提供方不报告任何这类权限。
 
+提供方可以声明 `viewer`（它为登录用户列出变更请求的主机、提供的列表与 `maxItems`），并同时实现 `listForViewer` 与 `countForViewer`；`ctx.forge.viewerSources()` 列出所有这样的提供方。`listForViewer(query, signal)` 在一个主机上读取 `review-requested`、`authored` 或 `involved` 中的一个列表，可限定一个仓库，按最近更新在前；`countForViewer(host, signal)` 读取每个列表的总数。主机按限流拒绝时返回失败代码 `rate-limited`。提供方还可以实现 `readDescription(ref, signal)`，读取变更请求的 Markdown 描述、标签，以及浏览器无需用户托管平台会话即可加载的图片地址。提供方、主机或列表不提供读取时，注册表返回 `unsupported`。这些读取都不进入状态轮询。
+
 -----
 
 <a id="understand-the-implementation"></a>

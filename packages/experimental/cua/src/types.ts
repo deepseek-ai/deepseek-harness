@@ -1,5 +1,6 @@
 /** Native application objects independent of evaluator ownership and persistence. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
 import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ShowResult, WindowsResult } from './protocol.ts'
@@ -48,6 +49,15 @@ export type CuaBounds = CuaWindowInfo['bounds']
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Reports whether the provider successfully executed the requested operation. */
 export type CuaActionResult = z.output<typeof ActionResult>
+/**
+ * JSON Schema for an action's `{ argument }` parameters, excluding the action name and target identifiers.
+ * Describes basic types and named object fields; `description` states value limits and allowed enum names
+ * without numeric-bound, integer-type or enum constraints in the schema.
+ * No-argument actions allow omission or null; required arguments appear in `required`.
+ * The response is checked for its outer fields and JSON values, not full schema semantics.
+ * performAction enforces the action's value constraints and element-specific requirements.
+ */
+export type CuaActionSchema = ObjectJsonSchema
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
 /** Select screenshot pixels by default or integer thousandths when explicitly requested. */
@@ -62,7 +72,7 @@ export interface CuaCoordinateOptions {
 export type CuaShowResult = z.output<typeof ShowResult>
 /** Modifiers attached to a window-directed pointer gesture. */
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
-/** Buttons supported by window-directed clicks and drags. */
+/** Buttons supported by window-directed mouse input. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
 /**
  * Left clicks support one or two presses; right and middle clicks support one.
@@ -103,6 +113,14 @@ export interface CuaSurface {
    */
   listActions(elementId: CuaElementId): Promise<string[]>
   /**
+   * Describe an action's parameters without reading an element or requiring an accessibility snapshot.
+   * The schema does not establish that an element supports the action. Attributes whose types depend on
+   * live values expose the supported type alternatives; performAction still checks the element's actual type and state.
+   * @param action - Nonempty, case-sensitive provider action name, as used by performAction.
+   * @returns JSON Schema for the action-specific `{ argument }` parameters, not the complete performAction request.
+   */
+  getActionSchema(action: string): Promise<CuaActionSchema>
+  /**
    * Perform an element action, including attribute-setting operations.
    * @param elementId - Element id from the application's current snapshot.
    * @param action - Exact action name from listActions.
@@ -142,9 +160,8 @@ export interface CuaSurface {
   /**
    * Paste text or HTML at the target's current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
    * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @param options - Clipboard format.
    * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
    */
   paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
@@ -191,6 +208,15 @@ export interface CuaWindow extends CuaSurface {
    */
   mouseMove(target: CuaElementId | readonly [number, number],
     options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
+  /**
+   * Send one mouse-button down or up event without moving the pointer.
+   * Does not send the opposite event; callers explicitly release a pressed button.
+   * @param mouseButton - Mouse button to press or release.
+   * @param direction - Explicit event direction.
+   * @param options - Request a system button on a provider reporting systemPointer.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up', options?: { useSystemPointer?: boolean }): Promise<CuaActionResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.

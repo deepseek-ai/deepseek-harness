@@ -20,7 +20,7 @@ it.each([
   expect(rows).toHaveLength(1)
   expect(rows[0]!.name).toBe('@deepseek-ai/dsh-client-ui-sidebar-browser')
   const configured = applyEntryPatches(rows, override === undefined ? [] : [{ id: 'ui-sidebar-browser', disabled: override }],
-    (message) => { throw new Error(message) })
+    (message) => { throw new Error(message) }).data
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   if (profile !== undefined) {

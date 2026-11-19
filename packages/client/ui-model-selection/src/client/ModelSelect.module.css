@@ -390,5 +390,5 @@
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
-  color: var(--dsw-alias-menu-icon);
+  color: var(--dsw-alias-label-tertiary);
 }

@@ -26,8 +26,11 @@ export const CHANGES_OPEN_ROUTE = CHANGES_OPEN_PATH.slice(1)
 /** Resource-address prefix of a turn's review tab in the right Sidebar. */
 export const CHANGES_REVIEW_ADDRESS = 'dsh-resource://changes-review/session/'
 
-/** The summary fields the route serves; the Host keeps the working directory and snapshot ids to itself. */
-export type ChangesSummary = Pick<WorkspaceChangesSummary, 'turn' | 'files' | 'total' | 'added' | 'deleted'>
+/**
+ * The summary fields the route serves; the Host keeps the snapshot ids to itself. `cwd` is the directory the
+ * turn started in, which the listed paths are relative to; the Session may work elsewhere by the time it is read.
+ */
+export type ChangesSummary = Pick<WorkspaceChangesSummary, 'turn' | 'cwd' | 'files' | 'total' | 'added' | 'deleted'>
 
 /** The comparison the route serves, as the Host computed it. */
 export type ChangesDiff = WorkspaceFileDiff
@@ -60,12 +63,12 @@ export function isChangedFile(value: unknown): value is WorkspaceChangedFile {
 /**
  * Validate a summary read from the summary route.
  * @param value - decoded JSON.
- * @returns whether the value identifies a turn, a complete file list, the total count, and the line totals.
+ * @returns whether the value identifies a turn, its directory, a complete file list, the total count, and the line totals.
  */
 export function isChangesSummary(value: unknown): value is ChangesSummary {
   if (!isRecord(value)) return false
-  const { turn, files, total, added, deleted } = value
-  return Number.isSafeInteger(turn) && (turn as number) >= 1 && Number.isSafeInteger(total)
+  const { turn, cwd, files, total, added, deleted } = value
+  return Number.isSafeInteger(turn) && (turn as number) >= 1 && typeof cwd === 'string' && Number.isSafeInteger(total)
     && Number.isSafeInteger(added) && Number.isSafeInteger(deleted)
     && Array.isArray(files) && files.every(isChangedFile)
 }
