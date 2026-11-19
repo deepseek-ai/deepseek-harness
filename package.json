@@ -252,6 +252,7 @@
     "@deepseek-ai/dsh-mcp-manager": "workspace:*",
     "@deepseek-ai/dsh-linear": "workspace:*",
     "@deepseek-ai/dsh-notion": "workspace:*",
+    "@deepseek-ai/dsh-tencent-docs": "workspace:*",
     "@deepseek-ai/dsh-tool-session-query": "workspace:*",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
