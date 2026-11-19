@@ -50,9 +50,11 @@ kind: "package-reference"
 
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
-`ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次轮询读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
+`ctx.forge.watch(ref, listener, options)` 同样是 effect。它监听变更请求的快照：第一个快照监听方会立即触发轮询；之后加入的监听方传入 `maxAgeMs`、最近一次结果比它更旧、且没有快照轮询在进行时，也会立即触发。`latest(ref)` 返回最近一次快照结果；只剩简报监听方时，这个结果仍然保留。`ctx.forge.watchBrief(ref, listener, known)` 监听变更请求的简报：标题、状态、草稿标记、可合并性、评审结论与检查汇总结果。变更请求有快照监听方时，轮询读取快照，简报监听方收到快照里的简报。否则轮询通过提供方的 `fetchBriefs` 读取简报；提供方没有该方法时读取快照。尚无监听方的变更请求迎来第一个简报监听方时会立即轮询，除非它用 `known` 传入自己已知的状态；这时首次轮询按“在 `known.fetchedAt` 读过一次”来安排，已合并的变更请求不轮询。每个 forge 同时最多有一次快照读取和一次简报读取在进行。每次读取包含该 forge 在对应层级上所有到期的变更请求，以及距上一次状态的等待已过半的变更请求，所以在不同时刻到期的变更请求会逐渐共用一次读取。打开状态的变更请求在检查未完成时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。状态第一次报告可合并性未知时，`activeIntervalMs` 后再轮询一次；再次报告未知的变更请求等待 `idleIntervalMs`，因为有些变更请求不会再报告其他值。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 在同一层级已有读取在进行时，等待其结束后立即再读一次。`refresh(ref, { maxAgeMs })` 要求不早于 `maxAgeMs` 的状态：任一层级最近一次轮询（正在进行或已结束）在 `maxAgeMs` 之内开始的变更请求不触动，已合并的也不触动。`expectChange(ref)` 预告一个被监听的变更请求即将变化，例如它的 head 分支刚被推送：立即轮询一次，之后每 `activeIntervalMs` 轮询一次，直到状态报告检查正在运行、或变更请求已关闭或已合并为止，最长持续 `idleIntervalMs`。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`；在此之前该变更请求不加入其他读取。简报读取失败只通知简报监听方，`latest(ref)` 不变；快照读取失败会通知两类监听方。注销提供方会让其被监听的变更请求以 `unavailable` 结束。两类监听方都离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
 
-达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
+提供方可以声明 `snapshotBatchSize` 与 `briefBatchSize`，即一次 `fetch` 轮询调用和一次 `fetchBriefs` 轮询调用最多读取同一主机的多少个变更请求；两者都必须是正安全整数，否则注册被拒绝。这时一次读取按主机（不区分大小写）对到期的变更请求分组，每这么多个调用提供方一次，依次调用，并在每次调用返回时发布它的结果；所以某次调用失败或超过时限时，只有它读取的变更请求失败。没有声明大小时，一次调用读取该 forge 所有到期的变更请求。等待调用期间失去最后一个监听方的变更请求不再读取；等待期间监听方改变了轮询读取内容的变更请求，由对应层级的读取来读。
+
+每次提供方调用都有自己的 `fetchTimeoutMs` 时限。达到时限时，该调用的信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的调用会转为它所读取的变更请求的 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
 provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。用户留待之后一起提交的评论通过 `writeReview` 写入代码托管平台的待提交评审，不由轮询注册表保存。
 
@@ -70,7 +72,7 @@ provider 可以实现 `submitReview`，在指定的 head 提交上发布行内�
 <details>
 <summary>实现细节——点击展开</summary>
 
-一个定时器覆盖所有被监听的变更请求。定时器触发时，服务按 forge 对到期的变更请求分组，并为每个空闲的 forge 发起一次批量读取。抛错的监听方会被记录日志并跳过。销毁服务会中止进行中的读取，并等待它们结束。
+一个定时器覆盖所有被监听的变更请求。定时器触发时，服务按 forge 和轮询读取的内容对到期的变更请求分组，把等待已过半的变更请求加入对应分组，并为上一次读取已结束的每个分组发起一次批量读取。抛错的监听方会被记录日志并跳过。销毁服务会中止进行中的读取，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|

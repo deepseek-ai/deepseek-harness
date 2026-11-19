@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
@@ -10,7 +10,9 @@ import { compileRules } from '../src/commands.ts'
 import ForgeSessionService from '../src/index.ts'
 import type { Config, ForgeCommandRule, SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
 import { forgeChangeRequestsProjection } from '../src/projection.ts'
-import { bench, demo, FakeProvider, programTurn, pull, pullUrl, pushOutput, settled, shellTurn, snapshot, TEA_COMMANDS } from './fixtures.ts'
+import {
+  bench, demo, FakeProvider, programTurn, pull, pullUrl, pushOutput, settled, shellTurn, snapshot, startShellTurn, TEA_COMMANDS,
+} from './fixtures.ts'
 import type { Bench } from './fixtures.ts'
 
 const contexts: Context[] = []
@@ -321,6 +323,25 @@ describe('forgeSession watch', () => {
     return listener.mock.lastCall?.[0] ?? []
   }
 
+  it('asks for a status no older than its first watcher accepts, for each change request it polls', async () => {
+    const { ctx, provider, session } = await open()
+    create(session, 'create', pullUrl(1))
+    const other = ctx.sessions.create()
+    create(other, 'other', pullUrl(1))
+    // Another watcher read the status before the Sessions are watched.
+    const stop = ctx.forge.watch(pull(1), () => {})
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1]]) })
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    ctx.forgeSession.watch(other, () => {})
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(provider.fetches).toEqual([[1]])
+
+    ctx.forgeSession.watch(session, () => {}, { maxAgeMs: 1 })
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1], [1]]) })
+    stop()
+  })
+
   it('polls visible change requests and notifies after results and binding changes', async () => {
     const { ctx, provider, session } = await open()
     create(session, 'create', pullUrl(1))
@@ -408,6 +429,62 @@ describe('forgeSession watch', () => {
 
     expect(warn).toHaveBeenCalledWith('forge-session: change request listener failed: Error: boom')
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('forgeSession polls after commands', () => {
+  const UNSERVED = 'https://github.com/octo/demo/pull/5'
+  const pause = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
+  it('announces a change of the shown change requests in the repository a push went to', async () => {
+    const { ctx, session } = await open()
+    create(session, 'one', pullUrl(1))
+    create(session, 'elsewhere', 'https://fake.test/other/repo/pull/2')
+    create(session, 'unserved', UNSERVED)
+    create(session, 'hidden', pullUrl(3))
+    ctx.forgeSession.dismiss(session, pullUrl(3))
+    const announced = vi.spyOn(ForgeService.prototype, 'expectChange')
+    onTestFinished(() => { announced.mockRestore() })
+
+    push(session, 'push', 'feat')
+    push(session, 'mirror', 'feat', 'unknown.test:octo/demo.git')
+
+    expect(announced.mock.calls).toEqual([[pull(1)]])
+  })
+
+  it('polls the change requests a Session shows once a turn that ran a tool ends', async () => {
+    const { ctx, provider, session } = await open()
+    create(session, 'one', pullUrl(1))
+    create(session, 'unserved', UNSERVED)
+    ctx.forgeSession.watch(session, () => {})
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1]]) })
+    await pause(5)
+
+    shellTurn(session, [{ callId: 'merge', command: 'gh pr merge 1 --squash', output: '' }])
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1], [1]]) })
+
+    // A turn without a tool result changed nothing on the code host.
+    await pause(5)
+    session.append('turn/start', { turn: 90 })
+    session.append('turn/end', { turn: 90, reason: { kind: 'completed' } })
+    await pause(20)
+    expect(provider.fetches).toEqual([[1], [1]])
+  })
+
+  it('polls nothing at the end of a turn when a poll started after its last tool result', async () => {
+    const { ctx, provider, session } = await open()
+    create(session, 'one', pullUrl(1))
+    ctx.forgeSession.watch(session, () => {})
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1]]) })
+
+    const end = startShellTurn(session, [{ callId: 'merge', command: 'gh pr merge 1 --squash', output: '' }])
+    await pause(5)
+    ctx.forge.refresh(pull(1))
+    await vi.waitFor(() => { expect(provider.fetches).toEqual([[1], [1]]) })
+    end()
+    await pause(20)
+
+    expect(provider.fetches).toEqual([[1], [1]])
   })
 })
 
