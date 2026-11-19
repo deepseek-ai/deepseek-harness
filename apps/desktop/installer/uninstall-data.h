@@ -45,6 +45,29 @@ inline bool Normalize(LPCWSTR input, std::wstring& result) {
     return true;
 }
 
+// DSH_HOME accepts Node's tilde and separator spellings; relative roots remain
+// unverifiable because the application's working directory is not available here.
+inline bool NormalizeHome(LPCWSTR input, std::wstring& result) {
+    std::wstring value = input ? input : L"";
+    if (value.find_first_not_of(L" \t\r\n") == std::wstring::npos) value = L"~/.dsh";
+    if (value == L"~" || value.compare(0, 2, L"~/") == 0 || value.compare(0, 2, L"~\\") == 0) {
+        WCHAR buffer[32768];
+        DWORD length = GetEnvironmentVariableW(L"USERPROFILE", buffer, ARRAYSIZE(buffer));
+        std::wstring profile;
+        if (length && length < ARRAYSIZE(buffer)) profile.assign(buffer, length);
+        else {
+            if (length) return false;
+            PWSTR folder = nullptr;
+            if (FAILED(SHGetKnownFolderPath(FOLDERID_Profile, KF_FLAG_DONT_VERIFY, nullptr, &folder))) return false;
+            profile = folder;
+            CoTaskMemFree(folder);
+        }
+        value = profile + (value.size() > 1 ? L"\\" + value.substr(2) : L"");
+    }
+    for (auto& character : value) if (character == L'/') character = L'\\';
+    return Normalize(value.c_str(), result);
+}
+
 // Listing access takes part in share checks, so the open handle refuses the DELETE access a rename or removal needs.
 inline DWORD Pin(const std::wstring& path, Handles& handles) {
     HANDLE handle = CreateFileW((L"\\\\?\\" + path).c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
@@ -109,7 +132,7 @@ inline DWORD Remove(LPCWSTR input, LPCWSTR installation, LPCWSTR protectedRoot, 
     if (protectedRoot && *protectedRoot) {
         std::wstring home;
         // An unusable protected root cannot establish separation from retained data.
-        if (!Normalize(protectedRoot, home)) return ERROR_INVALID_NAME;
+        if (!NormalizeHome(protectedRoot, home)) return ERROR_INVALID_NAME;
         if (Contains(path, home) || Contains(home, path)) return ERROR_ACCESS_DENIED;
     }
     struct ComScope {

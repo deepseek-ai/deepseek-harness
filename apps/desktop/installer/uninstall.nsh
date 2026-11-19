@@ -61,6 +61,8 @@ Function un.BeginCleanup
       StrCpy $UnHeading "$(INSTALLER_UNINSTALL_OWNER)"
       Call un.ShowCleanup
       ${If} $UnResult != 1001
+        System::Call '$PLUGINSDIR\window-frame.dll::UninstallNote(p $UnSession, w "Removal not confirmed; no deletion started. Registered installation: $UnRegistered. Uninstall directory: $INSTDIR.") ?c'
+        System::Call '$PLUGINSDIR\window-frame.dll::UninstallPersist(p $UnSession) ?c'
         SetErrorLevel 2
         Quit
       ${EndIf}

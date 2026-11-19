@@ -51,6 +51,9 @@ int wmain(int argc, wchar_t** argv) {
     assert(uninstall_data::Remove(cache.c_str(), installation.c_str(), data.c_str()) == ERROR_ACCESS_DENIED);
     assert(uninstall_data::Remove(data.c_str(), installation.c_str(), cache.c_str()) == ERROR_ACCESS_DENIED);
     assert(uninstall_data::Remove(cache.c_str(), installation.c_str(), L"relative\\home") == ERROR_INVALID_NAME);
+    std::wstring slashHome = cache;
+    for (auto& character : slashHome) if (character == L'\\') character = L'/';
+    assert(uninstall_data::Remove(data.c_str(), installation.c_str(), slashHome.c_str()) == ERROR_ACCESS_DENIED);
     assert(Exists(cache + L"\\CURRENT"));
 
     // A pinned directory cannot be renamed or replaced while the helper holds it.
@@ -124,5 +127,39 @@ int wmain(int argc, wchar_t** argv) {
     assert(DeleteFileW((installation + L"\\aux.log").c_str()));
     assert(DeleteFileW(report.c_str()));
     assert(RemoveDirectoryW(installation.c_str()));
+
+    for (auto home : {L"C:/HarnessHome", L"~/.dsh", L"~\\.dsh", L" \t "}) {
+        assert(CreateDirectoryW(installation.c_str(), nullptr));
+        void* alternate = UninstallBegin(report.c_str());
+        assert(alternate);
+        assert(UninstallPrepare(alternate, installation.c_str(), home) == ERROR_SUCCESS);
+        assert(UninstallFinish(alternate, installation.c_str(), L"uninstall.exe") == 0);
+        assert(!Exists(installation));
+    }
+    assert(CreateDirectoryW(installation.c_str(), nullptr));
+    void* protectedSession = UninstallBegin(report.c_str());
+    std::wstring slashInstall = installation;
+    for (auto& character : slashInstall) if (character == L'\\') character = L'/';
+    assert(UninstallPrepare(protectedSession, installation.c_str(), slashInstall.c_str()) == ERROR_ACCESS_DENIED);
+    assert(UninstallPrepare(protectedSession, installation.c_str(), L"relative/home") == ERROR_INVALID_NAME);
+    assert(RemoveDirectoryW(installation.c_str()));
+
+    std::vector<std::wstring> longDirectories;
+    std::wstring longDirectory = root;
+    while (longDirectory.size() < 280) {
+        longDirectory += L"\\" + std::wstring(60, L'x');
+        assert(CreateDirectoryW((L"\\\\?\\" + longDirectory).c_str(), nullptr));
+        longDirectories.push_back(longDirectory);
+    }
+    const std::wstring longUninstaller = L"\\\\?\\" + longDirectory + L"\\uninstall.exe";
+    File(longUninstaller);
+    void* longSession = UninstallBegin(report.c_str());
+    assert(UninstallPrepare(longSession, longDirectory.c_str(), nullptr) == ERROR_SUCCESS);
+    assert(UninstallFinish(longSession, longDirectory.c_str(), L"uninstall.exe") == 0);
+    assert(!Exists(longUninstaller));
+    assert(!Exists(L"\\\\?\\" + longDirectory));
+    longDirectories.pop_back();
+    for (auto it = longDirectories.rbegin(); it != longDirectories.rend(); ++it)
+        assert(RemoveDirectoryW((L"\\\\?\\" + *it).c_str()));
     assert(RemoveDirectoryW(root.c_str()));
 }

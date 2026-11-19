@@ -174,7 +174,7 @@ inline DWORD Prepare(Session& session, LPCWSTR directory, LPCWSTR protectedRoot)
     if (!uninstall_data::Normalize(directory, path)) return ERROR_INVALID_NAME;
     if (protectedRoot && *protectedRoot) {
         std::wstring home;
-        if (!uninstall_data::Normalize(protectedRoot, home)) return ERROR_INVALID_NAME;
+        if (!uninstall_data::NormalizeHome(protectedRoot, home)) return ERROR_INVALID_NAME;
         if (uninstall_data::Contains(path, home) || uninstall_data::Contains(home, path)) return ERROR_ACCESS_DENIED;
     }
     const KNOWNFOLDERID* folders[] = {&FOLDERID_Profile, &FOLDERID_RoamingAppData, &FOLDERID_LocalAppData,
@@ -267,10 +267,14 @@ extern "C" __declspec(dllexport) int __cdecl UninstallShow(uninstall_report::Ses
 }
 extern "C" __declspec(dllexport) int __cdecl UninstallFinish(uninstall_report::Session* session, LPCWSTR directory, LPCWSTR uninstaller) {
     const std::wstring file = std::wstring(directory) + L"\\" + uninstaller;
-    const DWORD attributes = GetFileAttributesW(file.c_str());
+    const DWORD attributes = GetFileAttributesW((L"\\\\?\\" + file).c_str());
     if (attributes != INVALID_FILE_ATTRIBUTES) {
         const DWORD error = uninstall_data::Unlink(L"\\\\?\\" + file, attributes);
         if (error) uninstall_report::Add(*session, L"Remove uninstaller", file.c_str(), error);
+    } else {
+        const DWORD error = GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND)
+            uninstall_report::Add(*session, L"Inspect uninstaller", file.c_str(), error);
     }
     for (HANDLE handle : session->pinned.values) CloseHandle(handle);
     session->pinned.values.clear();

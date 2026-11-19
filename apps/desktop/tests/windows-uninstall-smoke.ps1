@@ -25,6 +25,7 @@ $ownerKey = "Software\DSHUninstallTests\$RegistryKey\CommandOwner"
 $protocolKey = "Software\Classes\dsh-test-$RegistryKey"
 $process = $null
 $held = $null
+$originalHome = [Environment]::GetEnvironmentVariable('DSH_HOME', 'Process')
 $strings = (Get-Content (Join-Path $PSScriptRoot "../installer/locales/$Language.json") -Encoding UTF8 -Raw | ConvertFrom-Json).strings
 function Wait-Text([string]$Text) {
     $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -114,7 +115,7 @@ try {
         try { $key.SetValue('', '"' + (Join-Path $integrationRoot ($ProductName + '.exe')) + '" "%1"') } finally { $key.Dispose() }
         $launchUninstaller = $uninstaller
         $arguments = '_?=' + $installPath
-        if ($mode -in @('silent', 'missing-location', 'missing-location-short', 'missing-location-foreign', 'unowned', 'owned-retained', 'home-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
+        if ($mode -in @('silent', 'missing-location', 'missing-location-short', 'missing-location-foreign', 'unowned', 'owned-retained', 'home-inside', 'home-slash', 'home-tilde', 'home-slash-inside', 'registration-error', 'main-locked', 'auxiliary-locked', 'unsafe-root')) { $arguments = '/S ' + $arguments }
         # electron-builder's installUtil.nsh runs an older uninstaller with exactly these flags when replacing it.
         if ($mode -eq 'upgrade') {
             Set-ItemProperty -LiteralPath ('HKCU:\Software\' + $RegistryKey) -Name InstallLocation -Value ($installPath + '\')
@@ -125,6 +126,12 @@ try {
             $arguments = '/S /KEEP_APP_DATA'
         }
         if ($mode -eq 'home-inside') { $env:DSH_HOME = Join-Path $userDataPath 'home' } else { Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue }
+        if ($mode -eq 'home-slash') { $env:DSH_HOME = $homePath.Replace('\', '/') }
+        if ($mode -eq 'home-tilde') {
+            if (-not $homePath.StartsWith($env:USERPROFILE + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Tilde fixture must be inside USERPROFILE' }
+            $env:DSH_HOME = '~/' + $homePath.Substring($env:USERPROFILE.Length + 1).Replace('\', '/')
+        }
+        if ($mode -eq 'home-slash-inside') { $env:DSH_HOME = (Join-Path $userDataPath 'home').Replace('\', '/') }
         if ($mode -in @('registration-error', 'save-report')) {
             $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
             try { $key.SetValue('Path', 42, [Microsoft.Win32.RegistryValueKind]::DWord) } finally { $key.Dispose() }
@@ -217,7 +224,7 @@ try {
         Wait-Exit
         $retained = $missingLocation -or $mode -in @('upgrade', 'replaced', 'self-copy')
         # A DSH_HOME inside the Electron directory protects that directory (and its scope) but not the other roots.
-        $userDataRetained = $retained -or $mode -eq 'home-inside'
+        $userDataRetained = $retained -or $mode -in @('home-inside', 'home-slash-inside')
         if ([IO.File]::ReadAllText((Join-Path $externalPath 'keep.txt')) -ne 'outside data root') { throw 'Cleanup followed a junction into a project' }
         if (-not (Test-Path (Join-Path $homePath 'session.txt'))) { throw "Harness home retention failed: $mode" }
         if ((Test-Path (Join-Path $productDataPath 'state.txt')) -ne $retained) { throw "Product data retention failed: $mode" }
@@ -250,6 +257,7 @@ try {
     $relocationData = Join-Path $userDataPath 'relocation-state.txt'
     [IO.File]::WriteAllText($relocationData, 'retained during relocation')
     $newPath = Join-Path $OutputDirectory 'Replacement App'
+    $env:DSH_HOME = $homePath.Replace('\', '/')
     $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $newPath) -PassThru -WindowStyle Hidden
     try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover B setup failed' } } finally { $setup.Dispose() }
     if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory) { throw 'Relocation retained old command owner' }
@@ -289,7 +297,26 @@ try {
     Set-ItemProperty ('HKCU:\' + $ownerKey) Directory $oldCommand
     Set-ItemProperty ('HKCU:\' + $environmentKey) Path ($oldCommand + ';C:\Windows')
     $bUninstall = $entry.UninstallString
-    Copy-Item -LiteralPath $newPath -Destination $installPath -Recurse
+    New-Item -ItemType Directory -Force -Path $installPath | Out-Null
+    Get-ChildItem -LiteralPath $newPath | Copy-Item -Destination $installPath -Recurse
+    if (-not (Test-Path -LiteralPath (Join-Path $installPath ($ProductName + '.exe')))) { throw 'Partial takeover fixture lacks the A executable' }
+    $process = Start-Process $uninstaller -ArgumentList ('/S /currentuser _?=' + $installPath) -PassThru -WindowStyle Hidden
+    if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Existing stale directory was not rejected' }
+    $report = Get-Content (Join-Path $env:TEMP ('DeepSeek-Harness-uninstall-' + $process.Id + '.txt')) -Raw
+    if (-not $report.Contains('Removal not confirmed') -or -not $report.Contains($newPath) -or -not $report.Contains($installPath)) { throw 'Silent rejection report lacks reason and both paths' }
+    $process.Dispose(); $process = $null
+    $process = Start-Process $uninstaller -ArgumentList ('/currentuser _?=' + $installPath) -PassThru
+    $welcome = Wait-Text $copy.welcome
+    $window = [InstallerCapture]::TopLevel($welcome)
+    [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($window, 1))
+    $continue = Wait-Text $strings.INSTALLER_UNINSTALL_CONTINUE
+    # TaskDialog common buttons are nested DirectUI controls; use TDM_CLICK_BUTTON with IDCANCEL.
+    if (-not [InstallerCapture]::PostMessage([InstallerCapture]::TopLevel($continue), 0x466, [IntPtr]2, [IntPtr]::Zero)) { throw 'Could not cancel owner dialog' }
+    if (-not $process.WaitForExit(30000) -or $process.ExitCode -ne 2) { throw 'Owner dialog cancellation did not stop uninstall' }
+    $report = Get-Content (Join-Path $env:TEMP ('DeepSeek-Harness-uninstall-' + $process.Id + '.txt')) -Raw
+    if (-not $report.Contains('Removal not confirmed') -or -not $report.Contains($newPath) -or -not $report.Contains($installPath)) { throw 'Cancellation report lacks reason and both paths' }
+    if (-not (Test-Path -LiteralPath (Join-Path $installPath ($ProductName + '.exe')))) { throw 'Cancellation deleted A' }
+    $process.Dispose(); $process = $null
     $process = Start-Process $uninstaller -ArgumentList ('/currentuser _?=' + $installPath) -PassThru
     $welcome = Wait-Text $copy.welcome
     $window = [InstallerCapture]::TopLevel($welcome)
@@ -327,7 +354,7 @@ try {
 } finally {
     if ($held) { $held.Dispose() }
     foreach ($key in @("Software\DSHUninstallTests\$RegistryKey", $protocolKey)) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($key, $false) }
-    Remove-Item Env:DSH_HOME -ErrorAction SilentlyContinue
+    [Environment]::SetEnvironmentVariable('DSH_HOME', $originalHome, 'Process')
     if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
     # Only unique test identities below known application-data parents are removed.
     foreach ($pair in @(@($productDataPath, $roaming), @($scopePath, $roaming), @($cachePath, $local))) {
