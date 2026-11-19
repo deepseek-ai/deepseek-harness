@@ -108,7 +108,7 @@ async function setup(options: SetupOptions = {}) {
     cua: {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
-        installCua(owner, config, { helperPath: process.execPath, turnInputLifecycle: true,
+        installCua(owner, config, { helperPath: process.execPath, heldInputState: true,
           createChannel: options.cancellationAcknowledgementMs === undefined
             ? native.createChannel
             : delayCancellation(native.createChannel, options.cancellationAcknowledgementMs, () => { native.events.push('cancellation-acknowledged') }),
@@ -182,22 +182,21 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('Computer Use MCP composition', () => {
-  it('refuses persistent downs outside a turn and still completes clicks through MCP', async () => {
-    const { client, native, run } = await setup()
-    expect(client.getInstructions()).toContain('MCP programs cannot hold keys or mouse buttons')
-    const capabilities = await run('inspect(JSON.stringify((await cua.getCapabilities()).methods))')
-    expect(texts(capabilities).join('')).toContain('sendKeyEvent')
-    expect(texts(capabilities).join('')).toContain('toggleMouse')
-    const selected = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree()')
-    expect(selected.isError).not.toBe(true)
-    for (const code of ['await app.sendKeyEvent("w", "down")', 'await win.toggleMouse("left", "down")']) {
-      const result = await run(code)
-      expect(result.isError).toBe(true)
-      expect(texts(result).join('\n')).toContain('active agent turn')
-    }
-    expect(native.calls.some(call => call.method === 'sendKeyEvent' || call.method === 'toggleMouse')).toBe(false)
-    expect((await run('await win.click("0")')).isError).not.toBe(true)
-    expect(native.state.count).toBe(1)
+  it('retains input across MCP programs, reminds after success, and releases on error and reset', async () => {
+    const { native, run, client } = await setup()
+    expect((await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await app.sendKeyEvent("w", "down")')).isError).not.toBe(true)
+    expect(native.held.map(press => press.key)).toEqual(['w'])
+    const continuing = await run('inspect("continue")')
+    expect(texts(continuing).join('')).toContain('Key "w", appHandle "fixture-app"')
+    const released = await run('await app.sendKeyEvent("w", "up")')
+    expect(texts(released).join('')).not.toContain('<system-reminder>')
+    expect(native.held).toEqual([])
+    expect((await run('await win.toggleMouse("left", "down"); throw Error("failed program")')).isError).toBe(true)
+    expect(native.held).toEqual([])
+    expect(texts(await run('await app.sendKeyEvent("d", "down")')).join('')).toContain('Key "d"')
+    await client.callTool({ name: 'cua_reset', arguments: {} })
+    expect(native.held).toEqual([])
+    expect((await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0")')).isError).not.toBe(true)
   })
 
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {

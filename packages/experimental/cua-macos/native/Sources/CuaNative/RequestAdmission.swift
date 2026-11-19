@@ -83,7 +83,4 @@ struct RequestParameters: Sendable {
 }
 
 extension RequestParameters {
-    func inputScope() throws -> HeldInputs.Scope {
-        try HeldInputs.Scope(task: string("taskId"), turn: integer("turn", in: 1...Int.max))
-    }
 }

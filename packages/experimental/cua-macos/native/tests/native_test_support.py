@@ -106,14 +106,11 @@ class NativeHelper:
         self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         text=True, start_new_session=True)
         self.sequence = 0
-        self.input_turn = 1
         self.transcript = transcript
 
     def call(self, method, params, error_code=None):
-        if method in ("sendKeyEvent", "toggleMouse", "releaseHeldInputs") or (method == "mouseMove" and params.get("useSystemPointer")):
-            params = {**params, "taskId": "native-fixture", "turn": self.input_turn}
-        if method == "releaseHeldInputs":
-            self.input_turn += 1
+        if method in ("sendKeyEvent", "toggleMouse", "getHeldInputs", "releaseHeldInputs") or (method == "mouseMove" and params.get("useSystemPointer")):
+            params = {**params, "taskId": "native-fixture"}
         self.sequence += 1
         request = {"id": str(self.sequence), "method": method, "params": params}
         self.process.stdin.write(json.dumps(request) + "\n")

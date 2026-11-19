@@ -63,7 +63,7 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, turnInputLifecycle: true,
+  const backend = { createChannel: createSharedNativeChannel, heldInputState: true,
     getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {

@@ -4,17 +4,13 @@ import Foundation
 
 /// The lock covers registration, dispatch, explicit release, and reverse-order cleanup.
 final class HeldInputs: @unchecked Sendable {
-    struct Scope: Equatable {
-        let task: String
-        let turn: Int
-    }
     struct Owner: Equatable {
         let connection: UUID
-        let scope: Scope
+        let task: String
         let app: String
     }
     enum Mode: Equatable {
-        case keyboard(CGKeyCode, CGEventFlags)
+        case keyboard(CGKeyCode, CGEventFlags, String)
         case windowPointer(CGMouseButton, UInt32)
         case systemPointer(CGMouseButton, UInt32)
     }
@@ -28,37 +24,29 @@ final class HeldInputs: @unchecked Sendable {
     }
     private let lock = NSLock()
     private var pressed: [Press] = []
-    private var ended: [UUID: [String: Int]] = [:]
 
     func snapshot(pid: Int32) -> [CGKeyCode: CGEventFlags] {
         lock.withLock {
             Dictionary(uniqueKeysWithValues: pressed.compactMap {
-                guard $0.recipient.pid == pid, case .keyboard(let code, let flag) = $0.mode else { return nil }
+                guard $0.recipient.pid == pid, case .keyboard(let code, let flag, _) = $0.mode else { return nil }
                 return (code, flag)
             })
-        }
-    }
-
-    private func admit(_ owner: Owner) throws {
-        if let last = ended[owner.connection]?[owner.scope.task], owner.scope.turn <= last {
-            throw NativeFailure(code: "INPUT_TURN_CLOSED", message: "Input for this turn has already been released")
         }
     }
 
     private func conflict(_ name: String, holder: Owner, caller: Owner) -> NativeFailure {
         let source: String
         if holder.connection != caller.connection { source = "another session" }
-        else if holder.scope != caller.scope { source = "another turn" }
-        else { source = "a different application handle in this turn" }
-        return RequestParameters.invalid("Key '\(name)' is held for this target by \(source). No event was sent. Wait for the holder to release it or for its turn to end.")
+        else if holder.task != caller.task { source = "another task" }
+        else { source = "a different application handle" }
+        return RequestParameters.invalid("Key '\(name)' is held for this target by \(source). No event was sent. Wait for the holder to release it before using it.")
     }
 
     /// Repeats retain the original recipient and do not change the cleanup order.
     func repeatIfHeld(owner: Owner, name: String, code: CGKeyCode, down: CGEvent, post: (CGEvent, Int32) -> Void) throws -> Bool {
         try lock.withLock {
-            try admit(owner)
             guard let key = pressed.first(where: { $0.owner == owner && $0.mode.keyCode == code }) else { return false }
-            guard case .keyboard(_, let flag) = key.mode, flag.isEmpty, down.type == .keyDown else {
+            guard case .keyboard(_, let flag, _) = key.mode, flag.isEmpty, down.type == .keyDown else {
                 throw RequestParameters.invalid("Modifier '\(name)' is already held. Send 'up' to release it.")
             }
             try NativePlatform.verify(key.recipient)
@@ -72,11 +60,10 @@ final class HeldInputs: @unchecked Sendable {
     func keyDown(owner: Owner, recipient: ProcessIdentity, name: String, code: CGKeyCode, flag: CGEventFlags,
                  down: CGEvent, up: CGEvent, post: @escaping (CGEvent, Int32) -> Void) throws {
         try lock.withLock {
-            try admit(owner)
             if let key = pressed.first(where: { $0.mode.keyCode == code && $0.recipient.pid == recipient.pid }) {
                 throw conflict(name, holder: key.owner, caller: owner)
             }
-            pressed.append(Press(owner: owner, recipient: recipient, mode: .keyboard(code, flag), up: up,
+            pressed.append(Press(owner: owner, recipient: recipient, mode: .keyboard(code, flag, name), up: up,
                                  post: { post($0, recipient.pid) }, prepareRelease: nil))
             down.flags = flags(for: recipient)
             post(down, recipient.pid)
@@ -85,7 +72,7 @@ final class HeldInputs: @unchecked Sendable {
 
     private func flags(for recipient: ProcessIdentity) -> CGEventFlags {
         pressed.reduce(into: CGEventFlags()) {
-            if $1.recipient == recipient, case .keyboard(_, let flag) = $1.mode { $0.formUnion(flag) }
+            if $1.recipient == recipient, case .keyboard(_, let flag, _) = $1.mode { $0.formUnion(flag) }
         }
     }
 
@@ -119,7 +106,7 @@ final class HeldInputs: @unchecked Sendable {
             if let key = pressed.first(where: { $0.mode.keyCode == code && $0.recipient == recipient }) {
                 return conflict(name, holder: key.owner, caller: owner)
             }
-            return RequestParameters.invalid("Key '\(name)' is not held for this target. Send 'down' in this turn before 'up'.")
+            return RequestParameters.invalid("Key '\(name)' is not held for this target. Send 'down' before 'up'.")
         }
     }
 
@@ -127,7 +114,6 @@ final class HeldInputs: @unchecked Sendable {
                      down: CGEvent, up: CGEvent, post: @escaping (CGEvent) -> Void,
                      prepareRelease: ((CGEvent) throws -> Void)? = nil) throws {
         try lock.withLock {
-            try admit(owner)
             try checkPointerAvailable(route: route, button: button, system: system)
             pressed.append(Press(owner: owner, recipient: route.owner,
                 mode: system ? .systemPointer(button, route.windowID) : .windowPointer(button, route.windowID), up: up, post: post, prepareRelease: prepareRelease))
@@ -154,7 +140,7 @@ final class HeldInputs: @unchecked Sendable {
     func pointerUp(owner: Owner, window: UInt32, button: CGMouseButton) throws -> Bool {
         try lock.withLock {
             guard let index = pressed.firstIndex(where: { $0.owner == owner && $0.mode.pointer == button && $0.mode.window == window }) else {
-                throw RequestParameters.invalid("Release the mouse button through the same task, turn, application and window that pressed it")
+                throw RequestParameters.invalid("Release the mouse button through the same task, application and window that pressed it")
             }
             return try release(at: index)
         }
@@ -163,7 +149,6 @@ final class HeldInputs: @unchecked Sendable {
     /// Create and post movement under the same lock as ownership and the saved release point.
     func moveSystem(owner: Owner?, route: WindowRoute, screen: CGPoint, checkCancellation: () throws -> Void) throws {
         try lock.withLock {
-            if let owner { try admit(owner) }
             let press = pressed.first { if case .systemPointer = $0.mode { return true }; return false }
             let event: CGEvent
             if let press {
@@ -183,14 +168,43 @@ final class HeldInputs: @unchecked Sendable {
         }
     }
 
-    func release(connection: UUID, scope: Scope? = nil) throws {
+    /// Only the caller's registered input is disclosed; physical user input is never inferred.
+    func held(connection: UUID, task: String) throws -> JSONValue {
         try lock.withLock {
-            if let scope { ended[connection, default: [:]][scope.task] = max(ended[connection]?[scope.task] ?? 0, scope.turn) }
-            defer { if scope == nil { ended.removeValue(forKey: connection) } }
+            for index in pressed.indices.reversed() {
+                let press = pressed[index]
+                guard press.owner.connection == connection, press.owner.task == task else { continue }
+                if case .systemPointer = press.mode { continue }
+                do { try NativePlatform.verify(press.recipient) }
+                catch let error as NativeFailure where error.code == "STALE_APP" || error.code == "APP_UNAVAILABLE" {
+                    pressed.remove(at: index)
+                }
+            }
+            return .array(pressed.filter { $0.owner.connection == connection && $0.owner.task == task }.map { press in
+                var record: [String: JSONValue] = ["appHandle": .string(press.owner.app)]
+                switch press.mode {
+                case .keyboard(_, _, let name):
+                    record["kind"] = .string("key")
+                    record["key"] = .string(name)
+                    record["mode"] = .string("application")
+                case .windowPointer(let button, let window), .systemPointer(let button, let window):
+                    record["kind"] = .string("mouse")
+                    record["button"] = .string(button == .left ? "left" : button == .right ? "right" : "middle")
+                    record["windowId"] = .string(String(window))
+                    if case .systemPointer = press.mode { record["mode"] = .string("system") }
+                    else { record["mode"] = .string("window") }
+                }
+                return .object(record)
+            })
+        }
+    }
+
+    func release(connection: UUID, task: String? = nil) throws {
+        try lock.withLock {
             var failures: [String] = []
             for index in pressed.indices.reversed() {
                 let owner = pressed[index].owner
-                guard owner.connection == connection, scope == nil || owner.scope == scope else { continue }
+                guard owner.connection == connection, task == nil || owner.task == task else { continue }
                 do { _ = try release(at: index) }
                 catch { failures.append(String(describing: error)) }
             }
@@ -204,7 +218,7 @@ final class HeldInputs: @unchecked Sendable {
 }
 
 private extension HeldInputs.Mode {
-    var keyCode: CGKeyCode? { if case .keyboard(let code, _) = self { return code }; return nil }
+    var keyCode: CGKeyCode? { if case .keyboard(let code, _, _) = self { return code }; return nil }
     var pointer: CGMouseButton? {
         switch self { case .keyboard: return nil; case .windowPointer(let button, _), .systemPointer(let button, _): return button }
     }

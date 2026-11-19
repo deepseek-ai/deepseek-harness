@@ -96,7 +96,7 @@ const INSTRUCTIONS = 'DeepSeek Harness Computer Use: observe and operate desktop
   + 'written without it guess the API wrong. Then call cua_run_code with a TypeScript program that uses the global cua '
   + 'object; program state persists across calls on this connection. A call may ask the user for application or pointer '
   + 'consent before it proceeds. Call cua_reset to discard program state. '
-  + 'On macOS, MCP programs cannot hold keys or mouse buttons with explicit down events. Use pressKey, click, or drag.'
+  + 'Explicit key and mouse downs can remain held across programs. A system reminder lists remaining held inputs after successful programs. Release them explicitly when finished; program failure, cancellation, reset, and connection closure release owned input.'
 
 const NO_PROVIDER = 'Computer Use is not available on this Host: the cua-mcp profile has no active CUA provider. '
   + 'Providers exist for macOS and native Windows; on those Hosts the server\'s stderr names why the provider did not start.'

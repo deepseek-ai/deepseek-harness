@@ -23,8 +23,8 @@ final class KeyboardInput {
         self.checkCancellation = checkCancellation
     }
 
-    func keyDown(_ name: String, app: String, scope: HeldInputs.Scope, recipient: () throws -> ProcessIdentity) throws {
-        let owner = HeldInputs.Owner(connection: connection, scope: scope, app: app)
+    func keyDown(_ name: String, app: String, task: String, recipient: () throws -> ProcessIdentity) throws {
+        let owner = HeldInputs.Owner(connection: connection, task: task, app: app)
         let code = try Self.keyCode(name)
         let source = try Self.source()
         let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
@@ -38,8 +38,8 @@ final class KeyboardInput {
                       down: down, up: up, post: post)
     }
 
-    func keyUp(_ name: String, app: String, scope: HeldInputs.Scope, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
-        try held.keyUp(owner: .init(connection: connection, scope: scope, app: app), name: name, code: Self.keyCode(name),
+    func keyUp(_ name: String, app: String, task: String, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+        try held.keyUp(owner: .init(connection: connection, task: task, app: app), name: name, code: Self.keyCode(name),
                     recipientIfUnheld: recipientIfUnheld)
     }
 

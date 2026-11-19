@@ -157,8 +157,8 @@ export interface CuaSurface {
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
-   * Explicit downs share the current turn across programs; cleanup after turn/end releases remaining input.
-   * macOS implements turn cleanup; Windows support is pending and requires explicit up.
+   * Explicit downs persist across programs and turns. Successful programs disclose remaining holds in a system reminder.
+   * Program failure, cancellation, connection closure and disposal release owned input. Windows support is pending.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
    * @param direction - Down establishes a hold; up immediately releases owned input at its saved recipient.
@@ -193,8 +193,8 @@ export interface CuaWindow extends CuaSurface {
     options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
    * Send one mouse-button down or up event without moving the pointer.
-   * Uses the same turn lifecycle as {@link CuaSurface.sendKeyEvent}; up uses the saved window and input route.
-   * Implemented turn cleanup releases keys and buttons together in reverse press order after turn/end.
+   * Uses the same held-input lifecycle as {@link CuaSurface.sendKeyEvent}; up uses the saved window and input route.
+   * Error and cancellation cleanup releases keys and buttons together in reverse dispatch order.
    * @param mouseButton - Mouse button to press or release.
    * @param direction - Explicit event direction.
    * @param options - Request a system button on a provider reporting systemPointer.

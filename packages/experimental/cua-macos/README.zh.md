@@ -83,7 +83,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 `pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。`pressKey`、`click` 和 `drag` 都接受修饰键 `command`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`。只有 `pressKey` 的修饰键参数还接受 `command` 的别名 `cmd`。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
 
-长按时，在活动回合中调用 `app.sendKeyEvent('w', 'down')`。按键可跨 `run_code` 和 `cua_run_code` 执行保持；程序出错后回合仍继续时，也保留持有状态。显式 `up` 立即向原接收方释放按键。普通键的重复 `down` 只保留一条持有记录。回合正常完成、异常结束和用户停止时，所有仍按住的键盘键与鼠标按钮按实际派发顺序的反序统一释放。完整的 `pressKey`、`typeText`、`click` 和 `drag` 操作仍自行及时清理。
+长按时调用 `app.sendKeyEvent('w', 'down')`。显式键盘和鼠标按下会跨程序、跨回合保持，直到显式 up 按保存的目标释放。成功结束的程序通过 system reminder 报告剩余持有输入，包括目标和实际输入方式。程序失败、用户取消、断连、重置和销毁按实际派发顺序的反序统一释放所属键盘键和鼠标按钮。完整的 `pressKey`、`typeText`、`click` 和 `drag` 保持操作内及时清理。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
@@ -148,7 +148,7 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-共享 helper 的 `HeldInputs` 在每次显式按下派发前记录任务、回合、连接、进程代次、应用或窗口和实际输入方式。同一把锁维护键盘与鼠标的派发和释放顺序。`turn/end` 触发 CUA 清理：关闭宿主输入准入、取消在途原生操作，并通过独立且有超时限制的请求等待 `releaseHeldInputs` 确认。CUA 利用现有 `runMaintenance()` 和 pre-step 入口，使 `whenIdle()`、后续输入和 Agent 销毁等待清理完成。回合结束记录和空闲通知可以早于释放确认；清理失败单独通过 `agent/error` 报告，并禁用该任务的 CUA。连接关闭会先取消并等待原生操作停止，再做兜底释放；宿主被强杀时依靠这条断连路径。重复清理不会释放后续回合的输入。
+共享 helper 的 `HeldInputs` 在派发前记录任务、连接、进程代次、应用或窗口和实际输入方式。同一把锁维护派发、状态查询和释放。程序中间件在成功执行后查询原生状态，并把已记录的提醒附加到外层工具结果。失败和取消会关闭输入准入，通过独立且有超时限制的请求等待 `releaseHeldInputs`。原生连接关闭会先取消并等待在途操作，再做兜底释放。宿主被强杀时依赖断连清理，无法保证宿主回调执行。
 
 <details>
 <summary>操作分派与资源归属</summary>

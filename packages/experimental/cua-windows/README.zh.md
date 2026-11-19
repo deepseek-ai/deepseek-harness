@@ -81,7 +81,7 @@ kind: "package-reference"
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
 - 悬停、点击、滚动和拖拽使用系统指针。`requireSystemPointerApproval` 不会为 Windows 操作弹出单独的指针授权提示。
 - 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。
-- 共通 CUA 的持有范围是一个回合。Windows 尚未实现这套生命周期和统一反序清理。每次键盘或鼠标 down 都须显式配对 up，不能依赖回合自动清理。
+- Windows 尚未实现原生持有状态报告和统一的异常或取消清理。每次键盘或鼠标 down 都须显式配对 up，不能依赖提醒或自动释放。
 - 清理输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
 - helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
 - Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。

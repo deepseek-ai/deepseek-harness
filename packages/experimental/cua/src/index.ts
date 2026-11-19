@@ -14,7 +14,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { MouseControl } from './mouse-control.ts'
-import { CuaInputTurns } from './turn-inputs.ts'
+import { CuaHeldInputs } from './held-inputs.ts'
 import { withSystemPointerGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
@@ -187,8 +187,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Opt in to task/turn parameters and acknowledged releaseHeldInputs; omission preserves the provider's existing protocol. */
-  turnInputLifecycle?: boolean
+  /** Opt in to task-owned getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
+  heldInputState?: boolean
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -207,7 +207,7 @@ export interface CuaBackend {
  */
 export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend): void {
   const { helperPath } = backend
-  const inputTurns = backend.turnInputLifecycle ? new CuaInputTurns(ctx) : undefined
+  const heldInputs = backend.heldInputState ? new CuaHeldInputs(ctx) : undefined
   const systemPointer = backend.capabilities.systemPointer === true
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
@@ -264,7 +264,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     return owner
   }
   ctx.effect(function* () {
-    if (inputTurns) yield* inputTurns.install()
+    if (heldInputs) yield* heldInputs.install()
     yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
     yield async () => {
       lifetime.abort()
@@ -287,14 +287,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       // Earlier helpers accept an explicit false only for mouseMove.
       if (method !== 'mouseMove' && !useSystemPointer) delete params.useSystemPointer
       else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
-      if (inputTurns && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
-        const turn = inputTurns.scope(agent)
-        if (!turn && method !== 'mouseMove') throw new ToolContextUnavailableError('Directional CUA input requires an active agent turn; external MCP programs can use pressKey, click, and drag')
-        if (turn) {
-          if (method !== 'mouseMove' && params.direction === 'down') turn.track(client)
-          params.taskId = agent.id
-          params.turn = turn.turn
-        }
+      if (heldInputs && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
+        const owner = await heldInputs.ready(agent)
+        if (method !== 'mouseMove' && params.direction === 'down') owner.track(client)
+        params.taskId = agent.id
       }
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -389,9 +385,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
         const owner = ownerFor(agent)
-        if (inputTurns) await inputTurns.ready(agent)
-        const turn = inputTurns?.scope(agent)
-        const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal, ...turn ? [turn.signal] : []])
+        const inputOwner = await heldInputs?.ready(agent)
+        const signal = AbortSignal.any([
+          execution.signal, lifetime.signal, owner.signal, ...inputOwner ? [inputOwner.controller.signal] : [],
+        ])
         signal.throwIfAborted()
         const operation = (async () => {
           const previous = clients.get(agent)
@@ -420,7 +417,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           }
           const nativeClient = client
           const route = request.method === 'mouseMove' || request.method === 'drag'
-            || (request.method === 'toggleMouse' && !(inputTurns && request.params.direction === 'up'))
+            || (request.method === 'toggleMouse' && !(heldInputs && request.params.direction === 'up'))
             ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
             : undefined
           if (route?.prepare) owner.coordinates.parameters(request)
@@ -445,7 +442,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       },
     }
-    yield installCuaTools(ctx, config, tool, guidance, programGuidance)
+    yield installCuaTools(ctx, config, tool, guidance, programGuidance, agent => heldInputs?.release(agent) ?? Promise.resolve())
   }, 'dsh-cua.runtime')
 }
 

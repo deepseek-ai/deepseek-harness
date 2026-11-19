@@ -112,11 +112,18 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
         handle.agent.cancel({ kind: 'user' })
       }
       await handle.agent.whenIdle()
+      if (ending === 'completed') {
+        expect((await received()).map(event => event.type)).toEqual([10, 1, 10])
+        expect(JSON.stringify(handle.agent.session.snapshotEvents())).toContain('CUA inputs are still held')
+        programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up'); await app.sendKeyEvent('a', 'up')"
+        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Release held input' }], source: { kind: 'user' } }))
+        await handle.agent.whenIdle()
+      }
       await expect.poll(async () => (await received()).map(event => [event.type, event.keyCode ?? null]), { timeout: 30_000 }).toEqual([
         [10, 0], [1, null], [10, 13], [11, 13], [2, null], [11, 0],
       ])
       const outcomes = handle.agent.session.snapshotEvents().filter(event => event.type === 'turn/end')
-      expect(outcomes).toHaveLength(1)
+      expect(outcomes).toHaveLength(ending === 'completed' ? 2 : 1)
       expect(outcomes[0]?.data.reason.kind).toBe(ending === 'completed' ? 'completed' : ending === 'error' ? 'error' : 'aborted')
       await handle.dispose()
     } finally {

@@ -204,7 +204,7 @@ actor AXWorker {
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, scope: params.inputScope()) {
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, task: params.string("taskId")) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
                 return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
@@ -319,7 +319,7 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
+            snapshots[scope] = NativeSnapshot(id: id, task: task, elements: projection.indexed)
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
@@ -346,7 +346,7 @@ actor AXWorker {
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
-            try inputs().0.keyDown(params.string("key"), app: handle, scope: params.inputScope()) {
+            try inputs().0.keyDown(params.string("key"), app: handle, task: params.string("taskId")) {
                 try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
         case "typeText", "pressKey":
@@ -378,7 +378,7 @@ actor AXWorker {
             if try params.optionalBoolean("useSystemPointer") == true {
                 return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
             }
-            try await inputs().1.mouseDown(owner: .init(connection: connectionID, scope: params.inputScope(), app: handle),
+            try await inputs().1.mouseDown(owner: .init(connection: connectionID, task: params.string("taskId"), app: handle),
                                           in: route, button: params.string("mouseButton"))
         case "click", "mouseMove":
             let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false

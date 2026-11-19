@@ -89,7 +89,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <details>
 <summary>共享执行与平台职责</summary>
 
-共通 CUA 生命周期以一个回合作为显式键盘和鼠标按下的持有范围。平台指导说明实现支持情况，不定义另一套持有范围。提供方仅在 helper 已接受 `sendKeyEvent`、`toggleMouse` 和系统 `mouseMove` 的 `taskId`、`turn` 参数，并能确认 `releaseHeldInputs({ taskId, turn })` 后，才启用 `CuaBackend.turnInputLifecycle`。提供方卸载时保留生命周期监听器，直到程序调用和原生清理都已结束。共通持有方从 `turn/end` 开始清理，禁止新输入，等待原生取消后用独立且有超时限制的请求释放。它通过现有的 Agent maintenance 和 pre-step 等待保留清理完成结果；单独的 `turn/end` 或空闲通知不表示释放已经确认。释放未经确认时报告 `agent/error`，并禁用该任务的全部 CUA 操作。提供方必须在派发前记录实际顺序、目标与输入方式，实现显式释放和键鼠混合反序清理，拒绝旧回合输入，并在断连时只清理本连接。`getCapabilities().methods` 报告提供方声明的方法，不随回合状态变化；显式持有操作在派发时要求活动回合。Windows 在实现这些原生行为前保持此选项未设置，不接收新增参数或清理命令。
+实现 `CuaBackend.heldInputState` 的提供方为显式输入和系统指针移动接受 `taskId`，通过 `getHeldInputs({ taskId })` 报告本连接的持有记录，并确认 `releaseHeldInputs({ taskId })`。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仅在仍有输入按住时添加 system reminder；正常程序结束和回合结束均保持输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。程序失败、取消、断连、环境重置和销毁会停止所属输入派发，并等待反序释放。清理失败会禁用该任务后续 CUA 操作并报告结果不确定。提供方卸载前保留监听器，直到程序和原生连接排空。能力方法列表保持静态。Windows 在 helper 实现报告和清理前不设置 `heldInputState`，不会收到新命令。
 
 [授权存储](src/permission-store.ts)复用 `storageDomain` 和配置的后端。默认 JSON 后端写入 `$DSH_HOME/storages/cua_permissions_<sha256>.json`，摘要对应 profile 的真实目录。每次授权检查在 profile 文件锁内打开并读取最新状态，随后关闭存储域；原生操作使用单独的应用锁。撤销会等待其他进程已获准执行的操作结束；撤销完成后，各进程都拒绝旧句柄。不同电脑或 PID 命名空间不能共享这把锁。
 

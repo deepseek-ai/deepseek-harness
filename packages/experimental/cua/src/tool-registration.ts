@@ -25,7 +25,7 @@ export interface CuaPrograms {
    * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
    * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
    * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
-   * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+   * connection, and the desktop applications themselves are unaffected. Held input is released. The runtime rejects that Agent's
    * programs until the release settles, so the caller holds them back; after a failed release it rejects them
    * until a later release succeeds. Resolves when no environment exists.
    * @param agent - Agent whose `cua_run_code` state owner is released.
@@ -68,10 +68,12 @@ export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, ima
  * @param tool Internal native tool; Agents off the configured preset can reach it only through the program.
  * @param guidance Raw-tool operation instructions for the configured preset.
  * @param programGuidance Operation instructions available inside cua_run_code.
+ * @param releaseInputs Release held input when resetting the program environment.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
 export function installCuaTools(
   ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string, programGuidance: string,
+  releaseInputs: (agent: Agent) => Promise<void>,
 ): () => void | Promise<void> {
   // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
   const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
@@ -152,7 +154,9 @@ var cua = connectCua(() => tools.cua);
                 })
                 // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
                 consumer.provide('cuaPrograms', {
-                  release: (agent: Agent) => consumer.ptcRuntime.release(agent),
+                  release: async (agent: Agent) => {
+                    try { await consumer.ptcRuntime.release(agent) } finally { await releaseInputs(agent) }
+                  },
                   screenshotRequestTarget: image => config.screenshotTarget === undefined
                     ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
                 } satisfies CuaPrograms)

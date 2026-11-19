@@ -50,9 +50,9 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
-  expect(backend.turnInputLifecycle).toBeUndefined()
-  expect(GUIDANCE).toContain('sendKeyEvent and toggleMouse share one turn-wide hold scope')
-  expect(GUIDANCE).toContain('Turn-wide held-input cleanup is not yet implemented on Windows')
+  expect(backend.heldInputState).toBeUndefined()
+  expect(GUIDANCE).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(GUIDANCE).toContain('Held-input reminders and unified failure/cancellation cleanup are not yet implemented on Windows')
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
   const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }

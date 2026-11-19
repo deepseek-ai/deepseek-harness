@@ -12,7 +12,7 @@ export function apply(ctx, config) {
   const fixture = createNativeFixture()
   installCua(ctx, config, {
     helperPath: process.execPath,
-    turnInputLifecycle: true,
+    heldInputState: true,
     createChannel: fixture.createChannel,
     getGuidance: () => COMMON_GUIDANCE,
     capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],

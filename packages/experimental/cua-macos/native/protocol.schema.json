@@ -493,11 +493,6 @@
             "taskId": {
               "type": "string",
               "minLength": 1
-            },
-            "turn": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -505,8 +500,7 @@
             "windowId",
             "mouseButton",
             "direction",
-            "taskId",
-            "turn"
+            "taskId"
           ],
           "additionalProperties": false
         }
@@ -556,11 +550,6 @@
                 "taskId": {
                   "type": "string",
                   "minLength": 1
-                },
-                "turn": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991
                 }
               },
               "required": [
@@ -599,11 +588,6 @@
                 "taskId": {
                   "type": "string",
                   "minLength": 1
-                },
-                "turn": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991
                 }
               },
               "required": [
@@ -1129,19 +1113,13 @@
             "taskId": {
               "type": "string",
               "minLength": 1
-            },
-            "turn": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             }
           },
           "required": [
             "appHandle",
             "key",
             "direction",
-            "taskId",
-            "turn"
+            "taskId"
           ],
           "additionalProperties": false
         }
@@ -1550,6 +1528,37 @@
         },
         "method": {
           "type": "string",
+          "const": "getHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "taskId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
           "const": "releaseHeldInputs"
         },
         "params": {
@@ -1558,16 +1567,10 @@
             "taskId": {
               "type": "string",
               "minLength": 1
-            },
-            "turn": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             }
           },
           "required": [
-            "taskId",
-            "turn"
+            "taskId"
           ],
           "additionalProperties": false
         }

@@ -216,26 +216,13 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
 
-it('requires an active turn before sending a directional key', async () => {
+it('accepts task-owned directional input outside a turn', async () => {
   const f = await setup()
   await selectApplication(f)
-  native.request.mockClear()
+  native.request.mockResolvedValueOnce({ dispatched: true })
   const result = await f.execute('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' })
-  expect(result.isError).toBe(true)
-  expect(JSON.stringify(result.content)).toContain('active agent turn')
-  expect(native.request).not.toHaveBeenCalled()
-})
-
-it.each(['run_code', 'cua_run_code'] as const)('finishes a shortcut-only %s without requesting held-key cleanup', async (name) => {
-  const f = await setup(undefined, true)
-  await selectApplication(f)
-  native.request.mockClear().mockResolvedValue({ dispatched: true })
-  const result = await executeProgram(f, name,
-    "return await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } });",
-    'Press Command+A')
   expect(result.isError).toBe(false)
-  expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
-  expect(native.cleanup).not.toHaveBeenCalled()
+  expect(native.request).toHaveBeenLastCalledWith('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down', taskId: f.handle.agent.id }, expect.any(AbortSignal), expect.any(String))
 })
 
 it('holds a key from run_code until a later cua_run_code explicitly releases it in the same turn', async () => {
@@ -244,8 +231,9 @@ it('holds a key from run_code until a later cua_run_code explicitly releases it 
   await selectApplication(f)
   const held = new Set<string>()
   native.request.mockClear().mockImplementation(async (method, params) => {
+    if (method === 'getHeldInputs') return [...held].map(key => ({ kind: 'key', key, appHandle: 'app-one', mode: 'application' }))
     expect(method).toBe('sendKeyEvent')
-    expect(params).toMatchObject({ taskId: f.handle.agent.id, turn: 1 })
+    expect(params).toMatchObject({ taskId: f.handle.agent.id })
     const key = params.key
     if (typeof key !== 'string') throw new Error('The native fixture requires a key name')
     if (params.direction === 'down') held.add(key)
@@ -262,7 +250,7 @@ it('holds a key from run_code until a later cua_run_code explicitly releases it 
   expect(native.cleanup).not.toHaveBeenCalled()
   f.handle.agent.cancel({ kind: 'user' })
   await f.handle.agent.whenIdle()
-  expect(native.cleanup).toHaveBeenCalledExactlyOnceWith('releaseHeldInputs', { taskId: f.handle.agent.id, turn: 1 })
+  expect(native.cleanup).not.toHaveBeenCalled()
 })
 
 it('rejects a relative helper path before publishing computer-use operations', async () => {
@@ -1156,9 +1144,9 @@ it('requires an explicit system-pointer request on every move and asks only once
     [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
   ] as const) {
     expect((await f.execute('mouseMove', params)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical, ...physical ? { taskId: f.handle.agent.id, turn: 1 } : {} }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical, ...physical ? { taskId: f.handle.agent.id } : {} }, expect.any(AbortSignal), expect.any(String))
   }
-  expect(native.request.mock.calls[1]?.[1]).toEqual({ ...physicalHover, taskId: f.handle.agent.id, turn: 1 })
+  expect(native.request.mock.calls[1]?.[1]).toEqual({ ...physicalHover, taskId: f.handle.agent.id })
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
@@ -1167,7 +1155,7 @@ it.each([true, false])('shares the mouse control decision for a system button wi
   const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
   for (const params of [target, { ...target, useSystemPointer: false }]) {
     expect((await f.execute('toggleMouse', params)).isError).toBe(false)
-    expect(native.request.mock.lastCall?.[1]).toEqual({ ...target, taskId: f.handle.agent.id, turn: 1 })
+    expect(native.request.mock.lastCall?.[1]).toEqual({ ...target, taskId: f.handle.agent.id })
   }
   expect(f.ask).not.toHaveBeenCalled()
   const answer = Promise.withResolvers<typeof f.approved>()
@@ -1188,7 +1176,7 @@ it.each([true, false])('shares the mouse control decision for a system button wi
       .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', undefined]])
     f.handle.agent.cancel({ kind: 'user' })
     await f.handle.agent.whenIdle()
-    expect(native.cleanup).toHaveBeenCalledWith('releaseHeldInputs', { taskId: f.handle.agent.id, turn: 1 })
+    expect(native.cleanup).toHaveBeenCalledWith('releaseHeldInputs', { taskId: f.handle.agent.id })
   } else {
     for (const result of results.slice(0, 2)) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
     expect(results[2]?.isError).toBe(false)
@@ -1236,7 +1224,7 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id, turn: 1 }, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id }, expect.any(AbortSignal), expect.any(String))
   const sessionId = f.handle.agent.id
   await f.handle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId })
@@ -1296,7 +1284,7 @@ it('allows only the explicitly requested physical move when approval is disabled
   const f = await hoverFixture(false)
   for (const [target, expected] of [[hoverTarget, false], [physicalHover, true], [hoverTarget, false]] as const) {
     expect((await f.execute('mouseMove', target)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected, ...expected ? { taskId: f.handle.agent.id, turn: 1 } : {} }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected, ...expected ? { taskId: f.handle.agent.id } : {} }, expect.any(AbortSignal), expect.any(String))
   }
   expect(f.ask).not.toHaveBeenCalled()
 })
@@ -1363,7 +1351,7 @@ it('keeps complete system moves available outside a turn without registering a p
   await selectApplication(f)
   native.request.mockClear()
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
-  expect(native.request).toHaveBeenCalledExactlyOnceWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('mouseMove', { ...physicalHover, taskId: f.handle.agent.id }, expect.any(AbortSignal), expect.any(String))
   await f.handle.dispose()
   expect(native.cleanup).not.toHaveBeenCalled()
 })
