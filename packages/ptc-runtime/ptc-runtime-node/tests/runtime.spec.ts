@@ -210,8 +210,14 @@ describe('Node program process', () => {
     const { run } = await setup()
     const entered = Promise.withResolvers<undefined>()
     const controller = new AbortController()
-    const active = run({ ...timing, program: 'void tools.enter({}); for (;;) {}', signal: controller.signal, bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }) })
-    await entered.promise
+    const active = run({
+      ...timing,
+      program: 'await tools.enter({}); for (;;) {}',
+      signal: controller.signal,
+      bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }),
+    })
+    const earlyResult = await Promise.race([entered.promise, active])
+    expect(earlyResult).toBeUndefined()
     controller.abort('stop')
     expect((await active).error).toEqual({ kind: 'abort', message: 'stop' })
   })
