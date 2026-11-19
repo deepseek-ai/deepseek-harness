@@ -82,7 +82,6 @@ describe('Sidebar chat registration', () => {
             displayTitle: 'Projected title',
             projectionValues: { subagent: { mode: 'continuable', label: 'Worker', seq: 1 } },
           },
-          [PARENT]: { displayTitle: 'Root title' },
         },
         phase: 'ready',
         projectionsBySession: {},
@@ -106,17 +105,26 @@ describe('Sidebar chat registration', () => {
           return () => {}
         },
       },
-      effect: (install: () => unknown) => {
-        const dispose = install()
-        if (typeof dispose === 'function') disposers.push(dispose as () => void)
-        return () => {}
-      },
+      effect: (install: () => unknown) => { install(); return () => {} },
     } as unknown as Context
+    const childSnapshot = list.getSnapshot
+    list.getSnapshot = () => {
+      const snapshot = childSnapshot()
+      return { ...snapshot, byId: { ...snapshot.byId, [PARENT]: { ...snapshot.byId[CHILD]!, displayTitle: 'Root title', projectionValues: {} } } }
+    }
 
     const openResource = vi.fn()
     let onScreen: SessionId | undefined = PARENT
     registerSidebarChat(
-      Object.assign(ctx, { uiWorkspace: { openWorkspace }, sidebarRight: { openResource, mounted: { getSnapshot: () => onScreen } } }),
+      Object.assign(ctx, {
+        uiWorkspace: { openWorkspace },
+        sidebarRight: { openResource, mounted: { getSnapshot: () => onScreen } },
+        effect: (install: () => unknown) => {
+          const dispose = install()
+          if (typeof dispose === 'function') disposers.push(() => { dispose() })
+          return () => {}
+        },
+      }),
       (key: string) => key === 'sidebar.chat' ? 'Chat' : key,
     )
 
