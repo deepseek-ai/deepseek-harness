@@ -396,10 +396,11 @@ describe('Computer Use MCP composition', () => {
     expect(texts(invalid)).toEqual(['invalid arguments: missing required property "description"'])
   })
 
-  it.each([false, true])('reports environment reset failure after attempting input cleanup (input refused: %s)', async (refused) => {
+  it.each([[true, false], [false, true], [true, true]])('reports reset failures (environment: %s, input: %s)', async (environmentFails, refused) => {
     const { native, client, run } = await setup()
     await run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")')
-    const environment = vi.spyOn(NodeRuntime.prototype, 'release').mockRejectedValueOnce(new Error('Fixture process failed to exit'))
+    const environment = vi.spyOn(NodeRuntime.prototype, 'release')
+    if (environmentFails) environment.mockRejectedValueOnce(new Error('Fixture process failed to exit'))
     onTestFinished(() => { environment.mockRestore() })
     const release = native.controlNext('releaseHeldInputs')
     const resetting = client.callTool({ name: 'cua_reset', arguments: {} })
@@ -410,7 +411,7 @@ describe('Computer Use MCP composition', () => {
     const result = await resetting
     expect(result.isError).toBe(true)
     const message = texts(result).join(' ')
-    expect(message).toContain('Fixture process failed to exit')
+    if (environmentFails) expect(message).toContain('Fixture process failed to exit')
     if (refused) expect(message).toContain('Fixture release refused')
     else expect(native.events).toEqual(['w:down', 'w:up'])
   })
