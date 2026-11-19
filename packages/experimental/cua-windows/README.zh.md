@@ -43,6 +43,7 @@ kind: "package-reference"
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口；窗口关闭后，列表也可以变为空。
 - `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。执行窗口操作时会检查目标是否仍属于所选应用。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
+- 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
 
@@ -54,6 +55,8 @@ kind: "package-reference"
 3. `pressKey`、`click` 和 `drag` 都接受 `ctrl`（别名 `control`）、`alt` 和 `shift`。只有 `click` 和 `drag` 接受 `win`。系统键盘和指针输入要求目标窗口位于前台。解释必要的焦点切换，显式激活应用或让用户聚焦目标窗口，再重新观察。不要假定选择 App 或 Window 会改变焦点。
 4. `dispatched` 只表示分派情况，不证明预期效果已经发生。继续操作前先观察结果。窗口变化、快照过期、超时或取消后，不要盲目重放输入，也不要自动切换目标窗口。
 5. 授权针对当前会话中的应用。尊重拒绝和撤销，不使用其他工具绕过。重新连接会使已保留的句柄失效，继续操作前必须重新选择应用。
+
+`win.toggleMouse(button, direction)` 在当前指针位置发送一次系统按键事件。按下和松开时，所选窗口都必须在前台。按下时指针还必须命中该窗口，松开时可以移出窗口。
 
 <a id="model-experience"></a>
 ## 模型体验

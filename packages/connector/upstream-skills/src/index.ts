@@ -1,16 +1,19 @@
 /**
  * Upstream skills of CLI app plugins: the Host Service `ctx.upstreamSkills` downloads the files that a plugin's entry
  * skill indexes from one directory of the vendor's GitHub repository at a pinned commit, verifies them, publishes them
- * in the DSH cache, and lists the entry skill over them once they are there.
+ * in the DSH cache, and lists the entry skill over them once they are there. In a profile, each plugin's files have
+ * a directory of their own, from which a registration deletes the other pins once its own pin is in place.
  * @module @deepseek-ai/dsh-upstream-skills
  */
 
 import { randomUUID } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+// Also declares `Context.profileContext`, the launcher-provided profile that owns a plugin's downloads.
+import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { BUNDLED_SKILL_RANK, isSkillName } from '@deepseek-ai/dsh-skill'
 import type { SkillCandidate, SkillDefinition, SkillProvider, SkillProviderControl } from '@deepseek-ai/dsh-skill'
@@ -61,8 +64,9 @@ export default class UpstreamSkills extends Service {
   /**
    * Register the calling plugin's entry skill and start downloading the upstream files unless they are in place. The
    * download starts at load so that a session without a client also gets the skill; a failure is logged as a warning
-   * and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download
-   * and removes the entry skill.
+   * and waits for `retry()`. In a profile, the files go to that profile's own directory for the plugin, and the
+   * registration deletes the other pins there once, the first time its own pin is in place. The registration belongs
+   * to the calling plugin: unloading that plugin aborts the download and removes the entry skill.
    * @param registration - the plugin's provider name, entry, pinned files, and optional skills directory.
    * @returns the handle the plugin's view observes and its check retries.
    * @throws when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a
@@ -72,10 +76,11 @@ export default class UpstreamSkills extends Service {
     const caller = this.ctx
     let provider!: UpstreamSkillProvider
     const withdraw = caller.skills.registerProvider((control) => {
-      provider = new UpstreamSkillProvider(registration, this.config, control, caller.logger)
+      provider = new UpstreamSkillProvider(registration, this.config, control, caller.logger, caller.get('profileContext'))
       return provider
     })
     provider.retry()
+    provider.prune()
     return {
       directory: provider.directory,
       get state() { return provider.state },
@@ -86,10 +91,21 @@ export default class UpstreamSkills extends Service {
   }
 }
 
+/** The prefix of the directory name a pin is published under; the first 16 digits of its digest follow. */
+const PIN_PREFIX = 'skills-'
+
 /** Lists the entry skill while its upstream files are in place, and owns their download. */
 class UpstreamSkillProvider implements SkillProvider {
   readonly name: string
   readonly directory: string
+  /**
+   * The profile's own directory for this plugin, from which {@link prune} deletes the other pins; the processes of
+   * the profile share it. Undefined for a configured `skillsDir` and without a profile, where pins share
+   * `$DSH_HOME/cache/<name>` and all stay.
+   */
+  private readonly pins: string | undefined
+  /** Whether this registration has started deleting the other pins, which it does once. */
+  private pruned = false
   private readonly candidate: SkillCandidate
   private readonly content: string
   private readonly listeners = new Set<(state: UpstreamSkillsState) => void>()
@@ -100,15 +116,21 @@ class UpstreamSkillProvider implements SkillProvider {
     private readonly config: Config,
     private readonly control: SkillProviderControl,
     private readonly logger: Context['logger'],
+    profile: ProfileContext | undefined,
   ) {
     this.name = options.name
     const { skillsDir } = options
-    if (skillsDir === undefined) {
-      this.directory = dshCachePath(options.name, `skills-${options.set.sha256.slice(0, 16)}`)
-    } else {
+    const pin = `${PIN_PREFIX}${options.set.sha256.slice(0, 16)}`
+    if (skillsDir !== undefined) {
       this.directory = resolve(skillsDir)
       const remedy = `set it to a directory holding the files of ${options.set.directory} at their repository paths`
       if (!this.installed()) throw new Error(`${options.name}: skillsDir ${skillsDir} is not a directory; ${remedy}`)
+    } else if (profile === undefined) {
+      this.directory = dshCachePath(options.name, pin)
+    } else {
+      // Only this profile's processes read these pins; one that still runs another plugin version loses its pin.
+      this.pins = dshCachePath({ dshHome: profile.home }, options.name, profile.name)
+      this.directory = join(this.pins, pin)
     }
     const entry = readEntry(options)
     this.content = entry.content
@@ -160,7 +182,30 @@ class UpstreamSkillProvider implements SkillProvider {
       },
     ).finally(() => {
       this.running = false
-      if (!signal.aborted) this.notify()
+      if (signal.aborted) return
+      this.notify()
+      this.prune()
+    })
+  }
+
+  /**
+   * Start deleting the other pins from the profile's own directory, once per registration: the first time this pin is
+   * in place there. It returns at once, and does nothing without a profile, for a configured `skillsDir`, or after it
+   * has started once. A registration whose pin a process running another plugin version deleted therefore downloads
+   * it again without deleting that process's pin. A pin that cannot be deleted is logged as a warning and stays until
+   * a later load.
+   */
+  prune(): void {
+    const { pins } = this
+    if (pins === undefined || this.pruned || !this.installed()) return
+    this.pruned = true
+    const current = basename(this.directory)
+    void readdir(pins).then(async (names) => {
+      for (const name of names) {
+        if (name !== current && name.startsWith(PIN_PREFIX)) await rm(join(pins, name), { recursive: true, force: true })
+      }
+    }).catch((error: unknown) => {
+      this.logger.warn(`${this.name}: could not delete the upstream skills this pin replaces`, error)
     })
   }
 

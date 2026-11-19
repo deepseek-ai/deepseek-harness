@@ -375,6 +375,33 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "getActionSchema"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "performAction"
               },
               "params": {
@@ -494,6 +521,10 @@
                       "down",
                       "up"
                     ]
+                  },
+                  "useSystemPointer": {
+                    "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                    "type": "boolean"
                   }
                 },
                 "required": [

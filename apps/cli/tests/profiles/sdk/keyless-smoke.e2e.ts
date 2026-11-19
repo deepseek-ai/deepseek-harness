@@ -486,6 +486,87 @@ describe('Python SDK dsh profile keyless smoke', () => {
     }
   }, 30_000)
 
+  // TZ belongs to the spawned runtime only; GMT makes ICU report "+00:00", which is not a usable zone name.
+  it.each([
+    { tz: 'America/New_York', sampled: 'Browser time zone for this request: America/New_York. Interpret otherwise-unqualified dates and times in this zone.' },
+    { tz: 'GMT', sampled: 'Browser time zone for this request: unavailable. Ask the user to clarify otherwise-unqualified dates and times.' },
+  ])('shows the model the reported or sampled prompt time zone (TZ=$tz)', async ({ tz, sampled }) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-time-zone-'))
+    onTestFinished(() => rm(root, { recursive: true, force: true }))
+    const modelRequests: string[] = []
+    const modelServer = createServer((request, response) => {
+      let body = ''
+      request.setEncoding('utf8')
+      request.on('data', (chunk: string) => { body += chunk })
+      request.on('end', () => {
+        modelRequests.push(body)
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.end(messagesResponse({ type: 'text', text: 'done' }, 'end_turn'))
+      })
+    })
+    onTestFinished(() => new Promise<void>((resolve) => { modelServer.close(() => { resolve() }) }))
+    await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve))
+    const address = modelServer.address()
+    if (address === null || typeof address === 'string') throw new Error('model server did not bind a TCP port')
+    const child = execa(launch.command, [...launch.args, '--profile', 'sdk'], {
+      cwd: repoRoot,
+      env: {
+        ...launch.env,
+        DSH_HOME: join(root, '.dsh'),
+        DSH_TELEMETRY_DISABLED: '1',
+        DEEPSEEK_API_KEY: 'keyless-smoke-no-call',
+        DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
+        TZ: tz,
+      },
+      timeout: 35_000,
+      killSignal: 'SIGKILL',
+      reject: false,
+    })
+    onTestFinished(async () => { child.kill('SIGKILL'); await child })
+    const lines: string[] = []
+    let stdoutBuffer = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuffer += chunk.toString('utf8')
+      const parts = stdoutBuffer.split('\n')
+      stdoutBuffer = parts.pop() ?? ''
+      lines.push(...parts)
+    })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    const send = (id: number, method: string, params?: object) => {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+      return waitForLine(lines, value => value.id === id, () => stderr)
+    }
+    const promptRequest = async (id: number, sessionId: string, timeZone?: string): Promise<string> => {
+      const requests = modelRequests.length
+      expect(await send(id, 'session/prompt', {
+        sessionId, contentBlocks: [{ type: 'text', text: 'When is noon tomorrow?' }], ...timeZone === undefined ? {} : { timeZone },
+      })).toHaveProperty('result.messageId')
+      await waitForLine(lines, (value) => {
+        const params = value.params as { sessionId?: string; event?: { type?: string } } | undefined
+        return value.method === 'session.event' && params?.sessionId === sessionId && params.event?.type === 'turn/end'
+      }, () => stderr)
+      expect(modelRequests).toHaveLength(requests + 1)
+      return modelRequests.at(-1)!
+    }
+
+    await send(1, 'initialize', { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(await promptRequest(2, 'explicit', 'US/Eastern')).toContain(
+      'Browser time zone for this request: America/New_York. Interpret otherwise-unqualified dates and times in this zone.',
+    )
+    expect(await promptRequest(3, 'sampled')).toContain(sampled)
+    expect(await send(4, 'session/prompt', {
+      sessionId: 'invalid', contentBlocks: [{ type: 'text', text: 'When is noon?' }], timeZone: 'CST',
+    })).toMatchObject({
+      error: { code: -32603, message: 'timeZone must be UTC or a valid IANA Area/Location name: "CST"' },
+    })
+    expect(modelRequests).toHaveLength(2)
+
+    await send(5, 'shutdown')
+    const exit = await child
+    expect(exit.exitCode, `signal=${String(exit.signal)}; stderr=${stderr}`).toBe(0)
+  }, 40_000)
+
   it('rejects an invalid max-token success env value', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-runtime-invalid-'))
     try {

@@ -7,6 +7,7 @@
  * follows `PUSH_FROM`, `FILL_BELOW`, and `FULLSCREEN_QUERY`; the package
  * README describes its behavior, search included.
  */
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import clsx from 'clsx'
@@ -173,9 +174,8 @@ export function FileNavigator({
   const { tab, panel } = useTabInfo()
   const { getTriggerProps } = useContextMenu()
   const paneId = panel.id
-  // A Session's working directory comes from its header and never changes once
-  // known, so every search result the pane's store holds is rooted at it.
-  const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
+  // The tree is rooted at the directory the Session works in; the face searches again when it changes.
+  const cwd = useSessions(sessions => selectSessionDirectory(sessions, sessionId))
   const state = useStore(store => store.byPane[paneId])
   const rowWidth = useRowWidth(paneId)
   const canOpen = useCanOpen(check => check)

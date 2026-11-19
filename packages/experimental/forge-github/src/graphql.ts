@@ -138,6 +138,18 @@ export interface SnapshotPages {
 
 const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
 
+/** The closing issues references of a pull request, the snapshot's and a viewer list item's. */
+export const closingIssuesSchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  nodes: z.array(z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.string(),
+    url: z.string(),
+    repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
+  })),
+})
+
 const reviewsSchema = z.object({
   totalCount: z.number().int().nonnegative(),
   nodes: z.array(z.object({ state: z.string(), commit: z.object({ oid: z.string() }).nullable(), author: actorSchema.nullable() })),
@@ -179,16 +191,7 @@ const pullRequestSchema = z.object({
   }),
   latestReviews: reviewsSchema,
   latestOpinionatedReviews: reviewsSchema,
-  closingIssuesReferences: z.object({
-    totalCount: z.number().int().nonnegative(),
-    nodes: z.array(z.object({
-      number: z.number().int().positive(),
-      title: z.string(),
-      state: z.string(),
-      url: z.string(),
-      repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
-    })),
-  }),
+  closingIssuesReferences: closingIssuesSchema,
   commits: z.object({
     nodes: z.array(z.object({
       commit: z.object({
@@ -255,7 +258,7 @@ const MERGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE'])
 const TRIAGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE', 'TRIAGE'])
 
 /** Outcome of a submitted review by GitHub state; a pending review is not submitted. */
-const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
+export const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
   APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', COMMENTED: 'commented', DISMISSED: 'dismissed',
 }
 
@@ -357,8 +360,10 @@ export async function mapSnapshotResponse(
         ?? (rollup === undefined || rollup === null || checks === undefined ? undefined
           : await readPages(rollup.contexts, Number.POSITIVE_INFINITY, 'check', async cursor => await checks(rollup.id, cursor)))
       results.set(key, failure ?? toSnapshot(ref, node.data, settings.success ? settings.data : undefined))
-    } else if (error !== undefined) results.set(key, { code: error.type === 'NOT_FOUND' ? 'not-found' : 'unavailable', message: error.message })
-    else if (raw === null || raw === undefined) results.set(key, { code: 'not-found', message: 'pull request not found' })
+    } else if (error !== undefined) {
+      const code = error.type === 'NOT_FOUND' ? 'not-found' : error.type === 'RATE_LIMITED' ? 'rate-limited' : 'unavailable'
+      results.set(key, { code, message: error.message })
+    } else if (raw === null || raw === undefined) results.set(key, { code: 'not-found', message: 'pull request not found' })
     else results.set(key, { code: 'unavailable', message: 'unexpected pull request fields' })
   }
   return results
@@ -657,7 +662,12 @@ function statusContextState(state: string): CheckState {
   }
 }
 
-function checksRollup(state: string | undefined): ChecksRollup {
+/**
+ * Map GitHub's `StatusCheckRollup.state`.
+ * @param state - the rollup state, or undefined for a head commit without checks.
+ * @returns the combined check outcome; states outside the documented set read as pending.
+ */
+export function checksRollup(state: string | undefined): ChecksRollup {
   switch (state) {
     case undefined: return 'none'
     case 'SUCCESS': return 'success'
@@ -675,7 +685,12 @@ function mergeability(value: string): Mergeability {
   }
 }
 
-function reviewDecision(value: string | null): ReviewDecision {
+/**
+ * Map GitHub's `PullRequest.reviewDecision`.
+ * @param value - the decision, or null when the base branch requires none.
+ * @returns the aggregate review outcome.
+ */
+export function reviewDecision(value: string | null): ReviewDecision {
   switch (value) {
     case 'APPROVED': return 'approved'
     case 'CHANGES_REQUESTED': return 'changes-requested'

@@ -247,7 +247,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('starts in the current directory while earlier terminals and sandbox roots stay independent', async () => {
+  it('starts in the current directory while earlier terminals keep theirs and the sandbox root follows the directory', async () => {
     onTestFailed(() => saveFailureShot(page, 'sidebar-terminal-directory'))
     const agent = scaffold.ctx.agents.list()[0]!
     const directories = agent.ctx.get('workingDirectory')
@@ -262,6 +262,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     if (sandbox === undefined) throw new Error('Session sandbox provider is missing')
     const confine = vi.spyOn(sandbox, 'confine')
     const selected = await directories.set(agent, child)
+    expect(sandboxPolicy.resolve({ session: agent.session })).toEqual({ ...policy, workspaceRoot: selected })
 
     await openTerminal(page)
     const firstProcess = processIdentity(0)

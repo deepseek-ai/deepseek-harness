@@ -27,7 +27,7 @@ import { formatAgo } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
-import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf, type ChangeRequestTone } from './status.ts'
+import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf, type ChangeRequestEntry, type ChangeRequestTone } from './status.ts'
 import css from './Forge.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -44,15 +44,15 @@ export interface ChangeRequestActions extends OverviewActions {
   /** Read the status again after a failed read. */
   readonly retry: () => void
   /** Remove the change request from its Session. */
-  readonly remove?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  readonly remove?: ((entry: ChangeRequestEntry) => void) | undefined
   /** Mark a draft ready for review; settles once the outcome is reported. */
-  readonly markReady?: ((entry: ForgePanelChangeRequest) => Promise<void>) | undefined
+  readonly markReady?: ((entry: ChangeRequestEntry) => Promise<void>) | undefined
   /** Merge the change request as `request` describes; settles once the outcome is reported. */
-  readonly merge?: ((entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>) | undefined
+  readonly merge?: ((entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>) | undefined
   /** Load complete check details independently of polling; cancellation follows the open list. */
   readonly readChecks?: ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
   /** Open the changes view of the change request. */
-  readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  readonly viewChanges?: ((entry: ChangeRequestEntry) => void) | undefined
   /** Draw the icon buttons plugins add to the card's head through `forge.change-request.card.actions`. */
   readonly renderActions?: ((owner: ForgeChangeRequestCardActionsProps) => ReactNode) | undefined
   /**
@@ -89,6 +89,7 @@ const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
 const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'change.failure.notFound',
   'unauthenticated': 'change.failure.unauthenticated',
+  'rate-limited': 'change.failure.rateLimited',
   'too-large': 'change.failure.unavailable',
   'stale': 'change.failure.unavailable',
   'unsupported': 'change.failure.unavailable',
@@ -122,11 +123,13 @@ function DiffSize({ snapshot, locale }: { readonly snapshot: ChangeRequestSnapsh
 }
 
 /**
- * The changed lines with the unresolved review thread count, as a row that opens the changes view when the provider
- * serves the change request.
+ * Render the changed lines with the unresolved review thread count, as a row that opens the changes view when the
+ * provider serves the change request.
+ * @param props - the change request, its snapshot, how the row names it, the actions, the number locale, and copy.
+ * @returns the row.
  */
-function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
-  readonly entry: ForgePanelChangeRequest
+export function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly actions: ChangeRequestActions
@@ -293,12 +296,22 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   )
 }
 
-/** The footer with the merge action of an open change request the host would merge now. */
-function Primary({ entry, snapshot, name, actions, t }: {
-  readonly entry: ForgePanelChangeRequest
+/**
+ * Render the merge action of an open change request the host would merge now.
+ * @param props.entry - the change request.
+ * @param props.snapshot - its latest snapshot.
+ * @param props.name - how menus name it.
+ * @param props.actions - the actions the surface offers.
+ * @param props.className - class of the wrapper, the card footer's by default.
+ * @param props.t - forge panel copy.
+ * @returns the action, or null when the host would not merge now or the surface does not offer it.
+ */
+export function ChangeRequestPrimary({ entry, snapshot, name, actions, className = css.footer, t }: {
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly actions: ChangeRequestActions
+  readonly className?: string | undefined
   readonly t: Translate
 }): ReactNode {
   // One request at a time: the action stays disabled until the previous one settles.
@@ -312,7 +325,7 @@ function Primary({ entry, snapshot, name, actions, t }: {
   const [usual] = snapshot.mergeMethods
   if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
   return (
-    <div className={css.footer}>
+    <div className={className}>
       <MergeMenu
         snapshot={snapshot}
         name={name}
@@ -394,8 +407,66 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
   )
 }
 
+/**
+ * Render the merged or closed fact of a finished change request with its time.
+ * @param props - the snapshot, current epoch milliseconds for the relative time, and copy.
+ * @returns the row.
+ */
+export function FinishedRow({ snapshot, now, t }: {
+  readonly snapshot: ChangeRequestSnapshot
+  readonly now: number
+  readonly t: Translate
+}): ReactNode {
+  return (
+    <div className={css.row}>
+      <RowParts label={undefined} icon={<ChangeRequestGlyph tone={snapshot.state} tinted={false} size={16} />}
+        value={finished(snapshot, now, t)} tone={snapshot.state} opens={false} />
+    </div>
+  )
+}
+
+/**
+ * The aggregate review outcome of an open change request in words, with its tone.
+ * @param snapshot - the snapshot.
+ * @param t - forge panel copy.
+ * @returns the outcome and its tone.
+ */
+export function reviewOutcome(
+  snapshot: ChangeRequestSnapshot, t: Translate,
+): { readonly value: string; readonly tone: string | undefined } {
+  return {
+    value: t(REVIEW[snapshot.reviewDecision]),
+    tone: snapshot.reviewDecision === 'changes-requested' ? 'error' : snapshot.reviewDecision === 'approved' ? 'success' : undefined,
+  }
+}
+
+/**
+ * Render the merge state of an open change request: whether it conflicts with its base, and the branch update.
+ * @param props - the change request, its snapshot, the update action, and copy.
+ * @returns the row.
+ */
+export function MergeStateRow({ entry, snapshot, updateBranch, t }: {
+  readonly entry: ChangeRequestEntry
+  readonly snapshot: ChangeRequestSnapshot
+  readonly updateBranch: ChangeRequestActions['updateBranch']
+  readonly t: Translate
+}): ReactNode {
+  const merge = snapshot.mergeability === 'mergeable'
+    ? t('change.merge.mergeable')
+    : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
+  return (
+    <MergeRow entry={entry} snapshot={snapshot} value={merge} updateBranch={updateBranch}
+      icon={<ChangeRequestGlyph tone="merged" tinted={false} size={16} />}
+      tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined} t={t} />
+  )
+}
+
+/**
+ * The facts of a change request one row each: the merged or closed state, or the checks, review, and merge state;
+ * the changed lines; and the linked issues.
+ */
 function Details({ entry, snapshot, name, now, actions, locale, t }: {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly now: number
@@ -407,28 +478,19 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
   if (snapshot.state !== 'open') {
     return (
       <div className={css.rows}>
-        <div className={css.row}>
-          <RowParts label={undefined} icon={<ChangeRequestGlyph tone={snapshot.state} tinted={false} size={16} />}
-            value={finished(snapshot, now, t)} tone={snapshot.state} opens={false} />
-        </div>
+        <FinishedRow snapshot={snapshot} now={now} t={t} />
         {changes}
       </div>
     )
   }
-  const review = t(REVIEW[snapshot.reviewDecision])
-  const reviewTone = snapshot.reviewDecision === 'changes-requested' ? 'error' : snapshot.reviewDecision === 'approved' ? 'success' : undefined
-  const merge = snapshot.mergeability === 'mergeable'
-    ? t('change.merge.mergeable')
-    : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
+  const review = reviewOutcome(snapshot, t)
   return (
     <div className={css.rows}>
       <ChecksRow key={snapshot.headSha} entry={entry} snapshot={snapshot} openLink={actions.openLink} readChecks={actions.readChecks}
         rerunChecks={actions.rerunChecks} t={t} />
-      <ReviewRow entry={entry} snapshot={snapshot} tone={reviewTone} openLink={actions.openLink} value={review}
+      <ReviewRow entry={entry} snapshot={snapshot} tone={review.tone} openLink={actions.openLink} value={review.value}
         requestReviews={actions.requestReviews} reviewerCandidates={actions.reviewerCandidates} t={t} />
-      <MergeRow entry={entry} snapshot={snapshot} value={merge} updateBranch={actions.updateBranch}
-        icon={<ChangeRequestGlyph tone="merged" tinted={false} size={16} />}
-        tone={snapshot.mergeability === 'conflicting' ? 'error' : undefined} t={t} />
+      <MergeStateRow entry={entry} snapshot={snapshot} updateBranch={actions.updateBranch} t={t} />
       {changes}
       <IssuesRow snapshot={snapshot} openLink={actions.openLink} t={t} />
     </div>
@@ -516,7 +578,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
       {expanded && snapshot !== null && (
         <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       )}
-      {expanded && snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
+      {expanded && snapshot !== null && <ChangeRequestPrimary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>
   )
 }

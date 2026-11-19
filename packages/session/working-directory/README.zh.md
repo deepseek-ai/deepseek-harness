@@ -81,7 +81,6 @@ Session 投影拥有当前目录，并通过 Session observation 暴露它，因
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **读取 header 的消费方** — 沙箱写边界、工作区文件服务、变更记录器和客户端文件视图仍然读取 Session header，因此 Host 移动之后它们仍停在原始项目。让它们改读 `get` 是[工作区根记录](../../../.agents/notes/implemented/architecture/2026-11-03-session-workspace-root.zh.md#deferred)列出的后续工作。
 - **已存储的目录变更** — 早期版本存储的 Session 在原始项目中恢复，即使它进入过工作树或模型切换过目录。`enter_worktree` 或其他 Host 移动可以让它回到工作树。
 - **原始项目缺失** — 当前目录与原始项目均不可用时，提示词组装会拒绝每个模型轮次，包括纯聊天轮次。服务不会另选或重建仓库。请先恢复原始目录，或通过 SDK 的 `setWorkingDirectory`（Python 中为 `set_working_directory`）或 `ctx.workingDirectory.set` 选择现有的绝对目录，再重试。已有 shell 保留各自进程的目录。
 

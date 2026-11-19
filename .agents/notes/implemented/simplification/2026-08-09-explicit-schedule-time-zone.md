@@ -12,9 +12,9 @@ Most of that complexity sat outside Schedule. The model already interprets natur
 
 ## Decision
 
-The browser zone is request-local source data. The Web client samples `Intl.DateTimeFormat().resolvedOptions().timeZone` for every prompt. The Host accepts an optional `clientTimeZone`, validates and canonicalizes `UTC` or an IANA Area/Location at the RPC boundary, and logs it on that exact `user-rpc` message. Invalid values reject prompt admission. Non-browser clients may omit it.
+The browser zone is request-local source data. The Web client samples `Intl.DateTimeFormat().resolvedOptions().timeZone` for every prompt. The Host accepts an optional `clientTimeZone`, validates and canonicalizes `UTC` or an IANA Area/Location at the RPC boundary, and logs it on that exact `user-rpc` message. Invalid values reject prompt admission. Non-browser clients may omit it; SDK prompts report an explicit or sampled process zone on an `sdk-user` source without `rpcId`, as recorded in [per-prompt SDK time zone](../feature/2026-11-09-sdk-prompt-time-zone.md).
 
-Time-context derives unique, mixed, or missing browser facts from original user-rpc messages in the open turn. A unique zone formats the clock and tells the model to interpret otherwise-unqualified dates and times in that zone. Mixed or missing browser-zone records tell the model to ask the user. The configured or process zone is only a display fallback and is never presented as user authority.
+Time-context derives unique, mixed, or missing browser facts from original user messages in the open turn that carry `clientTimeZone`. A unique zone formats the clock and tells the model to interpret otherwise-unqualified dates and times in that zone. Mixed or missing browser-zone records tell the model to ask the user. The configured or process zone is only a display fallback and is never presented as user authority.
 
 Schedule accepts no implicit local zone. `at` is either a strict offset-bearing RFC 3339 string or exact `{ date, time, time_zone }`. The structured form requires its zone even when time-context just showed the model a browser zone. Schedule does not import time-context, inspect user-message sources, read a Session header, or produce a confirmation error. Its parser validates the explicit value, rejects daylight-saving gaps, chooses the first instant in overlaps, and stores only canonical UTC `scheduledAt`.
 
@@ -43,5 +43,5 @@ Source audits reject `SessionHeader.timeZone`, persistence `time_zone` columns, 
 - Browser-local natural language works without a persisted Session-zone subsystem.
 - Schedule has one explicit, independently testable absolute-time boundary.
 - Travel and concurrent tabs affect only their own prompts; a turn with mixed browser-zone records asks instead of mutating shared state.
-- Non-browser clients remain valid but must provide enough natural-language context or explicit tool arguments.
+- Non-browser clients without a reported zone remain valid but must provide enough natural-language context or explicit tool arguments.
 - The model may still make an interpretation error; the tool guarantees only that the explicit calendar value is valid and deterministic.
