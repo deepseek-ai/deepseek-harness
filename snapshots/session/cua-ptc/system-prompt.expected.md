@@ -100,6 +100,15 @@ AX read defaults: maxElements=5000, maxDepth=50.
 
 Maximum click holdMs: 5000 ms.
 
+If using per-call PTC, include the bridge initialization at the start of every program before using cua; variables and objects do not persist between calls.
+
+Per-call PTC initialization:
+
+```ts
+var { connectCua } = await import("file://{{cwd}}/cua-bridge.mjs");
+var cua = connectCua(() => tools.cua);
+```
+
 ## Writing code for run_code
 
 `run_code` takes two required arguments: `code`, the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped), and `description`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:

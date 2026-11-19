@@ -97,3 +97,12 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 AX read defaults: maxElements=5000, maxDepth=50.
 
 Maximum click holdMs: 5000 ms.
+
+If using per-call PTC, include the bridge initialization at the start of every program before using cua; variables and objects do not persist between calls.
+
+Per-call PTC initialization:
+
+```ts
+var { connectCua } = await import("file://{{cwd}}/cua-bridge.mjs");
+var cua = connectCua(() => tools.cua);
+```

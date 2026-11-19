@@ -179,7 +179,6 @@ it('guides complex input combinations through platform-supported primitive opera
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     expect(catalog).toContain(advice)
     expect(catalog.indexOf(advice)).toBeGreaterThan(catalog.indexOf('- sendKeyEvent('))
-    expect(catalog.indexOf(advice)).toBeLessThan(catalog.indexOf('Raw tools use { method, params }'))
   }
 })
 

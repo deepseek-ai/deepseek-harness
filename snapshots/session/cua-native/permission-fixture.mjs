@@ -1,11 +1,13 @@
 /** Scripted human answers and a permission-page revocation in the recorded CUA scenario. */
 import { join } from 'node:path'
 import { startFixtureHost } from './fixture-host.mjs'
+import { installCuaBridge } from './bridge-fixture.mjs'
 export const name = 'cua-permission-fixture'
 export const inject = ['userQuestions', 'cuaAccess', 'tools']
 
 /** Supply external human decisions while retaining the real permission policy and tool pipeline. */
 export async function apply(ctx) {
+  await installCuaBridge(ctx)
   const close = await startFixtureHost(join(process.cwd(), 'native-helper.mjs'))
   ctx.effect(() => close)
   ctx.on('user-questions/request', async (request) => ({ answers: request.questions.map(question => ({

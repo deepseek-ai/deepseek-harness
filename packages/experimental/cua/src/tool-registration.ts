@@ -79,11 +79,14 @@ export function installCuaTools(
   const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
-    return !runtime?.retainsState ? guidance : `${guidance}
+    if (runtime === undefined) return guidance
+    return `${guidance}
 
-In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.
+${runtime.retainsState
+  ? 'In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.'
+  : 'If using per-call PTC, include the bridge initialization at the start of every program before using cua; variables and objects do not persist between calls.'}
 
-Persistent PTC initialization:
+${runtime.retainsState ? 'Persistent' : 'Per-call'} PTC initialization:
 
 \`\`\`ts
 var { connectCua } = await import(${ptcBridgeUrl});
