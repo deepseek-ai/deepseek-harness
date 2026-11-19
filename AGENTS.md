@@ -171,7 +171,7 @@ Real-API tests/demos read `DEEPSEEK_API_KEY`, optional `DEEPSEEK_BASE_URL`, and 
 
 ## Review rules
 
-Before finishing, self-review against [DSH Core Guidelines](docs/core-guidelines.md).
+Before finishing, self-review against [DSH Core Guidelines](docs/core-guidelines/README.md).
 
 Read [docs/defensive-patterns/README.md](docs/defensive-patterns/README.md) before changing a package surface, remote service, client component or state, conversation or Session behavior, or lifecycle, concurrency, subprocess, and teardown code.
 
