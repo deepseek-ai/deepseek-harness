@@ -158,6 +158,7 @@ export class CuaHeldInputs {
           const owner = this.owners.get(agent)
           const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
           const text = await owner?.reminder(inTurn)
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
           if (signal.aborted) { await this.release(agent); return result }
           if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
