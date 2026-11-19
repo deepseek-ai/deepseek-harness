@@ -169,8 +169,7 @@ import Darwin
             return try scheduler.heldInputs.held(connection: connectionID, task: params.string("taskId"))
         }
         if request.method == "releaseHeldInputs" {
-            try scheduler.heldInputs.release(connection: connectionID, task: params.string("taskId"))
-            return AXWorker.actionResult
+            return .array(try scheduler.heldInputs.release(connection: connectionID, task: params.string("taskId")))
         }
         if request.method == "toggleMouse", try params.string("direction") == "up" {
             let dispatched = try scheduler.heldInputs.pointerUp(owner: .init(connection: connectionID, task: params.string("taskId"),

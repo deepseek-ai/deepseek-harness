@@ -182,7 +182,8 @@ export interface CuaSurface {
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
-   * Explicit downs persist across programs and turns. Successful programs disclose remaining holds in a system reminder.
+   * In DSH turns, explicit downs persist across programs and turns; successful programs remind about remaining holds.
+   * Programs outside a DSH turn, including MCP, release remaining input before returning and report the release.
    * Program failure, cancellation, connection closure and disposal release owned input. Windows support is pending.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.

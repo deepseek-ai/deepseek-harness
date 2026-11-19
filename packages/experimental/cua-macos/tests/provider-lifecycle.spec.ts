@@ -148,7 +148,7 @@ async function setup(
   model?: { provider: string; model: string }, ptc = false, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
 ) {
   native.connect.mockClear()
-  native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
+  native.cleanup.mockReset().mockResolvedValue([])
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0

@@ -8,7 +8,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-macOS explicit `sendKeyEvent('down')` and `toggleMouse('down')` remain held across programs and turns until an explicit `up`. Normal completion does not release them. After a successful `run_code` or `cua_run_code`, a system reminder lists any remaining keys and mouse buttons, their application or window and actual input mode. Program failure, user stop, connection closure, environment reset and disposal release owned input in reverse dispatch order. Complete `pressKey`, `typeText`, `click` and `drag` actions keep their operation-local cleanup. DSH and MCP use the same behavior. Windows reporting and unified cleanup remain unimplemented.
+Within DSH turns, macOS explicit `sendKeyEvent('down')` and `toggleMouse('down')` remain held across programs and turns until an explicit `up`. Normal completion does not release them. After a successful `run_code` or `cua_run_code`, a system reminder lists any remaining keys and mouse buttons, their application or window and actual input mode. Program failure, user stop, connection closure, environment reset and disposal release owned input in reverse dispatch order. Complete `pressKey`, `typeText`, `click` and `drag` actions keep their operation-local cleanup. MCP programs release remaining input before returning and report confirmed automatic releases, because clients do not notify the server when paused between calls. Windows reporting and unified cleanup remain unimplemented.
 
 ## Migration
 

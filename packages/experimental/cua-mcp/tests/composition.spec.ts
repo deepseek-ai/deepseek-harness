@@ -182,21 +182,35 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('Computer Use MCP composition', () => {
-  it('retains input across MCP programs, reminds after success, and releases on error and reset', async () => {
-    const { native, run, client } = await setup()
-    expect((await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await app.sendKeyEvent("w", "down")')).isError).not.toBe(true)
-    expect(native.held.map(press => press.key)).toEqual(['w'])
-    const continuing = await run('inspect("continue")')
-    expect(texts(continuing).join('')).toContain('Key "w", appHandle "fixture-app"')
-    const released = await run('await app.sendKeyEvent("w", "up")')
-    expect(texts(released).join('')).not.toContain('<system-reminder>')
+  it('releases MCP input before returning and reports only confirmed automatic releases', async () => {
+    const { native, run } = await setup()
+    const held = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await app.sendKeyEvent("w", "down"); await win.toggleMouse("left", "down")')
+    expect(held.isError).not.toBe(true)
     expect(native.held).toEqual([])
-    expect((await run('await win.toggleMouse("left", "down"); throw Error("failed program")')).isError).toBe(true)
+    expect(native.events).toEqual(['w:down', 'left:down', 'left:up', 'w:up'])
+    expect(texts(held).join('')).toContain('CUA inputs were automatically released at program end')
+    expect(texts(held).join('')).toContain('Mouse left')
+    expect(texts(held).join('')).toContain('Key "w"')
+    expect(texts(await run('inspect("next program")')).join('')).not.toContain('<system-reminder>')
+    expect(texts(await run('await app.sendKeyEvent("d", "down"); await app.sendKeyEvent("d", "up")')).join('')).not.toContain('<system-reminder>')
+    const failed = await run('await win.toggleMouse("left", "down"); throw Error("failed program")')
+    expect(failed.isError).toBe(true)
     expect(native.held).toEqual([])
-    expect(texts(await run('await app.sendKeyEvent("d", "down")')).join('')).toContain('Key "d"')
-    await client.callTool({ name: 'cua_reset', arguments: {} })
-    expect(native.held).toEqual([])
-    expect((await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0")')).isError).not.toBe(true)
+    expect((await run('await win.click("0")')).isError).not.toBe(true)
+  })
+
+  it('waits for the native MCP cleanup reply and reports refusal without claiming release', async () => {
+    const { native, run } = await setup()
+    const release = native.controlNext('releaseHeldInputs')
+    let settled = false
+    const running = run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")').then((value) => { settled = true; return value })
+    await release.entered
+    expect(settled).toBe(false)
+    release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'MCP release refused' })
+    const result = await running
+    expect(result.isError).toBe(true)
+    expect(texts(result).join('')).toContain('MCP release refused')
+    expect(texts(result).join('')).not.toContain('inputs were automatically released')
   })
 
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {

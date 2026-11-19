@@ -83,7 +83,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 `pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。`pressKey`、`click` 和 `drag` 都接受修饰键 `command`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`。只有 `pressKey` 的修饰键参数还接受 `command` 的别名 `cmd`。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
 
-长按时调用 `app.sendKeyEvent('w', 'down')`。显式键盘和鼠标按下会跨程序、跨回合保持，直到显式 up 按保存的目标释放。成功结束的程序通过 system reminder 报告剩余持有输入，包括目标和实际输入方式。程序失败、用户取消、断连、重置和销毁按实际派发顺序的反序统一释放所属键盘键和鼠标按钮。完整的 `pressKey`、`typeText`、`click` 和 `drag` 保持操作内及时清理。
+长按时调用 `app.sendKeyEvent('w', 'down')`。在 DSH 中，显式键盘和鼠标按下会跨程序、跨回合保持，直到显式 up 按保存的目标释放。成功结束的程序通过 system reminder 报告剩余持有输入，包括目标和实际输入方式。程序失败、用户取消、断连、重置和销毁按实际派发顺序的反序统一释放所属键盘键和鼠标按钮。完整的 `pressKey`、`typeText`、`click` 和 `drag` 保持操作内及时清理。
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 

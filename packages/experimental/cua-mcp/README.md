@@ -167,7 +167,7 @@ The tool catalog and instructions are stable for one installation. The reference
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Successful programs disclose remaining native-held keys and mouse buttons in a system reminder. Inputs persist across calls until explicit up. Program failure, cancellation, reset and connection closure release owned input; no client turn notification is required.
+- Each program releases remaining native-held keys and mouse buttons before returning. A system reminder lists inputs automatically released after native acknowledgement. Input cannot remain held across MCP calls; no client pause notification is required. Program failure, cancellation, reset and connection closure also release owned input.
 - macOS and native Windows Hosts have a provider. Other Hosts, WSL included, list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
 - On Windows the [provider's limits](../cua-windows/README.md#known-limitations-and-deferred-work) apply through MCP: it does not launch applications, grants no `Always allow`, and an npm installation needs `helperPath`.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.

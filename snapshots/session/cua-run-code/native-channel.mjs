@@ -31,6 +31,7 @@ export function createNativeFixture(selectorPid) {
         ? { kind: 'key', key: press.key, appHandle: press.appHandle, mode: 'application' }
         : { kind: 'mouse', button: press.key, appHandle: press.appHandle, windowId: press.windowId, mode: press.mode })
       if (method === 'releaseHeldInputs') {
+        const released = dispatch('getHeldInputs', params).reverse()
         for (let index = held.length - 1; index >= 0; index--) {
           const press = held[index]
           if (press.connection === connection && press.taskId === params.taskId) {
@@ -38,7 +39,7 @@ export function createNativeFixture(selectorPid) {
             held.splice(index, 1)
           }
         }
-        return { dispatched: true }
+        return released
       }
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
       if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: selectorPid ?? 4 }]

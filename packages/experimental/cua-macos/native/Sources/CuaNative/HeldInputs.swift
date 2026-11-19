@@ -168,6 +168,23 @@ final class HeldInputs: @unchecked Sendable {
         }
     }
 
+    private func record(_ press: Press) -> JSONValue {
+        var record: [String: JSONValue] = ["appHandle": .string(press.owner.app)]
+        switch press.mode {
+        case .keyboard(_, _, let name):
+            record["kind"] = .string("key")
+            record["key"] = .string(name)
+            record["mode"] = .string("application")
+        case .windowPointer(let button, let window), .systemPointer(let button, let window):
+            record["kind"] = .string("mouse")
+            record["button"] = .string(button == .left ? "left" : button == .right ? "right" : "middle")
+            record["windowId"] = .string(String(window))
+            if case .systemPointer = press.mode { record["mode"] = .string("system") }
+            else { record["mode"] = .string("window") }
+        }
+        return .object(record)
+    }
+
     /// Only the caller's registered input is disclosed; physical user input is never inferred.
     func held(connection: UUID, task: String) throws -> JSONValue {
         try lock.withLock {
@@ -181,34 +198,25 @@ final class HeldInputs: @unchecked Sendable {
                 }
             }
             return .array(pressed.filter { $0.owner.connection == connection && $0.owner.task == task }.map { press in
-                var record: [String: JSONValue] = ["appHandle": .string(press.owner.app)]
-                switch press.mode {
-                case .keyboard(_, _, let name):
-                    record["kind"] = .string("key")
-                    record["key"] = .string(name)
-                    record["mode"] = .string("application")
-                case .windowPointer(let button, let window), .systemPointer(let button, let window):
-                    record["kind"] = .string("mouse")
-                    record["button"] = .string(button == .left ? "left" : button == .right ? "right" : "middle")
-                    record["windowId"] = .string(String(window))
-                    if case .systemPointer = press.mode { record["mode"] = .string("system") }
-                    else { record["mode"] = .string("window") }
-                }
-                return .object(record)
+                record(press)
             })
         }
     }
 
-    func release(connection: UUID, task: String? = nil) throws {
+    @discardableResult
+    func release(connection: UUID, task: String? = nil) throws -> [JSONValue] {
         try lock.withLock {
             var failures: [String] = []
+            var released: [JSONValue] = []
             for index in pressed.indices.reversed() {
-                let owner = pressed[index].owner
+                let press = pressed[index]
+                let owner = press.owner
                 guard owner.connection == connection, task == nil || owner.task == task else { continue }
-                do { _ = try release(at: index) }
+                do { if try release(at: index) { released.append(record(press)) } }
                 catch { failures.append(String(describing: error)) }
             }
             if !failures.isEmpty { throw NativeFailure(code: "INPUT_CLEANUP_FAILED", message: failures.joined(separator: "; ")) }
+            return released
         }
     }
 

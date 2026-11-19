@@ -12,18 +12,29 @@ const heldInputs = z.array(z.discriminatedUnion('kind', [
   z.object({ ...target, kind: z.literal('mouse'), button: z.enum(['left', 'right', 'middle']), windowId: z.string() }),
 ]))
 
+function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released'): string {
+  const rows = inputs.map(input => input.kind === 'key'
+    ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)} (${input.mode} input).`
+    : `- Mouse ${input.button}, appHandle ${JSON.stringify(input.appHandle)}, windowId ${JSON.stringify(input.windowId)} (${input.mode} input).`)
+  return ['<system-reminder>', state === 'held' ? 'CUA inputs are still held:' : 'CUA inputs were automatically released at program end:', ...rows,
+    state === 'held'
+      ? "They remain pressed across programs and turns. Release them explicitly with sendKeyEvent(key, 'up') or toggleMouse(button, 'up') on the same target when no longer needed."
+      : 'These inputs are no longer held. In this environment, keep any required hold sequence within one program.',
+    '</system-reminder>'].join('\n')
+}
+
 class InputOwner {
   readonly controller = new AbortController()
   private client: NativeClient | undefined
   private removeCleanup: (() => void) | undefined
-  closing: Promise<void> | undefined
+  closing: Promise<z.infer<typeof heldInputs>> | undefined
 
   constructor(readonly agent: Agent, private readonly failed: (error: unknown) => void) {}
 
   track(client: NativeClient): void {
     this.controller.signal.throwIfAborted()
     if (this.client) return
-    this.removeCleanup = client.registerCleanup(canRequest => this.close(canRequest))
+    this.removeCleanup = client.registerCleanup(async (canRequest) => { await this.close(canRequest) })
     this.client = client
   }
 
@@ -36,21 +47,21 @@ class InputOwner {
       this.client = undefined
       return
     }
-    const rows = inputs.map(input => input.kind === 'key'
-      ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)} (${input.mode} input).`
-      : `- Mouse ${input.button}, appHandle ${JSON.stringify(input.appHandle)}, windowId ${JSON.stringify(input.windowId)} (${input.mode} input).`)
-    return ['<system-reminder>', 'CUA inputs are still held:', ...rows,
-      "They remain pressed across programs and turns. Release them explicitly with sendKeyEvent(key, 'up') or toggleMouse(button, 'up') on the same target when no longer needed.",
-      '</system-reminder>'].join('\n')
+    return renderInputs(inputs, 'held')
   }
 
-  close(canRequest = true): Promise<void> {
+  async releaseReminder(): Promise<string | undefined> {
+    const released = await this.close()
+    return released.length > 0 ? renderInputs(released, 'released') : undefined
+  }
+
+  close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
     this.controller.abort()
     return this.closing ??= Promise.resolve().then(async () => {
       try {
-        if (!this.client) return
+        if (!this.client) return []
         if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before held-input cleanup was confirmed. Inspect the desktop manually before starting a new task')
-        await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id })
+        return heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id }))
       } catch (error) {
         this.failed(error)
         throw error
@@ -127,10 +138,12 @@ export class CuaHeldInputs {
           catch (error) { throw new NativeError('INPUT_CLEANUP_UNCONFIRMED',
             `${result.isError ? result.error.message : 'Program cancelled'}. Held-input cleanup failed: ${String(error)}`, { cause: error }) }
         } else if (execution.parent === undefined) {
-          const text = await this.owners.get(agent)?.reminder()
+          const owner = this.owners.get(agent)
+          const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
+          const text = inTurn ? await owner?.reminder() : await owner?.releaseReminder()
           if (text) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
-              source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
+              source: { kind: 'cua-held-inputs', form: 'notice', summary: inTurn ? 'CUA inputs remain held' : 'CUA inputs released' } }),
           ] }
         }
         return result
