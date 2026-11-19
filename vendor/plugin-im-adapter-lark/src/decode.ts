@@ -160,10 +160,10 @@ async function recalledSessions(bot: LarkBot, raw: LarkRawEvent, now: number): P
 /**
  * One `im.message.reaction.created_v1` / `deleted_v1` event.
  *
- * The platform's reaction payload names the message, the emoji and the operator but **no chat**, while
- * `SessionEvent.reaction.message` is a `MessageRef` (an id *and* a chat). Rather than inventing a chat id, a reaction
- * is published only when the deployment's payload carries one; otherwise nothing is published and the frame is still
- * acknowledged. The intake ignores this family either way (it routes `message` sessions).
+ * The platform's reaction payload names the message, the emoji and the operator, and normally carries no chat id:
+ * `message.chat` is populated when the payload provides `chat_id` and omitted otherwise so downstream stores can
+ * resolve the message by id without fabricating a chat. When `operator_type === 'app'` matches this application, the
+ * operator is normalized to `bot.selfId` so consumers can recognize self-reactions cleanly.
  *
  * @param bot - receiving bot.
  * @param raw - envelope.
@@ -180,12 +180,23 @@ function reactionSessions(
   const wire = raw.event
   const messageId = nonEmpty(wire.message_id)
   const emoji = isDict(wire.reaction_type) ? nonEmpty(wire.reaction_type.emoji_type) : undefined
+  if (!messageId || !emoji) return []
   const chatId = nonEmpty(wire.chat_id)
-  if (!messageId || !emoji || !chatId) return []
-  const chat: ChatRef = { id: chatId, type: chatKindOf(wire.chat_type) }
-  const reaction: NonNullable<Session['event']['reaction']> = { message: { id: messageId, chat }, emoji }
-  const user = decodeUser({ sender_id: wire.user_id })
-  if (user.id) reaction.user = user
+  const message: { id: string; chat?: ChatRef } = chatId
+    ? { id: messageId, chat: { id: chatId, type: chatKindOf(wire.chat_type) } }
+    : { id: messageId }
+  const reaction: NonNullable<Session['event']['reaction']> = { message, emoji }
+  if (wire.operator_type === 'app') {
+    const appId = nonEmpty(wire.app_id)
+    const id = appId === bot.config.appId ? (bot.selfId || appId) : appId
+    if (id) reaction.user = { id, isBot: true }
+  } else {
+    const operatorIds = isDict(wire.operator) && isDict(wire.operator.operator_id)
+      ? wire.operator.operator_id
+      : undefined
+    const user = decodeUser({ sender_id: wire.user_id ?? operatorIds })
+    if (user.id) reaction.user = user
+  }
   const time = epochTime(wire.action_time, now)
   return [bot.session({ type, id: raw.header.event_id, timestamp: time, reaction })]
 }

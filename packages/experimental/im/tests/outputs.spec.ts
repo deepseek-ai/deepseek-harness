@@ -16,7 +16,7 @@ import { ImOutputRegistry, NO_OUTPUT, STOP_BUTTON_PREFIX, type ImOutputDeps } fr
 import { ImSender } from '../src/send.ts'
 import { ImStore } from '../src/store.ts'
 import {
-  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, record, toggle,
+  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, react, record, toggle,
 } from './support/outputs-harness.ts'
 
 const open: OutputsHarness[] = []
@@ -517,6 +517,60 @@ describe('ImOutputRegistry checks', () => {
     // An envelope without a checkbox is not a toggle.
     harness.registry.check(noClick())
     expect(harness.checks).toEqual([])
+  })
+})
+
+describe('ImOutputRegistry reactions', () => {
+  it('re-emits reactions on stored messages without chat_id, carrying session attribution and deduplicating event ids', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    const message = { ...inbound(), sender: { id: 'bot-user', self: true } }
+    harness.messages.set(message.key, message)
+    harness.sender.owners.set(message.key, hosted.sessionId)
+
+    harness.ctx.emit('reaction-added', react('m1', 'THUMBSUP', { id: 'ev-1' }))
+    // Duplicate platform redelivery with the same event id is ignored.
+    harness.ctx.emit('reaction-added', react('m1', 'THUMBSUP', { id: 'ev-1' }))
+    harness.ctx.emit('reaction-removed', react('m1', 'THUMBSUP', { id: 'ev-2', time: 1500 }))
+    await flush()
+
+    expect(harness.reactions).toHaveLength(2)
+    expect(harness.reactions[0]).toMatchObject({
+      action: 'added',
+      emoji: 'THUMBSUP',
+      chat: chatOf(),
+      user: { id: 'user-1' },
+      bot: BOT,
+      message,
+      session: hosted.sessionId,
+      time: 1000,
+      id: 'ev-1',
+    })
+    expect(harness.reactions[1]).toMatchObject({
+      action: 'removed',
+      emoji: 'THUMBSUP',
+      time: 1500,
+      id: 'ev-2',
+    })
+  })
+
+  it('ignores self-reactions, unknown messages, chat mismatches, and disallowed users', () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    const message = { ...inbound(), sender: { id: 'bot-user', self: true } }
+    harness.messages.set(message.key, message)
+
+    // Bot's own working reaction is ignored.
+    harness.registry.reaction(react('m1', 'Typing', { user: { id: 'bot-user', isBot: true } }), 'added')
+    // Unknown message id is ignored.
+    harness.registry.reaction(react('m-missing', 'THUMBSUP'), 'added')
+    // Chat mismatch is ignored.
+    harness.registry.reaction(react('m1', 'THUMBSUP', { chat: 'other' }), 'added')
+    // User outside source allowlist is ignored.
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+
+    expect(harness.reactions).toEqual([])
   })
 })
 

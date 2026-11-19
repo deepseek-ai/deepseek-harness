@@ -198,6 +198,23 @@ export interface ImCheckEvent {
   readonly raw: CheckEvent
 }
 
+/** A reaction added to or removed from a stored message in an admitted chat, re-emitted by the core as `im/reaction`. */
+export interface ImReactionEvent {
+  readonly action: 'added' | 'removed'
+  /** Platform emoji identity (for example Feishu `THUMBSUP`, `SMILE`). */
+  readonly emoji: string
+  readonly chat: ImChat
+  readonly user: UserRef
+  readonly bot: Bot
+  /** The stored message that received the reaction. */
+  readonly message: ImMessage
+  /** The session whose send/output produced that message, when known. */
+  readonly session?: SessionId
+  readonly time: number
+  /** Platform event id when provided by the adapter. */
+  readonly id?: string
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
@@ -231,6 +248,12 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'im/check'(event: ImCheckEvent): void
+    /**
+     * A reaction was added to or removed from a stored message in an admitted chat.
+     * @param event - the reaction, its target message, actor, and producing session when known.
+     * @mode emit
+     */
+    'im/reaction'(event: ImReactionEvent): void
     /**
      * A hosted session's turn activity changed; output renderers subscribe to redraw their message.
      * @param activity - the whole activity of the turn, with every segment so far.

@@ -95,10 +95,13 @@ export interface LarkMessageRecalledEvent {
 /** `im.message.reaction.created_v1` / `deleted_v1`. */
 export interface LarkReactionChangedEvent {
   message_id?: string
-  /** `message` or `thread`. */
+  chat_id?: string
+  chat_type?: string
   reaction_type?: { emoji_type?: string }
-  operator_type?: number
+  operator_type?: 'user' | 'app' | number
+  operator?: { operator_id?: LarkUserIds }
   user_id?: LarkUserIds
+  app_id?: string
   action_time?: string
 }
 

@@ -10,15 +10,15 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey, ImSourceId,
-  type ImActivity, type ImButtonEvent, type ImChat, type ImCheckEvent, type ImMessage, type ImSelectEvent,
-  type ImSendOptions,
+  type ImActivity, type ImButtonEvent, type ImChat, type ImCheckEvent, type ImMessage, type ImReactionEvent,
+  type ImSelectEvent, type ImSendOptions,
   type ImSendResult, type ImSessionRecord, type ImSourceConfig,
 } from '../../src/api.ts'
 import { ImOutputRegistry, type ImOutputDeps } from '../../src/outputs.ts'
 import type { ImMessageDraft } from '../../src/store.ts'
 
 /** The bot id every fake chat and click belongs to. */
-export const BOT = { id: 'fake:bot' } as Bot
+export const BOT = { id: 'fake:bot', selfId: 'bot-user' } as Bot
 
 /** One `io.send` call. */
 export interface Send {
@@ -183,6 +183,26 @@ export function toggle(
   return { check, bot: BOT, timestamp: 1000 } as Session
 }
 
+/** One `reaction-added` / `reaction-removed` session of the fake bot. */
+export function react(
+  messageId: string,
+  emoji: string,
+  patch: { user?: { id: string; name?: string; isBot?: boolean }; chat?: string; id?: string; time?: number } = {},
+): Session {
+  const timestamp = patch.time ?? 1000
+  const message = patch.chat === undefined
+    ? { id: messageId }
+    : { id: messageId, chat: chatOf(patch.chat).ref }
+  const user = patch.user ?? { id: 'user-1' }
+  const event = {
+    type: 'reaction-added',
+    timestamp,
+    ...patch.id === undefined ? {} : { id: patch.id },
+    reaction: { message, emoji, user },
+  }
+  return { bot: BOT, timestamp, event, reaction: event.reaction } as unknown as Session
+}
+
 /** Everything one registry test needs. */
 export class OutputsHarness {
   readonly ctx = new Context()
@@ -194,6 +214,8 @@ export class OutputsHarness {
   readonly selects: ImSelectEvent[] = []
   /** Every `im/check` emission. */
   readonly checks: ImCheckEvent[] = []
+  /** Every `im/reaction` emission. */
+  readonly reactions: ImReactionEvent[] = []
   /** Chats `chat()` knows. */
   readonly chats = new Map<ImChatKey, ImChat>()
   /** Stored messages by key (`history.get`). */
@@ -226,6 +248,7 @@ export class OutputsHarness {
     this.ctx.on('im/button', (event) => { this.buttons.push(event) })
     this.ctx.on('im/select', (event) => { this.selects.push(event) })
     this.ctx.on('im/check', (event) => { this.checks.push(event) })
+    this.ctx.on('im/reaction', (event) => { this.reactions.push(event) })
     this.registry.start()
   }
 

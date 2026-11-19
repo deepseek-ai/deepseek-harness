@@ -10,7 +10,7 @@ import type {
 import { Context } from '@deepseek-ai/cordis'
 import { defineProperty, Time } from '@deepseek-ai/cosmokit'
 import type { Bot } from './bot.ts'
-import type { InboundMessage, Login, MessageRef, UserRef } from './protocol.ts'
+import type { ChatRef, InboundMessage, Login, MessageRef, UserRef } from './protocol.ts'
 
 export interface SessionEvent {
   /** Event name: `message`, `interaction/button`, `interaction/select`, `interaction/check`, `reaction-added`, … */
@@ -28,8 +28,8 @@ export interface SessionEvent {
   check?: CheckEvent
   /** `message-deleted` */
   deleted?: MessageRef & { operator?: UserRef }
-  /** `reaction-added` / `reaction-removed` */
-  reaction?: { message: MessageRef; emoji: string; user?: UserRef }
+  /** `reaction-added` / `reaction-removed`; `chat` is omitted on platforms whose event only names `message.id`. */
+  reaction?: { message: { id: string; chat?: ChatRef }; emoji: string; user?: UserRef }
   /** `login-*` */
   login?: Login
   /** Passive-reply context (also on `message.referrer` / `button.referrer` / `select.referrer` / `check.referrer`). */
@@ -87,6 +87,10 @@ export class Session {
 
   get check() {
     return this.event.check
+  }
+
+  get reaction() {
+    return this.event.reaction
   }
 
   get referrer() {

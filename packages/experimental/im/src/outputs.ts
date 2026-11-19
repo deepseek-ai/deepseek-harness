@@ -21,8 +21,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey,
   type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImCheckEvent,
-  type ImHistory, type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSelectEvent,
-  type ImSendOptions, type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
+  type ImHistory, type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImReactionEvent,
+  type ImSelectEvent, type ImSendOptions, type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { allows, admitsChat } from './intake.ts'
@@ -33,6 +33,9 @@ export const STOP_BUTTON_PREFIX = 'dsh:stop:'
 
 /** Reserved `spec.output` value that names no renderer: nothing is published unless the agent calls `im_send`. */
 export const NO_OUTPUT = 'none'
+
+/** Maximum recent reaction event ids kept for platform redelivery deduplication. */
+const MAX_REACTION_EVENTS = 1000
 
 /** The IM host slice one rendered turn reads: the chat of a session, its admitting source and its history tail. */
 export interface ImOutputHost {
@@ -69,10 +72,12 @@ export class ImOutputRegistry implements ImOutputs {
   private readonly open = new Map<SessionId, Open>()
   /** Per session, the tail of the serialized begin/update/end chain. */
   private readonly chains = new Map<SessionId, Promise<void>>()
+  /** Recent reaction event ids (`${botId}|${eventId}`) already re-emitted, bounded FIFO. */
+  private readonly seenReactions = new Set<string>()
 
   constructor(readonly ctx: Context, readonly deps: ImOutputDeps) {}
 
-  /** Subscribe `im/activity`, `interaction/button`, `interaction/select` and `interaction/check` (disposed with `ctx`). */
+  /** Subscribe `im/activity`, `interaction/*` and `reaction-*` (disposed with `ctx`). */
   start(): void {
     this.ctx.on('im/activity', (activity, change) => { this.activity(activity, change) })
     this.ctx.on('interaction/button', (session) => {
@@ -85,6 +90,12 @@ export class ImOutputRegistry implements ImOutputs {
     })
     this.ctx.on('interaction/check', (session) => {
       this.guarded('checkbox toggle', () => { this.check(session) })
+    })
+    this.ctx.on('reaction-added', (session) => {
+      this.guarded('reaction', () => { this.reaction(session, 'added') })
+    })
+    this.ctx.on('reaction-removed', (session) => {
+      this.guarded('reaction', () => { this.reaction(session, 'removed') })
     })
   }
 
@@ -192,6 +203,57 @@ export class ImOutputRegistry implements ImOutputs {
   }
 
   /**
+   * `reaction-added` / `reaction-removed` listener body (exposed for tests).
+   *
+   * Resolves the target message from the durable message store (because platforms such as Feishu omit `chat_id` on
+   * reaction events), enforces chat/source/user admission, skips self-reactions, deduplicates by platform event id,
+   * and re-emits `im/reaction` with the producing session when known.
+   *
+   * @param session - the core reaction session.
+   * @param action - whether the reaction was added or removed.
+   */
+  reaction(session: Session, action: 'added' | 'removed'): void {
+    const data = session.reaction
+    if (data === undefined || !data.emoji) return
+    const user = data.user
+    if (user === undefined || !user.id) return
+    // Never surface the bot's own working reactions back as external events.
+    if (session.bot.selfId && user.id === session.bot.selfId) return
+    const eventId = session.event.id
+    if (eventId !== undefined && eventId !== '') {
+      const dedupeKey = `${session.bot.id}|${eventId}`
+      if (this.seenReactions.has(dedupeKey)) return
+      if (this.seenReactions.size >= MAX_REACTION_EVENTS) {
+        const oldest = this.seenReactions.values().next().value
+        if (oldest !== undefined) this.seenReactions.delete(oldest)
+      }
+      this.seenReactions.add(dedupeKey)
+    }
+    const message = this.deps.im.history.get(ImMessageKey(session.bot.id, data.message.id))
+    if (message === undefined) return
+    if (data.message.chat !== undefined && message.chat.ref.id !== data.message.chat.id) return
+    const chat = this.deps.im.chat(message.chat.key)
+    if (chat === undefined) return
+    const source = this.deps.im.source(chat.source)
+    if (source === undefined) return
+    if (!admitsChat(source, session.bot.id, chat.ref)) return
+    if (!allows(source.users, user.id)) return
+    const owner = this.deps.sender.sessionOf(message.key)
+    const event: ImReactionEvent = {
+      action,
+      emoji: data.emoji,
+      chat,
+      user,
+      bot: session.bot,
+      message,
+      time: session.timestamp,
+      ...owner === undefined ? {} : { session: owner },
+      ...eventId === undefined || eventId === '' ? {} : { id: eventId },
+    }
+    this.ctx.emit('im/reaction', event)
+  }
+
+  /**
    * The admitted chat of one interaction, the own message that carried the control and the session that produced it.
    *
    * The interacting user is admitted like any sender: an interaction must not be a way around the source's user
@@ -226,6 +288,7 @@ export class ImOutputRegistry implements ImOutputs {
     await Promise.allSettled([...this.chains.values()])
     const open = [...this.open.values()]
     this.open.clear()
+    this.seenReactions.clear()
     await Promise.all(open.map(entry => this.close(entry)))
   }
 

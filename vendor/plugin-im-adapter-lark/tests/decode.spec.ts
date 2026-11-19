@@ -328,14 +328,42 @@ describe('other event families', () => {
     })
   })
 
-  it('publishes no reaction when the platform names no chat', async () => {
+  it('decodes a reaction change even when the platform names no chat', async () => {
     const { bot } = await mount()
     const raw = fixture<LarkRawEvent>('reaction')
     const event = raw.event as Record<string, unknown>
     delete event.chat_id
     delete event.chat_type
-    // A `MessageRef` needs a chat, and inventing one would be a lie about the payload.
-    await expect(bot.decodeEvent(raw)).resolves.toEqual([])
+    const [session] = await bot.decodeEvent(raw)
+    expect(session!.type).toBe('reaction-added')
+    expect(session!.event.id).toBe('ev_reaction')
+    expect(session!.event.reaction).toEqual({
+      message: { id: 'om_text_mentions' },
+      emoji: 'SMILE',
+      user: { id: 'ou_user' },
+    })
+  })
+
+  it('normalizes an own-app reaction operator to bot.selfId and handles reaction-removed', async () => {
+    const { bot } = await mount()
+    bot.selfId = 'ou_bot'
+    const raw = fixture<LarkRawEvent>('reaction')
+    raw.header = { ...raw.header, event_type: 'im.message.reaction.deleted_v1', event_id: 'ev_del' }
+    raw.event = {
+      message_id: 'om_text_mentions',
+      reaction_type: { emoji_type: 'Typing' },
+      operator_type: 'app',
+      app_id: bot.config.appId,
+      action_time: '1700000031000',
+    }
+    const [session] = await bot.decodeEvent(raw)
+    expect(session!.type).toBe('reaction-removed')
+    expect(session!.event.id).toBe('ev_del')
+    expect(session!.event.reaction).toEqual({
+      message: { id: 'om_text_mentions' },
+      emoji: 'Typing',
+      user: { id: 'ou_bot', isBot: true },
+    })
   })
 
   it('publishes nothing for a family it does not serve', async () => {
