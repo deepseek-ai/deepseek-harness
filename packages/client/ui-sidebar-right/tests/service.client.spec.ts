@@ -16,7 +16,37 @@ import type { SidebarRightCloseHandler } from '../src/client/service.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 import { controllerHarness as harness, SESSION } from './controller-harness.client.ts'
 
+declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
+  interface SidebarRightTabParamsMap {
+    'test-preview': { source: string }
+  }
+}
+
 describe('SidebarRightController — opening', () => {
+  it('opens transient content directly in a float and reuses its occurrence when docking updated content', () => {
+    const h = harness()
+    h.tabs.register({ id: 'test/preview', kind: 'test-preview', title: () => 'Preview' })
+    h.publish()
+    const first = { source: 'first body' }
+    h.controller.openContent('test-preview', first, { key: 'a/b', destination: 'float' })
+    const tabId = h.tabOf('Preview')
+    const occurrence = h.controller.tabDomain.occurrence(SESSION, { id: tabId })
+    expect(findTabPane(h.layout(), tabId).host).toBe('float')
+    expect(h.layout().expanded).toBe(false)
+    expect(occurrence.navigation.getSnapshot().params).toEqual(first)
+    expect(JSON.stringify(h.layout())).not.toContain(first.source)
+
+    const updated = { source: 'updated body' }
+    h.controller.openContent('test-preview', updated, { key: 'a/b' })
+    expect(findTabPane(h.layout(), tabId).host).toBe('dock')
+    expect(h.layout().expanded).toBe(true)
+    expect(occurrence.navigation.getSnapshot().params).toEqual(updated)
+    expect(h.titles().filter(title => title === 'Preview')).toHaveLength(1)
+    h.controller.openContent('test-preview', first)
+    h.controller.openContent('test-preview', first)
+    expect(h.titles().filter(title => title === 'Preview')).toHaveLength(3)
+  })
+
   it('keeps independently opened instances distinct when they return to the same pane', () => {
     const h = harness()
     h.tabs.register({ id: 'test/terminal', kind: 'terminal', multiple: true, title: () => 'terminal' })

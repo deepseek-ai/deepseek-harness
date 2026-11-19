@@ -56,6 +56,15 @@ describe('forge-github plugin', () => {
     expect(context.forge.repositoryFromRemote('https://ghe.corp.example/team/svc.git')).toBeUndefined()
   })
 
+  it('offers the three viewer lists on its hosts, 50 pull requests per read by default', async () => {
+    const context = await forge()
+    await context.plugin(ForgeGitHub, { hosts: ['github.com', 'ghe.corp.example'] })
+
+    expect(context.forge.viewerSources()).toEqual([{
+      forge: 'github', hosts: ['github.com', 'ghe.corp.example'], filters: new Set(['review-requested', 'authored', 'involved']), maxItems: 50,
+    }])
+  })
+
   it('registers the gh commands with forge-session while both run', async () => {
     const context = await forge()
     await context.plugin(RecordingForgeSession)
@@ -91,6 +100,8 @@ describe('forge-github plugin', () => {
     [{ maxCommits: 2.5 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxReviewThreads: 0 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
     [{ maxReviewThreads: 2.5 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
+    [{ maxViewerItems: 0 }, 'forge-github: maxViewerItems must be a positive safe integer'],
+    [{ maxViewerItems: 101 }, 'forge-github: maxViewerItems must be no greater than 100'],
   ])('rejects %j at load', async (config, message) => {
     const context = await forge()
 

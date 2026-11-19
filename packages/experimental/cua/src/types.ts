@@ -1,5 +1,6 @@
 /** Native application objects independent of evaluator ownership and persistence. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
 import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ShowResult, WindowsResult } from './protocol.ts'
@@ -48,6 +49,15 @@ export type CuaBounds = CuaWindowInfo['bounds']
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
 /** Reports whether the provider successfully executed the requested operation. */
 export type CuaActionResult = z.output<typeof ActionResult>
+/**
+ * JSON Schema for an action's `{ argument }` parameters, excluding the action name and target identifiers.
+ * Describes basic types and named object fields; `description` states value limits and allowed enum names
+ * without numeric-bound, integer-type or enum constraints in the schema.
+ * No-argument actions allow omission or null; required arguments appear in `required`.
+ * The response is checked for its outer fields and JSON values, not full schema semantics.
+ * performAction enforces the action's value constraints and element-specific requirements.
+ */
+export type CuaActionSchema = ObjectJsonSchema
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
 /** Select screenshot pixels by default or integer thousandths when explicitly requested. */
@@ -102,6 +112,14 @@ export interface CuaSurface {
    * @returns Provider-defined action names; empty when the element advertises none.
    */
   listActions(elementId: CuaElementId): Promise<string[]>
+  /**
+   * Describe an action's parameters without reading an element or requiring an accessibility snapshot.
+   * The schema does not establish that an element supports the action. Attributes whose types depend on
+   * live values expose the supported type alternatives; performAction still checks the element's actual type and state.
+   * @param action - Nonempty, case-sensitive provider action name, as used by performAction.
+   * @returns JSON Schema for the action-specific `{ argument }` parameters, not the complete performAction request.
+   */
+  getActionSchema(action: string): Promise<CuaActionSchema>
   /**
    * Perform an element action, including attribute-setting operations.
    * @param elementId - Element id from the application's current snapshot.

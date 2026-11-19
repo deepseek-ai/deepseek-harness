@@ -196,6 +196,23 @@ describe('durable step context', () => {
     expect(event.surfaceOp).toBe('append')
   })
 
+  it('reads a zone from a user source without an rpcId through the committed-turn projection', async () => {
+    const { ctx } = await mount()
+    const session = Session.create(brandString<SessionId>('rpc-free-zone'))
+    session.append('turn/start', { turn: 1 })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'turn 1' }],
+      source: { kind: 'user', clientTimeZone: 'Asia/Shanghai' } as never,
+    }), { surfaceOp: 'append' })
+
+    await fire(ctx, sessionAgent(session), 1, 1)
+
+    expect(contextTexts(session)[0]).toContain(
+      '+08:00[Asia/Shanghai]\n'
+      + 'Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone.\n',
+    )
+  })
+
   it('reports an unavailable first-step baseline when no model-visible message precedes it', async () => {
     const { ctx } = await mount()
     const session = Session.create(brandString<SessionId>('unavailable'))

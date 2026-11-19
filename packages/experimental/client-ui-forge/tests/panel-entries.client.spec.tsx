@@ -22,8 +22,9 @@ import {
 } from '../src/client/EnvironmentRows.tsx'
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
-import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
+import type { ForgePanelState } from '../src/types.ts'
 import { createChangeRequestsSectionStore } from '../src/client/change-requests-store.ts'
+import type { ChangeRequestEntry } from '../src/client/status.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
 
 afterEach(cleanup)
@@ -61,13 +62,13 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
   const store = options.store ?? createChangeRequestsSectionStore().create()
   const handlers = {
     refresh: vi.fn<() => Promise<void>>(async () => {}),
-    remove: vi.fn<(entry: ForgePanelChangeRequest) => void>(),
-    markReady: vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {}),
-    merge: vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {}),
+    remove: vi.fn<(entry: ChangeRequestEntry) => void>(),
+    markReady: vi.fn<(entry: ChangeRequestEntry) => Promise<void>>(async () => {}),
+    merge: vi.fn<(entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>>(async () => {}),
     readChecks: vi.fn<ChangeRequestsSectionProps['readChecks']>(async () => snapshot(1)),
     openLink: vi.fn<(url: string) => void>(),
     copyText: vi.fn<(text: string) => void>(),
-    viewChanges: vi.fn<(entry: ForgePanelChangeRequest) => void>(),
+    viewChanges: vi.fn<(entry: ChangeRequestEntry) => void>(),
     dismissOverlay: vi.fn<() => void>(),
     // Plugins' card actions: a marker naming the change request it was drawn for.
     renderSlot: vi.fn((_name: string, owner: { url: string }) => <span data-plugin-action={owner.url} />),

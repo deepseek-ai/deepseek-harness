@@ -843,7 +843,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         throw new Error(`web e2e scaffold: the web app requested exit ${String(code)} with no arguments to reject`)
       },
     })
-    const resolution = await createRuntimeResolution(resolutionOptions)
+    // Like the launcher, resolve the dependencies of every selected bundle, not only the extra install anchors.
+    const selectedLayers = loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers
+    const resolution = await createRuntimeResolution({
+      ...resolutionOptions, profile: { ...profile, layers: [...profile.layers, ...selectedLayers] },
+    })
     await ctx.plugin(PluginPackages, {
       resolution,
     })

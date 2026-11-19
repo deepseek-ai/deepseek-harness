@@ -29,17 +29,20 @@ function teamTaskItems(value: unknown, t: DetailTranslate): DetailItem[] {
 }
 
 function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetailsModel | null {
-  if (Array.isArray(json)) {
-    const items = inspectionItems(json, t).map((item) => {
+  // Capacity is model-facing; the member card keeps its existing presentation.
+  const agents = detailRecord(json) ? json.agents : json
+  if (Array.isArray(agents)) {
+    const items = inspectionItems(agents, t).map((item) => {
       if (item.title === undefined || item.description === undefined) return item
       const { title, description, ...rest } = item
       return { ...rest, title: description, subtitle: title }
     })
-    return { ...detailList(items, t('detail.agents.count', { count: json.length }), t), compact: true }
+    return { ...detailList(items, t('detail.agents.count', { count: agents.length }), t), compact: true }
   }
-  if (text === '(no subagents)') return detailList([], t('detail.agents.count', { count: 0 }), t)
+  const memberText = text.replace(/^Subagent capacity: running=\d+, limit=\d+\n/u, '')
+  if (memberText === '(no subagents)') return detailList([], t('detail.agents.count', { count: 0 }), t)
   const items: DetailItem[] = []
-  for (const line of text.split('\n')) {
+  for (const line of memberText.split('\n')) {
     // Historical rows name agents by Session ID and carry parent and depth.
     const match = /^(\S+) \[([^\]]+)\](?: parent=\S+ depth=\d+)?(?: — (.*))?$/u.exec(line)
     if (match === null) return null

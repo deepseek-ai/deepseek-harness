@@ -56,6 +56,8 @@ The task tools complement the ordinary subagent controls:
 
 Task `owner` arguments accept the names that `list_agents` shows: `lead`, a full name such as `reviewer/checker`, or a Session id. Task results report `owner` as that name, or as the Session id when the owner has no name; `unowned: true` filters tasks without an owner, while `unowned: false` selects assigned tasks. The `owner` and `unowned` filters cannot be combined. The Team service authorizes `ownerId` Session ids and saves the full name in `ownerName` at assignment. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
+`write_scopes` accepts advisory file or directory prefixes relative to the workspace root, with no absolute paths or `..` segments. Omit it or pass `[]` when creating a task with no workspace writes. For `edit`, omission keeps existing scopes and `[]` clears them.
+
 ### What success and failure look like
 
 Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors.
