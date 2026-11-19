@@ -100,8 +100,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeParentOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
-  // The DeepSeek chat importer validates its seed with the installed Session class before storing it.
-  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'Session', 'appendPluginRecord', 'pluginRecordOf'],
+  // The DeepSeek chat importer validates its seed with the installed Session log validation before storing it.
+  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf', 'validateSessionLog'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
   // Imported titles follow the installed title service's normalization.
   '@deepseek-ai/dsh-session-title': ['normalizeSessionTitle'],
