@@ -8234,6 +8234,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-connector-account':
         specifier: workspace:*
         version: link:../../client/ui-connector-account
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill

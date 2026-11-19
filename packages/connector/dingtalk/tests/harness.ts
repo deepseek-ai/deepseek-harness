@@ -19,6 +19,7 @@ import type {
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { vi } from 'vitest'
 import { executableFileName } from '../src/release.ts'
@@ -179,6 +180,7 @@ export async function createHost(): Promise<DingtalkHost> {
   const ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   const home = await mkdtemp(join(tmpdir(), 'dsh-dingtalk-home-'))
   vi.stubEnv('DSH_HOME', home)
