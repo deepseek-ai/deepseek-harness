@@ -417,6 +417,8 @@ export interface LaunchOptions {
     /** Credential reference of both sections. */
     apiKeyEnv: string
   }
+  /** Node PTC execution mode for recordings whose programs use another syntax than the provider default. */
+  ptcExecutionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
     default: string
@@ -686,6 +688,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // Open In scenario supplies launch facts that suppress every native probe.
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
+    ...options.ptcExecutionMode === undefined ? [] : [{ id: 'ptc-runtime', config: { executionMode: options.ptcExecutionMode } }],
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },

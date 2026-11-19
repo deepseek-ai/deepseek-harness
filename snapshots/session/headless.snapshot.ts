@@ -1448,7 +1448,7 @@ describe('headless recorded-session snapshots', () => {
               ? {}
               : { DSH_PERMISSION_MODE: scenario.manifest.permission }),
             ...scenario.manifest.environment,
-            ...(scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc' ? {
+            ...(scenario.manifest.composition === 'mcp-resources' || scenario.manifest.composition === 'mcp-resources-ptc' ? {
               DSH_MCP_RESOURCES_FIXTURE: join(repoRoot, 'packages/mcp/mcp-client/tests/fixtures/resources-server.ts'),
             } : {}),
             NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
@@ -1590,7 +1590,7 @@ describe('headless recorded-session snapshots', () => {
               expect(systems[3]!.data.message.source.sections?.find(section => section.name === 'snapshot:complete'))
                 .toMatchObject({ name: 'snapshot:complete', state: 'retired' })
             }
-            if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.manifest.composition === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {
               expect(actualLogs).toHaveLength(3)
               const leaf = actualLogs[2]!
@@ -1606,11 +1606,11 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }
-            if (scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc') {
-              verifyMcpResources(actualLogs[0]!.content, scenario.name === 'mcp-resources-ptc')
+            if (scenario.manifest.composition === 'mcp-resources' || scenario.manifest.composition === 'mcp-resources-ptc') {
+              verifyMcpResources(actualLogs[0]!.content, scenario.manifest.composition === 'mcp-resources-ptc')
             }
-            if (scenario.name === 'mcp-empty' || scenario.name === 'mcp-empty-ptc') {
-              verifyNoMcpServers(actualLogs[0]!.content, scenario.name === 'mcp-empty-ptc')
+            if (scenario.manifest.composition === 'mcp-empty' || scenario.manifest.composition === 'mcp-empty-ptc') {
+              verifyNoMcpServers(actualLogs[0]!.content, scenario.manifest.composition === 'mcp-empty-ptc')
             }
             if (scenario.name === 'provider-cwd') {
               if (model === undefined) throw new Error('provider-cwd resume requires a recorded model')

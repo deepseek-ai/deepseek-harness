@@ -133,7 +133,7 @@ describe('multimodal recovery through real providers', () => {
     await ctx.plugin(Subprocess)
     await ctx.plugin(Sandbox, {})
     await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-    await ctx.plugin(NodeRuntime)
+    await ctx.plugin(NodeRuntime, { executionMode: 'per-call' })
     await writeFile(join(root, 'large.png'), green)
     const result = await execute('run_code', {
       code: `try {
@@ -216,7 +216,7 @@ describe('multimodal recovery through real providers', () => {
     await ctx.plugin(Subprocess)
     await ctx.plugin(Sandbox, {})
     await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-    await ctx.plugin(NodeRuntime)
+    await ctx.plugin(NodeRuntime, { executionMode: 'per-call' })
     if (mode === 'parallel') {
       const overlap = Promise.withResolvers<undefined>()
       onTestFinished(() => { overlap.resolve(undefined) })
