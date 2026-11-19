@@ -218,14 +218,6 @@ register<View extends AnyConnectorAccountView>(registration: ConnectorAccountReg
 
 Source: [`packages/client/ui-connector-account/src/index.ts`](../../packages/client/ui-connector-account/src/index.ts)
 
-<a id="ctxconnectors--connectors"></a>
-
-### `ctx.connectors` — `Connectors`
-
-Present while the Connectors bundle is enabled; a connector row that injects it runs only then.
-
-Source: [`packages/experimental/client-ui-connectors/src/index.ts`](../../packages/experimental/client-ui-connectors/src/index.ts)
-
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 
 ### `ctx.headlessStartup` — `HeadlessStartupValues`

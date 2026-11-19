@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop Plugins page. The tab lists the official connectors with their switches, installs a missing one when it is switched on, and opens an installed one's page, where its account is connected. The connectors run only while the bundle is enabled; switching it off stops every connector. Shipped profiles leave the bundle disabled, and the Plugins page does not list it until it is enabled.
+Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop Plugins page. The tab lists the official connectors with their brand icons, installs a missing one at the running DSH version, and opens an installed one's page, where its account is connected. Shipped profiles leave the bundle disabled, and the Plugins page does not list it until it is enabled.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop
 <a id="use-this-package"></a>
 ## Use this package
 
-In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-connectors-bundle`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed, and switching the bundle off hides its card again. Each tab row shows the switch the connector's card would show; switching on a missing connector installs it at the running DSH version. An installed connector's row opens its page, and that page's Back button returns to the tab. The connectors never appear on Installed. Switching the bundle off removes the tab and stops every connector; switching it on again resumes them.
+In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-connectors-bundle`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed; switching the bundle off removes the tab and hides the bundle's card again. A connector the profile does not hold shows **Install**, which opens the install dialog at the running DSH version and offers **Enable now** once the connector is installed. An installed connector shows **Installed** or **On**; its row opens its page, and that page's Back button returns to the tab. Installed connectors keep their cards and switches on Installed and run whether or not this bundle is enabled.
 
 -----
 

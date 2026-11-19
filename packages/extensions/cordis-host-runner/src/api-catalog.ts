@@ -887,12 +887,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'connectors',
-    summary: 'Present while the Connectors bundle is enabled; a connector row that injects it runs only then.',
-    description: 'Present while the Connectors bundle is enabled; a connector row that injects it runs only then.',
-    methods: [],
-  },
-  {
     key: 'cotTranslation',
     summary: 'Optional reasoning translation delegates Session-bound storage to the translator.',
     description: 'Optional reasoning translation delegates Session-bound storage to the translator.',

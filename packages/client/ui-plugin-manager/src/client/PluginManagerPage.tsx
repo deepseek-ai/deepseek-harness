@@ -22,8 +22,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { FactoryComponentPropsOf, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { CONNECTOR_BUNDLES, EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { localizedValues, TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { createNavigationStore } from './navigation-store.ts'
 import type { PluginHeaderLayoutFace } from './header-scroll.ts'
@@ -123,18 +123,6 @@ const HIGHLIGHT_MS = 2_400
  */
 function rowsRunning(pkg: PackageView): boolean {
   return pkg.rows.some(row => row.enabled)
-}
-
-/**
- * Whether the page lists a bundle. It omits profile bundles and persistent terminals; other installed or offered
- * bundles and unreadable selections remain manageable.
- * @param pkg - the bundle as the Host reports it.
- * @returns whether the page's lists and switches know the bundle.
- */
-function listedOnPage(pkg: PackageView): boolean {
-  return !HIDDEN_BUNDLES.has(pkg.name)
-    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
-    && (pkg.installed || pkg.official || pkg.error !== undefined)
 }
 
 /**
@@ -419,11 +407,11 @@ function SourceSection({ pkg, t }: { readonly pkg: PackageView; readonly t: Tran
 }
 
 /**
- * A bundle's enable switch on its card, its page, and a contributed tab: locked, saying why, for one the Host
- * protects; off and locked for one it cannot read; off for one the page does not list yet.
+ * A bundle's enable switch on its card and its page: locked, saying why, for
+ * one the Host protects; off and locked for one it cannot read.
  */
 function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
-  readonly pkg: PackageView | undefined
+  readonly pkg: PackageView
   readonly title: string
   readonly t: Translate
   readonly busy: boolean
@@ -436,40 +424,15 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
         {busy ? <StateDot state="ongoing" /> : null}
       </span>
       <Switch
-        checked={pkg?.enabled ?? false}
+        checked={pkg.enabled}
         label={t('enableToggle', { name: title })}
-        disabled={busy || (pkg !== undefined && (pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
-          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))))}
-        {...pkg?.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
+          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))}
+        {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
         onChange={onSetEnabled}
       />
     </span>
   )
-}
-
-/** Props of one `plugins.bundle.switch` occurrence, as the renderer assembles them. */
-export type BundleSwitchProps = FactoryComponentPropsOf<'plugins.bundle.switch'>
-
-/**
- * The Installed list's switch for one bundle, rendered by a contributed tab. A listed bundle switches on or off, with
- * the activation guidance opening on the tab that rendered the switch; a bundle the page does not list installs
- * `install` and switches on once installed.
- * @param props - the bundle and its install target, the page's state and actions, and the navigation store.
- * @returns the switch; null while the page has not read its bundles, or for an unlisted bundle without `install`.
- */
-export function BundleSwitch(props: BundleSwitchProps): ReactNode {
-  const { packageName, install, t, resolveText } = props
-  const state = props.usePluginManager(snapshot => snapshot)
-  const tab = props.useStore(snapshot => snapshot.tab)
-  const { setActivation } = props.actions
-  const pkg = state.packages.find(item => item.name === packageName && listedOnPage(item))
-  if (pkg !== undefined) {
-    return <EnableSwitch pkg={pkg} title={packageText(pkg, resolveText).title} t={t} busy={bundleBusy(state, pkg.name)}
-      onSetEnabled={(enabled) => { setActivation(enabled ? { name: pkg.name, tab } : null); props.setEnabled(pkg.name, enabled) }} />
-  }
-  if (install === undefined || (state.status !== 'ready' && state.status !== 'error')) return null
-  return <EnableSwitch pkg={undefined} title={install.title} t={t} busy={bundleBusy(state, packageName)}
-    onSetEnabled={() => { setActivation({ name: packageName, tab }); props.installFrom(install, true) }} />
 }
 
 /** The status one card carries: running, off, not running because the Host skipped a selected bundle's layer, or another problem. */
@@ -1626,8 +1589,6 @@ function ConfirmDialog({ name, t, onConfirm, onCancel }: {
   )
 }
 
-const CONNECTORS: ReadonlySet<string> = new Set(CONNECTOR_BUNDLES)
-
 /** Render the plugin manager: the official plugins and installed bundles, their pages, the install dialog, and the confirmation. */
 export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const { t, ensure, renderSlot, resolveText } = props
@@ -1649,7 +1610,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const tab = tabs.some(item => item.id === selectedTab) ? selectedTab : INSTALLED_TAB
   useEffect(() => { if (tab !== selectedTab) setTab(tab) }, [tab, selectedTab, setTab])
   const tabsId = useId()
-  const activation = props.useStore(state => state.activation), { setActivation } = props.actions
+  const [activation, setActivation] = useState<string | null>(null)
   const [headerRef] = useState(props.createHeaderRef)
   useEffect(() => { ensure() }, [ensure])
   // Installation highlights visible cards without changing the user's current page.
@@ -1663,11 +1624,11 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }, [highlight, clearHighlight])
   const noticeLine = state.notice === null || state.notice.kind === 'refresh-failed' ? null : noticeText(state.notice, t)
 
-  const listed = state.packages.filter(listedOnPage)
-  // The Connectors tab presents the official connectors; their pages still open from it.
-  const carded = listed.filter(pkg => !CONNECTORS.has(pkg.name))
-  const mine = carded.filter(pkg => !pkg.official)
-  const official = carded.filter(pkg => pkg.official)
+  const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
+    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
+    && (pkg.installed || pkg.official || pkg.error !== undefined))
+  const mine = listed.filter(pkg => !pkg.official)
+  const official = listed.filter(pkg => pkg.official)
   // Both lists read one order over the eligible bundles: the main list holds the always-held ones plus the held-back
   // ones the profile enabled, and the More list holds the eligible ones, so enabling a bundle from the More list pins it
   // to the main list without moving it among its neighbours there.
@@ -1705,11 +1666,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const installedPanel = tabs.length === 0 || showsMoreList
     ? {}
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
-  const activated = activation?.tab === tab
-    ? listed.find(pkg => pkg.name === activation.name && pkg.enabled && !state.busy.includes(pkg.name))
-    : undefined
+  const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
   const setBundleEnabled = (name: string, enabled: boolean): void => {
-    setActivation(enabled ? { name, tab } : null)
+    setActivation(enabled ? name : null)
     props.setEnabled(name, enabled)
   }
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
@@ -1833,7 +1792,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
               {renderSlot('plugins.tab', {
-                install: (target) => { props.installFrom(target, false) },
+                install: props.installFrom,
                 update: props.openGitUpdate,
                 openPackage: (name) => { setTab(INSTALLED_TAB); setView({ kind: 'package', name, returnTab: tab }) },
               }, { only: tab })}
@@ -1954,18 +1913,13 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               </div>
             )
           : null}
-        {activated !== undefined && !state.install.open
+        {onInstalled && activated !== undefined && !state.install.open
           ? renderSlot('plugins.bundle.activation', {
             packageName: activated.name,
             onDismiss: () => { setActivation(null) },
             onOpenDetails: () => {
               setActivation(null)
-              if (onInstalled) {
-                setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
-                return
-              }
-              setTab(INSTALLED_TAB)
-              setView({ kind: 'package', name: activated.name, returnTab: tab })
+              setView({ kind: 'package', name: activated.name, ...showsMoreList ? { from: 'more' } : {} })
             },
           }, { entryKey: activated.name }) : null}
       </div>
@@ -1988,12 +1942,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
         onCancel={props.cancelInstall}
         onReconcile={props.reconcileInstall}
         onToggleDetails={props.toggleInstallDetails}
-        onEnableNow={() => {
-          // Guidance for a bundle the dialog switched on stays beside the Installed list that holds its card.
-          /* v8 ignore next -- the dialog offers Enable now only once it names the installed bundle */
-          setActivation(state.install.installed === null ? null : { name: state.install.installed, tab: INSTALLED_TAB })
-          props.enableInstalled()
-        }}
+        onEnableNow={() => { setActivation(state.install.installed); props.enableInstalled() }}
         onApproveBuilds={props.approveBuildsAndRetry}
         onToggleRegistry={props.toggleRegistryOptions}
         onChooseRegistry={props.chooseRegistry}

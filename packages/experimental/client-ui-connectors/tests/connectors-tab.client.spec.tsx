@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { PluginBundleSwitchProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { ConnectorsTab, type ConnectorsTabProps } from '../src/client/ConnectorsTab.tsx'
 import type { ConnectorsState } from '../src/client/connectors-store.ts'
 import { en, type ConnectorsLocaleKey } from '../src/client/locales.ts'
@@ -17,12 +16,7 @@ function translator(dictionary: Record<ConnectorsLocaleKey, string>): Connectors
 
 function renderTab(state: ConnectorsState, version: string | undefined) {
   const store = createSnapshotStore<ConnectorsState>(state)
-  // The page's switch Factory, reduced to a marker that records what the tab asked it for.
-  const renderFactorySlot = vi.fn((name: string, factoryProps: object) => {
-    const { packageName, install } = factoryProps as PluginBundleSwitchProps
-    return <span data-factory={name} data-switch={packageName} data-install={install === undefined ? '' : JSON.stringify(install)} />
-  })
-  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), renderFactorySlot }
+  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn() }
   const props = {
     t: translator(en), version, ...actions, useConnectors: bindSnapshotSelector(store),
   } as ConnectorsTabProps
@@ -32,43 +26,39 @@ function renderTab(state: ConnectorsState, version: string | undefined) {
 }
 
 const row = (id: string): HTMLElement => document.querySelector(`[data-connector="${id}"]`) as HTMLElement
-const switchOf = (id: string): Element | null => row(id).querySelector('[data-switch]')
 
 it('lists every official connector with its brand icon before its state is known, and asks for the state once mounted', () => {
   const { actions } = renderTab({ status: 'loading', connectors: {} }, '1.2.3')
   expect(actions.ensure).toHaveBeenCalledOnce()
   expect(screen.getByRole('heading', { name: en.official })).toBeTruthy()
-  expect(document.querySelectorAll('[data-connector]')).toHaveLength(7)
+  expect([...document.querySelectorAll('[data-connector]')].map(item => item.getAttribute('data-connector')))
+    .toEqual(['feishu', 'wecom', 'notion', 'tencent-docs', 'linear'])
   expect(within(row('feishu')).getByText(en['feishu.title'])).toBeTruthy()
   expect(within(row('tencent-docs')).getByText(en['tencent-docs.description'])).toBeTruthy()
   const icons = [...document.querySelectorAll('[data-connector] img')].map(icon => icon.getAttribute('src'))
-  expect(icons).toHaveLength(7)
-  expect(new Set(icons).size).toBe(7)
-  expect(within(row('feishu')).queryByRole('button')).toBeNull()
-  expect(actions.renderFactorySlot).not.toHaveBeenCalled()
+  expect(icons).toHaveLength(5)
+  expect(new Set(icons).size).toBe(5)
+  expect(screen.queryByRole('button')).toBeNull()
 })
 
-it('renders the page switch Factory for each connector, with the install target only for a missing one, and opens an installed one by its name', () => {
+it('installs a missing connector at the running release, and shows an installed one\'s state and opens its page', () => {
   const { actions } = renderTab({ status: 'ready', connectors: {
-    '@deepseek-ai/dsh-feishu': 'missing', '@deepseek-ai/dsh-wecom': 'installed', '@deepseek-ai/dsh-notion': 'enabled',
+    '@deepseek-ai/dsh-notion': 'enabled', '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
   } }, '1.2.3')
-  expect(actions.renderFactorySlot).toHaveBeenCalledWith('plugins.bundle.switch', {
-    packageName: '@deepseek-ai/dsh-feishu', install: { spec: '@deepseek-ai/dsh-feishu@1.2.3', title: 'Feishu plugin', version: '1.2.3' },
-  })
-  expect(actions.renderFactorySlot).toHaveBeenCalledWith('plugins.bundle.switch', { packageName: '@deepseek-ai/dsh-wecom' })
-  expect(switchOf('notion')?.getAttribute('data-install')).toBe('')
-  expect(switchOf('notion')?.getAttribute('data-factory')).toBe('plugins.bundle.switch')
-  expect(switchOf('dingtalk')).toBeNull()
-  expect(within(row('feishu')).queryByRole('button')).toBeNull()
-  fireEvent.click(within(row('wecom')).getByRole('button', { name: 'Open WeCom plugin' }))
+  fireEvent.click(within(row('linear')).getByRole('button', { name: 'Install Linear plugin' }))
+  expect(actions.install).toHaveBeenCalledExactlyOnceWith({ spec: '@deepseek-ai/dsh-linear@1.2.3', title: 'Linear plugin', version: '1.2.3' })
+  expect(within(row('linear')).getAllByRole('button')).toHaveLength(1)
+  expect(within(row('notion')).getByText(en.enabled)).toBeTruthy()
+  expect(within(row('tencent-docs')).getByText(en.installed)).toBeTruthy()
   expect(within(row('notion')).getByRole('button', { name: 'Open Notion plugin' }).textContent).toBe(en['notion.title'])
-  expect(actions.openPackage).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-wecom')
-  expect(actions.install).not.toHaveBeenCalled()
+  fireEvent.click(within(row('tencent-docs')).getByRole('button', { name: 'Open Tencent Docs plugin' }))
+  expect(actions.openPackage).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-tencent-docs')
+  expect(within(row('tencent-docs')).getAllByRole('button')).toHaveLength(1)
 })
 
-it('offers no install target when the build carries no version', () => {
-  const { actions } = renderTab({ status: 'ready', connectors: { '@deepseek-ai/dsh-feishu': 'missing' } }, undefined)
-  expect(actions.renderFactorySlot).toHaveBeenCalledWith('plugins.bundle.switch', { packageName: '@deepseek-ai/dsh-feishu' })
+it('offers no Install when the build carries no version', () => {
+  renderTab({ status: 'ready', connectors: { '@deepseek-ai/dsh-linear': 'missing' } }, undefined)
+  expect(within(row('linear')).queryByRole('button')).toBeNull()
 })
 
 it('reports a failed read with a retry and clears it once the state arrives', () => {

@@ -15,18 +15,14 @@ import { StrictMode, type ReactNode } from 'react'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import { bundleDetailKey, type BundleDetailsState } from '../src/client/detail-store.ts'
 import { createNavigationStore } from '../src/client/navigation-store.ts'
-import { BundleSwitch, PluginManagerPage, type BundleSwitchProps } from '../src/client/PluginManagerPage.tsx'
+import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast } from '../src/client/PluginRefreshToast.tsx'
 import type { PluginManagerPageProps } from '../src/client/index.ts'
 import type { PluginTab } from '../src/client/tab-ledger.ts'
 import type { ConfigLedger } from '../src/client/config-ledger.ts'
 import { rowKey, type InstallState, type PackageRow, type PackageView, type PluginManagerState, type UpdateState, type VersionCheck } from '../src/client/manager-store.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, en, zh, type PluginManagerLocaleKey } from '../src/client/locales.ts'
-import type { PluginActivationOwnerProps, PluginAddActionsProps, PluginBundleSwitchProps, PluginDetailProps, PluginTabProps, PluginsSubject } from '../src/client/slot-contract.ts'
-import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
-
-/** The props a contributed tab's component receives: the page's owner props and the renderer's Factory renderer. */
-type TabOwner = PluginTabProps & PropsRenderFactories
+import type { PluginActivationOwnerProps, PluginAddActionsProps, PluginDetailProps, PluginTabProps, PluginsSubject } from '../src/client/slot-contract.ts'
 
 beforeEach(() => { localStorage.clear() })
 afterEach(cleanup)
@@ -195,28 +191,16 @@ function renderTab(
       stub.publish(forms[id]!.state as ConfigFormSnapshot<T>)
       return { ...stub.scope, mutate: forms[id]!.mutate }
     },
-    renderFactorySlot: ((name: string, factoryProps: object) => {
-      if (name === 'plugins.bundle.switch') {
-        // The page's own switch Factory, assembled as the renderer would from the page's state and navigation store.
-        const switchProps = {
-          ...factoryProps as PluginBundleSwitchProps, ...standard, t: currentT, resolveText,
-          useStore: bindSnapshotSelector(navigation), actions: navigation.actions, usePluginManager: bindSnapshotSelector(store),
-          installFrom: actions.installFrom, setEnabled: actions.setEnabled,
-          renderFactorySlot: props.renderFactorySlot, useFactorySlot: unusedStandardHook,
-        } as BundleSwitchProps
-        return <BundleSwitch {...switchProps} />
-      }
+    renderFactorySlot: ((name: string, factoryProps: SettingsSectionViewProps) => {
       if (name !== 'settings.section.view') throw new Error(`Plugin manager fixture renders no Factory ${name}`)
-      const { id, close } = factoryProps as SettingsSectionViewProps
-      return bodies[`settings.section:${id}`]?.('page', { close }) ?? null
+      return bodies[`settings.section:${factoryProps.id}`]?.('page', { close: factoryProps.close }) ?? null
     }) as PluginManagerPageProps['renderFactorySlot'],
     renderSlot: (name, owner, opts) => {
       const body = bodies[`${name}:${opts?.only ?? opts?.entryKey ?? ''}`]
       if (body === undefined) return null
       if (name === 'plugins.bundle.activation') return body('activation', owner)
       if (name === 'plugins.add.actions') return body('add', owner)
-      // A tab component receives the Factory renderer from the renderer beside its owner props.
-      if (name === 'plugins.tab') return body('tab', { ...owner, renderFactorySlot: props.renderFactorySlot })
+      if (name === 'plugins.tab') return body('tab', owner)
       if (name.startsWith('plugins.detail.')) return body('detail', owner)
       if (!('view' in owner) || (owner.view !== 'summary' && owner.view !== 'page')) {
         throw new Error('Plugin configuration fixture requires a summary or page view')
@@ -298,16 +282,16 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
-    expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' }, false)
+    expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover update' }))
     expect(actions.openGitUpdate).toHaveBeenCalledWith({ packageName: 'dsh-a', version: '1.1.0', spec: 'git+https://git.example/o/a.git#bbbbbbb' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' }, activation: null })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' } })
     expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
     // A detail page hides the tabs; its back button returns to the tab that opened it.
     expect(screen.queryByRole('tablist')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' }, activation: null })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
     expect(screen.getByRole('tab', { name: 'Discover' }).getAttribute('aria-selected')).toBe('true')
     // A contributed tab that leaves the ledger falls back to Installed.
     act(() => { navigation.actions.setView({ kind: 'list' }); navigation.actions.setTab('discover') })
@@ -367,7 +351,7 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector(`[data-plugin-detail="${inspector}"]`)).not.toBeNull()
     // An official plugin of the More list opened from Discover returns to Discover, not to the More list.
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' }, activation: null })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
     fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
     act(() => { navigation.actions.setView({ kind: 'more' }) })
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', inspector) }))
@@ -389,7 +373,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', 'dsh-better-sidebar') }))
     expect(navigation.getSnapshot().view).toEqual({ kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' })
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' }, activation: null })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
     // A calling tab that left the ledger while the page was open falls back to Installed.
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
     setTabs([])
@@ -901,17 +885,6 @@ describe('PluginManagerPage', () => {
       ],
     })
     expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
-  })
-
-  it('leaves the official connectors off both card lists while their pages still open', () => {
-    const b = renderTab({
-      packages: [pkg({ name: '@deepseek-ai/dsh-feishu' }), pkg({ name: '@deepseek-ai/dsh-notion', official: true }), pkg({ name: 'dsh-kept' })],
-    })
-    expect(document.querySelector('[data-plugin-package="@deepseek-ai/dsh-feishu"]')).toBeNull()
-    expect(document.querySelector('[data-plugin-package="@deepseek-ai/dsh-notion"]')).toBeNull()
-    expect(document.querySelector('[data-plugin-package="dsh-kept"]')).not.toBeNull()
-    act(() => { b.navigation.actions.setView({ kind: 'package', name: '@deepseek-ai/dsh-feishu' }) })
-    expect(document.querySelector('[data-plugin-detail="@deepseek-ai/dsh-feishu"]')).not.toBeNull()
   })
 
   it('does not open a default-hidden bundle by id while its card is hidden', () => {
@@ -1604,7 +1577,7 @@ describe('PluginManagerPage', () => {
     it('starts on the main list when the navigation store is recreated', () => {
       const first = createNavigationStore().create()
       first.actions.setView({ kind: 'more' })
-      expect(createNavigationStore().create().getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' }, activation: null })
+      expect(createNavigationStore().create().getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
     })
 
     it('counts an official plugin as content: the empty line waits for a page with nothing at all', () => {
@@ -2864,71 +2837,6 @@ it('keeps activation guidance with the Installed list when a contributed tab ena
   expect(screen.queryByText('Enable guidance')).toBeNull()
   fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
   expect(screen.getByText('Enable guidance')).toBeTruthy()
-})
-
-it('gives a contributed tab the Installed list switch, whose guidance opens on that tab and returns to it', () => {
-  const name = 'dsh-better-sidebar'
-  const { set, actions, navigation } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
-    'plugins.tab:connectors': (_view, owner) => <div data-tab-switch>{(owner as TabOwner).renderFactorySlot('plugins.bundle.switch', { packageName: name })}</div>,
-    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onOpenDetails}>Go to setup</button>,
-    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
-  }, {}, [{ id: 'connectors', label: 'Connectors' }])
-  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
-  const toggle = within(document.querySelector('[data-tab-switch]') as HTMLElement).getByRole('switch', { name: en.enableToggle.replace('{name}', name) })
-  expect(toggle.getAttribute('aria-checked')).toBe('false')
-  fireEvent.click(toggle)
-  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
-  set({ packages: [pkg()], busy: [name] })
-  expect(screen.queryByText('Go to setup')).toBeNull()
-  set({ busy: [] })
-  // The guidance belongs to the tab whose switch turned the bundle on.
-  fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
-  expect(screen.queryByText('Go to setup')).toBeNull()
-  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
-  expect(screen.getByText('Go to setup')).toBeTruthy()
-  // Switching the bundle off from the tab withdraws the guidance; switching it on again brings it back.
-  const tabSwitch = (): HTMLElement => within(document.querySelector('[data-tab-switch]') as HTMLElement).getByRole('switch')
-  fireEvent.click(tabSwitch())
-  expect(actions.setEnabled).toHaveBeenLastCalledWith(name, false)
-  expect(screen.queryByText('Go to setup')).toBeNull()
-  set({ packages: [pkg({ enabled: false })] })
-  fireEvent.click(tabSwitch())
-  expect(actions.setEnabled).toHaveBeenLastCalledWith(name, true)
-  set({ packages: [pkg()] })
-  fireEvent.click(screen.getByText('Go to setup'))
-  expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name, returnTab: 'connectors' }, activation: null })
-  expect(screen.getByText('Bundle setup')).toBeTruthy()
-})
-
-it('installs and switches on a bundle the page does not list from a contributed tab switch', () => {
-  const install = { spec: 'dsh-new@1.0.0', title: 'New', version: '1.0.0' }
-  const { set, actions } = renderTab({ status: 'loading', packages: [] }, {}, {
-    'plugins.tab:connectors': (_view, owner) => {
-      const tab = owner as TabOwner
-      return <>
-        <div data-new>{tab.renderFactorySlot('plugins.bundle.switch', { packageName: 'dsh-new', install })}</div>
-        <div data-absent>{tab.renderFactorySlot('plugins.bundle.switch', { packageName: 'dsh-absent' })}</div>
-      </>
-    },
-    'plugins.bundle.activation:dsh-new': () => <div>New guidance</div>,
-  }, {}, [{ id: 'connectors', label: 'Connectors' }])
-  fireEvent.click(screen.getByRole('tab', { name: 'Connectors' }))
-  const slot = (marker: string): HTMLElement => document.querySelector(`[${marker}]`) as HTMLElement
-  // Until the page has read its bundles it cannot tell a missing bundle from one it lists.
-  expect(within(slot('data-new')).queryByRole('switch')).toBeNull()
-  set({ status: 'ready' })
-  expect(within(slot('data-absent')).queryByRole('switch')).toBeNull()
-  const toggle = within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch', { name: en.enableToggle.replace('{name}', 'New') })
-  expect(toggle.getAttribute('aria-checked')).toBe('false')
-  fireEvent.click(toggle)
-  expect(actions.installFrom).toHaveBeenCalledWith(install, true)
-  expect(actions.setEnabled).not.toHaveBeenCalled()
-  const subject = { spec: install.spec, status: 'accepted', kind: 'registry', name: 'dsh-new', bundle: true, registry: null, selection: true } as const
-  set({ install: { ...IDLE_INSTALL, open: false, phase: 'running', subject } })
-  expect(within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch')).toHaveProperty('disabled', true)
-  set({ install: IDLE_INSTALL, packages: [pkg({ name: 'dsh-new' })] })
-  expect(within(document.querySelector('[data-new]') as HTMLElement).getByRole('switch').getAttribute('aria-checked')).toBe('true')
-  expect(screen.getByText('New guidance')).toBeTruthy()
 })
 
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {

@@ -62,20 +62,6 @@ export const MORE_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-subagent-claude-code',
 ]
 
-/**
- * Official connector bundles, in the order the Connectors tab lists them. The plugin manager's card lists leave them to
- * that tab, and their pages still open from it.
- */
-export const CONNECTOR_BUNDLES = [
-  '@deepseek-ai/dsh-feishu',
-  '@deepseek-ai/dsh-wecom',
-  '@deepseek-ai/dsh-dingtalk',
-  '@deepseek-ai/dsh-tencent-meeting',
-  '@deepseek-ai/dsh-notion',
-  '@deepseek-ai/dsh-tencent-docs',
-  '@deepseek-ai/dsh-linear',
-] as const
-
 /** Official bundles the plugin manager marks with the Experimental badge. */
 export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-cua-bundle',

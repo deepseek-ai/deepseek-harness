@@ -1,5 +1,5 @@
-/** An installed connector stays off Installed, switches and opens from the Connectors tab, and stays off after that tab leaves. */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+/** The Connectors tab lists the official connectors, opens an installed one's page, and installs a missing one in the page's dialog. */
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,9 +10,13 @@ import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
 const BUNDLE = '@deepseek-ai/dsh-experimental-connectors-bundle'
 const FEISHU = '@deepseek-ai/dsh-feishu'
+const WECOM = '@deepseek-ai/dsh-wecom'
 const EXPECTED = fileURLToPath(new URL('./expected/connectors-tab/connectors-tab.expected.md', import.meta.url))
 
-it('lists the official connectors, switches an installed one from the tab, and keeps it off Installed when switched off', async () => {
+const bundleManifest = (name: string, version: string): string =>
+  JSON.stringify({ name, version, dsh: { bundle: { patch: './cordis.patch.yml' } } })
+
+it('lists the official connectors, opens an installed one\'s page, and installs a missing one at the running DSH version', async () => {
   const root = await mkdtemp(join(tmpdir(), 'connectors-tab-web-'))
   const owned: { scaffold?: WebScaffold; browser?: Browser } = {}
   onTestFinished(async () => {
@@ -20,9 +24,31 @@ it('lists the official connectors, switches an installed one from the tab, and k
       try { await owned.scaffold?.close() } finally { await rm(root, { recursive: true, force: true }) }
     }
   })
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: FEISHU, version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } }))
-  await writeFile(join(root, 'cordis.patch.yml'), '[]\n')
-  const scaffold = owned.scaffold = await launchWebScaffold({ profile: { packages: [{ dir: root, enabled: true }], bundles: [BUNDLE] } })
+  const { version } = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string }
+  const feishuDir = join(root, 'feishu')
+  await mkdir(feishuDir)
+  await writeFile(join(feishuDir, 'package.json'), bundleManifest(FEISHU, '1.0.0'))
+  await writeFile(join(feishuDir, 'cordis.patch.yml'), '[]\n')
+  const overlay = join(root, 'cordis.patch.yml')
+  await writeFile(overlay, `- id: plugin-manager\n  config: ${JSON.stringify({ pnpmCommand: process.execPath })}\n`)
+  const scaffold = owned.scaffold = await launchWebScaffold({
+    profile: { packages: [{ dir: feishuDir, enabled: true }], bundles: [BUNDLE] }, extraOverlayPath: overlay,
+  })
+  // Node stands in for pnpm and runs the profile directory's file named after the subcommand: `config` names the
+  // registry, `view` answers with the WeCom bundle at the asked version, and `add` records its arguments and installs it.
+  const profile = join(scaffold.harnessHome, 'profiles', 'scaffold')
+  const wecom = bundleManifest(WECOM, version)
+  await writeFile(join(profile, 'config'), 'console.log("https://registry.npmjs.org/")\n')
+  await writeFile(join(profile, 'view'), `console.log(${JSON.stringify(wecom)})\n`)
+  await writeFile(join(profile, 'add'), `
+    const fs = require('node:fs')
+    fs.writeFileSync('.added', JSON.stringify(process.argv.slice(2)))
+    fs.mkdirSync('node_modules/${WECOM}', { recursive: true })
+    fs.writeFileSync('node_modules/${WECOM}/package.json', ${JSON.stringify(wecom)})
+    fs.writeFileSync('node_modules/${WECOM}/cordis.patch.yml', '[]\\n')
+    const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+    fs.writeFileSync('package.json', JSON.stringify({ ...manifest, dependencies: { ...manifest.dependencies, '${WECOM}': '${version}' } }))
+  `)
   const browser = owned.browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE, reducedMotion: 'reduce' })
   await page.goto(scaffold.authenticatedUrl)
@@ -31,20 +57,14 @@ it('lists the official connectors, switches an installed one from the tab, and k
   const panel = page.locator('[data-plugin-panel]')
   const tab = panel.getByRole('tab', { name: '连接器', exact: true })
   await tab.waitFor()
-  await panel.locator(`[data-plugin-package="${BUNDLE}"]`).waitFor()
-  expect(await panel.locator(`[data-plugin-package="${FEISHU}"]`).count()).toBe(0)
+  // An installed connector keeps its card on Installed.
+  await panel.locator(`[data-plugin-package="${FEISHU}"]`).waitFor()
 
   await tab.click()
   const feishu = panel.locator('[data-connector="feishu"]')
   await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).waitFor()
-  const toggle = feishu.getByRole('switch')
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+  await feishu.getByText('已开启', { exact: true }).waitFor()
   await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[data-connectors]', scaffold.workspaceCwd), webSnapshotMode())
-  // The tab's switch is the Installed list's own: it applies through the Host and reads back the new state.
-  await toggle.click()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-  await toggle.click()
-  await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
   // The row opens the page as an Installed card does: a click on its description reaches the name button.
   const description = (await feishu.getByText('在对话中使用飞书文档、消息及其他已授权的功能。').boundingBox())!
   const rowBox = (await feishu.boundingBox())!
@@ -54,8 +74,22 @@ it('lists the official connectors, switches an installed one from the tab, and k
   await panel.getByRole('button', { name: '返回插件', exact: true }).click()
   await feishu.waitFor()
 
+  // Install hands the page's dialog the connector at the running DSH version; the dialog names it by the tab's title.
+  const wecomRow = panel.locator('[data-connector="wecom"]')
+  await wecomRow.getByRole('button', { name: '安装 企业微信插件', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const enableNow = dialog.getByRole('button', { name: '立即启用', exact: true })
+  await enableNow.waitFor({ timeout: 20_000 })
+  await dialog.getByText('企业微信插件', { exact: true }).waitFor()
+  expect(JSON.parse(await readFile(join(profile, '.added'), 'utf8'))).toContain(`${WECOM}@${version}`)
+  await enableNow.click()
+  await wecomRow.getByRole('button', { name: '打开 企业微信插件', exact: true }).waitFor()
+  await wecomRow.getByText('已开启', { exact: true }).waitFor()
+
+  // Switching the bundle off removes only the tab: the connectors stay installed and listed.
   await panel.getByRole('tab', { name: '已安装', exact: true }).click()
   await panel.locator(`[data-plugin-package="${BUNDLE}"]`).getByRole('switch').click()
   await tab.waitFor({ state: 'detached' })
-  expect(await panel.locator(`[data-plugin-package="${FEISHU}"]`).count()).toBe(0)
+  expect(await panel.locator(`[data-plugin-package="${FEISHU}"]`).count()).toBe(1)
+  expect(await panel.locator(`[data-plugin-package="${WECOM}"]`).count()).toBe(1)
 })

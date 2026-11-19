@@ -1,12 +1,7 @@
-/** The official connectors the Connectors tab offers, in the official list's order. */
-import { CONNECTOR_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
-
-const SCOPE = '@deepseek-ai/dsh-'
-
-type IdOf<Name> = Name extends `${typeof SCOPE}${infer Id}` ? Id : never
+/** The official connectors the Connectors tab offers, in display order. */
 
 /** Dictionary prefix of one connector's title and description: its package name without the scope prefix. */
-export type ConnectorId = IdOf<(typeof CONNECTOR_BUNDLES)[number]>
+export type ConnectorId = 'feishu' | 'wecom' | 'notion' | 'tencent-docs' | 'linear'
 
 /** One official connector bundle. */
 export interface Connector {
@@ -17,8 +12,10 @@ export interface Connector {
 }
 
 /** Every official connector, in display order. */
-export const CONNECTORS: readonly Connector[] = CONNECTOR_BUNDLES.map(packageName => ({
-  // Every name in the list starts with the scope prefix, as `ConnectorId` requires.
-  id: packageName.slice(SCOPE.length) as ConnectorId,
-  packageName,
-}))
+export const CONNECTORS: readonly Connector[] = [
+  { id: 'feishu', packageName: '@deepseek-ai/dsh-feishu' },
+  { id: 'wecom', packageName: '@deepseek-ai/dsh-wecom' },
+  { id: 'notion', packageName: '@deepseek-ai/dsh-notion' },
+  { id: 'tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs' },
+  { id: 'linear', packageName: '@deepseek-ai/dsh-linear' },
+]

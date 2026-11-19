@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-插件页的“连接器”标签列出官方连接器，每行带品牌图标和“已安装”列表上的开关。打开未安装连接器的开关，会安装与当前 DSH 版本相同的包并开启它；与“已安装”列表的卡片一样，点已安装连接器的这一行会打开它的详情页。“已安装”标签的卡片列表把连接器留给本标签，关闭“连接器”bundle 会停止所有连接器。
+插件页的“连接器”标签列出官方连接器，每行带品牌图标。profile 未持有的连接器显示**安装**，点击后通过插件页的安装对话框安装与当前 DSH 版本相同的包；已安装的连接器显示它的状态，并且与“已安装”列表的卡片一样，点这一行会打开它的详情页。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-启用 [“连接器”bundle](../connectors-bundle/README.zh.md)。本包没有配置项。每一行以界面语言显示连接器的品牌图标、名称和简介，以及它在“已安装”列表的卡片上会显示的开关。打开 profile 未持有的连接器的开关，会以当前 DSH 版本打开安装对话框，装好后开启该连接器，并在本标签上显示它的账号引导；构建中没有 DSH 版本时，这类连接器不显示开关。连接器只在 bundle 开启时运行：关闭 bundle 会停止所有连接器，但保留每个连接器自己的开关；重新开启后，它们恢复运行。
+启用 [“连接器”bundle](../connectors-bundle/README.zh.md)。本包没有配置项。每一行以界面语言显示连接器的品牌图标、名称和简介。profile 未持有的连接器显示**安装**，点击后插件页的安装对话框直接进入检查步骤，安装目标是该连接器在当前 DSH 版本的包；安装完成后，对话框提供**立即启用**。构建中没有 DSH 版本时，不显示“安装”。已安装的连接器显示**已安装**或**已开启**；点这一行会打开它的详情页，详情页的返回键会回到本标签。已安装的连接器在“已安装”标签中保留自己的卡片和开关，无论 bundle 是否开启都会运行。
 
 -----
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject: [connectors]` 的连接器条目在没有这个服务时保持等待，所以无论开关在哪里切换，Loader 都会随之停止或恢复连接器。浏览器入口把标签注册到 `plugins.tab`。`ConnectorsController` 在标签首次渲染时读取 `pluginManager.listBundles`，收到 `plugin-manager/changed` 和 `connection/reset` 时再次读取，只采用最新一次读取的结果。每一行渲染插件页的组件工厂 `plugins.bundle.switch`，未安装的连接器附带安装目标 `<包名>@<DSH_CLIENT_VERSION>`；已安装连接器的名称按钮覆盖整行，点击会调用 `openPackage`。每个连接器的品牌图标是其 bundle 所声明 `icon.svg` 的副本，放在 `src/client/assets/` 下。连接器名单是 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md) 的 `CONNECTOR_BUNDLES`，插件页也据此把它们排除在卡片列表之外；每个连接器的名称、简介和图标放在本包中，所以标签能显示 profile 尚未持有的连接器。
+Host 入口是一个空插件，浏览器入口把标签注册到 `plugins.tab`。`ConnectorsController` 在标签首次渲染时读取 `pluginManager.listBundles`，收到 `plugin-manager/changed` 和 `connection/reset` 时再次读取，只采用最新一次读取的结果。**安装**以 `<包名>@<DSH_CLIENT_VERSION>` 调用插件页提供的 `install`；已安装连接器的名称按钮覆盖整行，点击会调用 `openPackage`。每个连接器的品牌图标是其 bundle 所声明 `icon.svg` 的副本，放在 `src/client/assets/` 下。连接器名单以及每个连接器的名称、简介和图标都放在本包中，所以标签能显示 profile 尚未持有的连接器。
 
 - [Host 源码](src/index.ts)
 - [浏览器源码](src/client/index.ts)
@@ -49,7 +49,7 @@ Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject
 ## 延伸阅读
 
 - [“连接器”bundle](../connectors-bundle/README.zh.md) — 启用本标签的可选 bundle。
-- [插件页](../../client/ui-plugin-manager/README.zh.md) — 页面标签、安装对话框，以及把连接器留给本标签的卡片列表。
+- [插件页](../../client/ui-plugin-manager/README.zh.md) — 页面标签和安装对话框。
 
 -----
 
@@ -60,14 +60,14 @@ Host 入口在 bundle 开启期间提供 `connectors` 服务。声明了 `inject
 
 #### KV Cache 效果
 
-标签不增加模型上下文。已安装或已开启的连接器按其说明改变后续请求；关闭 bundle 后，所有连接器的内容都从后续请求中移除，直到重新开启。
+标签不增加模型上下文。已安装或已开启的连接器按其说明改变后续请求。
 
 ## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 名单只包含 DSH 发布的连接器；新增连接器时，要把包名加入 `CONNECTOR_BUNDLES`，在这里加上它的文案和图标，并在它的条目上声明 `inject: [connectors]`。每一行的名称和简介是本包的文案，须跟随连接器自身的显示名称（开关以后者命名），没有检查比对两者。
-- 每一行不显示账号连接状态，连接状态在连接器的详情页查看。
+- 名单只包含 DSH 发布的连接器；新增连接器时，要在这里加上它的包名、文案和图标。每一行的名称和简介是本包的文案，须跟随连接器自身的显示名称，没有检查比对两者。
+- 每一行不显示账号连接状态，连接状态在连接器的详情页查看。选择**立即启用**后，连接器提供的账号引导显示在“已安装”标签中。
 - 安装要求连接器包已按当前 DSH 版本发布。
 
 -----

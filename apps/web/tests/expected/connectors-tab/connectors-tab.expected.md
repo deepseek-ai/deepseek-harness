@@ -2,30 +2,16 @@
 - list:
   - listitem:
     - button "打开 飞书插件": 飞书插件
-    - text: 在对话中使用飞书文档、消息及其他已授权的功能。
-    - status
-    - switch "启用 @deepseek-ai/dsh-feishu" [checked]
+    - text: 在对话中使用飞书文档、消息及其他已授权的功能。 已开启
   - listitem:
     - text: 企业微信插件 在对话中使用企业微信的文档、日程、会议、待办和消息。
-    - status
-    - switch "启用 企业微信插件"
-  - listitem:
-    - text: 钉钉插件 在对话中使用钉钉的日程、待办、文档、AI 表格、群聊和通讯录。
-    - status
-    - switch "启用 钉钉插件"
-  - listitem:
-    - text: 腾讯会议插件 在对话中使用腾讯会议的会议、录制、纪要和会议报告。
-    - status
-    - switch "启用 腾讯会议插件"
+    - button "安装 企业微信插件": 安装
   - listitem:
     - text: Notion 插件 在对话中使用 Notion 页面、数据库及其他已授权的内容。
-    - status
-    - switch "启用 Notion 插件"
+    - button "安装 Notion 插件": 安装
   - listitem:
     - text: 腾讯文档插件 在对话中使用你有权限的腾讯文档内容。
-    - status
-    - switch "启用 腾讯文档插件"
+    - button "安装 腾讯文档插件": 安装
   - listitem:
     - text: Linear 插件 在对话中使用 Linear 的议题、项目与评论。
-    - status
-    - switch "启用 Linear 插件"
+    - button "安装 Linear 插件": 安装

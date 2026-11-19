@@ -36,9 +36,6 @@
     },
     {
       "path": "../../client/ui-slots"
-    },
-    {
-      "path": "../../util/official-bundles"
     }
   ]
 }

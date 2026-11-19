@@ -27,8 +27,8 @@ const FAILED: ListAnswer = { ok: false, error: { code: 'plugin-manager/failed', 
 
 it('reads each connector as missing, installed, or on, once, and only after the tab first asks', async () => {
   const { controller, face, listBundles } = bench(Promise.resolve({ ok: true, value: [
-    bundle('@deepseek-ai/dsh-feishu', true, true), bundle('@deepseek-ai/dsh-wecom', true, false),
-    bundle('@deepseek-ai/dsh-dingtalk', false, false), bundle('dsh-unrelated', true, true),
+    bundle('@deepseek-ai/dsh-notion', true, true), bundle('@deepseek-ai/dsh-tencent-docs', true, false),
+    bundle('dsh-unrelated', true, true),
   ] }))
   expect(face.version).toBe('1.2.3')
   controller.changed()
@@ -39,9 +39,8 @@ it('reads each connector as missing, installed, or on, once, and only after the 
   await vi.waitFor(() => { expect(face.hooks.connectors.getSnapshot().status).toBe('ready') })
   expect(listBundles).toHaveBeenCalledOnce()
   expect(face.hooks.connectors.getSnapshot().connectors).toEqual({
-    '@deepseek-ai/dsh-feishu': 'enabled', '@deepseek-ai/dsh-wecom': 'installed', '@deepseek-ai/dsh-dingtalk': 'missing',
-    '@deepseek-ai/dsh-tencent-meeting': 'missing', '@deepseek-ai/dsh-notion': 'missing', '@deepseek-ai/dsh-tencent-docs': 'missing',
-    '@deepseek-ai/dsh-linear': 'missing',
+    '@deepseek-ai/dsh-feishu': 'missing', '@deepseek-ai/dsh-wecom': 'missing', '@deepseek-ai/dsh-notion': 'enabled',
+    '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
   })
   face.ensure()
   expect(listBundles).toHaveBeenCalledOnce()
