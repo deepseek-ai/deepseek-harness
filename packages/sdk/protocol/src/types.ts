@@ -73,6 +73,8 @@ export interface SessionPromptParams {
   sessionId: string
   /** The prompt content blocks, sent verbatim as the user message. */
   contentBlocks: SdkPromptContentBlock[]
+  /** User time zone for this prompt: UTC or IANA Area/Location. Omitted: the runtime samples its process zone for this prompt. */
+  timeZone?: string
 }
 
 /** Inline raster input admitted into the runtime's durable attachment store. */
@@ -101,6 +103,8 @@ export interface SessionQueryParams {
   sessionId: SessionId
   /** Ordered prompt blocks; a native command occupies its only text block and may accompany encoded images. */
   contentBlocks: SdkPromptContentBlock[]
+  /** User time zone for this prompt: UTC or IANA Area/Location. Omitted: the runtime samples its process zone for this prompt. */
+  timeZone?: string
 }
 
 /**

@@ -53,6 +53,15 @@
       config:
         pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
 
+# The skill catalog lists dsh-doc, as the Desktop standard, PTC, and Creator
+# presets do; its instructions load only when the model calls `skill`. The
+# path resolves through this package's `@deepseek-ai/dsh-agent-preset`
+# dependency, which no plugin row names.
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+
 # Share native desktop tools and model context without starting a Web server.
 - insert:
     - id: connection

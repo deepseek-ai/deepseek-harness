@@ -1,0 +1,6 @@
+- insert:
+    - id: wecom
+      name: '@deepseek-ai/dsh-wecom'
+      config:
+        binDir: !!js process.cwd() + '/wecom-bin'
+        skillsDir: !!js process.cwd() + '/wecom-skills'

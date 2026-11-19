@@ -102,6 +102,8 @@ console.log(result.finalResponse)
 
 每次调用在发送前建立订阅，并在结束前释放。`onNotification` 按传输顺序接收本次输入的会话树活动；区间可以包含其他重叠工作。内部完成回执由 SDK 消费。并发调用保留各自结果，因此模型运行期间仍能取得另一条命令的忙碌错误。超时或观察回调失败不回滚运行时工作，也不授权自动重试。
 
+在 `run()` 选项中以 `timeZone` 传入用户时区，或调用 `client.prompt(sessionId, blocks, { timeZone })`，例如 `session.run('When is noon tomorrow?', { timeZone: 'Asia/Shanghai' })`。取值为 `UTC` 或 IANA Area/Location 名称；其他取值会在执行输入前被运行时以 `JsonRpcResponseError` 拒绝。不传时，运行时为每条 prompt 采样自身进程时区。原生命令不记录时区。记录的来源见 [SDK server](../server/README.zh.md#command-input)。
+
 启动选项提供初始值。权限命令只修改目标 Session；后续输入与恢复保留该状态，其他 Session 保留自己的状态，新 Session 使用配置默认值。命令不修改选项对象或已保存的用户默认值。运行中的审批策略变化可以注入通知并触发下一步骤。原生转换与恢复行为见[权限 preset](../../interaction/permission-presets/README.zh.md)。
 
 `run('/plan')` 进入计划模式；`/plan off` 退出；`/plan <message>` 进入并通过 steer 提交正文。`run()` 等待提交的模型活动、原生审阅及获批后的执行，无需调用者另行订阅或等待。通过用户问题处理器回答计划审阅；`exit_plan_mode` 的计划正文位于问题的 `detail`。计划模式不改变权限。通过 `run()` 创建或恢复目标时，会跨越自动轮次等待，直到目标停止及最后回复结束；暂停或清除返回 `aborted`，目标阻塞或失去激活状态报告失败。

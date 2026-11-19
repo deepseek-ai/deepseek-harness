@@ -13,6 +13,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
+import { observeRuntime, type RuntimeProcessEvents } from './process-events.ts'
 import { HarnessSdkJsonRpcServer } from './server.ts'
 
 export * from './server.ts'
@@ -30,6 +31,8 @@ export interface JsonRpcConfig {
   output?: Writable
   /** Process-exit override; production uses `process.exit`. */
   exit?: (code: number) => void
+  /** Process-event override; production uses `process`. */
+  processEvents?: RuntimeProcessEvents
 }
 
 export const Config: Schema<JsonRpcConfig> = Schema.object({
@@ -54,10 +57,13 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
   const output = config.output ?? process.stdout
   /* v8 ignore next -- production exit wiring; tests always inject the runtime hooks */
   const exit = config.exit ?? ((code: number): void => { process.exit(code) })
+  /* v8 ignore next -- production process wiring; tests always inject the runtime hooks */
+  const processEvents = config.processEvents ?? process
 
   const transport = new JsonRpcLineTransport(input, output)
   const server = new HarnessSdkJsonRpcServer(ctx, transport, {
     maxTokensAsSuccess: resolvedConfig.maxTokensAsSuccess,
+    runtime: observeRuntime(ctx, rootFiber, processEvents, input),
   })
   // Compositions can order Schedule after its activation handler is installed.
   // Like the app startup marker, this carries readiness, not another control API.

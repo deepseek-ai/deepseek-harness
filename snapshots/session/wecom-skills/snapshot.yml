@@ -1,0 +1,12 @@
+version: 1
+scenario: wecom-skills
+profile: headless
+composition: wecom-skills
+recording: authored
+replay:
+  override: true
+platform: posix
+header:
+  class: skill
+  pin: true
+  toolSchemasSource: text-turn

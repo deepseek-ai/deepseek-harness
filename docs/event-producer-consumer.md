@@ -109,7 +109,7 @@ Application listeners are outside this package matrix. Desktop Host subscribes t
 | `workspace/session-archived` | `parallel` | [`packages/workspace/workspace/src/index.ts:157`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | `worktree` |
 | `workspace/session-stop` | `parallel` | [`packages/workspace/workspace/src/index.ts:148`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`schedule`](../packages/schedule/schedule), [`subagent`](../packages/subagent/subagent) |
 | `workspace/session-unarchiving` | `parallel` | [`packages/workspace/workspace/src/index.ts:164`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | `worktree` |
-| `worktree/cleanup` | `emit` | [`packages/experimental/worktree/src/archive.ts:26`](../packages/experimental/worktree/src/archive.ts) | `worktree` (`emit`) | - |
+| `worktree/cleanup` | `emit` | [`packages/experimental/worktree/src/archive.ts:25`](../packages/experimental/worktree/src/archive.ts) | `worktree` (`emit`) | - |
 <!-- END GENERATED event-producer-consumer:events -->
 
 ## Non-harness or undeclared event strings seen in package source
@@ -123,7 +123,7 @@ Application listeners are outside this package matrix. Desktop Host subscribes t
 | `internal/dispatch` | - | [`terminal-bash`](../packages/terminal/terminal-bash) |
 | `internal/plugin` | - | `computer-use-cua-driver-native`, `inspector`, `loader`, [`lsp-stdio`](../packages/lsp/lsp-stdio), [`mcp-client`](../packages/mcp/mcp-client), [`mcp-manager`](../packages/mcp/mcp-manager), `modules` |
 | `internal/service` | - | `client-ui-forge`, `gateway` |
-| `internal/status` | - | [`agent`](../packages/core/agent), `claude-code-mods`, `inspector`, `modules`, `translator`, [`web`](../packages/web/web) |
+| `internal/status` | - | [`agent`](../packages/core/agent), `claude-code-mods`, `inspector`, `modules`, `server`, `translator`, [`web`](../packages/web/web) |
 | `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`mcp-manager`](../packages/mcp/mcp-manager), `modules`, [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text`, [`timeline`](../packages/experimental/timeline) |
 | `locale/change` | `locale` (`emit`) | `locale` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |

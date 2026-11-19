@@ -50,6 +50,8 @@ print(result.final_response)
 
 `DeepSeekHarness` 延迟启动运行时，并在调用 `close()` 或退出上下文管理器前复用该进程。首次 profile 握手通过 `initialize_timeout_seconds` 使用独立的 30 秒默认上限；普通活动在协议响应后仍不设时限；`request_timeout_seconds` 可以限制协议响应的等待。超时诊断会指明所选 profile，并包含保留的运行时诊断。`cwd` 是 agent workspace；`runtime_cwd` 独立选择子进程工作目录。两者都会在启动前转成绝对路径。`provider`、`model`、可选的 `reasoning_effort` 和可选的正整数 `max_tokens` 通过 JSON-RPC 初始化发送。`base_url` 与 `api_key` 会显式覆盖子进程环境中的 `DEEPSEEK_BASE_URL` 与 `DEEPSEEK_API_KEY`。
 
+SDK 把运行时写到 stderr 的每一行实时记录到 Python logger `deepseek_harness.runtime`，级别为 `INFO`，前缀为 `dsh runtime[<pid>] stderr:`。该输出包含运行时的致命错误报告，包括导致进程结束的未捕获异常或未处理拒绝的堆栈。宿主把日志配置为 `INFO`（例如 `logging.basicConfig(level=logging.INFO)`）后，这些行会进入宿主自己的日志；未配置日志时，Python 不显示低于 `WARNING` 的记录。调整该 logger 的级别即可关闭。
+
 `harness.resume_session(saved_session_id)` 恢复持久化历史，并返回可调用 `run()` 的 `Session`。请保存原会话 id，并沿用其 `dsh_home` 和工作区。恢复会保留存储的目录、修复最后一个被中断的轮次，且不发送新输入。会话缺失、不可读、不兼容或被占用时会抛出异常，不创建替代会话。`start_session(id)` 只打开惰性句柄，不会请求持久化恢复。此 API 不恢复 shell、浏览器或其他外部进程。
 
 调用 `harness.resume_session(saved_session_id, {"permission_mode": "danger-full-access"})` 可在恢复后的执行开始前覆盖已保存的权限预设；省略选项或传入空字典时保留历史权限。若选项含未知键，或传入的选项既非字典也非 `None`，SDK 会在发送恢复请求前抛出 `TypeError`。所选预设同时更新 sandbox 和审批策略，并持久化供后续恢复使用；该预设必须存在于 profile 的权限服务中。标准 `sdk` profile 提供 `read-only`、`workspace-write` 和 `danger-full-access`。缺少该服务的 profile（如 `sdk-minimal`）会拒绝显式覆盖。已被提醒任务恢复的会话也会拒绝覆盖；请对该运行中会话使用 `/permission`。
@@ -68,6 +70,8 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
 每次调用都返回 `RunResult`，包含接收输入的 `session_id`、根会话事件和会话树通知。`final_response` 包含最终助手文本；活动未输出助手文本时为空字符串。仅改变状态的命令返回原生 handler 的结果文本。`finish_reason` 表示结束结果。原生命令身份与结果保留在 `command/run` 和 `command/done` 事件中。完成通知缺少匹配的命令生命周期事件时抛出 `SdkProtocolError`，不会返回不完整的结果。
 
 内容块数组与字符串使用相同的命令路由。`session.run([{"type": "text", "text": "/compact"}])` 和 `session.run("/compact")` 都调用原生压缩并返回 `RunResult`。要绕过原生命令路由，调用底层 `client.session_prompt(session_id, blocks)` 并管理后续活动；运行时 skill（技能）识别仍然适用。
+
+以 `time_zone` 传入用户时区，例如 `session.run("When is noon tomorrow?", time_zone="Asia/Shanghai")`；`harness.run()` 与 `client.session_prompt()` 接受同一关键字参数，并以 `timeZone` 协议字段发送。取值为 `UTC` 或 IANA Area/Location 名称；其他取值会在执行输入前被运行时以 `JsonRpcError` 拒绝。不传时，运行时为每条 prompt 采样自身进程时区。原生命令不记录时区。
 
 先选择支持图片输入的模型。通过现有内容块数组同时提交命令和图片，例如 `session.run([{"type": "text", "text": "/plan Analyze this image."}, {"type": "image", "data": image_base64, "mimeType": "image/png"}])`；`harness.run()` 接受相同输入。计划输入和目标创建、编辑接受图片；`/plan off`、目标控制、压缩和权限命令按[原生附件规则](../../packages/sdk/server/README.zh.md#command-input)拒绝图片。原生命令输入支持编码栅格图片，不支持一般文件上传或客户端提供的附件引用。
 
