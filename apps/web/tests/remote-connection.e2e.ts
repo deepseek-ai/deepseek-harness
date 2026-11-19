@@ -420,7 +420,9 @@ describe('web e2e: one-use QR browser login', () => {
         await page.emulateMedia({ colorScheme })
         await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme)
         await dialog.getByRole('button', { name: '模型', exact: true }).click()
-        const models = await headingTypography(dialog.getByRole('heading', { name: '模型', level: 2, exact: true }), 4)
+        const modelsHeading = dialog.getByRole('heading', { name: '模型', level: 2, exact: true })
+        await modelsHeading.locator('..').locator('..').locator(':scope > ul').waitFor({ state: 'attached' })
+        const models = await headingTypography(modelsHeading, 4)
         expect(models.title).toMatchObject({ fontSize: '16px', lineHeight: '24px', fontWeight: '500' })
         expect(models.intro).toMatchObject({ fontSize: '14px', lineHeight: '22px' })
         const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
