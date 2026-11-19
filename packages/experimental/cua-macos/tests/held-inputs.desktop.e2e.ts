@@ -113,7 +113,7 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       }
       await handle.agent.whenIdle()
       if (ending === 'completed') {
-        expect((await received()).map(event => event.type)).toEqual([10, 1, 10])
+        await expect.poll(async () => (await received()).map(event => event.type), { timeout: 30_000 }).toEqual([10, 1, 10])
         expect(JSON.stringify(handle.agent.session.snapshotEvents())).toContain('CUA inputs are still held')
         programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up'); await app.sendKeyEvent('a', 'up')"
         handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Release held input' }], source: { kind: 'user' } }))

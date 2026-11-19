@@ -289,7 +289,14 @@ def check_mixed_input(call, owner, state_file, executable):
             call("sendKeyEvent", {**owner, "key": "a", "direction": "down"})
             call("toggleMouse", {**window, "mouseButton": "left", "direction": "down", "useSystemPointer": system})
             call("sendKeyEvent", {**owner, "key": "w", "direction": "down"})
+            assert call("getHeldInputs", {}) == [
+                {"kind": "key", "key": "a", "appHandle": owner["appHandle"], "mode": "application"},
+                {"kind": "mouse", "button": "left", "appHandle": owner["appHandle"],
+                 "windowId": window["windowId"], "mode": "system" if system else "window"},
+                {"kind": "key", "key": "w", "appHandle": owner["appHandle"], "mode": "application"},
+            ]
             call("releaseHeldInputs", {})
+            assert call("getHeldInputs", {}) == []
             state = wait_for_state(state_file, lambda s: sum(e.get("sourcePid") == source_pid for e in s["events"][count:]) >= 6)
             events = [(e["type"], e.get("keyCode")) for e in state["events"][count:] if e.get("sourcePid") == source_pid]
             assert events == [(10, 0), (1, None), (10, 13), (11, 13), (2, None), (11, 0)], events

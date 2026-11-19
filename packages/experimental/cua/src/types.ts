@@ -1,8 +1,15 @@
 /** Native application objects independent of evaluator ownership and persistence. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
 import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ShowResult, WindowsResult } from './protocol.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'cua-held-inputs': { kind: 'cua-held-inputs' } & ContextFormed
+  }
+}
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>

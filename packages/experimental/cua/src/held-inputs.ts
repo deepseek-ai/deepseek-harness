@@ -1,16 +1,10 @@
 /** Native-owned held input, program-end reminders, and failure/cancellation cleanup. */
 import type { Context } from '@deepseek-ai/cordis'
 import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, type ContextFormed } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
 import { NativeError, type NativeClient } from './native-client.ts'
-
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    'cua-held-inputs': { kind: 'cua-held-inputs' } & ContextFormed
-  }
-}
 
 const target = { appHandle: z.string(), mode: z.enum(['application', 'window', 'system']) }
 const heldInputs = z.array(z.discriminatedUnion('kind', [
