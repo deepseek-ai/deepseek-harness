@@ -63,7 +63,7 @@
 
 ### `session_send_message`
 
-向独立 Session 发送消息。仅当用户明确要求你向另一个 Session 发送消息时使用此工具。运行中的 Session 在下一次可接收输入时处理消息；空闲 Session 开始一轮，不在线的 Session 先恢复。返回接收回执，不等待回复。
+向独立 Session 发送消息。仅当用户明确要求你向另一个 Session 发送消息时使用此工具。
 
 ```json
 {

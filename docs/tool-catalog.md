@@ -59,7 +59,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 ### `session_send_message`
 
-Send a message to an independent session. Use this tool only when the user explicitly asks you to send a message to another session. A working session receives it at its next input boundary; an idle session starts a turn, and an inactive session resumes first. Returns an acceptance receipt without waiting for a reply.
+Send a message to an independent session. Use this tool only when the user explicitly asks you to send a message to another session.
 
 ```json
 {
