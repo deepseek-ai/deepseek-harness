@@ -3,6 +3,7 @@
 #define NOMINMAX
 #define UNICODE
 #include <windows.h>
+#include <winnetwk.h>
 #include <cassert>
 #include "../installer/uninstall-data.h"
 
@@ -10,6 +11,7 @@ extern "C" __declspec(dllimport) void* __cdecl UninstallBegin(LPCWSTR);
 extern "C" __declspec(dllimport) DWORD __cdecl UninstallPrepare(void*, LPCWSTR, LPCWSTR);
 extern "C" __declspec(dllimport) DWORD __cdecl UninstallPayload(void*, LPCWSTR, LPCWSTR, LPCWSTR);
 extern "C" __declspec(dllimport) int __cdecl UninstallFinish(void*, LPCWSTR, LPCWSTR);
+extern "C" __declspec(dllimport) void __cdecl UninstallPersist(void*);
 
 static void File(const std::wstring& path, DWORD attributes = FILE_ATTRIBUTE_NORMAL) {
     HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, attributes, nullptr);
@@ -22,7 +24,7 @@ static void File(const std::wstring& path, DWORD attributes = FILE_ATTRIBUTE_NOR
 static bool Exists(const std::wstring& path) { return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
 int wmain(int argc, wchar_t** argv) {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     const std::wstring root = argv[1];
     const std::wstring installation = root + L"\\application";
     const std::wstring data = root + L"\\data";
@@ -36,6 +38,30 @@ int wmain(int argc, wchar_t** argv) {
     File(cache + L"\\CURRENT");
     File(cache + L"\\LOCK", FILE_ATTRIBUTE_READONLY);
     File(cache + L"\\MANIFEST");
+
+    // Optional live SMB coverage: argv[2] is the same private root through an existing share.
+    if (argc == 3) {
+        const std::wstring networkRoot = argv[2];
+        assert(uninstall_data::CheckHome(installation, (networkRoot + L"\\data").c_str()) == ERROR_SUCCESS);
+        assert(uninstall_data::CheckHome(installation, (networkRoot + L"\\application").c_str()) == ERROR_ACCESS_DENIED);
+        assert(uninstall_data::CheckHome(installation, (networkRoot + L"\\application\\missing").c_str()) == ERROR_ACCESS_DENIED);
+        WCHAR drive[] = L"Z:";
+        NETRESOURCEW resource{};
+        resource.dwType = RESOURCETYPE_DISK;
+        resource.lpRemoteName = argv[2];
+        resource.lpLocalName = drive;
+        DWORD mapped = ERROR_ALREADY_ASSIGNED;
+        for (; drive[0] >= L'F'; --drive[0]) {
+            mapped = WNetAddConnection2W(&resource, nullptr, nullptr, CONNECT_TEMPORARY);
+            if (mapped != ERROR_ALREADY_ASSIGNED && mapped != ERROR_DEVICE_ALREADY_REMEMBERED) break;
+        }
+        assert(mapped == ERROR_SUCCESS);
+        const DWORD separate = uninstall_data::CheckHome(installation, (std::wstring(drive) + L"\\data").c_str());
+        const DWORD overlapping = uninstall_data::CheckHome(installation, (std::wstring(drive) + L"\\application").c_str());
+        assert(WNetCancelConnection2W(drive, 0, FALSE) == ERROR_SUCCESS);
+        assert(separate == ERROR_SUCCESS);
+        assert(overlapping == ERROR_ACCESS_DENIED);
+    }
 
     // Refused roots: the test root contains the installation; shell roots and malformed paths are rejected.
     assert(uninstall_data::Remove(root.c_str(), installation.c_str(), nullptr) == ERROR_ACCESS_DENIED);
@@ -55,6 +81,17 @@ int wmain(int argc, wchar_t** argv) {
     for (auto& character : slashHome) if (character == L'\\') character = L'/';
     assert(uninstall_data::Remove(data.c_str(), installation.c_str(), slashHome.c_str()) == ERROR_ACCESS_DENIED);
     assert(Exists(cache + L"\\CURRENT"));
+
+    // Missing children still overlap their existing parent; absent siblings are separate.
+    assert(uninstall_data::CheckHome(installation, (installation + L"\\missing\\home").c_str()) == ERROR_ACCESS_DENIED);
+    assert(uninstall_data::CheckHome(installation, (root + L"\\missing\\home").c_str()) == ERROR_SUCCESS);
+    assert(uninstall_data::CheckHome(installation, (L"\\\\?\\" + installation).c_str()) == ERROR_ACCESS_DENIED);
+    std::wstring normalizedHome;
+    assert(uninstall_data::NormalizeHome(L"\\\\server\\share\\home", normalizedHome));
+    assert(uninstall_data::NormalizeHome(L"\\\\?\\UNC\\server\\share\\home", normalizedHome));
+    assert(normalizedHome == L"\\\\server\\share\\home");
+    assert(!uninstall_data::NormalizeHome(L"\\\\server", normalizedHome));
+    assert(!uninstall_data::NormalizeHome(L"\\\\.\\C:\\home", normalizedHome));
 
     // A pinned directory cannot be renamed or replaced while the helper holds it.
     {
@@ -142,6 +179,15 @@ int wmain(int argc, wchar_t** argv) {
     for (auto& character : slashInstall) if (character == L'\\') character = L'/';
     assert(UninstallPrepare(protectedSession, installation.c_str(), slashInstall.c_str()) == ERROR_ACCESS_DENIED);
     assert(UninstallPrepare(protectedSession, installation.c_str(), L"relative/home") == ERROR_INVALID_NAME);
+    UninstallPersist(protectedSession);
+    reportFile = CreateFileW(report.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(reportFile != INVALID_HANDLE_VALUE);
+    ZeroMemory(contents, sizeof(contents));
+    assert(ReadFile(reportFile, contents, sizeof(contents) - 1, &length, nullptr));
+    CloseHandle(reportFile);
+    assert(strstr(contents, "Validate DSH_HOME"));
+    assert(strstr(contents, "relative/home"));
+    assert(DeleteFileW(report.c_str()));
     assert(RemoveDirectoryW(installation.c_str()));
 
     std::vector<std::wstring> longDirectories;

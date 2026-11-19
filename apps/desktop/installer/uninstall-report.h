@@ -169,13 +169,13 @@ inline int Show(HWND parent, Session& session, int mode, LPCWSTR title, LPCWSTR 
 }
 
 // Pin every ancestor and reject shell roots/ancestors before any payload removal.
-inline DWORD Prepare(Session& session, LPCWSTR directory, LPCWSTR protectedRoot) {
+inline DWORD Prepare(Session& session, LPCWSTR directory, LPCWSTR protectedRoot, bool& homeFailure) {
     std::wstring path;
     if (!uninstall_data::Normalize(directory, path)) return ERROR_INVALID_NAME;
     if (protectedRoot && *protectedRoot) {
-        std::wstring home;
-        if (!uninstall_data::NormalizeHome(protectedRoot, home)) return ERROR_INVALID_NAME;
-        if (uninstall_data::Contains(path, home) || uninstall_data::Contains(home, path)) return ERROR_ACCESS_DENIED;
+        const DWORD error = uninstall_data::CheckHome(path, protectedRoot, &homeFailure);
+        if (error) return error;
+        homeFailure = false;
     }
     const KNOWNFOLDERID* folders[] = {&FOLDERID_Profile, &FOLDERID_RoamingAppData, &FOLDERID_LocalAppData,
         &FOLDERID_Desktop, &FOLDERID_Documents, &FOLDERID_Downloads, &FOLDERID_Pictures, &FOLDERID_Music,
@@ -243,8 +243,9 @@ extern "C" __declspec(dllexport) uninstall_report::Session* __cdecl UninstallBeg
     return session;
 }
 extern "C" __declspec(dllexport) DWORD __cdecl UninstallPrepare(uninstall_report::Session* session, LPCWSTR path, LPCWSTR home) {
-    const DWORD error = uninstall_report::Prepare(*session, path, home);
-    if (error) uninstall_report::Add(*session, L"Validate removal scope; no deletion started", path, error);
+    bool homeFailure = false;
+    const DWORD error = uninstall_report::Prepare(*session, path, home, homeFailure);
+    if (error) uninstall_report::Add(*session, homeFailure ? L"Validate DSH_HOME; no deletion started" : L"Validate removal scope; no deletion started", homeFailure ? home : path, error);
     return error;
 }
 extern "C" __declspec(dllexport) DWORD __cdecl UninstallPayload(uninstall_report::Session* session, LPCWSTR path, LPCWSTR executable, LPCWSTR uninstaller) {

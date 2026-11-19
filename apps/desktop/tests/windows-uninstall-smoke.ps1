@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $copy = (Get-Content (Join-Path $PSScriptRoot "../installer/locales/$Language.json") -Encoding UTF8 -Raw | ConvertFrom-Json).uninstaller
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+. (Join-Path $PSScriptRoot 'windows-installer-process.ps1')
 [InstallerCapture]::Initialize()
 $expected = Get-Content (Join-Path $PSScriptRoot 'expected/windows-uninstall.json') -Raw | ConvertFrom-Json
 $roaming = [Environment]::GetFolderPath('ApplicationData')
@@ -24,6 +25,7 @@ $environmentKey = "Software\DSHUninstallTests\$RegistryKey\CommandEnvironment"
 $ownerKey = "Software\DSHUninstallTests\$RegistryKey\CommandOwner"
 $protocolKey = "Software\Classes\dsh-test-$RegistryKey"
 $process = $null
+$setup = $null
 $held = $null
 $originalHome = [Environment]::GetEnvironmentVariable('DSH_HOME', 'Process')
 $strings = (Get-Content (Join-Path $PSScriptRoot "../installer/locales/$Language.json") -Encoding UTF8 -Raw | ConvertFrom-Json).strings
@@ -52,10 +54,8 @@ function Wait-Exit {
 try {
     foreach ($mode in $expected.cases) {
         $setup = Start-Process -FilePath $Installer -ArgumentList ('/S /D=' + $installPath) -PassThru -WindowStyle Hidden
-        try {
-            if (-not $setup.WaitForExit(30000)) { $setup.Kill(); $setup.WaitForExit(); throw 'Setup timed out' }
-            if ($setup.ExitCode -ne 0) { throw "Setup failed: $($setup.ExitCode)" }
-        } finally { $setup.Dispose() }
+        Wait-InstallerProcess $setup
+        $setup.Dispose(); $setup = $null
         $entry = Get-ItemProperty ('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey)
         if ($entry.InstallLocation.TrimEnd('\') -ne $installPath) { throw 'Uninstall entry lacks InstallLocation' }
         $deepAsset = Join-Path $installPath (('nested-' * 20) + '\' + ('asset-' * 15) + '.txt')
@@ -244,7 +244,8 @@ try {
     }
     # Real replacement publishes B after the old A uninstaller has been retained.
     $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $installPath) -PassThru -WindowStyle Hidden
-    try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover A setup failed' } } finally { $setup.Dispose() }
+    Wait-InstallerProcess $setup
+    $setup.Dispose(); $setup = $null
     Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
     $oldCommand = Join-Path $installPath 'resources\runtime\cli\bin'
     $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($ownerKey)
@@ -259,7 +260,8 @@ try {
     $newPath = Join-Path $OutputDirectory 'Replacement App'
     $env:DSH_HOME = $homePath.Replace('\', '/')
     $setup = Start-Process $Installer -ArgumentList ('/S /D=' + $newPath) -PassThru -WindowStyle Hidden
-    try { if (-not $setup.WaitForExit(30000) -or $setup.ExitCode -ne 0) { throw 'Takeover B setup failed' } } finally { $setup.Dispose() }
+    Wait-InstallerProcess $setup
+    $setup.Dispose(); $setup = $null
     if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory) { throw 'Relocation retained old command owner' }
     if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne 'C:\Windows') { throw 'Relocation retained old command PATH' }
     if (Test-Path -LiteralPath ('HKCU:\' + $protocolKey)) { throw 'Relocation retained old protocol' }
@@ -353,9 +355,17 @@ try {
     Write-Output 'passed: installation takeover'
 } finally {
     if ($held) { $held.Dispose() }
-    foreach ($key in @("Software\DSHUninstallTests\$RegistryKey", $protocolKey)) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($key, $false) }
+    if ($setup) { Stop-InstallerProcess $setup; $setup.Dispose() }
+    if ($process) { Stop-InstallerProcess $process; $process.Dispose() }
+    if ($ProductName -ne ('Harness Installer Test ' + ([Guid]$RegistryKey).ToString('N').Substring(0, 8))) { throw 'Unexpected fixture identity' }
+    foreach ($key in @("Software\DSHUninstallTests\$RegistryKey", $protocolKey, "Software\$RegistryKey", "Software\Microsoft\Windows\CurrentVersion\Uninstall\$RegistryKey")) {
+        [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($key, $false)
+    }
+    foreach ($folder in @('DesktopDirectory', 'Programs')) {
+        $link = Join-Path ([Environment]::GetFolderPath($folder)) ($ProductName + '.lnk')
+        if (Test-Path -LiteralPath $link) { Remove-Item -LiteralPath $link -Force }
+    }
     [Environment]::SetEnvironmentVariable('DSH_HOME', $originalHome, 'Process')
-    if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
     # Only unique test identities below known application-data parents are removed.
     foreach ($pair in @(@($productDataPath, $roaming), @($scopePath, $roaming), @($cachePath, $local))) {
         $target = [IO.Path]::GetFullPath($pair[0])

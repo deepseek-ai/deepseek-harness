@@ -23,7 +23,7 @@ if ($TestProgress -or $CompileProgressOnly) {
     # UAC installer detection demands elevation from unmanifested executables named after installation.
     $cleanupExecutable = Join-Path $output 'data-cleanup-test.exe'
     $cleanupScript = Join-Path $output 'compile-data-cleanup-test.cmd'
-    [IO.File]::WriteAllLines($cleanupScript, @('@echo off', ('call "{0}" >nul' -f $vcvars), 'if errorlevel 1 exit /b %errorlevel%', ('cl /nologo /MT /W4 /WX /EHsc "{0}" /Fo"{1}" /Fe"{2}" /link "{3}" shell32.lib ole32.lib uuid.lib advapi32.lib' -f $cleanupSource, (Join-Path $output 'data-cleanup-test.obj'), $cleanupExecutable, (Join-Path $output 'window-frame.lib'))), [Text.Encoding]::Default)
+    [IO.File]::WriteAllLines($cleanupScript, @('@echo off', ('call "{0}" >nul' -f $vcvars), 'if errorlevel 1 exit /b %errorlevel%', ('cl /nologo /MT /W4 /WX /EHsc "{0}" /Fo"{1}" /Fe"{2}" /link "{3}" shell32.lib ole32.lib uuid.lib advapi32.lib mpr.lib' -f $cleanupSource, (Join-Path $output 'data-cleanup-test.obj'), $cleanupExecutable, (Join-Path $output 'window-frame.lib'))), [Text.Encoding]::Default)
     & $env:ComSpec /d /c $cleanupScript
     if ($LASTEXITCODE -ne 0) { throw 'Uninstall data test compilation failed.' }
     if ($TestProgress) {
