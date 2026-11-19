@@ -624,6 +624,47 @@ export interface ChangeRequestLabel {
   readonly color: string | null
 }
 
+/**
+ * One entry of a change request's activity: a comment in its conversation, a submitted review, a commit, a change of
+ * its state, or a record the host words itself.
+ */
+export type ChangeRequestActivityItem = {
+  /** ISO 8601 time of the entry. */
+  readonly at: string
+  /** Account the entry is by, or null when the host names none or the account no longer exists. */
+  readonly actor: ForgeCommentAuthor | null
+} & (
+  /** A comment in the conversation. `body` is Markdown source; it may contain raw HTML, which readers must not render as HTML. */
+  | { readonly kind: 'comment'; readonly body: string; readonly url: string | null }
+  /**
+   * A submitted review: its decision, its own Markdown text, which follows the rule of a comment's `body` and is empty
+   * without one, and the number of comments it left on lines and files.
+   */
+  | { readonly kind: 'review'; readonly verdict: ReviewVerdict; readonly body: string; readonly comments: number; readonly url: string | null }
+  /**
+   * A commit added to the change request: its object name, abbreviated when the host records only an abbreviation, and
+   * the first line of its message.
+   */
+  | { readonly kind: 'commit'; readonly sha: string; readonly title: string }
+  | { readonly kind: 'merged' | 'closed' | 'reopened' | 'ready-for-review' | 'converted-to-draft' | 'force-pushed' }
+  | { readonly kind: 'auto-merge-enabled' | 'auto-merge-disabled' }
+  /** A review was requested from an account or a team, named as the host spells it; null when the host names neither. */
+  | { readonly kind: 'review-requested'; readonly reviewer: string | null }
+  | { readonly kind: 'renamed'; readonly from: string; readonly to: string }
+  /** A record with no kind of its own, as plain text in the host's own words. */
+  | { readonly kind: 'other'; readonly text: string }
+)
+
+/** The activity of a change request. */
+export interface ChangeRequestActivity {
+  /** Entries oldest first, at most the provider's limit; the latest ones when the change request has more. */
+  readonly items: readonly ChangeRequestActivityItem[]
+  /** Whether the change request has entries older than `items` holds. */
+  readonly truncated: boolean
+  /** Whether the signed-in user can add a comment through `addComment`; false for a provider without it. */
+  readonly viewerCanComment: boolean
+}
+
 /** Whether a provider can reach one host with the current credentials. */
 export interface ForgeReadiness {
   /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
@@ -677,6 +718,17 @@ export interface ForgeProvider {
   countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
   /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
   readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+  /**
+   * Read the activity of a change request: the comments in its conversation, its submitted reviews, its commits, and
+   * the changes of its state. Omission declares that this provider reads no activity.
+   */
+  readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+  /**
+   * Add a comment of Markdown source `body` to a change request's conversation, resolving to undefined once the host
+   * saved it. A comment is never retried. Omission declares that this provider adds no comments, and its `readActivity`
+   * then denies `viewerCanComment`.
+   */
+  addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**

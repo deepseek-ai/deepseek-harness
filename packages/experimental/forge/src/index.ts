@@ -6,7 +6,8 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { backoffDelay, nextPollDelay } from './schedule.ts'
 import type {
-  BranchUpdateRequest, ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestBriefUpdate, ChangeRequestDescription, ChangeRequestKey,
+  BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestBriefUpdate,
+  ChangeRequestDescription, ChangeRequestKey,
   ChangeRequestKnownState, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ChangeRequestWatchOptions,
   Config,
   ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRegistrationHandle,
@@ -605,6 +606,32 @@ export class ForgeService extends Service {
     return await this.invoke(this.registration(ref.repository.forge), signal,
       (provider, operation) => provider.readDescription?.(ref, operation)
         ?? Promise.resolve({ code: 'unsupported', message: 'This provider does not read descriptions' } as const))
+  }
+
+  /**
+   * Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.readActivity?.(ref, operation)
+        ?? Promise.resolve({ code: 'unsupported', message: 'This provider does not read activity' } as const))
+  }
+
+  /**
+   * Add a comment to a change request's conversation, then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param body - Markdown source of the comment.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    return await this.act(ref, signal, provider => provider.addComment?.bind(provider), 'adds no comments',
+      (action, operation) => action(ref, body, operation))
   }
 
   /**
