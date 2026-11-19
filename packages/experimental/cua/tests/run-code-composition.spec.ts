@@ -407,6 +407,19 @@ it('releases keyboard and mouse in mixed reverse order on program failure', asyn
   expect(results.map(result => result.isError)).toEqual([false, true, false])
 })
 
+it('releases a previous hold when downstream execution throws before producing a result', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  await f.run()
+  f.model.restart(['inspect("unreachable")'])
+  f.ctx.on('tools/execute', (execution, next) => {
+    if (execution.name === 'cua_run_code') throw new Error('Executor middleware failed')
+    return next()
+  })
+  await f.run()
+  expect(f.native.events).toEqual(['w:down', 'w:up'])
+  expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('Executor middleware failed')
+})
+
 it('reminders name the actual mouse target and omit explicitly released inputs', async () => {
   const f = await setup([holdProgram, 'await app.sendKeyEvent("w", "up"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down")'],
     'macos', undefined, true, true)
@@ -683,13 +696,17 @@ it('drops a delayed held-state reminder after cancellation has already released 
   expect(reminders(f.agent, 'cua-inputs-released')).toHaveLength(1)
 })
 
-it('does not report held input when stopped as its native state query replies', async () => {
+it.each(['reply before stop', 'stop before reply'] as const)('does not report held input on %s', async (order) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
-  const query = f.native.controlNext('getHeldInputs', { afterDispatch: true })
+  const query = f.native.controlNext('getHeldInputs', { afterDispatch: true, waitForCancellation: order === 'stop before reply' })
   const running = f.run()
   await query.entered
-  query.reply()
+  if (order === 'reply before stop') query.reply()
   f.agent.cancel({ kind: 'user' })
+  if (order === 'stop before reply') {
+    await query.cancelled
+    query.reply({ code: 'NATIVE_CANCELLED', message: 'Held-state query cancelled' })
+  }
   await running
   expect(f.native.held).toEqual([])
   expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-held-inputs')).toBe(false)

@@ -240,7 +240,7 @@ describe('Computer Use MCP composition', () => {
     expect(native.held).toEqual([])
   })
 
-  it.each(['reset', 'image failure'] as const)('cleans up held input when %s interrupts response delivery', async (ending) => {
+  it.each(['reset', 'image failure', 'cleanup failure'] as const)('cleans up held input when %s interrupts response delivery', async (ending) => {
     const { ctx, native, client, run } = await setup()
     const entered: PromiseWithResolvers<void> = Promise.withResolvers()
     const finish: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -249,7 +249,7 @@ describe('Computer Use MCP composition', () => {
       if (native.calls.some(call => call.method === 'getHeldInputs')) {
         entered.resolve()
         await finish.promise
-        if (ending === 'image failure') throw new Error('Fixture screenshot could not be delivered')
+        if (ending !== 'reset') throw new Error('Fixture screenshot could not be delivered')
       }
       return original(...args)
     })
@@ -268,12 +268,22 @@ describe('Computer Use MCP composition', () => {
         release.reply()
         expect(resetDone).toBe(false)
       }
+      if (ending === 'cleanup failure') {
+        const release = native.controlNext('releaseHeldInputs')
+        finish.resolve()
+        await release.entered
+        release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Fixture cleanup refused during response delivery' })
+      }
     } finally { finish.resolve() }
     const result = await running
     expect(result).not.toContain('CUA inputs are still held')
-    if (ending === 'image failure') expect(result).toContain('Fixture screenshot could not be delivered')
+    if (ending !== 'reset') expect(result).toContain('Fixture screenshot could not be delivered')
+    if (ending === 'cleanup failure') {
+      expect(result).toContain('Fixture cleanup refused during response delivery')
+      const next = await run('await win.sendKeyEvent("w", "down")')
+      expect(texts(next).join(' ')).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    } else expect(native.held).toEqual([])
     expect((await reset)?.isError).not.toBe(true)
-    expect(native.held).toEqual([])
   })
 
   it('reports refused cleanup after a cancelled MCP request and prevents further native input', async () => {
