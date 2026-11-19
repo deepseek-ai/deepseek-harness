@@ -152,7 +152,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
         await mention.click()
         const preview = column.locator('[data-document-preview]')
         await expect.poll(() => preview.getAttribute('data-textpreview-url'))
-          .toBe(`dsh-resource://file/session/${sessionId}/${encodeURIComponent(name)}`)
+          .toBe(`dsh-resource://file/session/${sessionId}/${join(cwd, name).split('/').map(encodeURIComponent).join('/')}`)
         await preview.getByText(content, { exact: true }).waitFor()
         await mention.click()
         expect(await column.locator('[data-dockkit-tab]').filter({ hasText: name }).count()).toBe(1)

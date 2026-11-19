@@ -262,7 +262,7 @@ describe('program sub-calls through the real chat machinery', () => {
     const view = mountApp(b.runtime)
     view.getByText('notes/demo.txt').click()
     await vi.waitFor(() => {
-      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1/notes/demo.txt')
+      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1//w/notes/demo.txt')
     })
     expect(b.openWorkspacePath).not.toHaveBeenCalled()
     view.getByText('List notes').click()
