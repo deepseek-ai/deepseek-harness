@@ -6,7 +6,7 @@ recording: authored
 header:
   class: image-compaction
   pin: true
-  systemPromptSource: session/read-image
+  promptChanges: 1
   toolSchemasSource: escalation-approved
 permission: danger-full-access
 input:

@@ -42,7 +42,7 @@ dsh --profile web --no-open --port 8080
 
 After startup you see a `dsh web:` line whose root URL carries a fresh process token. Unless `--no-open` or an SSH session suppresses it, the default browser opens that URL, receives a signed cookie, and redirects to the same directory without the token. You know it worked when the page loads and you can chat with the agent. Two failures to expect: if the frontend is not built, startup stops with a build hint (`pnpm run build` in a checkout); if the browser cannot be opened, a credential-free diagnostic prints to stderr while the server keeps running — open the printed startup URL yourself.
 
-**Settings → Models** displays **DeepSeek**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
+**Settings → Models** displays **DeepSeek API**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
 
 Saved model selections override the composition default. The settings card accepts a Messages-compatible API address and a credential reference.
 
@@ -96,7 +96,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
-Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
+Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard, PTC, and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
 
 The packaged skill uses the custom skill root: a same-named project skill overrides it, and it overrides same-named user skills. One catalog entry wins without an error; see [skill-root priority](../../skill/skill-filesystem/README.md).
 
@@ -161,7 +161,7 @@ Read these pages when you want to go deeper into the shared core, the browser re
 
 #### What the model sees
 
-Standard and Creator list `dsh-doc` in the skill catalog. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
+Standard, PTC, and Creator list `dsh-doc` in the skill catalog, as the SDK profile does. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
 
 #### Token effect
 

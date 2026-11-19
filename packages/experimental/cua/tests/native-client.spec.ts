@@ -1,4 +1,5 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { PassThrough, Writable } from 'node:stream'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -281,6 +282,7 @@ describe('native helper transport', () => {
   it('reports the native and close failures with screenshot diagnostics through the tool pipeline', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(Tools)
     ctx.tools.setExecutor(new NativeToolExecutor(ctx))

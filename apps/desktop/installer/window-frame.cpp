@@ -33,6 +33,7 @@ static HRESULT ApplyInstallerDwmFrame(HWND window) {
 #include "extract-report.h"
 #include "directory-report.h"
 #include "uninstall-data.h"
+#include "uninstall-report.h"
 
 using namespace Gdiplus;
 

@@ -737,3 +737,64 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   expect(exit.exitCode, stderr).toBe(0)
   await expect(readFile(join(home, 'dsh-runtimes', 'dsh-primary-runtime', 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
 })
+
+it.each(['standard', 'ptc'] as const)('lists and loads the packaged dsh-doc skill through the SDK profile (%s)', async (mode) => {
+  const root = await mkdtemp(join(tmpdir(), 'sdk-dsh-doc-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const requests: { tools: { name: string }[]; messages: unknown }[] = []
+  const toolUses = mode === 'standard' ? [{ type: 'tool_use', id: 'dsh-doc', name: 'skill', input: { name: 'dsh-doc' } } as const] : []
+  const server = createServer((request, response) => {
+    let body = ''
+    request.setEncoding('utf8').on('data', (chunk: string) => { body += chunk })
+    request.on('end', () => {
+      requests.push(JSON.parse(body) as { tools: { name: string }[]; messages: unknown })
+      const toolUse = toolUses[requests.length - 1]
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end(toolUse === undefined ? messagesResponse({ type: 'text', text: 'done' }, 'end_turn') : messagesResponse(toolUse, 'tool_use'))
+    })
+  })
+  onTestFinished(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
+  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
+  const launch = resolveExampleLaunch({
+    srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
+    configArgs: ['--profile', 'sdk', ...mode === 'ptc' ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []],
+    env: { DSH_HOME: join(root, 'home'), DSH_PRIMARY_RUNTIME: '', DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
+      DEEPSEEK_API_KEY: 'local-fixture', DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}` },
+  })
+  const child = execa(launch.command, launch.args, { cwd: repoRoot, env: launch.env, timeout: 60_000, reject: false })
+  onTestFinished(async () => { child.kill('SIGKILL'); await child })
+  let buffer = '', stderr = ''
+  const lines: string[] = []
+  child.stdout.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString()
+    const parts = buffer.split('\n')
+    buffer = parts.pop() ?? ''
+    lines.push(...parts)
+  })
+  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+  const send = (id: number, method: string, params?: object) => {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+    return waitForLine(lines, value => value.id === id, () => stderr)
+  }
+  expect(await send(1, 'initialize', { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' })).toHaveProperty('result')
+  await send(2, 'session/prompt', { sessionId: 'dsh-doc', contentBlocks: [{ type: 'text', text: 'How do DSH presets work?' }] })
+  await waitForLine(lines, (value) => {
+    const params = value.params as { sessionId?: string; event?: { type?: string } } | undefined
+    return value.method === 'session.event' && params?.sessionId === 'dsh-doc' && params.event?.type === 'turn/end'
+  }, () => stderr)
+  expect(requests).toHaveLength(toolUses.length + 1)
+  expect(JSON.stringify(requests[0]!.messages)).toMatch(/- `dsh-doc`: Use when a task needs facts about DeepSeek Harness/)
+  if (mode === 'ptc') expect(requests[0]!.tools.map(tool => tool.name)).toEqual(['run_code'])
+  else {
+    const messages = requests[1]!.messages as { content: { tool_use_id?: string }[] }[]
+    const loaded = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'dsh-doc'))
+    const directory = join(repoRoot, 'packages/preset/agent-preset/skills/dsh-doc').split(sep).join('/')
+    expect(loaded).toContain(JSON.stringify(`Base directory for this skill: ${directory}`).slice(1, -1))
+    expect(loaded).toContain('# DeepSeek Harness documentation')
+  }
+  await send(3, 'shutdown')
+  const exit = await child
+  expect(exit.exitCode, stderr).toBe(0)
+})

@@ -146,7 +146,7 @@ The detail page reads the effective default (`selectedDefault ?? default`) from 
 
 #### What the model sees
 
-With the default preset selection, PTC receives `cua` through its existing `run_code` tool and every other Agent, with or without a preset, receives `cua_run_code`. Its description states: “The global cua object is ready to use; retain application and window objects across calls.” The program binds only `tools.cua`; ordinary tools remain directly callable. Calls and observations use the same app/window interface and enter normal Session history. The Web card shows the program, nested calls, and screenshots. Platform guidance is documented by the [macOS provider](../cua-macos/README.md#model-experience).
+With the default preset selection, PTC receives `cua` through its existing `run_code` tool and every other Agent, with or without a preset, receives `cua_run_code`. Its description states: “The global cua object is ready to use; retain application and window objects across calls.” Model instructions describe the object API. PTC guidance includes bridge initialization: initialize once in persistent mode, or at the start of every program in per-call mode. The program binds `tools.cua` for dispatch; ordinary tools are called outside `cua_run_code`. Calls and observations use the same app/window interface and enter normal Session history. The Web card shows the program, nested calls, and screenshots. Platform guidance is documented by the [macOS provider](../cua-macos/README.md#model-experience).
 
 #### Token effect
 

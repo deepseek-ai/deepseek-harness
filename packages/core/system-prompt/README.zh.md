@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-system-prompt` 让 agent 在每个模型步骤收到一份有序系统提示词与可用工具 schema。需要添加提示词段、动态运行时事实、可复用变量或工具 schema，或者控制固定 harness 身份、部署 persona、运行时上下文和面向模型的工具顺序时，请使用本包。agent 作用域的贡献会遮蔽同名全局默认值，而不影响其他 agent。无效的完整提示词组合与未解析变量会使组装失败，不会向模型发送格式错误的提示词。
+`dsh-system-prompt` 组装有序提示词段、运行时事实、变量和工具 schema。每个 Session 只接收新增或变化的系统文本；未变指令保留在历史中。Cordis 生命周期决定已注册来源是否活跃。同名注册支持作用域覆盖。无效的完整提示词组合和未解析变量会使组装失败。
 
 ## 目录
 
@@ -25,10 +25,12 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在任何运行 agent 的地方挂载 `dsh-system-prompt`：它提供 `ctx.systemPrompt`，即每个提示词贡献所落入的注册表。贡献带作用域——通过 `agent.ctx` 注册只影响该 agent，并遮蔽同名全局项。
+在任何运行 agent 的地方挂载 `dsh-system-prompt`：它提供 `ctx.systemPrompt`，即每个提示词贡献所落入的注册表。通过 `agent.ctx` 注册只向该 agent 贡献内容。同名段以最近的作用域为准；同一作用域中，最后一个活跃注册优先。兄弟作用域互不影响。
 
 <a id="configure-the-prompt"></a>
 ### 配置提示词
+
+`sessionProjections` 是必需依赖；服务激活会等待系统状态投影注册完成。
 
 配置拥有固定开场白、runtime 上下文、部署 persona 前缀与后缀与工具顺序；其余一切来自已注册的贡献。
 
@@ -53,7 +55,11 @@ kind: "package-reference"
 
 ### 贡献提示词段
 
-段携带静态或按上下文解析的文本与 `order`；它们先按顺序值升序拼接，顺序值相同时再按名称的代码单元顺序排列。仓库自带贡献方通过 `ctx.systemPrompt.getSectionOrder(name)` 解析集中分配的位置；runtime-context 贡献方使用 `getContextOrder(name)`。外部贡献可以使用任意有限的顺序值。`complete: true` 段会在组装后成为精确的完整提示词；有效的 complete 段超过一个时，组装会失败。
+段包含稳定的 `name`、静态或按上下文解析的 `text`，以及有限的 `order`。
+
+每个段在插值后、比较、渲染或记录前移除首尾空白，包括字面段和完整提示词段；内部空白保持不变。仅首尾空白变化不会发送更新，仅含空白的文本遵循空文本准入规则。替换和退役通知也会移除首尾空白；退役通知必须仍为非空。
+
+名称在更新、插件重载、恢复和派生中标识同一贡献。组装先按顺序值、再按名称的代码单元顺序排序。仓库贡献方使用 `getSectionOrder()`；运行时上下文使用 `getContextOrder()`。`complete: true` 段在组装中保持独占。进入或改变它时追加通知，说明从此刻起替代此前所有系统提示词段。离开时追加当前普通段，并明确同样从此刻起适用，包括此前被覆盖项抑制的未变段。此前消息保留原位置；空完整提示词显式撤回此前指导。
 
 ```text
 ctx.systemPrompt.section({
@@ -67,7 +73,18 @@ ctx.systemPrompt.section({
 
 `refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
-agent loop 在 `agent/pre-step` 之前为每个拟议步骤调用一次 `assemble(context)`，并传入该步骤捕获的模型选择（`context.modelSelection`）与准入工具集合（`context.toolSet`）。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的步骤集合。
+agent loop 在 `agent/pre-step` 之前为每个拟议步骤调用 `assemble(context)`，传入 Session、捕获的模型选择（`context.modelSelection`）和准入工具集合（`context.toolSet`）。结果为该 Session 固定段文本和生命周期。每次模型尝试前，循环追加 `assembly.systemUpdates(retry)` 返回的写入：首次尝试写入普通增量；压缩后的首次尝试（包括重试）写入重建的系统头节点。重试复用该组装，不重新求值段回调。提交前拒绝或取消不会改变已提交准入。组装后的来源变化留到下一次组装处理。展示监听器接收段、上下文与变量；工具声明仍由提供方持有。
+
+调用返回的 disposer 或卸载所属插件时，Cordis 清理只移除对应注册。移除覆盖会显露下一个活跃定义，并按普通文本更新处理。只有当 Session 可见的作用域链中已无活跃注册，且该 Session 此前提交过此名称时，才会退役；通知来自该 Session 观察过的最后一个被释放的注册。可将 `retirement` 设为非空字面通知；省略时使用 `The earlier instructions from ${name} no longer apply.`。退役绝不调用已销毁生产方的回调。组装前销毁并重新注册同名段时，会将新文本与已提交文本比较；文本和顺序相同则不发送内容。
+
+```text
+ctx.systemPrompt.section({
+  name: 'workspace:instructions', order: 100,
+  text: () => currentInstructions,
+  replacement: 'The workspace instructions have changed.',
+  retirement: 'The workspace instructions no longer apply.',
+})
+```
 
 ### 贡献提示词变量
 
@@ -106,14 +123,24 @@ ctx.systemPrompt.variable('response_language', () => 'English')
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SystemPrompt` 服务、配置、组装流水线、`renderPrompt` |
+| [`src/admission.ts`](src/admission.ts) | 根据捕获的段生成固定追加或重建决策 |
+| [`src/projection.ts`](src/projection.ts) | 从日志恢复每个 Session 的已提交段与待执行压缩重建 |
 
 ### 组装与渲染
 
-组装分两阶段完成求值与渲染：`assemble()` 返回文本已求值但尚未插值的段、有序工具 schema，以及每个已注册变量按当前上下文求得的值；`renderPrompt()` 对未设置 `interpolate: false` 的段插值 `{{variable}}` 引用、删除空段并用空行连接——严格规则：未知引用、已注册但无值的引用或格式错误的完整组都会抛出，因为格式错误的提示词比明确失败更糟。`toolOrder` 在 waterfall 分发前规范化收集到的工具（注册顺序只是插件加载产物）；展示 waterfall 不接收工具数组，也不能替换提供方持有的声明。
+在普通增量组装中，从 waterfall 结果中省略已准入的段不会改变其已提交指令。返回空文本可撤回指令并保持来源活跃；销毁注册则使来源退役。
+
+组装同时捕获来源定义和生命周期状态，再通过 waterfall 解析展示内容。`PromptAssembly.systemUpdates()` 在调用时将捕获的段与 Session 的已提交投影比较，返回带 surface 意图的 `system/message` 写入：普通增量为追加，重建一份完整提示词时为替换。没有 `context.session` 时，它不返回写入。`renderPrompt()` 用于检查时渲染完整展示内容。两条路径都对未设置 `interpolate: false` 的段执行变量插值、移除首尾空白，并拒绝未知或无值引用以及格式错误的完整组。
+
+日志中的 `source.sections` 条目携带 `name`、`order` 和 `state`。活跃条目必须通过 `contentIndex` 指向其规范文本块，即使文本为空；退役条目省略此字段。可选的 `noticeIndex` 列出该来源的替换或退役通知块。所有索引都指向所在消息的 `content` 数组，索引不能重复，文本与通知也不能重叠。整体系统替代通知仍不归属任何来源。通知不参与文本比较。
+
+每个段和通知各占一个去除首尾空白的文本块；适配器在渲染时选择分隔符。`source.reset` 替换已提交的段状态。记录压缩摘要后，需要根据下一次尝试的组装所捕获的段生成完整提示词，包含尚未提交的变化，但不附加替换或退役通知。即使组装被丢弃或应用重启，该要求仍保留，直到[循环提交重建后的头节点](../agent-loop/README.zh.md#understand-the-implementation)；空闲期间的检查视图在此之前保留原有指令。
+
+系统投影保留已提交章节以及是否仍需重建；压缩摘要或不含 `source.sections` 的系统消息会设置该要求，带归属的重置会清除它。Session surface 根据实际替换位置而非来源引用，报告当前系统节点。重建读取有序系统节点，先清空非空增量，最后替换头节点。
 
 ### 作用域
 
-带作用域的段、变量与工具提供方会为单个 agent 遮蔽全局项，组装 waterfall 按作用域筛选分发。注册表变更通知（`system-prompt/change`）刻意不经过筛选，因为全局变更影响每个作用域。
+组装从全局到最近作用域解析段名称，先选取各层最后一个活跃注册，再求值文本回调。带作用域的上下文和变量遮蔽外层值；工具提供方合并。Persona 前缀与后缀使用普通段注册；`persona` 插件覆盖两者，只注册前缀时则继承后缀。组装 waterfall 按作用域筛选分发。注册表变更通知（`system-prompt/change`）不经过筛选，因为全局变更影响每个作用域。
 
 </details>
 
@@ -139,7 +166,7 @@ ctx.systemPrompt.variable('response_language', () => 'English')
 
 #### 模型看到什么
 
-第一方段落依次渲染 harness 身份、部署 persona 前缀（含模型名称介绍）、可复用指令（包括生成的工具 SDK 和结构化输出指导），最后是携带环境信息的后缀：harness 源码（`10000`）、Web 表层（`10100`）和部署 persona 后缀（`10200`）。外部段落的顺序与组装监听器仍决定其最终结果。`includeHarnessIdentity: false` 仅省略这个固定开场白。空段会消失；带作用域的段与变量可以为一个 agent 遮蔽全局项。`system-prompt/assemble` waterfall 决定交付的提示词，除非一个有效段声明自身为 complete——此时该确切段会成为完整的系统提示词，而 waterfall 得到的上下文与变量保持不变。工具声明仍由提供方持有。渲染后的提示词作为派生历史中的 system 角色消息——surface 第 0 号节点，或历史内更新之后最新的系统节点——到达模型；循环请求与 `request/header` 均不含单独的 `system` 字段。完整渲染结果为空时，循环通过有日志记录的空内容替换清除所有生效的系统节点，模型历史不再保留任何旧提示词。有序动态上下文与段分离，只在存在时才会成为带来源的 user 角色快照；`includeRuntimeContext: false` 或带作用域的抑制器会移除可选贡献；必需的操作上下文仍然保留。
+首次接受的组装会在用户消息之前提交初始 `system/message`，即使所有段都为空。非空段提供其文本；空头节点保留在日志和表层中，但不产生模型请求消息。被拒绝的组装或提交前取消都不会写入系统头节点。后续准入追加文本或顺序变化的段，可在新文本前附上 `replacement` 通知。省略通知时会指出被替换的段；空通知省略此前缀。显式空文本更新使用其替换通知；未提供时使用默认撤回通知。只有所有可见注册均已释放，且此前已向该 Session 提交过来源时，才会发送退役通知，随后移出已提交投影。压缩后的下一次请求被接受时，组装重新求值活跃来源，在头节点提交当前指令，包括上次普通准入后的变更。运行时上下文仍是独立的带来源用户角色快照。
 
 ##### harness 身份
 
@@ -149,11 +176,11 @@ You are an AI agent powered by DeepSeek Harness.
 
 #### Token 影响
 
-启用时，身份是每次请求的固定成本。Persona 前缀、后缀与插件文本在每次请求中重复，成本随渲染内容增长。
+普通更新仅增加发生变化的段及其通知。压缩后的下一次请求使用当前系统头，保留的对话中已清除通知和被替代的指令。
 
 #### KV Cache 影响
 
-只要身份、persona、变量、段文本与顺序的渲染完全相同，前缀就保持稳定：渲染未变时系统节点保持不动，具备能力路由的新请求序列也不例外；只有不支持该能力的路由，或有效文本不同的新序列开始，才归并保留的历史内提示词。没有 `systemPromptUpdate` 时，非空提示词文本通过有日志记录的逐节点替换归并到首个系统节点，因此头节点重写会从首个变化的 token 起失去前缀复用；当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，agent loop（智能体循环）会在同一请求序列延续期间把变化后的非空提示词追加到已缓存历史之后，因此直到该历史末尾的前缀仍可复用（[决策规则](../agent-loop/README.zh.md#understand-the-implementation)）。模型、persona 前缀、工具与前置指令一致时，不同源码路径、本地 Web URL 或 persona 后缀值不会改变可复用的第一方前缀。persona 前缀变化可能改变靠前的前缀。任何变更都可能从第一个变化的 token 起使复用失效；不保证提供方共享缓存或实际命中率。
+普通更新保留此前消息。路由变化、恢复、显式请求序列开始和工具 schema 变化不会归并各段。压缩用摘要替换选区；下一次模型尝试将当前指令归并到头节点。下一次普通准入将来源值与该已提交头节点比较。适配器按路由支持选择原生历史内消息、提醒消息或合并的系统字段；只有保留前缀的表示才能复用其缓存。
 
 ### 工具 schema
 
@@ -176,7 +203,8 @@ schema token 在每次请求中重复。限制工具会为该 agent 移除其全
 
 这些限制说明提示词组装何时需要特别留意。它们是当前包约束，不是待办事项清单。
 
-- **部署方编写的提示词文本只来自配置／组合**：此插件拥有全局 persona 前缀与后缀默认值；创建方插件可以注册 agent 作用域的遮蔽项；其他段来自拥有相应事实的插件。不存在终端用户提示词编辑 API。
+- **部署方编写的提示词文本只来自配置／组合**：此插件注册部署 persona 默认值；组合插件通过 `section()` 覆盖其段名称。其他段属于拥有相应事实的插件。不存在终端用户提示词编辑 API。
+- **来源生命周期仅保留在进程内**：应用重启会丢失尚未提交退役的已销毁来源定义。重启后缺席来源的早先指导可能保留在恢复后的历史中。
 - **插值文本不支持行内转义语法**：整段需要保留字面花括号时，使用 `interpolate: false`。
 - **`toolOrder` 配置错误在提示词组装（首轮）时出现，而不是启动时**：只有形状违规会在配置加载时抛出。
 

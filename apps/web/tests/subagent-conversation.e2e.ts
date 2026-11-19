@@ -22,7 +22,7 @@ import {
 } from './scaffold.ts'
 import {
   connectFreshWorkspace, dismissSessionPanel, foldControlLayout, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot,
-  sessionPanelToggle, showSessionPanel, writeComposerDraft,
+  showSessionPanel, writeComposerDraft,
 } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -857,6 +857,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     )
     await nestedRow.getByText(NESTED_LABEL, { exact: true }).click()
     await page.getByText(NESTED_PROMPT).waitFor()
+    // The docked panel stays beside the grandchild's conversation; the snapshot below is of the conversation alone.
+    await dismissSessionPanel(page)
     expect(await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).isEnabled()).toBe(true)
     const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
     const crumbs = await hierarchy.getByRole('button').allTextContents()
@@ -932,7 +934,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await expect.poll(() => scaffold.ctx.agents.get(forkId)).not.toBeUndefined()
 
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
-    await sessionPanelToggle(page).press('Enter')
+    await showSessionPanel(page)
     await page.locator(SUBAGENTS_SECTION).getByRole('treeitem', { name: new RegExp(LABEL) })
       .getByText(LABEL, { exact: true }).click()
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()

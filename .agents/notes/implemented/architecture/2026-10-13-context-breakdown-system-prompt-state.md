@@ -10,18 +10,20 @@ English | [中文](2026-10-13-context-breakdown-system-prompt-state.zh.md)
 
 ## Decision
 
-[`breakdown-projection.ts`](../../../../packages/llm/token-meter/src/breakdown-projection.ts) retains the surviving `system/message` nodes in surface order with their heuristic prices, one running surface total, and at most one armed shadow-price claim. State version 6 discards version-5 rows; other projection keys keep their rows.
+All retained system messages contribute to system-token accounting under [section-based updates](2026-10-21-section-based-system-updates.md). This note owns the compact retained-state choice independently of that additive classification.
+
+[`breakdown-projection.ts`](../../../../packages/llm/token-meter/src/breakdown-projection.ts) retains surviving `system/message` nodes in surface order with their heuristic prices, one running surface total, and at most one armed shadow-price claim. Its state version invalidates checkpoints whose recovery or accounting semantics differ; other projection keys keep their rows.
 
 - An append adds its price; a `system/message` append also joins the end of the system list.
 - `compaction/summary` and `compaction/prune` arm a claim from `shadowedRange`, `shadowedTokenCount`, and the retained system prompts named by `shadowedSeqs`. The next event consumes or expires it. A replacement over the claimed range subtracts the claim price and drops those prompts; a replacement naming another range, or putting a `system/message` in place of a metered range, throws.
 - An unmetered replacement of one retained system prompt subtracts that prompt's own price. A `system/message` replacement keeps its position; any other replacement removes it.
 - Any other unmetered replacement folds at zero delta, the rule `contextPressure` already applies.
 
-`systemTokens` is the last retained prompt with a positive price, and `messageTokens` is the surface total minus it; both are floored at zero. `shadowedSeqs` is the authoritative set of shadowed nodes, so membership decides which prompts leave without locating non-system endpoints in surface order.
+`systemTokens` sums all retained system-message prices; `messageTokens` is the surface total minus that sum, floored at zero. `shadowedSeqs` is the authoritative set of shadowed nodes, so membership decides which prompts leave without locating non-system endpoints in surface order.
 
 ## Verification
 
-Folding all 836 stored logs with the version-5 and version-6 definitions produced identical breakdowns after every event. The logs held 2,206 metered replacements, 106 system-prompt rewrites, and no other replacement. Retained state fell from 7.13 MB to 110 KB, with at most five surviving system prompts in one Session.
+The original state-size reduction was checked by folding 836 stored logs with the version-5 and version-6 definitions, producing identical breakdowns after every event. Those logs held 2,206 metered replacements, 106 system-prompt rewrites, and no other replacement. Retained state fell from 7.13 MB to 110 KB, with at most five surviving system prompts in one Session. This historical comparison predates additive system-token classification; current tests cover that classification, replacements, replay and checkpoint invalidation.
 
 ## Alternatives considered
 

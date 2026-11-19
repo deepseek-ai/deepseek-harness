@@ -108,6 +108,7 @@ async function setup(
   beforePolicy?: (ctx: Context) => void,
 ): Promise<{ ctx: Context; spill?: StubStore; fiber: Awaited<ReturnType<Context['plugin']>> }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -227,6 +228,7 @@ describe('oversized plain-text replacement', () => {
 describe('outer PTC mode failure capture', () => {
   it('spills a failure after output truncation through the ordinary outer-result policy', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
@@ -273,6 +275,7 @@ describe('the durable dispatch-log arm', () => {
   /** Boot code mode + the policy + the Node runtime; run one program via the real bridge. */
   async function runCodeWith(program: string, maxInlineTokens: number, extraTools: ToolDefinition[] = []) {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
@@ -343,6 +346,7 @@ describe('the durable dispatch-log arm', () => {
 
   it('a slow spill backend never delays the program value or a later dispatch slot', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
@@ -397,6 +401,7 @@ describe('the durable dispatch-log arm', () => {
 
   it('a sustained slow backend backpressures the run instead of accumulating unbounded log tasks', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor, { maxParallelSubCalls: 1 })
@@ -465,6 +470,7 @@ describe('the durable dispatch-log arm', () => {
 
   it('a saveText failure keeps the complete content in the durable log (best-effort)', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)

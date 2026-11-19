@@ -27,6 +27,8 @@ import type { WorktreeCreations } from './worktree.ts'
 export interface PanelConfig extends DiffConfig {
   /** Deadline in milliseconds for one provider sign-in probe. */
   readonly readinessTimeoutMs: number
+  /** Age in milliseconds past which the status of the Session's change requests is read at once when the panel starts. */
+  readonly statusMaxAgeMs: number
   /** Prefix of generated worktree branch names, which a name the user types starts from. */
   readonly worktreePrefix: string
 }
@@ -39,17 +41,38 @@ interface Upstream {
   readonly branch: string
 }
 
+/** What the panel of a Session leaves when its last follower left, for the next panel of that Session to start from. */
+export interface KeptPanel {
+  /** The last published state. */
+  readonly state: ForgePanelState
+  /** The latest snapshot of each change request, by URL. */
+  readonly snapshots: ReadonlyMap<string, ChangeRequestSnapshot>
+  /** Why the last inspection found that no worktree can be created. */
+  readonly blocker: ForgeWorktreeBlocker | null
+  /** The unavailable worktree the last inspection found. */
+  readonly missing: ForgeMissingWorktree | null
+  /** Remote URL and branch of the upstream that a branch lookup covered. */
+  readonly discovered: string | null
+}
+
 /**
  * Panel state of one Session. Construction starts the first checkout
- * inspection and watches the Session's change requests. Inspections run one at
+ * inspection and watches the Session's change requests. A panel given what the
+ * previous panel of the Session kept publishes that state first, with the
+ * current bindings and worktree facts, unless the Session has moved to another
+ * directory. Inspections run one at
  * a time; a request that arrives during one runs once more after it, and a
  * result for a directory the Session has since left is dropped. A sign-in
- * probe runs when an inspection recognizes a new code host and on `refresh`;
+ * probe runs when an inspection recognizes a new code host, after the first
+ * inspection of a panel whose kept probe did not find the host ready, on
+ * `refresh`, on `revisit` while the host is not ready, and once when status
+ * reads on a host shown as ready start to be refused as unauthenticated;
  * a probe result for a host the panel no longer shows is dropped. Each change
  * request keeps the latest snapshot a poll returned while later polls fail.
  * When an inspection finds an upstream branch on a remote a provider
  * recognizes, the open change requests of that branch are bound as discovered,
- * once per remote and branch until a refresh. The
+ * once per remote and branch until a refresh, or until a panel starts or is
+ * revisited while the Session shows no change request. The
  * worktree facts follow the `forgeWorktree` projection, the live creation, and the last failed one;
  * each inspection also decides whether the Session's sandbox can write the
  * checkout and its shared Git directory, which a new worktree needs, whether
@@ -67,8 +90,12 @@ export class SessionPanel {
   private missing: ForgeMissingWorktree | null = null
   private inspection: Promise<void> | null = null
   private rerun: Promise<void> | null = null
-  /** Remote URL and branch of the upstream that the last branch lookup covered, until a refresh. */
+  /** Remote URL and branch of the upstream that the last branch lookup covered, until the next lookup is due. */
   private discovered: string | null = null
+  /** Whether the readiness the panel started with must be probed again after its first inspection. */
+  private unconfirmed = false
+  /** Whether a refused status read already started a sign-in probe, until no status read on the host is refused. */
+  private questioned = false
 
   /**
    * @param ctx - service context that provides the forge, Session, directory, and process services.
@@ -78,6 +105,7 @@ export class SessionPanel {
    * @param creations - reads the running creation and restoration, the last failed creation, and what a message of the
    * Session waits for.
    * @param reviewRevision - reads how many review changes were announced for a change request.
+   * @param kept - what the previous panel of the Session kept, when there was one.
    * @param onIdle - called when the last follower leaves.
    */
   constructor(
@@ -87,21 +115,35 @@ export class SessionPanel {
     private readonly worktreeStates: ProjectionHandle<ForgeWorktreeState>,
     private readonly creations: Pick<WorktreeCreations, 'of' | 'restorationOf' | 'failureOf' | 'waitingOf'>,
     private readonly reviewRevision: (ref: ChangeRequestRef) => number,
+    kept: KeptPanel | undefined,
     private readonly onIdle: () => void,
   ) {
-    this.current = {
-      directory: ctx.workingDirectory.get(session),
-      checkout: { state: 'pending' },
-      repository: null,
-      readiness: null,
-      changeRequests: this.entries(ctx.forgeSession.changeRequests(session)),
-      worktree: this.worktree(),
-      local: null,
+    const directory = ctx.workingDirectory.get(session)
+    const start = kept?.state.directory === directory ? kept : undefined
+    if (start !== undefined) {
+      for (const [url, snapshot] of start.snapshots) this.snapshots.set(url, snapshot)
+      this.blocker = start.blocker
+      this.missing = start.missing
+      this.unconfirmed = start.state.readiness?.state !== 'ready'
     }
-    this.stopWatching = ctx.forgeSession.watch(session, (changeRequests) => {
-      this.publish({ ...this.current, changeRequests: this.entries(changeRequests) })
-    })
+    const changeRequests = this.entries(ctx.forgeSession.changeRequests(session))
+    if (start !== undefined && changeRequests.length > 0) this.discovered = start.discovered
+    this.current = start === undefined
+      ? { directory, checkout: { state: 'pending' }, repository: null, readiness: null, changeRequests, worktree: this.worktree(), local: null }
+      : { ...start.state, changeRequests, worktree: this.worktree() }
+    this.stopWatching = ctx.forgeSession.watch(session, (latest) => {
+      this.publish({ ...this.current, changeRequests: this.entries(latest) })
+      this.confirmSignIn(latest)
+    }, { maxAgeMs: config.statusMaxAgeMs })
     void this.inspect()
+  }
+
+  /**
+   * Name what the next panel of the Session starts from.
+   * @returns the last published state and what the inspections and status polls found.
+   */
+  keep(): KeptPanel {
+    return { state: this.current, snapshots: this.snapshots, blocker: this.blocker, missing: this.missing, discovered: this.discovered }
   }
 
   /**
@@ -198,6 +240,24 @@ export class SessionPanel {
     const probe = this.current.repository === null ? undefined : this.probe(this.current.repository)
     for (const entry of this.current.changeRequests) {
       if (entry.ref !== null) this.ctx.forge.refresh(entry.ref)
+    }
+    await Promise.all([inspection, probe])
+  }
+
+  /**
+   * Bring the panel up to date after its surface showed again: reinspect the checkout, poll each bound change request
+   * whose latest poll is older than `statusMaxAgeMs`, probe sign-in again unless the last probe found the host ready,
+   * and let the inspection look the upstream branch up again while the Session shows no change request.
+   * @returns settles once the inspection and the sign-in probe have ended; each poll publishes its result when it finishes.
+   */
+  async revisit(): Promise<void> {
+    if (this.current.changeRequests.length === 0) this.discovered = null
+    const inspection = this.inspect()
+    const { repository, readiness } = this.current
+    // A null readiness has its probe in flight, or due after the inspection.
+    const probe = repository !== null && readiness !== null && readiness.state !== 'ready' ? this.probe(repository) : undefined
+    for (const entry of this.current.changeRequests) {
+      if (entry.ref !== null) this.ctx.forge.refresh(entry.ref, { maxAgeMs: this.config.statusMaxAgeMs })
     }
     await Promise.all([inspection, probe])
   }
@@ -309,7 +369,8 @@ export class SessionPanel {
     const sameHost = repository !== null && this.current.repository !== null && hostOf(repository) === hostOf(this.current.repository)
     const readiness = sameHost ? this.current.readiness : null
     this.publish({ ...this.current, checkout, repository, readiness, worktree: this.worktree(), local })
-    if (repository !== null && !sameHost) void this.probe(repository)
+    if (repository !== null && (!sameHost || this.unconfirmed)) void this.probe(repository)
+    this.unconfirmed = false
     if (upstream !== null) this.discover(upstream)
   }
 
@@ -358,6 +419,25 @@ export class SessionPanel {
       }
     }
     return null
+  }
+
+  /**
+   * Probe sign-in again when a status read on the host the panel shows as ready was refused as unauthenticated, once
+   * until a status read on that host is no longer refused.
+   */
+  private confirmSignIn(changeRequests: readonly SessionChangeRequest[]): void {
+    const { repository, readiness } = this.current
+    if (repository === null) return
+    const refused = changeRequests.some(entry => entry.ref !== null && hostOf(entry.ref.repository) === hostOf(repository)
+      && entry.update !== null && 'failure' in entry.update && entry.update.failure.code === 'unauthenticated')
+    if (!refused) {
+      this.questioned = false
+      return
+    }
+    if (this.questioned || readiness?.state !== 'ready') return
+    this.questioned = true
+    this.publish({ ...this.current, readiness: null })
+    void this.probe(repository)
   }
 
   /** Probe sign-in on the repository's host; resolves once the probe has ended. */

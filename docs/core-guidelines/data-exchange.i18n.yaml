@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record for data-exchange.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines/data-exchange.md
+/d-data-exchange:
+  en: 38fd72b45c5b46c9
+  zh: fcafd7b2fabdb56d

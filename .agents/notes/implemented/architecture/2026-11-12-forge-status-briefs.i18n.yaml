@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-12-forge-status-briefs.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-12-forge-status-briefs.md
+/agent-note-forge-status-briefs:
+  en: 51cd3647298126c4
+  zh: 07f18bcd7bd2a7c3
+/agent-note-forge-status-briefs/problem:
+  en: f99803963e0818f4
+  zh: b4aba14e12cdeede
+/agent-note-forge-status-briefs/decision:
+  en: 847ad02b06062771
+  zh: ce8747cbc2b15545
+/agent-note-forge-status-briefs/alternatives-considered:
+  en: 4dfbe3ae83d89e7a
+  zh: 74ded5f0f1b8c5b3
+/agent-note-forge-status-briefs/consequences:
+  en: 2b4e5ebfef68df7e
+  zh: 72e774ad90908f21

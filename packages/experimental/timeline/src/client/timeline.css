@@ -168,6 +168,11 @@
 .timeline-annotation-editor{--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2)}
 .timeline-dock-bar,.timeline-annotation-editor{position:relative;isolation:isolate;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-panel)}
 .timeline-dock-bar:before,.timeline-annotation-editor:before{content:'';position:absolute;z-index:-1;inset:0;border-radius:inherit;background:var(--dsw-specific-menu);backdrop-filter:var(--dsw-menu-backdrop-filter);pointer-events:none}
+.timeline-dock-bar{cursor:pointer;user-select:none}
+.timeline-dock-highlight{position:absolute;z-index:-1;inset:0;border-radius:inherit;background:var(--dsw-alias-interactive-bg-hover);opacity:0;transition:opacity 120ms ease;pointer-events:none}
+.timeline-dock-bar:active>.timeline-dock-highlight{opacity:1;background:var(--dsw-alias-interactive-bg-active)}
+.timeline-dock .timeline-dock-toggle:active:not(:disabled){background:transparent}
+.timeline-dock-bar>.timeline-dock-remove:active~.timeline-dock-highlight{opacity:0}
 .timeline-dock-title{flex:0 1 auto;min-width:0;max-width:min(30%,18ch);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .timeline-dock .timeline-progress{flex:1;min-width:24px;height:8px}
 .timeline-dock-percent{flex:none;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
@@ -232,6 +237,7 @@ body:has(.dsh-timeline[data-timeline-dock-open=true]) .timeline-dock[data-curren
 .timeline-detail-actions{flex:none;padding-top:12px;border-top:0.5px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
 .timeline-annotations{margin-top:20px;padding-top:16px;border-top:0.5px solid var(--dsw-alias-border-l1)}
 :is(.timeline-discussion-history,.timeline-task-history){margin-top:20px;border-top:1px solid var(--timeline-border);padding-top:10px}
+.timeline-discussion-history{margin-top:28px;border-top-width:2px}
 :is(.timeline-discussion-history,.timeline-task-history)>summary{width:fit-content;min-height:30px;padding:4px 6px;cursor:pointer;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-md);transition:background-color 140ms ease,color 140ms ease}
 .timeline-task-history>.timeline-annotation-list{margin-top:12px!important}
 .timeline-discussion-history .timeline-annotations{margin-top:12px;padding-top:0;border:0}
@@ -324,6 +330,9 @@ body:has(.dsh-timeline[data-timeline-dock-open=true]) .timeline-dock[data-curren
 @media (hover: hover) {
   .timeline-card-open:hover{background:var(--dsw-alias-interactive-bg-hover)!important;color:var(--dsw-alias-label-primary)!important}
   .timeline-card-task:hover,.timeline-card-more:hover{background:var(--dsw-alias-interactive-bg-hover)}
+  .timeline-dock-bar:hover>.timeline-dock-highlight{opacity:1}
+  .timeline-dock .timeline-dock-toggle:hover:not(:disabled){background:transparent}
+  .timeline-dock-bar>.timeline-dock-remove:hover~.timeline-dock-highlight{opacity:0}
   .timeline-progress[data-segmented]>[data-part]:hover{position:relative;z-index:1;filter:brightness(1.1);box-shadow:inset 0 0 0 1px var(--dsw-alias-label-primary)}
   .dsh-timeline .timeline-task-action:hover{background:var(--dsw-alias-interactive-bg-hover)}
   .dsh-timeline .timeline-playback:hover{background:color-mix(in srgb,currentColor 15%,transparent)}

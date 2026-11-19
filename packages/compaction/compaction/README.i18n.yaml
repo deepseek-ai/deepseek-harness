@@ -39,8 +39,8 @@
   en: 226e05fde1f7ad54
   zh: 4b0f671d68aee872
 /deepseek-ai-dsh-compaction/understand-the-implementation/service-api:
-  en: d742d41c7eb5d406
-  zh: 6ff26c23eba5dd59
+  en: 9b333ed7df47d133
+  zh: b519bd0291a14fd8
 /deepseek-ai-dsh-compaction/understand-the-implementation/manual-failure-taxonomy:
   en: 81449c88ba52f445
   zh: 2cdcce236bfbf284
@@ -48,8 +48,8 @@
   en: 15dad68a04d6c86b
   zh: 3b95acf1b7e503bf
 /deepseek-ai-dsh-compaction/understand-the-implementation/the-surface-contract:
-  en: 28980d8259e59700
-  zh: c452e0bb4b778824
+  en: 4b1288a7549e98e1
+  zh: 43501922aaec68fe
 /deepseek-ai-dsh-compaction/understand-the-implementation/source-map:
   en: 076448ecc9911baf
   zh: 1b671f96fb217d5e
@@ -69,8 +69,8 @@
   en: 94de97ed1e85db85
   zh: c8e37d8050609e63
 /deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked/what-the-model-sees:
-  en: 3c4875a13da17814
-  zh: 9b257950a9e2c7c1
+  en: a9b01787258ddeed
+  zh: ffab47444b0c0e6a
 /deepseek-ai-dsh-compaction/model-experience/conversation-history-when-a-backend-is-invoked/token-effect:
   en: be91f4a4bbb9338b
   zh: 2b5de31d4d7caff1
@@ -78,8 +78,8 @@
   en: 40ba838a2309c44a
   zh: c609fc1587a0d666
 /deepseek-ai-dsh-compaction/known-limitations-and-deferred-work:
-  en: fee9ba06d3e5f35c
-  zh: 2bb5241e2447d15d
+  en: fc4c3c601aa8602b
+  zh: f3b83a3529ac3bd4
 /deepseek-ai-dsh-compaction/known-limitations-and-deferred-work/dev-note:
-  en: 270e23ae6414aff0
-  zh: c6d219b8a547dbca
+  en: 98c4b3642dafbadd
+  zh: 0733519dfdf5ca49

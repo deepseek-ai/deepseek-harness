@@ -8,6 +8,7 @@
  * suite runs on every platform without a system `rg` install; the
  * fake-service suite (tools.spec.ts) carries the coverage gate.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -67,6 +68,7 @@ describe('search tools over the real subprocess service + the packaged rg', () =
     ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

@@ -26,7 +26,7 @@ Timeline shows what an agent is working on and what it has finished. Its task tr
 <a id="use-this-package"></a>
 ## Use this package
 
-Open **Plugins → More → Timeline** and turn it on. Timeline is experimental and off by default. During a task with several steps, select **Open task tree** in the progress strip above the message box.
+Open **Plugins → More → Timeline** and turn it on. Timeline is experimental and off by default. During a task with several steps, select the progress strip above the message box to open the task tree. Select it again to close the task tree.
 
 ### Replace Todo and track progress
 
@@ -48,7 +48,7 @@ In the sidebar, open **Timeline** and select the **Reports** tab to browse the r
 
 ### Discuss and direct work
 
-Open a task or report to ask a question or give feedback in **Discussion**. Switching views keeps the draft in the current session view. The saved discussion and the agent’s reply stay with that item. Set a task’s priority to help the agent choose what to work on next. You can also ask the agent to pause or continue a task or a whole tree.
+Open a task or report to ask a question or give feedback in **Discussion**. Switching views keeps the draft in the current session view. The saved discussion and the agent’s reply stay with that item. **All discussions in this session** at the bottom of the **Task Tree** and **Reports** tabs lists the discussions of every task tree and report, newest first. Set a task’s priority to help the agent choose what to work on next. You can also ask the agent to pause or continue a task or a whole tree.
 
 ### Move a task tree
 
@@ -64,7 +64,7 @@ The file has a format version separate from the plugin version. Export a tree fr
 
 ### Set languages and writing guidance
 
-The interface follows the Harness display language. **Follow app** uses the display language set in Harness. If the display language is automatic, Timeline uses the connected browser’s language for new task text and reports. Without a browser language, it uses the Host language. Timeline supports English, Simplified Chinese, Japanese, Spanish, French, German, Russian, and Brazilian Portuguese.
+The interface follows the Harness display language. **Follow app** uses the display language set in Harness. If the display language is automatic, Timeline uses the connected browser’s language for new task text and reports. Without a browser language, it uses the Host language. **Follow chat** sets no language for new task text and reports. The agent chooses the language from the conversation and your instructions. A higher report level sees only the reports it combines, so its language can differ from the conversation. Text that Timeline writes without the model, such as the report for a period without activity, uses the same language as **Follow app**. Timeline supports English, Simplified Chinese, Japanese, Spanish, French, German, Russian, and Brazilian Portuguese.
 
 Edit **Task writing guidance** for task titles and details, **Instructions for all levels** for all reports, and the additional instructions for each report level. The defaults ask the agent to lead with concrete results, explain unfamiliar terms and numbers, and connect findings to your goal. You can restore the default guidance in the editor.
 

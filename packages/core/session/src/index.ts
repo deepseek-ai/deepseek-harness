@@ -30,7 +30,7 @@ export { SessionPreparation } from './preparation.ts'
 export type { SessionPreparationOptions } from './preparation.ts'
 export type { AssistantMessage, DeveloperMessage, SystemMessage, ToolResultMessage, UserMessage } from '@deepseek-ai/dsh-llm'
 export { interruptedTurnClosers, ToolCallRecovery, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from './repair.ts'
-export type { SessionSurface, SurfaceFoldReplacement, SurfaceFoldResult, SessionMessageProjection, SessionMessageProjectionContext } from './surface.ts'
+export type { SystemSurfaceNode, SessionSurface, SurfaceFoldReplacement, SurfaceFoldResult, SessionMessageProjection, SessionMessageProjectionContext } from './surface.ts'
 export { deriveEventMessage, foldSurface, isAppendSurfaceEvent, isReplacementSurfaceEvent, isSurfaceEvent, isSurfaceEligibleType } from './surface.ts'
 export { canonicalHeader, foldRequestHeader, headerEquals } from './request-header.ts'
 export { KNOWN_SESSION_EVENT_TYPES } from './known-event-types.ts'
@@ -333,6 +333,65 @@ const MESSAGE_ROLE_BY_TYPE: Record<SurfaceEventType, Message['role']> = {
   'tool/result': 'tool',
 }
 
+/** Validate source attribution without rejecting unrelated metadata fields. */
+function assertSystemSectionMetadata(
+  sourceRecord: Record<string, unknown>, content: unknown, subject: string,
+): void {
+  for (const marker of ['complete', 'reset']) {
+    if (sourceRecord[marker] !== undefined && sourceRecord[marker] !== true) {
+      throw new Error(`${subject} has invalid ${marker} system prompt marker`)
+    }
+  }
+  const sections = sourceRecord['sections']
+  if (sections === undefined) {
+    if (sourceRecord['reset'] !== undefined) {
+      throw new Error(`${subject} requires system section attribution`)
+    }
+    return
+  }
+  if (!Array.isArray(sections) || !Array.isArray(content)
+    || content.some((block: unknown) => typeof block !== 'object' || block === null
+      || !('type' in block) || block.type !== 'text' || !('text' in block) || typeof block.text !== 'string')) {
+    throw new Error(`${subject} has invalid system section attribution`)
+  }
+  const names = new Set<string>()
+  const indices = new Set<number>()
+  const entries: readonly unknown[] = sections
+  for (const section of entries) {
+    if (typeof section !== 'object' || section === null
+      || !('name' in section) || typeof section.name !== 'string' || section.name.length === 0) {
+      throw new Error(`${subject} has invalid system section attribution`)
+    }
+    if (!('state' in section) || (section.state !== 'active' && section.state !== 'retired')) {
+      throw new Error(`${subject} has invalid system section attribution`)
+    }
+    if (section.state === 'active'
+      && (!('order' in section) || typeof section.order !== 'number' || !Number.isFinite(section.order))) {
+      throw new Error(`${subject} has invalid system section attribution`)
+    }
+    const contentIndex = 'contentIndex' in section ? section.contentIndex : undefined
+    if (section.state === 'retired' && contentIndex !== undefined) {
+      throw new Error(`${subject} has invalid system section attribution`)
+    }
+    const references: unknown[] = section.state === 'active' ? [contentIndex] : []
+    const noticeIndex = 'noticeIndex' in section ? section.noticeIndex : undefined
+    if (noticeIndex !== undefined) {
+      if (!Array.isArray(noticeIndex)) throw new Error(`${subject} has invalid system section attribution`)
+      const notices: readonly unknown[] = noticeIndex
+      references.push(...notices)
+    }
+    if (names.has(section.name)) throw new Error(`${subject} has invalid system section attribution`)
+    names.add(section.name)
+    for (const index of references) {
+      if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= content.length
+        || indices.has(index)) {
+        throw new Error(`${subject} has invalid system section attribution`)
+      }
+      indices.add(index)
+    }
+  }
+}
+
 /** Validate only the event-specific invariants needed to safely replay a message. */
 function assertMessageEventShape(event: Record<string, unknown>, subject: string): void {
   const type = event['type']
@@ -366,6 +425,7 @@ function assertMessageEventShape(event: Record<string, unknown>, subject: string
     if (sourceRecord['kind'] !== 'system-prompt') {
       throw new Error(`${subject} message must have system-prompt source`)
     }
+    assertSystemSectionMetadata(sourceRecord, messageRecord['content'], subject)
     return
   }
   if (type === 'assistant/message') {

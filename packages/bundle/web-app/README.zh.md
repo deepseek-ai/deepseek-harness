@@ -42,7 +42,7 @@ dsh --profile web --no-open --port 8080
 
 启动后你会看到 `dsh web:` 行，其根 URL 携带新的进程 token。除非 `--no-open` 或 SSH 会话抑制，否则默认浏览器会打开该 URL、取得签名 cookie，再重定向到不含认证参数的同一目录。页面加载且你可以与 agent 对话，就说明成功了。两种可预期的失败：前端未构建时，启动会以构建提示停止（checkout 中运行 `pnpm run build`）；浏览器无法打开时，stderr 会打印不含凭据的诊断，但服务器会继续运行——请自行打开已打印的启动 URL。
 
-**设置 → 模型**显示 **DeepSeek**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
+**设置 → 模型**显示 **DeepSeek API**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
 
 已保存的模型选择覆盖组合默认值。设置卡接受兼容 Messages 的 API 地址与凭据引用。
 
@@ -96,7 +96,7 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，标准模式和 Creator 才会启用插件管理工具。
 
-两种模式均通过 `cordis_inspect` 提供只读运行时检查；参见[其上下文影响](../../extensions/tool-cordis/README.zh.md#model-experience)。标准模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
+两种模式均通过 `cordis_inspect` 提供只读运行时检查；参见[其上下文影响](../../extensions/tool-cordis/README.zh.md#model-experience)。标准模式、PTC 模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
 
 打包的 skill 使用自定义 skill 根目录：同名的项目 skill 会覆盖打包的 skill，打包的 skill 又会覆盖同名的用户 skill。skill 目录中只保留优先级最高的一个条目，不会报错；参见 [skill 根目录优先级](../../skill/skill-filesystem/README.zh.md)。
 
@@ -161,7 +161,7 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 
 #### 模型看到什么
 
-标准模式和创造模式的 skill 目录都列出 `dsh-doc`。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
+标准模式、PTC 模式和创造模式的 skill 目录都列出 `dsh-doc`，与 SDK profile 相同。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
 
 #### Token 影响
 

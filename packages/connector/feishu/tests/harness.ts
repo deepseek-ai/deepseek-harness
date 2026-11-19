@@ -16,6 +16,7 @@ import type {
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { executableFileName } from '../src/cli.ts'
 import type { FeishuState } from '../src/types.ts'
@@ -139,6 +140,7 @@ export async function createHost(): Promise<FeishuHost> {
   const ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   const host: FeishuHost = { ctx, subprocess: ctx.subprocess as ScriptedSubprocess, binDir: await createBinDir(), pages: [], withdrawn: 0 }
   ctx.provide('connectorAccounts', {

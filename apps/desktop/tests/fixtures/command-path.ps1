@@ -1,4 +1,4 @@
-param([string]$Worker, [string]$Root)
+﻿param([string]$Worker, [string]$Root, [Parameter(Mandatory)][string]$Electron)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 . $Worker
@@ -92,7 +92,61 @@ try {
     Require ((UserPath) -eq ($desktop + ';' + $invalidPath)) 'a notification failure changed the committed PATH'
     [void](Apply 'remove' $desktop)
     Require ((UserPath) -eq $invalidPath) 'removal changed invalid user PATH entries'
+    # Uninstalling A must preserve independently registered B integrations.
+    $app = Join-Path $Root 'Uninstall A'
+    $bin = Join-Path $app 'resources\runtime\cli\bin'
+    New-Item -ItemType Directory -Force $bin | Out-Null
+    [IO.File]::WriteAllText((Join-Path $bin 'dsh.cmd'), 'fixture')
+    [void](Apply 'install' $other)
+    $protocolKey = $keyRoot + '\Protocol'
+    $foreignCommand = '"' + (Join-Path $other 'DeepSeek Harness.exe') + '" "%1"'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($protocolKey + '\shell\open\command')
+    try { $key.SetValue('', $foreignCommand) } finally { $key.Dispose() }
+    $helper = Join-Path (Split-Path $Worker) 'uninstall-registration.ps1'
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath (Join-Path $Root 'uninstall-report.txt') -MutexName $options.MutexName
+    Require ($LASTEXITCODE -eq 0) 'foreign integration cleanup failed'
+    Require ((State $other).managed) 'uninstall removed foreign command ownership'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($protocolKey + '\shell\open\command')
+    try { Require ($key.GetValue('') -eq $foreignCommand) 'uninstall removed foreign protocol' } finally { $key.Dispose() }
+    [void](Apply 'install' $bin)
+    $scheme = 'dsh-command-test-' + $identity
+    $protocolKey = 'Software\Classes\' + $scheme
+    $launcher = Join-Path $PSScriptRoot 'register-test-protocol.cjs'
+    $exe = Join-Path $app 'DeepSeek Harness.exe'
+    $registration = Start-Process $Electron -ArgumentList @(('"' + $launcher + '"'), ('"--user-data-dir=' + $Root + '\profile"'), $scheme, ('"' + $exe + '"')) -PassThru -WindowStyle Hidden
+    try {
+        if (-not $registration.WaitForExit(20000)) { $registration.Kill(); $registration.WaitForExit(); throw 'Electron protocol registration timed out' }
+        Require ($registration.ExitCode -eq 0) 'Electron could not register the test protocol'
+    } finally { $registration.Dispose() }
+    Require (Test-Path -LiteralPath ('HKCU:\' + $protocolKey + '\shell\open\command')) 'Electron did not write the protocol command'
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath (Join-Path $Root 'uninstall-report.txt') -MutexName $options.MutexName
+    Require ($LASTEXITCODE -eq 0) 'owned integration cleanup failed'
+    Require (-not (State $bin).managed) 'uninstall retained command ownership'
+    Require (-not (Test-Path -LiteralPath ('HKCU:\' + $protocolKey))) 'uninstall retained protocol'
+    # Missing ownership does not authorize removal while any of the installation remains.
+    $orphanPath = $bin + ';"' + $bin.ToUpperInvariant() + '\";C:\Windows;' + $other
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey, $true)
+    try { $key.SetValue('Path', $orphanPath, [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Dispose() }
+    $report = Join-Path $Root 'unowned-report.txt'
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 1) 'unowned cleanup accepted an existing installation'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey)
+    try { Require ($key.GetValue('Path') -eq $orphanPath) 'unowned cleanup changed PATH before directory removal' } finally { $key.Dispose() }
+    Require ([IO.File]::ReadAllText($report).Contains('installation directory remains')) 'unowned refusal lacks a report'
+    [IO.Directory]::Delete($app, $true)
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 0) 'unowned cleanup failed after directory removal'
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($environmentKey)
+    try {
+        Require ($key.GetValue('Path') -eq ('C:\Windows;' + $other)) 'unowned cleanup failed to preserve other PATH entries'
+        Require ($key.GetValueKind('Path') -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) 'unowned cleanup changed PATH type'
+    } finally { $key.Dispose() }
+    [void](Apply 'install' $other)
+    $foreignState = State $other
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Directory $app -EnvironmentKey $environmentKey -OwnerKey $ownerKey -ProtocolKey $protocolKey -ReportPath $report -MutexName $options.MutexName -UnownedOnly
+    Require ($LASTEXITCODE -eq 0 -and (State $other).fingerprint -eq $foreignState.fingerprint) 'unowned cleanup changed a new owner'
     'WINDOWS_COMMAND_PATH_OK'
 } finally {
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree(('Software\Classes\dsh-command-test-' + $identity), $false)
     [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($keyRoot, $false)
 }

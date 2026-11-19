@@ -90,6 +90,19 @@ An initialized client advertising `capabilities.userQuestions` handles questions
 
 The plugin answers `shutdown`, flushes the response, disposes the root context so SDK-owned agents, subscriptions, and persistence reach quiescence, then exits 0. EOF and signal exits belong to the app bin, which also disposes the root context. Unloading only this plugin stops serving without exiting the process.
 
+### Requests for a disposed agent
+
+A request for a session whose agent has left the agent registry fails with `session agent was disposed outside the server: <sessionId>; <context>`. The context states what the server observed:
+
+| Context | Meaning |
+|---|---|
+| `the runtime is shutting down; last process event before teardown: <event> at <time>` | The whole runtime is being disposed. `<event>` is `SIGTERM`, `SIGINT`, `uncaught exception: <first line>`, `unhandled rejection: <first line>`, or `stdin closed`. It is the last such event seen before disposal began, not an established cause. |
+| `the runtime is shutting down; no process event was observed before teardown` | The whole runtime is being disposed and none of those events preceded it. |
+| `the SDK server is shutting down` | This plugin is unloading or answering `shutdown`. |
+| `the agent loop was unloaded at <time> while the runtime keeps running; first plugin unloading at that time: "<name>"` | Only the agent loop went away; the process stays up. `<name>` is the plugin whose unload began first among those in progress, usually the agent loop or a service it requires; when unloads overlap it can be an unrelated plugin. The time and plugin are omitted when the server did not observe the removal. |
+
+A signal or an unhandled rejection is recorded only when another listener already handles that event, so mounting this plugin never changes whether the process terminates. Failure text is the first line of the message, at most 200 characters, or `<unprintable>` for a value without a string form; the full report stays on stderr.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -109,6 +122,7 @@ The plugin is a thin presentation adapter: [`HarnessSdkJsonRpcServer`](src/serve
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, stdio wiring, request dispatch, shared shutdown/exit task |
+| [`src/process-events.ts`](src/process-events.ts) | Record of the last signal, fatal failure, or input end seen before runtime teardown |
 | [`src/user-questions.ts`](src/user-questions.ts) | Native question adapter: host forwarding, answer validation, cancellation |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`: protocol methods, per-session agent creation, lifecycle subscriptions, teardown |
 

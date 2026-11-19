@@ -1,7 +1,7 @@
 /** Parser fault checks; real-file equivalence is measured separately. */
 import { it as test } from 'vitest'
 import assert from 'node:assert/strict'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseSignatureRows, inspectSignaturesBatched } from '../scripts/windows-signature-batch.mjs'
@@ -33,12 +33,18 @@ test('empty input launches no verifier and returns no rows', async () => {
   assert.deepEqual(await inspectSignaturesBatched([]), [])
 })
 
-test.skipIf(process.platform !== 'win32')('Unicode paths retain the same Windows trust result as individual inspection', async (t) => {
+test.skipIf(process.platform !== 'win32')('long Unicode paths retain the same Windows trust result as short paths', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'signature-batch-'))
   t.onTestFinished(() => rm(root, { recursive: true, force: true }))
-  const path = join(root, "验证 ' 文件.exe")
-  await copyFile(join(process.env.SystemRoot!, 'System32', 'cmd.exe'), path)
-  const expected = await inspectWindowsRuntimeSignature(path)
+  const shortPath = join(root, 'short.exe')
+  const directory = join(root, 'nested-'.repeat(15), 'nested-'.repeat(15))
+  await mkdir(directory, { recursive: true })
+  const path = join(directory, "验证 ' 文件.exe")
+  assert.ok(path.length > 260)
+  await copyFile(join(process.env.SystemRoot!, 'System32', 'cmd.exe'), shortPath)
+  await copyFile(shortPath, path)
+  const expected = await inspectWindowsRuntimeSignature(shortPath)
+  assert.deepEqual(await inspectWindowsRuntimeSignature(path), expected)
   assert.equal(expected.status, 'Valid')
   assert.deepEqual(await inspectSignaturesBatched([path]), [expected])
   await signWindowsCode(root, {

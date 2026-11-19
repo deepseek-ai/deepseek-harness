@@ -53,6 +53,7 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) }
   })
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
@@ -60,7 +61,6 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   await ctx.plugin(LocalAttachments, { dshHome: join(root, 'home') })
   await ctx.plugin(ToolFs)
   await ctx.plugin(LocalSpillStore, { root: join(root, 'spill'), cleanupPeriodDays: 0 })
-  await ctx.plugin(SessionProjections)
   await ctx.plugin(SessionStore)
   await ctx.plugin(LlmRuntime)
   const access = (ref: ImageAttachmentRef) => resolveImageAttachmentAccess(

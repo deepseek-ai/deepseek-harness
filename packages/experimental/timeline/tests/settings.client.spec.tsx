@@ -274,7 +274,7 @@ describe('the Timeline Settings section', () => {
       'Global progress instructions.',
     )
   })
-  it('offers Follow app and precision choices, retaining drafts after a refused write', async () => {
+  it('offers Follow app, Follow chat, and precision choices, retaining drafts after a refused write', async () => {
     const save = vi.fn().mockResolvedValue(false)
     render(<Fixture save={save} />)
     expect(screen.queryByLabelText(/Visible history/)).toBeNull()
@@ -286,6 +286,7 @@ describe('the Timeline Settings section', () => {
         .map(option => option.textContent),
     ).toEqual([
       'Follow app',
+      'Follow chat',
       'English',
       '简体中文',
       '日本語',
@@ -295,7 +296,7 @@ describe('the Timeline Settings section', () => {
       'Русский',
       'Português (Brasil)',
     ])
-    fireEvent.change(language, { target: { value: 'ui' } })
+    fireEvent.change(language, { target: { value: 'chat' } })
     fireEvent.change(screen.getByRole('combobox', { name: 'Progress decimal places' }), {
       target: { value: '3' },
     })
@@ -307,7 +308,7 @@ describe('the Timeline Settings section', () => {
     fireEvent.click(saveButton())
     expect(await screen.findByText(en.saveFailed)).toBeTruthy()
     expect(save).toHaveBeenCalledWith(
-      { ...value, language: 'ui', progressDecimals: 3, summaryPrompt: 'Keep this draft.' },
+      { ...value, language: 'chat', progressDecimals: 3, summaryPrompt: 'Keep this draft.' },
       9,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))

@@ -1,4 +1,5 @@
 /** Real profile persistence, inherited servers, and live Loader reconciliation. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Transport } from '@modelcontextprotocol/client'
 import { readFile, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
@@ -48,6 +49,7 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
 
 async function registry(): Promise<Context> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   return ctx

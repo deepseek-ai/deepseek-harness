@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   APP_ICON_VARIANTS, ICON_OUTPUT_DIRECTORY, MASKABLE_ARTWORK_SCALE, TILE_SOURCE,
-  maskableDocument, tileDocument,
+  maskableDocument, roundedDocument, tileDocument,
 } from '../scripts/render-app-icons.ts'
 import { pngSize } from './png-size.ts'
 
@@ -27,6 +27,46 @@ describe('web install icons', () => {
     expect(tile).toContain(source.match(/<path\b[^>]*>/u)![0])
     expect(tile).toContain(source.match(/<defs>[\s\S]*<\/defs>/u)![0])
     expect(maskable).toContain(`transform="translate(552 544) scale(${MASKABLE_ARTWORK_SCALE}) translate(-552 -544)"`)
+  })
+
+  it('rounds the full tile with the macOS corner geometry and unscaled artwork', async () => {
+    const source = await readFile(TILE_SOURCE, 'utf8')
+    const rounded = roundedDocument(source)
+    const macos = await readFile(new URL('../../desktop/resources/icon-macos.svg', import.meta.url), 'utf8')
+    expect(rounded).toContain('viewBox="40 32 1024 1024"')
+    expect(rounded).toContain('<g clip-path="url(#install-tile-clip)">')
+    expect(rounded).toContain('<clipPath id="install-tile-clip"><rect x="40" y="32" width="1024" height="1024" rx="230"/></clipPath>')
+    expect(rounded).not.toContain('<g filter="url(#filter0_d_1637_371)">')
+    expect(rounded).not.toContain(`scale(${MASKABLE_ARTWORK_SCALE})`)
+    expect(rounded).toContain(source.match(/<path\b[^>]*>/u)![0])
+    expect(rounded).toContain('<g filter="url(#filter1_ddi_1637_371)">')
+    const corner = rounded.match(/<clipPath\b[^>]*><rect\b[^>]*\brx="([^"]+)"/u)![1]
+    const tileRects = [...macos.matchAll(/<rect\b[^>]*\bwidth="1024"[^>]*\bheight="1024"[^>]*>/gu)]
+    expect(tileRects).toHaveLength(3)
+    expect(tileRects.map(rect => rect[0].match(/\brx="([^"]+)"/u)?.[1]))
+      .toEqual([corner, corner, corner])
+  })
+
+  it('clips the tile when another group precedes it', async () => {
+    const source = await readFile(TILE_SOURCE, 'utf8')
+    const precedingGroup = '<g><rect width="1" height="1"/></g>'
+    const rounded = roundedDocument(source.replace(
+      '<g filter="url(#filter0_d_1637_371)">',
+      `${precedingGroup}<g filter="url(#filter0_d_1637_371)">`,
+    ))
+    expect(rounded).toContain(`${precedingGroup}<g clip-path="url(#install-tile-clip)">`)
+  })
+
+  it('preserves attributes on the source definitions', async () => {
+    const source = await readFile(TILE_SOURCE, 'utf8')
+    expect(roundedDocument(source.replace('<defs>', '<defs id="tile-definitions">')))
+      .toContain('<defs id="tile-definitions"><clipPath id="install-tile-clip">')
+  })
+
+  it('rejects a source without the definitions needed by the rounded tile', async () => {
+    const source = await readFile(TILE_SOURCE, 'utf8')
+    expect(() => roundedDocument(source.replace(/<defs>[\s\S]*<\/defs>/u, '')))
+      .toThrow(/no definitions element/)
   })
 
   it('rejects non-PNG bytes and incomplete image headers', () => {

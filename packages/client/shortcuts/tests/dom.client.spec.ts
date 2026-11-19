@@ -192,6 +192,27 @@ it('blocks background commands during dialogs and gives terminal input ownership
   fireEvent.blur(window)
 })
 
+it('updates shortcut ownership when a mounted popup opens and closes', () => {
+  const popup = document.createElement('div')
+  document.body.append(popup)
+  const registry = new ShortcutRegistry('web', 'windows')
+  const fixed = vi.fn<(input: ShortcutFixedInput) => void>()
+  dispose = installKeyboard(window, registry, fixed)
+
+  press(document.body)
+  expect(fixed.mock.lastCall?.[0]).toMatchObject({ type: 'keydown', context: { modal: null } })
+  fixed.mockClear()
+  popup.dataset.menuPopup = ''
+  press(document.body)
+  expect(fixed).toHaveBeenNthCalledWith(1, { type: 'reset' })
+  expect(fixed.mock.lastCall?.[0]).toMatchObject({ type: 'keydown', context: { modal: 'other' } })
+  fixed.mockClear()
+  delete popup.dataset.menuPopup
+  press(document.body)
+  expect(fixed).toHaveBeenNthCalledWith(1, { type: 'reset' })
+  expect(fixed.mock.lastCall?.[0]).toMatchObject({ type: 'keydown', context: { modal: null } })
+})
+
 it('routes body focus and window-delivered input through the same application command', () => {
   const { input, run } = mount()
   input.remove()
