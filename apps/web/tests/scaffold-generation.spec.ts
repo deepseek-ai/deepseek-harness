@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { parseSessionLog, prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import {
   assertFixtureInventory,
+  normalizeWebSessionVolatiles,
   parseSeedFixture,
   recordedSessionFixturePath,
   selectedSessionFixture,
@@ -101,5 +102,34 @@ describe('Web snapshot generation filenames', () => {
 
     await expect(assertFixtureInventory(root, ['session.jsonl', 'ui.expected.md']))
       .resolves.toBeUndefined()
+  })
+})
+
+describe('Web snapshot working directories', () => {
+  it.each([
+    ['/workspace', '/workspace/recipient', '/workspace-other/result.txt'],
+    ['C:\\workspace', 'C:\\workspace\\recipient', 'C:\\workspace-other\\result.txt'],
+  ])('preserves recipient subdirectories below %s', (workspace, recipient, sibling) => {
+    const log = `${JSON.stringify({ type: 'session', cwd: recipient })}\n`
+      + `${JSON.stringify({ path: recipient, unrelated: sibling })}\n`
+    const relative = recipient.slice(workspace.length)
+
+    expect(normalizeWebSessionVolatiles(log, workspace, 'workspace')).toBe(
+      `${JSON.stringify({ type: 'session', cwd: `{{cwd}}${relative}` })}\n`
+      + `${JSON.stringify({ path: `{{cwd}}${relative}`, unrelated: sibling })}\n`,
+    )
+  })
+
+  it.each([undefined, ''])('rejects workspace mode with cwd %j', (workspace) => {
+    const log = `${JSON.stringify({ type: 'session', cwd: '/workspace/recipient' })}\n`
+    expect(() => normalizeWebSessionVolatiles(log, workspace, 'workspace'))
+      .toThrow('workspace cwd normalization requires a non-empty workspaceCwd')
+  })
+
+  it('uses the Session directory by default without requiring a workspace', () => {
+    const log = `${JSON.stringify({ type: 'session', cwd: '/workspace/recipient' })}\n`
+    expect(normalizeWebSessionVolatiles(log)).toBe(
+      `${JSON.stringify({ type: 'session', cwd: '{{cwd}}' })}\n`,
+    )
   })
 })

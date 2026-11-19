@@ -29,7 +29,7 @@ Enable the disabled `tool-session-control` row of the `@deepseek-ai/dsh-web-app`
 
 ### When to choose it
 
-Enable it when Agents in a Web profile must hand instructions or findings to independent Sessions. The tool applies no Workspace or directory restriction: any Agent that sees it can address any ordinary Session that the Session controller resolves. Leave the row disabled when Agents must not start work in other Sessions. Members of one subagent tree message each other with `send_message` from [subagent control](../../subagent/tool-subagent-control/README.md) instead.
+Enable it when Agents in a Web profile must hand instructions or findings to independent Sessions. The tool applies no Workspace or directory restriction: any Agent that sees it, including a subagent, can address any ordinary Session that the Session controller resolves. Leave the row disabled when Agents must not start work in other Sessions. Members of one subagent tree message each other with `send_message` from [subagent control](../../subagent/tool-subagent-control/README.md) instead.
 
 ### Minimal configuration
 
@@ -92,7 +92,7 @@ The tool takes the sender from the runtime's calling Agent, so the model cannot 
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-session-control) defines the exact schema. The schema exposes neither sender identity nor permission overrides. A successful call returns one JSON text block, `{"message_id":"..."}`, that confirms inbox insertion, not completion or a reply. Target cancellation or disposal can leave the message unprocessed. A rejected call returns `Error: <message>`; a subagent target reads `session "<id>" is not available to session_send_message`.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-session-control) defines the exact schema. The description instructs the model: "Use this tool only when the user explicitly asks you to send a message to another session." The schema exposes neither sender identity nor permission overrides. A successful call returns one JSON text block, `{"message_id":"..."}`, that confirms inbox insertion, not completion or a reply. Target cancellation or disposal can leave the message unprocessed. A rejected call returns `Error: <message>`; a subagent target reads `session "<id>" is not available to session_send_message`.
 
 #### Token effect
 
@@ -121,7 +121,8 @@ Append-only in the recipient; the message joins at its next input boundary witho
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Web compositions only** — only the dsh-web-app bundle declares the row; the `headless`, `sdk`, `sdk-minimal`, and `acp` profiles mount no Session controller and offer no `session_send_message`.
-- **Subagent targets are unavailable** — the tool rejects a target that subagent routing owns. The separate `send_message` tool can address only members of the caller's own subagent tree.
+- **Subagent targets are unavailable** — a subagent can send to an ordinary Session, but that Session cannot reply to it with this tool. The separate `send_message` tool can address only members of the caller's own subagent tree.
+- **Automatic reply loops** — automatic replies can repeatedly wake two Sessions and consume tokens. The explicit-user-request instruction relies on the model; the runtime applies no message-rate or hop limit.
 - **Text only, no reply wait** — messages carry text only; the tool attaches no files and does not wait for the recipient's turn or answer.
 - **Restored Agents stay resident** — a cold target restored for a message stays loaded under the Session controller, like a Session opened in the GUI.
 - **No safe retry after an unknown outcome** — acceptance is not idempotent; callers must retain known successful receipts and must not repeat a send automatically.

@@ -68,7 +68,7 @@ export function apply(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'session_send_message',
-    description: 'Send a message to an independent session. A working session receives it at its next input boundary; an idle session starts a turn, and an inactive session resumes first. Returns an acceptance receipt without waiting for a reply.',
+    description: 'Send a message to an independent session. Use this tool only when the user explicitly asks you to send a message to another session. A working session receives it at its next input boundary; an idle session starts a turn, and an inactive session resumes first. Returns an acceptance receipt without waiting for a reply.',
     parameters: {
       session_id: {
         type: 'string',

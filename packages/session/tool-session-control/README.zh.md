@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当 Web profile 中的 Agent 需要把指令或发现交给独立会话时启用本工具。本工具不施加 Workspace 或目录限制：任何能看到它的 Agent 都可以向 Session 控制器能解析的任意普通会话发送消息。若 Agent 不应在其他会话中启动工作，请保持该行禁用。同一 subagent 树的成员之间改用 [subagent 控制](../../subagent/tool-subagent-control/README.zh.md)提供的 `send_message` 通信。
+当 Web profile 中的 Agent 需要把指令或发现交给独立会话时启用本工具。本工具不施加 Workspace 或目录限制：任何能看到它的 Agent（包括 subagent）都可以向 Session 控制器能解析的任意普通会话发送消息。若 Agent 不应在其他会话中启动工作，请保持该行禁用。同一 subagent 树的成员之间改用 [subagent 控制](../../subagent/tool-subagent-control/README.zh.md)提供的 `send_message` 通信。
 
 ### 最小配置
 
@@ -92,7 +92,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-session-control)定义确切 schema。Schema 既不提供发送者身份，也不提供权限覆盖参数。成功调用返回一个 JSON 文本块 `{"message_id":"..."}`，确认消息已入队，不表示执行完成或对方已回复。目标取消或释放可能使消息未被处理。被拒绝的调用返回 `Error: <message>`；subagent 目标的消息为 `session "<id>" is not available to session_send_message`。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-session-control)定义确切 schema。描述向模型发出指令："Use this tool only when the user explicitly asks you to send a message to another session." Schema 既不提供发送者身份，也不提供权限覆盖参数。成功调用返回一个 JSON 文本块 `{"message_id":"..."}`，确认消息已入队，不表示执行完成或对方已回复。目标取消或释放可能使消息未被处理。被拒绝的调用返回 `Error: <message>`；subagent 目标的消息为 `session "<id>" is not available to session_send_message`。
 
 #### Token 影响
 
@@ -121,7 +121,8 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **仅限 Web 组合** — 只有 dsh-web-app bundle 声明该行；`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 不挂载 Session 控制器，也不提供 `session_send_message`。
-- **subagent 目标不可用** — 工具拒绝归 subagent 路由所有的目标。独立的 `send_message` 工具只能访问调用方自身 subagent 树内的成员。
+- **subagent 目标不可用** — subagent 可以向普通 Session 发消息，但该 Session 无法通过本工具回复它。独立的 `send_message` 工具只能访问调用方自身 subagent 树内的成员。
+- **自动回复循环** — 自动回复可能反复唤醒两个 Session 并消耗 token。仅在用户明确要求时使用的指令依赖模型遵循；运行时不限制消息发送速率或转发跳数。
 - **仅文本，不等待回复** — 消息只包含文本；工具不附加文件，也不等待接收方的轮次或回答。
 - **恢复出的 Agent 保持驻留** — 为投递消息而冷恢复的目标会在 Session 控制器下保持加载，与在 GUI 中打开的会话相同。
 - **结果未知时不可安全重试** — 接收不具备幂等性；调用方必须保留已知成功的回执，且不得自动重复发送。

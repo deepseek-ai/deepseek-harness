@@ -23,7 +23,7 @@ description: "在 Web profile 中启用跨 Session 消息，并理解独立对�
 <a id="enable-messaging"></a>
 ## 启用消息
 
-该工具默认关闭。启用后，调用 Agent 可以向 Web Session 控制器能打开的任意普通 Session 发消息，包括当前 Workspace 或 cwd 之外的 Session。
+该工具默认关闭。启用后，任何能看到它的 Agent（包括 subagent）都可以向 Web Session 控制器能打开的任意普通 Session 发消息，包括当前 Workspace 或 cwd 之外的 Session。
 
 将以下 patch 追加到某个 Web profile 的 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`，保留已有条目。未设置 `DSH_HOME` 时使用 `~/.dsh`：
 
@@ -45,7 +45,7 @@ pnpm dsh --profile web --patch apps/cli/config/examples/session-control.overlay.
 <a id="send-and-check-the-receipt"></a>
 ## 发送并检查回执
 
-向 Agent 提供目标 Session id 和要发送的消息。例如，请它使用以下参数调用 `session_send_message`：
+工具描述要求 Agent 仅在你明确要求它向另一个 Session 发消息时使用该工具。向它提供目标 Session id 和要发送的消息。例如，请它使用以下参数调用 `session_send_message`：
 
 ```json
 {
@@ -62,7 +62,8 @@ pnpm dsh --profile web --patch apps/cli/config/examples/session-control.overlay.
 ## 投递限制
 
 - 已归档 Session 拒绝消息并保持归档状态。发送前需显式取消目标的归档。
-- subagent 目标对 `session_send_message` 不可用。只有调用方自身 subagent 树内的成员才能使用 `send_message` 访问。
+- subagent 目标对 `session_send_message` 不可用，因此普通 Session 无法用它回复发送消息的 subagent。只有调用方自身 subagent 树内的成员才能使用 `send_message` 访问。
+- 自动回复可能反复唤醒两个 Session 并消耗 token。仅在用户明确要求时使用的指令依赖模型遵循；运行时不限制消息发送速率或转发跳数。
 - 接收前的取消会阻止投递。接收后的取消可能返回 `ABORTED`，但不会撤回消息。取消后或结果未知时不要自动重复发送。
 - 该工具只发送文本。它不等待接收方回答，也不与另一个 Harness 进程通信。
 

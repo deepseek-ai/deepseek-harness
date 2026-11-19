@@ -23,7 +23,7 @@ Enable `session_send_message` in a Web profile when an Agent needs to send instr
 <a id="enable-messaging"></a>
 ## Enable messaging
 
-The tool is disabled by default. Enabling it allows the calling Agent to address any ordinary Session that the Web Session controller can open, including Sessions outside its current Workspace or cwd.
+The tool is disabled by default. Enabling it allows any Agent that sees it, including a subagent, to address any ordinary Session that the Web Session controller can open, including Sessions outside its current Workspace or cwd.
 
 Append this patch to `$DSH_HOME/profiles/<profile>/cordis.patch.yml` of a Web profile, preserving existing entries. If `DSH_HOME` is unset, use `~/.dsh`:
 
@@ -45,7 +45,7 @@ The composed `tool-session-control` row has `disabled: false`. Keep the overlay 
 <a id="send-and-check-the-receipt"></a>
 ## Send and check the receipt
 
-Give the Agent the target Session id and the message to send. For example, ask it to call `session_send_message` with:
+The tool description instructs the Agent to send only when you explicitly ask it to message another Session. Give it the target Session id and the message to send. For example, ask it to call `session_send_message` with:
 
 ```json
 {
@@ -62,7 +62,8 @@ A successful result contains `message_id`. It confirms inbox insertion, without 
 ## Delivery limits
 
 - Archived Sessions reject messages and stay archived. Unarchive a target explicitly before messaging it.
-- Subagent targets are unavailable to `session_send_message`. Use `send_message` only for members of the caller's own subagent tree.
+- Subagent targets are unavailable to `session_send_message`, so an ordinary Session cannot use it to reply to a subagent sender. Use `send_message` only for members of the caller's own subagent tree.
+- Automatic replies can repeatedly wake two Sessions and consume tokens. The explicit-user-request instruction relies on the model; the runtime applies no message-rate or hop limit.
 - Cancellation before acceptance prevents delivery. After acceptance, cancellation can return `ABORTED` without retracting the message. Do not repeat a send automatically after cancellation or another unknown outcome.
 - The tool sends text only. It does not wait for the recipient's answer or communicate with another Harness process.
 
