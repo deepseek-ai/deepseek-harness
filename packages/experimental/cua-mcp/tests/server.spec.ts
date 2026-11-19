@@ -347,4 +347,24 @@ describe('Computer Use MCP server', () => {
     expect(served.dispose).toHaveBeenCalledOnce()
     await served.client.close()
   })
+
+  it('settles a queued request cancelled before admission even without optional input controls', async () => {
+    const served = await setup({ programs: false })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    served.execute.mockImplementationOnce(async () => { entered.resolve(); await finish.promise; return batch('first') })
+    const first = served.run({ code: 'first' })
+    await entered.promise
+    const controller = new AbortController()
+    const queued = served.client.callTool({ name: 'cua_run_code', arguments: { code: 'queued' } }, { signal: controller.signal })
+    const cancelled = expect(queued).rejects.toThrow(/abort/i)
+    try {
+      await served.client.listTools()
+      controller.abort()
+    } finally { finish.resolve() }
+    await Promise.all([first, cancelled])
+    await served.run({ code: 'after cancellation' })
+    expect(served.execute.mock.calls[1]?.[0].signal.aborted).toBe(true)
+  })
+
 })

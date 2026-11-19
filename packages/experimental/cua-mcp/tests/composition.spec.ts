@@ -238,6 +238,30 @@ describe('Computer Use MCP composition', () => {
     expect(native.held).toEqual([])
   })
 
+  it('reports refused cleanup after a cancelled MCP request and prevents further native input', async () => {
+    const { ctx, native, run } = await setup()
+    await run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")')
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    ctx.on('tools/execute', (execution, next) => {
+      if (execution.name === 'cua_run_code' && execution.parent === undefined) entered.resolve()
+      return next()
+    })
+    const release = native.controlNext('releaseHeldInputs')
+    const controller = new AbortController()
+    const running = run('await new Promise(() => {})', {}, controller.signal)
+    const cancelled = expect(running).rejects.toThrow(/abort/i)
+    await entered.promise
+    controller.abort()
+    await release.entered
+    release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Cancellation release refused' })
+    await cancelled
+    const count = native.calls.length
+    const result = await run('await cua.getApp("test.fixture")')
+    expect(result.isError).toBe(true)
+    expect(texts(result).join('')).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    expect(native.calls).toHaveLength(count)
+  })
+
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {
     const { ctx, native, client, run, adapter, directory } = await setup()
     expect(client.getInstructions()).toContain('Start every conversation by calling cua_get_api_reference')
