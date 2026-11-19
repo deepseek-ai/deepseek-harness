@@ -1633,6 +1633,9 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
     return { start: { x, y: start.y + start.height / 2 }, end: { x, y: end.y + end.height / 2 } }
   }
   await number('R3').waitFor()
+  // The strip after README.md's last hunk leaves once the file's text was read for highlighting, which moves the rows
+  // of notes.txt below it up; the positions this test measures for a drag hold only after that.
+  await file.locator('[data-forge-diff-gap]').waitFor({ state: 'detached', timeout: 20_000 })
 
   // The plus appears only on the hovered side of the hovered row, for the code as for the line number.
   expect(await plus('R3').isVisible()).toBe(false)
