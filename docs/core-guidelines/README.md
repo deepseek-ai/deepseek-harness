@@ -17,7 +17,7 @@ Rules for writing DeepSeek Harness code, in the style of the [C++ Core Guideline
 
 ## Status and scope
 
-These guidelines are to DeepSeek Harness what the C++ Core Guidelines are to C++: the repository's coding standard for how to write code, independent of what the code does. Every change follows them, and reviewers cite them by ID.
+These guidelines are to DeepSeek Harness what the C++ Core Guidelines are to C++: the repository's coding standard for how to write code, independent of what the code does.
 
 A rule belongs here when it would still apply if the code implemented a different feature. Examples are rules about interfaces, types, errors, resource ownership, concurrency, state, component structure, and data formats.
 

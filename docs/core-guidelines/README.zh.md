@@ -17,11 +17,11 @@
 
 ## 地位与范围
 
-本准则之于 DeepSeek Harness，相当于 C++ Core Guidelines 之于 C++：它是本仓库关于“如何写代码”的编码标准，与代码实现什么功能无关。每个变更都遵循本准则，审查者按编号引用。
+本准则之于 DeepSeek Harness，相当于 C++ Core Guidelines 之于 C++：它是本仓库关于“如何写代码”的编码标准，与代码实现什么功能无关。
 
 一条规则若在代码实现其他功能时依然适用，就属于本准则。例如关于接口、类型、错误、资源所有权、并发、状态、组件结构和数据格式的规则。
 
-业务领域规则不属于本准则。规定某个功能、子系统或产品决策必须如何运作的规则，放在其所有者处：包 README、[子系统页面](../subsystems/README.zh.md)或 [Agent Note](../../.agents/notes/README.zh.md)。针对某类产物已知缺陷的审查检查见[防御性模式](../defensive-patterns/README.zh.md)。
+业务领域规则不属于本准则。规定某个功能、子系统或产品决策必须如何运作的规则，放在拥有这条规则的文档里：包 README、[子系统页面](../subsystems/README.zh.md)或 [Agent Note](../../.agents/notes/README.zh.md)。针对某类产物已知缺陷的审查规则见[防御性模式](../defensive-patterns/README.zh.md)。
 
 ## 引言
 
