@@ -7,6 +7,7 @@ import feishu from './assets/feishu.svg'
 import linear from './assets/linear.svg'
 import notion from './assets/notion.svg'
 import tencentDocs from './assets/tencent-docs.svg'
+import tencentMeeting from './assets/tencent-meeting.svg'
 import wecom from './assets/wecom.svg'
 import { CONNECTORS, type Connector, type ConnectorId } from './connectors.ts'
 import type { ConnectorsFace, ConnectorStatus } from './connectors-store.ts'
@@ -15,7 +16,8 @@ import css from './ConnectorsTab.module.css'
 
 /** Each connector's brand icon, the same file its bundle declares. */
 const ICONS: Readonly<Record<ConnectorId, string>> = {
-  'feishu': feishu, 'wecom': wecom, 'notion': notion, 'tencent-docs': tencentDocs, 'linear': linear,
+  'feishu': feishu, 'wecom': wecom, 'tencent-meeting': tencentMeeting, 'notion': notion, 'tencent-docs': tencentDocs,
+  'linear': linear,
 }
 
 /** Tab props: the Plugins page's install and open callbacks, the dictionary, and the injected face. */

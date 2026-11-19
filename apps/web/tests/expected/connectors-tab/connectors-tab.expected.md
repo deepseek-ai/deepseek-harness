@@ -7,6 +7,9 @@
     - text: 企业微信插件 在对话中使用企业微信的文档、日程、会议、待办和消息。
     - button "安装 企业微信插件": 安装
   - listitem:
+    - text: 腾讯会议插件 在对话中使用腾讯会议的会议、录制、纪要和会议报告。
+    - button "安装 腾讯会议插件": 安装
+  - listitem:
     - text: Notion 插件 在对话中使用 Notion 页面、数据库及其他已授权的内容。
     - button "安装 Notion 插件": 安装
   - listitem:
