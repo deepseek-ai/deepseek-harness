@@ -22,6 +22,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
@@ -40,6 +41,7 @@ const programs = [
 
 class ProgramModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  toolName = 'cua_run_code'
   beforeStream?: (index: number, options: GenerateOptions) => Promise<void>
   /** Requests a test holds back until it has finished acting between two model steps. */
   readonly gates = new Map<number, Promise<void>>()
@@ -56,7 +58,7 @@ class ProgramModel extends LlmAdapter {
     if (code !== undefined) {
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>(`cua-program-${this.requests.length}`),
-        name: 'cua_run_code', arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
+        name: this.toolName, arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
     }
@@ -513,4 +515,54 @@ it('reports and releases only the owning task inputs', async () => {
   expect(f.native.held.map(press => press.key)).toEqual(['d'])
   await peer.dispose()
   expect(f.native.held).toEqual([])
+})
+
+it('reports native connection loss after a dispatched down and rejects further input', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const down = f.native.controlNext('sendKeyEvent', { afterDispatch: true })
+  const running = f.run()
+  await down.entered
+  down.disconnect()
+  await running
+  expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('INPUT_CLEANUP_UNCONFIRMED')
+  const calls = f.native.calls.length
+  f.model.restart([holdProgram])
+  await f.run()
+  expect(f.native.calls).toHaveLength(calls)
+})
+
+it('waits and reports cleanup refusal when user stop arrives as the program returns', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  f.ctx.on('tools/execute', async (execution, next) => {
+    const result = await next()
+    if (execution.name === 'cua_run_code' && execution.parent === undefined) f.agent.cancel({ kind: 'user' })
+    return result
+  })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  await release.entered
+  release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Release refused during stop' })
+  await running
+  expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('Release refused during stop')
+})
+
+it('emits only the final outer reminder for a nested CUA program', async () => {
+  const f = await setup([`await tools.cua_run_code({ code: ${JSON.stringify(holdProgram)}, description: "Hold W" })`], 'macos', undefined, true, true)
+  const program = f.ctx.tools.get('cua_run_code', f.agent)
+  if (!program) throw new Error('CUA program registration missing')
+  f.ctx.tools.register(createRunCodeTool(f.ctx, { name: 'run_code', description: 'Run nested programs', runtime: f.ctx.ptcRuntime, tools: [program] }))
+  f.model.toolName = 'run_code'
+  await f.run()
+  expect(reminders(f.agent)).toHaveLength(1)
+  expect(f.native.calls.filter(call => call.method === 'getHeldInputs')).toHaveLength(1)
+  expect(f.native.held.map(press => press.key)).toEqual(['w'])
+})
+
+it('ignores turn endings from Sessions without an Agent', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  await f.run()
+  const session = f.ctx.sessions.create(brandString<SessionId>('unattached-input-session'))
+  session.append('turn/start', { turn: 1 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'UNKNOWN', message: 'Unrelated failure' } } })
+  expect(f.native.held.map(press => press.key)).toEqual(['w'])
 })

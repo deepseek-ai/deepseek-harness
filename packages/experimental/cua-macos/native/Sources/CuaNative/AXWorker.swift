@@ -319,7 +319,7 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            snapshots[scope] = NativeSnapshot(id: id, task: task, elements: projection.indexed)
+            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }

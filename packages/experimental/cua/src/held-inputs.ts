@@ -134,8 +134,10 @@ export class CuaHeldInputs {
             `${result.isError ? result.error.message : 'Program cancelled'}. Held-input cleanup failed: ${String(error)}`, { cause: error }) }
         } else if (execution.parent === undefined) {
           const text = await this.owners.get(agent)?.reminder()
-          if (text) execution.deferContext(createUserMessage({ content: [{ type: 'text', text }],
-            source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }))
+          if (text) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
+            createUserMessage({ content: [{ type: 'text', text }],
+              source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
+          ] }
         }
         return result
       } catch (error) {
