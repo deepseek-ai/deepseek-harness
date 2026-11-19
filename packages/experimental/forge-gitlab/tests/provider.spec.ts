@@ -5,6 +5,7 @@ import type { GlabOutput } from '../src/glab.ts'
 import { GitLabProvider } from '../src/provider.ts'
 import type { GitLabLimits } from '../src/provider.ts'
 import type { MergeRequestNode } from '../src/status.ts'
+import { VIEWER_COUNT_QUERY, VIEWER_INVOLVED_QUERY, VIEWER_LIST_QUERIES, VIEWER_NAME_QUERY } from '../src/viewer.ts'
 import { app, fakeGlab, HOST, json, merge, mrPath, output, pathOf, sent, sha } from './fixtures.ts'
 import type { GlabCall } from './fixtures.ts'
 import { job, mergeRequestNode, PIPELINE } from './status.spec.ts'
@@ -493,6 +494,135 @@ describe('GitLab provider writes', () => {
     await expect(subject.rerunChecks(merge(6), { headSha: 'HEAD' }, signal)).rejects.toThrow('invalid head commit')
     await expect(subject.updateBranch(merge(6), { method: 'rebase', headSha: 'HEAD' }, signal)).rejects.toThrow('invalid head commit')
     expect(calls).toEqual([])
+  })
+})
+
+/** The viewer queries by the name the request lists below give them. */
+const VIEWER_QUERIES = new Map([
+  [VIEWER_NAME_QUERY, 'name'], [VIEWER_COUNT_QUERY, 'count'], [VIEWER_INVOLVED_QUERY, 'involved'],
+  [VIEWER_LIST_QUERIES['review-requested'], 'review-requested'], [VIEWER_LIST_QUERIES.authored, 'authored'],
+])
+
+/** Each call as the viewer query it sent and its variables. */
+function viewerRequests(calls: readonly GlabCall[]): unknown[] {
+  return calls.map(call => [VIEWER_QUERIES.get(sent(call).query), sent(call).variables])
+}
+
+/** An answer to any viewer query as `username`, with lists of no merge requests, or as nobody for null. */
+function viewerAnswer(call: GlabCall, username: string | null): GlabOutput {
+  if (username === null) return json({ data: { currentUser: null } })
+  const page = { count: 0, nodes: [] }
+  const size = { count: 2 }
+  const user = { username, list: page, reviewed: page, assigned: page, awaited: size, authored: size, ...counted(call) }
+  return json({ data: { currentUser: user } })
+}
+
+/** The sizes of the two connections of the involved list when `call` counts them, which name who they were counted for. */
+function counted(call: GlabCall): Record<string, unknown> {
+  if (sent(call).query !== VIEWER_COUNT_QUERY) return {}
+  return { reviewed: { count: sent(call).variables.me === 'lin' ? 1 : 10 }, assigned: { count: 4 } }
+}
+
+describe('GitLab provider viewer lists and descriptions', () => {
+  const involved = { host: HOST, filter: 'involved', repository: null, limit: 20 } as const
+  const counts = (reviewed: number) => new Map([['review-requested', 2], ['authored', 2], ['involved', reviewed + 4]])
+
+  it('offers the three lists on every host it serves, up to GitLab\'s page of 100', () => {
+    expect(provider(() => json({})).subject.viewer).toEqual({
+      hosts: [HOST, 'gitlab.com'], filters: new Set(['review-requested', 'authored', 'involved']), maxItems: 100,
+    })
+  })
+
+  it('refuses lists, counts, and descriptions on an unserved host without a request', async () => {
+    const { subject, calls } = provider(() => json({}))
+    const refused = { code: 'unavailable', message: 'forge-gitlab does not serve elsewhere.test; add it to the provider\'s hosts setting' }
+    await expect(subject.listForViewer({ ...involved, host: 'elsewhere.test' }, signal)).resolves.toEqual(refused)
+    await expect(subject.countForViewer('elsewhere.test', signal)).resolves.toEqual(refused)
+    await expect(subject.readDescription(merge(6, { ...app, host: 'elsewhere.test' }), signal)).resolves.toEqual(refused)
+    expect(calls).toEqual([])
+  })
+
+  it.each([0, -1, 1.5, 101])('rejects a list limit of %s outside 1 to 100', async (limit) => {
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, 'lin'))
+    await expect(subject.listForViewer({ ...involved, filter: 'authored', limit }, signal))
+      .rejects.toThrow('forge-gitlab: viewer list limit must be a positive integer no greater than 100')
+    expect(calls).toEqual([])
+  })
+
+  it('reads a list of 100 merge requests in one request', async () => {
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, 'lin'))
+    const authored = { ...involved, filter: 'authored', repository: { owner: 'group/sub', name: 'app' }, limit: 100 } as const
+    await expect(subject.listForViewer(authored, signal)).resolves.toEqual({ viewer: 'lin', items: [], total: 0 })
+    expect(viewerRequests(calls)).toEqual([['authored', { first: 100, project: 'group/sub/app' }]])
+  })
+
+  it('reads the username once for the reads that name the user, and keeps it for later ones', async () => {
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, 'lin'))
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(counts(1))
+    await expect(subject.listForViewer(involved, signal)).resolves.toEqual({ viewer: 'lin', items: [], total: 0 })
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(counts(1))
+    expect(viewerRequests(calls)).toEqual([
+      ['name', {}], ['count', { me: 'lin' }], ['involved', { first: 20, project: null, me: 'lin' }], ['count', { me: 'lin' }],
+    ])
+  })
+
+  it('keeps the username a list answered as, per host', async () => {
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, call.args.includes(HOST) ? 'lin' : 'zhou'))
+    await subject.listForViewer({ ...involved, filter: 'review-requested' }, signal)
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(counts(1))
+    await expect(subject.countForViewer('gitlab.com', signal)).resolves.toEqual(counts(10))
+    expect(viewerRequests(calls)).toEqual([
+      ['review-requested', { first: 20, project: null }], ['count', { me: 'lin' }], ['name', {}], ['count', { me: 'zhou' }],
+    ])
+    expect(calls.map(call => call.args[3])).toEqual([HOST, HOST, 'gitlab.com', 'gitlab.com'])
+  })
+
+  it('reads once more as the user GitLab answered as when it is another one, and keeps that user', async () => {
+    let user = 'lin'
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, user))
+    await subject.countForViewer(HOST, signal)
+    user = 'zhou'
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(counts(10))
+    await expect(subject.listForViewer(involved, signal)).resolves.toMatchObject({ viewer: 'zhou' })
+    expect(viewerRequests(calls).slice(2)).toEqual([
+      ['count', { me: 'lin' }], ['count', { me: 'zhou' }], ['involved', { first: 20, project: null, me: 'zhou' }],
+    ])
+  })
+
+  it('reads at most twice when every answer names another user', async () => {
+    const users = ['lin', 'zhou', 'wang']
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, users.shift() ?? 'chen'))
+    await expect(subject.listForViewer(involved, signal)).resolves.toMatchObject({ viewer: 'wang' })
+    expect(viewerRequests(calls)).toEqual([
+      ['name', {}], ['involved', { first: 20, project: null, me: 'lin' }], ['involved', { first: 20, project: null, me: 'zhou' }],
+    ])
+  })
+
+  it('keeps no username from a read GitLab did not answer', async () => {
+    let user: string | null = null
+    const { subject, calls } = provider((_path, call) => viewerAnswer(call, user))
+    const signedOut = { code: 'unauthenticated', message: `GitLab named no signed-in user on ${HOST}` }
+    await expect(subject.listForViewer({ ...involved, filter: 'authored' }, signal)).resolves.toEqual(signedOut)
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(signedOut)
+    user = 'lin'
+    await expect(subject.countForViewer(HOST, signal)).resolves.toEqual(counts(1))
+    user = null
+    await expect(subject.listForViewer(involved, signal)).resolves.toEqual(signedOut)
+    expect(viewerRequests(calls)).toEqual([
+      ['authored', { first: 20, project: null }], ['name', {}], ['name', {}], ['count', { me: 'lin' }],
+      ['involved', { first: 20, project: null, me: 'lin' }],
+    ])
+  })
+
+  it('reads a description through one request', async () => {
+    const { subject, calls } = provider(() => json({ data: { project: { id: 'gid://gitlab/Project/278', mergeRequest: {
+      description: 'Why', createdAt: '2026-11-08T12:00:00Z', labels: { count: 1, nodes: [{ title: 'bug', color: '#d9534f' }] },
+    } } } }))
+    await expect(subject.readDescription(merge(6), signal)).resolves.toEqual({
+      body: 'Why', labels: [{ name: 'bug', color: 'd9534f' }], labelsTruncated: false, images: {}, imagesExpireAt: null,
+      createdAt: '2026-11-08T12:00:00Z',
+    })
+    expect(calls.map(call => sent(call).variables)).toEqual([{ path: 'group/sub/app', iid: '6' }])
   })
 })
 

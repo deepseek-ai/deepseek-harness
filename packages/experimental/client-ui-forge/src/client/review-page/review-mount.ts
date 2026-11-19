@@ -209,10 +209,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       store: createReviewStore(),
       inject: (): ReviewPageInjected => ({
         hooks: { locale: deps.locale, pluginNavigation },
-        openLists: (scope, signal) => {
-          const slash = scope.indexOf('/')
-          return remote.reviewLists(slash < 0 ? null : { owner: scope.slice(0, slash), name: scope.slice(slash + 1) }, signal)
-        },
+        openLists: (repository, signal) => remote.reviewLists(repository, signal),
         openChangeRequest: (url, signal) => remote.reviewChangeRequest(url, signal),
         subscribeReset,
         refresh: async () => { settled(await remote.reviewRefresh(), 'toast.refreshFailed') },

@@ -20,7 +20,7 @@ import { ReviewChat, useReviewConversation, type ReviewChatFace } from './Review
 import { ReviewDetail } from './ReviewDetail.tsx'
 import { ReviewList } from './ReviewList.tsx'
 import type { QuoteCopy, ReviewSelection } from '../review.ts'
-import { reviewListsComplete, reviewRepositories } from './review-lists.ts'
+import { reviewListsComplete, reviewRepositories, scopeRepository, type ReviewRepository } from './review-lists.ts'
 import type { createReviewStore, ReviewTab } from './review-store.ts'
 import type { HostStream, StreamSnapshot } from '../source.ts'
 import type { ChangesPanelState } from '../status.ts'
@@ -45,8 +45,8 @@ export interface ReviewPageInjected {
     /** Whether the Plugins page can be opened; the renderer binds it as `usePluginNavigation`. */
     readonly pluginNavigation: HostObservable<boolean>
   }
-  /** Open the list stream of one repository, named `owner/name`, or of every repository for the empty string. */
-  readonly openLists: (scope: string, signal: AbortSignal) => HostStream<ForgeReviewFrame>
+  /** Open the list stream of one repository on its host, or of every repository of every host for null. */
+  readonly openLists: (repository: ReviewRepository | null, signal: AbortSignal) => HostStream<ForgeReviewFrame>
   /** Open the stream of one change request by URL. */
   readonly openChangeRequest: (url: string, signal: AbortSignal) => HostStream<ForgeReviewChangeRequest>
   /** Subscribe to transport resets, after which open streams no longer deliver. */
@@ -212,7 +212,8 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
   const tab = useStore(state => state.tab)
   const listHidden = useStore(state => state.listHidden)
   const folded = useStore(state => state.folded)
-  const repository = useStore(state => state.repository)
+  const scope = useStore(state => state.scope)
+  const repository = scopeRepository(scope)
   const repositories = useStore(state => state.repositories)
   const query = useStore(state => state.query)
   const directOnly = useStore(state => state.directOnly)
@@ -222,8 +223,11 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
   const onConversation = useMemo(() => selected === null ? null : (sessionId: SessionId | null) => {
     actions.conversed(selected, sessionId)
   }, [actions, selected])
-  const scope = repository === null ? '' : `${repository.owner}/${repository.name}`
-  const lists = useHostStream(openLists, scope, subscribeReset)
+  // A scope that names a host only narrows the lists of every repository on the page; one repository is read on its host.
+  const listsKey = repository === null ? '' : JSON.stringify([repository.host, repository.owner, repository.name])
+  const openScoped = useCallback((_key: string, signal: AbortSignal) => openLists(repository, signal), [openLists, repository])
+  const lists = useHostStream(openScoped, listsKey, subscribeReset)
+  const hostSettings = props.usePluginNavigation(value => value)
   // Lists read in one repository name only that one, so the repository menu's offer is recorded while they are read in all.
   const listsFrame = lists.frame
   useEffect(() => {
@@ -246,7 +250,7 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
           stopped={lists.stopped}
           selected={selected}
           query={query}
-          repository={repository}
+          scope={scope}
           repositories={repositories}
           directOnly={directOnly}
           folded={folded}
@@ -262,6 +266,7 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
           onRefresh={startRefresh}
           onRetry={lists.retry}
           copyText={copyText}
+          onOpenSettings={hostSettings ? props.openHostSettings : undefined}
           t={t}
         />
         {selected === null || cardActions === null || onConversation === null

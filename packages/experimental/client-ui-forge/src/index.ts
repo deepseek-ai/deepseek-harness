@@ -45,7 +45,7 @@ import { Reader, ViewerLists } from './viewer-lists.ts'
 import type { KeptPanel, PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
-  ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame,
+  ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame, ForgeReviewRepository,
   ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
   ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeBases, ForgeWorktreeState,
 } from './types.ts'
@@ -196,6 +196,7 @@ export class ForgePanelController extends TypertRemoteService {
       sources: () => ctx.forge.viewerSources(),
       list: async (forge, query, signal) => await ctx.forge.listForViewer(forge, query, signal),
       count: async (forge, host, signal) => await ctx.forge.countForViewer(forge, host, signal),
+      signIn: async (forge, host, signal) => (await ctx.forge.readiness({ forge, host }, signal)).signIn?.command ?? null,
       report: (error) => { ctx.logger.warn(`forge-panel: reading a review list failed: ${String(error)}`) },
     }, {
       listIntervalMs: resolved.reviewListIntervalMs,
@@ -287,15 +288,17 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
    * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
-   * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
-   * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
-   * @param repository - one repository to list in, or null for every repository the user can read.
+   * reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed
+   * again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream
+   * lasts. The stream ends when `signal` aborts or the Remote stops.
+   * @param repository - one repository to list in, read on its host only, or null for every repository the user can
+   * read on every host.
    * @param signal - ends the stream.
    * @returns frames, each complete.
    */
   @Remote({ mode: 'stream' })
   async *reviewLists(
-    repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal,
+    repository: ForgeReviewRepository | null, signal: AbortSignal,
   ): AsyncIterable<ForgeReviewFrame> {
     yield* this.viewerLists.lists(repository, signal)
   }

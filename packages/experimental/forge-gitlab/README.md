@@ -52,6 +52,8 @@ Review writes read the newest diff version first and refuse with `stale` unless 
 
 `rerunChecks` retries the head pipeline once it has failed jobs and none pending. `requestReviews` adds new reviewers with `mergeRequestSetReviewers` and asks current ones again with `mergeRequestReviewerRereview`; a merge request that takes one reviewer, as on GitLab's free tier, refuses a second, and GitLab has no team reviewers. `reviewerCandidates` lists at most 20 of GitLab's matches among the users who can see the project, never the author, none suggested. `updateBranch` only rebases: GitLab names no head in a rebase request, so the provider reads the head first and refuses a moved one with `stale`, and GitLab rebases in the background once it accepted the request. Writes are never retried: a 4xx answer is a refusal, `failed`, except HTTP 401, `unauthenticated`, and HTTP 409 to a merge or an approval, `stale`; a 5xx answer, an answer without a status, and a write past `timeoutMs` are `unknown`.
 
+`viewer` offers the `review-requested`, `authored`, and `involved` lists on every configured host, up to 100 merge requests per read, GitLab's page maximum. `listForViewer` reads one list of open merge requests, most recently updated first, through one GraphQL request to `currentUser`. `review-requested` holds the merge requests that still await the user's review, where the user is a reviewer whose state is `UNREVIEWED` or `REVIEW_STARTED`, and `authored` the ones the user wrote. GitLab has no single query for `involved`, so its request reads two connections, merges them by update time, and reports the sum of their sizes as the total: the merge requests the user reviewed and did not write, and the ones assigned to the user who neither wrote nor reviews them. These two share no merge request with each other or with the other two lists. A repository limits a read to one project by its full path, and a path with a segment GitLab does not permit returns `not-found` without a request. Each item carries the head pipeline's status as its check outcome and `changes-requested`, `approved`, or `none` as its review decision by the rules of a status read. When the user is among the first 20 reviewers, the user's review state gives the item its review or its review request; every item of `review-requested` names a request. A merge request without commits has no head and is left out of the items, though the total counts it. `countForViewer` reads the sizes of the same four connections in every project through one request. The `involved` list and the counts name the user by username in their requests: the provider keeps the username that the latest viewer read on a host answered as, reads it through one more request when it keeps none, and repeats a read once when its answer names another user, as after `glab` signed in as someone else. An answer without a user is `unauthenticated`. `readDescription` reads `description`, `createdAt`, up to 100 labels, and the project's id in one GraphQL query. GitLab writes an upload in Markdown without host or project, as `/uploads/<32 hex digits>/<file>`, and serves it at `https://<host>/-/project/<project id>/uploads/…`; where a Markdown link or image or an HTML `src` names an upload, the description returns that address, as GitLab's own rendering does. A label's `#rrggbb` color is returned without `#`, and `images` maps nothing.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -66,7 +68,7 @@ Each status query reads several merge requests under aliases with their project 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Configuration validation, and provider and command rule registration |
 | [`src/commands.ts`](src/commands.ts) | The `glab` command rule that forge-session binds merge requests by |
-| [`src/provider.ts`](src/provider.ts) | URL mapping, batching, closing issue and diff caches, and actions |
+| [`src/provider.ts`](src/provider.ts) | URL mapping, batching, closing issue and diff caches, the signed-in username kept per host, and actions |
 | [`src/api.ts`](src/api.ts) | REST, GraphQL, and write requests through `glab api`, and failure mapping |
 | [`src/status.ts`](src/status.ts) | Status query construction and snapshot mapping |
 | [`src/diff.ts`](src/diff.ts) | Version-pinned patches, comparisons, merge bases, and file texts |
@@ -75,6 +77,8 @@ Each status query reads several merge requests under aliases with their project 
 | [`src/writes.ts`](src/writes.ts) | Review writes and submissions through discussions, draft notes, and approvals |
 | [`src/position.ts`](src/position.ts) | Diff note positions and line codes from a version's file diff |
 | [`src/overview.ts`](src/overview.ts) | Pipeline retries, review requests, reviewer candidates, and rebases |
+| [`src/viewer.ts`](src/viewer.ts) | Viewer list, count, and username queries, and summary mapping |
+| [`src/description.ts`](src/description.ts) | Description and label reads, and the addresses of uploads |
 | [`src/pool.ts`](src/pool.ts) | Bounded concurrency |
 | [`src/glab.ts`](src/glab.ts) | Host `glab` execution with environment scrubbing and limits |
 | [`src/urls.ts`](src/urls.ts) | Remote, merge request, and issue URL parsing, and project path validation |
@@ -110,8 +114,10 @@ None. Provider output reaches only host-side watchers.
 - **Rebase without a head check** — a push between the head read and the rebase request is rebased too, and a rebase GitLab fails in the background is not reported.
 - **Overview discussions** — discussions that are not on a file count toward `unresolvedThreads` but are not returned as threads.
 - **Bots and draft times** — comment authors are never marked as bots, and draft notes carry the read's time.
+- **Viewer lists** — GitLab has no team review requests, so no list item names a team. `involved` holds the merge requests the user reviewed or is assigned to, not the ones that only mention the user or that the user only commented on. List items carry no reviewed commit, so the review page cannot tell an approval of the head from an older one, and they never report `review-required`, because the lists read no merge status. The list and count queries need a GitLab version whose `reviewRequestedMergeRequests` accepts `reviewStates` and `not`; they work on GitLab 19.5.1, and the oldest version that accepts them is not known.
+- **Descriptions** — an upload image of a private project needs a GitLab session and does not load. GitLab's own reference forms, such as `!12`, `#34`, and `@name`, are plain text.
 - **CE fields only** — the status query reads fields Community Edition has; required approvals, code owners, suggested reviewers, and merged-results pipelines of paid tiers are not read.
-- **Rate limits** — every poll costs one GraphQL query per batch plus one REST request per merge request whose update time changed; a review read costs one REST and one GraphQL request per 100 discussions, one request each for the versions, the draft notes, and the approval, and up to two per outdated file not yet cached; a write reads the newest version first, and a comment reads its version's files once.
+- **Rate limits** — every poll costs one GraphQL query per batch plus one REST request per merge request whose update time changed; a review read costs one REST and one GraphQL request per 100 discussions, one request each for the versions, the draft notes, and the approval, and up to two per outdated file not yet cached; a write reads the newest version first, and a comment reads its version's files once; a viewer list costs one GraphQL request and the counts cost one, plus one for the username when the `involved` list or the counts are read before any viewer read on the host named it.
 
 <a id="dev-note"></a>
 ### Dev Note

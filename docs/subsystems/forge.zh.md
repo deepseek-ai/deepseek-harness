@@ -953,10 +953,6 @@ interface ChangeRequestSummary {
    * `organization/slug`, when the request asks a team the user belongs to rather than the user.
    */
   readonly viewerRequest: { readonly team: string | null } | null
-  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
-  readonly closingIssues: readonly ChangeRequestIssue[]
-  /** Whether the host reported more closing issues than `closingIssues` holds. */
-  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
 }
@@ -1624,7 +1620,7 @@ interface ForgeLocalChanges {
 
 ### 代码评审页
 
-[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；连续失败的轮次按 `reviewMaxBackoffMs` 为上限退避。计数每隔 `reviewCountIntervalMs` 读取一次，全部仓库范围的列表读取也会更新它。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目以及最近一次读取的失败；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
 
 对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
 
@@ -2143,13 +2139,15 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
  * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
- * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
- * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
- * @param repository - one repository to list in, or null for every repository the user can read.
+ * reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed
+ * again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream
+ * lasts. The stream ends when `signal` aborts or the Remote stops.
+ * @param repository - one repository to list in, read on its host only, or null for every repository the user can
+ * read on every host.
  * @param signal - ends the stream.
  * @returns frames, each complete.
  */
-@Remote({ mode: 'stream' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
+@Remote({ mode: 'stream' }) async *reviewLists( repository: ForgeReviewRepository | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
 
 /**
  * Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read:

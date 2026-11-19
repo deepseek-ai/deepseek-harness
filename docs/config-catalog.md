@@ -1232,7 +1232,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:587`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:602`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1300,7 +1300,7 @@ export interface Config {
   reviewListIntervalMs?: number
   /** Milliseconds between two reads of the review page's navigation count while it is shown. */
   reviewCountIntervalMs?: number
-  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  /** Largest delay in milliseconds between two reads of the review page's lists or count on one host after its consecutive failed reads. */
   reviewMaxBackoffMs?: number
   /** Most change requests one review page list shows, capped by each provider's own limit. */
   reviewPageSize?: number
@@ -1337,7 +1337,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:851`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:847`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */

@@ -583,10 +583,6 @@ export interface ChangeRequestSummary {
    * `organization/slug`, when the request asks a team the user belongs to rather than the user.
    */
   readonly viewerRequest: { readonly team: string | null } | null
-  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
-  readonly closingIssues: readonly ChangeRequestIssue[]
-  /** Whether the host reported more closing issues than `closingIssues` holds. */
-  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
 }

@@ -113,6 +113,11 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* A repository below the row of its host. */
+.menuNested {
+  padding-left: 16px;
+}
+
 .menuValue {
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
@@ -223,6 +228,7 @@
 
 .itemText {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -236,25 +242,84 @@
   overflow-wrap: anywhere;
 }
 
+/* An item's small text on at most two lines: "repository#number · author" and the hint in the first column, the update
+   time in the second. The first column's line does not wrap; the hint follows it where both fit and wraps below it
+   where they do not. */
 .itemMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 8px;
   min-width: 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
 }
 
-.itemIssues {
-  display: inline-flex;
-  gap: 2px;
+.itemFacts {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.itemLine {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* Where the line is too narrow the author gives way first, then the repository name; the number is never cut. */
+.itemName {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.itemRepository {
+  flex: 0 1 auto;
+  min-width: 2ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemNumber {
+  flex: none;
+}
+
+.itemAuthor {
+  flex: 0 100000 auto;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemTime {
+  white-space: nowrap;
 }
 
 .itemHint {
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
+}
+
+/* The separator before a hint is drawn in the gap to its left. A hint that starts the second line has that gap outside
+   `.itemFacts`, which clips the separator there. */
+.itemFacts > .itemHint {
+  position: relative;
+  flex: none;
+}
+
+.itemFacts > .itemHint::before {
+  position: absolute;
+  left: -8px;
+  color: var(--dsw-alias-label-tertiary);
+  content: '·';
 }
 
 .itemHint[data-tone='error'] {
@@ -330,7 +395,11 @@
   overflow-wrap: anywhere;
 }
 
-.compactCard .itemMeta {
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  min-width: 0;
   color: var(--dsw-alias-hovercard-label-tertiary);
 }
 
@@ -385,6 +454,21 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.noticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The notices of the hosts that could not be read, after the sections. */
+.notices {
+  padding-top: 10px;
+}
+
+.notices:first-child {
+  padding-top: 4px;
 }
 
 .noticeCommand code {

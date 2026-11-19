@@ -52,6 +52,8 @@ kind: "package-reference"
 
 `rerunChecks` 在 head 流水线有失败作业且没有 pending 作业时重试它。`requestReviews` 用 `mergeRequestSetReviewers` 添加新评审者，用 `mergeRequestReviewerRereview` 再次请求现有评审者；只能有一位评审者的合并请求（如 GitLab 免费版）会拒绝第二位，GitLab 也没有团队评审者。`reviewerCandidates` 在能看到该项目的用户中列出 GitLab 匹配到的最多 20 人，永远不含作者，也都不标记为建议。`updateBranch` 只做变基：GitLab 的变基请求不指明 head，所以提供方先读取 head，head 已变化时以 `stale` 拒绝；GitLab 接受请求后在后台变基。写入从不重试：4xx 答复为拒绝，即 `failed`，但 HTTP 401 为 `unauthenticated`，对合并或批准的 HTTP 409 为 `stale`；5xx 答复、没有状态码的答复和超过 `timeoutMs` 的写入为 `unknown`。
 
+`viewer` 在每个已配置主机上提供 `review-requested`、`authored` 与 `involved` 三个列表，每次读取最多 100 个合并请求，即 GitLab 的分页上限。`listForViewer` 用一次发往 `currentUser` 的 GraphQL 请求读取一个列表：打开状态的合并请求，按最近更新在前。`review-requested` 是仍在等待当前用户评审的合并请求，即当前用户是评审者且状态为 `UNREVIEWED` 或 `REVIEW_STARTED` 的合并请求；`authored` 是当前用户为作者的合并请求。GitLab 没有对应 `involved` 的单个查询，所以它的请求读取两个连接，按更新时间合并，并以两者大小之和作为总数：当前用户评审过且不是其作者的合并请求，以及指派给当前用户、而当前用户既不是作者也不是评审者的合并请求。这两个连接彼此不重叠，也不与另外两个列表重叠。限定仓库时，读取按项目的完整路径限定在一个项目内；路径中有 GitLab 不允许的片段时不发请求，直接返回 `not-found`。每项以 head 流水线的状态作为检查汇总，评审结论按状态读取的规则取 `changes-requested`、`approved` 或 `none`。当前用户在前 20 位评审者之中时，其评审状态决定该项的评审或评审请求；`review-requested` 的每一项都带有评审请求。没有提交的合并请求没有 head，不出现在各项中，但仍计入总数。`countForViewer` 用一次请求读取同样四个连接在所有项目中的大小。`involved` 列表和计数在请求中以用户名指明当前用户：提供方保存主机上最近一次 viewer 读取的答复所对应的用户名，没有保存时多发一次请求读取它；答复对应另一位用户时（例如 `glab` 改以其他账号登录之后），把该读取重复一次。答复中没有用户时为 `unauthenticated`。`readDescription` 用一次 GraphQL 查询读取 `description`、`createdAt`、最多 100 个标签和项目的 id。GitLab 在 Markdown 中写上传文件时不带主机和项目，写成 `/uploads/<32 位十六进制数字>/<file>`，而提供该文件的地址是 `https://<host>/-/project/<project id>/uploads/…`；Markdown 链接或图片、或 HTML 的 `src` 指向上传文件时，描述返回这个地址，与 GitLab 自己的渲染结果一致。标签的 `#rrggbb` 颜色去掉 `#` 后返回，`images` 不映射任何地址。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -66,7 +68,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 配置校验，以及提供方与命令规则注册 |
 | [`src/commands.ts`](src/commands.ts) | forge-session 据以绑定 merge request 的 `glab` 命令规则 |
-| [`src/provider.ts`](src/provider.ts) | URL 映射、分批、关闭 issue 与 diff 缓存，以及操作 |
+| [`src/provider.ts`](src/provider.ts) | URL 映射、分批、关闭 issue 与 diff 缓存、按主机保存的当前用户名，以及操作 |
 | [`src/api.ts`](src/api.ts) | 经 `glab api` 发出的 REST、GraphQL 与写入请求，以及失败映射 |
 | [`src/status.ts`](src/status.ts) | 状态查询构造与快照映射 |
 | [`src/diff.ts`](src/diff.ts) | 钉在版本上的补丁、比较、合并基础与文件文本 |
@@ -75,6 +77,8 @@ kind: "package-reference"
 | [`src/writes.ts`](src/writes.ts) | 经讨论、草稿笔记和批准完成的评审写入与提交 |
 | [`src/position.ts`](src/position.ts) | 由版本的文件 diff 推出 diff 笔记位置与行码 |
 | [`src/overview.ts`](src/overview.ts) | 流水线重试、评审请求、评审者候选与变基 |
+| [`src/viewer.ts`](src/viewer.ts) | viewer 列表、计数与用户名查询，以及摘要映射 |
+| [`src/description.ts`](src/description.ts) | 描述与标签读取，以及上传文件的地址 |
 | [`src/pool.ts`](src/pool.ts) | 有上限的并发 |
 | [`src/glab.ts`](src/glab.ts) | 在宿主上执行 `glab`，清理环境变量并施加限制 |
 | [`src/urls.ts`](src/urls.ts) | 远端、合并请求与 issue URL 解析，以及项目路径校验 |
@@ -110,8 +114,10 @@ kind: "package-reference"
 - **变基不校验 head**——在读取 head 与发出变基请求之间的推送也会被变基，GitLab 在后台变基失败时不会报告。
 - **概览讨论**——不在文件上的讨论会计入 `unresolvedThreads`，但不会作为讨论返回。
 - **机器人与草稿时间**——评论作者从不标记为机器人，草稿笔记带的是读取时间。
+- **viewer 列表**——GitLab 没有团队评审请求，所以列表项从不指明团队。`involved` 包含当前用户评审过或被指派的合并请求，不包含只是提及当前用户、或当前用户只发表过评论的合并请求。列表项不带评审所在的提交，所以评审页无法区分对 head 的批准与对更早提交的批准；列表项也从不报告 `review-required`，因为列表不读取合并状态。列表与计数查询要求 GitLab 版本的 `reviewRequestedMergeRequests` 接受 `reviewStates` 与 `not`；它们在 GitLab 19.5.1 上可用，接受它们的最低版本尚不清楚。
+- **描述**——私有项目的上传图片需要 GitLab 会话，无法加载。GitLab 自己的引用形式（如 `!12`、`#34` 和 `@name`）是纯文本。
 - **只读 CE 字段**——状态查询只读取社区版具备的字段；付费版的必需批准、代码所有者、建议的评审者和合并结果流水线都不读取。
-- **速率限制**——每次轮询每批花费一个 GraphQL 查询，每个更新时间变化的合并请求再花费一个 REST 请求；一次评审读取每 100 个讨论花费一个 REST 请求和一个 GraphQL 请求，版本、草稿笔记和批准情况各一个，每个尚未缓存的过期文件最多两个；一次写入先读取最新版本，一条评论只读取一次其版本的文件。
+- **速率限制**——每次轮询每批花费一个 GraphQL 查询，每个更新时间变化的合并请求再花费一个 REST 请求；一次评审读取每 100 个讨论花费一个 REST 请求和一个 GraphQL 请求，版本、草稿笔记和批准情况各一个，每个尚未缓存的过期文件最多两个；一次写入先读取最新版本，一条评论只读取一次其版本的文件；一次 viewer 列表读取花费一个 GraphQL 请求，一次计数花费一个；读取 `involved` 列表或计数时，如果主机上还没有任何 viewer 读取给出过用户名，再为用户名花费一个。
 
 <a id="dev-note"></a>
 ### 开发备注

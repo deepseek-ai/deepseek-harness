@@ -1636,10 +1636,10 @@ describe('mountForgePanel review page', () => {
     const f = await fixture()
     const page = reviewPage(f)
     const signal = new AbortController().signal
-    page.openLists('', signal)
+    page.openLists(null, signal)
     expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith(null, signal)
-    page.openLists('octo/demo', signal)
-    expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith({ owner: 'octo', name: 'demo' }, signal)
+    page.openLists({ host: 'gitlab.example', owner: 'group/sub', name: 'app' }, signal)
+    expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith({ host: 'gitlab.example', owner: 'group/sub', name: 'app' }, signal)
     page.openChangeRequest(url, signal)
     expect(f.forgePanel.reviewChangeRequest).toHaveBeenCalledWith(url, signal)
     expect(await page.readDescription(url, signal)).toEqual({ ok: true, value: description('Body') })

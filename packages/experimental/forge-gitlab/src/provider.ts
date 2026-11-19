@@ -2,13 +2,15 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList,
-  ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate,
-  ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, MergeRequest,
+  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot,
+  ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData,
+  ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
+  ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { GitLabApi } from './api.ts'
 import { readCommits } from './commits.ts'
+import { readDescription } from './description.ts'
 import { comparePatch, fileTextOf, isCommit, mergeBaseOf, newestVersion, textPatch, versionFileDiffs, versionPatch } from './diff.ts'
 import type { GlabRunner } from './glab.ts'
 import { gitLabReviewerCandidates, requestGitLabReviews, rerunGitLabChecks, updateGitLabBranch } from './overview.ts'
@@ -21,6 +23,7 @@ import {
 } from './status.ts'
 import type { JobNode, MergeRequestNode } from './status.ts'
 import { checkedProject, encodedPath, mergeRequestPath, parseMergeRequestUrl, parseRemoteUrl, repositoryOf } from './urls.ts'
+import { countViewerLists, readInvolvedList, readViewerList, readViewerName, VIEWER_FILTERS, VIEWER_PAGE } from './viewer.ts'
 import { submitGitLabReview, writeGitLabReview } from './writes.ts'
 import type { VersionFiles } from './writes.ts'
 
@@ -69,8 +72,11 @@ export class GitLabProvider implements ForgeProvider {
   readonly hosts: readonly string[]
   readonly label = 'GitLab'
   readonly changeRequestNoun = 'merge-request'
+  readonly viewer: ForgeViewerCapability
   private readonly served: ReadonlySet<string>
   private readonly api: GitLabApi
+  /** Username of the signed-in user by host, as the latest viewer read on the host named it. */
+  private readonly viewers = new Map<string, string>()
   /** Closing issues by merge request; one entry per merge request this provider polled. */
   private readonly closing = new Map<ChangeRequestKey, ClosingIssues>()
   /** Diff version patches by merge request and version, least recently read first. */
@@ -88,6 +94,50 @@ export class GitLabProvider implements ForgeProvider {
     this.api = new GitLabApi(glab)
     this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
     this.served = new Set(this.hosts)
+    this.viewer = { hosts: this.hosts, filters: VIEWER_FILTERS, maxItems: VIEWER_PAGE }
+  }
+
+  /**
+   * Read one list of the signed-in user's open merge requests through one GraphQL request; the `involved` list names
+   * the user in its request.
+   * @see readViewerList
+   * @see readInvolvedList
+   * @see GitLabProvider.asViewer
+   * @throws when the limit is not a positive integer no greater than {@link VIEWER_PAGE}.
+   */
+  async listForViewer(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure> {
+    const { host, filter, limit } = query
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > VIEWER_PAGE) {
+      throw new Error(`forge-gitlab: viewer list limit must be a positive integer no greater than ${VIEWER_PAGE}`)
+    }
+    if (filter === 'involved') return await this.asViewer(host, async me => await readInvolvedList(this.api, query, me, signal), signal)
+    const list = await readViewerList(this.api, filter, query, signal)
+    if (!('code' in list)) this.viewers.set(host, list.viewer)
+    return list
+  }
+
+  /**
+   * Count the signed-in user's open merge requests in every list through one GraphQL request, which names the user.
+   * @see countViewerLists
+   * @see GitLabProvider.asViewer
+   */
+  async countForViewer(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> {
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    const counted = await this.asViewer(host, async me => await countViewerLists(this.api, host, me, signal), signal)
+    return 'code' in counted ? counted : counted.counts
+  }
+
+  /**
+   * Read a merge request's description and labels through GraphQL.
+   * @see readDescription
+   */
+  async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readDescription(this.api, ref, signal)
   }
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
@@ -286,6 +336,31 @@ export class GitLabProvider implements ForgeProvider {
     const failure = this.hostFailure(ref.repository.host)
     if (failure !== undefined) return failure
     return await readReviewThreads(this.api, ref, headSha, this.limits, async file => await this.positionPatch(ref, file, signal), signal)
+  }
+
+  /**
+   * Run a read that names the signed-in user of `host` in its request: with the username the latest viewer read on the
+   * host returned, which one request reads first when there is none. An answer that names another user, as after
+   * `glab` signed in as someone else, replaces the kept username, and the read runs once more with it.
+   * @param host - host the read is on.
+   * @param read - the read for one username, whose result names the user GitLab answered as.
+   * @param signal - cancellation of the username read.
+   * @returns the result of the last read, or why GitLab named no user.
+   */
+  private async asViewer<Result extends { readonly viewer: string }>(
+    host: string, read: (me: string) => Promise<Result | ForgeFailure>, signal: AbortSignal,
+  ): Promise<Result | ForgeFailure> {
+    let me = this.viewers.get(host)
+    if (me === undefined) {
+      const named = await readViewerName(this.api, host, signal)
+      if (typeof named !== 'string') return named
+      me = named
+      this.viewers.set(host, me)
+    }
+    const result = await read(me)
+    if ('code' in result || result.viewer === me) return result
+    this.viewers.set(host, result.viewer)
+    return await read(result.viewer)
   }
 
   /**

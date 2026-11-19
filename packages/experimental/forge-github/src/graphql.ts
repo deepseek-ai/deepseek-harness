@@ -142,8 +142,8 @@ export interface SnapshotPages {
 
 const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
 
-/** The closing issues references of a pull request, the snapshot's and a viewer list item's. */
-export const closingIssuesSchema = z.object({
+/** The closing issues references of a pull request snapshot. */
+const closingIssuesSchema = z.object({
   totalCount: z.number().int().nonnegative(),
   nodes: z.array(z.object({
     number: z.number().int().positive(),

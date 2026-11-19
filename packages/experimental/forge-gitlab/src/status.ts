@@ -152,7 +152,21 @@ export function needsMergeCheck(node: MergeRequestNode): boolean {
 }
 
 /** Review states of a reviewer whose review is still awaited. */
-const AWAITED = new Set(['UNREVIEWED', 'REVIEW_STARTED'])
+export const AWAITED_REVIEW_STATES: ReadonlySet<string> = new Set(['UNREVIEWED', 'REVIEW_STARTED'])
+
+/** One reviewer's review state as GitLab returns it with a merge request. */
+export interface ReviewerInteraction {
+  /** The reviewer's interaction with the merge request, or null when GitLab reports none. */
+  readonly mergeRequestInteraction: { readonly reviewState: string | null } | null
+}
+
+/** The approval and reviewers of a merge request, which decide its aggregate review outcome with its merge status. */
+export interface ReviewedMergeRequest {
+  /** Whether GitLab reports the merge request approved. */
+  readonly approved: boolean
+  /** The reviewers GitLab listed. */
+  readonly reviewers: { readonly nodes: readonly ReviewerInteraction[] }
+}
 
 /** A merge request whose status is known, and the parts of it read elsewhere. */
 export interface StatusParts {
@@ -238,8 +252,15 @@ function mergeMethods(fastForwardOnly: boolean, node: MergeRequestNode): MergeMe
   return node.squash ? ['squash', base] : [base, 'squash']
 }
 
-/** A reviewer who requested changes decides first, then an approval, then GitLab's demand for one. */
-function reviewDecision(node: MergeRequestNode, status: string): ReviewDecision {
+/**
+ * Decide a merge request's aggregate review outcome: a reviewer who requested changes decides first, then an approval,
+ * then GitLab's demand for one.
+ * @param node - the merge request's approval and reviewers.
+ * @param status - the merge request's `detailedMergeStatus`, or null for a read that does not select it, which then
+ * reports a demanded approval as `none`.
+ * @returns the review decision.
+ */
+export function reviewDecision(node: ReviewedMergeRequest, status: string | null): ReviewDecision {
   if (node.reviewers.nodes.some(reviewer => reviewer.mergeRequestInteraction?.reviewState === 'REQUESTED_CHANGES')) return 'changes-requested'
   if (node.approved) return 'approved'
   if (status === 'NOT_APPROVED') return 'review-required'
@@ -257,10 +278,9 @@ function reviewers(node: MergeRequestNode, host: string): ChangeRequestReviewer[
     listed.push(entry)
   }
   for (const reviewer of node.reviewers.nodes) {
-    const state = reviewer.mergeRequestInteraction?.reviewState ?? 'UNREVIEWED'
     add(reviewer.username, {
-      kind: reviewer.bot ? 'bot' : 'user', login: reviewer.username, avatarUrl: avatarUrlOf(host, reviewer.avatarUrl), requested: AWAITED.has(state),
-      codeOwner: false, verdict: verdictOf(state), reviewedSha: null,
+      kind: reviewer.bot ? 'bot' : 'user', login: reviewer.username, avatarUrl: avatarUrlOf(host, reviewer.avatarUrl), codeOwner: false,
+      ...reviewOf(reviewer), reviewedSha: null,
     })
   }
   for (const approver of node.approvedBy?.nodes ?? []) {
@@ -270,6 +290,16 @@ function reviewers(node: MergeRequestNode, host: string): ChangeRequestReviewer[
     })
   }
   return listed
+}
+
+/**
+ * Read one reviewer's review state; a reviewer GitLab reports no state for has not reviewed.
+ * @param reviewer - the reviewer as GitLab returned it.
+ * @returns whether the reviewer's review is still awaited, and the outcome of their latest review.
+ */
+export function reviewOf(reviewer: ReviewerInteraction): Pick<ChangeRequestReviewer, 'requested' | 'verdict'> {
+  const state = reviewer.mergeRequestInteraction?.reviewState ?? 'UNREVIEWED'
+  return { requested: AWAITED_REVIEW_STATES.has(state), verdict: verdictOf(state) }
 }
 
 /** A reviewer state as the outcome of their latest review; states outside the documented set read as none. */
@@ -316,8 +346,12 @@ function jobState(job: JobNode): CheckState {
   }
 }
 
-/** A pipeline status as the combined check outcome; a merge request without a pipeline has none. */
-function rollup(status: string | null): ChecksRollup {
+/**
+ * Map a pipeline status to the combined check outcome; statuses outside the documented set read as pending.
+ * @param status - status of the head pipeline, or null for a merge request without a pipeline.
+ * @returns the combined outcome, `none` without a pipeline.
+ */
+export function rollup(status: string | null): ChecksRollup {
   switch (status) {
     case null: return 'none'
     case 'SUCCESS':

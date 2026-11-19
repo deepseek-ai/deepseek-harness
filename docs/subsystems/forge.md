@@ -949,10 +949,6 @@ interface ChangeRequestSummary {
    * `organization/slug`, when the request asks a team the user belongs to rather than the user.
    */
   readonly viewerRequest: { readonly team: string | null } | null
-  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
-  readonly closingIssues: readonly ChangeRequestIssue[]
-  /** Whether the host reported more closing issues than `closingIssues` holds. */
-  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
 }
@@ -1620,7 +1616,7 @@ interface ForgeLocalChanges {
 
 ### Review page
 
-The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and backs off after failed rounds up to `reviewMaxBackoffMs`; the count reads every `reviewCountIntervalMs`, and lists of every repository refresh it too. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, and the failure of the latest read; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
+The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, while the other hosts keep their cadence; the count reads every `reviewCountIntervalMs` in the same way, and lists of every repository refresh it too. A scope is every repository of every host or one `ForgeReviewRepository`, which names its host and is read on that host only. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, the failure of the latest read, and, for a host that refused the viewer, the sign-in command its provider's `readiness` names; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
 
 The chat tab starts in the blank Session `connectWorkspace` resolves and records the change request with `reviewStage`; the Host keeps that choice in memory and binds the change request once the Session's next message enters its inbox, so an untouched blank stays unbound.
 
@@ -2139,13 +2135,15 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
  * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
- * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
- * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
- * @param repository - one repository to list in, or null for every repository the user can read.
+ * reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed
+ * again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream
+ * lasts. The stream ends when `signal` aborts or the Remote stops.
+ * @param repository - one repository to list in, read on its host only, or null for every repository the user can
+ * read on every host.
  * @param signal - ends the stream.
  * @returns frames, each complete.
  */
-@Remote({ mode: 'stream' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
+@Remote({ mode: 'stream' }) async *reviewLists( repository: ForgeReviewRepository | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
 
 /**
  * Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read:

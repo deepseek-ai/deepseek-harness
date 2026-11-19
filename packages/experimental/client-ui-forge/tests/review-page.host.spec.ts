@@ -535,7 +535,7 @@ describe('forgePanel review lists', () => {
     const { provider, registration } = await registerViewer(opened)
     const read = await lists.until(frame => !frame.reading && frame.hosts[0]?.viewer === 'mona')
     const listed = { items: [], total: 2, fetchedAt: ANY_TIME, failure: null }
-    expect(read.hosts).toEqual([{ forge: 'viewer', host: 'view.test', viewer: 'mona', lists: { 'review-requested': listed, authored: listed } }])
+    expect(read.hosts).toEqual([{ forge: 'viewer', host: 'view.test', viewer: 'mona', signIn: null, lists: { 'review-requested': listed, authored: listed } }])
     expect(provider.queries).toEqual([
       { host: 'view.test', filter: 'review-requested', repository: null, limit: 10 },
       { host: 'view.test', filter: 'authored', repository: null, limit: 10 },
@@ -552,12 +552,27 @@ describe('forgePanel review lists', () => {
     const { provider } = await registerViewer(opened)
     provider.list = () => Promise.reject(new Error('gh crashed'))
     const warn = vi.spyOn(opened.ctx.logger, 'warn').mockImplementation(() => undefined)
-    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists({ owner: 'octo', name: 'demo' }, stop))
+    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists({ host: 'view.test', owner: 'octo', name: 'demo' }, stop))
 
     const failed = await lists.until(frame => !frame.reading && (frame.hosts[0]?.lists.authored?.failure ?? null) !== null)
     expect(failed.hosts[0]?.lists['review-requested']?.failure).toEqual({ code: 'unavailable', message: 'gh crashed' })
     expect(provider.queries).toEqual([{ host: 'view.test', filter: 'review-requested', repository: { owner: 'octo', name: 'demo' }, limit: 30 }])
     expect(warn).toHaveBeenCalledWith('forge-panel: reading a review list failed: Error: gh crashed')
+  })
+
+  it('names the provider\'s sign-in command beside the lists of a host that refuses the viewer', async () => {
+    const opened = await page()
+    const { provider } = await registerViewer(opened)
+    provider.list = () => Promise.resolve({ code: 'unauthenticated', message: 'sign in' })
+    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists(null, stop))
+
+    // A provider that names no command leaves the host without one.
+    const unnamed = await lists.until(frame => !frame.reading && (frame.hosts[0]?.lists.authored?.failure ?? null) !== null)
+    expect(unnamed.hosts[0]?.signIn).toBeNull()
+    provider.readiness = () => Promise.resolve({ state: 'unauthenticated', message: 'sign in', signIn: { command: 'viewer auth login' } })
+    await opened.ctx.forgePanel.reviewRefresh(signal)
+    const refused = await lists.until(frame => !frame.reading && (frame.hosts[0]?.signIn ?? null) !== null)
+    expect(refused.hosts[0]).toEqual(expect.objectContaining({ host: 'view.test', viewer: null, signIn: 'viewer auth login' }))
   })
 
   it('streams the review request count from count reads and from lists of every repository', async () => {

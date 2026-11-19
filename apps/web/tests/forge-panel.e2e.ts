@@ -230,6 +230,28 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   })
   const overview = existsSync(join(here, 'overview.json')) ? JSON.parse(readFileSync(join(here, 'overview.json'), 'utf8')) : {}
   const none = { totalCount: 0, nodes: [] }
+  if (query.includes('search(type: ISSUE')) {
+    // The review page's lists and their count, which only a case that writes lists.json shows.
+    if (!existsSync(join(here, 'lists.json'))) {
+      process.stderr.write('no lists fixture\\n')
+      process.exit(1)
+    }
+    const lists = JSON.parse(readFileSync(join(here, 'lists.json'), 'utf8'))
+    if (query.includes('review: search(')) {
+      process.stdout.write(JSON.stringify({ data: { review: { issueCount: lists['review-requested'].length },
+        authored: { issueCount: lists.authored.length }, involved: { issueCount: lists.involved.length } } }))
+      process.exit(0)
+    }
+    const q = args.find(arg => arg.startsWith('q=')).slice(2)
+    const filter = q.includes('involves:@me') ? 'involved' : q.includes('review-requested:@me') ? 'review-requested' : 'authored'
+    const row = number => ({ __typename: 'PullRequest', number, title: 'Pull request ' + number, url: 'https://github.com/octo/demo/pull/' + number, isDraft: false,
+      updatedAt: new Date(Date.now() - 5 * 60000).toISOString(), headRefOid: 'a'.repeat(40), reviewDecision: null,
+      repository: { name: 'demo', owner: { login: 'octo' } }, author: { __typename: 'User', login: 'octo', avatarUrl: null },
+      commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] }, viewerLatestReview: null,
+      viewerLatestReviewRequest: filter === 'review-requested' ? { requestedReviewer: { __typename: 'User' } } : null })
+    process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, search: { issueCount: lists[filter].length, nodes: lists[filter].map(row) } } }))
+    process.exit(0)
+  }
   const requested = (state.requested ?? []).map(login => ({ asCodeOwner: false, requestedReviewer: { __typename: 'User', login, avatarUrl: null } }))
   const requests = overview.reviewRequests ?? none
   const reviewing = { totalCount: requests.totalCount + requested.length, nodes: [...requests.nodes, ...requested] }
@@ -473,11 +495,42 @@ interface PanelLaunch {
 }
 
 /**
+ * A GitLab CLI double for the review page's lists on gitlab.com: user `lin` is asked to review merge request 12 of the
+ * nested-group project `group/sub/app`, updated three minutes before each read, and has no other merge request.
+ */
+const GLAB = `#!/usr/bin/env node
+import { readFileSync } from 'node:fs'
+const args = process.argv.slice(2)
+if (args[0] === 'api' && args[1] === 'graphql') {
+  const { query, variables } = JSON.parse(readFileSync(0, 'utf8'))
+  const row = { iid: '12', title: 'Fix the gateway timeout', webUrl: 'https://gitlab.com/group/sub/app/-/merge_requests/12', draft: false,
+    updatedAt: new Date(Date.now() - 3 * 60000).toISOString(), diffHeadSha: 'c'.repeat(40), approved: false,
+    author: { username: 'mona', avatarUrl: null, bot: false }, project: { fullPath: 'group/sub/app' }, headPipeline: { status: 'SUCCESS' },
+    reviewers: { nodes: [{ username: 'lin', mergeRequestInteraction: { reviewState: 'UNREVIEWED' } }] } }
+  const page = nodes => ({ count: nodes.length, nodes })
+  const listed = variables.project === null || variables.project === 'group/sub/app' ? [row] : []
+  const user = query.includes('awaited:') ? { awaited: { count: 1 }, authored: { count: 0 }, reviewed: { count: 0 }, assigned: { count: 0 } }
+    : query.includes('reviewed:') ? { reviewed: page([]), assigned: page([]) }
+      : query.includes('list: reviewRequestedMergeRequests') ? { list: page(listed) }
+        : query.includes('list: authoredMergeRequests') ? { list: page([]) } : {}
+  process.stdout.write(JSON.stringify({ data: { currentUser: { username: 'lin', ...user } } }))
+  process.exit(0)
+}
+if (args[0] === 'api') {
+  process.stdout.write(JSON.stringify({ username: 'lin' }))
+  process.exit(0)
+}
+process.stderr.write('unexpected glab call\\n')
+process.exit(1)
+`
+
+/**
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
  * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup through `bash` or a PTC program.
- * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, diff output limit, and
- * whether the extension fixture plugin loads.
+ * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, diff output limit,
+ * whether the extension fixture plugin loads, the pull requests each review page list of github.com holds, and whether
+ * the GitLab provider runs {@link GLAB} instead of the machine's GitLab CLI.
  * @returns the scaffold, page, and checkout.
  */
 async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' | 'ptc-reference' = 'normal',
@@ -488,6 +541,8 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
     missingSandbox?: boolean
     maxDiffBytes?: number
     extension?: boolean
+    lists?: Readonly<Record<'review-requested' | 'authored' | 'involved', readonly number[]>>
+    glab?: boolean
   } = {}): Promise<PanelLaunch> {
   const { desktop } = options
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
@@ -502,12 +557,19 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   const gh = join(root, 'gh')
   await writeFile(gh, GH)
   await chmod(gh, 0o755)
+  if (options.lists !== undefined) await writeFile(join(root, 'lists.json'), JSON.stringify(options.lists))
+  const glab = join(root, 'glab')
+  if (options.glab === true) {
+    await writeFile(glab, GLAB)
+    await chmod(glab, 0o755)
+  }
   await writeFile(join(root, 'pr-7.diff'), PR7_DIFF)
   await writeFile(join(root, 'pr-9.diff'), PR9_DIFF)
   const panelText = `${Array.from({ length: 20 }, (_, index) => panelLine(index + 1, 'new')).join('\n')}\n`
   await writeFile(join(root, 'contents.json'), JSON.stringify({ [`src/panel.ts@${HEAD7}`]: panelText }))
   const overlay = join(root, 'forge.patch.yml')
   await writeFile(overlay, `- id: forge-github\n  config: ${JSON.stringify({ ghCommand: gh })}\n`
+    + (options.glab === true ? `- id: forge-gitlab\n  config: ${JSON.stringify({ glabCommand: glab })}\n` : '')
     + (options.maxDiffBytes === undefined ? '' : `- id: forge-panel\n  config: ${JSON.stringify({ maxDiffBytes: options.maxDiffBytes })}\n`)
     + (options.missingSandbox ? `- id: sandbox\n  config: ${JSON.stringify({ runnerCommand: [join(root, 'missing-sandbox')], runnerFailureSignatures: ['sandbox startup failed'] })}\n` : ''))
   const override = join(root, 'replay.override.json')
@@ -764,6 +826,54 @@ it.skipIf(MODE === 'record')('reports incomplete filter configuration and retrie
   await changes.getByRole('button', { name: '重试', exact: true }).click()
   await changes.locator('[data-forge-diff-file="README.md"]').getByText('changed', { exact: true }).waitFor()
   expect(await changes.getByRole('status').count()).toBe(0)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('lists the change requests of a GitHub and a GitLab host on the Code review page and narrows them to one host or project', async () => {
+  const { scaffold, page, tripwire } = await launchPanel('web-e2e-forge-review-lists', 'normal', {
+    glab: true, lists: { 'review-requested': [7], 'authored': [], 'involved': [] },
+  })
+  // The scaffold expects its recorded model call to be consumed, so the borrowed conversation runs first.
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  const entry = page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '代码评审', exact: true })
+  // The navigation entry counts the requests of both hosts.
+  await page.getByRole('button', { name: '代码评审', exact: true, description: '2 个变更请求等你评审' }).waitFor()
+  await entry.click()
+  const list = page.locator('[data-forge-review-list]')
+  const requested = list.locator('[data-forge-review-section="review-requested"]')
+  const items = requested.locator('[data-forge-review-item]')
+  const shown = async (): Promise<(string | null)[]> => await items.evaluateAll(rows => rows.map(row => row.textContent))
+  const MERGE = 'https://gitlab.com/group/sub/app/-/merge_requests/12'
+
+  // Both hosts' change requests show together, most recently updated first, each on a card without a closing issue.
+  await list.locator(`[data-forge-review-item="${MERGE}"]`).waitFor()
+  await list.locator(`[data-forge-review-item="${PULL}"]`).waitFor()
+  await expect.poll(shown).toEqual([
+    expect.stringMatching(/^Fix the gateway timeoutapp#12·mona\d+分钟$/), expect.stringMatching(/^Pull request 7demo#7·octo\d+分钟$/),
+  ])
+  expect(await requested.getByRole('button', { name: /待我评审/ }).textContent()).toBe('待我评审2')
+  expect(await list.locator('[data-forge-review-failure]').count()).toBe(0)
+
+  // The repository submenu offers each host with its repositories below it; a host narrows the lists on the page.
+  await list.getByRole('button', { name: '筛选', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^仓库/ }).click()
+  const offered = page.getByRole('menu').last().getByRole('menuitem')
+  await expect.poll(async () => await offered.allTextContents()).toEqual(['全部仓库', 'github.com', 'octo/demo', 'gitlab.com', 'group/sub/app'])
+  await offered.filter({ hasText: 'gitlab.com' }).click()
+  // One repository is left in the lists, so its name leaves the card.
+  await expect.poll(shown).toEqual([expect.stringMatching(/^Fix the gateway timeout#12·mona\d+分钟$/)])
+  expect(await requested.getByRole('button', { name: /待我评审/ }).textContent()).toBe('待我评审1')
+
+  // A project in a nested group is one choice, read on its own host only: GitHub is not asked for it, so no host fails.
+  await list.getByRole('button', { name: '筛选', exact: true }).click()
+  expect(await page.getByRole('menuitem', { name: /^仓库/ }).textContent()).toBe('仓库gitlab.com')
+  await page.getByRole('menuitem', { name: /^仓库/ }).click()
+  await page.getByRole('menu').last().getByRole('menuitem', { name: 'group/sub/app', exact: true }).click()
+  await expect.poll(shown).toEqual([expect.stringMatching(/^Fix the gateway timeout#12·mona\d+分钟$/)])
+  expect(await list.locator('[data-forge-review-item]').count()).toBe(1)
+  expect(await list.locator('[data-forge-review-failure]').count()).toBe(0)
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
