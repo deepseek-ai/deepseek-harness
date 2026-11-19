@@ -38,6 +38,12 @@ export interface WebSearchRequest {
    * bound regardless.
    */
   readonly maxResults?: number
+  /**
+   * Provider route id of the model request this search serves. While no search
+   * provider is configured, the seam selects with it, as `searchReady()` selects
+   * with its argument. Omitted = the search serves no model request.
+   */
+  readonly llmProvider?: string
 }
 
 /**

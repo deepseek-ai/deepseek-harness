@@ -274,6 +274,19 @@ describe('ThreadCard', () => {
     expect(shared.openLink).toHaveBeenCalledWith(thread.comments[0]?.url)
   })
 
+  it('names the destination of the quote and reports a refusal once the quote settles', async () => {
+    const shared = actions({
+      addToInput: vi.fn(async () => await Promise.reject(new Error('closed'))),
+      quoteCopy: { add: 'reviewPage.addToChat', added: 'reviewPage.addedToChat', failed: 'reviewPage.addToChatFailed' },
+    })
+    const view = render(<ThreadCard thread={reviewThread()} place={LINE} actions={shared} t={t} />)
+    expect(view.queryByRole('button', { name: en['review.addToInput'] })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Add to chat' }))
+    expect(shared.inputFailed).not.toHaveBeenCalled()
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    expect(shared.inputFailed).toHaveBeenCalledOnce()
+  })
+
   it('names a file thread and offers no page without one', () => {
     const view = render(<ThreadCard thread={reviewThread({ subject: 'file', current: null, original: null, comments: [reviewComment({ url: null })] })}
       place={{ kind: 'file' }} actions={actions()} t={t} />)

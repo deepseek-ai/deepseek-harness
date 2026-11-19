@@ -1,8 +1,8 @@
-/** Session approval for explicit physical pointer moves, shared by capable CUA providers. */
+/** Session approval for explicit system mouse input, shared by capable CUA providers. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
-import { NativeError } from './native-client.ts'
+import { NativeError, type NativeClient } from './native-client.ts'
 import { applicationAccessDisplay } from './locales.ts'
 import { mouseControlPrompt } from './mouse-control-locales.ts'
 
@@ -10,18 +10,40 @@ import { mouseControlPrompt } from './mouse-control-locales.ts'
 export class MouseControl {
   private readonly decisions = new WeakMap<Agent, boolean | 'asking'>()
 
-  constructor(private readonly ctx: Context, private readonly requireApproval: boolean) {}
+  private readonly pressed = new WeakMap<Agent['session'], NativeClient>()
+
+  constructor(private readonly ctx: Context, private readonly requireApproval: boolean) {
+    ctx.on('session/event', (session, event) => {
+      if (event.type !== 'turn/end') return
+      const client = this.pressed.get(session)
+      this.pressed.delete(session)
+      if (client && !client.disposed) {
+        void client.requestCleanup('releaseSystemButton', {}).catch((error: unknown) => {
+          ctx.logger.warn('Could not release system mouse input at turn end: %s', error)
+        })
+      }
+    })
+  }
+
+  /**
+   * Arm turn-end cleanup before posting; cancellation can hide an already dispatched press.
+   * @param agent Owner of the current turn.
+   * @param client Connection that owns and can release the native button.
+   */
+  trackPress(agent: Agent, client: NativeClient): void {
+    this.pressed.set(agent.session, client)
+  }
 
   /**
    * Select the per-call route and any approval required before dispatch.
    * @param agent Agent owning the live Session.
-   * @param requested Whether the caller explicitly requested system-pointer movement.
+   * @param requested Whether the caller explicitly requested system mouse input.
    * @returns Native pointer mode and an optional preparation that must succeed before input.
    */
   resolve(agent: Agent, requested: boolean): { useSystemPointer: boolean; prepare?: (signal: AbortSignal) => Promise<void> } {
     if (!requested) return { useSystemPointer: false }
     if (agent.session.header.origin === 'subagent') {
-      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', "Delegated tasks cannot move the user's pointer. Use a window-directed action or report the required system-pointer gesture to the main task.")
+      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', 'Delegated tasks cannot control the system mouse. Use a window-directed action or report the required system-pointer gesture to the main task.')
     }
     if (!this.requireApproval || this.decisions.get(agent) === true) return { useSystemPointer: true }
     return { useSystemPointer: true, prepare: signal => this.approve(agent, signal) }
@@ -58,6 +80,6 @@ export class MouseControl {
         throw error
       }
     }
-    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer moves and drags for this session. No input was sent. Use pointer-free actions.')
+    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system mouse control for this session. No input was sent. Use pointer-free actions.')
   }
 }

@@ -29,20 +29,20 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeExtensionState, ForgeLensFrame,
-  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
+  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
 } from '../types.ts'
 import { lensVersion } from '../lens-version.ts'
 import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
   ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
+import { sameReviewSource, type RemovedRecord, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { SubmitReview } from './SubmitReview.tsx'
-import type { ReviewSelection, ReviewSource } from './review.ts'
+import type { QuoteCopy, ReviewSelection, ReviewSource } from './review.ts'
 import { BaseMenu } from './BaseMenu.tsx'
-import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
+import { parseChangesAddress, type ChangesSource, type ChangesTarget } from './changes-address.ts'
 import type { ChangesLens, createChangesStore } from './changes-store.ts'
 import { CommitMenu } from './CommitMenu.tsx'
 import { HideTestsSwitch, LensControl, LensMenu, LENSES, ViewedProgress } from './ReviewControls.tsx'
@@ -70,8 +70,8 @@ import type { FileThreads, ThreadActions, ThreadFocus, ThreadWrite } from './Rev
 import { inFileOrder, type ThreadFilter } from './review-threads.ts'
 import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
 import { ThreadList } from './ThreadList.tsx'
-import type { HostStream, PanelSnapshot, StreamSnapshot } from './source.ts'
-import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf } from './status.ts'
+import type { HostStream, NoticeOptions, PanelSnapshot, StreamSnapshot } from './source.ts'
+import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf, type ChangeRequestEntry, type ChangesPanelState } from './status.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -88,9 +88,9 @@ interface Wanted {
 /** Business face of the changes tab body. */
 export interface ChangesTabInjected {
   /** Append a frozen comment to the main input without submitting it. */
-  readonly addReviewToInput: (selection: ReviewSelection) => boolean
+  readonly addReviewToInput: (selection: ReviewSelection) => boolean | Promise<boolean>
   /** Records retained across Session switches and cleared when this tab occurrence closes. */
-  readonly reviewQueue: (tab: Pick<SidebarRightTabInfo['tab'], 'id' | 'signal'>) => ReviewQueue
+  readonly reviewQueue: (tab: Pick<ChangesViewTab, 'id' | 'signal'>) => ReviewQueue
   /** Publish one comment or a completed review; never retries mutations. */
   readonly submitReview: (url: string, request: ForgeReviewRequest) => Promise<RemoteResult<ForgeReviewResult>>
   /**
@@ -142,15 +142,15 @@ export interface ChangesTabInjected {
   /** Write to the review threads or the pending review of a change request; never retries a write. */
   readonly changeRequestReviewWrite: (url: string, write: ForgeReviewWrite) => Promise<RemoteResult<ForgeReviewWriteResult>>
   /** Quote a whole review thread of the change request at `url` in the main input without submitting it. */
-  readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean
+  readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean | Promise<boolean>
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Copy a path to the clipboard and report the outcome. */
   readonly copyPath: (path: string) => void
   /** Ask the Session's Agent to create a change request for its changes, reporting the outcome. */
   readonly createChangeRequest: () => void
-  /** Show a failure notice. */
-  readonly report: (key: ForgePanelKey, params?: Readonly<Record<string, string>>) => void
+  /** Show a notice: a failure unless the options name another tone, with the undo action they carry. */
+  readonly report: (key: ForgePanelKey, options?: NoticeOptions) => void
 }
 
 /** Full props of the changes tab body. */
@@ -161,6 +161,32 @@ export type ChangesTabProps =
   & PropsStore<ReturnType<typeof createChangesStore>>
   & InjectFace<ChangesTabInjected>
   & PropsLocale<typeof NS>
+
+/** The tab facts the changes view reads: its sidebar tab's, or the review page's for one change request. */
+export interface ChangesViewTab extends Pick<SidebarRightTabInfo['tab'], 'visible' | 'navigation' | 'signal'> {
+  /** Identity the view's choices and pending review comments are kept under. */
+  readonly id: string
+  /** Bind the view's refresh to the tab's refresh command; returns the unbinding. */
+  readonly actions: Pick<SidebarRightTabInfo['tab']['actions'], 'bindCommands'>
+}
+
+/** Props of the changes view, which the changes tab and the review page draw. */
+export type ChangesViewProps = Omit<ChangesTabProps, 'useTabInfo' | 'sessionId' | 'usePanel' | 'useAnnotations'> & {
+  /** Tab facts. */
+  readonly tab: ChangesViewTab
+  /** What the view shows. */
+  readonly source: ChangesSource
+  /** The view plugins see, or null on the review page, where plugin slots and annotations do not show. */
+  readonly target: ChangesTarget | null
+  /** The panel facts while known, and whether their stream ended. */
+  readonly snapshot: { readonly state: ChangesPanelState | null; readonly disconnected: boolean } | undefined
+  /** Plugin annotations of the view, or undefined before any. */
+  readonly annotations: ViewAnnotations | undefined
+  /** Open a file of the checkout in the right sidebar, by its absolute path; undefined where no sidebar shows. */
+  readonly openFile: ((path: string) => void) | undefined
+  /** Copy of the quote actions where they quote somewhere other than the Session's input. */
+  readonly quoteCopy?: QuoteCopy | undefined
+}
 
 /** Changes of either source as the view draws them. */
 type ChangesData =
@@ -374,7 +400,7 @@ function badgeOf(file: ForgeDiffFile, data: ChangesData, t: Translate): string {
 
 function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDisabled, onReview, t }: {
   readonly url: string
-  readonly entry: ForgePanelChangeRequest | undefined
+  readonly entry: ChangeRequestEntry | undefined
   /** Commit picker left of the review button. */
   readonly commitMenu: ReactNode
   readonly reviewCount: number
@@ -412,7 +438,7 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
  * that uncommitted changes count; for another scope, what it compares.
  */
 function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, commitMenu, createChangeRequest, t }: {
-  readonly state: ForgePanelState | null
+  readonly state: ChangesPanelState | null
   /** Commit picker of the `branch` scope, left of the create button. */
   readonly commitMenu: ReactNode
   readonly scope: ScopeKind
@@ -517,18 +543,33 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
  * @param props - tab information, the tab's choices, the panel snapshot hook, reads and actions, and copy.
  * @returns the view body.
  */
-export function ChangesTab({
-  useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
-  changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles, changeRequestViewed, setFileViewed,
-  openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, useLenses,
-  useExtensions, useAnnotations, changesLens, renderSlot, t: translate,
-}: ChangesTabProps): ReactNode {
+export function ChangesTab({ useTabInfo, sessionId, usePanel, useAnnotations, ...props }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
-  const { navigation, signal } = tab
   const target = useMemo(() => parseChangesAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`forge-panel: not a changes address "${tab.contentId}"`)
-  const source = target.source
   const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
+  const annotations = useAnnotations(tab.contentId)
+  const tabActions = tab.actions
+  const openFile = useCallback((path: string) => {
+    tabActions.openResource(fileAddressFor(sessionId, undefined, path))
+  }, [tabActions, sessionId])
+  return <ChangesView {...props} tab={tab} source={target.source} target={target} snapshot={snapshot} annotations={annotations}
+    openFile={openFile} />
+}
+
+/**
+ * Render the changes of a Session's checkout or of one change request.
+ * @param props - tab facts, what the view shows, the view's choices, the panel facts, reads and actions, and copy.
+ * @returns the view body.
+ */
+export function ChangesView({
+  tab, source, target, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff, diffBases,
+  localText,
+  localCommits, changeRequestDiff, changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
+  changeRequestViewed, setFileViewed, openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue,
+  submitReview, report, useLenses, useExtensions, changesLens, renderSlot, t: translate,
+}: ChangesViewProps): ReactNode {
+  const { navigation, signal } = tab
   const state = snapshot?.state ?? null
   const entry = source.kind === 'change' ? state?.changeRequests.find(item => item.url === source.url) : undefined
   const { t, host: hostCopy } = useForgeCopy(translate, source.kind === 'change' ? source.url : null, entry?.forge ?? null)
@@ -562,8 +603,8 @@ export function ChangesTab({
         return message
       }
       if (!complete(result.url)) return t('review.unknown')
-      if (request.kind === 'review') report('review.submitted')
-      else report('review.published', hostCopy)
+      if (request.kind === 'review') report('review.submitted', { tone: 'success' })
+      else report('review.published', { tone: 'success', params: hostCopy })
       if (request.kind === 'review') setReviewOpen(false)
       return undefined
     } catch (_error) {
@@ -768,7 +809,7 @@ export function ChangesTab({
   useEffect(() => {
     if (withdrawn === null) return
     actions.filtered(tab.id, null)
-    report('filterLens.removed', { lens: live.current.lensTitle(withdrawn) })
+    report('filterLens.removed', { params: { lens: live.current.lensTitle(withdrawn) } })
   }, [withdrawn, actions, tab.id, report])
   const chooseLens = (next: string | null): void => { actions.filtered(tab.id, next) }
   // The hunks each kept file folds stay folded until the reader shows them for that file; a new result folds again.
@@ -787,7 +828,7 @@ export function ChangesTab({
     }
     return map
   }, [allFiles, kept, shownPaths, foldTitle])
-  const annotations = useAnnotations(tab.contentId) ?? NO_ANNOTATIONS
+  const annotations = viewAnnotations ?? NO_ANNOTATIONS
   // Annotations wait for the Host's limit.
   const annotationLimit = extensions?.maxAnnotationsPerFile
   const shownSource = useMemo(() => data === null ? null : reviewSourceOf(data), [data])
@@ -796,9 +837,9 @@ export function ChangesTab({
   const hostOwner = useMemo(() => data?.kind === 'change' && data.viewed !== null
     ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
   const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
-    if (failure.kind === 'stale') report('viewed.syncStale', hostCopy)
-    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
-    else report('viewed.syncFailed', { ...hostCopy, message: failure.message })
+    if (failure.kind === 'stale') report('viewed.syncStale', { params: hostCopy })
+    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { params: { message: failure.message } })
+    else report('viewed.syncFailed', { params: { ...hostCopy, message: failure.message } })
   })
   const marks = host?.marks ?? localMarks
   // Files marked viewed at their current change, which the file tree draws subdued.
@@ -900,7 +941,7 @@ export function ChangesTab({
         return
       }
       if (result.ok) report('toast.expandStale')
-      else report('toast.expandFailed', { message: result.error.message })
+      else report('toast.expandFailed', { params: { message: result.error.message } })
       update((value) => {
         const { [path]: _text, ...texts } = value.texts
         const { [path]: _open, ...open } = value.open
@@ -929,8 +970,8 @@ export function ChangesTab({
     const list: DiffFileAction[] = [{ label: 'diff.copyPath', run: () => { copyPath(file.path) } }]
     if (file.status === 'deleted') return list
     if (owner.kind === 'local') {
-      if (root !== null) {
-        list.push({ label: 'diff.openFileInSidebar', run: () => { tab.actions.openResource(fileAddressFor(sessionId, undefined, `${root}/${file.path}`)) } })
+      if (root !== null && openFile !== undefined) {
+        list.push({ label: 'diff.openFileInSidebar', run: () => { openFile(`${root}/${file.path}`) } })
       }
     } else {
       const url = owner.fileUrls[file.path]
@@ -954,7 +995,7 @@ export function ChangesTab({
         setReviewError(failure)
         return
       }
-      report(done)
+      report(done, { tone: 'success' })
       setReviewOpen(false)
     } finally {
       reviewRunning.current = false
@@ -1000,11 +1041,15 @@ export function ChangesTab({
     return writeReview(selection.source.url, { kind: 'add-pending', headSha: selection.source.headSha, comment: { path, side, startLine, endLine, body } })
   }
 
+  /** Report a reference or receipt removed from the view and offer to put it back where it was. */
+  const reportRemoved = (removed: RemovedRecord): void => {
+    report('review.recordRemoved', { tone: 'success', undo: () => { if (!queue.restoreRecord(removed)) report('toast.undoFailed') } })
+  }
   const recordActions: ReviewActions = {
     source: shownSource ?? (source.kind === 'local'
       ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope), commits: commitsOf(localScope) }
       : { kind: 'change', url: source.url, headSha: '', commits: changeCommits }),
-    records: queue, addToInput: addReviewToInput, openLink,
+    records: queue, addToInput: addReviewToInput, openLink, quoteCopy, onRemoved: reportRemoved,
   }
   const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]
     .filter(item => sameReviewSource(item.source, recordActions.source)).map(item => item.comment.path))]
@@ -1017,16 +1062,17 @@ export function ChangesTab({
   const threadActions = useMemo((): ThreadActions | null => review === null || url === null ? null : {
     author: prAuthor,
     addToInput: (thread, range) => addThreadToInput(thread, url, range),
+    quoteCopy,
     openLink,
     readText: (commit, path) => changeRequestText(url, commit, path),
-    inputFailed: () => { live.current.report('thread.inputFailed') },
+    inputFailed: () => { live.current.report(quoteCopy?.failed ?? 'thread.inputFailed') },
     focused: focus,
     writes: {
       write: (write: ThreadWrite) => live.current.writeReview(url, { ...write, headSha: review.headSha }),
       reviewStarted: review.pendingReview !== null,
       canReview: review.viewerCanReview,
     },
-  }, [review, url, prAuthor, addThreadToInput, openLink, changeRequestText, focus])
+  }, [review, url, prAuthor, addThreadToInput, quoteCopy, openLink, changeRequestText, focus])
   const fileThreads = useMemo(() => new Map<string, FileThreads>(threadActions === null ? []
     : [...placed.files].map(([path, group]) => [path, { ...group, actions: threadActions }])), [placed.files, threadActions])
   /** Show a file's next unresolved thread in display order after the one last shown, or its first. */
@@ -1141,7 +1187,7 @@ export function ChangesTab({
   // props and state, which the retried render assigns again.
   const callbacks = {
     data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
-    lensTitle, renderSlot, kept, t,
+    lensTitle, renderSlot, kept, reportRemoved, t,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1177,9 +1223,9 @@ export function ChangesTab({
     },
     nextThread: (path) => { live.current.nextThread(path) },
     reach,
-    annotation: (path, item: SourcedAnnotation) => live.current.renderSlot('forge.diff.line.annotation',
+    annotation: (path, item: SourcedAnnotation) => target === null ? null : live.current.renderSlot('forge.diff.line.annotation',
       { target, path, annotation: item.annotation }, { entryKey: item.source }),
-    fileMenu: (file, dismiss) => live.current.renderSlot('forge.changes.file.menu', { target, file, dismiss }),
+    fileMenu: (file, dismiss) => target === null ? null : live.current.renderSlot('forge.changes.file.menu', { target, file, dismiss }),
     unfold: (path) => {
       const { kept: current } = live.current
       setUnfolded(value => ({ kept: current, paths: new Set([...(value.kept === current ? value.paths : []), path]) }))
@@ -1196,9 +1242,11 @@ export function ChangesTab({
   const fileReview = useMemo((): ReviewActions | undefined => shownSource === null ? undefined : {
     source: shownSource,
     addToInput: addReviewToInput,
-    renderActions: owner => live.current.renderSlot('forge.diff.comment.actions', { target, ...owner }),
+    quoteCopy,
+    renderActions: owner => target === null ? null : live.current.renderSlot('forge.diff.comment.actions', { target, ...owner }),
     records: queue, openLink, reviewStarted,
     onQuoted: (selection) => { if (!queue.recordAgent(selection)) live.current.report('review.saveFailed') },
+    onRemoved: (removed) => { live.current.reportRemoved(removed) },
     publishingBlocked,
     ...queueable ? { queue: (selection: ReviewSelection) => live.current.addPending(selection) } : {},
     ...single ? {
@@ -1207,7 +1255,7 @@ export function ChangesTab({
           url => queue.published(selection, url))
         : Promise.resolve(live.current.t('review.stale')),
     } : {},
-  }, [shownSource, addReviewToInput, queue, openLink, reviewStarted, publishingBlocked, queueable, single, target])
+  }, [shownSource, addReviewToInput, quoteCopy, queue, openLink, reviewStarted, publishingBlocked, queueable, single, target])
 
   let body: ReactNode
   if (data === null) {
@@ -1349,7 +1397,7 @@ export function ChangesTab({
             </span>
           )}
           <span className={css.spacer} data-fold-spacer="" />
-          <span className={css.foldPlugins}>{renderSlot('forge.changes.toolbar', { target, form: 'bar', close: noop })}</span>
+          <span className={css.foldPlugins}>{target !== null && renderSlot('forge.changes.toolbar', { target, form: 'bar', close: noop })}</span>
           {/* A truncated read keeps the list, whose footer says so, even when it kept no thread. */}
           {review !== null && (review.threads.length > 0 || review.truncated) && (
             <button ref={threadsToggle} type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
@@ -1399,7 +1447,7 @@ export function ChangesTab({
               anyExpanded, hasFiles: files.length > 0, toggleExpansion, split, toggleSplit, wrap, toggleWrap,
               hideTests: allFiles.length > 0 ? hideTests : undefined, toggleTests, refresh,
               lenses: allFiles.length > 0 && activeLens === null ? lensChoices : [], chooseLens,
-              plugins: close => renderSlot('forge.changes.toolbar', { target, form: 'menu', close }),
+              plugins: close => target === null ? null : renderSlot('forge.changes.toolbar', { target, form: 'menu', close }),
             }} t={t} />
           </span>
         </div>

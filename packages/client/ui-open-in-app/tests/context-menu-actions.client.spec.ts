@@ -47,7 +47,7 @@ async function boot() {
     .mockResolvedValue({ status: 'saved', path: '/downloads/file.svg' })
   const copyImage = vi.fn<(source: FileActionSource) => Promise<void>>().mockResolvedValue()
   const fileActions = { save, copyImage, canSaveAs: true }
-  const sessions = createSnapshotStore({ byId: { [sessionId]: { cwd: '/workspace' } } })
+  const sessions = createSnapshotStore({ byId: { [sessionId]: { cwd: '/workspace' } }, projectionsBySession: {} })
   const sidebar = { openResourceIn: vi.fn(), openTabIn: vi.fn() }
   const browserTab = vi.fn(() => ({}))
   const directoryFetch = vi.fn(async () => new Response(JSON.stringify({ apps: ['vscode', 'finder'] })))
@@ -406,10 +406,10 @@ it('offers only folder reveal and path copy, retaining the captured directory', 
   const menu = await h.resolve(target)
   expect(menu.source.getSnapshot().map(item => item.id)).toEqual(['open-in-app.directory/reveal', 'open-in-app.directory/copyPath'])
   expect(h.remote.workspaceFiles.stat).not.toHaveBeenCalled()
-  h.sessions.set({ byId: { [sessionId]: { cwd: '/changed' } } })
+  h.sessions.set({ byId: { [sessionId]: { cwd: '/changed' } }, projectionsBySession: {} })
   menu.select('open-in-app.directory/reveal')
   await vi.waitFor(() => { expect(h.remote.session.openWorkspacePath).toHaveBeenCalledWith({ path: '/workspace/src', action: 'reveal' }) })
-  h.sessions.set({ byId: { [sessionId]: { cwd: '/workspace' } } })
+  h.sessions.set({ byId: { [sessionId]: { cwd: '/workspace' } }, projectionsBySession: {} })
   await h.choose(target, 'open-in-app.directory/copyPath')
   expect(h.writeText).toHaveBeenLastCalledWith('/workspace/src')
   h.paths.desktop.set(false)

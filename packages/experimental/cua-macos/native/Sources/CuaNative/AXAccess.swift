@@ -375,7 +375,7 @@ final class AXAccess {
         }
         try setAttribute(element, target.attribute, argument, expectedRole: target.role)
     }
-    private enum AttributeValueKind {
+    enum AttributeValueKind: CaseIterable {
         case string, boolean, number, point, size, range
     }
     /// Convert one direct JSON argument to the Core Foundation value expected by the attribute's live type.
@@ -421,13 +421,17 @@ final class AXAccess {
             return value
         }
     }
-    private static func valueKind(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> AttributeValueKind {
+    /// The value kind the attribute name determines without an observed element.
+    static func knownValueKind(attribute: String) -> AttributeValueKind? {
         switch attribute {
         case "AXPosition": return .point
         case "AXSize": return .size
         case "AXSelectedTextRange": return .range
-        default: break
+        default: return nil
         }
+    }
+    private static func valueKind(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> AttributeValueKind {
+        if let known = knownValueKind(attribute: attribute) { return known }
         if let current { return try inferredKind(current, attribute: attribute) }
         switch argument {
         case .string: return .string

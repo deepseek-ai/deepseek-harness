@@ -315,6 +315,7 @@ The [shared runtime lock](scripts/primary-runtime/lock.json) records each distri
 | [`openpyxl`](https://foss.heptapod.net/openpyxl/openpyxl) | 3.1.5 | MIT |
 | [`pandas`](https://github.com/pandas-dev/pandas) | 3.0.1 | BSD-3-Clause |
 | [`pillow`](https://github.com/python-pillow/Pillow) | 12.3.0 | MIT-CMU |
+| [`pypdf`](https://github.com/py-pdf/pypdf) | 6.21.4 | BSD-3-Clause |
 | [`python-dateutil`](https://github.com/dateutil/dateutil) | 2.9.0.post0 | Apache-2.0 OR BSD-3-Clause |
 | [`python-docx`](https://github.com/python-openxml/python-docx) | 1.2.0 | MIT |
 | [`python-pptx`](https://github.com/scanny/python-pptx) | 1.0.2 | MIT |
