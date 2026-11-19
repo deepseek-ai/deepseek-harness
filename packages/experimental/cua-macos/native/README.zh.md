@@ -77,6 +77,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
+| `getActionSchema` | 查询动作的参数 JSON Schema。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |

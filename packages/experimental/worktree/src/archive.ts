@@ -105,16 +105,16 @@ export class WorktreeReclamation {
 
   /**
    * Read the most recent cleanup attempt of a Session; waiting never starts one.
-   * @param session - archived Session whose attempt is read.
+   * @param sessionId - archived Session whose attempt is read.
    * @param revision - null reads at once; a matching revision waits for that attempt to settle.
    * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    const attempt = this.attempts.get(session.id)
+  async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    const attempt = this.attempts.get(sessionId)
     if (attempt === undefined || (revision !== null && revision !== attempt.revision)) return null
     if (revision !== null) await attempt.done
     // A cold Session without creations withdraws its placeholder while it settles.
-    if (this.lifetime.signal.aborted || this.attempts.get(session.id) !== attempt) return null
+    if (this.lifetime.signal.aborted || this.attempts.get(sessionId) !== attempt) return null
     return { revision: attempt.revision, status: attempt.status }
   }
 

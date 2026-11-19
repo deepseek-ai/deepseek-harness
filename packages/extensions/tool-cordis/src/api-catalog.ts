@@ -1714,15 +1714,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
       },
       {
-        signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(session: Session, url: string | null, signal: AbortSignal): Promise<void>',
+        signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(sessionId: SessionId, url: string | null, signal: AbortSignal): Promise<void>',
         description: 'Remember the change request a review conversation\'s draft quotes, or forget it with null. When the Session\'s next message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts; a Session that already started is bound at its next message. The choice lives in memory until then.',
-        parameters: [{ name: 'session', description: 'the Session whose draft quotes the change request.' }, { name: 'url', description: 'web URL of the change request, or null.' }, { name: 'signal', description: 'request cancellation.' }],
+        parameters: [{ name: 'sessionId', description: 'the Session whose draft quotes the change request; staging neither loads nor resumes it.' }, { name: 'url', description: 'web URL of the change request, or null.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL.'],
       },
       {
-        signature: '@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        signature: '@Remote async worktreeCleanup(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null>',
         description: 'Read or await the worktree service\'s archive cleanup of the Session\'s checkout.',
-        parameters: [{ name: 'session', description: 'Session whose cleanup is visible to the caller.' }, { name: 'revision', description: 'null reads now; a matching revision waits for completion.' }],
+        parameters: [{ name: 'sessionId', description: 'Session whose cleanup is visible to the caller; reading neither loads nor resumes it.' }, { name: 'revision', description: 'null reads now; a matching revision waits for completion.' }],
         returns: 'the cleanup state, or null without a worktree service, an attempt, or a current revision.',
       },
       {
@@ -1751,9 +1751,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
       },
       {
-        signature: '@Remote async refresh(session: Session, signal: AbortSignal): Promise<void>',
+        signature: '@Remote async refresh(sessionId: SessionId, signal: AbortSignal): Promise<void>',
         description: 'Reinspect a followed Session\'s checkout, probe sign-in again, and poll its change requests at once; an unfollowed Session is unchanged.',
-        parameters: [{ name: 'session', description: 'Session whose panel refreshes.' }, { name: 'signal', description: 'request cancellation.' }],
+        parameters: [{ name: 'sessionId', description: 'Session whose panel refreshes; refreshing neither loads nor resumes it.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.',
       },
       {
@@ -4963,7 +4963,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle',
-        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
+        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. In a profile, the files go to that profile\'s own directory for the plugin, and the registration deletes the other pins there once, the first time its own pin is in place. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
         parameters: [{ name: 'registration', description: 'the plugin\'s provider name, entry, pinned files, and optional skills directory.' }],
         returns: 'the handle the plugin\'s view observes and its check retries.',
         throws: ['when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a skill provider named `name` is already registered.'],
@@ -5443,9 +5443,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service\'s error when the source checkout no longer exists.'],
       },
       {
-        signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
+        signature: 'async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null>',
         description: 'Read the archive cleanup of a Session\'s created checkout; waiting never starts one. Absent without the Workspace and query providers.',
-        parameters: [{ name: 'session', description: 'archived Session whose cleanup is read.' }, { name: 'revision', description: 'null reads at once; a matching revision waits for that attempt to settle.' }],
+        parameters: [{ name: 'sessionId', description: 'archived Session whose cleanup is read; reading neither loads nor resumes it.' }, { name: 'revision', description: 'null reads at once; a matching revision waits for that attempt to settle.' }],
         returns: 'the attempt state, or null when none exists, the revision was superseded, or the service is stopping.',
       },
     ],

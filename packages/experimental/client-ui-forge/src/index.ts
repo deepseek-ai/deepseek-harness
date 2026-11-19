@@ -15,7 +15,7 @@ import type {
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
@@ -138,7 +138,7 @@ export class ForgePanelController extends TypertRemoteService {
   private states: ChangeRequestStates | undefined
   private readonly viewerLists: ViewerLists
   /** The change request a review conversation's draft quotes, per Session, bound once its first message enters the inbox. */
-  private readonly staged = new WeakMap<Session, string>()
+  private readonly staged = new Map<SessionId, string>()
   /** Review page streams of change requests shown in full, which a review change makes publish again. */
   private readonly reviewFollowers = new Set<{ readonly key: ChangeRequestKey; readonly emit: () => void }>()
   private readonly stopPanels: () => Promise<void>
@@ -223,6 +223,8 @@ export class ForgePanelController extends TypertRemoteService {
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
+    // A change request staged for a Session that is disposed before its next message is never bound.
+    const disposed = ctx.on('session/disposed', (session: Session) => { this.staged.delete(session.id) })
     const reviewChanges = ctx.on('forge/review-changed', (ref: ChangeRequestRef) => { this.reviewChanged(ref) })
     const services = ctx.on('internal/service', (name: string) => {
       if (name !== 'worktrees') return
@@ -233,6 +235,7 @@ export class ForgePanelController extends TypertRemoteService {
       yield stateOwner.dispose
       yield inbox
       yield events
+      yield disposed
       yield reviewChanges
       yield providers
       yield services
@@ -614,32 +617,32 @@ export class ForgePanelController extends TypertRemoteService {
    * Remember the change request a review conversation's draft quotes, or forget it with null. When the Session's next
    * message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts;
    * a Session that already started is bound at its next message. The choice lives in memory until then.
-   * @param session - the Session whose draft quotes the change request.
+   * @param sessionId - the Session whose draft quotes the change request; staging neither loads nor resumes it.
    * @param url - web URL of the change request, or null.
    * @param signal - request cancellation.
    * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
    */
   @Remote
   // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect
-  async reviewStage(session: Session, url: string | null, signal: AbortSignal): Promise<void> {
+  async reviewStage(sessionId: SessionId, url: string | null, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     if (url === null) {
-      this.staged.delete(session)
+      this.staged.delete(sessionId)
       return
     }
     this.served(url)
-    this.staged.set(session, url)
+    this.staged.set(sessionId, url)
   }
 
   /**
    * Read or await the worktree service's archive cleanup of the Session's checkout.
-   * @param session - Session whose cleanup is visible to the caller.
+   * @param sessionId - Session whose cleanup is visible to the caller; reading neither loads nor resumes it.
    * @param revision - null reads now; a matching revision waits for completion.
    * @returns the cleanup state, or null without a worktree service, an attempt, or a current revision.
    */
   @Remote
-  async worktreeCleanup(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    return await this.home.get('worktrees')?.cleanupOf(session, revision) ?? null
+  async worktreeCleanup(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    return await this.home.get('worktrees')?.cleanupOf(sessionId, revision) ?? null
   }
 
   /**
@@ -713,14 +716,14 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Reinspect a followed Session's checkout, probe sign-in again, and poll its
    * change requests at once; an unfollowed Session is unchanged.
-   * @param session - Session whose panel refreshes.
+   * @param sessionId - Session whose panel refreshes; refreshing neither loads nor resumes it.
    * @param signal - request cancellation.
    * @returns settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.
    */
   @Remote
-  async refresh(session: Session, signal: AbortSignal): Promise<void> {
+  async refresh(sessionId: SessionId, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    await this.panels.get(session)?.refresh()
+    for (const [session, panel] of this.panels) if (session.id === sessionId) await panel.refresh()
   }
 
   /**
@@ -1528,9 +1531,9 @@ export class ForgePanelController extends TypertRemoteService {
 
   /** Bind the change request a review conversation staged once the Session's message enters its inbox. */
   private bindStaged(session: Session): void {
-    const url = this.staged.get(session)
+    const url = this.staged.get(session.id)
     if (url === undefined) return
-    this.staged.delete(session)
+    this.staged.delete(session.id)
     // A provider withdrawn since the draft was staged leaves the message unbound.
     if (this.home.forge.changeRequestFromUrl(url) !== undefined) this.home.forgeSession.track(session, url)
   }

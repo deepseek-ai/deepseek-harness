@@ -20,6 +20,23 @@ const { NativeClient } = await import('@deepseek-ai/dsh-cua/native-client')
 const { Request } = await import('@deepseek-ai/dsh-cua/protocol')
 for (const callable of [host.apply, host.installCua, host.CuaAccess, createCuaApi, connectCua, NativeClient]) assert.equal(typeof callable, 'function')
 assert.equal(Request.parse({ method: 'getCapabilities', params: {} }).method, 'getCapabilities')
+const schema = { type: 'object', properties: { argument: { type: 'null', description: 'Omit argument or pass null.' } }, required: [], additionalProperties: false }
+const calls = []
+const cua = createCuaApi(async operation => {
+  calls.push(operation)
+  if (operation.method === 'getCapabilities') return {
+    platform: 'fixture', permissions: { accessibility: false, screenRecording: false }, appLevelAccessibility: false,
+    keyboard: [], sessionLocked: true, methods: ['getActionSchema'], coordinateSpace: 'screenshot-pixels', browser: false,
+  }
+  if (operation.method === 'getApp') return { appHandle: 'app', name: 'Fixture', running: true }
+  assert.equal(operation.method, 'getActionSchema')
+  return schema
+})
+const app = await cua.getApp('Fixture')
+assert.deepEqual(await app.getActionSchema('AXPress'), schema)
+const query = { method: 'getActionSchema', params: { action: 'AXPress' } }
+assert.deepEqual(calls.at(-1), query)
+assert.deepEqual(Request.parse(query), query)
 const ctx = new Context()
 try { await ctx.plugin(host); assert.equal(ctx.get('cuaAccess'), undefined) }
 finally { await ctx.fiber.dispose() }
