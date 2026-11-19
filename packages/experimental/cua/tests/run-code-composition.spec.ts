@@ -580,19 +580,17 @@ it.each(['confirmed', 'refused'] as const)('joins background cleanup on concurre
   f.model.beforeStream = async (index) => { if (index === 1) throw new Error('Model failed') }
   const errors: unknown[] = []
   f.ctx.on('agent/error', ({ error }) => { errors.push(error) })
+  const registered = vi.spyOn(NativeClient.prototype, 'registerCleanup')
+  onTestFinished(() => { registered.mockRestore() })
   const release = f.native.controlNext('releaseHeldInputs')
   const idle = f.run()
   await release.entered
   await idle
 
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const dispose = NativeClient.prototype.dispose
-  const spy = vi.spyOn(NativeClient.prototype, 'dispose').mockImplementation(function (this: NativeClient) {
-    const closing = dispose.call(this)
-    entered.resolve()
-    return closing
-  })
-  onTestFinished(() => { spy.mockRestore() })
+  const [client] = registered.mock.contexts
+  if (!(client instanceof NativeClient)) throw new Error('Expected a native connection with a registered input owner')
+  client.registerCleanup(async () => { entered.resolve() })
   let disposed = false
   const closing = f.provider.dispose().then(() => { disposed = true })
   try {
