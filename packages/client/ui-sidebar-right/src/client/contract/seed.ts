@@ -10,6 +10,7 @@
  * type would use — the guide is not special in the machinery, only in being
  * always available.
  */
+import type { TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SidebarRightTabRegistry } from '../tab-registry.ts'
 
 /** One pane's initial page, resolved from the current registered guide entries. */
@@ -44,4 +45,20 @@ export const GUIDE_KIND = 'guide'
  */
 export function pageAddress(kind: string): string {
   return `sidebar://${kind}`
+}
+
+/** Namespace content keys separately from page instances of the same kind.
+ * @param kind - registered tab kind.
+ * @returns the reserved address prefix for a window's transient content.
+ */
+export function contentPrefix(kind: string): string {
+  return `${pageAddress(kind)}/content/`
+}
+
+/** Recognize a transient content occurrence without loading its plugin.
+ * @param tab - tab identity saved in the layout.
+ * @returns whether openContent owns this occurrence's window-local content.
+ */
+export function isContentTab(tab: TabRecord): boolean {
+  return tab.contentId.startsWith(contentPrefix(tab.kind))
 }

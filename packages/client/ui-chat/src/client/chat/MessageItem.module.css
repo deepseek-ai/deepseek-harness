@@ -76,12 +76,8 @@
 }
 
 /* Compaction marker: one 24px row with a context icon at rest and a
-   hover/focus disclosure for the summary body. */
+   hover/focus chevron for opening the checkpoint in the right Sidebar. */
 .compactionRow {
-  /* The toggle's line, and the band a pinned toggle occupies. The button's
-     height and the offset that holds a summary's code banner below that band
-     are the same measurement, so both read it from here. */
-  --dsh-compaction-header-height: calc(24px + var(--dsh-content-font-delta, 0px));
   padding: 2px 0;
 }
 
@@ -89,7 +85,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: var(--dsh-compaction-header-height);
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
   padding: 0;
   border: none;
@@ -99,43 +95,6 @@
   transition: color 100ms ease;
   font: inherit;
   text-align: left;
-}
-
-/* The summary body flows uncapped with the page, so a long checkpoint summary
-   carries this toggle off the top of the viewport. Pin it to the conversation
-   scroll container's top while the row is open (the body is a sibling rendered
-   only when expanded); the base background masks the prose scrolling under it.
-   The square corners apply for as long as the row is open, pinned or not: the
-   fill is what masks the prose, and rounded corners would leave that prose visible
-   in the corners. z-index outranks the markdown code block's own sticky banner
-   (z-index 6 in CodeBlock.module.css); that banner itself stops below this
-   toggle (rule below), so a summary's fenced code block never puts a control
-   inside the toggle's band. */
-.compactionRow:has(.compactionBody) .compactionButton {
-  position: sticky;
-  top: 0;
-  z-index: 7;
-  border-radius: 0;
-  background: var(--dsw-alias-bg-base);
-}
-
-/* A fenced code block in the summary pins its banner at the scrollport top,
-   where this pinned toggle already sits, and the toggle's band covers the
-   banner's Copy control. Stop the banner below the toggle instead, on the same
-   measurement the toggle's own height uses. This rule beats CodeBlock's
-   `.bannerWrap { top: 0 }` by specificity (0,2,0 against 0,1,0), not by
-   declaration order: the two sheets load in their own packages. */
-.compactionBody :has(> [data-code-block-banner]) {
-  top: var(--dsh-compaction-header-height);
-}
-
-/* Pinned, the toggle needs an opaque hover fill: the default translucent hover
-   token below would let the scrolling prose show through the moment the pointer
-   lands on the toggle to collapse it. */
-@media (hover: hover) {
-  .compactionRow:has(.compactionBody) .compactionButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover-solid);
-  }
 }
 
 .compactionButton:not(:disabled) {
@@ -170,14 +129,14 @@
 }
 
 .compactionContextIcon,
-.compactionDisclosureIcon {
+.compactionOpenIcon {
   display: inline-flex;
   grid-area: 1 / 1;
   align-items: center;
   justify-content: center;
 }
 
-.compactionDisclosureIcon {
+.compactionOpenIcon {
   opacity: 0;
 }
 
@@ -191,12 +150,12 @@
   }
 }
 
-.compactionButton:not(:disabled):focus-visible .compactionDisclosureIcon {
+.compactionButton:not(:disabled):focus-visible .compactionOpenIcon {
   opacity: 1;
 }
 
 @media (hover: hover) {
-  .compactionButton:not(:disabled):hover .compactionDisclosureIcon {
+  .compactionButton:not(:disabled):hover .compactionOpenIcon {
     opacity: 1;
   }
 }
@@ -226,14 +185,6 @@
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.compactionBody {
-  /* Indent under the title, which starts at leading (16 + delta) + gap 6. */
-  padding: 4px 0 4px calc(22px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
 }
 
 .retryRow {

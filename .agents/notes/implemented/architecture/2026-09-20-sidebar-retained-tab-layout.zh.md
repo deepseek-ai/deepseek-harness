@@ -22,7 +22,7 @@ Sidebar 负责活 Body 的保留，不依赖 Browser 导航和 Workspace 存储�
 
 ### 会话与 Tab 生命周期
 
-`SidebarRightTabDefinition.keepMounted` 为类型启用懒保活。Desktop Browser 启用它，其他类型继续按可见性挂载 Body。保活 Body 在首次显示时创建，随后隐藏不卸载，直到 occurrence 或提供方生命周期结束。该策略不持久化，也不选择存储分区。
+`SidebarRightTabDefinition.keepMounted` 为类型启用懒保活。Desktop Browser 启用它。通过 `openContent` 打开的标签也会在当前窗口的生命周期内保留已查看的正文。保活 Body 在首次显示时创建，随后隐藏不卸载，直到 occurrence 或提供方生命周期结束。该策略不持久化，也不选择存储分区。
 
 `SidebarSessionView` 使用独立的 `sidebarView` 来源申请、释放一个 `SessionReference`，并管理自己的已提交挂载计数和 Body 保活持有。`SidebarSessionViews` 管理选中、保留策略和视图索引，将生命周期操作委托给视图，而不修改其计数或释放其引用。`RightbarRoot` 接收 `SidebarSessionViewSnapshot` 和已有注入回调，不接收资源所有者对象；它为各视图分别渲染显式 `SessionProvider`，保持会话 key 稳定，渲染器通用的会话重挂载语义不变。
 
@@ -48,10 +48,12 @@ Tab 提供 Body 保活持有，而不独立申请会话引用。View 的稳定 `
 | 收起 Sidebar | 隐藏停靠 cell，前台浮窗保持可见。 |
 | 会话 A → B → A | 隐藏并重新显示 A 的原内容树，而非加载已保存 URL。 |
 | 关闭、提供方卸载或真实 generation 结束 | 释放 Body 和 guest；撤销关闭创建新 occurrence。 |
-| 应用重启或窗口刷新 | 展示保存的标题和 URL，显式恢复或提交地址后才加载。 |
+| 应用重启或窗口刷新 | 恢复能够重建正文的标签。Browser 显示已保存的 URL 供用户显式恢复。呈现布局前关闭临时正文标签及其浮窗。 |
 | guest 崩溃 | 通过提供方重试；页面内存和原生 history 不持久化。 |
 
 [布局与提供方恢复](../../../../packages/client/ui-sidebar-right/README.zh.md)仍然独立：持久化的 Tab 身份、位置和地址支持冷启动，而不是序列化 DOM。隐藏页面可能继续执行脚本、播放媒体或联网。
+
+通过 `openContent` 打开的标签从当前窗口的导航参数取得正文。复用 key 能在会话内定位标签，却无法据此恢复正文。恢复这样的标签会留下空预览，还可能占据文件等可恢复标签的位置。刷新后，用户可从内容来源重新打开。
 
 ## Alternatives considered
 

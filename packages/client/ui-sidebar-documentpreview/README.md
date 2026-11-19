@@ -28,6 +28,8 @@ Preview files in the right Sidebar and choose among registered renderers. Markdo
 <a id="what-it-registers"></a>
 ## What it registers
 
+The compaction summary tab shows the Markdown supplied by the selected Chat row. It stays open across Session switches and closes on reload. Reopen the row to read the same event again.
+
 Image drag actions arrive through the image entry’s inject face from [ui-file-drag](../ui-file-drag/README.md).
 
 - **The type** — `ctx.sidebarRightTabs.register(...)` with id `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` (this implementation's identity in the tab system, and the key its body registers under), kind `text`, a whole-address file-resource pattern, band `fallback`. `canOpen` accepts only Session addresses, whose paths may be relative or absolute; bare `absolute` addresses are not claimed. A type registered at the `extension` or `builtin` band for a narrower pattern (say `*.png`) takes those addresses; other supported files land here. The whole address is the content identity, so two files with one name in different directories, or one path under two sessions, are two tabs; the decoded basename is the tab title, and the keyed `sidebar.right.pane.tab.title` seat places its extension-specific `FileTypeIcon` before that title.

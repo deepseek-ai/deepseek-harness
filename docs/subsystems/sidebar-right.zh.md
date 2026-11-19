@@ -75,7 +75,9 @@ export function apply(ctx: Context): void {
 
 ## 导航：`ctx.sidebarRight`
 
-两种打开构成导航控制器，进入这一列的每条路都调用其一：`openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框或 Assistant Markdown 中的 HTTP(S) 链接。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开；替换浮动 tab、或揭示浮窗中的 tab 时除外。揭示一个已在屏幕上显示的 tab 时，存放它的格发光提示一次，对所有 tab 类型都一样，且只在其会话位于屏幕上时播放；需要切换 tab 或展开该列的揭示不发光。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
+需要显示临时正文时，用 `openContent(kind, content, options?)` 指定已注册的标签类型。可选 key 在会话内标识正文，目标位置可选侧栏或浮窗。切换会话时保留正文；刷新后无法重建正文的标签在恢复布局时关闭。见[挂载保留与恢复决策](../../.agents/notes/implemented/architecture/2026-09-20-sidebar-retained-tab-layout.zh.md)。
+
+使用 `openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框或 Assistant Markdown 中的 HTTP(S) 链接。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开；替换浮动 tab、或揭示浮窗中的 tab 时除外。揭示一个已在屏幕上显示的 tab 时，存放它的格发光提示一次，对所有 tab 类型都一样，且只在其会话位于屏幕上时播放；需要切换 tab 或展开该列的揭示不发光。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
 
 | 选项 | 含义 |
 |---|---|

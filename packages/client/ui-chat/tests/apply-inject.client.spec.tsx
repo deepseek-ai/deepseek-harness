@@ -1,3 +1,4 @@
+import type { CompactionRowInjected } from '../src/client/chat/CompactionItem.tsx'
 import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AssistantNodeInjected } from '../src/client/chat/AssistantNodeView.tsx'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
@@ -23,6 +24,8 @@ import {
 import {
   apply as applyChat, inject as injectChat, type ChatFlowDataInjected, type ChatViewInjected,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { SessionWireEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createChatStore } from '../src/client/stores.ts'
@@ -71,7 +74,8 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
-    openResource: vi.fn<(address: string) => void>(),
+    openContent: vi.fn<typeof runtime.ctx.sidebarRight.openContent>(),
+    openResource: vi.fn<typeof runtime.ctx.sidebarRight.openResource>(),
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
@@ -86,7 +90,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  const events = vi.fn<ClientRemote['session']['events']>(async ({ throughSeq }) => ({
+    ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: {
+      type: 'compaction/summary', seq: throughSeq ?? 42, time: 0, data: { summary: [{ type: 'text', text: '# Summary' }] },
+    } }] },
+  }))
+  runtime.remote.provideNamespaces({ session: { openWorkspacePath, events } })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
@@ -136,12 +145,17 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     return { instance, injected: injectFlow(reference.sessionId) }
   }
   return {
+    compactionRow(key: 'compaction' | 'manual-compaction') {
+      const entry = runtime.slots.entries('conversation.chat.node').find(row => row.options.key === key)!
+      const inject = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => CompactionRowInjected)
+      return inject(ROOT)
+    },
     get linkPreference() {
       const row = runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'link-opening')!
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable,
+    events, runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
@@ -448,6 +462,67 @@ describe('Chat inject API', () => {
     } finally {
       await b.runtime.dispose()
     }
+  })
+
+  it('opens recorded summaries by Session and stops pending reads when the viewer unloads', async () => {
+    const b = await bench()
+    try {
+      const row = b.compactionRow('manual-compaction')
+      const signal = new AbortController().signal
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(b.events).not.toHaveBeenCalled()
+      const viewer = await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'session', sessionId: ROOT }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent).toHaveBeenCalledWith('compaction-summary',
+        { summaryMarkdown: '# Summary' }, { key: JSON.stringify([ROOT, 42]) })
+      const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
+      vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'subagent', ...child }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent.mock.calls[0]![2]?.key).not.toBe(b.sidebarRight.openContent.mock.calls[1]![2]?.key)
+      b.events.mockImplementationOnce(async (_query, active) => {
+        await viewer.dispose()
+        expect(active?.aborted).toBe(true)
+        throw new Error('cancelled')
+      })
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(row.hooks.compactionPreview.getSnapshot()).toBe(false)
+      expect(b.sidebarRight.openContent).toHaveBeenCalledTimes(2)
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('reports unreadable summaries and keeps cancelled reads out of the sidebar', async () => {
+    const b = await bench()
+    try {
+      const row = b.compactionRow('compaction')
+      const signal = new AbortController().signal
+      await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      const event = { seq: 42, time: 0, type: 'compaction/summary', data: { summary: [{ type: 'text', text: 'summary' }] } }
+      const records: SessionWireEvent[] = [{ ...event, seq: 41 }, { ...event, type: 'other' },
+        ...[null, {}, { summary: [null] }, { summary: [{}] }, { summary: [{ type: 'text', text: 5 }] },
+          { summary: [{ type: 'image' }, { type: 'text', text: ' ' }] }].map(data => ({ ...event, data }))]
+      for (const invalid of records) {
+        b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: invalid }] } })
+        expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      }
+      b.events.mockRejectedValueOnce(new Error('offline'))
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) })
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [] } })
+      expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      expect(await row.openCompaction(42, AbortSignal.abort())).toBeNull()
+      const pending = new AbortController()
+      b.events.mockImplementationOnce(async () => {
+        pending.abort()
+        return { ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event }] } }
+      })
+      expect(await row.openCompaction(42, pending.signal)).toBeNull()
+      expect(b.sidebarRight.openContent).not.toHaveBeenCalled()
+    } finally { await b.runtime.dispose() }
   })
 
   it('keeps local link choices usable when settings cannot persist', async () => {
