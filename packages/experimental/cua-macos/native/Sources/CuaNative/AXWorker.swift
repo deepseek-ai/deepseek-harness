@@ -203,6 +203,9 @@ actor AXWorker {
             try keyboard?.releaseHeldKeys(run: params.string("runId"))
             return .result(Self.actionResult)
         }
+        if method == "getActionSchema" {
+            return .result(try ActionSchema.parameter(action: params.string("action")))
+        }
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")

@@ -1,6 +1,6 @@
 ---
 name: dsh-pr-description
-description: Use when creating a deepseek-harness pull request, or when updating its description after later changes or a handled review round. Defines each description section, Issue references, test design, change-specific disclosures, and the AI Usage section with its levels, stages, grading rules, AI-DECLARATION badge, and update timing.
+description: Use when creating a deepseek-harness pull request, or when updating its description after later changes or a handled review round. Defines each description section, Issue references, module responsibilities and dependency edges, test design, change-specific disclosures, and the AI Usage section with its levels, stages, grading rules, AI-DECLARATION badge, and update timing.
 user-invocable: false
 ---
 
@@ -18,7 +18,7 @@ This skill defines what a deepseek-harness PR description contains, how to write
 
 The description uses four second-level headings, in this order: `## Motivation`, `## Changes`, `## Testing`, and `## AI Usage`.
 
-Write fixed section headings and labels, such as **Interface changes**, **Behavior changes**, **Test design**, and **Test entries**, in English. Write table headers and the rest of the description in the PR description's language, Chinese unless a human asked for another language.
+Write fixed section headings and labels, such as **Interface changes**, **Behavior changes**, **Module responsibilities and dependencies**, **Test design**, and **Test entries**, in English. Write table headers and the rest of the description in the PR description's language, Chinese unless a human asked for another language.
 
 ### Motivation
 
@@ -29,7 +29,53 @@ Write fixed section headings and labels, such as **Interface changes**, **Behavi
 
 - Interface changes: summarize changes to commands (including repository scripts), flags, configuration keys, environment variables, public exports, plugin registration values, protocols, or persisted formats; write None when there are none.
 - Behavior changes: summarize results that users, models, developers, or the system can observe, including defaults, performance, timing, and output; write None when there are none. Changes to documentation and agent instructions, such as READMEs, AGENTS.md, and skills, are behavior changes for the readers they guide.
+- Module responsibilities and dependencies: state the responsibility of each package that the structural change involves, and every runtime dependency between workspace packages that the PR adds or removes, in the form that [Module responsibilities and dependencies](#module-responsibilities-and-dependencies) defines; write None when the PR adds or removes no package, adds or removes no runtime dependency between workspace packages, and moves no responsibility between packages.
 - State only behavior that the diff guarantees and the tests cover.
+
+#### Module responsibilities and dependencies
+
+A reviewer uses this item, before reading the diff, to judge whether each package has one responsibility and whether each added dependency is necessary. A workspace package is a member that `pnpm-workspace.yaml` lists; name it by the `name` in its manifest without the `@deepseek-ai/` scope, which can differ from its directory name. When the item is not None, it has three parts, in this order:
+
+1. **Responsibility table**: one row for each package that the PR adds or removes, that is the source of an added or removed dependency edge, or that gains or loses a responsibility. The columns are the package, its responsibility in one sentence, and what this PR does to it: added, removed, changed and how, or unchanged and depended on. Packages that have the same role and receive the same change may share a row. A package that the PR does not change and that is only the target of an added edge gets a row when its responsibility explains why the edge is needed; a general utility package, such as `dsh-error`, may be left out. A package whose only change is a composition edge gets no row.
+2. **Dependency edges**: a list of every runtime dependency between workspace packages that the PR adds or removes, each written `A → B` for "A depends on B" and marked as added or removed. Take the edges from the diff, never from memory: in `git diff <base>...HEAD -- '*package.json'`, compare the `dependencies`, `peerDependencies`, and `optionalDependencies` of each workspace package's manifest. Leave out `devDependencies`, the `package.json` files of test fixtures and templates, and dependencies on the vendored packages under `vendor/`. Mark an optional peer dependency or an `optionalDependencies` entry as optional. One list item may hold edges that share a source or a target, but every edge appears. List the edges of a bundle, app, or deploy root that only mounts a plugin or adds a package to its closure in a separate composition item, because they are not runtime calls. End the list with a reverse-edge item: for each added edge `A → B`, check that the runtime dependencies of B do not name A, then state that no added edge has a reverse edge, or list each one that has.
+3. **Call flow**: three to six lines of pseudo-code, in a code fence, that show the main call path across the packages. Write it only when the PR adds or changes a call between packages.
+
+When the edges involve four or more packages, a Mermaid `graph` may follow the list; it never replaces the list.
+
+Filled in from the manifests, READMEs, and call sites of #8521:
+
+````markdown
+**Module responsibilities and dependencies**
+
+| 包 | 职责 | 本 PR 的变化 |
+|---|---|---|
+| `dsh-deepseek-auth` | `ctx.deepseekAuth`：在 API 密钥与账号登录之间选择，把凭据绑定到所属部署，给出请求头 | 新增 |
+| `dsh-llm-deepseek-api-key`、`dsh-llm-deepseek-account` | 注册各自的 DeepSeek 模型路由 | 用 `connect()` 登记自己的部署，用 `authorize()` 取请求头 |
+| `dsh-web-deepseek-api`、`dsh-web-search-deepseek` | Search / Fetch API 与 Messages 搜索 | 改为向 `ctx.deepseekAuth` 取凭据，不再自己读账号服务和模型路由配置 |
+| `dsh-sdk-jsonrpc-server` | SDK JSON-RPC 服务 | 组合里没有 `deepseekAuth` 时自己挂载它 |
+| `dsh-credentials`、`dsh-deepseek-account` | 凭据存取、账号登录 | 不变，被 `dsh-deepseek-auth` 读取 |
+
+依赖边：
+
+- 新增 `dsh-deepseek-auth → dsh-credentials`、`dsh-error`、`dsh-launch-environment`、`dsh-deepseek-account`（可选）
+- 新增 `dsh-llm-deepseek-api-key → dsh-deepseek-auth`、`dsh-llm-deepseek-account → dsh-deepseek-auth`
+- 新增 `dsh-web-deepseek-api → dsh-deepseek-auth`、`dsh-web-search-deepseek → dsh-deepseek-auth`
+- 新增 `dsh-sdk-jsonrpc-server → dsh-deepseek-auth`
+- 删除 `dsh-web-deepseek-api → dsh-deepseek-account`（可选）、`dsh-web-deepseek-api → dsh-launch-environment`
+- 删除 `dsh-web-search-deepseek → dsh-llm`
+- 组合：`dsh-base`、`dsh-sdk-minimal`、`dsh-python-runtime-closure` 新增 `dsh-deepseek-auth`
+- 反向边：无。`dsh-deepseek-auth` 的运行时依赖只有第一条中的四个包，不含任何新依赖它的包；这四个包都不依赖 `dsh-deepseek-auth`
+
+调用流程：
+
+```ts
+const authorization = await ctx.deepseekAuth.authorize({
+  consumer: 'my-plugin', accepts: ['account', 'api-key'], billing: 'auto',
+  route, destination: { path: '/v1/tools/search' },
+}, signal)
+await fetch(authorization.endpoint, { headers: authorization.headers, signal }) // 请求仍由使用方自己发
+```
+````
 
 ### Testing
 
@@ -201,4 +247,4 @@ Filled in from the session and review records of #6013:
 
 1. Write the description to a file that git ignores, such as `.artifacts/pr/body.md`. Create the PR with `gh pr create --body-file <file>`, or update it with `gh pr edit <number> --body-file <file>`; when the description embeds a GIF, follow [record-browser-gif](../record-browser-gif/SKILL.md) and use `--attach`.
 2. Before an update, save the current description with `gh pr view <number> --json body --jq .body`, and change only the sections that need it: keep content and media the author wrote, replace only the contents of an existing `ai-declaration` block, and remove statements that no longer match the code. When the description still has the old `## Human and Agent Roles` heading, replace that heading and its level line with `## AI Usage` and the block; keep only one AI Usage section.
-3. After writing, read the description back and confirm that all four sections are present, that AI Usage matches the current code and review state, and that no old `## Human and Agent Roles` section remains.
+3. After writing, read the description back and confirm that all four sections are present, that the dependency edges in Changes match the current diff, that AI Usage matches the current code and review state, and that no old `## Human and Agent Roles` section remains.

@@ -10,6 +10,7 @@ import {
   isFilesQuotaError,
   MAX_FILE_UPLOAD_BYTES,
 } from '../src/files-api.ts'
+import { uploadedForm } from './helpers.ts'
 
 function requestUrl(input: string | URL | Request): string {
   if (typeof input === 'string') return input
@@ -67,7 +68,7 @@ describe('DeepSeekFilesClient', () => {
       expect(headers.get('anthropic-version')).toBe('2023-06-01')
       expect(headers.get('anthropic-beta')).toBe('files-api-2025-04-14')
       expect(headers.has('authorization')).toBe(false)
-      const form = init?.body as FormData
+      const form = await uploadedForm(init)
       expect(form.get('purpose')).toBeNull()
       expect(form.get('expires_after[anchor]')).toBe('created_at')
       expect(form.get('expires_after[seconds]')).toBe('3600')
@@ -179,15 +180,16 @@ describe('DeepSeekFilesClient', () => {
       const headers = new Headers(init?.headers)
       expect(headers.get('x-api-key')).toBe('key')
       expect(headers.get('user-agent')).toBe(userAgent())
-      const form = init?.body
-      expect(form).toBeInstanceOf(FormData)
-      if (!(form instanceof FormData)) throw new Error('expected multipart body')
-      expect(form.get('purpose')).toBeNull()
+      expect(headers.get('content-type')).toMatch(/^multipart\/form-data; boundary=/u)
+      const form = await uploadedForm(init)
+      expect([...form.keys()]).toEqual(['expires_after[anchor]', 'expires_after[seconds]', 'file'])
       expect(form.get('expires_after[anchor]')).toBe('created_at')
       expect(form.get('expires_after[seconds]')).toBe('604800')
-      const blob = form.get('file')
-      expect(blob).toBeInstanceOf(Blob)
-      expect((blob as Blob).size).toBe(3)
+      const uploaded = form.get('file')
+      if (!(uploaded instanceof File)) throw new Error('expected multipart file')
+      expect(uploaded.name).toBe('image.png')
+      expect(uploaded.type).toBe('image/png')
+      expect([...await uploaded.bytes()]).toEqual([1, 2, 3])
       return new Response(JSON.stringify(file()), { status: 200 })
     }) as typeof fetch
     const client = new DeepSeekFilesClient({ baseURL: 'https://api.deepseek.com/', headers: { 'x-api-key': 'key' }, fetch: fetchImpl })
@@ -204,6 +206,22 @@ describe('DeepSeekFilesClient', () => {
       filename: 'image.png',
       expiresAt: 1_700_604_800,
     })
+  })
+
+  it('keeps a filename with quotes and line breaks inside its multipart header', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(file())))
+    const client = new DeepSeekFilesClient({ baseURL: 'https://api.deepseek.com/', headers: { 'x-api-key': 'key' }, fetch: fetchImpl })
+
+    await client.upload({
+      data: Uint8Array.of(1, 2, 3), mediaType: 'image/png', filename: 'a"b\r\nc.png', expiresAfterSeconds: 3_600,
+    })
+
+    const form = await uploadedForm(fetchImpl.mock.calls[0]![1])
+    expect([...form.keys()]).toEqual(['expires_after[anchor]', 'expires_after[seconds]', 'file'])
+    const uploaded = form.get('file')
+    if (!(uploaded instanceof File)) throw new Error('expected multipart file')
+    expect(uploaded.name).toBe('a"b\r\nc.png')
+    expect([...await uploaded.bytes()]).toEqual([1, 2, 3])
   })
 
   it('validates list, retrieve, and delete responses', async () => {

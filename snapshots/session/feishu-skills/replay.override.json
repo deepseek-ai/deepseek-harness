@@ -1,0 +1,18 @@
+{
+  "patches": [
+    {
+      "at": 1,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          { "type": "block-start", "index": 0, "blockType": "reasoning" },
+          { "type": "block-end", "index": 0, "block": { "type": "reasoning", "text": "Open the lark-doc guide through lark-cli." } },
+          { "type": "block-start", "index": 1, "blockType": "tool-call" },
+          { "type": "block-end", "index": 1, "block": { "type": "tool-call", "id": "call_feishu_guide", "name": "bash", "arguments": "{\"command\":\"\\\"{{fromRequest:Feishu CLI: run .lark-cli. by its absolute path .(/[^;]+?).; the bare name}}\\\" skills read lark-doc\",\"description\":\"Open the lark-doc guide\"}" } },
+          { "type": "usage", "usage": { "inputTokens": 200, "outputTokens": 20, "cacheReadTokens": 0, "reasoningTokens": 5 } },
+          { "type": "finish", "reason": { "kind": "tool-calls" } }
+        ]
+      }
+    }
+  ]
+}

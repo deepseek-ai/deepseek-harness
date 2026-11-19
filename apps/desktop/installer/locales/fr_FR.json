@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Masquer les détails",
     "INSTALLER_EXTRACT_SAVED": "Le rapport complet a été enregistré dans %s",
     "INSTALLER_EXTRACT_UNSAVED": "Le rapport complet n'a pas pu être enregistré. Utilisez Copier les détails de l'erreur pour le conserver.",
-    "INSTALLER_EXTRACT_COPIED": "Les détails de l'erreur ont été copiés dans le presse-papiers."
+    "INSTALLER_EXTRACT_COPIED": "Les détails de l'erreur ont été copiés dans le presse-papiers.",
+    "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness est installé à plusieurs emplacements",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Certains éléments n’ont pas pu être nettoyés. Enregistrez le rapport pour consulter les détails.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Emplacement enregistré :",
+    "INSTALLER_UNINSTALL_SCOPE": "Ce dossier et les commandes, raccourcis et inscriptions qui y renvoient seront supprimés :",
+    "INSTALLER_UNINSTALL_CONTINUE": "Continuer le nettoyage du dossier de désinstallation",
+    "INSTALLER_UNINSTALL_SAVE": "Enregistrer le rapport de nettoyage…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "Le rapport n’a pas pu être enregistré. Choisissez un autre emplacement.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "La désinstallation n’est pas terminée",
+    "INSTALLER_UNINSTALL_UNSAFE": "Le périmètre de suppression n’a pas pu être vérifié. Aucune suppression n’a commencé.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "Une opération de nettoyage n’a pas renvoyé de résultat complet. Les opérations suivantes ont été arrêtées.",
+    "INSTALLER_UNINSTALL_BLOCKED": "Ce fichier n’a pas pu être supprimé. Fermez les programmes susceptibles de l’utiliser, vérifiez les droits d’accès et réessayez.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Désinstallation terminée"
   },
   "uninstaller": {
     "welcome": "Bienvenue",

@@ -188,6 +188,14 @@ def check_clicks(helper, window, point, state_file):
     count = len(state["events"])
     presses, menus = state["axPresses"], state["axMenus"]
     assert {"AXPress", "AXShowMenu"}.issubset(helper.call("listActions", target))
+    plain = helper.call("getActionSchema", {"action": "AXShowMenu"})
+    assert plain["type"] == "object" and plain["required"] == [] and plain["additionalProperties"] is False, plain
+    assert "description" not in plain and "description" in plain["properties"]["argument"], plain
+    setter = helper.call("getActionSchema", {"action": f"{pad['role']}.AXValue.Set"})
+    argument = setter["properties"]["argument"]
+    assert setter["required"] == ["argument"] and len(argument["oneOf"]) == 6, setter
+    assert "description" in argument and "description" not in setter, setter
+    helper.call("getActionSchema", {"action": ""}, "INVALID_ARGUMENT")
     helper.call("invoke", target)
     state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
     helper.call("performAction", {**target, "action": "AXShowMenu"})

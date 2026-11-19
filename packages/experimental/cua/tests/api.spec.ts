@@ -262,6 +262,47 @@ describe('text selections', () => {
 })
 
 describe('element action queries', () => {
+  const schema = { type: 'object', properties: { argument: { type: 'null' } }, required: [], additionalProperties: false }
+
+  it.each([true, false])('queries action schemas on apps and windows without an observation (app AX: %s)', async (appLevelAccessibility) => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, appLevelAccessibility })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    f.dispatch.mockClear()
+    for (const surface of [app, window]) {
+      f.dispatch.mockResolvedValueOnce(schema)
+      expect(await surface.getActionSchema('AXPress')).toEqual(schema)
+    }
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+    ])
+  })
+
+  it('rejects an empty schema action name before dispatch', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await expect(app.getActionSchema('')).rejects.toThrow('getActionSchema action')
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('preserves parameter types, descriptions and native schema lookup failures', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const valueSchema = { ...schema, properties: { argument: {
+      type: 'string', description: 'One of: Normal, Maximized, Minimized. Names are case-sensitive.',
+    } }, required: ['argument'] }
+    f.dispatch.mockResolvedValueOnce(valueSchema)
+    expect(await app.getActionSchema('Window.SetWindowVisualState')).toEqual(valueSchema)
+    const failure = new NativeError('UNSUPPORTED', 'Unknown action')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.getActionSchema('Window.Unknown')).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: true })
+    await expect(app.getActionSchema('AXPress')).rejects.toThrow()
+  })
+
   it('returns raw provider action names including attribute-setting operations without reading new state', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

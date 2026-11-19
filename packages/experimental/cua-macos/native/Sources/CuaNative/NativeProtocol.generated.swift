@@ -8,6 +8,7 @@ enum NativeProtocol {
         "click": ["appHandle", "clickCount", "elementId", "holdMs", "modifiers", "mouseButton", "snapshotId", "useSystemInput", "windowId", "x", "y"],
         "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "useSystemInput", "windowId"],
         "findApps": ["maxAppMatches", "query"],
+        "getActionSchema": ["action"],
         "getApp": ["selector"],
         "getCapabilities": [],
         "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
