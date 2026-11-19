@@ -93,15 +93,15 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
 
     const held = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
       code: 'await app.sendKeyEvent("shift", "down"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("w", "down"); inspect("Input sequence finished.")',
-      description: 'Hold mixed input within one MCP program',
+      description: 'Hold mixed input across MCP programs',
     } }) as CallResult
     expect(held.isError).toBeUndefined()
-    await expect(`${JSON.stringify(held, null, 2)}\n`).toMatchFileSnapshot('./expected/input-release.json')
+    await expect(`${JSON.stringify(held, null, 2)}\n`).toMatchFileSnapshot('./expected/held-inputs.json')
     const up = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: 'await app.sendKeyEvent("w", "up")', description: 'Confirm W was released',
+      code: 'await app.sendKeyEvent("w", "up"); await win.toggleMouse("left", "up"); await app.sendKeyEvent("shift", "up")', description: 'Release the held input',
     } }) as CallResult
-    expect(up.isError).toBe(true)
-    expect(up.content.some(block => block.type === 'text' && block.text.includes('not held'))).toBe(true)
+    expect(up.isError).toBeUndefined()
+    expect(up.content.some(block => block.type === 'text' && block.text.includes('<system-reminder>'))).toBe(false)
     const afterRelease = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
       code: 'inspect("After release")', description: 'Continue without held input',
     } }) as CallResult

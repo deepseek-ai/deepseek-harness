@@ -182,35 +182,60 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('Computer Use MCP composition', () => {
-  it('releases MCP input before returning and reports only confirmed automatic releases', async () => {
+  it('retains input across successful MCP programs and reports remaining holds', async () => {
     const { native, run } = await setup()
     const held = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await app.sendKeyEvent("w", "down"); await win.toggleMouse("left", "down")')
     expect(held.isError).not.toBe(true)
+    expect(native.held.map(press => press.key)).toEqual(['w', 'left'])
+    expect(native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+    expect(texts(held).join('')).toContain('CUA inputs are still held')
+    expect(texts(await run('inspect("next program")')).join('')).toContain('Key "w"')
+    const released = await run('await win.toggleMouse("left", "up"); await app.sendKeyEvent("w", "up")')
+    expect(texts(released).join('')).not.toContain('<system-reminder>')
     expect(native.held).toEqual([])
-    expect(native.events).toEqual(['w:down', 'left:down', 'left:up', 'w:up'])
-    expect(texts(held).join('')).toContain('CUA inputs were automatically released at program end')
-    expect(texts(held).join('')).toContain('Mouse left')
-    expect(texts(held).join('')).toContain('Key "w"')
-    expect(texts(await run('inspect("next program")')).join('')).not.toContain('<system-reminder>')
-    expect(texts(await run('await app.sendKeyEvent("d", "down"); await app.sendKeyEvent("d", "up")')).join('')).not.toContain('<system-reminder>')
     const failed = await run('await win.toggleMouse("left", "down"); throw Error("failed program")')
     expect(failed.isError).toBe(true)
     expect(native.held).toEqual([])
     expect((await run('await win.click("0")')).isError).not.toBe(true)
   })
 
-  it('waits for the native MCP cleanup reply and reports refusal without claiming release', async () => {
+  it('waits for cleanup after a failed MCP program and reports native refusal', async () => {
     const { native, run } = await setup()
     const release = native.controlNext('releaseHeldInputs')
     let settled = false
-    const running = run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")').then((value) => { settled = true; return value })
+    const running = run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down"); throw Error("program failed")').then((value) => { settled = true; return value })
     await release.entered
     expect(settled).toBe(false)
     release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'MCP release refused' })
     const result = await running
     expect(result.isError).toBe(true)
     expect(texts(result).join('')).toContain('MCP release refused')
-    expect(texts(result).join('')).not.toContain('inputs were automatically released')
+  })
+
+  it('cleans up a cancelled MCP request even after its program has finished and image delivery is pending', async () => {
+    const { ctx, native, run } = await setup()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    const original = ctx.attachments.readImageRequest.bind(ctx.attachments)
+    const read = vi.spyOn(ctx.attachments, 'readImageRequest').mockImplementation(async (...args) => {
+      if (native.calls.some(call => call.method === 'getHeldInputs')) { entered.resolve(); await finish.promise }
+      return original(...args)
+    })
+    onTestFinished(() => { finish.resolve(); read.mockRestore() })
+    const controller = new AbortController()
+    const running = run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await app.sendKeyEvent("w", "down"); inspect(await win.getScreenshot())', {}, controller.signal)
+    const cancelled = expect(running).rejects.toThrow(/abort/i)
+    await entered.promise
+    const release = native.controlNext('releaseHeldInputs')
+    try {
+      controller.abort()
+      await release.entered
+      expect(native.held.map(press => press.key)).toEqual(['w'])
+      release.reply()
+    } finally { finish.resolve() }
+    await cancelled
+    await run('inspect("after cancellation")')
+    expect(native.held).toEqual([])
   })
 
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {

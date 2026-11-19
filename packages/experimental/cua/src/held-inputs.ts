@@ -12,17 +12,15 @@ const heldInputs = z.array(z.discriminatedUnion('kind', [
   z.object({ ...target, kind: z.literal('mouse'), button: z.enum(['left', 'right', 'middle']), windowId: z.string() }),
 ]))
 
-function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released' | 'program-end'): string {
+function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released'): string {
   const rows = inputs.map(input => input.kind === 'key'
     ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)} (${input.mode} input).`
     : `- Mouse ${input.button}, appHandle ${JSON.stringify(input.appHandle)}, windowId ${JSON.stringify(input.windowId)} (${input.mode} input).`)
-  const title = state === 'held' ? 'CUA inputs are still held:'
-    : state === 'program-end' ? 'CUA inputs were automatically released at program end:' : 'CUA inputs were released during cleanup:'
+  const title = state === 'held' ? 'CUA inputs are still held:' : 'CUA inputs were released during cleanup:'
   return ['<system-reminder>', title, ...rows,
     state === 'held'
       ? "They remain pressed across programs and turns. Release them explicitly with sendKeyEvent(key, 'up') or toggleMouse(button, 'up') on the same target when no longer needed."
-      : state === 'program-end' ? 'These inputs are no longer held. In this environment, keep any required hold sequence within one program.'
-        : 'These inputs are no longer held.',
+      : 'These inputs are no longer held.',
     '</system-reminder>'].join('\n')
 }
 
@@ -44,7 +42,7 @@ class InputOwner {
     this.client = client
   }
 
-  async reminder(): Promise<string | undefined> {
+  async reminder(inTurn: boolean): Promise<string | undefined> {
     if (this.closing || !this.client) return
     const inputs = heldInputs.parse(await this.client.request('getHeldInputs', { taskId: this.agent.id }, this.controller.signal))
     if (inputs.length === 0) {
@@ -53,15 +51,10 @@ class InputOwner {
       this.client = undefined
       return
     }
-    this.notifySessionOnRelease = true
+    this.notifySessionOnRelease ||= inTurn
     return renderInputs(inputs, 'held')
   }
 
-  async releaseReminder(): Promise<string | undefined> {
-    if (this.closing) return
-    const released = await this.close()
-    return released.length > 0 ? renderInputs(released, 'program-end') : undefined
-  }
 
   close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
     this.controller.abort()
@@ -161,12 +154,11 @@ export class CuaHeldInputs {
         } else if (execution.parent === undefined) {
           const owner = this.owners.get(agent)
           const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
-          const text = inTurn ? await owner?.reminder() : await owner?.releaseReminder()
+          const text = await owner?.reminder(inTurn)
           if (signal.aborted) { await this.release(agent); return result }
-          if (text && (!inTurn || !owner?.closing)) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
+          if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
-              source: { kind: inTurn ? 'cua-held-inputs' : 'cua-inputs-released',
-                form: 'notice', summary: inTurn ? 'CUA inputs remain held' : 'CUA inputs released' } }),
+              source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
           ] }
         }
         return result

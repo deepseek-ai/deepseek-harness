@@ -167,7 +167,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 每个程序在返回前释放剩余的原生键盘键和鼠标按钮。原生确认后，通过 system reminder 列出自动释放的输入。输入不能跨 MCP 调用保持，不需要客户端提供暂停通知。程序失败、取消、重置和断连也会释放所属输入。
+- 成功结束的程序跨调用保持键盘键和鼠标按钮，并通过 system reminder 报告。程序失败、执行中的 cua_run_code 请求收到取消、重置和断连会释放所属输入。如果一次调用发送 down 后返回，客户端随后在模型思考期间暂停，服务端收不到取消：该输入可能持续按住，直到显式 up 或后续清理。
 - macOS 与原生 Windows Host 有提供方。其他 Host（包括 WSL）列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
 - 在 Windows 上，[提供方的限制](../cua-windows/README.zh.md#known-limitations-and-deferred-work)经 MCP 同样适用：它不启动应用，不提供 `Always allow` 授权，npm 安装需要配置 `helperPath`。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。

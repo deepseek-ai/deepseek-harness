@@ -102,7 +102,7 @@ function fixture(options: SetupOptions = {}) {
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
-  if (options.programs !== false) ctx.provide('cuaPrograms', { release, screenshotRequestTarget: () => undefined, ...options.programs } as never)
+  if (options.programs !== false) ctx.provide('cuaPrograms', { release, releaseInputs: vi.fn(async () => {}), screenshotRequestTarget: () => undefined, ...options.programs } as never)
   onTestFinished(async () => { await ctx.fiber.dispose() })
   return {
     ctx, agent, maintenance, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,

@@ -34,6 +34,13 @@ export interface CuaPrograms {
    */
   release(agent: Agent): Promise<void>
   /**
+   * Release the Agent's tracked input while retaining its program variables and application grants.
+   * Providers without held-input state support retain their existing cancellation behavior.
+   * @param agent - Owner of the input to release.
+   * @returns Completion after native acknowledgement, or rejection when cleanup is unconfirmed.
+   */
+  releaseInputs(agent: Agent): Promise<void>
+  /**
    * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
    * A host that forwards screenshots outside a model request reads the same request version with it, so the
    * image a caller sees matches the coordinate space the provider mapped.
@@ -68,7 +75,7 @@ export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, ima
  * @param tool Internal native tool; Agents off the configured preset can reach it only through the program.
  * @param guidance Raw-tool operation instructions for the configured preset.
  * @param programGuidance Operation instructions available inside cua_run_code.
- * @param releaseInputs Release held input when resetting the program environment.
+ * @param releaseInputs Release tracked input on cancellation or environment reset.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
 export function installCuaTools(
@@ -157,6 +164,7 @@ var cua = connectCua(() => tools.cua);
                   release: async (agent: Agent) => {
                     try { await consumer.ptcRuntime.release(agent) } finally { await releaseInputs(agent) }
                   },
+                  releaseInputs,
                   screenshotRequestTarget: image => config.screenshotTarget === undefined
                     ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
                 } satisfies CuaPrograms)

@@ -91,9 +91,9 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <details>
 <summary>共享执行与平台职责</summary>
 
-实现 `CuaBackend.heldInputState` 的提供方为显式输入和系统指针移动接受 `taskId`，通过 `getHeldInputs({ taskId })` 报告本连接的持有记录，并确认 `releaseHeldInputs({ taskId })`。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。DSH 回合中成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；正常程序结束和回合结束均保持输入。没有 DSH 回合的程序，包括 MCP，在返回前等待释放，并只报告 helper 已确认释放的输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。程序失败、取消、断连、环境重置和销毁会停止所属输入派发，并等待反序释放。清理失败会禁用该任务后续 CUA 操作并报告结果不确定。提供方卸载前保留监听器，直到程序和原生连接排空。能力方法列表保持静态。Windows 在 helper 实现报告和清理前不设置 `heldInputState`，不会收到新命令。
+实现 `CuaBackend.heldInputState` 的提供方为显式输入和系统指针移动接受 `taskId`，通过 `getHeldInputs({ taskId })` 报告本连接的持有记录，并确认 `releaseHeldInputs({ taskId })`。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；DSH 和 MCP 的正常程序结束和回合结束均保持输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。程序失败、取消、断连、环境重置和销毁会停止所属输入派发，并等待反序释放。清理失败会禁用该任务后续 CUA 操作并报告结果不确定。提供方卸载前保留监听器，直到程序和原生连接排空。能力方法列表保持静态。Windows 在 helper 实现报告和清理前不设置 `heldInputState`，不会收到新命令。
 
-持有输入属于任务和原生连接，保存在程序进程之外。模型思考期间，DSH 仍监听回合取消信号。清理确认后，释放提醒进入会话队列，供恢复后的模型读取；清理开始后才到达的旧持有状态提醒会被丢弃。
+持有输入属于任务和原生连接，保存在程序进程之外。模型思考期间，DSH 仍监听回合取消信号。DSH 在清理确认后将释放提醒写入会话队列，供恢复后的模型读取；清理开始后才到达的旧持有状态提醒会被丢弃。
 
 [授权存储](src/permission-store.ts)复用 `storageDomain` 和配置的后端。默认 JSON 后端写入 `$DSH_HOME/storages/cua_permissions_<sha256>.json`，摘要对应 profile 的真实目录。每次授权检查在 profile 文件锁内打开并读取最新状态，随后关闭存储域；原生操作使用单独的应用锁。撤销会等待其他进程已获准执行的操作结束；撤销完成后，各进程都拒绝旧句柄。不同电脑或 PID 命名空间不能共享这把锁。
 

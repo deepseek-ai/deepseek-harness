@@ -96,7 +96,7 @@ const INSTRUCTIONS = 'DeepSeek Harness Computer Use: observe and operate desktop
   + 'written without it guess the API wrong. Then call cua_run_code with a TypeScript program that uses the global cua '
   + 'object; program state persists across calls on this connection. A call may ask the user for application or pointer '
   + 'consent before it proceeds. Call cua_reset to discard program state. '
-  + 'Remaining held keys and mouse buttons are released before each program returns. A system reminder lists inputs automatically released at program end. Explicit downs cannot stay held across MCP calls.'
+  + 'Explicit key and mouse downs remain held across successful programs; a system reminder lists remaining holds. Explicit up, program failure, request cancellation, reset, and connection closure release owned input. Client pause between completed calls is not observable by this server and does not release input.'
 
 const NO_PROVIDER = 'Computer Use is not available on this Host: the cua-mcp profile has no active CUA provider. '
   + 'Providers exist for macOS and native Windows; on those Hosts the server\'s stderr names why the provider did not start.'
@@ -203,21 +203,34 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     }
     // The program runtime rejects a run while the Agent's previous process is still exiting.
     while (resetting !== undefined) await resetting
-    // The call is the Agent's maintenance activity: Agent disposal cancels it and waits for it, with its nested
-    // calls, to settle before the Agent's scope and Session close.
-    const batch = await agent.runMaintenance(maintenance => ctx.agents.withInitiator(agent, () => ctx.tools.execute({
-      calls: [{
-        type: 'tool-call', id: brandString<ToolCallId>(`cua-mcp-${String(++calls)}`), name: PROGRAM_TOOL, arguments: JSON.stringify(args),
-      }],
-      agent, signal: AbortSignal.any([signal, maintenance]),
-    })))
-    const outcome = batch.results[0]
-    if (outcome === undefined) throw new Error(`The tool executor settled without a ${PROGRAM_TOOL} result`)
     const programs = ctx.get('cuaPrograms')
-    return projectToolResult(outcome.result, batch.additionalContexts, {
-      attachments: ctx.attachments, target: image => programs?.screenshotRequestTarget(image),
-    }, signal)
+    let cleanup: Promise<void> | undefined
+    const cancel = (): void => {
+      cleanup ??= programs?.releaseInputs(agent) ?? Promise.resolve()
+      void cleanup.catch(() => undefined) // The native owner reports failure; finally joins this same cleanup.
+    }
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted) cancel()
+    try {
+      // The call is the Agent's maintenance activity: Agent disposal cancels it and waits for it, with its nested
+      // calls, to settle before the Agent's scope and Session close.
+      const batch = await agent.runMaintenance(maintenance => ctx.agents.withInitiator(agent, () => ctx.tools.execute({
+        calls: [{
+          type: 'tool-call', id: brandString<ToolCallId>(`cua-mcp-${String(++calls)}`), name: PROGRAM_TOOL, arguments: JSON.stringify(args),
+        }],
+        agent, signal: AbortSignal.any([signal, maintenance]),
+      })))
+      const outcome = batch.results[0]
+      if (outcome === undefined) throw new Error(`The tool executor settled without a ${PROGRAM_TOOL} result`)
+      return await projectToolResult(outcome.result, batch.additionalContexts, {
+        attachments: ctx.attachments, target: image => programs?.screenshotRequestTarget(image),
+      }, signal)
+    } finally {
+      signal.removeEventListener('abort', cancel)
+      await cleanup
+    }
   }
+
   const resetEnvironment = (): CallToolResult | Promise<CallToolResult> => {
     const programs = ctx.get('cuaPrograms')
     if (programs === undefined) return failure(NO_PROVIDER)
