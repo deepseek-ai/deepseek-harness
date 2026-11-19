@@ -1,4 +1,4 @@
-/** Reasoning-level declarations for a model on a hand-declared pi-ai route. */
+/** Reasoning-level declarations for a model on a pi-ai route. */
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -52,7 +52,7 @@ function readEfforts(model: DeepSeekModelDraft): Entries | undefined {
 function withEfforts(model: DeepSeekModelDraft, entries: Entries | undefined): DeepSeekModelDraft {
   const next = { ...model }
   if (entries === undefined) {
-    // Absent is how a hand-declared model says it does not reason.
+    // Absent keeps the installed catalog's levels; a model the catalog does not describe then does not reason.
     Reflect.deleteProperty(next, 'reasoningEfforts')
     return next
   }
@@ -81,7 +81,7 @@ function outsideLevels(only: readonly string[], level: string, wire: unknown): b
 }
 
 /**
- * Mirror the pi-ai refusals of a hand-declared `reasoningEfforts`, so a card
+ * Mirror the pi-ai refusals of a model's `reasoningEfforts`, so a card
  * names the row instead of failing at the write.
  * @param value - drafted `models` value, or `undefined` while inherited.
  * @param only - the levels the route's protocol accepts, each sent under its
@@ -120,7 +120,7 @@ interface ModelReasoningEffortsProps {
 }
 
 /**
- * Edit the `reasoningEfforts` a hand-declared pi-ai model offers: a switch,
+ * Edit the `reasoningEfforts` a pi-ai model offers: a switch,
  * then one row per level pairing the level with the value sent for it. Every
  * row is read from the model, so a reused instance shows its new model.
  * @param props - model declaration and row replacement action.
