@@ -3349,7 +3349,7 @@ export interface Config {
 
 - `inject`: `agents` · `workingDirectory`
 - `refs`: `Readable` (`node:stream`) · `Writable` (`node:stream`)
-- `source`: [`packages/sdk/server/src/index.ts:24`](../packages/sdk/server/src/index.ts)
+- `source`: [`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
 
 ```ts config-catalog
 /** JSON-RPC deployment config plus runtime-only test hooks. */
@@ -3362,6 +3362,15 @@ export interface JsonRpcConfig {
   output?: Writable
   /** Process-exit override; production uses `process.exit`. */
   exit?: (code: number) => void
+  /** Process-event override; production uses `process`. */
+  processEvents?: RuntimeProcessEvents
+}
+
+/** The slice of `process` this module observes; `node:events` emitters satisfy it. */
+export interface RuntimeProcessEvents {
+  listenerCount(event: string): number
+  prependListener(event: string, listener: (...args: unknown[]) => void): unknown
+  off(event: string, listener: (...args: unknown[]) => void): unknown
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-sdk-jsonrpc-server -->

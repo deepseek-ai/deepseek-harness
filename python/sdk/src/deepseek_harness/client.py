@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import subprocess
@@ -18,6 +19,8 @@ from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
 from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, ResumeSessionOptions, UserQuestionAnswer, UserQuestionRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+# Every line the runtime writes to stderr, as it arrives. The host's logging configuration decides whether it is shown.
+_runtime_logger = logging.getLogger("deepseek_harness.runtime")
 NotificationFilter: TypeAlias = Callable[[Notification], bool]
 UserQuestionHandler: TypeAlias = Callable[[UserQuestionRequest, threading.Event], UserQuestionAnswer | JsonObject]
 
@@ -459,7 +462,9 @@ class HarnessClient:
         if proc is None or proc.stderr is None:
             return
         for line in proc.stderr:
-            self._stderr_lines.append(line.rstrip())
+            text = line.rstrip()
+            self._stderr_lines.append(text)
+            _runtime_logger.info("dsh runtime[%d] stderr: %s", proc.pid, text)
 
     def _handle_message(self, message: object) -> None:
         if not isinstance(message, dict):
