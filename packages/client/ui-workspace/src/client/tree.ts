@@ -241,7 +241,8 @@ export type ArchivedFilter = 'default' | 'show' | 'only'
 
 /**
  * Ordinary sessions are visible; among blank sessions, only the current one
- * is visible. Subagent children use their parent header catalog; archived
+ * is visible. Subagent children use their parent header catalog, and side
+ * conversations open from their source Session's right Sidebar; archived
  * sessions follow the archived filter, while their accounting slots remain
  * either way so unarchiving restores position.
  */
@@ -251,7 +252,7 @@ function sessionVisible(
   archived: ReadonlySet<SessionId>,
   archivedFilter: ArchivedFilter,
 ): boolean {
-  if (session.origin === 'subagent') return false
+  if (session.origin === 'subagent' || session.origin === 'side') return false
   if (session.blank && session.id !== current) return false
   switch (archivedFilter) {
     case 'default':

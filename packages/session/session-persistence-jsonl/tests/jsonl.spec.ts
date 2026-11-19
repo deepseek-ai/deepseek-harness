@@ -461,6 +461,10 @@ describe('JsonlSessionPersistence: format helpers', () => {
     ))
     expect(scan.meta).toEqual(full)
     expect(scan.inheritedEventCount).toBe(3)
+    const side: SessionHeader = { ...full, origin: 'side' }
+    expect(scanLog(Buffer.from(
+      `${[toHeaderLine(side, SessionLogOffset(3)), ...events].map(value => JSON.stringify(value)).join('\n')}\n`,
+    )).meta).toEqual(side)
   })
 
   it.each([

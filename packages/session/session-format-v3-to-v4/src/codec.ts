@@ -11,9 +11,20 @@ import { assertV4ForkResult } from './fork-result.ts'
 import { assertV4ToolResultMessage } from './tool-role.ts'
 import { assertReleasedV4Header } from './validation.ts'
 
-function physicalV2(value: unknown): SessionFormatHeader {
+/**
+ * Split the V4-only `side` origin from a header, because the frozen V2 header codec admits only `subagent`.
+ * @param header - V4 header object.
+ * @returns the header for the V2 codec and the origin fields to restore on its result.
+ */
+function splitSideOrigin(header: Readonly<Record<string, unknown>>): readonly [Readonly<Record<string, unknown>>, { readonly origin?: 'side' }] {
+  const { origin, ...rest } = header
+  return origin === 'side' ? [rest, { origin }] : [header, {}]
+}
+
+function physicalV2(value: unknown): readonly [SessionFormatHeader, { readonly origin?: 'side' }] {
   if (!isSessionFormatJsonObject(value) || value['version'] !== 4) throw new SessionFormatError('expected format v4 physical header')
-  return { ...value, version: 2 } as SessionFormatHeader
+  const [header, side] = splitSideOrigin(value)
+  return [{ ...header, version: 2 } as SessionFormatHeader, side]
 }
 
 /**
@@ -23,13 +34,15 @@ function physicalV2(value: unknown): SessionFormatHeader {
 export const releasedV4SessionFormatCodec = Object.freeze({
   version: 4,
   decodeHeader(value: unknown) {
-    return { ...releasedV2SessionFormatCodec.decodeHeader(physicalV2(value)), version: 4 }
+    const [header, side] = physicalV2(value)
+    return { ...releasedV2SessionFormatCodec.decodeHeader(header), ...side, version: 4 }
   },
   createDecoder(value, recovery) {
-    const decoder = releasedV2SessionFormatCodec.createDecoder(physicalV2(value), recovery)
+    const [header, side] = physicalV2(value)
+    const decoder = releasedV2SessionFormatCodec.createDecoder(header, recovery)
     return {
       ...decoder,
-      header: { ...decoder.header, version: 4 },
+      header: { ...decoder.header, ...side, version: 4 },
       decodeRow(row, context) {
         assertV4RowAdmission(row)
         decoder.decodeRow(row, {
@@ -41,7 +54,9 @@ export const releasedV4SessionFormatCodec = Object.freeze({
   },
   encodeHeader(header, inheritedEventCount) {
     assertReleasedV4Header(header)
-    return { ...releasedV2SessionFormatCodec.encodeHeader({ ...header, version: 2 }, inheritedEventCount), version: 4 }
+    const [v2, side] = splitSideOrigin(header)
+    const physical = releasedV2SessionFormatCodec.encodeHeader({ ...v2, version: 2 } as SessionFormatHeader, inheritedEventCount)
+    return { ...physical, ...side, version: 4 }
   },
   encodeEvent(event: SessionFormatEvent) {
     if (event.type === 'developer/message' && event['ignorable'] === true) {

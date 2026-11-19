@@ -27,7 +27,7 @@ export interface DeepSeekSessionLogWireHeader {
   readonly parentSession?: string
   /** Exact inherited prefix length; absent for an unseeded Session. */
   readonly seedLength?: number
-  readonly origin?: 'subagent'
+  readonly origin?: 'subagent' | 'side'
   readonly delegationDepth?: number
   readonly agentPreset?: string
 }

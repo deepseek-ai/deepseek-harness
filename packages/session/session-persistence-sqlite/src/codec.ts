@@ -16,7 +16,7 @@ const header = z.object({
   isSeeded: z.boolean(),
   cwd: z.string().refine(isAbsolute).optional(),
   parentSession: z.string().transform(SessionId).optional(),
-  origin: z.literal('subagent').optional(),
+  origin: z.enum(['subagent', 'side']).optional(),
   delegationDepth: z.number().int().nonnegative().default(0),
   agentPreset: z.string().optional(),
 }).strict()

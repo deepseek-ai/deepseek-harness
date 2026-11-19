@@ -8,7 +8,7 @@ import type {
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { LlmModelBadge, TextBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionOrigin, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -153,7 +153,7 @@ export interface SessionSummary {
   readonly running: boolean
   readonly blank: boolean
   readonly parentSessionId?: SessionId
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   readonly cwd?: string
   readonly projections?: SessionProjectionHints
 }
@@ -305,6 +305,8 @@ export interface SessionForkRequest {
   readonly atSeq?: number
   /** False asks the Host to check for required migration before forking. Defaults to true. */
   readonly allowMigration?: boolean
+  /** Durable classification of the child; omission creates an ordinary Session. */
+  readonly origin?: 'side'
 }
 
 /** Identity of a newly forked Session. */
@@ -431,7 +433,7 @@ export interface SessionWireHeader {
   readonly parentSession?: SessionId
   /** Whether the Session contains a fork-inherited prefix. */
   readonly isSeeded: boolean
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   readonly delegationDepth?: number
   readonly agentPreset?: string
 }

@@ -1,0 +1,20 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"SessionHeader","kind":"header","digest":"5bd0c9671b79261f42e5a47a308f7e5c7e15926a80e4a6e137a8bc66e70db09c"},
+    {"key":"JsonlHeaderLine","kind":"header","digest":"80182de7c81ace88aba710f01dd7c66e10412a5e42645fe11d647c8eb237f3b2"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "408c748a4653a356": {"kind":"union","types":["aacda84a69739238","d3d39989f351add2"]},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "5bd0c9671b79261f": {"kind":"object","properties":[{"name":"agentPreset","type":"4cd48f3e5108bd6e","optional":true},{"name":"createdAt","type":"0657d3ca5ac4e7bf","optional":false},{"name":"cwd","type":"4cd48f3e5108bd6e","optional":true},{"name":"delegationDepth","type":"0657d3ca5ac4e7bf","optional":true},{"name":"id","type":"4cd48f3e5108bd6e","optional":false},{"name":"isSeeded","type":"aa93010d0e521ad7","optional":false},{"name":"origin","type":"408c748a4653a356","optional":true},{"name":"parentSession","type":"4cd48f3e5108bd6e","optional":true},{"name":"version","type":"af6e173f7be819bc","optional":false}],"indices":[]},
+    "80182de7c81ace88": {"kind":"object","properties":[{"name":"agentPreset","type":"4cd48f3e5108bd6e","optional":true},{"name":"createdAt","type":"0657d3ca5ac4e7bf","optional":false},{"name":"cwd","type":"4cd48f3e5108bd6e","optional":true},{"name":"delegationDepth","type":"0657d3ca5ac4e7bf","optional":false},{"name":"id","type":"4cd48f3e5108bd6e","optional":false},{"name":"isSeeded","type":"aa93010d0e521ad7","optional":false},{"name":"origin","type":"408c748a4653a356","optional":true},{"name":"parentSession","type":"4cd48f3e5108bd6e","optional":true},{"name":"type","type":"e41bdebe246abe17","optional":false},{"name":"version","type":"0657d3ca5ac4e7bf","optional":false}],"indices":[]},
+    "aa93010d0e521ad7": {"kind":"primitive","type":"boolean"},
+    "aacda84a69739238": {"kind":"literal","value":"subagent"},
+    "af6e173f7be819bc": {"kind":"literal","value":4},
+    "d3d39989f351add2": {"kind":"literal","value":"side"},
+    "e41bdebe246abe17": {"kind":"literal","value":"session"}
+  }
+}

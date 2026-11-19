@@ -947,6 +947,15 @@ describe('fork', () => {
     expect(b.mock.log.requests(FOLLOW)).toHaveLength(0)
   })
 
+  it('forwards a side origin to the Remote request', async ({ bench }) => {
+    const b = bench()
+    b.mock.remote.session.fork.mockResolvedValueOnce(ok({ sessionId: sid('child') }))
+
+    await expect(b.svc.fork({ sessionId: sid('source'), origin: 'side' })).resolves.toBe(sid('child'))
+
+    expect(b.mock.remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), origin: 'side' })
+  })
+
   it('preserves the Host migration refusal without creating or opening a Session', async ({ bench }) => {
     const b = bench()
     const source = sid('source')

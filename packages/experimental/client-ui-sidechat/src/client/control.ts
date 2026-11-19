@@ -30,7 +30,8 @@ export class SidechatControl {
    * the right Sidebar of the Session on screen. Forking from a side conversation therefore adds the child
    * beside it, not inside it. A subagent source reports that it cannot start a side conversation: its child
    * would inherit the delegated approval policy and preset without the delegation itself. The Host refuses a
-   * source without a completed Turn, which the notice reports as having no completed turn. Every other call forks.
+   * source without a completed Turn, which the notice reports as having no completed turn. The child records
+   * `origin: 'side'`, which keeps it out of the left Sidebar. Every other call forks.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
@@ -60,7 +61,7 @@ export class SidechatControl {
     let childId: SessionId | undefined
     try {
       // `onCreated` runs before the child title rename, so a rename failure still opens the created child.
-      await this.ctx.sessions.fork({ sessionId, increaseTitle: true, onCreated: (id) => { childId = id } })
+      await this.ctx.sessions.fork({ sessionId, origin: 'side', increaseTitle: true, onCreated: (id) => { childId = id } })
     } catch (error) {
       if (childId === undefined && !this.closed) {
         this.notice.set({ serial: ++this.serial, key: forkUnavailable(error) ? 'noTurn' : 'createFailed' })

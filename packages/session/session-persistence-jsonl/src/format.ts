@@ -19,6 +19,7 @@ import type {
   SessionHeader,
   SessionId,
   SessionLogOffset as SessionLogOffsetType,
+  SessionOrigin,
 } from '@deepseek-ai/dsh-session'
 import { parseSessionFormatLogFilename, sessionFormatLogFilename, SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
@@ -88,7 +89,7 @@ interface HeaderLine {
   cwd?: string
   parentSession?: SessionId
   isSeeded: boolean
-  origin?: 'subagent'
+  origin?: SessionOrigin
   delegationDepth: number
   agentPreset?: string
 }
@@ -179,7 +180,8 @@ function isHeaderLine(value: unknown): value is HeaderLine {
       || typeof (value as { parentSession?: unknown }).parentSession === 'string')
     && typeof (value as { isSeeded?: unknown }).isSeeded === 'boolean'
     && ((value as { origin?: unknown }).origin === undefined
-      || (value as { origin?: unknown }).origin === 'subagent')
+      || (value as { origin?: unknown }).origin === 'subagent'
+      || (value as { origin?: unknown }).origin === 'side')
     && ((value as { agentPreset?: unknown }).agentPreset === undefined
       || typeof (value as { agentPreset?: unknown }).agentPreset === 'string')
   )

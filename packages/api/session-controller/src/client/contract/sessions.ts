@@ -158,6 +158,8 @@ export interface ISessions {
     onCreated?: (childId: SessionId) => void
     /** False refuses source migration; omission preserves the Host default. */
     allowMigration?: boolean
+    /** `side` records the child as a side conversation; omission creates an ordinary Session. */
+    origin?: 'side'
   }): Promise<SessionId>
   /**
    * Borrow an already-retained Agent-scoped Context without extending its lifetime.

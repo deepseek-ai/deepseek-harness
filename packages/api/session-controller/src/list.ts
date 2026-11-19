@@ -5,7 +5,7 @@ import { scheduler } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
-import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionHeader, SessionId, SessionOrigin } from '@deepseek-ai/dsh-session'
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
@@ -337,7 +337,7 @@ function updatedAt(header: SessionHeader, metadata: SessionListMetadata | undefi
 
 function listFields(header: SessionHeader): {
   readonly parentSessionId?: SessionId
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   readonly cwd?: string
 } {
   return {

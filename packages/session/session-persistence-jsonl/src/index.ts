@@ -36,7 +36,7 @@ import { JsonlBackendTracker, JsonlSessionHandle, type StorageHandleState } from
 import { SessionWriteLease } from './lease.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { SESSION_FORMAT_VERSION, SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SessionHeader, SessionOrigin, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath, logPath, logSuffix,
   parseGenerationLogFilename, projectDir, scanLog, sessionDir, SessionLogScanner, toHeaderLine,
@@ -1352,7 +1352,7 @@ export class JsonlSessionPersistence extends SessionPersistence {
     readonly cwd?: string
     readonly parentSession?: string
     readonly isSeeded: boolean
-    readonly origin?: 'subagent'
+    readonly origin?: SessionOrigin
     readonly delegationDepth: number
     readonly agentPreset?: string
   }): SessionHeader {

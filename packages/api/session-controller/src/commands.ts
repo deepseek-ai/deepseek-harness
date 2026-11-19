@@ -224,7 +224,7 @@ export class SessionCommandController {
    * Create a new ordinary Session from an exact event prefix. An explicit
    * `atSeq` is the inclusive cut; an omitted value selects the latest
    * completed-turn prefix. An open cut receives synthetic fork closers.
-   * @param request - source Session and optional exact event boundary.
+   * @param request - source Session, optional exact event boundary, and optional child origin.
    * @returns the new Session identity.
    */
   async fork(request: SessionForkRequest): Promise<SessionForkValue> {
@@ -233,6 +233,9 @@ export class SessionCommandController {
       atSeq = request.atSeq === undefined ? undefined : SessionSeq(request.atSeq)
     } catch {
       throw new RemoteError('gateway/bad-request', 'atSeq must be a non-negative safe integer', {})
+    }
+    if (request.origin !== undefined && request.origin !== 'side') {
+      throw new RemoteError('gateway/bad-request', 'origin must be "side"', {})
     }
     let observed: SessionObservation
     try {
@@ -285,6 +288,7 @@ export class SessionCommandController {
         meta: {
           ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),
           isSeeded: true,
+          ...(request.origin === undefined ? {} : { origin: request.origin }),
           ...(composition.agentPreset === undefined
             ? {}
             : { agentPreset: composition.agentPreset }),
