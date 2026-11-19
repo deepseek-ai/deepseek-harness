@@ -503,9 +503,15 @@ it('reports failed native state inspection and releases held input instead of cl
   expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('Held state unavailable')
 })
 
-it('keeps the Windows helper runtime alive until its Agent connection confirms release', async () => {
-  const disposed = vi.fn(async (state: { closedChannels: number }) => state.closedChannels)
-  const f = await setup([holdWindowProgram], 'windows', undefined, true, true, undefined, async (state) => { await disposed(state) })
+it.each(['closes', 'fails to close'] as const)('waits for Agent release before the Windows helper runtime %s', async (outcome) => {
+  const failure = new Error('Windows helper lease could not close')
+  const disposed = vi.fn(async (state: { closedChannels: number }) => {
+    expect(state.closedChannels).toBe(1)
+    if (outcome === 'fails to close') throw failure
+  })
+  const f = await setup([holdWindowProgram], 'windows', undefined, true, true, undefined, disposed)
+  const report = vi.spyOn(f.provider.ctx.logger, 'error').mockImplementation(() => {})
+  onTestFinished(() => { report.mockRestore() })
   await f.run()
   const release = f.native.controlNext('releaseHeldInputs')
   const closing = f.provider.dispose()
@@ -513,8 +519,9 @@ it('keeps the Windows helper runtime alive until its Agent connection confirms r
   try { expect(disposed).not.toHaveBeenCalled() } finally { release.reply() }
   await closing
   expect(disposed).toHaveBeenCalledOnce()
-  expect(await disposed.mock.results[0]?.value).toBe(1)
   expect(f.native.held).toEqual([])
+  if (outcome === 'fails to close') expect(report).toHaveBeenCalledWith(expect.objectContaining({ errors: [failure] }))
+  else expect(report).not.toHaveBeenCalled()
 })
 
 it.each(['agent', 'provider', 'context'] as const)('awaits native release when the %s is disposed after a completed turn', async (owner) => {
