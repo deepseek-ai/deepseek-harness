@@ -119,6 +119,19 @@ it('normalizes text and preserves block order through run', async () => {
   ])
 })
 
+it.each(['session', 'harness'])('forwards a prompt time zone as timeZone through the %s entry', async (entry) => {
+  const harness = harnessWith()
+  const result = entry === 'session'
+    ? await harness.session('zone').run('when is noon?', { timeZone: 'Asia/Shanghai' })
+    : await harness.run('when is noon?', { sessionId: 'zone', timeZone: 'Asia/Shanghai' })
+  expect(result.finalResponse).toBe('reply:when is noon?')
+  await harness.session('zone').run('no zone')
+  expect(await harness.client.request('test/state')).toHaveProperty('queries', [
+    { sessionId: 'zone', contentBlocks: [{ type: 'text', text: 'when is noon?' }], timeZone: 'Asia/Shanghai' },
+    { sessionId: 'zone', contentBlocks: [{ type: 'text', text: 'no zone' }] },
+  ])
+})
+
 it('returns native command results for text-only blocks', async () => {
   const harness = harnessWith()
   const contentBlocks: SdkPromptContentBlock[] = [{ type: 'text', text: '/compact' }]

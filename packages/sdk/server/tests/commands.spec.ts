@@ -469,7 +469,7 @@ describe('SDK query dispatch', () => {
   ])('rejects invalid query fields %j', async (params) => {
     const h = await setup()
     await h.initialize()
-    await expect(h.server.handleRequest('session/query', params)).rejects.toThrow('session/query requires only')
+    await expect(h.server.handleRequest('session/query', params)).rejects.toThrow('session/query requires a non-empty sessionId and contentBlocks, with an optional timeZone')
     expect(h.ctx.agents.list()).toEqual([])
   })
 
