@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-remote-connection",
   "description": "Settings panel and single-use QR login for another browser",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
   },

@@ -208,10 +208,14 @@ const generatedRemoteAliases = {
   },
 }
 const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
-const remoteConnectionPlugin = () => sourceRemotePlugin(import.meta.dirname, '@deepseek-ai/dsh-client-remote-connection')
+const testPlugins = () => [
+  pathsPlugin(),
+  standardDecoratorPlugin(),
+  sourceRemotePlugin(import.meta.dirname, '@deepseek-ai/dsh-client-remote-connection'),
+]
 
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin(), remoteConnectionPlugin()],
+  plugins: testPlugins(),
   resolve: { alias: testingAliases },
   test: {
     ...localWorkerBudget,
@@ -225,7 +229,7 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin(), remoteConnectionPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'thread-safe',
@@ -247,7 +251,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin(), remoteConnectionPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',

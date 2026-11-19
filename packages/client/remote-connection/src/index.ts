@@ -1,4 +1,5 @@
 /** Remote-owned QR authentication and an independent shortcut to Token login. */
+import { isIPv4 } from 'node:net'
 import { FiberState, Service, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -229,7 +230,7 @@ export default class RemoteConnection extends TypertRemoteService {
     const root = new URL(url)
     const hostname = root.hostname
     if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]'
-      || hostname === '[::]' || hostname === '0.0.0.0' || /^127\./.test(hostname)) {
+      || hostname === '[::]' || hostname === '0.0.0.0' || (hostname.startsWith('127.') && isIPv4(hostname))) {
       return { url, availability: 'unreachable-host' }
     }
     const admission = this.owner.bail(this.owner.webServer, 'webserver/authorize', {

@@ -44,13 +44,14 @@ function QrLoginCard({ t, useRemoteConnection, create, cancel, reload }: Pick<Re
   const visibleTicket = phase === 'pending' && ticket !== null ? ticket : null
   const showQrPreview = visibleTicket !== null || busy
   const showDetails = visibleTicket !== null || retainDetails
+  const regenerate = ticket !== null || retainDetails || phase === 'used' || phase === 'expired' || phase === 'replaced'
   const showQrBody = phase !== 'ready' && phase !== 'cancelled'
   return <section className={css.card} aria-label={t('qrTitle')} aria-busy={busy || undefined}>
     <header className={css.cardHeader}>
       <h3 className={css.methodTitle}>{t('qrTitle')}</h3>
       <div className={css.qrActions}>
         <Button variant="primary" size="sm" disabled={busy} onClick={create}>
-          {t(phase === 'ready' || phase === 'cancelled' ? 'generate' : 'regenerate')}
+          {t(regenerate ? 'regenerate' : 'generate')}
         </Button>
         {(ticket !== null || phase === 'creating') && <Button variant="outline" size="sm" disabled={busy} onClick={cancel}>{t('cancel')}</Button>}
       </div>

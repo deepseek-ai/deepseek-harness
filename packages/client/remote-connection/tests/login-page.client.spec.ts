@@ -39,7 +39,7 @@ function page(path = `/?login=qr#${TOKEN}`, language = 'en-US') {
   }
 }
 
-function authenticationPage(options = { tokenLoginEnabled: true, tokenRejected: false }, language = 'en-US') {
+function authenticationPage(options = { tokenLoginEnabled: true }, language = 'en-US') {
   const html = new DOMParser().parseFromString(renderAuthenticationPage(options), 'text/html')
   document.documentElement.innerHTML = html.documentElement.innerHTML
   history.replaceState(null, '', '/mount/')
@@ -96,7 +96,7 @@ it.each([
     replace: fixture.replace,
   } satisfies Pick<Location, 'href' | 'replace'>)
   vi.spyOn(history, 'replaceState').mockImplementation(() => {})
-  enterAuthenticationPage(loginLocales, false, vi.fn())
+  enterAuthenticationPage(loginLocales, vi.fn())
   expect(fixture.input.placeholder).toBe(`${applicationUrl}?token=xxx`)
   expect(fixture.input.placeholder).not.toContain(TOKEN)
   expect(fixture.input.placeholder).not.toContain('private-query')
@@ -104,22 +104,27 @@ it.each([
 })
 
 it('hides the Token form when its provider is unavailable', () => {
-  const fixture = authenticationPage({ tokenLoginEnabled: false, tokenRejected: false }, 'zh-CN')
+  const fixture = authenticationPage({ tokenLoginEnabled: false }, 'zh-CN')
   enterAuthenticationPage(loginLocales)
   expect(document.getElementById('description')?.textContent).toBe(loginLocales.zh.authenticationUnavailable)
   expect(document.getElementById('token-form')).toBeNull()
   expect(fixture.exchange).not.toHaveBeenCalled()
 })
 
-it('removes a rejected Token from the address and keeps localized field feedback', () => {
-  const fixture = authenticationPage({ tokenLoginEnabled: true, tokenRejected: true }, 'zh-CN')
+it('clears a Token from the address and clears submission feedback on edit', async () => {
+  const fixture = authenticationPage(undefined, 'zh-CN')
   history.replaceState(null, '', `/mount/?token=${TOKEN}&keep=value`)
-  enterAuthenticationPage(loginLocales, true)
+  fixture.exchange.mockResolvedValue(new Response(null, { status: 401 }))
+  enterAuthenticationPage(loginLocales)
   expect(fixture.actualLocation.href).not.toContain(TOKEN)
   expect(fixture.actualLocation.search).toBe('?keep=value')
-  expect(fixture.error.textContent).toBe(loginLocales.zh.tokenInvalid)
-  expect(fixture.input.getAttribute('aria-invalid')).toBe('true')
+  expect(fixture.error.textContent).toBe('')
+  expect(fixture.input.hasAttribute('aria-invalid')).toBe(false)
   fixture.input.value = TOKEN
+  fixture.form.dispatchEvent(new Event('submit', { cancelable: true }))
+  await expect.poll(() => fixture.error.textContent).toBe(loginLocales.zh.tokenInvalid)
+  await expect.poll(() => fixture.submit.disabled).toBe(false)
+  expect(fixture.input.getAttribute('aria-invalid')).toBe('true')
   fixture.input.dispatchEvent(new Event('input'))
   expect(fixture.error.textContent).toBe('')
   expect(fixture.input.hasAttribute('aria-invalid')).toBe(false)
@@ -320,7 +325,7 @@ it('does not navigate when a completed QR request settles after the page leaves'
 })
 
 it('exchanges QR credentials while retaining the ordinary page when Token sign-in is unavailable', async () => {
-  const fixture = authenticationPage({ tokenLoginEnabled: false, tokenRejected: false })
+  const fixture = authenticationPage({ tokenLoginEnabled: false })
   history.replaceState(null, '', `/mount/?login=qr#${TOKEN}`)
   fixture.exchange.mockResolvedValue(new Response(null, { status: 204 }))
   enterAuthenticationPage(loginLocales)

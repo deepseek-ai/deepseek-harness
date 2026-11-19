@@ -50,7 +50,7 @@ async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'htt
     },
   } as WebServer)
   ctx.provide('webApp', { getAdvertisedUrl: () => url })
-  await ctx.plugin(Connection, { trustedHosts: ['login.example', 'other.example'] })
+  await ctx.plugin(Connection, { trustedHosts: ['login.example', 'other.example', '127.login.example'] })
   if (withToken) await ctx.plugin(Token, { cookieMaxAgeDays: 30 })
   const fiber = ctx.plugin(RemoteConnection, RemoteConnection.Config({ ticketLifetimeMs: 120_000, pollIntervalMs: 1000 }))
   await fiber
@@ -322,11 +322,22 @@ it.each([
   ['https://[::]/', 'unreachable-host'],
   ['https://0.0.0.0/', 'unreachable-host'],
   ['https://unknown.example/', 'untrusted-host'],
+  ['https://127.unknown.example/', 'untrusted-host'],
 ] as const)('reports the unmet prerequisite for %s', async (url, availability) => {
   const { service } = await mount(url)
   expect(service.status(null).availability).toBe(availability)
   expect(() => service.create()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable', details: { reason: availability } }))
   expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable', details: { reason: availability } }))
+})
+
+it('allows login through a trusted DNS hostname that starts with 127', async () => {
+  const url = 'https://127.login.example/'
+  const { route, service } = await mount(url)
+  expect(service.status(null).availability).toBe('available')
+  const ticket = service.create()
+  expect(new URL(ticket.url).hostname).toBe('127.login.example')
+  expect(new URL(service.loginUrl()).hostname).toBe('127.login.example')
+  expect((await exchange(route, credential(ticket), { host: '127.login.example', origin: new URL(url).origin })).status).toBe(204)
 })
 
 it('marks QR cookies Secure behind an HTTPS proxy while preserving the upstream cookie audience', async () => {

@@ -140,6 +140,12 @@ describe('Remote connection section', () => {
     expect(screen.getByRole('button', { name: en.cancel })).toHaveProperty('disabled', true)
   })
 
+  it.each(['loading', 'creating'] as const)('keeps the generation label while %s without a previous QR', (phase) => {
+    panel({ phase })
+    const qr = screen.getByRole('region', { name: en.qrTitle })
+    expect(within(qr).getByRole('button', { name: en.generate })).toHaveProperty('disabled', true)
+  })
+
   it('keeps the link card and its focus while the QR is generated or refreshed', () => {
     const { state, copyLink } = panel({ phase: 'pending', ticket }, 'en', { copied: true })
     const qr = screen.getByRole('region', { name: en.qrTitle })
@@ -173,6 +179,7 @@ describe('Remote connection section', () => {
     act(() => { state.update((value) => { value.phase = 'creating'; value.ticket = null; value.retainDetails = true }) })
     expect(within(qr).queryByRole('img')).toBeNull()
     expect(within(qr).getByRole('status', { name: en.creating })).toBeTruthy()
+    expect(within(qr).getByRole('button', { name: en.regenerate })).toHaveProperty('disabled', true)
     expect(within(qr).getByRole('timer')).toBe(timer)
     expect(within(qr).getByText(en.warning)).toBe(warning)
     expect(timer.textContent).toBe('Expires in 120s')
