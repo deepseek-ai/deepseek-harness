@@ -161,6 +161,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-notion` | yes | Notion plugin: Notion's hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-tencent-docs` | yes | Tencent Docs plugin: Tencent Docs' hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-upstream-skills` | yes | Host Service of CLI app plugins: each plugin registers its entry skill and a pinned directory of the vendor's GitHub repository, and the Service downloads that directory into the DSH cache and lists the entry skill over it |
+| `@deepseek-ai/dsh-wecom` | yes | WeCom plugin: the official wecom-cli with its skills, and authorization from the Plugins page |
 
 ## context
 

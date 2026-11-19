@@ -30,6 +30,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | [`linear/`](linear/README.md) | Registers Linear's hosted MCP server with OAuth through the shared MCP manager, adds the Linear plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 | [`notion/`](notion/README.md) | Registers Notion's hosted MCP server with OAuth through the shared MCP manager, adds the Notion plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 | [`tencent-docs/`](tencent-docs/README.md) | Registers Tencent Docs' hosted MCP server with OAuth through the shared MCP manager, adds the Tencent Docs plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
+| [`wecom/`](wecom/README.md) | The WeCom plugin: installs the official `wecom-cli`, gives the model its absolute path, registers its skills, and runs the authorization operations the Plugins page drives | registers on `ctx.cliAccounts` and `ctx.upstreamSkills` |
 
 -----
 

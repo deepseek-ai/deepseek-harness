@@ -30,6 +30,7 @@ kind: "package-group"
 | [`linear/`](linear/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Linear 托管的 MCP 服务器，添加 Linear 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
 | [`notion/`](notion/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册 Notion 托管的 MCP 服务器，添加 Notion 插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
 | [`tencent-docs/`](tencent-docs/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册腾讯文档托管的 MCP 服务器，添加腾讯文档插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
+| [`wecom/`](wecom/README.zh.md) | 企业微信插件：安装官方 `wecom-cli`，把它的绝对路径告诉模型，注册其 skill，并执行插件页发起的授权操作 | 注册到 `ctx.cliAccounts` 与 `ctx.upstreamSkills` |
 
 -----
 

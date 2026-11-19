@@ -220,6 +220,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-shortcuts': ['lib/protocol.js'],
   // The Feishu entry skill travels with the package; the guides it indexes stay in lark-cli.
   '@deepseek-ai/dsh-feishu': ['skills'],
+  // The WeCom plugin ships its entry skill; the upstream guides it indexes are downloaded at load.
+  '@deepseek-ai/dsh-wecom': ['skills'],
   '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice': ['runtime/assets.json'],
   // Node profile configuration and process bootstraps have separate bundles.
   '@deepseek-ai/dsh-ptc-runtime-node': ['lib/configuration.js', 'lib/process.js', 'lib/persistent-process.js'],
