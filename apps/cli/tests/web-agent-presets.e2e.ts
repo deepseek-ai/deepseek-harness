@@ -995,6 +995,11 @@ describe('the standard preset documentation skill', () => {
         setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'cordis').then(() => undefined),
       })
       expect((await testCtx.skills.get('dsh-doc', { cwd: root, scope: creator.agent }))?.path).toBe(definition.path)
+      const ptc = await testCtx.agents.create({
+        sessionId: brandString<SessionId>('standard-doc-ptc'), meta: { cwd: root },
+        setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'ptc').then(() => undefined),
+      })
+      expect((await testCtx.skills.get('dsh-doc', { cwd: root, scope: ptc.agent }))?.path).toBe(definition.path)
       const schemas = testCtx.tools.schemas(standardAgent.agent)
       expect(schemas).toEqual(testCtx.tools.schemas(baseline.agent))
       expect(schemas.map(tool => tool.name)).toContain('cordis_inspect')
