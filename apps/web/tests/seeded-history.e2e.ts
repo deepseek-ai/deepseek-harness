@@ -60,8 +60,7 @@ const CHECKPOINT_SIDEBAR_EXPECTED = join(SNAPSHOT_DIR, 'checkpoint-sidebar.expec
 // packages/client/ui-compaction/src/client/locales.ts. apps/web does not
 // declare either feature plugin as a dependency, so this spec cannot import
 // their source values.
-const MARKDOWN_PREVIEW = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown'
-const CHECKPOINT_TITLE = 'Compacted context'
+const CHECKPOINT_TITLE = 'Context summary'
 const MODE = webSnapshotMode()
 const SEED_ID = 'seeded-history-web-e2e'
 
@@ -173,8 +172,6 @@ function withCompaction(raw: string, meter: TokenMeter): string {
       summary: [{
         type: 'text',
         text: '## Cold resume compact summary\n\n- The exact summary remains available.\n\n'
-          // The backend summary differs from the checkpoint text below, so the
-          // checkpoint tab proves it shows the replacement message instead.
           + '```ts\nfunction resume(): boolean {\n'
           + Array.from({ length: 26 }, (_, index) => `  const step${index + 1} = read(${index + 1})`).join('\n')
           + '\n  return true\n}\n```\n\n'
@@ -232,12 +229,14 @@ function checkpointOf(scaffold: WebScaffold): { seq: number; address: string } {
   const checkpoint = session?.snapshotEvents().find(event => event.type === 'user/message'
     && event.data.source.kind === 'compact-checkpoint')
   if (checkpoint === undefined) throw new Error('seeded history has no compaction checkpoint')
-  return { seq: checkpoint.seq, address: `dsh-resource://content-preview/${encodeURIComponent(`compaction:${SEED_ID}:${checkpoint.seq}`)}` }
+  const summary = session?.snapshotEvents().find(event => event.type === 'compaction/summary')
+  if (summary === undefined) throw new Error('seeded history has no compaction summary')
+  return { seq: checkpoint.seq, address: `dsh-resource://compaction/${SEED_ID}/${summary.seq}` }
 }
 
 /** The manual compaction marker; its hidden label names the Sidebar action. */
 function compactionMarker(page: Page): Locator {
-  return page.getByRole('button', { name: /^compact Compacted \d+ history items .*View compacted content in the sidebar$/ })
+  return page.getByRole('button', { name: /^compact Compacted \d+ history items .*View compaction summary in the sidebar$/ })
 }
 
 /** Close the checkpoint tab when present, leaving the other Sidebar tabs. */
@@ -601,16 +600,13 @@ describe('web e2e: seeded history renders through cold resume', () => {
     const frame = page.locator('[style*="grid-template-columns"]').first()
     expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
     const column = page.locator('[data-rightbar-col]')
-    const preview = column.locator(`[data-contentpreview-url="${address}"]`)
+    const preview = column.locator(`[data-compaction-preview="${address}"]`)
     try {
       await marker.click()
-      await preview.and(page.locator('[data-contentpreview-state="content"]')).waitFor({ state: 'visible', timeout: 10_000 })
-      expect(await preview.getAttribute('data-contentpreview-media-type')).toBe('text/markdown')
-      expect(await preview.getAttribute('data-document-preview')).toBe(MARKDOWN_PREVIEW)
-      expect(await preview.locator('[data-contentpreview-title]').textContent()).toBe(CHECKPOINT_TITLE)
+      await preview.locator('[data-document-markdown]').waitFor({ state: 'visible', timeout: 10_000 })
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])
-      await expect.poll(() => preview.locator('[data-contentpreview-body]').textContent())
-        .toContain('Model-only compact checkpoint.')
+      await expect.poll(() => preview.locator('[data-document-markdown]').textContent())
+        .toContain('Cold resume compact summary')
       // The checkpoint opens beside the transcript; Chat neither expands the
       // marker nor shows the replacement text or the backend summary inline.
       const transcript = page.locator('[data-conversation-scroll]')
@@ -618,7 +614,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       expect(await transcript.getByRole('heading', { name: 'Cold resume compact summary' }).count()).toBe(0)
       expect(await marker.getAttribute('aria-expanded')).toBeNull()
       await compareOrRefreshGolden(CHECKPOINT_SIDEBAR_EXPECTED,
-        await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd), MODE)
+        await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd), MODE)
     } finally {
       // Later cases share this page and require only the file tab, with the Sidebar closed.
       await closeCheckpointTab(column)
@@ -734,26 +730,23 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(restoredPreview).toBe(preview)
   })
 
-  it.skipIf(MODE === 'record')('reopens expired compaction content from its Chat row after reload', async () => {
+  it.skipIf(MODE === 'record')('restores the summary directly from the saved sidebar tab on reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-compaction-reload'))
     // Runs after the cases that capture Chat goldens: reloading resets their
     // expanded rows. The previous case left the Sidebar open on the file tab.
     const { address } = checkpointOf(scaffold)
     const column = page.locator('[data-rightbar-col]')
-    const rendered = column.locator(`[data-contentpreview-url="${address}"][data-contentpreview-state="content"]`)
+    const rendered = column.locator(`[data-compaction-preview="${address}"] [data-document-markdown]`)
     try {
       await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 10_000 })
-      const before = await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)
+      const before = await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd)
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
-      await column.locator(`[data-contentpreview-url="${address}"][data-contentpreview-state="expired"]`).waitFor()
-      await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 15_000 })
-      expect(await rendered.getAttribute('data-document-preview')).toBe(MARKDOWN_PREVIEW)
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])
-      expect(await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)).toBe(before)
+      expect(await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd)).toBe(before)
     } finally {
       await closeCheckpointTab(column)
     }
@@ -843,6 +836,64 @@ describe('web e2e: seeded history renders through cold resume', () => {
     ].join('\n'), MODE)
   })
 
+  it.skipIf(MODE === 'record')('shows automatic compact progress and opens its recorded summary after completion', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-auto-compaction'))
+    const session = scaffold.ctx.sessions.get(brandString<SessionId>(SEED_ID))
+    if (session === undefined) throw new Error('seeded session is unavailable')
+    const events = session.snapshotEvents()
+    const recorded = events.find(event => event.type === 'compaction/summary')
+    const previousEnd = events.findLast(event => event.type === 'turn/end')
+    const previousCheckpoint = events.find(event => event.type === 'user/message'
+      && event.data.source.kind === 'compact-checkpoint')
+    if (recorded?.type !== 'compaction/summary' || previousEnd?.type !== 'turn/end' || previousCheckpoint === undefined) {
+      throw new Error('seeded history requires a recorded compact summary and checkpoint')
+    }
+    const turn = previousEnd.data.turn + 1
+    const compactionId = 'compact-seeded-automatic' as CheckpointSource['compactionId']
+    session.append('turn/start', { turn })
+    const started = session.append('compaction/start', { compactionId, turn })
+    await scaffold.ctx.sessions.flush(session)
+    const selector = `[data-chat-turn="${turn}"][data-chat-flow-kind="compaction"]`
+    const row = page.locator(selector)
+    await row.getByText('Compacting context…', { exact: true }).waitFor()
+    expect(await row.locator('[data-shimmer="true"]').count()).toBe(1)
+    expect(await row.getByRole('button').count()).toBe(0)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic-compaction-running.expected.md'),
+      await captureStableAria(page, selector, scaffold.workspaceCwd), MODE)
+    const { sourceCommandId: _command, ...summary } = recorded.data
+    const previousMessage = deriveEventMessage(previousCheckpoint)
+    if (previousMessage === null) throw new Error('compact checkpoint requires model content')
+    const committed = session.append('compaction/summary', {
+      ...summary, compactionId,
+      shadowedSeqs: [previousCheckpoint.seq],
+      shadowedRange: { start: previousCheckpoint.seq, end: previousCheckpoint.seq },
+      shadowedTokenCount: scaffold.ctx.tokenMeter.estimateMessage(previousMessage),
+    })
+    session.append('user/message', createUserMessage({
+      content: summary.summary, source: { kind: 'compact-checkpoint', compactionId },
+    }), {
+      surfaceOp: { op: 'replace', startSeq: previousCheckpoint.seq, endSeq: previousCheckpoint.seq },
+      sourceEventSeqs: [started.seq, committed.seq, previousCheckpoint.seq],
+    })
+    session.append('compaction/end', { compactionId, turn })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+    await scaffold.ctx.sessions.flush(session)
+    const process = page.locator(`[data-turn-process="${turn}"]`)
+    await process.waitFor()
+    if (await process.getAttribute('aria-expanded') === 'false') await process.click()
+    const activity = page.locator(`[data-chat-turn="${turn}"][data-chat-group-key] [data-process-activity]`)
+    await activity.waitFor()
+    if (await activity.getAttribute('aria-expanded') === 'false') await activity.click()
+    const button = row.getByRole('button', { name: /Compacted/ })
+    await button.waitFor()
+    expect(await row.locator('[data-shimmer]').count()).toBe(0)
+    expect(await row.getByText('Compacting context…', { exact: true }).count()).toBe(0)
+    await button.click()
+    await page.locator('[data-document-markdown]').getByRole('heading', { name: 'Cold resume compact summary' }).waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automatic-compaction-completed.expected.md'),
+      await captureStableAria(page, selector, scaffold.workspaceCwd), MODE)
+  })
+
   it.skipIf(MODE === 'record')('issued zero model calls and stayed clean', async () => {
     // No replay fixture was installed and the llm seam is open — any stray
     // stream would have failed the turn loudly. Cleanliness pins the wire.
@@ -851,7 +902,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await assertFixtureInventory(REASONING_EXPECTED_DIR, ['blank-reasoning.expected.md'])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md',
-      'checkpoint-sidebar.expected.md', 'session.v3.jsonl', 'thinking-expanded.expected.md',
+      'automatic-compaction-running.expected.md', 'automatic-compaction-completed.expected.md', 'checkpoint-sidebar.expected.md', 'session.v3.jsonl', 'thinking-expanded.expected.md',
       'ui.expected.md', 'ui-expanded.expected.md',
     ])
   })

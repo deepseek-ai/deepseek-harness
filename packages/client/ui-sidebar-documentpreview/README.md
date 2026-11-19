@@ -135,7 +135,7 @@ Document path labels expose a file [context menu](../ui-context-menu/README.md),
 <a id="content-previews"></a>
 ## Content previews
 
-Content that is not a workspace file opens through `ctx.contentPreviews.open({ mediaType, text }, { title, key?, destination? })`; bytes may replace `text`. The call opens the shared sidebar immediately. Use `destination: 'float'` for the shared floating panel. A stable `key` reuses the existing preview and replaces its input; omit it to create another preview. Callers include their Session and source identity in keys when separate Sessions must not collide.
+Content that is not a workspace file opens through `ctx.sidebarRight.openContent({ mediaType, text }, { title, key?, destination? })`; bytes may replace `text`. The call opens the shared sidebar immediately. Use `destination: 'float'` for the shared floating panel. A stable `key` reuses the existing preview and replaces its input; omit it to create another preview. Callers include their Session and source identity in keys when separate Sessions must not collide.
 
 The `content` tab receives content and title through transient navigation parameters. The sidebar owns their lifetime; the service retains no content cache or resource streams. Refreshing the browser restores the tab identity but loses its input, so the body displays an expired-content message. Reopen it from the originating card. The private `content-preview` address only identifies a navigation destination and is not a readable resource protocol.
 
@@ -162,7 +162,7 @@ No direct effect; what the user reads here never enters a model request.
 - **Finite local HTML dependencies.** Only direct classic `.js` and stylesheet `.css` references are packed. Browser-resolved resources retain browser origin and network restrictions; no runtime file-read bridge is exposed to the iframe.
 - **Scroll writes are unthrottled.** Every scroll event except a layout clamp records its offset in the store; the line blocks are memoized so the resulting re-render hands React the same elements back.
 - **A failed PDF chunk load requires a page reload.** React caches a rejected lazy import for the page lifetime; ordinary PDF open or render failures remain retryable inside the loaded body.
-- **Content stays in memory while its tab is open.** Content opened through `ctx.contentPreviews.open` travels as the tab's navigation input; closing the tab removes it, and no separate window-level store keeps a copy. Each open without a `key` creates its own tab, so repeatedly opening large content retains one copy per open tab.
+- **Content stays in memory while its tab is open.** Content opened through `ctx.sidebarRight.openContent` travels as the tab's navigation input; closing the tab removes it, and no separate window-level store keeps a copy. Each open without a `key` creates its own tab, so repeatedly opening large content retains one copy per open tab.
 - **Window-local addresses expire on reload.** A content tab restored after reload shows an expired message; reopen it from its source.
 - **No base address for content.** Markdown images and other relative references in content previews stay unresolved.
 

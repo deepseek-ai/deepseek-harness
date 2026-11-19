@@ -19,7 +19,7 @@
 | [`client/resources`](../../packages/client/resources/README.zh.md) | `ctx.resources`、`useResource`、协议 → 值类型的花名册 `ResourceProtocolMap` |
 | [`api/workspace-files`](../../packages/api/workspace-files/README.zh.md) | Host `ctx.workspaceFiles`、`workspaceFiles` Remote 命名空间与 Client `file` 资源提供者 |
 | [`util/workspace-path`](../../packages/util/workspace-path/README.zh.md) | 文件地址语法：`fileAddressFor`、`parseFileAddress` |
-| [`client/ui-sidebar-documentpreview`](../../packages/client/ui-sidebar-documentpreview/README.zh.md)、[`client/ui-sidebar-files`](../../packages/client/ui-sidebar-files/README.zh.md)、[`client/ui-sidebar-browser`](../../packages/client/ui-sidebar-browser/README.zh.md) | 内置的 `text`、`content`、`files` 与 `browser` 类型；Document Preview 还为渲染器提供 `ctx.documentPreviews`，为内存内容提供 `ctx.contentPreviews` |
+| [`client/ui-sidebar-documentpreview`](../../packages/client/ui-sidebar-documentpreview/README.zh.md)、[`client/ui-sidebar-files`](../../packages/client/ui-sidebar-files/README.zh.md)、[`client/ui-sidebar-browser`](../../packages/client/ui-sidebar-browser/README.zh.md) | 内置的 `text`、`content`、`files` 与 `browser` 类型；Document Preview 还为渲染器提供 `ctx.documentPreviews` |
 
 ## 地址
 
@@ -75,7 +75,7 @@ export function apply(ctx: Context): void {
 
 ## 导航：`ctx.sidebarRight`
 
-两种打开构成导航控制器，进入这一列的每条路都调用其一：`openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框或 Assistant Markdown 中的 HTTP(S) 链接。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开；替换浮动 tab、或揭示浮窗中的 tab 时除外。揭示一个已在屏幕上显示的 tab 时，存放它的格发光提示一次，对所有 tab 类型都一样，且只在其会话位于屏幕上时播放；需要切换 tab 或展开该列的揭示不发光。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
+资源和页面通过以下接口打开：`openResource(address, options?)` 打开 `dsh-resource://` 地址——会话区的文件链接、工具行的行号引用、文件树的行；`openTab(kind, options?)` 打开页面——tab 条的新增控件、引导页入口框或 Assistant Markdown 中的 HTTP(S) 链接。两者都以一条历史记录走完四步——认领（注册表为资源排候选，或点名 `kind` 的生效实现应答）；聚焦已显示同一 `(kind, address)` 的 tab；否则落一个新 tab；展开这一列——然后把导航记入 Tab 域（[服务](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。用户看不见的内容不算打开，所以折叠的列会在同一步展开；替换浮动 tab、或揭示浮窗中的 tab 时除外。揭示一个已在屏幕上显示的 tab 时，存放它的格发光提示一次，对所有 tab 类型都一样，且只在其会话位于屏幕上时播放；需要切换 tab 或展开该列的揭示不发光。`openResource` 对 `dsh-resource://` 之外的地址或无人认领的地址抛错；`openTab` 对无人注册的 kind 抛错：二者都是接线错误，不是用户错误。
 
 | 选项 | 含义 |
 |---|---|
@@ -83,7 +83,7 @@ export function apply(ctx: Context): void {
 | `replaceTab` | 新内容取代这个 tab 的位置，并在同一步关闭它：停靠 tab 让出 pane 与条上位置，浮动 tab 让出浮窗，新 tab 沿用其 pane id 与矩形。揭示时该 tab 保持打开（[语义](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。 |
 | `revealIfOpened` | 缺省 `true`：已显示同一 `(kind, address)` 的 tab 被聚焦并收到 `params`。`false` 则无论如何再开一个。 |
 | `preferNewPane` | 在普通格数预算与空间规则下优先新建停靠格；不能分栏时回退到目标格。与 `replaceTab` 一起使用时忽略。 |
-| `destination`（仅 `openResource`） | `'sidebar'` 或 `'float'`：落在活跃停靠格（活动格是浮窗时为第一个停靠格）或新浮窗，忽略上面四个选项。该处已有副本时揭示它；否则把另一宿主中的副本连同 tab id 与正文状态移过去；否则新开 tab。`'float'` 新开和移动都不改变该列的展开状态（[语义](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。 |
+| `destination`（`openResource` 与 `openContent`） | `'sidebar'` 或 `'float'`：落在活跃停靠格（活动格是浮窗时为第一个停靠格）或新浮窗，忽略上面四个选项。该处已有副本时揭示它；否则把另一宿主中的副本连同 tab id 与正文状态移过去；否则新开 tab。`'float'` 新开和移动都不改变该列的展开状态（[语义](../../packages/client/ui-sidebar-right/README.zh.md#ctxsidebarright)）。 |
 | `kind`（仅 `openResource`） | 点名打开类型而不排候选；该 kind 的生效实现打开地址，它的 `canOpen` 仍生效。 |
 | `params` | 给正文的导航参数，作为 `navigation.params` 送达。`openResource` 按资源类型经声明合并表 `SidebarRightResourceParamsMap` 定型（文本预览声明 `{ line?: number }`）；`openTab<K>` 按 kind 经 `SidebarRightTabParamsMap` 定型，未声明的 kind 为 `undefined`；正文读到的是二者联合 `SidebarRightNavigationParams`。值按约定为 JSON 形状，运行时不校验。 |
 
@@ -143,7 +143,7 @@ Host 的 `ctx.workspaceFiles` 服务与生成的 `workspaceFiles` Remote 命名�
 
 - **`guide`**——`builtin`，以 `openTab('guide')` 打开。一枚弱化的罗盘位于各类型按 `order` 贡献的入口胶囊上方；入口较少时显示已注册的描述，未提供图标的入口统一使用内置占位符。点选胶囊即在引导 tab 的位置把贡献它的类型作为页面打开。每个 pane 最多一个引导 tab，tab 条的新增控件只在本 pane 没有引导时出现。新 pane 使用已注册的默认页：只有一个引导入口时直接使用该入口，否则使用引导页（[引导](../../packages/client/ui-sidebar-right/README.zh.md#the-guide)）。
 - **`text`**——`fallback`，`dsh-resource://file/**`，只认领 Session 地址。Document Preview 通过 `useResource<'file'>` 观察元数据，经 Remote 回调加载内容，并拥有渲染器选择、工具栏、逐 tab 刷新、滚动与源码定位；未知扩展名按纯文本渲染。它在停靠与浮动窗格中直接渲染 files 插件的 `sidebar.files.navigator` 与 `sidebar.files.navigator.toggle` 两个 Factory；未注册时不绘制内容（[README](../../packages/client/ui-sidebar-documentpreview/README.zh.md)）。
-- **`content`**——`builtin`，`dsh-resource://content-preview/**`；调用方通过 `ctx.contentPreviews.open` 把文本或字节及标题直接作为导航输入传入，由共享文档渲染器按媒体类型选择正文组件。输入在刷新后过期，请重新打开原卡片。
+- **`content`**——`builtin`，`dsh-resource://content-preview/**`；调用方通过 `ctx.sidebarRight.openContent` 把文本或字节及标题直接作为导航输入传入，由共享文档渲染器按媒体类型选择正文组件。输入在刷新后过期，请重新打开原卡片。
 - **`files`**——`builtin`，以 `openTab('files')` 打开。文件页与导航栏共享每个分栏的一棵工作区目录树。[包参考](../../packages/client/ui-sidebar-files/README.zh.md)定义懒加载目录列表、监听、打开回调及导航驱动的可见性。
 - **`browser`**——可多开的 `builtin`，以 `openTab('browser', { params: { url? } })` 打开。Chat 的[链接偏好](../../packages/client/ui-chat/README.zh.md)决定 Assistant Markdown 是否在此打开 HTTP(S) 链接。它在默认 sandbox 下接受公共与 loopback HTTP(S) 目标，本地文件改用 Document Preview，并使用应用已知的 iframe history（[README](../../packages/client/ui-sidebar-browser/README.zh.md)）。
 - **`subagentchat`**——`builtin`，`dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>`。资源提供方保留一个显式寻址的 subagent Conversation，并通过共享 Conversation Factory 渲染（[README](../../packages/client/ui-subagent/README.zh.md)）。

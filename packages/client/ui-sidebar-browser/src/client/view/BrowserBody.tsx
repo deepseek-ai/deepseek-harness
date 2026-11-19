@@ -50,7 +50,8 @@ export function BrowserBody(props: BrowserBodyProps): ReactNode {
   useEffect(() => tab.actions.bindCommands({ refresh: () => { reload(tab.id) } }), [tab.actions, tab.id, reload])
   const saved = useStore(state => state.byTab[tab.id])
   const initial = useRef(saved)
-  const initialUrl = useRef(tab.navigation.params?.url)
+  const params = tab.navigation.params
+  const initialUrl = useRef(params !== undefined && 'url' in params ? params.url : undefined)
   const viewportId = useId()
   const [mountEpoch, setMountEpoch] = useState(0)
   const state = useBrowserState(tab.id)

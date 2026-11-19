@@ -17,7 +17,7 @@ import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
 import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
 import type { ContentPreviewProps } from '../src/client/content/ContentPreview.tsx'
-import type { PreviewContent } from '../src/client/content/contract.ts'
+import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { contentFace } from '../src/client/content/face.ts'
 import { createContentPreviewStore } from '../src/client/content/store.ts'
 

@@ -2,7 +2,7 @@
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { WebTerminalId, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller/types'
-import type { SidebarRightTabParamsMap, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -37,7 +37,7 @@ export function apply(ctx: Context): void {
     sync()
     return () => { unsubscribe(); ctx.webTerminals.retainTabs([]) }
   }, 'ui-sidebar-terminal.window-holds')
-  const target = (sessionId: SessionId, key: string): SidebarRightTabParamsMap['terminal'] | undefined =>
+  const target = (sessionId: SessionId, key: string) =>
     ctx.sidebarRight.tabDomain.occurrence(sessionId, { id: key as TabId }).navigation.getSnapshot().params
   const terminalId = (sessionId: SessionId, key: string): WebTerminalId | undefined => {
     const params = target(sessionId, key)

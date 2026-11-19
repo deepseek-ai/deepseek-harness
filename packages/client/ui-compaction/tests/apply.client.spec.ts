@@ -1,141 +1,55 @@
-/**
- * The plugin's registrations with recorded copy, content-preview service, and
- * Session Remote face: the dictionaries, the `compactionPreviews` service with
- * localized block labels, title, and failure lines while the optional
- * `contentPreviews` service is present, cancellation of reads that outlive that
- * service, and the removal of every registration when the plugin goes.
- */
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { Context } from '@deepseek-ai/cordis'
-import { ResourceRegistry } from '@deepseek-ai/dsh-client-resources/src/client/resources.ts'
-import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionEventsPage } from '@deepseek-ai/dsh-api-session-controller/types'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { apply as nodeApply } from '../src/index.ts'
 
-const page: SessionEventsPage = {
-  cursor: 7,
-  hasMore: false,
-  records: [{
-    type: 'event',
-    event: {
-      type: 'user/message', seq: 7, time: 1,
-      data: { source: { kind: 'compact-checkpoint' }, content: [{ type: 'text', text: 'Summary' }, { type: 'image' }] },
-    },
-  }],
-}
-
-async function boot(options: { realLocale?: boolean; withPreviews?: boolean } = {}) {
+async function boot() {
   const ctx = new Context()
-  const resources = new ResourceRegistry(ctx)
-  const dictionaries = new Map<string, unknown>()
-  const locale = options.realLocale === true ? new LocaleRuntime(ctx) : {
-    bind: vi.fn((ns: string) => (key: string) => `${ns}:${key}`),
-    register: vi.fn((ns: string, dicts: unknown) => {
-      dictionaries.set(ns, dicts)
-      return () => { dictionaries.delete(ns) }
-    }),
-  }
-  const contentPreviews = { open: vi.fn<Context['contentPreviews']['open']>() }
-  const events = vi.fn(async () => ({ ok: true as const, value: page }))
-  ctx.provide('resources', resources)
-  ctx.provide('locale', locale as never)
-  const providePreviews = (): () => void => ctx.provide('contentPreviews', contentPreviews as never)
-  if (options.withPreviews !== false) providePreviews()
-  ctx.provide('remote', { session: { events } } as never)
-  ctx.provide('remote.session', { events } as never)
+  const openResource = vi.fn()
+  const register = vi.fn(() => () => {})
+  ctx.provide('locale', { bind: () => (key: string) => key, register } as never)
+  ctx.provide('remote', { session: {} } as never)
+  ctx.provide('remote.session', {} as never)
+  ctx.provide('resources', { register } as never)
+  ctx.provide('sidebarRight', { openResource } as never)
+  const registerTab = vi.fn((_type: SidebarRightTabDefinition) => () => {})
+  ctx.provide('sidebarRightTabs', { register: registerTab } as never)
+  const registerSlot = vi.fn(() => () => {})
+  ctx.provide('slots', { register: registerSlot, inject: (_key: string, mount: () => () => void) => mount() } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  return { ctx, resources, dictionaries, contentPreviews, events, fiber, providePreviews }
+  return { ctx, openResource, registerTab, registerSlot }
 }
 
-const sessionId = brandString<SessionId>('session-1')
-const session = { kind: 'session' as const, sessionId }
+const sessionId = brandString<SessionId>('session/1')
+const childId = brandString<SessionId>('child/2')
 
-describe('ui-compaction direct previews', () => {
-  it.each([
-    { address: session, previewId: sessionId },
-    { address: { kind: 'subagent' as const, parentSessionId: sessionId, childSessionId: brandString<SessionId>('child'), mode: 'continuable' as const }, previewId: 'child' },
-  ])('opens a $address.kind checkpoint under its own Session ID', async ({ address, previewId }) => {
-    const h = await boot()
-    const preview = h.ctx.get('compactionPreviews')!
-    expect(await preview.open(address, 7, new AbortController().signal)).toBeNull()
-    expect(h.contentPreviews.open).toHaveBeenCalledWith({ mediaType: 'text/markdown', text: 'Summary\n\n*[compaction:block.image]*' }, { title: 'compaction:preview.title', key: `compaction:${previewId}:7` })
-    expect(h.dictionaries.has('compaction')).toBe(true)
-    await h.fiber.dispose()
-    expect(h.ctx.get('compactionPreviews')).toBeUndefined()
-    expect(h.dictionaries.size).toBe(0)
-  })
-
-  it('follows the optional preview service lifetime', async () => {
-    const h = await boot({ withPreviews: false })
-    expect(h.ctx.get('compactionPreviews')).toBeUndefined()
-    const withdraw = h.providePreviews()
-    await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeDefined() })
+describe('compaction summary navigation', () => {
+  it('opens durable addresses for ordinary and delegated Sessions only while document previews are available', async () => {
+    const { ctx, openResource, registerTab, registerSlot } = await boot()
+    expect(ctx.get('compactionPreviews')).toBeUndefined()
+    const withdraw = ctx.provide('documentPreviews', {} as never)
+    await vi.waitFor(() => { expect(ctx.get('compactionPreviews')).toBeDefined() })
+    const definition = registerTab.mock.calls[0]![0]
+    expect(definition.title('')).toBe('preview.title')
+    expect(definition.canOpen?.('dsh-resource://compaction/s/7')).toBe(true)
+    expect(definition.canOpen?.('dsh-resource://file/s/file.md')).toBe(false)
+    expect(registerSlot).toHaveBeenCalledTimes(2)
+    const preview = ctx.compactionPreviews
+    const address = { kind: 'session' as const, sessionId }
+    expect(await preview.open(address, 7, AbortSignal.abort())).toBeNull()
+    expect(openResource).not.toHaveBeenCalled()
+    const signal = new AbortController().signal
+    expect(await preview.open(address, 7, signal)).toBeNull()
+    expect(openResource).toHaveBeenLastCalledWith('dsh-resource://compaction/session%2F1/7')
+    await preview.open({ kind: 'subagent', parentSessionId: sessionId, childSessionId: childId, mode: 'continuable' }, 9, signal)
+    expect(openResource).toHaveBeenLastCalledWith('dsh-resource://compaction/subagent/session%2F1/child%2F2/continuable/9')
     withdraw()
-    await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeUndefined() })
+    await vi.waitFor(() => { expect(ctx.get('compactionPreviews')).toBeUndefined() })
+    await preview.open(address, 7, signal)
+    expect(openResource).toHaveBeenCalledTimes(2)
   })
-
-  it('does not open content after cancellation', async () => {
-    const h = await boot()
-    const controller = new AbortController()
-    controller.abort()
-    expect(await h.ctx.get('compactionPreviews')!.open(session, 7, controller.signal)).toBeNull()
-    expect(h.contentPreviews.open).not.toHaveBeenCalled()
-  })
-
-  it('does not open a completed read after the plugin is disposed', async () => {
-    const h = await boot()
-    const result = Promise.withResolvers<{ ok: true; value: SessionEventsPage }>()
-    h.events.mockImplementationOnce(() => result.promise)
-    const pending = h.ctx.get('compactionPreviews')!.open(session, 7, new AbortController().signal)
-    await h.fiber.dispose()
-    result.resolve({ ok: true, value: page })
-    expect(await pending).toBeNull()
-    expect(h.contentPreviews.open).not.toHaveBeenCalled()
-  })
-
-  it('cancels a pending read when the preview service is withdrawn, even after a new provider arrives', async () => {
-    const h = await boot({ withPreviews: false })
-    const withdraw = h.providePreviews()
-    await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeDefined() })
-    const result = Promise.withResolvers<{ ok: true; value: SessionEventsPage }>()
-    let transport: AbortSignal | undefined
-    h.events.mockImplementationOnce(((_request: unknown, signal: AbortSignal) => {
-      transport = signal
-      return result.promise
-    }) as never)
-    const caller = new AbortController()
-    const pending = h.ctx.get('compactionPreviews')!.open(session, 7, caller.signal)
-    withdraw()
-    await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeUndefined() })
-    expect(transport?.aborted).toBe(true)
-    const replacement = { open: vi.fn<Context['contentPreviews']['open']>() }
-    const withdrawReplacement = h.ctx.provide('contentPreviews', replacement as never)
-    onTestFinished(() => { withdrawReplacement() })
-    await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeDefined() })
-    result.resolve({ ok: true, value: page })
-    expect(await pending).toBeNull()
-    expect(caller.signal.aborted).toBe(false)
-    expect(h.contentPreviews.open).not.toHaveBeenCalled()
-    expect(replacement.open).not.toHaveBeenCalled()
-    expect(await h.ctx.get('compactionPreviews')!.open(session, 7, caller.signal)).toBeNull()
-    expect(replacement.open).toHaveBeenCalledOnce()
-  })
-
-  it('reports unavailable checkpoints and read failures to the caller', async () => {
-    const h = await boot()
-    const previews = h.ctx.get('compactionPreviews')!
-    const open = previews.open.bind(previews)
-    h.events.mockResolvedValueOnce({ ok: true, value: { ...page, records: [] } })
-    expect(await open(session, 7, new AbortController().signal)).toBe('compaction:preview.notFound')
-    h.events.mockRejectedValueOnce(new Error('connection closed'))
-    expect(await open(session, 7, new AbortController().signal)).toBe('compaction:preview.readFailed')
-    expect(h.contentPreviews.open).not.toHaveBeenCalled()
-  })
-
-  it('has an empty node half', () => { expect(() => { nodeApply() }).not.toThrow() })
 })

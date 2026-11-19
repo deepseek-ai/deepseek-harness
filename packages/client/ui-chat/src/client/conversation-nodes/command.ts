@@ -116,6 +116,7 @@ function compactSummary(match: ConversationMatch | undefined, checkpoint: Conver
     kind: 'compaction',
     seq: checkpoint.event.seq,
     time: checkpoint.event.time,
+    summaryEventSeq: match?.event.seq ?? null,
     shadowedItemCount,
     shadowedTokenCount,
   }

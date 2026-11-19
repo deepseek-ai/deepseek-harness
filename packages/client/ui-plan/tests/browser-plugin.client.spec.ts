@@ -28,7 +28,6 @@ import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
 import { createSidebarRightController } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
-import { ContentPreviewService } from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/src/client/content/service.ts'
 import { createSidebarRightStore } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/stores.ts'
 
 function providePreview(ctx: Context, withPreviews = true) {
@@ -36,7 +35,7 @@ function providePreview(ctx: Context, withPreviews = true) {
   const chat = createSnapshotStore<ChatSnapshot | undefined>(EMPTY_CHAT_SNAPSHOT)
   ctx.provide('uiConversation', { events, binding: () => ({ target: () => chat }) })
   const removeResources = vi.fn()
-  const openContent = vi.fn<Context['contentPreviews']['open']>()
+  const openContent = vi.fn<Context['sidebarRight']['openContent']>()
   const openResourceIn = vi.fn<Context['sidebarRight']['openResourceIn']>()
   const openResource = vi.fn<Context['sidebarRight']['openResource']>()
   const mounted = createSnapshotStore<SessionId | undefined>(undefined)
@@ -44,12 +43,13 @@ function providePreview(ctx: Context, withPreviews = true) {
   const binding = vi.fn<() => object | undefined>(() => ({}))
   ctx.provide('sessions', { subagentAddress, binding })
   ctx.provide('resources', { register: vi.fn(() => removeResources) })
-  const previews = { open: openContent }
-  if (withPreviews) ctx.provide('contentPreviews', previews)
-  ctx.provide('sidebarRight', { openResourceIn, openResource, mounted })
+  ctx.provide('sidebarRight', { openContent, openResourceIn, openResource, mounted })
   const tabs = new SidebarRightTabRegistry(ctx)
+  ctx.provide('sidebarRightTabs', tabs)
+  const addContent = () => tabs.register({ id: 'test/content', kind: 'content', title: () => 'Content' })
+  if (withPreviews) addContent()
   return {
-    events, removeResources, openContent, previews,
+    events, removeResources, openContent, addContent,
     openResourceIn, openResource, mounted, subagentAddress, chat, binding, tabs,
   }
 }
@@ -113,8 +113,6 @@ describe('ui-plan browser apply', () => {
     const parent = 'visible-parent' as SessionId
     const child = 'embedded-child' as SessionId
     const tabs = b.tabs
-    const previews = new ContentPreviewService({ openResource: b.openResource }, () => 'Content')
-    b.openContent.mockImplementation(previews.open.bind(previews))
     const store = createSidebarRightStore(() => ({ kind: 'guide', title: 'Guide' })).create()
     const { controller, adopt, show } = createSidebarRightController(tabs, vi.fn(), {
       autoFullscreen: () => false,
@@ -124,13 +122,12 @@ describe('ui-plan browser apply', () => {
     const release = adopt(parent, store)
     store.actions.open(parent)
     show(parent)
-    b.openResource.mockImplementation(controller.openResource.bind(controller))
+    b.openContent.mockImplementation(controller.openContent.bind(controller))
     b.openResourceIn.mockImplementation(controller.openResourceIn.bind(controller))
     b.subagentAddress.mockReturnValue({ parentSessionId: parent, childSessionId: child, mode: 'continuable' })
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
-      const removeType = tabs.register(previews.definition())
       const card = b.slots.entries('conversation.chat.turnTail')[0]!
       const opener = (card.inject as unknown as (sessionId: SessionId) => PlanOpenInjected)(child)
       const plan = submittedPlan({ type: 'tool/call', data: { callId: 'child-plan', name: 'exit_plan_mode', arguments: '{"plan":"# Child plan"}' } })!
@@ -143,7 +140,6 @@ describe('ui-plan browser apply', () => {
       reviewOpener.openReview({ id: 'pending', question: 'Approve?', plan: '# Temporary child plan', approve: { label: 'Approve' } }, 'child-question')
       expect(resources()).toContain('dsh-resource://content-preview/review%3Aembedded-child%3Achild-question')
       expect(store.getSnapshot().bySession[child]).toBeUndefined()
-      removeType()
     } finally {
       await fiber.dispose()
       show(undefined)
@@ -153,7 +149,7 @@ describe('ui-plan browser apply', () => {
   })
 
   it('declares every service it binds', () => {
-    expect(inject).toEqual(['slots', 'remote', 'remote.commands', 'sessions', 'locale', 'uiConversation', 'sidebarRight'])
+    expect(inject).toEqual(['slots', 'remote', 'remote.commands', 'sessions', 'locale', 'uiConversation', 'sidebarRight', 'sidebarRightTabs'])
   })
 
   it('loads without content previews, disables the openers, and follows the service in and out', async () => {
@@ -181,7 +177,7 @@ describe('ui-plan browser apply', () => {
 
       const changed = vi.fn()
       const unsubscribe = available.subscribe(changed)
-      const withdraw = b.ctx.provide('contentPreviews', b.previews)
+      const withdraw = b.addContent()
       await vi.waitFor(() => { expect(available.getSnapshot()).toBe(true) })
       expect(changed).toHaveBeenCalled()
       cards.openPlan({ callId: 'call' as ToolCallId, title: 'Saved', markdown: '# Saved' })

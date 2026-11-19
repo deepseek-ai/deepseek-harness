@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Aperçu du contexte compacté",
-    "description": "Affiche dans la barre latérale droite le contexte que lit le modèle après un compactage."
+    "title": "Aperçu du résumé de compactage",
+    "description": "Consultez les résumés de compactage des conversations dans la barre latérale droite."
   }
 }

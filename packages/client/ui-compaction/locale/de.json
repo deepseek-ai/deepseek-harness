@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Vorschau des komprimierten Kontexts",
-    "description": "Zeigt in der rechten Seitenleiste den Kontext, den das Modell nach einer Komprimierung liest."
+    "title": "Vorschau der Komprimierungszusammenfassung",
+    "description": "Zeigt Zusammenfassungen komprimierter Gespräche in der rechten Seitenleiste an."
   }
 }

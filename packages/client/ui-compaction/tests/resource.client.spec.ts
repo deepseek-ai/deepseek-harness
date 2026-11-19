@@ -1,169 +1,107 @@
-/**
- * The `compaction` provider over a recorded Session Remote face: address
- * decoding, the single bounded history read, checkpoint recognition, failure
- * frames, cancellation, and the block-to-Markdown conversion.
- */
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionAddress, SessionEventEntry, SessionEventsPage } from '@deepseek-ai/dsh-api-session-controller/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { apply as hostApply } from '../src/index.ts'
+import type { SessionEventEntry } from '@deepseek-ai/dsh-api-session-controller/types'
+import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { checkpointMarkdown, readCheckpoint, type PlaceholderKind } from '../src/client/resource.ts'
+import { summaryAddress, parseSummaryAddress, summaryDocument } from '../src/client/summary.ts'
+import { summaryResourceProvider } from '../src/client/resource.ts'
 
-type SessionRemote = Parameters<typeof readCheckpoint>[0]
-
-const label = (kind: PlaceholderKind): string => `label:${kind}`
-const source = { kind: 'compact-checkpoint', compactionId: 'compaction-1' }
-
-function event(seq: number, type: string, data: SessionEventEntry['event']['data']): SessionEventEntry {
-  return { type: 'event', event: { type, seq, time: 1, data } }
+const address = 'dsh-resource://compaction/session/4'
+const entry: SessionEventEntry = { type: 'event', event: {
+  type: 'compaction/summary', seq: 4, time: 100,
+  data: { summary: [{ type: 'text', text: '# Saved summary\n\nKeep **this**.' }] },
+} }
+type Remote = Parameters<typeof summaryResourceProvider>[0]
+function setup(records: readonly SessionEventEntry[] = [entry]) {
+  const events = vi.fn<Remote['events']>(async () => ({ ok: true, value: { cursor: 4, records, hasMore: true } }))
+  return { events, provider: summaryResourceProvider({ events }) }
+}
+async function read(provider: ReturnType<typeof summaryResourceProvider>, url = address, signal = new AbortController().signal) {
+  const frames = []
+  for await (const frame of provider.open(url, { signal })) frames.push(frame)
+  return frames
 }
 
-const checkpoint = event(42, 'user/message', {
-  id: 'message-1', role: 'user', source,
-  content: [
-    { type: 'text', text: 'Preamble\n\n<compacted-summary>' },
-    { type: 'text', text: '# Summary' },
-    { type: 'text', text: '</compacted-summary>' },
-  ],
-})
-const previous = event(40, 'assistant/message', { id: 'message-0', role: 'assistant', content: [] })
-const markdown = 'Preamble\n\n<compacted-summary># Summary</compacted-summary>'
-
-function setup(records: SessionEventsPage['records']) {
-  const events = vi.fn<SessionRemote['events']>(async () => ({ ok: true, value: { cursor: 42, records, hasMore: true } }))
-  return { provider: (session: SessionAddress, signal: AbortSignal) => readCheckpoint({ events }, session, 42, label, signal), events }
-}
-
-async function read(provider: ReturnType<typeof setup>['provider'], session: SessionAddress, signal = new AbortController().signal) {
-  const result = await provider(session, signal)
-  return result === undefined ? [] : [result]
-}
-
-const session: SessionAddress = { kind: 'session', sessionId: brandString<SessionId>('session-1') }
-
-describe('compaction checkpoint resource', () => {
-  it('reads an ordinary Session checkpoint through one events page cut at its seq', async () => {
-    const { provider, events } = setup([previous, checkpoint])
-    expect(await read(provider, session)).toEqual([
-      { ok: true, value: { mediaType: 'text/markdown', text: markdown } },
-    ])
-    expect(events).toHaveBeenCalledOnce()
-    expect(events).toHaveBeenCalledWith(
-      { address: { kind: 'session', sessionId: 'session-1' }, throughSeq: 42, maxMessages: 1 },
-      expect.any(AbortSignal),
-    )
+describe('compaction summary resource', () => {
+  it('recovers the exact historical event on a fresh provider without opening the chat window', async () => {
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const b = setup()
+      expect(await read(b.provider)).toEqual([{ ok: true, value: { markdown: '# Saved summary\n\nKeep **this**.' } }])
+      expect(b.events).toHaveBeenCalledExactlyOnceWith({
+        address: { kind: 'session', sessionId: 'session' }, throughSeq: 4, maxMessages: 1,
+      }, expect.any(AbortSignal))
+    }
   })
-
-  it('passes the decoded subagent address to the Remote face', async () => {
-    const { provider, events } = setup([checkpoint])
-    const url: SessionAddress = { kind: 'subagent', parentSessionId: brandString<SessionId>('parent/1'), childSessionId: brandString<SessionId>('child'), mode: 'continuable' }
-    expect(await read(provider, url)).toMatchObject([{ ok: true }])
-    expect(events).toHaveBeenCalledWith(
-      {
-        address: { kind: 'subagent', parentSessionId: 'parent/1', childSessionId: 'child', mode: 'continuable' },
-        throughSeq: 42,
-        maxMessages: 1,
-      },
-      expect.any(AbortSignal),
-    )
+  it.each(['one-shot', 'continuable', 'unknown'] as const)('retains parent authorization for %s children', async (mode) => {
+    const b = setup()
+    await read(b.provider, `dsh-resource://compaction/subagent/parent/child/${mode}/4`)
+    expect(b.events).toHaveBeenCalledWith({
+      address: { kind: 'subagent', parentSessionId: 'parent', childSessionId: 'child', mode }, throughSeq: 4, maxMessages: 1,
+    }, expect.any(AbortSignal))
   })
-
-  it('reports a seq absent from the page as not found', async () => {
-    const { provider } = setup([previous])
-    expect(await read(provider, session)).toMatchObject([
-      { ok: false, error: { code: 'compaction/not-found' } },
-    ])
+  it('round-trips encoded identities and distinguishes multiple summaries and Sessions', () => {
+    const target = { session: { kind: 'session' as const, sessionId: 's / 中文' as SessionId }, seq: SessionSeq(4) }
+    expect(parseSummaryAddress(summaryAddress(target))).toEqual(target)
+    expect(summaryAddress({ ...target, seq: SessionSeq(5) })).not.toBe(summaryAddress(target))
+    expect(summaryAddress({ ...target, session: { kind: 'session', sessionId: 'other' as SessionId } })).not.toBe(summaryAddress(target))
   })
-
-  it.each([
-    ['another event type', event(42, 'compaction/summary', { summary: [] })],
-    ['an ordinary user message', event(42, 'user/message', { source: { kind: 'user' }, content: [] })],
-    ['message data that is not an object', event(42, 'user/message', 'text')],
-    ['a message without a source object', event(42, 'user/message', { source: 'compact-checkpoint', content: [] })],
-    ['a source without a string kind', event(42, 'user/message', { source: { kind: 1 }, content: [] })],
-    ['checkpoint content that is not an array', event(42, 'user/message', { source, content: 'text' })],
-  ])('reports %s at the seq as not found', async (_name, entry) => {
-    const { provider } = setup([entry])
-    expect(await read(provider, session)).toMatchObject([
-      { ok: false, error: { code: 'compaction/not-found' } },
-    ])
+  it.each(['', 'dsh-resource://compaction/s/%', 'dsh-resource://compaction/s/-1', 'dsh-resource://compaction/s/1.2',
+    'dsh-resource://compaction/s/01', 'dsh-resource://compaction/s/9007199254740992', 'dsh-resource://compaction//4',
+    'dsh-resource://compaction/s/4?text=x', 'dsh-resource://compaction/subagent/p/c/bad/4'])('rejects invalid saved address %s', async (url) => {
+    const b = setup()
+    expect(await read(b.provider, url)).toMatchObject([{ ok: false, error: { code: 'compaction-summary/invalid-address' } }])
+    expect(b.events).not.toHaveBeenCalled()
   })
-
-  it('forwards a Remote failure frame unchanged', async () => {
-    const { provider, events } = setup([])
-    const error = new RemoteError('gateway/bad-request', 'history cut exceeds the log', {})
-    events.mockResolvedValueOnce({ ok: false, error })
-    expect(await read(provider, session)).toEqual([{ ok: false, error }])
+  it('does not replace a missing summary with a different event', async () => {
+    expect(await read(setup([{ ...entry, event: { ...entry.event, seq: 3 } }]).provider))
+      .toMatchObject([{ ok: false, error: { code: 'compaction-summary/not-found' } }])
   })
-
-  it('reports a thrown RemoteError with its own code', async () => {
-    const { provider, events } = setup([])
-    const error = new RemoteError('gateway/internal', 'connection lost', {})
-    events.mockRejectedValueOnce(error)
-    expect(await read(provider, session)).toMatchObject([
-      { ok: false, error: { code: 'gateway/internal' } },
-    ])
+  it.each([null, {}, { summary: [] }, { summary: [{ type: 'text', text: 3 }] }, { summary: [null] }, { summary: [{ type: 'text', text: ' ' }] }])('rejects malformed summary data %j', (data) => {
+    expect(summaryDocument({ type: 'compaction/summary', data })).toBeUndefined()
   })
-
-  it.each([
-    ['an Error', new Error('connection lost'), 'connection lost'],
-    ['a non-Error value', 'socket closed', 'socket closed'],
-  ])('reports a thrown %s as a read failure', async (_name, thrown, message) => {
-    const { provider, events } = setup([])
-    events.mockRejectedValueOnce(thrown)
-    expect(await read(provider, session)).toMatchObject([
-      { ok: false, error: { code: 'compaction/read-failed', message } },
-    ])
+  it('preserves remote failures and contains transport errors', async () => {
+    const b = setup()
+    const error = new RemoteError('compaction-summary/read-failed', 'offline', {})
+    b.events.mockResolvedValueOnce({ ok: false, error })
+    expect(await read(b.provider)).toEqual([{ ok: false, error }])
+    b.events.mockRejectedValueOnce(new Error('network'))
+    expect(await read(b.provider)).toMatchObject([{ ok: false, error: { code: 'compaction-summary/read-failed' } }])
   })
-
-  it('publishes nothing when the signal is already aborted', async () => {
-    const { provider, events } = setup([checkpoint])
+  it('does not publish when closed before or during the history read', async () => {
+    const b = setup()
     const controller = new AbortController()
-    controller.abort()
-    expect(await read(provider, session, controller.signal)).toEqual([])
-    expect(events).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['resolves', (events: ReturnType<typeof setup>['events'], controller: AbortController) => {
-      events.mockImplementationOnce(async () => {
-        controller.abort()
-        return { ok: true, value: { cursor: 42, records: [checkpoint], hasMore: false } }
-      })
-    }],
-    ['throws', (events: ReturnType<typeof setup>['events'], controller: AbortController) => {
-      events.mockImplementationOnce(async () => {
-        controller.abort()
-        throw new Error('aborted')
-      })
-    }],
-  ])('publishes nothing when the read is aborted before it %s', async (_name, arrange) => {
-    const { provider, events } = setup([])
-    const controller = new AbortController()
-    arrange(events, controller)
-    expect(await read(provider, session, controller.signal)).toEqual([])
+    b.events.mockImplementationOnce(async () => {
+      controller.abort()
+      return { ok: true, value: { cursor: 4, records: [entry], hasMore: false } }
+    })
+    expect(await read(b.provider, address, controller.signal)).toEqual([])
+    b.events.mockClear()
+    expect(await read(b.provider, address, controller.signal)).toEqual([])
+    expect(b.events).not.toHaveBeenCalled()
   })
 })
 
-describe('checkpoint Markdown', () => {
-  it('concatenates text blocks with no separator', () => {
-    expect(checkpointMarkdown([{ type: 'text', text: 'a\n' }, { type: 'text', text: 'b' }, { type: 'text', text: '' }], label)).toBe('a\nb')
-  })
+it('extracts text around non-text blocks and rejects unrelated events', () => {
+  expect(summaryDocument({ type: 'other', data: {} })).toBeUndefined()
+  expect(summaryDocument({ type: 'compaction/summary', data: { summary: [{ type: 'image' }, { type: 'text', text: 'kept' }] } }))
+    .toEqual({ markdown: 'kept' })
+  expect(summaryDocument({ type: 'compaction/summary', data: { summary: [{}] } })).toBeUndefined()
+  expect(parseSummaryAddress('dsh-resource://compaction/wrong/a/b/continuable/4')).toBeUndefined()
+  expect(parseSummaryAddress('dsh-resource://compaction/subagent/p/c/continuable/0')?.seq).toBe(0)
+  const child = { session: { kind: 'subagent' as const, parentSessionId: 'p' as SessionId, childSessionId: 'c' as SessionId, mode: 'continuable' as const }, seq: SessionSeq(4) }
+  expect(parseSummaryAddress(summaryAddress(child))).toEqual(child)
+})
 
-  it('puts each non-text block in its own paragraph as an emphasized localized label', () => {
-    expect(checkpointMarkdown([
-      { type: 'text', text: 'before' },
-      { type: 'image', attachment: { attachmentId: 'sha256:0' } },
-      { type: 'file', attachment: { attachmentId: 'sha256:1' } },
-      { type: 'tool-call', id: 'call', name: 'read', arguments: '{}' },
-      { type: 'text', text: 7 },
-      'stray',
-      { type: 'text', text: 'after' },
-    ], label)).toBe('before\n\n*[label:image]*\n\n*[label:file]*\n\n*[label:other]*\n\n*[label:other]*\n\n*[label:other]*\n\nafter')
-  })
+it('preserves thrown remote failures and ignores errors after cancellation', async () => {
+  const b = setup()
+  const error = new RemoteError('compaction-summary/read-failed', 'offline', {})
+  b.events.mockRejectedValueOnce(error)
+  expect(await read(b.provider)).toEqual([{ ok: false, error }])
+  const controller = new AbortController()
+  b.events.mockImplementationOnce(async () => { controller.abort(); throw new Error('cancelled') })
+  expect(await read(b.provider, address, controller.signal)).toEqual([])
+})
 
-  it('starts with a label when the first block is not text', () => {
-    expect(checkpointMarkdown([{ type: 'image' }, { type: 'text', text: 'caption' }], label)).toBe('*[label:image]*\n\ncaption')
-  })
+it('loads the browser-only plugin host entry without requiring client services', () => {
+  expect(() => { hostApply() }).not.toThrow()
 })

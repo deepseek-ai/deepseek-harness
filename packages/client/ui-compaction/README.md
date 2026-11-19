@@ -1,5 +1,5 @@
 ---
-description: "Right Sidebar previews of compaction checkpoints: the replacement message the model reads after a compact, shown as Markdown in the content tab."
+description: "Right sidebar previews of recorded conversation compaction summaries."
 kind: "package-reference"
 ---
 
@@ -9,12 +9,12 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open a checkpoint replacement message in the shared sidebar content preview. Chat asks `ctx.compactionPreviews.open(address, seq, signal)` to read the exact checkpoint when a compact row is clicked; the plugin passes its Markdown directly to `ctx.contentPreviews.open`.
+Chat opens a recorded summary with `ctx.compactionPreviews.open(address, summarySeq, signal)`. The sidebar persists the `dsh-resource://compaction/` address and reloads the Markdown from Session history when the tab is restored.
 
 ## Table of Contents
 
 - [What it registers](#what-it-registers)
-- [Reading a checkpoint](#reading-a-checkpoint)
+- [Reading a summary](#reading-a-summary)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -24,29 +24,28 @@ Open a checkpoint replacement message in the shared sidebar content preview. Cha
 <a id="what-it-registers"></a>
 ## What it registers
 
-The plugin injects `locale`, `remote`, and `remote.session`, registers its locale dictionaries, and provides `compactionPreviews` while the optional `contentPreviews` service is available. Disposal removes its service and dictionaries. It contributes no tab type or resource protocol.
+The plugin registers a `compaction` resource provider. While document previews are loaded, it registers the summary tab, its title and body, and the Session navigation service.
 
-<a id="reading-a-checkpoint"></a>
-## Reading a checkpoint
+<a id="reading-a-summary"></a>
+## Reading a summary
 
-The caller supplies the complete ordinary or subagent `SessionAddress` and the replacement-message sequence number. One `remote.session.events` request uses `throughSeq: seq` and `maxMessages: 1`; the reader locates that exact sequence and requires a checkpoint `user/message`. Missing checkpoints and read failures return a localized failure line. The requesting row owns cancellation; cancelled or disposed requests never open a preview.
+The address identifies the Session and summary sequence. For a subagent it includes the parent, child, and mode. The tab reads the exact `compaction/summary` event with `throughSeq` and `maxMessages: 1`. Missing or empty summaries and read failures appear in the tab. An aborted opener skips navigation, and closing the tab releases its resource subscription.
 
-Text blocks concatenate without separators, matching model-adapter behavior. Non-text blocks become localized labels. The shared content preview receives Markdown and the localized title with a Session-scoped checkpoint key. Repeated opens reuse the preview; browser reload expires its transient input.
+Summary text blocks are joined in order and displayed by the shared Markdown document renderer. Reopening the same address reuses the tab.
 
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the package only displays a checkpoint the model has already read and registers no tool, prompt section, or session event.
+None, as the package displays a logged summary and registers no tool, prompt section, or session event.
 
 #### KV Cache effect
 
-No direct effect; reading a checkpoint does not assemble or change a model request.
+No direct effect on model requests or caching.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
-- **Non-text blocks show only a label.** Images, files, and other non-text blocks in the replacement message appear as a localized placeholder, not their content.
-- **Backend framing shows verbatim.** Each compaction backend wraps its summary in its own fixed instructions and tags; the preview shows them as written, so the text around the summary differs between backends.
+- **Partial history.** The preview button is disabled while the associated summary event is outside the loaded history.
 
 <a id="dev-note"></a>
 ### Dev Note

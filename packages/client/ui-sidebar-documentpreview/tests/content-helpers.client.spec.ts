@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentContentOf, textPage } from '../src/client/content/content.ts'
 import { iconKindOf } from '../src/client/content/title.ts'
-import type { PreviewContent } from '../src/client/content/contract.ts'
+import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
 describe('content conversion', () => {
   it('counts lines the way the workspace file reader does', () => {

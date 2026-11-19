@@ -51,7 +51,7 @@ kind: "package-reference"
 
 徽章占据 conversation 声明的 `conversation.input.plan` 单实例座位；node 半部是空 apply（roster 行）。读取经 standard-kit 的 `useProjection` 走通用投影对：有效目标是 `pending ? !active : active`——折叠的宿主值而非客户端乐观态，因此到达的帧无论哪个方向都会纠正徽章。座位注入面携带一个动词 `exitPlanMode`，经 `ctx.remote.commands.execute` 执行 `/plan off`，并把准入失败映射为一行内联错误。placeholder 与提示文案位于 ui-conversation 的 `conversation` locale 命名空间，与已认领 `/plan` 命令的提示逐字共用。
 
-计划卡片和待审批入口把完整 Markdown 直接传给 `ctx.contentPreviews.open`，使用包含会话标识的调用 key 或审批 key，并从开头标题派生预览标题。共享内容标签沿用当前侧栏位置，内嵌子代理计划也在父会话侧栏打开。`contentPreviews` 是可选服务，服务可用前卡片和审批控件保持禁用；审批自动打开还等待 `ctx.sidebarRight.mounted`。导航正文只保存在内存中，刷新后请从计划或审批卡片重新打开过期预览。计划卡片仍通过 Conversation Definition 从已记录的原生或 PTC 调用派生，并与文件产物共同贡献到 `conversation.chat.turnTail`。
+计划卡片和待审批入口把完整 Markdown 直接传给 `ctx.sidebarRight.openContent`，使用包含会话标识的调用 key 或审批 key，并从开头标题派生预览标题。共享内容标签沿用当前侧栏位置，内嵌子代理计划也在父会话侧栏打开。未注册 `content` 标签类型时，卡片和审批预览入口保持禁用；审批自动打开还等待 `ctx.sidebarRight.mounted`。导航正文只保存在内存中，刷新后请从计划或审批卡片重新打开过期预览。计划卡片仍通过 Conversation Definition 从已记录的原生或 PTC 调用派生，并与文件产物共同贡献到 `conversation.chat.turnTail`。
 
 框架绑定的 `usePlans(turn)` 只提供该回合的已提交计划数据。Chat 随节点更新维护成员索引，并在读取时排列该集合；卡片渲染不扫描整段对话，也不订阅其他回合或节点类型。
 

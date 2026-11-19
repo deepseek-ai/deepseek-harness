@@ -33,7 +33,7 @@ describe('chat flow font-size axis', () => {
   })
 
   it('command and context summaries read the secondary tier on the shared row line', () => {
-    expect(declarationsFrom(read('GenericCommandCard.module.css'), '.summary')).toEqual(expect.arrayContaining([
+    expect(declarationsFrom(read('CommandStatusRow.module.css'), '.summary')).toEqual(expect.arrayContaining([
       'font-size: var(--dsh-content-font-size-secondary, 13px)',
       'line-height: calc(24px + var(--dsh-content-font-delta, 0px))',
     ]))

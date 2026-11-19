@@ -40,7 +40,7 @@ import type { FloatRect, LayoutState, PaneId, TabId, TabRecord } from '@deepseek
 import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor } from './contract/params.ts'
+import type { PreviewContent, SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor } from './contract/params.ts'
 import { pageAddress } from './contract/seed.ts'
 import type { SidebarRightDestination } from './contract/slots.ts'
 import type { SidebarRightTabClaim, SidebarRightTabRegistry } from './tab-registry.ts'
@@ -175,6 +175,14 @@ export interface SidebarRightPlacement {
   readonly revealIfOpened?: boolean
 }
 
+/** Placement and identity for a transient content preview. */
+export interface ContentPreviewOptions {
+  readonly title: string
+  /** Reuses a preview in the current window; omission creates a new preview. */
+  readonly key?: string
+  readonly destination?: SidebarRightOpenResourceOptions['destination']
+}
+
 /** How a caller wants a resource opened. */
 export interface SidebarRightOpenResourceOptions extends SidebarRightPlacement {
   /** Name the opening type instead of letting the registry rank claims; its `canOpen` still applies. */
@@ -241,6 +249,13 @@ export interface ISidebarRight {
    * @param options - placement or an explicit host, the opening type, and navigation parameters.
    */
   openResource(address: string, options?: SidebarRightOpenResourceOptions): void
+  /**
+   * Open transient text or bytes in the registered content tab.
+   * @param content - media type and text or bytes to render.
+   * @param options - title, optional tab reuse key and destination.
+   * @returns false when the content tab is unavailable, true after navigation.
+   */
+  openContent(content: PreviewContent, options: ContentPreviewOptions): boolean
   /**
    * Open a page type by kind: the type in force for it, at the address this
    * package records pages under. A kind nothing registered throws.
@@ -380,6 +395,17 @@ export class SidebarRightController implements ISidebarRight {
   openResource(address: string, options: SidebarRightOpenResourceOptions = {}): void {
     const { sessionId, actions } = this.require()
     this.placeResource(sessionId, actions, address, options)
+  }
+
+  openContent(content: PreviewContent, options: ContentPreviewOptions): boolean {
+    if (this.tabs.get('content') === undefined) return false
+    const address = `dsh-resource://content-preview/${encodeURIComponent(options.key ?? randomUUID())}`
+    this.openResource(address, {
+      kind: 'content',
+      ...options.destination === undefined ? {} : { destination: options.destination },
+      params: { previewContent: content, previewTitle: options.title },
+    })
+    return true
   }
 
   /**

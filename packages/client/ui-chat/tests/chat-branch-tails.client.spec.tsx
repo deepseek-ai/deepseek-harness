@@ -871,33 +871,46 @@ describe('MessageItem arms', () => {
     expect(unknownView.getByText(/未知 surface 事件：surface\/next/)).toBeTruthy()
   })
 
-  it('a compaction marker opens its checkpoint seq in the Sidebar and never shows the framed checkpoint', () => {
+  it.each([
+    [{ status: 'running' }, 'running', t('message.compaction.running')],
+    [{ status: 'interrupted' }, 'error', t('message.taskStopped')],
+    [{ status: 'ended' }, 'ok', t('command.done')],
+    [{ status: 'ended', error: 'Failure\nDetails' }, 'error', 'Failure Details'],
+  ] as const)('renders automatic compaction progress %j', (progress, state, summary) => {
+    const node = { data: { kind: 'compaction-progress', ...progress } }
+    const view = render(<CompactionNodeView {...{ node, t } as ChatNodeViewProps<'compaction'>}
+      useCompactionPreview={select => select(false)} openCompaction={vi.fn()} />)
+    expect(view.container.querySelector(`[data-state="${state}"]`)).toBeTruthy()
+    expect(view.getByText(summary)).toBeTruthy()
+  })
+
+  it('a compaction marker opens its summary seq in the Sidebar and never shows the framed checkpoint', () => {
     const openCompaction = vi.fn<(seq: number, signal: AbortSignal) => Promise<string | null>>(async () => null)
     const view = render(
       <MessageItem t={t} openCompaction={openCompaction} node={{
-        kind: 'compaction', seq: 5, time: 1_000,
+        kind: 'compaction', seq: 5, summaryEventSeq: 4, time: 1_000,
         shadowedItemCount: 16,
         shadowedTokenCount: 11_309,
       }}
       />,
     )
-    const row = view.getByRole('button', { name: /上下文已压缩.*在侧栏查看压缩后的内容/ })
+    const row = view.getByRole('button', { name: /上下文已压缩.*在侧栏查看压缩摘要/ })
     expect(row).toHaveProperty('disabled', false)
     expect(row.getAttribute('aria-expanded')).toBeNull()
     expect(view.getByText('已压缩 16 条历史记录（约 11309 tokens）')).toBeTruthy()
     fireEvent.click(row)
-    expect(openCompaction).toHaveBeenCalledExactlyOnceWith(5, expect.any(AbortSignal))
+    expect(openCompaction).toHaveBeenCalledExactlyOnceWith(4, expect.any(AbortSignal))
     expect(view.container.querySelector('[class*="compactionBody"]')).toBeNull()
   })
 
   it('a marker without a Sidebar opener is disabled and keeps neutral copy without counts', () => {
     const view = render(<MessageItem t={t} node={{
-      kind: 'compaction', seq: 6, time: 1_000, shadowedItemCount: null, shadowedTokenCount: null,
+      kind: 'compaction', seq: 6, summaryEventSeq: 5, time: 1_000, shadowedItemCount: null, shadowedTokenCount: null,
     }} />)
     const row = view.getByRole('button', { name: /上下文已压缩/ })
     expect(row).toHaveProperty('disabled', true)
     expect(view.getByText('较早的历史已压缩为摘要')).toBeTruthy()
-    expect(view.queryByText('在侧栏查看压缩后的内容')).toBeNull()
+    expect(view.queryByText('在侧栏查看压缩摘要')).toBeNull()
     fireEvent.click(row)
   })
 

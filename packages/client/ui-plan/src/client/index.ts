@@ -15,8 +15,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { PlanCards, PlanReviewOpen, type PlanCardsInjected, type PlanOpenInjected, type PlanReviewOpenInjected } from './PlanCard.tsx'
 import { planDefinition } from './plan-definition.ts'
@@ -48,9 +46,9 @@ export interface PlanChipInjected {
 
 /**
  * Services for plan controls, Conversation projection, and resource
- * navigation. `contentPreviews` is optional and bound separately.
+ * navigation. Plan openers observe the registered content tab.
  */
-export const inject = ['slots', 'remote', 'remote.commands', 'sessions', 'locale', 'uiConversation', 'sidebarRight']
+export const inject = ['slots', 'remote', 'remote.commands', 'sessions', 'locale', 'uiConversation', 'sidebarRight', 'sidebarRightTabs']
 
 /**
  * Register plan controls and cards, enabling openers while content previews are available.
@@ -61,23 +59,14 @@ export function apply(ctx: ClientContext): void {
 
   const previewId = '@deepseek-ai/dsh-client-ui-plan'
   ctx.effect(() => ctx.uiConversation.events.register(planDefinition), 'ui-plan: conversation definition')
-  // The optional content previews: the service while it is present, and its availability for the openers.
-  let previews: ClientContext['contentPreviews'] | undefined
-  const previewAvailable = createSnapshotStore(false)
-  ctx.inject(['contentPreviews'], (scope) => {
-    const service = scope.contentPreviews
-    scope.effect(() => {
-      previews = service
-      previewAvailable.set(true)
-      return () => {
-        previews = undefined
-        previewAvailable.set(false)
-      }
-    }, 'ui-plan: content preview availability')
-  })
+  const previewAvailable = {
+    getSnapshot: () => ctx.sidebarRightTabs.get('content') !== undefined,
+    subscribe: (listener: () => void) => ctx.sidebarRightTabs.subscribe(listener),
+  }
   const open = (sessionId: SessionId): PlanOpenInjected => ({
     openPlan: (plan) => {
-      previews?.open({ mediaType: 'text/markdown', text: plan.markdown }, {
+      if (!previewAvailable.getSnapshot()) return
+      ctx.sidebarRight.openContent({ mediaType: 'text/markdown', text: plan.markdown }, {
         title: plan.title, key: `plan:${sessionId}:${plan.callId}`,
       })
     },
@@ -106,9 +95,9 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.plan-review.actions', id: previewId, locale: NS, store: reviewStore,
     inject: (sessionId: SessionId): PlanReviewOpenInjected => ({
       openReview: (review, requestKey) => {
-        if (previews === undefined) return
+        if (!previewAvailable.getSnapshot()) return
         // Reviews and logged plans share the same invocation key when one is available.
-        previews.open(
+        ctx.sidebarRight.openContent(
           { mediaType: 'text/markdown', text: review.plan },
           { title: planTitle(review.plan) ?? extractMarkdownPlainText(review.plan, { mode: 'first-line' }), key: review.callId === undefined ? `review:${sessionId}:${requestKey}` : `plan:${sessionId}:${review.callId}` },
         )

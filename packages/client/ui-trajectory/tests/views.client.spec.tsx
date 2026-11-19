@@ -1561,6 +1561,7 @@ describe('TrajectoryView state', () => {
       content: [], isError: false, subCalls: [],
     }, ...Array.from({ length: 39 }, (_, index) => ({
       kind: 'compaction' as const,
+      summaryEventSeq: null,
       seq: index + 4,
       time: index + 4,
       shadowedItemCount: null,

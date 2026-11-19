@@ -6,7 +6,7 @@ import { createElement } from 'react'
 import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
 import type { ContentTitleProps } from '../src/client/content/ContentTitle.tsx'
-import type { PreviewContent } from '../src/client/content/contract.ts'
+import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
 afterEach(cleanup)
 

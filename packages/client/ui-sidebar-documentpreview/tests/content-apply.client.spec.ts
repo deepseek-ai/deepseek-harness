@@ -15,10 +15,9 @@ import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-righ
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/content/index.ts'
 import { retainDocumentTabs } from '../src/client/document/tab-lifetime.ts'
-import type { PreviewContent } from '../src/client/content/contract.ts'
 import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
-import { CONTENTPREVIEW_ID, CONTENTPREVIEW_KIND } from '../src/client/content/service.ts'
+import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import type { ContentPreviewStore } from '../src/client/content/store.ts'
 
 /** The services the content registrations read. */
@@ -59,20 +58,17 @@ async function boot() {
   const fiber = ctx.plugin({ inject: [...inject], apply: (scope: Context) => { apply(scope, retainDocumentTabs(scope)) } })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  const service = ctx.get('contentPreviews')
-  if (service === undefined) throw new Error('contentPreviews was not provided')
-  return { openResource, ctx, resources, tabs, previews, registered, locale, fiber, service }
+  return { tabs, previews, registered, fiber }
 }
 
 describe('direct content previews', () => {
   it('registers the shared tab and removes it with its service', async () => {
     const h = await boot()
-    expect(h.tabs.get(CONTENTPREVIEW_KIND)).toMatchObject({ id: CONTENTPREVIEW_ID, patterns: ['dsh-resource://content-preview/**'] })
+    expect(h.tabs.get('content')).toMatchObject({ id: CONTENTPREVIEW_ID, patterns: ['dsh-resource://content-preview/**'] })
     expect(h.registered.map(entry => entry.component)).toEqual([ContentPreview, ContentTitle])
-    expect(h.tabs.get(CONTENTPREVIEW_KIND)?.title?.('dsh-resource://content-preview/item')).toBe('t:content.title')
+    expect(h.tabs.get('content')?.title?.('dsh-resource://content-preview/item')).toBe('t:content.title')
     await h.fiber.dispose()
-    expect(h.ctx.get('contentPreviews')).toBeUndefined()
-    expect(h.tabs.get(CONTENTPREVIEW_KIND)).toBeUndefined()
+    expect(h.tabs.get('content')).toBeUndefined()
     expect(h.registered).toEqual([])
   })
 
@@ -100,19 +96,5 @@ describe('direct content previews', () => {
     expect(store.getSnapshot().byTab[first]).toBeUndefined()
     other.abort()
     expect(store.getSnapshot().byTab).toEqual({})
-  })
-
-  it('passes content by navigation input and reuses only explicit keys', async () => {
-    const h = await boot()
-    const first: PreviewContent = { mediaType: 'text/plain', text: 'first' }
-    h.service.open(first, { title: 'First', key: 'plan/a', destination: 'float' })
-    h.service.open({ mediaType: 'text/plain', text: 'second' }, { title: 'Second', key: 'plan/a' })
-    const calls = h.openResource.mock.calls
-    expect(calls[0]).toEqual(['dsh-resource://content-preview/plan%2Fa', { destination: 'float', params: { previewContent: first, previewTitle: 'First' } }])
-    expect(calls[1]?.[0]).toBe(calls[0]?.[0])
-    expect(calls[1]?.[1]?.params).toEqual({ previewContent: { mediaType: 'text/plain', text: 'second' }, previewTitle: 'Second' })
-    h.service.open(first, { title: 'A' })
-    h.service.open(first, { title: 'B' })
-    expect(calls[2]?.[0]).not.toBe(calls[3]?.[0])
   })
 })

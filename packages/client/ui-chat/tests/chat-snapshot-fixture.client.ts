@@ -356,7 +356,7 @@ export function chatSnapshotFixture(input: {
       const compaction = sourceSeq === undefined
         ? undefined
         : legacy.nodes.find((candidate): candidate is CompactionSummaryNode =>
-          candidate.kind === 'compaction' && candidate.seq > sourceSeq)
+          candidate.kind === 'compaction' && candidate.summaryEventSeq === sourceSeq)
       if (node.outcome === null || compaction !== undefined) {
         if (compaction !== undefined) linkedCompactions.add(compaction)
         const base = settledNode(node, turns)

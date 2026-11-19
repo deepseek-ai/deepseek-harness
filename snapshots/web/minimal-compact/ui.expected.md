@@ -17,7 +17,7 @@
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}}
-- button "compact Compacted 2 history items (~{{tokens}} tokens) View compacted content in the sidebar"
+- button "compact Compacted 2 history items (~{{tokens}} tokens) View compaction summary in the sidebar"
 - text: Continue using the project requirements. Reply exactly MINIMAL_COMPACT_OK and stop. {{clock}}
 - button "Copy"
 - status: Completed

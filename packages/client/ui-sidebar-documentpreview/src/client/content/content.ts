@@ -4,7 +4,7 @@
  * `bytes-complete`.
  */
 import type { DocumentContent, DocumentLoadMode } from '../index.ts'
-import type { PreviewContent } from './contract.ts'
+import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 
 /**
  * One text as a single complete page, counted the way the workspace file

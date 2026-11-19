@@ -228,7 +228,7 @@ const command = (over: Partial<CommandNode> = {}): CommandNode => ({
   ...over,
 })
 const compaction = (over: Partial<CompactionSummaryNode> = {}): CompactionSummaryNode => ({
-  kind: 'compaction', seq: 8, time: 8_000,
+  kind: 'compaction', seq: 8, summaryEventSeq: 7, time: 8_000,
   shadowedItemCount: 16,
   shadowedTokenCount: 11_309,
   ...over,
@@ -4865,29 +4865,29 @@ describe('ChatView', () => {
     expect(view.queryByText('正在压缩…')).toBeNull()
     expect(view.queryByText('上下文已压缩')).toBeNull()
     expect(view.getByText('已压缩 16 条历史记录（约 11309 tokens）')).toBeTruthy()
-    const row = view.getByRole('button', { name: /compact.*在侧栏查看压缩后的内容/ })
+    const row = view.getByRole('button', { name: /compact.*在侧栏查看压缩摘要/ })
     expect(row.getAttribute('aria-expanded')).toBeNull()
     expect(row.getAttribute('data-compaction-seq')).toBe('8')
     expect(row.querySelector('[data-compaction-icon="context"]')).not.toBeNull()
     expect(row.querySelector('[data-compaction-icon="open"]')).not.toBeNull()
     fireEvent.click(row)
-    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(8, expect.any(AbortSignal))
+    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(7, expect.any(AbortSignal))
     expect(view.container.querySelector('[class*="compactionBody"]')).toBeNull()
   })
 
   it('disables compaction rows while no Sidebar tab type opens checkpoints and enables them live', () => {
-    const h = makeHarness({ nodes: [compaction({ seq: 12 })] })
+    const h = makeHarness({ nodes: [compaction({ seq: 12, summaryEventSeq: 11 })] })
     h.setCompactionPreview(false)
     const view = render(<h.ChatView {...h.props} />)
     const row = view.getByRole('button', { name: /上下文已压缩/ })
     expect(row).toHaveProperty('disabled', true)
-    expect(row.textContent).not.toContain('在侧栏查看压缩后的内容')
+    expect(row.textContent).not.toContain('在侧栏查看压缩摘要')
     fireEvent.click(row)
     expect(h.openCompaction).not.toHaveBeenCalled()
     act(() => { h.setCompactionPreview(true) })
     expect(row).toHaveProperty('disabled', false)
     fireEvent.click(row)
-    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(12, expect.any(AbortSignal))
+    expect(h.openCompaction).toHaveBeenCalledExactlyOnceWith(11, expect.any(AbortSignal))
   })
 
   it('keeps /compact no-history and error settlements on the generic command row', () => {

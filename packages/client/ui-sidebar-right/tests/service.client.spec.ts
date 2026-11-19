@@ -17,6 +17,35 @@ import { createSidebarRightStore } from '../src/client/stores.ts'
 import { controllerHarness as harness, SESSION } from './controller-harness.client.ts'
 
 describe('SidebarRightController — opening', () => {
+  it('opens supplied content only with a renderer and reuses keyed navigation without persisting the input', () => {
+    const { controller, tabs, publish, layout, entries } = harness()
+    publish()
+    const first = { mediaType: 'text/plain', text: 'original text' }
+    const options = { title: 'First', key: 'plan/a' }
+    const before = entries()
+    expect(controller.openContent(first, options)).toBe(false)
+    expect(entries()).toBe(before)
+    const remove = tabs.register({ id: 'test/content', kind: 'content', title: () => 'Content' })
+    expect(controller.openContent(first, options)).toBe(true)
+    const contentTabs = () => Object.values(layout().tabs).filter(tab => tab.kind === 'content')
+    const tab = contentTabs()[0]!
+    const occurrence = controller.tabDomain.occurrence(SESSION, tab)
+    const bytes = { mediaType: 'application/octet-stream', bytes: Uint8Array.of(1, 2) }
+    expect(controller.openContent(bytes, { ...options, title: 'Second', destination: 'float' })).toBe(true)
+    expect(contentTabs().map(record => record.id)).toEqual([tab.id])
+    expect(occurrence.navigation.getSnapshot()).toMatchObject({
+      address: 'dsh-resource://content-preview/plan%2Fa', params: { previewContent: bytes, previewTitle: 'Second' },
+    })
+    expect(JSON.stringify(layout())).not.toContain('previewContent')
+    controller.openContent(first, { title: 'A' })
+    controller.openContent(first, { title: 'B' })
+    expect(new Set(contentTabs().map(record => record.contentId)).size).toBe(3)
+    remove()
+    const after = entries()
+    expect(controller.openContent(first, options)).toBe(false)
+    expect(entries()).toBe(after)
+  })
+
   it('keeps independently opened instances distinct when they return to the same pane', () => {
     const h = harness()
     h.tabs.register({ id: 'test/terminal', kind: 'terminal', multiple: true, title: () => 'terminal' })

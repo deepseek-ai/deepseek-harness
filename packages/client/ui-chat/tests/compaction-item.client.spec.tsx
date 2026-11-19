@@ -20,7 +20,7 @@ afterEach(() => { cleanup() })
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
 
 function marker(seq: number): CompactionSummaryNode {
-  return { kind: 'compaction', seq, time: 1_000, shadowedItemCount: 2, shadowedTokenCount: 30 }
+  return { kind: 'compaction', seq, summaryEventSeq: seq - 1, time: 1_000, shadowedItemCount: 2, shadowedTokenCount: 30 }
 }
 
 /** An opener whose every call stays pending until the test settles it. */
@@ -39,13 +39,21 @@ function button(view: ReturnType<typeof render>): HTMLButtonElement {
 }
 
 describe('CompactionItem open requests', () => {
+  it('disables a marker until the summary event enters the loaded history', () => {
+    const opener = deferredOpener()
+    const view = render(<CompactionItem t={t} node={{ ...marker(5), summaryEventSeq: null }} openCompaction={opener.open} />)
+    expect(view.getByRole('button')).toHaveProperty('disabled', true)
+    view.rerender(<CompactionItem t={t} node={marker(5)} openCompaction={opener.open} />)
+    expect(view.getByRole('button')).toHaveProperty('disabled', false)
+  })
+
   it('keeps one request in flight and stays busy until it settles', async () => {
     const opener = deferredOpener()
     const view = render(<CompactionItem t={t} node={marker(5)} openCompaction={opener.open} />)
     // Both clicks land before React commits the disabled state.
     act(() => { button(view).click(); button(view).click() })
     fireEvent.click(button(view))
-    expect(opener.open).toHaveBeenCalledExactlyOnceWith(5, expect.any(AbortSignal))
+    expect(opener.open).toHaveBeenCalledExactlyOnceWith(4, expect.any(AbortSignal))
     expect(button(view).disabled).toBe(true)
     expect(button(view).getAttribute('aria-busy')).toBe('true')
     await act(async () => { opener.calls[0]!.settle.resolve(null) })
@@ -93,7 +101,7 @@ describe('CompactionItem open requests', () => {
     expect(button(view).disabled).toBe(false)
     expect(button(view).getAttribute('aria-busy')).toBe('false')
     fireEvent.click(button(view))
-    expect(opener.calls[1]!.seq).toBe(9)
+    expect(opener.calls[1]!.seq).toBe(8)
     await act(async () => { opener.calls[0]!.settle.resolve('Late failure') })
     expect(view.queryByRole('alert')).toBeNull()
     expect(button(view).getAttribute('aria-busy')).toBe('true')
@@ -117,7 +125,7 @@ describe('CompactionItem open requests', () => {
     expect(view.queryByRole('alert')).toBeNull()
     expect(button(view).disabled).toBe(false)
     fireEvent.click(button(view))
-    expect(second.open).toHaveBeenCalledExactlyOnceWith(5, expect.any(AbortSignal))
+    expect(second.open).toHaveBeenCalledExactlyOnceWith(4, expect.any(AbortSignal))
     await act(async () => { second.calls[0]!.settle.resolve('Read failed') })
     expect(view.getByRole('alert').textContent).toBe('Read failed')
   })

@@ -3,32 +3,32 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-compaction/README.md
 /:
-  en: 8dbf78e686ea1528
-  zh: b9af01b9434ac9dd
+  en: f08e4f7372e89553
+  zh: e14e4dab70119e88
 /deepseek-ai-dsh-client-ui-compaction:
   en: 453f619db5ec29a6
   zh: 962a998670eb8253
 /deepseek-ai-dsh-client-ui-compaction/summary:
-  en: 09d2ac1ff9a60d23
-  zh: 808528f6c3b004d5
+  en: f1fbe3886eb56a95
+  zh: aa029b9936650799
 /deepseek-ai-dsh-client-ui-compaction/table-of-contents:
-  en: 66a24cb276793faf
-  zh: 2229dc6c4a4ff41a
+  en: d3ca4204ae112422
+  zh: 7b3a3c6e211edeb0
 /deepseek-ai-dsh-client-ui-compaction/what-it-registers:
-  en: 52032481e5173f8b
-  zh: 965b9ddbd56483fc
-/deepseek-ai-dsh-client-ui-compaction/reading-a-checkpoint:
-  en: 0470de6a61cc29a7
-  zh: 70d1a07125e5a828
+  en: 01ce3ec640cda3c7
+  zh: b374c0b4165062f7
+/deepseek-ai-dsh-client-ui-compaction/reading-a-summary:
+  en: 30f08a6ec7f7bfd4
+  zh: 4211ecc97d042f23
 /deepseek-ai-dsh-client-ui-compaction/model-experience:
-  en: 8d580281ca56eef1
-  zh: d8c3d4733a5741f1
+  en: f51ca904b3454532
+  zh: 92b6f1bcaeeaf3f2
 /deepseek-ai-dsh-client-ui-compaction/model-experience/kv-cache-effect:
-  en: 517d44cea1147372
-  zh: 95f99c4efa5371cd
+  en: 900e7c177de0539e
+  zh: 08875689803df6c6
 /deepseek-ai-dsh-client-ui-compaction/known-limitations-and-deferred-work:
-  en: 41c4bae7993789b1
-  zh: c32598d351e1d371
+  en: fcd9b8c47f1b719b
+  zh: d49e599d119b0850
 /deepseek-ai-dsh-client-ui-compaction/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

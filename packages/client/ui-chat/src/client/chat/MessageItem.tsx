@@ -8,6 +8,7 @@ import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
+import { CommandStatusRow } from './CommandStatusRow.tsx'
 import { CompactionItem, type CompactionRowInjected } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
@@ -379,7 +380,15 @@ export const CompactionNodeView = memo(function CompactionNodeView({
   node, openCompaction, useCompactionPreview, t,
 }: ChatNodeViewProps<'compaction'> & InjectFace<CompactionRowInjected>) {
   const available = useCompactionPreview(value => value)
-  return <CompactionItem node={node.data} openCompaction={available ? openCompaction : undefined} t={t} />
+  const data = node.data
+  if (data.kind === 'compaction-progress') {
+    const title = t('message.compaction.commandTitle')
+    if (data.status === 'running') return <CommandStatusRow title={title} state="running" summary={t('message.compaction.running')} body={null} t={t} />
+    const error = data.status === 'interrupted' ? t('message.taskStopped') : data.error
+    return <CommandStatusRow title={title} state={error === undefined ? 'ok' : 'error'} summary={error ?? t('command.done')}
+      body={error?.includes('\n') ? error : null} t={t} />
+  }
+  return <CompactionItem node={data} openCompaction={available ? openCompaction : undefined} t={t} />
 })
 
 /** Divider between a forked Session's inherited history and its own messages. */

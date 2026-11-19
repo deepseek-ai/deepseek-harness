@@ -1,0 +1,11 @@
+.preview {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
+  padding: 20px 24px 40px;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.message { padding: 24px; color: var(--dsw-alias-label-secondary); font-size: var(--dsh-content-font-size, 14px); }

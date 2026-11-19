@@ -135,7 +135,7 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 <a id="content-previews"></a>
 ## 内容预览
 
-非工作区文件内容通过 `ctx.contentPreviews.open({ mediaType, text }, { title, key?, destination? })` 打开；也可以用 `bytes` 替代 `text`。调用会直接打开共享侧栏，`destination: 'float'` 使用共享浮窗。稳定的 `key` 会复用预览并替换输入；省略它则创建新预览。需要隔离不同会话时，调用方应把会话和来源标识包含在 key 中。
+非工作区文件内容通过 `ctx.sidebarRight.openContent({ mediaType, text }, { title, key?, destination? })` 打开；也可以用 `bytes` 替代 `text`。调用会直接打开共享侧栏，`destination: 'float'` 使用共享浮窗。稳定的 `key` 会复用预览并替换输入；省略它则创建新预览。需要隔离不同会话时，调用方应把会话和来源标识包含在 key 中。
 
 `content` 标签通过临时导航参数接收正文和标题，生命周期由侧栏管理，服务不另存正文缓存或资源流。刷新浏览器只恢复标签标识，正文参数会丢失并显示内容已过期，请从原卡片重新打开。私有 `content-preview` 地址仅用于定位导航目标，不是可读取的资源协议。
 
@@ -163,7 +163,7 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 - **本地 HTML 依赖集合有限。** 只打包直接引用的经典 `.js` 脚本和 `.css` 样式表。浏览器解析的资源仍受浏览器源与网络规则限制；iframe 不获得运行时文件读取桥接。
 - **滚动写入未节流。** 除布局夹紧外，每次滚动事件都把偏移记进 store；行块已 memo 化，于是由此引发的重渲染交还给 React 的是同一批元素。
 - **PDF chunk 加载失败后需要刷新页面。** React 会在页面生命周期内缓存被拒绝的 lazy import；已加载正文中的普通 PDF 打开或渲染失败仍可重试。
-- **内容在标签页打开期间驻留内存。** 通过 `ctx.contentPreviews.open` 打开的内容作为标签页的导航输入传递；关闭标签页即删除，窗口层面没有另外保留副本的存储。每次不带 `key` 的打开都会新建标签页，因此反复打开大内容时，每个打开的标签页各保留一份副本。
+- **内容在标签页打开期间驻留内存。** 通过 `ctx.sidebarRight.openContent` 打开的内容作为标签页的导航输入传递；关闭标签页即删除，窗口层面没有另外保留副本的存储。每次不带 `key` 的打开都会新建标签页，因此反复打开大内容时，每个打开的标签页各保留一份副本。
 - **窗口地址在刷新后失效。** 刷新后恢复的内容标签显示「已过期」，需要从来源重新打开内容。
 - **内容没有基准地址。** 内容预览中的 Markdown 图片等相对引用不会被解析。
 

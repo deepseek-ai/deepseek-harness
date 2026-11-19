@@ -4,24 +4,21 @@ import type {} from '../index.ts'
 import { ContentPreview } from './ContentPreview.tsx'
 import { ContentTitle } from './ContentTitle.tsx'
 import { contentFace, type ContentFaceSources } from './face.ts'
-import { CONTENTPREVIEW_ID, ContentPreviewService } from './service.ts'
 import { createContentPreviewStore } from './store.ts'
+
+/** Implementation identity of the shared content tab. */
+export const CONTENTPREVIEW_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/content'
 
 /** The copy namespace the body and the fallback title read. */
 const NS = 'sidebarDocumentPreview'
 
 /**
- * Provide direct content navigation and register its tab body and title.
+ * Register the content tab renderer and title.
  * @param ctx - context carrying the tab registry, the resource model, the renderer registry, slots, and copy.
  * @param retainTab - retains a content tab's view state until its record ends or the plugin is disposed.
  */
 export function apply(ctx: Context, retainTab: ContentFaceSources['retainTab']): void {
   const t = ctx.locale.bind(NS)
-  const service = new ContentPreviewService(ctx.sidebarRight, () => t('content.title'))
-  const disposeService = ctx.reflect.provide('contentPreviews', service)
-  ctx.effect(() => disposeService, 'ui-sidebar-documentpreview: content service')
-  ctx.effect(() => ctx.sidebarRightTabs.register(service.definition()), 'ui-sidebar-documentpreview: content type')
-
   const previews = ctx.documentPreviews
   const face = contentFace({
     mediaTypeCandidates: mediaType => previews.mediaTypeCandidates(mediaType),
@@ -41,4 +38,8 @@ export function apply(ctx: Context, retainTab: ContentFaceSources['retainTab']):
     { name: 'sidebar.right.pane.tab.title', key: CONTENTPREVIEW_ID },
     ContentTitle,
   )), 'ui-sidebar-documentpreview: content title')
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: CONTENTPREVIEW_ID, kind: 'content', priority: 'builtin',
+    patterns: ['dsh-resource://content-preview/**'], title: () => t('content.title'),
+  }), 'ui-sidebar-documentpreview: content type')
 }

@@ -1,7 +1,7 @@
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Browser half: register `text` as a right-Sidebar tab type for workspace
- * files, and `content` with the `ctx.contentPreviews` service for in-memory
+ * files, and `content` for `ctx.sidebarRight.openContent` for in-memory
  * content; both render through the same renderer registry.
  *
  * The type reaches the Sidebar through its public path only: the definition into
@@ -60,7 +60,7 @@ export type { ReadDocumentBytes, DocumentFileBytes, ReadWorkspaceFilePage, Sessi
 export type { TextPage, TextState, TextStore, TextTabState } from './store.ts'
 export type { DocumentBodyInput, DocumentContent, DocumentPreviewProps, DocumentTextPage } from './document/contract.ts'
 export type { DocumentLoadMode, DocumentPreviewDefinition } from './document/registry.ts'
-export type { ContentPreviewOptions, ContentPreviews, PreviewContent } from './content/contract.ts'
+import type {} from './content/contract.ts'
 export type { ContentPreviewProps } from './content/ContentPreview.tsx'
 export type { ContentTitleProps } from './content/ContentTitle.tsx'
 export type { ContentPreviewInjected, MediaTypeRenderer } from './content/face.ts'
@@ -98,7 +98,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'remote', 'remote.workspaceFiles', 'configForms', 'resources', 'fileDrag']
 
 /**
- * Client plugin body: provide `ctx.documentPreviews` and `ctx.contentPreviews`,
+ * Client plugin body: provide `ctx.documentPreviews`,
  * register the `text` and `content` types with their bodies and chip titles,
  * the dictionaries, and the built-in renderers.
  * @param ctx - client root context carrying the registry, slots, copy, and file readers.

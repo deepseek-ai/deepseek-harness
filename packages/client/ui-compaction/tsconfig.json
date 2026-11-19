@@ -30,13 +30,16 @@
       "path": "../ui-slots"
     },
     {
-      "path": "../../compaction/compaction"
-    },
-    {
-      "path": "../../llm/llm"
-    },
-    {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-sidebar-right"
+    },
+    {
+      "path": "../../core/session"
     }
   ]
 }

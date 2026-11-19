@@ -36,7 +36,7 @@ import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
 import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
-import { CONTENTPREVIEW_ID, CONTENTPREVIEW_KIND } from '../src/client/content/service.ts'
+import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 import type { textFace } from '../src/client/face.ts'
 import type { TextStore } from '../src/client/store.ts'
@@ -124,8 +124,7 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.pane.tab.title', CONTENTPREVIEW_ID, undefined, ContentTitle],
     ])
     // Both services come from this plugin: renderers for every tab type, content sources for `content`.
-    expect(tabs.get(CONTENTPREVIEW_KIND)?.id).toBe(CONTENTPREVIEW_ID)
-    expect(ctx.get('contentPreviews')).toBeDefined()
+    expect(tabs.get('content')?.id).toBe(CONTENTPREVIEW_ID)
     expect(Object.keys(registered[0]!.children!)).toEqual([
       'sidebar.right.tab.document.actions', 'sidebar.right.tab.document.unpreviewable', 'sidebar.right.tab.document.action',
     ])
@@ -156,9 +155,8 @@ describe('ui-sidebar-documentpreview apply', () => {
     const { ctx, tabs, registered, factories, dictionaries, fiber } = await boot()
     await fiber.dispose()
     expect(tabs.get(TEXTPREVIEW_KIND)).toBeUndefined()
-    expect(tabs.get(CONTENTPREVIEW_KIND)).toBeUndefined()
+    expect(tabs.get('content')).toBeUndefined()
     expect(ctx.get('documentPreviews')).toBeUndefined()
-    expect(ctx.get('contentPreviews')).toBeUndefined()
     expect(registered).toEqual([])
     expect(factories).toEqual([])
     expect(dictionaries.size).toBe(0)

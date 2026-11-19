@@ -1,5 +1,4 @@
-// A compaction marker does not replace shadowed transcript rows. Its checkpoint
-// content opens in the right Sidebar rather than inside the transcript.
+// The marker stays at the checkpoint position and opens the associated summary.
 
 import { memo, useEffect, useRef, useState } from 'react'
 import {
@@ -42,6 +41,8 @@ export const CompactionItem = memo(function CompactionItem({
   fallbackSummary,
   t,
 }: CompactionItemProps) {
+  const summarySeq = node.summaryEventSeq
+  const available = openCompaction !== undefined && summarySeq !== null
   const pending = useRef<AbortController | null>(null)
   const [opening, setOpening] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -50,15 +51,15 @@ export const CompactionItem = memo(function CompactionItem({
     setOpening(false)
     setFailure(null)
     return () => { pending.current?.abort() }
-  }, [node.seq, openCompaction])
+  }, [node.seq, summarySeq, openCompaction])
   const open = async (): Promise<void> => {
-    if (openCompaction === undefined || pending.current !== null) return
+    if (!available || pending.current !== null) return
     const controller = new AbortController()
     pending.current = controller
     setOpening(true)
     setFailure(null)
     try {
-      const result = await openCompaction(node.seq, controller.signal)
+      const result = await openCompaction(summarySeq, controller.signal)
       if (!controller.signal.aborted) setFailure(result)
     } catch (error) {
       if (!controller.signal.aborted) setFailure(error instanceof Error ? error.message : String(error))
@@ -76,11 +77,11 @@ export const CompactionItem = memo(function CompactionItem({
   const action = t('message.compaction.open')
   return (
     <div className={css.compactionRow}>
-      <Tooltip label={action} side="top" portal delayMs={200} disabled={openCompaction === undefined}>
+      <Tooltip label={action} side="top" portal delayMs={200} disabled={!available}>
         <button
           type="button"
           className={css.compactionButton}
-          disabled={openCompaction === undefined || opening}
+          disabled={!available || opening}
           aria-busy={opening}
           data-compaction-seq={node.seq}
           onClick={() => { void open() }}
@@ -96,7 +97,7 @@ export const CompactionItem = memo(function CompactionItem({
           <span className={css.compactionTitle}>{title ?? t('message.compaction')}</span>
           <span className={css.compactionSep} aria-hidden />
           <span className={css.compactionSummary}>{summary}</span>
-          {openCompaction !== undefined && <span className={a11yCss.visuallyHidden}>{action}</span>}
+          {available && <span className={a11yCss.visuallyHidden}>{action}</span>}
         </button>
       </Tooltip>
       {failure !== null && <p role="alert">{failure}</p>}
