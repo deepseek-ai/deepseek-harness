@@ -42,13 +42,12 @@ export function resolveRequestImageTargetBytes(model: DeepSeekCatalogModel): num
 }
 
 /**
- * Resolve the deterministic request target one DeepSeek model route chooses
- * for one source image: the published token grid unless the model overrides
- * it with a pixel budget, then the provider per-side limit, then the route's
- * encoded-byte target. Small images are never enlarged.
+ * Resolve maximum request dimensions from the published token grid or the
+ * model's pixel budget, capped by the provider per-side limit. Small images
+ * are never enlarged. Byte limits remain separate from the dimension bounds.
  * @param model - Advertised model route and its optional image overrides.
  * @param source - intrinsic dimensions of the normalized attachment.
- * @returns Complete request dimensions and encoded-byte target.
+ * @returns Maximum request dimensions, the fixed provider hard byte limit, and the model's soft encoded-byte target.
  * @internal
  */
 export function resolveRequestImageTarget(
