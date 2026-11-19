@@ -208,10 +208,6 @@ export class CuaHeldInputs {
       this.turnSignals.delete(agent)
       if (event.data.reason.kind === 'aborted' || event.data.reason.kind === 'error') this.stop(agent)
     })
-    yield ctx.on('agent/status', ({ agent, status }) => {
-      const owner = this.owners.get(agent)
-      if (status === 'idle' && owner?.closing) void agent.runMaintenance(() => owner.settled())
-    }, { prepend: true })
     yield () => { for (const value of this.turnSignals.values()) value.remove(); this.turnSignals.clear() }
   }
 }

@@ -31,6 +31,7 @@ import { z } from 'zod'
 import { createNativeFixture, png } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
+import { NativeClient } from '../src/native-client.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 const programs = [
@@ -430,41 +431,87 @@ it('reminders name the actual mouse target and omit explicitly released inputs',
   expect(f.native.held).toEqual([])
 })
 
-it.each(['model failure', 'thinking stop', 'tool stop'] as const)('awaits held input release on %s', async (ending) => {
-  const f = await setup([holdProgram + (ending === 'tool stop' ? '; await new Promise(() => {})' : '')], 'macos', undefined, true, true)
+function nextReleaseNotice(f: Awaited<ReturnType<typeof setup>>): Promise<void> {
+  const recorded: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+    if (agent === f.agent && message.source.kind === 'cua-inputs-released') recorded.resolve()
+  })
+  return recorded.promise
+}
+
+it.each([
+  ['model failure', 'confirmed'],
+  ['thinking stop', 'confirmed'],
+  ['thinking stop', 'refused'],
+] as const)('returns to idle after %s while new CUA input waits for cleanup (%s)', async (ending, outcome) => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
   const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
   f.model.beforeStream = async (index, options) => {
     if (index !== 1) return
-    if (ending === 'model failure') throw new Error('Model failed')
+    if (ending === 'model failure') throw new Error('Model failed with W held')
     thinking.resolve()
-    await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
+    const signal = options.signal!
+    await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
   }
-  const down = ending === 'tool stop' ? f.native.controlNext('sendKeyEvent', { afterDispatch: true }) : undefined
-  const release = ending === 'tool stop' ? undefined : f.native.controlNext('releaseHeldInputs')
-  let settled = false
-  const running = f.run().then(() => { settled = true })
-  if (down) { await down.entered; f.agent.cancel({ kind: 'user' }); down.reply() }
-  else if (ending === 'thinking stop') { await thinking.promise; f.agent.cancel({ kind: 'user' }) }
-  if (release) {
-    await release.entered
-    expect(settled).toBe(false)
-    release.reply()
+  const release = f.native.controlNext('releaseHeldInputs')
+  const notice = nextReleaseNotice(f).then(() => [...f.native.events])
+  const reported: PromiseWithResolvers<unknown> = Promise.withResolvers()
+  f.ctx.on('agent/error', ({ error }) => {
+    if (error instanceof Error && error.message.includes('Release refused after idle')) reported.resolve(error)
+  })
+  const idle = f.run()
+  if (ending === 'thinking stop') { await thinking.promise; f.agent.cancel({ kind: 'user' }, { keepInbox: true }) }
+  await release.entered
+  let following: Promise<void>
+  const before = f.native.calls.length
+  try {
+    await idle
+    expect(f.native.held.map(press => press.key)).toEqual(['w'])
+    expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-inputs-released')).toBe(false)
+    const terminal = f.agent.session.snapshotEvents().find(event => event.type === 'turn/end')
+    expect(terminal?.data.reason.kind).toBe(ending === 'thinking stop' ? 'aborted' : 'error')
+
+    const admitted: PromiseWithResolvers<void> = Promise.withResolvers()
+    f.ctx.on('tools/execute', (execution, next) => {
+      const result = next()
+      if (execution.name === 'cua') admitted.resolve()
+      return result
+    })
+    delete f.model.beforeStream
+    f.model.restart(['await app.sendKeyEvent("d", "down")'])
+    following = f.run()
+    await admitted.promise
+    expect(f.native.calls).toHaveLength(before)
+  } finally {
+    release.reply(outcome === 'refused' ? { code: 'INPUT_CLEANUP_FAILED', message: 'Release refused after idle' } : undefined)
   }
-  await running
-  expect(f.native.held).toEqual([])
-  expect(f.native.events.filter(event => event === 'w:up')).toHaveLength(1)
+  await following
+  if (outcome === 'confirmed') {
+    expect(await notice).toEqual(['w:down', 'w:up'])
+    expect(f.native.events).toEqual(['w:down', 'w:up', 'd:down'])
+  } else {
+    expect(await reported.promise).toMatchObject({ code: 'INPUT_CLEANUP_FAILED' })
+    expect(f.native.calls).toHaveLength(before)
+    expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+      && event.data.inserted.some(message => message.source.kind === 'cua-inputs-released'))).toBe(false)
+  }
 })
 
 it('cancels an in-flight down before releasing input and allows later programs after confirmed cleanup', async () => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const down = f.native.controlNext('sendKeyEvent', { afterDispatch: true, waitForCancellation: true })
-  const running = f.run()
+  let finished = false
+  const running = f.run().then(() => { finished = true })
   await down.entered
   f.agent.cancel({ kind: 'user' })
   await down.cancelled
   expect(f.native.held.map(press => press.key)).toEqual(['w'])
   expect(f.native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+  const release = f.native.controlNext('releaseHeldInputs')
   down.reply({ code: 'NATIVE_CANCELLED', message: 'Stopped after dispatch' })
+  await release.entered
+  try { expect(finished).toBe(false) } finally { release.reply() }
   await running
   expect(f.native.held).toEqual([])
   f.model.requests.length = 0
@@ -522,6 +569,43 @@ it.each(['closes', 'fails to close'] as const)('waits for Agent release before t
   expect(f.native.held).toEqual([])
   if (outcome === 'fails to close') expect(report).toHaveBeenCalledWith(expect.objectContaining({ errors: [failure] }))
   else expect(report).not.toHaveBeenCalled()
+})
+
+it.each(['confirmed', 'refused'] as const)('joins background cleanup on concurrent provider disposal (%s)', async (outcome) => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  f.model.beforeStream = async (index) => { if (index === 1) throw new Error('Model failed') }
+  const errors: unknown[] = []
+  f.ctx.on('agent/error', ({ error }) => { errors.push(error) })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const idle = f.run()
+  await release.entered
+  await idle
+
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const dispose = NativeClient.prototype.dispose
+  const spy = vi.spyOn(NativeClient.prototype, 'dispose').mockImplementation(function (this: NativeClient) {
+    const closing = dispose.call(this)
+    entered.resolve()
+    return closing
+  })
+  onTestFinished(() => { spy.mockRestore() })
+  let disposed = false
+  const closing = f.provider.dispose().then(() => { disposed = true })
+  try {
+    await entered.promise
+    expect(disposed).toBe(false)
+    expect(f.native.state.closedChannels).toBe(0)
+  } finally {
+    release.reply(outcome === 'refused' ? { code: 'INPUT_CLEANUP_FAILED', message: 'Release refused during disposal' } : undefined)
+    await closing
+  }
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
+  expect(f.native.state.closedChannels).toBe(1)
+  if (outcome === 'confirmed') expect(f.native.events).toEqual(['w:down', 'w:up', 'native-close'])
+  else {
+    expect(errors).toContainEqual(expect.objectContaining({ code: 'INPUT_CLEANUP_FAILED' }))
+    expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-inputs-released')).toBe(false)
+  }
 })
 
 it.each(['agent', 'provider', 'context'] as const)('awaits native release when the %s is disposed after a completed turn', async (owner) => {
@@ -621,10 +705,14 @@ it('records release after a thinking pause so the resumed model sees the new inp
     thinking.resolve()
     await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
   }
+  const release = f.native.controlNext('releaseHeldInputs')
+  const notice = nextReleaseNotice(f)
   const running = f.run()
   await thinking.promise
   f.agent.cancel({ kind: 'user' })
-  await running
+  await release.entered
+  release.reply()
+  await Promise.all([running, notice])
   expect(f.native.held).toEqual([])
   expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-inputs-released')).toBe(true)
   delete f.model.beforeStream
@@ -642,9 +730,13 @@ it('removes a pending held reminder when a pause preserves the inbox', async () 
     inserted.resolve()
     agent.cancel({ kind: 'user' }, { keepInbox: true })
   })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const notice = nextReleaseNotice(f)
   const running = f.run()
   await inserted.promise
-  await running
+  await release.entered
+  release.reply()
+  await Promise.all([running, notice])
   expect(f.agent.inbox.nextStep.map(message => message.source.kind)).toContain('cua-inputs-released')
   expect(f.agent.inbox.nextStep.map(message => message.source.kind)).not.toContain('cua-held-inputs')
   f.model.restart(['inspect("resumed")'])
@@ -652,28 +744,6 @@ it('removes a pending held reminder when a pause preserves the inbox', async () 
   const resumed = JSON.stringify(f.model.requests[0]?.messages)
   expect(resumed).toContain('CUA inputs were released during cleanup')
   expect(resumed).not.toContain('CUA inputs are still held')
-})
-
-it('drains an abnormal prior turn’s input before another program dispatches', async () => {
-  const f = await setup([holdProgram], 'macos', undefined, true, true)
-  await f.run()
-  expect(f.native.held).toHaveLength(1)
-  f.model.restart([])
-  f.model.beforeStream = async () => { throw new Error('Model failed after the previous turn left a key held') }
-  const release = f.native.controlNext('releaseHeldInputs')
-  const failing = f.run()
-  await release.entered
-  let next: Promise<unknown> | undefined
-  try {
-    expect(f.agent.session.snapshotEvents().at(-1)?.type).toBe('turn/end')
-    expect(f.native.held).toHaveLength(1)
-    delete f.model.beforeStream
-    f.model.restart([holdProgram])
-    next = f.run()
-    expect(f.native.held).toHaveLength(1)
-    expect(f.native.events).toEqual(['w:down'])
-  } finally { release.reply(); await failing; await next }
-  expect(f.native.events).toEqual(['w:down', 'w:up', 'w:down'])
 })
 
 it('drops a delayed held-state reminder after cancellation has already released the input', async () => {
