@@ -90,6 +90,8 @@ export class ToolExecutionPipeline {
   /** Original caller cancellation, kept outside the wrapper-mutable execution object. */
   private cancellationStates = new WeakMap<ToolRunContext, ToolCancellationState>()
 
+  private readonly failureCleanups = new WeakMap<ToolExecution, (() => void | Promise<void>)[]>()
+
   /** Definition-owned final content transform snapshotted before policy begins. */
   private contentFinalizers = new WeakMap<ToolRunContext, ToolDefinition['finalizeContent']>()
 
@@ -304,8 +306,16 @@ export class ToolExecutionPipeline {
    * @returns whether the result still needs post-execute.
    */
   async dispatch(exec: ToolRunContext): Promise<ScheduledToolDispatch> {
+    let dispatching = true
     try {
-      const mutableExec = exec as MutableToolRunContext
+      const mutableExec = Object.assign(exec as MutableToolRunContext, {
+        onFailure: (cleanup: () => void | Promise<void>) => {
+          if (!dispatching) throw new Error('Tool failure cleanup must be registered during dispatch')
+          const registered = this.failureCleanups.get(exec)
+          if (registered) registered.push(cleanup)
+          else this.failureCleanups.set(exec, [cleanup])
+        },
+      })
       const carrier = scopeTarget(this.tools, exec.agent)
       const result = await this.ctx.waterfall(
         carrier, 'tools/execute', mutableExec,
@@ -332,6 +342,8 @@ export class ToolExecutionPipeline {
       }
     } catch (error: unknown) {
       return { kind: 'final-result', result: this.wrapperFailureResult(exec, error) }
+    } finally {
+      dispatching = false
     }
   }
 
@@ -391,7 +403,7 @@ export class ToolExecutionPipeline {
    * @returns the materialized final result.
    * @internal
    */
-  private finish(exec: ToolRunContext, result: ToolExecutionResult): ToolExecutionResult {
+  private async finish(exec: ToolRunContext, result: ToolExecutionResult): Promise<ToolExecutionResult> {
     let materializedResult: ToolExecutionResult
     try {
       materializedResult = this.materializeFinalResult(result)
@@ -403,6 +415,21 @@ export class ToolExecutionPipeline {
       finalResult = this.materializeFinalResult(this.applyFinalContent(exec, materializedResult))
     } catch (error: unknown) {
       finalResult = this.materializeFinalResult(toolErrorResult(error))
+    }
+    const cleanups = this.failureCleanups.get(exec)
+    this.failureCleanups.delete(exec)
+    if (finalResult.isError && cleanups) {
+      const errors: string[] = []
+      for (const cleanup of cleanups) {
+        try { await cleanup() } catch (error) { errors.push(toolErrorMessage(error)) }
+      }
+      if (errors.length) {
+        const feedback = `Tool cleanup failed: ${errors.join('\n')}`
+        finalResult = this.materializeFinalResult({
+          ...finalResult, error: { ...finalResult.error, message: `${finalResult.error.message}\n${feedback}` },
+          content: [...finalResult.content, { type: 'text', text: feedback }],
+        })
+      }
     }
     this.notifyResult(exec, finalResult)
     return finalResult

@@ -450,10 +450,17 @@ interface ToolExecution extends ToolExecutionInput {
 interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
   /** Cancellation signal visible to the next wrapper or tool body. */
   signal: AbortSignal
+  /**
+   * Register cleanup during dispatch for this invocation. If the final result is an error, the executor
+   * awaits every registered cleanup in order before publishing it, including failures from post-execute policy.
+   * Cleanup failures add feedback to the original error. Successful calls discard the registrations.
+   * @param cleanup - Release this call's resources using the resource owner's cleanup deadline.
+   */
+  onFailure(cleanup: () => void | Promise<void>): void
 }
 ```
 
-`ToolExecutionToken` 是不透明的运行时 `Symbol`，仅用于身份比较。策略执行前，`execute()` 会物化并冻结参数、拒绝非 JSON 输入并分配 token。身份字段、调用方必需的 signal 和可选的 parent token 均保持 readonly。`ToolDispatchExecution` 包装层可以替换 signal 但不能移除；注册表会在调用工具函数体前重新融合调用方的 signal。最终观察者接收冻结的执行身份。
+`ToolExecutionToken` 是不透明的运行时 `Symbol`，仅用于身份比较。策略执行前，`execute()` 会物化并冻结参数、拒绝非 JSON 输入并分配 token。身份字段、调用方必需的 signal 和可选的 parent token 均保持 readonly。`ToolDispatchExecution` 包装层可以替换 signal 但不能移除；注册表会在调用工具函数体前重新融合调用方的 signal。最终观察者接收冻结的执行身份。 执行包装层可在返回前调用 `exec.onFailure(cleanup)`。若最终结果失败，包括被后置策略拒绝，执行器会先等待该次调用的清理，再通知结果观察者。清理失败时追加错误反馈，并保留原错误码。
 
 `ToolGuard` 是感知作用域的最终预分派策略。其返回类型有意不包含 allow 结果：`undefined` 保留 waterfall 的决策，而返回的 reason 或 `ToolGuardDenial` 只能缩减权限，因此后续监听器无法撤销它。拒绝中可选的 `info` 会成为失败结果的结构化错误身份。
 

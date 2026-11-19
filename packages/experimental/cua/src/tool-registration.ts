@@ -29,8 +29,8 @@ export interface CuaPrograms {
    * programs until the release settles, so the caller holds them back; after a failed release it rejects them
    * until a later release succeeds. Resolves when no environment exists.
    * @param agent - Agent whose `cua_run_code` state owner is released.
-   * @returns Completion after the process has exited and its output has drained.
-   * @throws When the process cleanup fails.
+   * @returns Completion after the process has exited, its output has drained, and held-input cleanup has settled.
+   * @throws When environment or input cleanup fails, reporting both causes if both fail.
    */
   release(agent: Agent): Promise<void>
   /**
@@ -165,7 +165,15 @@ var cua = connectCua(() => tools.cua);
                 // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
                 consumer.provide('cuaPrograms', {
                   release: async (agent: Agent) => {
-                    try { await consumer.ptcRuntime.release(agent) } finally { await releaseInputs(agent) }
+                    try { await consumer.ptcRuntime.release(agent) }
+                    catch (error) {
+                      try { await releaseInputs(agent) }
+                      catch (cleanup) {
+                        throw new AggregateError([error, cleanup], `Environment release failed: ${String(error)}. Held-input cleanup failed: ${String(cleanup)}`)
+                      }
+                      throw error
+                    }
+                    await releaseInputs(agent)
                   },
                   releaseInputs,
                   screenshotRequestTarget: image => config.screenshotTarget === undefined

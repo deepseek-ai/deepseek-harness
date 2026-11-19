@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import { RUN_CODE_NAME, type ToolDispatchExecution } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
 import { NativeError, type NativeClient } from './native-client.ts'
 
@@ -55,6 +55,9 @@ class InputOwner {
     return renderInputs(inputs, 'held')
   }
 
+  registerFailureCleanup(execution: ToolDispatchExecution): void {
+    if (this.client) execution.onFailure(async () => { await this.close() })
+  }
 
   close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
     this.controller.abort()
@@ -166,15 +169,19 @@ export class CuaHeldInputs {
         }
         if (result.isError || signal.aborted) {
           await releaseAfter(result.isError ? result.error.message : 'Program cancelled')
-        } else if (execution.parent === undefined) {
+        } else {
           const owner = this.owners.get(agent)
-          const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
-          const text = await owner?.reminder(inTurn).catch(async (error: unknown) => {
-            await releaseAfter(signal.aborted ? 'Program cancelled' : `Held-input query failed: ${String(error)}`)
-            throw error
-          })
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
-          if (signal.aborted) { await releaseAfter('Program cancelled'); return result }
+          let text: string | undefined
+          if (execution.parent === undefined) {
+            const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
+            text = await owner?.reminder(inTurn).catch(async (error: unknown) => {
+              await releaseAfter(signal.aborted ? 'Program cancelled' : `Held-input query failed: ${String(error)}`)
+              throw error
+            })
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
+            if (signal.aborted) { await releaseAfter('Program cancelled'); return result }
+          }
+          owner?.registerFailureCleanup(execution)
           if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
               source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),

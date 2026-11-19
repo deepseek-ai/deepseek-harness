@@ -406,6 +406,41 @@ it('reports the Windows keyboard window and desktop input mode and supports a la
   expect(reminders(f.agent)).toHaveLength(1)
 })
 
+it.each([
+  ['run_code', 'confirmed'], ['cua_run_code', 'confirmed'], ['cua_run_code', 'refused'],
+] as const)('settles %s post-policy failure after native cleanup (%s)', async (tool, cleanup) => {
+  const code = tool === 'run_code'
+    ? `await tools.cua_run_code({ code: ${JSON.stringify(holdProgram)}, description: "Hold W" })` : holdProgram
+  const f = await setup([code], 'macos', undefined, true, true)
+  if (tool === 'run_code') await f.agent.ctx.plugin(PtcToolExecutor)
+  f.model.toolName = tool
+  f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === tool
+    ? { kind: 'block', feedback: [{ type: 'text', text: 'Policy rejected output' }], info: { name: 'HookError', code: 'HOOK_BLOCKED' } }
+    : next(), { prepend: true })
+  const release = f.native.controlNext('releaseHeldInputs')
+  const running = f.run()
+  await release.entered
+  try {
+    expect(f.native.held.map(input => input.key)).toEqual(['w'])
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'tool/result')).toBe(false)
+  } finally {
+    release.reply(cleanup === 'refused' ? { code: 'INPUT_CLEANUP_FAILED', message: 'Fixture refused release' } : undefined)
+    await running
+  }
+  const result = f.agent.session.snapshotEvents().find(event => event.type === 'tool/result')
+  expect(result?.data).toMatchObject({ error: { code: 'HOOK_BLOCKED' }, message: { isError: true } })
+  const shown = JSON.stringify(f.model.requests[1]?.messages)
+  expect(shown).toContain('Policy rejected output')
+  expect(shown).not.toContain('CUA inputs are still held:')
+  if (cleanup === 'confirmed') {
+    expect(f.native.events).toEqual(['w:down', 'w:up'])
+    expect(shown).toContain('CUA inputs were released during cleanup')
+  } else {
+    expect(shown).toContain('Fixture refused release')
+    expect(shown).not.toContain('CUA inputs were released during cleanup')
+  }
+})
+
 it('releases keyboard and mouse in mixed reverse order on program failure', async () => {
   const f = await setup([holdProgram,
     'await app.sendKeyEvent("shift", "down"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("d", "down"); throw Error("program failed")', 'inspect("recovered")'],

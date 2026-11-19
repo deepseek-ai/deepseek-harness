@@ -158,8 +158,8 @@ Host control over the dedicated `cua_run_code` environments; registered as `ctx.
  * programs until the release settles, so the caller holds them back; after a failed release it rejects them
  * until a later release succeeds. Resolves when no environment exists.
  * @param agent - Agent whose `cua_run_code` state owner is released.
- * @returns Completion after the process has exited and its output has drained.
- * @throws When the process cleanup fails.
+ * @returns Completion after the process has exited, its output has drained, and held-input cleanup has settled.
+ * @throws When environment or input cleanup fails, reporting both causes if both fail.
  */
 release(agent: Agent): Promise<void>
 

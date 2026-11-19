@@ -91,7 +91,7 @@ Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.
 
 `ctx.tools.guard(guard)` registers a monotonic synchronous guard after the extensible `tools/pre-execute` waterfall: a returned reason denies the call, and no later listener can turn that denial back into permission. The pipeline's events give plugins more control — `tools/pre-execute` decides allow/deny/ask, `tools/execute` wraps dispatch for timeout or retry, `tools/post-execute` inspects or replaces the result, and `tools/result` observes the frozen final outcome.
 
-A tool’s `projectContent` installs execution-prepared content before post-execute policies. Policies may still replace or block it; `finalizeContent` remains the final content transform after those policies.
+A tool’s `projectContent` installs execution-prepared content before post-execute policies. Policies may still replace or block it; `finalizeContent` remains the final content transform after those policies. A dispatch wrapper can register `exec.onFailure(cleanup)` before returning. When the final outcome fails, including a post-execute block, the executor waits for that invocation’s cleanups before notifying result observers. A cleanup refusal appends feedback and preserves the original error code.
 
 ### Host presentation descriptors
 

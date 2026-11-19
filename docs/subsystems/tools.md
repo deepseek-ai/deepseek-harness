@@ -450,10 +450,17 @@ interface ToolExecution extends ToolExecutionInput {
 interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
   /** Cancellation signal visible to the next wrapper or tool body. */
   signal: AbortSignal
+  /**
+   * Register cleanup during dispatch for this invocation. If the final result is an error, the executor
+   * awaits every registered cleanup in order before publishing it, including failures from post-execute policy.
+   * Cleanup failures add feedback to the original error. Successful calls discard the registrations.
+   * @param cleanup - Release this call's resources using the resource owner's cleanup deadline.
+   */
+  onFailure(cleanup: () => void | Promise<void>): void
 }
 ```
 
-`ToolExecutionToken` is an opaque runtime `Symbol` used only for identity comparison. Before policy, `execute()` materializes and freezes arguments, rejects non-JSON input, and assigns the token. Identity fields, the required caller signal, and the optional parent token remain readonly. A `ToolDispatchExecution` wrapper may replace but not remove the signal; the registry re-fuses the caller signal before invoking the body. Final observers receive the frozen execution identity.
+`ToolExecutionToken` is an opaque runtime `Symbol` used only for identity comparison. Before policy, `execute()` materializes and freezes arguments, rejects non-JSON input, and assigns the token. Identity fields, the required caller signal, and the optional parent token remain readonly. A `ToolDispatchExecution` wrapper may replace but not remove the signal; the registry re-fuses the caller signal before invoking the body. Final observers receive the frozen execution identity. A dispatch wrapper can register `exec.onFailure(cleanup)` before returning. When the final outcome fails, including a post-execute block, the executor waits for that invocation’s cleanups before notifying result observers. A cleanup refusal appends feedback and preserves the original error code.
 
 A `ToolGuard` is scope-aware final pre-dispatch policy. Its return type deliberately has no allow result: `undefined` preserves the waterfall decision, while a returned reason or `ToolGuardDenial` can only reduce permission, so a later listener cannot undo it. A denial's optional `info` becomes the failed result's structured error identity.
 
