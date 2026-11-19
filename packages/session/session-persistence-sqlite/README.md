@@ -60,6 +60,8 @@ An active JSONL writer retains ownership until it closes. A SQLite read open wai
 
 Direct append, live Session events and durability checkpoints use the same handle. `flush()` drains pending events; writer close and provider disposal finish admitted writes before releasing ownership. An automatic write failure retains its pending batch and pauses automatic writes; the next explicit checkpoint retries and reports any remaining failure.
 
+Concurrent writers share a transaction when their encoded batches are queued together. Each batch has its own savepoint: a batch-local failure rejects that batch while its peers commit, but an error that ends the transaction rejects the whole group. Routing publication follows commit and settles each batch independently. An unknown commit or rollback result makes the provider unusable until restart.
+
 -----
 
 <a id="understand-the-implementation"></a>

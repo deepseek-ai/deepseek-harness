@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Feishu プラグイン",
+    "description": "会話の中で Feishu のドキュメント、メッセージ、その他の承認済み機能を使用します。",
+    "detail": "docs/DETAIL.md"
+  }
+}

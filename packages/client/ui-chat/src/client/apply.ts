@@ -6,6 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import type { GroupKey } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -290,9 +291,8 @@ export function apply(ctx: Context): void {
           // its top or at line 400, so the same tab is revealed and told where
           // to land.
           openFile: async (path, options) => {
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-            const current = session.projections.faceOf('workingDirectory').getSnapshot() as string | null | undefined
-            const url = fileAddressFor(sessionId, cwd, resolveWorkspacePath(current ?? undefined, path))
+            const directory = sessionDirectory(ctx.sessions, sessionId)
+            const url = fileAddressFor(sessionId, directory, resolveWorkspacePath(directory, path))
             if (options?.line === undefined) ctx.sidebarRight.openResource(url)
             else ctx.sidebarRight.openResource(url, { params: { line: options.line } })
             await Promise.resolve()

@@ -246,6 +246,10 @@ flowchart TD
   end
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
+    pkg_feishu["feishu"]
+    pkg_linear["linear"]
+    pkg_notion["notion"]
+    pkg_tencent_docs["tencent-docs"]
     pkg_upstream_skills["upstream-skills"]
     pkg_wecom["wecom"]
   end
@@ -688,6 +692,8 @@ flowchart TD
   pkg_api_workspace_controller --> pkg_storage_domain
   pkg_api_workspace_controller --> pkg_typert_protocol
   pkg_api_workspace_controller --> pkg_workspace
+  pkg_feishu --> pkg_cli_account
+  pkg_feishu --> pkg_skill
   pkg_wecom --> pkg_cli_account
   pkg_wecom --> pkg_upstream_skills
   pkg_experimental_api_speech_to_text --> pkg_experimental_speech_to_text
@@ -971,6 +977,7 @@ flowchart TD
   pkg_workspace_changes --> pkg_session
   pkg_workspace_changes --> pkg_subprocess
   pkg_workspace_changes --> pkg_tools
+  pkg_workspace_changes --> pkg_working_directory
   pkg_creation_recommendations --> pkg_llm
   pkg_creation_recommendations --> pkg_session
   pkg_creation_recommendations --> pkg_skill
@@ -1723,6 +1730,9 @@ flowchart TD
 | [`client-ui-workspace`](../packages/client/ui-workspace) | `client` | — |
 | [`client-web`](../packages/client/web) | `client` | — |
 | [`computer-use`](../packages/computer-use/computer-use) | `computer-use` | — |
+| [`linear`](../packages/connector/linear) | `connector` | — |
+| [`notion`](../packages/connector/notion) | `connector` | — |
+| [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
 | [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | `experimental` | — |
 | [`client-ui-creation-recommendations`](../packages/experimental/client-ui-creation-recommendations) | `experimental` | — |
@@ -1845,6 +1855,7 @@ flowchart TD
 | [`skill-filesystem`](../packages/skill/skill-filesystem) | `skill` | [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`skill`](../packages/skill/skill) |
 | [`deepseek-auth`](../packages/account/deepseek-auth) | `account` | [`credentials`](../packages/credentials/credentials), [`deepseek-account`](../packages/account/deepseek-account), [`error`](../packages/util/error), [`launch-environment`](../packages/util/launch-environment) |
 | [`api-workspace-controller`](../packages/api/workspace-controller) | `api` | [`api-gateway`](../packages/api/gateway), [`client-connection`](../packages/client/connection), [`host-directory-picker`](../packages/host/directory-picker), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`typert-protocol`](../packages/typert/protocol), [`workspace`](../packages/workspace/workspace) |
+| [`feishu`](../packages/connector/feishu) | `connector` | [`cli-account`](../packages/connector/cli-account), [`skill`](../packages/skill/skill) |
 | [`wecom`](../packages/connector/wecom) | `connector` | [`cli-account`](../packages/connector/cli-account), [`upstream-skills`](../packages/connector/upstream-skills) |
 | [`experimental-api-speech-to-text`](../packages/experimental/api-speech-to-text) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`typert-protocol`](../packages/typert/protocol) |
 | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | `experimental` | [`experimental-translator`](../packages/experimental/translator) |
@@ -1905,7 +1916,7 @@ flowchart TD
 | [`agent-instructions`](../packages/context/agent-instructions) | `context` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`file-reference-local`](../packages/context/file-reference-local) | `context` | [`agent`](../packages/core/agent), [`file-reference`](../packages/context/file-reference), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`tool-present`](../packages/deliverables/tool-present) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
-| [`workspace-changes`](../packages/deliverables/workspace-changes) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools) |
+| [`workspace-changes`](../packages/deliverables/workspace-changes) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`creation-recommendations`](../packages/experimental/creation-recommendations) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`skill`](../packages/skill/skill), [`tools`](../packages/core/tools) |
 | [`cua-macos`](../packages/experimental/cua-macos) | `experimental` | [`agent`](../packages/core/agent), [`computer-use`](../packages/computer-use/computer-use), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
 | [`cua-windows`](../packages/experimental/cua-windows) | `experimental` | [`agent`](../packages/core/agent), [`computer-use`](../packages/computer-use/computer-use), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |

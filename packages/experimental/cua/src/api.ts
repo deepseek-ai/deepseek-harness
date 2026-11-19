@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -122,6 +122,9 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         requireAccessibility()
         return ActionNamesResult.parse(await scopedCall('listActions', { ...elementParams(), elementId }))
       },
+      async getActionSchema(action) {
+        return ActionSchemaResult.parse(await call('getActionSchema', { action }))
+      },
       async performAction(elementId, name, argument) {
         requireAccessibility()
         return action('performAction', { ...elementParams(), elementId, action: name,
@@ -172,6 +175,12 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
           throw new Error('Window-scoped keyboard input is not supported on current platform.')
         }
       })
+    function systemPointerOptions(method: 'toggleMouse' | 'drag', useSystemPointer: boolean | undefined) {
+      if (useSystemPointer !== undefined && !capabilities.systemPointer) {
+        throw new Error(`${method} useSystemPointer: not accepted for these arguments`)
+      }
+      return { useSystemPointer }
+    }
     return {
       ...base.surface, windowId,
       async getScreenshot() {
@@ -191,8 +200,8 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         const [x, y] = targetPoint
         return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
       },
-      async toggleMouse(mouseButton, direction) {
-        return base.action('toggleMouse', { mouseButton, direction })
+      async toggleMouse(mouseButton, direction, options) {
+        return ActionResult.parse(await base.call('toggleMouse', { mouseButton, direction }, systemPointerOptions('toggleMouse', options?.useSystemPointer)))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
@@ -218,16 +227,12 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         })
       },
       async drag(from, to, options) {
-        const useSystemPointer = options?.useSystemPointer
-        if (useSystemPointer !== undefined && !capabilities.systemPointer) {
-          throw new Error('drag useSystemPointer: not accepted for these arguments')
-        }
         return ActionResult.parse(await base.call('drag', { ...coordinateParams(appHandle, windowId),
           fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
           ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
-        }, { useSystemPointer }))
+        }, systemPointerOptions('drag', options?.useSystemPointer)))
       },
     }
   }

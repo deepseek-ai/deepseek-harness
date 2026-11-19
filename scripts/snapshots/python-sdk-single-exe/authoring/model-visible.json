@@ -28,6 +28,7 @@
       "Pillow": "12.3.0",
       "lxml": "6.1.3",
       "XlsxWriter": "3.2.9",
+      "pypdf": "6.21.4",
       "typing_extensions": "4.16.0",
       "et_xmlfile": "2.0.0"
     }

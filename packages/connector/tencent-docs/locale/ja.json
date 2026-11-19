@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Tencent Docs プラグイン",
+    "description": "会話の中で、アクセス権のある Tencent Docs のコンテンツを使用します。",
+    "detail": "docs/DETAIL.md"
+  }
+}

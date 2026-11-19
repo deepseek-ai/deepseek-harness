@@ -693,6 +693,27 @@
   outline-offset: -2px;
 }
 
+/* A panel's trailing content follows the title in the row's flow: a row without content keeps its full title width,
+   and the title yields room only to content that shows. Where the pointer hovers, the content rests at the row's end
+   and gives way to the unpin action; elsewhere it stays before the action, which always shows. On the collapsed rail it
+   sits over the icon's top trailing corner. */
+.panelTrailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.collapsed .panelTrailing {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
+
 @media (hover: hover) {
   .panelUnpin { opacity: 0; }
   .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
@@ -700,6 +721,17 @@
   .panelUnpin:hover { color: var(--dsw-alias-label-primary); }
   .panelEntry:hover .panelUnpin,
   .panelEntry:has(:focus-visible) .panelUnpin { opacity: 1; }
+
+  /* The unpin action shows only while its row is hovered or holds keyboard focus, so trailing content rests in the
+     action's place, as a Session row's time rests in the place of its actions: its trailing edge is the unpin glyph's,
+     7px from the row's, and its box fills the rest of the 38px the row keeps for the action. */
+  .panelEntryWide .panelRow { padding-right: 7px; }
+  .panelEntryWide .panelTrailing {
+    justify-content: flex-end;
+    min-width: 31px;
+  }
+  .panelEntry:has(.panelUnpin):hover .panelTrailing,
+  .panelEntry:has(.panelUnpin):has(:focus-visible) .panelTrailing { opacity: 0; }
 }
 
 .panelList {

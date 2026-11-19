@@ -1,5 +1,6 @@
 /** The forge panel's extension slots and the props their owners pass. */
 
+import type { WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChangeRequestRef, ChangeRequestState } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeLensFile } from '../types.ts'
 import type { ChangesTarget } from './changes-address.ts'
@@ -65,8 +66,18 @@ export interface ForgeChangeRequestCardActionsProps {
   readonly state: ChangeRequestState | null
 }
 
+/** Owner props of `forge.review.conversation`. */
+export interface ForgeReviewConversationProps {
+  /** Headline of the blank conversation, naming the change request. */
+  readonly headline: string
+  /** Shows the blank Session of a Workspace the reader picked in the conversation as the page's conversation. */
+  readonly onWorkspaceSelected: WorkspaceSelectedHandler
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** The review page's conversation about one change request, in the Session its chat tab shows. */
+    'forge.review.conversation': { kind: 'single'; scope: 'session'; owner: ForgeReviewConversationProps }
     /** Tools a plugin adds to the changes toolbar, after its flexible space and before the thread list toggle. */
     'forge.changes.toolbar': { kind: 'list'; scope: 'session'; owner: ForgeChangesToolbarProps }
     /** Rows a plugin adds to a file's menu, below the built-in rows. */

@@ -65,6 +65,8 @@ export function WebSearchCard(props: WebSearchCardProps) {
     const description = section.options.find(option => option.id === section.selected)?.description
     return description === undefined ? undefined : props.resolveText(description) || undefined
   }
+  // Automatic Search selection names no provider, so the page states which provider the Host runs.
+  const searchAuto = search.auto && search.selected === AUTO_ID
   return (
     <SettingsForm labels={formLabels(t)} state={state} onSave={props.save} onDiscard={props.discard}>
       <section className={styles.section} aria-labelledby="plugin-config-web-search-section">
@@ -72,8 +74,8 @@ export function WebSearchCard(props: WebSearchCardProps) {
         <ProviderSelect id="plugin-config-web-search-provider" labelledBy="plugin-config-web-search-section" t={t}
           section={search} disabled={menuDisabled} field="searchProvider" onSelect={props.selectProvider}
           providersFailed={state.providersFailed} onRetry={props.retryProviders}
-          description={describe(search)}
-          hint={search.kind === 'deepseek'
+          description={searchAuto ? t('searchAutoHint') : describe(search)}
+          hint={search.kind === 'deepseek' || searchAuto
             ? <a className={styles.link} href={t('searchGuideUrl')} target="_blank" rel="noopener noreferrer">{t('searchGuide')}</a>
             : search.kind === 'plugin' ? t('pluginProviderHint') : undefined} />
         {search.kind === 'deepseek' && (
@@ -267,7 +269,7 @@ function ProviderSelect(props: {
   disabled: boolean
   field: keyof WebProviderSelection
   onSelect: WebSearchCardFace['selectProvider']
-  /** The selected provider's registered description, resolved to the active language, if it has one. */
+  /** The selected provider's registered description in the active language, or the page's line for automatic selection, if any. */
   description: string | undefined
   /** The page's own line about the selected provider, after its description, if it has one. */
   hint: ReactNode
