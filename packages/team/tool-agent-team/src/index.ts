@@ -111,6 +111,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   ctx.systemPrompt.section({
     name: 'team:policy',
+    retirement: 'The shared task board is no longer available. Its instructions no longer apply.',
     order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
     text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
   })

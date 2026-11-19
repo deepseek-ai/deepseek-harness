@@ -977,6 +977,26 @@ describe('system/message surface node', () => {
     expect(plainHead.nodes).toEqual(sourceSeqs(2))
   })
 
+  it('orders system nodes by position and keeps them isolated until a batch commits', () => {
+    const log: SessionEvent[] = [systemEvent(0, 'Head.'), userEvent(1), systemEvent(2, 'Tail.')]
+    const surface = new SurfaceManager(log)
+    expect(surface.systemNodes.map(node => node.seq)).toEqual(sourceSeqs(0, 2))
+    const inserted = systemEvent(3, 'Inserted.', { op: 'replace', startSeq: 1, endSeq: 1 }, [0, 1, 2])
+    const reset = systemEvent(4, '', { op: 'replace', startSeq: 0, endSeq: 0 }, [0, 2, 3])
+    reset.data.message = { ...reset.data.message, content: [], source: { kind: 'system-prompt', reset: true, sections: [] } }
+    const commit = surface.prepareBatch([inserted, reset])
+    expect(surface.systemNodes.map(node => node.seq)).toEqual(sourceSeqs(0, 2))
+    log.push(inserted, reset)
+    commit()
+    expect(surface.systemNodes).toEqual([
+      { seq: SessionSeq(4), isEmpty: true },
+      { seq: SessionSeq(3), isEmpty: false },
+      { seq: SessionSeq(2), isEmpty: false },
+    ])
+    const replay = new SurfaceManager(log)
+    expect(replay.systemNodes).toEqual(surface.systemNodes)
+  })
+
   it('rejects a seeded system/message with a non-system role or non-system-prompt source', () => {
     const good = systemEvent(0, 'v1')
     const badRole = { ...good, data: { ...good.data, message: { ...good.data.message, role: 'user' } } }

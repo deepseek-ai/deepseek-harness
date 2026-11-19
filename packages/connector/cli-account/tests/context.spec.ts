@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { cliPathContextText, registerCliPathContext, type CliPathContext } from '../src/context.ts'
@@ -12,6 +13,7 @@ const WINDOWS_RUN = 'Fixture CLI: run `fixture-cli` by its absolute path with th
 async function requiredContextOnly(): Promise<Context> {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { includeRuntimeContext: false })
   return ctx
 }

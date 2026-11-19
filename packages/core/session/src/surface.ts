@@ -241,10 +241,19 @@ export interface SurfaceFoldResult {
   projectedMessages: ReadonlyMap<SessionSeq, Message>
 }
 
+/** One system node on the current surface, including an empty head. */
+export interface SystemSurfaceNode {
+  readonly seq: SessionSeq
+  /** Whether the logged content array has no blocks; a node with empty text blocks is not empty. */
+  readonly isEmpty: boolean
+}
+
 /** Readonly live projection of the message-producing session events. */
 export interface SessionSurface {
   /** Current surface event sequences in model-visible order. */
   readonly nodes: readonly SessionSeq[]
+  /** Current system nodes in surface order, scanned from the surface on each read; citations do not affect membership. */
+  readonly systemNodes: readonly SystemSurfaceNode[]
   /** Monotonic count of committed positional replacements. */
   readonly replaceGeneration: number
   /** Monotonic count of committed replacements and plugin-owned message changes. */
@@ -721,6 +730,16 @@ export class SurfaceManager implements SessionSurface {
     this._assertProjections()
     if (this._lastProcessedSeq < this.baseSeq + this.log.length - 1) this._processDelta()
     return this._state.nodes
+  }
+
+  /** System nodes in surface order, including nodes whose content array is empty; scans current nodes on each read. */
+  get systemNodes(): readonly SystemSurfaceNode[] {
+    const systems: SystemSurfaceNode[] = []
+    for (const seq of this.nodes) {
+      const event = this.log[seq - this.baseSeq]
+      if (event?.type === 'system/message') systems.push({ seq, isEmpty: event.data.message.content.length === 0 })
+    }
+    return systems
   }
 
   /** Fold events appended since the previous access. */

@@ -69,6 +69,7 @@ export class McpResourceRuntime extends Service {
             + 'Use list_mcp_resources, list_mcp_resource_templates, or read_mcp_resource with one of these names '
             + `as the server argument: ${JSON.stringify(names)}.`
         },
+        retirement: 'The instructions for mcp-resource-servers no longer apply.',
       })
     })
   }

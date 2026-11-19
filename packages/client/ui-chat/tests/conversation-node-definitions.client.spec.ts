@@ -2289,7 +2289,7 @@ describe('built-in conversation node Definitions', () => {
     value.prepend([systemAt(1, 'A'), systemAt(3, 'B'), systemAt(5, 'A2', 1)], false)
     value.flush()
     expect(snapshot(value).nodes.values().filter(candidate => candidate.kind === 'system-prompt')
-      .map(candidate => candidate.data)).toEqual([{ text: 'A' }, { text: 'B', update: true }, { text: 'C' }])
+      .map(candidate => candidate.data)).toEqual([{ text: 'A' }, { text: 'B', update: true }, { text: 'D\n\nC' }])
   })
 
   it('hides a published prompt node while a prepended replacement makes its prompt unknown', () => {
@@ -2369,7 +2369,7 @@ describe('built-in conversation node Definitions', () => {
     expect(cards()).toEqual([
       [1, { text: '# System' }],
       [10, { text: '# Updated', update: true }],
-      [14, { text: '# Updated' }],
+      [14, { text: '# System\n\n# Updated' }],
     ])
   })
 

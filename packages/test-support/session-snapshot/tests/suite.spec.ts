@@ -748,6 +748,18 @@ describe('normalizedSystemPrompts', () => {
     expect(normalizedSystemPrompts(log, { sessionIds: [], cwd: '/w' })).toEqual(['work in {{cwd}}', '', 'replaced'])
   })
 
+  it('renders independent sections and ignores legacy separator blocks', () => {
+    const log = [
+      '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}',
+      systemMessage(0, { turn: 1, step: 1, message: { role: 'system', content: [
+        { type: 'text', text: 'First' }, { type: 'text', text: ' part.' },
+        { type: 'text', text: '\n\n' }, { type: 'text', text: 'Second.' },
+      ] } }),
+      '',
+    ].join('\n')
+    expect(normalizedSystemPrompts(log, { sessionIds: [], cwd: '/w' })).toEqual(['First\n\npart.\n\nSecond.'])
+  })
+
   it('omits system/message records without a text block', () => {
     const log = [
       '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}',

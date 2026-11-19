@@ -21,19 +21,26 @@ import type { PrefixDigests } from './prefix-binding.ts'
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
 import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
 
+function textBlocks(content: readonly ContentBlock[]): TextContent[] {
+  return content.filter((block): block is TextContent => block.type === 'text' && block.text.length > 0)
+}
+
+/** Pre-join system text with blank lines because pi-ai joins separate blocks with single newlines. */
+function systemText(content: readonly ContentBlock[]): string {
+  return extractTextContent(content, { separator: '\n\n', trim: true })
+}
+
 /** Recover the pi-ai toolResult message for one harness tool-role message. */
 function toolResultOf(
   message: Extract<Message, { role: 'tool' }>,
   toolNames: Map<ToolCallId, string>,
-  content: string | (TextContent | ImageContent)[],
+  content: (TextContent | ImageContent)[],
 ): PiMessage {
   return {
     role: 'toolResult',
     toolCallId: message.toolCallId,
     toolName: toolNames.get(message.toolCallId) ?? 'unknown',
-    content: typeof content === 'string'
-      ? [{ type: 'text', text: content || '(no output)' }]
-      : content,
+    content: content.length > 0 ? content : [{ type: 'text', text: '(no output)' }],
     isError: message.isError ?? false,
     timestamp: 0,
   }
@@ -61,7 +68,7 @@ function userContent(
   blocks: readonly ContentBlock[],
   requestImages: ReadonlyMap<AttachmentId, RequestImageAttachment>,
   resolveImageAccess: ImageAttachmentAccessResolver,
-): string | (TextContent | ImageContent)[] {
+): (TextContent | ImageContent)[] {
   const content: (TextContent | ImageContent)[] = []
   for (const block of blocks) {
     switch (block.type) {
@@ -86,7 +93,6 @@ function userContent(
         break
     }
   }
-  if (content.every(block => block.type === 'text')) return extractTextContent(content)
   return content
 }
 
@@ -143,7 +149,7 @@ function splitSystemPrompt(options: GenerateOptions): SystemPromptSplit {
   let end = 0
   for (const message of options.messages) {
     if (message.role !== 'system') break
-    text.push(extractTextContent(message.content))
+    text.push(systemText(message.content))
     end++
   }
   const systemPrompt = text.filter(Boolean).join('\n\n')
@@ -162,13 +168,12 @@ function piContext(systemPrompt: string | undefined, options: GenerateOptions, m
 
 /** Keep one developer event in one system update, resolving its projected tool declarations. */
 function appendDeveloper(message: Extract<Message, { role: 'developer' }>, options: GenerateOptions, messages: PiMessage[]): void {
-  const content: TextContent[] = []
+  const content = systemText(message.content)
   const toolsAdded: PiTool[] = []
   const toolsRemoved: NonNullable<SystemMessage['toolsRemoved']> = []
   for (const block of message.content) {
     switch (block.type) {
       case 'text':
-        if (block.text.length > 0) content.push({ type: 'text', text: block.text })
         break
       case 'tool-addition': {
         const tool = options.tools?.find(tool => tool.name === block.toolName)
@@ -222,7 +227,7 @@ function appendSharedHistory(
     return true
   }
   if (message.role === 'system') {
-    const content = extractTextContent(message.content)
+    const content = systemText(message.content)
     if (content.length > 0) {
       if (supportsMidConvoSystemMessages) {
         messages.push({ role: 'system', content, timestamp: 0 })
@@ -256,10 +261,10 @@ function textOnlyContext(
     }
     if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade, prefixDigests)) continue
     if (message.role === 'tool') {
-      messages.push(toolResultOf(message, toolNames, extractTextContent(message.content)))
+      messages.push(toolResultOf(message, toolNames, textBlocks(message.content)))
       continue
     }
-    messages.push({ role: 'user', content: extractTextContent(message.content), timestamp: 0 })
+    messages.push({ role: 'user', content: textBlocks(message.content), timestamp: 0 })
   }
   return piContext(split.systemPrompt, options, messages)
 }

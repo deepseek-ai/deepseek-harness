@@ -8,7 +8,12 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/device-pairing.e2e.ts",
+    "apps/web/tests/pairing-completion.e2e.ts",
+    "apps/web/tests/pairing-recovery.e2e.ts",
     "snapshots/session/headless.snapshot.ts",
+    "apps/web/tests/remote-connection.e2e.ts",
+    "apps/web/tests/remote-connection-fixture.ts",
     "apps/web/tests/home-whale.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/session-panel-layout.e2e.ts",
@@ -413,6 +418,7 @@
     { "path": "./packages/attachment/attachment" },
     { "path": "./packages/attachment/attachment-local" },
     { "path": "./packages/client/file-upload/tsconfig.host.json" },
+    { "path": "./packages/client/remote-connection/tsconfig.host.json" },
     { "path": "./packages/llm/llm" },
     { "path": "./packages/llm/deepseek-llm-api-extensions" },
     { "path": "./packages/llm/token-meter" },

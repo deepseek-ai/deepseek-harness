@@ -10,18 +10,20 @@ Status: implemented
 
 ## Decision
 
-[`breakdown-projection.ts`](../../../../packages/llm/token-meter/src/breakdown-projection.ts) 按 surface 顺序保留存活的 `system/message` 节点及其启发式价格、一个 surface 运行总量，以及至多一个已武装的影子价 claim。状态版本 6 丢弃版本 5 的行；其他 projection key 保留各自的行。
+[按段更新](2026-10-21-section-based-system-updates.zh.md)将全部保留系统消息计入系统 token。本记录独立于该增量分类，负责紧凑保留状态的选择。
+
+[`breakdown-projection.ts`](../../../../packages/llm/token-meter/src/breakdown-projection.ts) 按表面顺序保留存活的 `system/message` 节点及其启发式价格、一个表面运行总量，以及至多一个待使用的影子价格声明。其状态版本使恢复或计量语义不同的检查点失效；其他投影键保留各自的行。
 
 - 追加加上其价格；`system/message` 追加还会加入系统列表末尾。
 - `compaction/summary` 和 `compaction/prune` 依据 `shadowedRange`、`shadowedTokenCount` 以及 `shadowedSeqs` 中列出的已保留系统提示词武装 claim。下一个事件消费或使其失效。覆盖所 claim 范围的替换减去 claim 价格并移除这些提示词；指向其他范围的替换，或以 `system/message` 取代已计量范围的替换，会抛出错误。
 - 对单个已保留系统提示词的未计量替换减去该提示词自身的价格。`system/message` 替换保持其位置；其他替换将其移除。
 - 其他未计量替换以零增量折叠，这与 `contextPressure` 已采用的规则相同。
 
-`systemTokens` 是最后一个价格为正的保留提示词，`messageTokens` 是 surface 总量减去它；两者都不低于零。`shadowedSeqs` 是被遮蔽节点的权威集合，因此由成员关系决定哪些提示词离开，无需在 surface 顺序中定位非系统端点。
+`systemTokens` 汇总全部保留系统消息的价格；`messageTokens` 是表面总量减去该和，下限为零。`shadowedSeqs` 是被遮蔽节点的权威集合，因此由成员关系决定哪些提示词离开，无需在表面顺序中定位非系统端点。
 
 ## Verification
 
-用版本 5 和版本 6 的定义折叠全部 836 份已存日志，每个事件之后的构成数字都完全相同。这些日志包含 2,206 次已计量替换、106 次系统提示词改写，没有其他替换。保留状态从 7.13 MB 降到 110 KB，单个 Session 最多有五个存活的系统提示词。
+最初的状态缩减验证使用版本 5 和版本 6 定义折叠 836 份已存日志，每个事件后的构成数字都相同。这些日志包含 2,206 次已计量替换、106 次系统提示词重写，没有其他替换。保留状态从 7.13 MB 降到 110 KB，单个 Session 最多有五个存活系统提示词。这项历史比较早于系统 token 的累加分类；当前测试覆盖该分类、替换、重放及检查点失效。
 
 ## Alternatives considered
 

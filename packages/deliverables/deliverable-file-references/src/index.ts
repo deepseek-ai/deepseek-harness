@@ -26,5 +26,6 @@ export function apply(ctx: Context): void {
     name: 'ui:deliverable-file-references',
     order: ctx.systemPrompt.getSectionOrder('DELIVERABLE_FILE_REFERENCES'),
     text: FILE_REFERENCE_PROMPT,
+    retirement: 'The instructions for ui:deliverable-file-references no longer apply.',
   })
 }

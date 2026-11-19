@@ -23,6 +23,11 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/device-pairing.e2e.ts",
+    "tests/pairing-completion.e2e.ts",
+    "tests/pairing-recovery.e2e.ts",
+    "tests/remote-connection.e2e.ts",
+    "tests/remote-connection-fixture.ts",
     "tests/home-whale.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
     "tests/session-panel-layout.e2e.ts",

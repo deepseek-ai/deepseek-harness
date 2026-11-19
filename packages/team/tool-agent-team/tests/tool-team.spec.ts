@@ -903,15 +903,17 @@ describe('dsh-tool-team', () => {
     await other.dispose()
   })
 
-  it('updates model requests when Team is switched on and off within a turn', async () => {
-    const { ctx, lead, adapter } = await setup([
+  it.each(['disabled', 'unloaded'])('updates model requests when Team is enabled then %s within a turn', async (ending) => {
+    const { ctx, lead, adapter, fiber } = await setup([
       toolCallResponse('before-team', 'list_agents', {}),
       toolCallResponse('with-team', 'list_agents', {}),
       textResponse('ordinary work continues'),
     ], false)
     ctx.on('tools/execute', async (exec, next) => {
       const result = await next()
-      await ctx.agentTeams.setEnabled(lead, exec.callId === 'before-team')
+      if (exec.callId === 'before-team') await ctx.agentTeams.setEnabled(lead, true)
+      else if (ending === 'disabled') await ctx.agentTeams.setEnabled(lead, false)
+      else await fiber.dispose()
       return result
     })
 
@@ -925,10 +927,23 @@ describe('dsh-tool-team', () => {
       expect(tools.filter(tool => TEAM_TOOLS.includes(tool.name)).map(tool => tool.name).sort())
         .toEqual(enabled ? TEAM_TOOLS : [])
       expect(tools.filter(tool => !TEAM_TOOLS.includes(tool.name))).toEqual(ordinaryTools)
-      const system = request.messages.find(message => message.role === 'system')
-      const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      expect(prompt?.includes('Agent Teams is available')).toBe(enabled)
-      expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
+      const system = request.messages.findLast(message => message.source?.kind === 'system-prompt'
+        && message.source.sections?.some(section => section.name === 'team:policy'))
+      const source = system?.source
+      const section = source?.kind === 'system-prompt' ? source.sections?.find(section => section.name === 'team:policy') : undefined
+      if (index === 0) expect(section).toBeUndefined()
+      else if (index === 2 && ending === 'unloaded') expect(section?.state).toBe('retired')
+      else expect(section?.state).toBe('active')
+      const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n') ?? ''
+      expect(prompt.includes('Agent Teams is available')).toBe(enabled)
+      expect(prompt.includes('record expected write scopes on shared tasks')).toBe(enabled)
+      if (index === 2) {
+        if (ending === 'unloaded') expect(prompt).toBe('The shared task board is no longer available. Its instructions no longer apply.')
+        else {
+          expect(prompt.trim()).toBe('The earlier instructions from team:policy no longer apply.')
+          expect(system?.content[section!.contentIndex!]).toEqual({ type: 'text', text: '' })
+        }
+      }
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
       const initial = adapter.requests[0]!.messages.findLast(message => message.source?.kind === 'runtime-context')?.source

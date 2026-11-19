@@ -55,7 +55,7 @@ type SessionListResponse = { result: RemoteResult<SessionListValue> }
 /** Rendered text of the system prompt surface node, or undefined when the surface carries none. */
 function systemPromptText(session: Session): string | undefined {
   const message = session.deriveMessages().find(candidate => candidate.role === 'system')
-  return message?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+  return message?.content.flatMap(block => block.type === 'text' ? [block.text.trim()] : []).filter(Boolean).join('\n\n')
 }
 
 describe('web e2e: fresh round trip through the real assembly', () => {

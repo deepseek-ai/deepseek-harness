@@ -1,4 +1,5 @@
 /** Held-key cleanup through real native byte streams and the tool execution wrapper. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { PassThrough, Writable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { Context } from '@deepseek-ai/cordis'
@@ -62,6 +63,7 @@ function nativeConnection(holdRelease = false) {
 async function program(body: (send: (client: NativeClient) => Promise<void>) => Promise<void>) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   const sendKeyEvent = installHeldKeys(ctx)

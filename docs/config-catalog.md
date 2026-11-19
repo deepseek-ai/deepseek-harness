@@ -583,6 +583,44 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-product-analytics -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
+<a id="deepseek-aidsh-client-remote-connection"></a>
+
+## `@deepseek-ai/dsh-client-remote-connection`
+
+- `inject`: `connection` · `connection.authentication` · `credentials` · `webServer` · `webApp`
+- `source`: [`packages/client/remote-connection/src/index.ts:33`](../packages/client/remote-connection/src/index.ts)
+
+```ts config-catalog
+/** Deployment timing and limits for remote browser login. */
+export interface Config {
+  /** Absolute lifetime in days for Remote browser credentials; default 30. */
+  cookieMaxAgeDays: number
+  /** Invitation lifetime in milliseconds; expiry never renews an existing browser session. */
+  ticketLifetimeMs: number
+  /** Interval in milliseconds between the settings panel's status reads. */
+  pollIntervalMs: number
+  /** Limits for anonymous requests and approval delivery. */
+  pairing: {
+    /** Lifetime in milliseconds, including retries of approved delivery. Default: 300000. */
+    requestTtlMs: number
+    /** Maximum retained requests, including terminal requests until expiry. Default: 32. */
+    maxRequests: number
+    /** Minimum interval between anonymous creations across this process. Default: 1000. */
+    requestIntervalMs: number
+    /** Minimum applicant polling interval and periodic approval-list refresh interval. Default: 2000. */
+    pollIntervalMs: number
+    /** Complete anonymous HTTP request timeout in milliseconds. Default: 10000. */
+    requestTimeoutMs: number
+    /** Additional attempts after network, timeout, rate-limit, or server failures. Default: 3. */
+    maxRetries: number
+    /** Maximum exponential retry delay in milliseconds; at least pollIntervalMs. Default: 10000. */
+    retryMaxDelayMs: number
+  }
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-shortcuts -->
 <a id="deepseek-aidsh-client-shortcuts"></a>
 
@@ -2961,7 +2999,7 @@ export interface PresetSpec {
 ## `@deepseek-ai/dsh-persona`
 
 - `inject`: `systemPrompt`
-- `source`: [`packages/preset/persona/src/index.ts:30`](../packages/preset/persona/src/index.ts)
+- `source`: [`packages/preset/persona/src/index.ts:23`](../packages/preset/persona/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the persona text this composition contributes. */
@@ -4221,7 +4259,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:266`](../packages/core/system-prompt/src/index.ts)
+- `inject`: `sessionProjections`
+- `source`: [`packages/core/system-prompt/src/index.ts:316`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -4231,13 +4270,13 @@ export interface Config {
   /** Include optional runtime-context snapshots in model history (default true); required context remains. */
   includeRuntimeContext?: boolean
   /**
-   * Deployment-wide persona prefix template before first-party guidance. A scoped section named
-   * `deployment:persona-prefix` shadows it; `{{variable}}` references are strict.
+   * Deployment-wide persona prefix template before first-party guidance. A section
+   * named {@link PERSONA_PREFIX_SECTION} can override it; `{{variable}}` references are strict.
    */
   personaPrefix?: string
   /**
-   * Persona suffix template after first-party guidance. A scoped `deployment:persona-suffix`
-   * section shadows it; `{{variable}}` references are strict. Defaults to empty.
+   * Persona suffix template after first-party guidance. A section named
+   * {@link PERSONA_SUFFIX_SECTION} can override it; `{{variable}}` references are strict. Defaults to empty.
    */
   personaSuffix?: string
   /**
