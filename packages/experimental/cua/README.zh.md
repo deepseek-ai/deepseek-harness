@@ -91,7 +91,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <details>
 <summary>共享执行与平台职责</summary>
 
-实现 `CuaBackend.heldInputState` 的提供方为显式输入和系统指针移动接受 `taskId`，通过 `getHeldInputs({ taskId })` 报告本连接的持有记录，并确认 `releaseHeldInputs({ taskId })`。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；DSH 和 MCP 的正常程序结束和回合结束均保持输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。macOS 和 Windows 都实现了这套协议。能力方法列表保持静态。
+实现 `CuaBackend.heldInputState` 的提供方为显式输入和系统指针移动接受 `taskId`，通过 `getHeldInputs({ taskId })` 报告本连接的持有记录，并确认 `releaseHeldInputs({ taskId })`。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；DSH 和 MCP 的正常程序结束和回合结束均保持输入。DSH 在下一次模型请求中只传递最新的待交付持有提醒。同一批中的后续程序松开全部输入后，这一批不会向模型报告仍有输入按住。MCP 在每次程序响应中返回当时的状态。macOS 和 Windows 都实现了这套协议。能力方法列表保持静态。
 
 持有输入属于任务和原生连接，保存在程序进程之外。DSH 收到停止请求或模型报错时启动清理。原生释放尚未确认时，Agent 可以结束回合，`whenIdle()` 也可以返回。后续 CUA 调用等待清理结果。确认释放后，DSH 为模型记录释放提醒，并撤销仍在队列中的旧持有提醒。清理失败会通过 `agent/error` 单独报告，并禁用该任务后续的 CUA 操作。程序失败或取消、执行中的 MCP 请求收到取消、环境重置、连接关闭和提供方卸载，各自等待清理完成。
 

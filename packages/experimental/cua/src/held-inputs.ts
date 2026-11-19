@@ -1,7 +1,7 @@
 /** Native-owned held input, program-end reminders, and failure/cancellation cleanup. */
 import type { Context } from '@deepseek-ai/cordis'
 import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type MessageId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
 import { NativeError, type NativeClient } from './native-client.ts'
@@ -24,7 +24,15 @@ function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'relea
     '</system-reminder>'].join('\n')
 }
 
+function discardQueuedHeldNotices(agent: Agent): void {
+  for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
+    if (message.source.kind === 'cua-held-inputs') agent.inbox.remove(message.id)
+  }
+}
+
 class InputOwner {
+  // Batch delivery can enqueue this notice after another program has queried a newer state.
+  latestHeldNotice: MessageId | undefined
   readonly controller = new AbortController()
   private client: NativeClient | undefined
   private removeCleanup: (() => void) | undefined
@@ -42,9 +50,11 @@ class InputOwner {
     this.client = client
   }
 
-  async reminder(inTurn: boolean): Promise<string | undefined> {
+  async reminder(inTurn: boolean): Promise<UserMessage | undefined> {
     if (this.closing || !this.client) return
     const inputs = heldInputs.parse(await this.client.request('getHeldInputs', { taskId: this.agent.id }, this.controller.signal))
+    discardQueuedHeldNotices(this.agent)
+    this.latestHeldNotice = undefined
     if (inputs.length === 0) {
       this.removeCleanup?.()
       this.removeCleanup = undefined
@@ -52,11 +62,15 @@ class InputOwner {
       return
     }
     this.notifySessionOnRelease ||= inTurn
-    return renderInputs(inputs, 'held')
+    const notice = createUserMessage({ content: [{ type: 'text', text: renderInputs(inputs, 'held') }],
+      source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } })
+    this.latestHeldNotice = notice.id
+    return notice
   }
 
 
   close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
+    this.latestHeldNotice = undefined
     this.controller.abort()
     return this.closing ??= Promise.resolve().then(async () => {
       try {
@@ -108,9 +122,7 @@ export class CuaHeldInputs {
       emitAgentEvent(this.ctx, agent, 'agent/error', { turn: this.ctx.agents.turnBoundaryOf(agent.session).lastTurn, step: 0, error })
     }, (inputs) => {
       try {
-        for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
-          if (message.source.kind === 'cua-held-inputs') agent.inbox.remove(message.id)
-        }
+        discardQueuedHeldNotices(agent)
         if (inputs.length === 0) return
         agent.inject(createUserMessage({
           content: [{ type: 'text', text: renderInputs(inputs, 'released') }],
@@ -169,16 +181,13 @@ export class CuaHeldInputs {
         } else if (execution.parent === undefined) {
           const owner = this.owners.get(agent)
           const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
-          const text = await owner?.reminder(inTurn).catch(async (error: unknown) => {
+          const notice = await owner?.reminder(inTurn).catch(async (error: unknown) => {
             await releaseAfter(signal.aborted ? 'Program cancelled' : `Held-input query failed: ${String(error)}`)
             throw error
           })
           // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
           if (signal.aborted) { await releaseAfter('Program cancelled'); return result }
-          if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
-            createUserMessage({ content: [{ type: 'text', text }],
-              source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
-          ] }
+          if (notice && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [], notice] }
         }
         return result
       } finally {
@@ -198,7 +207,7 @@ export class CuaHeldInputs {
     })
     yield ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       // This live notification runs after append publication, so removal can safely write its own event.
-      if (message.source.kind === 'cua-held-inputs' && this.owners.get(agent)?.closing) agent.inbox.remove(message.id)
+      if (message.source.kind === 'cua-held-inputs' && message.id !== this.owners.get(agent)?.latestHeldNotice) agent.inbox.remove(message.id)
     }, { prepend: true })
     yield ctx.on('session/event', (session, event) => {
       if (event.type !== 'turn/end') return
