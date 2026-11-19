@@ -55,6 +55,26 @@ describe('shared detail values', () => {
 })
 
 describe('control detail adapters', () => {
+  it('shows Session message acceptance with the recorded target, content, and receipt', () => {
+    const args = { session_id: 'session-review', message: 'Review the change\nCheck the result.' }
+    const text = JSON.stringify({ message_id: 'message-accepted' })
+    expect(details('session_send_message', text, args)).toMatchObject({
+      summary: 'session-review · Accepted',
+      items: [{
+        title: 'session-review',
+        description: args.message,
+        badge: { label: 'Accepted', tone: 'success' },
+        fields: [{ label: 'Message ID', value: 'message-accepted' }],
+      }],
+    })
+    const translate = makeTranslate(zh, commonZh)
+    expect(detailsCardModel(output('session_send_message', text, args), translate, 'zh-CN')?.items[0]?.badge?.label)
+      .toBe(translate('detail.status.accepted'))
+    for (const malformed of ['null', '[]', '{}', '{"message_id":1}', '{"message_id":" "}']) {
+      expect(details('session_send_message', malformed, args)).toBeNull()
+    }
+  })
+
   it('localizes unreadable catalog statuses in English and Chinese', () => {
     const states = ['corrupt', 'unsupported', 'unavailable']
     for (const [dictionary, common, locale, labels] of [

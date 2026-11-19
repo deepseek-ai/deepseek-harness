@@ -179,6 +179,14 @@ const homeAndGuide = pairedPages([
     order: 2,
   },
   {
+    source: 'docs/user/session-control.md',
+    route: 'guide/session-control.md',
+    label: { root: '跨会话消息', en: 'Cross-Session messages' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '自动化', en: 'Automation' },
+    order: 3,
+  },
+  {
     source: 'docs/user/guide/plugin-market.md',
     route: 'guide/plugin-market.md',
     label: { root: '插件索引', en: 'Plugin indexes' },
