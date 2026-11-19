@@ -12,14 +12,17 @@ const heldInputs = z.array(z.discriminatedUnion('kind', [
   z.object({ ...target, kind: z.literal('mouse'), button: z.enum(['left', 'right', 'middle']), windowId: z.string() }),
 ]))
 
-function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released'): string {
+function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released' | 'program-end'): string {
   const rows = inputs.map(input => input.kind === 'key'
     ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)} (${input.mode} input).`
     : `- Mouse ${input.button}, appHandle ${JSON.stringify(input.appHandle)}, windowId ${JSON.stringify(input.windowId)} (${input.mode} input).`)
-  return ['<system-reminder>', state === 'held' ? 'CUA inputs are still held:' : 'CUA inputs were automatically released at program end:', ...rows,
+  const title = state === 'held' ? 'CUA inputs are still held:'
+    : state === 'program-end' ? 'CUA inputs were automatically released at program end:' : 'CUA inputs were released during cleanup:'
+  return ['<system-reminder>', title, ...rows,
     state === 'held'
       ? "They remain pressed across programs and turns. Release them explicitly with sendKeyEvent(key, 'up') or toggleMouse(button, 'up') on the same target when no longer needed."
-      : 'These inputs are no longer held. In this environment, keep any required hold sequence within one program.',
+      : state === 'program-end' ? 'These inputs are no longer held. In this environment, keep any required hold sequence within one program.'
+        : 'These inputs are no longer held.',
     '</system-reminder>'].join('\n')
 }
 
@@ -27,12 +30,15 @@ class InputOwner {
   readonly controller = new AbortController()
   private client: NativeClient | undefined
   private removeCleanup: (() => void) | undefined
+  private notifySessionOnRelease = false
   closing: Promise<z.infer<typeof heldInputs>> | undefined
 
-  constructor(readonly agent: Agent, private readonly failed: (error: unknown) => void) {}
+  constructor(readonly agent: Agent, private readonly failed: (error: unknown) => void,
+    private readonly released: (inputs: z.infer<typeof heldInputs>) => void) {}
 
-  track(client: NativeClient): void {
+  track(client: NativeClient, inTurn: boolean): void {
     this.controller.signal.throwIfAborted()
+    this.notifySessionOnRelease ||= inTurn
     if (this.client) return
     this.removeCleanup = client.registerCleanup(async (canRequest) => { await this.close(canRequest) })
     this.client = client
@@ -47,13 +53,14 @@ class InputOwner {
       this.client = undefined
       return
     }
+    this.notifySessionOnRelease = true
     return renderInputs(inputs, 'held')
   }
 
   async releaseReminder(): Promise<string | undefined> {
     if (this.closing) return
     const released = await this.close()
-    return released.length > 0 ? renderInputs(released, 'released') : undefined
+    return released.length > 0 ? renderInputs(released, 'program-end') : undefined
   }
 
   close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
@@ -62,7 +69,9 @@ class InputOwner {
       try {
         if (!this.client) return []
         if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before held-input cleanup was confirmed. Inspect the desktop manually before starting a new task')
-        return heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id }))
+        const released = heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id }))
+        if (this.notifySessionOnRelease && released.length > 0) this.released(released)
+        return released
       } catch (error) {
         this.failed(error)
         throw error
@@ -104,6 +113,17 @@ export class CuaHeldInputs {
       this.failures.set(agent, error)
       this.ctx.logger.error('CUA cleanup was not confirmed; all CUA operations are disabled for task %s: %s', agent.id, error)
       emitAgentEvent(this.ctx, agent, 'agent/error', { turn: this.ctx.agents.turnBoundaryOf(agent.session).lastTurn, step: 0, error })
+    }, (inputs) => {
+      try {
+        agent.inject(createUserMessage({
+          content: [{ type: 'text', text: renderInputs(inputs, 'released') }],
+          source: { kind: 'cua-inputs-released', form: 'notice', summary: 'CUA inputs released' },
+        }))
+      } catch (error) {
+        this.ctx.logger.error('CUA inputs were released but their notice could not be recorded for task %s: %s', agent.id, error)
+        emitAgentEvent(this.ctx, agent, 'agent/error', { turn: this.ctx.agents.turnBoundaryOf(agent.session).lastTurn, step: 0,
+          error: new NativeError('INPUT_NOTICE_FAILED', 'CUA inputs were released, but their notice could not be recorded', { cause: error }) })
+      }
     })
     this.owners.set(agent, owner)
     return owner
@@ -142,9 +162,11 @@ export class CuaHeldInputs {
           const owner = this.owners.get(agent)
           const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
           const text = inTurn ? await owner?.reminder() : await owner?.releaseReminder()
-          if (text) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
+          if (signal.aborted) { await this.release(agent); return result }
+          if (text && (!inTurn || !owner?.closing)) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
-              source: { kind: 'cua-held-inputs', form: 'notice', summary: inTurn ? 'CUA inputs remain held' : 'CUA inputs released' } }),
+              source: { kind: inTurn ? 'cua-held-inputs' : 'cua-inputs-released',
+                form: 'notice', summary: inTurn ? 'CUA inputs remain held' : 'CUA inputs released' } }),
           ] }
         }
         return result
@@ -169,9 +191,16 @@ export class CuaHeldInputs {
       return next()
     })
     yield ctx.on('session/event', (session, event) => {
-      if (event.type !== 'turn/end') return
+      if (event.type !== 'turn/end' && event.type !== 'agent/inbox/spliced') return
       const agent = ctx.agents.get(session.id)
       if (agent?.session !== session) return
+      if (event.type === 'agent/inbox/spliced') {
+        // Cancellation can finish cleanup before a delayed tool result queues its earlier held-state snapshot.
+        if (this.owners.get(agent)?.closing) {
+          for (const message of event.data.inserted) if (message.source.kind === 'cua-held-inputs') agent.inbox.remove(message.id)
+        }
+        return
+      }
       this.turnSignals.get(agent)?.remove()
       this.turnSignals.delete(agent)
       if (event.data.reason.kind === 'aborted' || event.data.reason.kind === 'error') this.stop(agent)

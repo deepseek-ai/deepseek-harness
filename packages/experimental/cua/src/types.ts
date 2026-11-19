@@ -9,6 +9,7 @@ import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Sy
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'cua-held-inputs': { kind: 'cua-held-inputs' } & ContextFormed
+    'cua-inputs-released': { kind: 'cua-inputs-released' } & ContextFormed
   }
 }
 

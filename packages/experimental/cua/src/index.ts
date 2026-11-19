@@ -289,7 +289,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (heldInputs && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemPointer))) {
         const owner = await heldInputs.ready(agent)
-        if (method !== 'mouseMove' && params.direction === 'down') owner.track(client)
+        if (method !== 'mouseMove' && params.direction === 'down') {
+          owner.track(client, ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null)
+        }
         params.taskId = agent.id
       }
       const nativeParams = method === 'findApps'

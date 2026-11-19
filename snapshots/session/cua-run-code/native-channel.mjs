@@ -90,6 +90,8 @@ export function createNativeFixture(selectorPid) {
           heldCallId = undefined
           events.push('native-cancelled')
           stdout.write(JSON.stringify({ id, error: { code: 'NATIVE_CANCELLED', message: 'Fixture click cancelled.' } }) + '\n')
+        } else if (type === 'cancel') {
+          // A reply can settle immediately before the caller's cancellation reaches the helper.
         } else {
           calls.push({ id, method, params })
           if (controlled?.method === method) {

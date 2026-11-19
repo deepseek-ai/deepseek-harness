@@ -26,7 +26,7 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { createNativeFixture, png } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import { CuaConfig, installCua } from '../src/index.ts'
@@ -360,8 +360,9 @@ it('forwards per-read accessibility limits to the Windows backend', async () => 
 
 const holdProgram = 'var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")'
 
-function reminders(agent: { session: { snapshotEvents(): readonly import('@deepseek-ai/dsh-session').SessionEvent[] } }) {
-  return agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'cua-held-inputs')
+function reminders(agent: { session: { snapshotEvents(): readonly import('@deepseek-ai/dsh-session').SessionEvent[] } },
+  kind: 'cua-held-inputs' | 'cua-inputs-released' = 'cua-held-inputs') {
+  return agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === kind)
     .flatMap(event => event.type === 'user/message' ? event.data.content.filter(block => block.type === 'text').map(block => block.text) : [])
 }
 
@@ -562,5 +563,79 @@ it('ignores turn endings from Sessions without an Agent', async () => {
   const session = f.ctx.sessions.create(brandString<SessionId>('unattached-input-session'))
   session.append('turn/start', { turn: 1 })
   session.append('turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'UNKNOWN', message: 'Unrelated failure' } } })
+  expect(f.native.held.map(press => press.key)).toEqual(['w'])
+})
+
+it('records release after a thinking pause so the resumed model sees the new input state', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.model.beforeStream = async (index, options) => {
+    if (index !== 1) return
+    thinking.resolve()
+    await new Promise<void>((resolve) => { options.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
+  }
+  const running = f.run()
+  await thinking.promise
+  f.agent.cancel({ kind: 'user' })
+  await running
+  expect(f.native.held).toEqual([])
+  expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-inputs-released')).toBe(true)
+  delete f.model.beforeStream
+  f.model.restart(['inspect("resumed")'])
+  await f.run()
+  expect(reminders(f.agent, 'cua-inputs-released')).toHaveLength(1)
+  expect(JSON.stringify(f.model.requests[0]?.messages)).toContain('CUA inputs were released during cleanup')
+})
+
+it('drops a delayed held-state reminder after cancellation has already released the input', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const post: PromiseWithResolvers<void> = Promise.withResolvers()
+  const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('tools/post-execute', async (execution, _result, next) => {
+    const decision = await next()
+    if (execution.name === 'cua_run_code' && execution.parent === undefined) { post.resolve(); await finish.promise }
+    return decision
+  })
+  f.ctx.on('session/event', (_session, event) => {
+    if (event.type === 'agent/inbox/spliced' && event.data.inserted.some(message => message.source.kind === 'cua-inputs-released')) released.resolve()
+  })
+  const running = f.run()
+  await post.promise
+  try {
+    f.agent.cancel({ kind: 'user' })
+    await released.promise
+    expect(f.native.held).toEqual([])
+  } finally { finish.resolve(); await running }
+  expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-held-inputs')).toBe(false)
+  f.model.restart(['inspect("resumed")'])
+  await f.run()
+  expect(reminders(f.agent)).toEqual([])
+  expect(reminders(f.agent, 'cua-inputs-released')).toHaveLength(1)
+})
+
+it('does not report held input when stopped as its native state query replies', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const query = f.native.controlNext('getHeldInputs', { afterDispatch: true })
+  const running = f.run()
+  await query.entered
+  query.reply()
+  f.agent.cancel({ kind: 'user' })
+  await running
+  expect(f.native.held).toEqual([])
+  expect(f.agent.inbox.nextStep.some(message => message.source.kind === 'cua-held-inputs')).toBe(false)
+})
+
+it('reports notice-write failure without treating confirmed native release as unknown', async () => {
+  const f = await setup([holdProgram + '; throw Error("failed program")'], 'macos', undefined, true, true)
+  const errors: unknown[] = []
+  f.ctx.on('agent/error', (event) => { errors.push(event.error) })
+  const inject = vi.spyOn(f.agent, 'inject').mockImplementationOnce(() => { throw new Error('Notice write failed') })
+  onTestFinished(() => { inject.mockRestore() })
+  await f.run()
+  expect(errors).toEqual([expect.objectContaining({ code: 'INPUT_NOTICE_FAILED' })])
+  expect(f.native.held).toEqual([])
+  f.model.restart([holdProgram])
+  await f.run()
   expect(f.native.held.map(press => press.key)).toEqual(['w'])
 })
