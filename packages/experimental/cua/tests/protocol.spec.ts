@@ -169,7 +169,7 @@ it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element i
 
 it('admits action schema queries with only a nonempty action name', () => {
   const params = { action: 'Transform.Resize' }
-  for (const schema of [Request, SystemPointerRequest]) {
+  for (const schema of [Request, SystemInputRequest]) {
     expect(schema.parse({ method: 'getActionSchema', params })).toEqual({ method: 'getActionSchema', params })
     for (const invalid of [
       {}, { action: '' }, { action: 1 }, { ...params, appHandle: 'app' },
