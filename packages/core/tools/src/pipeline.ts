@@ -376,6 +376,7 @@ export class ToolExecutionPipeline {
         return assertNever(outcome, 'scheduled tool outcome')
     }
     const { result } = outcome
+    let final: ToolExecutionResult
     try {
       const project = this.contentProjectors.get(exec)
       this.contentProjectors.delete(exec)
@@ -384,15 +385,13 @@ export class ToolExecutionPipeline {
         ? result
         : this.markCanonical(exec, this.materializeFinalResult({ ...result, content }))
       const postResult = await this.postExecute(exec, projected)
-      return this.finish(
-        exec,
-        this.callerCancelled(exec) && !postResult.isError
-          ? this.cancellationResult(exec, postResult)
-          : postResult,
-      )
+      final = this.callerCancelled(exec) && !postResult.isError
+        ? this.cancellationResult(exec, postResult)
+        : postResult
     } catch (error: unknown) {
-      return this.finish(exec, toolErrorResult(error))
+      final = toolErrorResult(error)
     }
+    return this.finish(exec, final)
   }
 
   /**

@@ -591,7 +591,7 @@ describe('ToolRuntime', () => {
       const call = (id: string) => executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(id), name: 'echo', arguments: {} })
       expect((await call('ok')).isError).toBe(false)
       expect(events).toEqual(['succeeded'])
-      expect(() => registerLate!()).toThrow('during dispatch')
+      expect(() => { registerLate!() }).toThrow('during dispatch')
       ctx.on('tools/post-execute', async (): Promise<PostToolDecision> => ({
         kind: 'block', feedback: [{ type: 'text', text: 'rejected' }], info: { name: 'PolicyError', code: 'BLOCKED' },
       }), { prepend: true })
