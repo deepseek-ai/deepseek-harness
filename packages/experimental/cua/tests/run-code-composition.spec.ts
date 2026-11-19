@@ -22,7 +22,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
@@ -548,9 +548,7 @@ it('waits and reports cleanup refusal when user stop arrives as the program retu
 
 it('emits only the final outer reminder for a nested CUA program', async () => {
   const f = await setup([`await tools.cua_run_code({ code: ${JSON.stringify(holdProgram)}, description: "Hold W" })`], 'macos', undefined, true, true)
-  const program = f.ctx.tools.get('cua_run_code', f.agent)
-  if (!program) throw new Error('CUA program registration missing')
-  f.ctx.tools.register(createRunCodeTool(f.ctx, { name: 'run_code', description: 'Run nested programs', runtime: f.ctx.ptcRuntime, tools: [program] }))
+  await f.agent.ctx.plugin(PtcToolExecutor)
   f.model.toolName = 'run_code'
   await f.run()
   expect(reminders(f.agent)).toHaveLength(1)
