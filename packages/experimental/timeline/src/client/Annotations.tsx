@@ -90,7 +90,7 @@ export function Annotations({
   )
 }
 
-/** One read-only Session history shared by the main pages; collapsed content stays unmounted. */
+/** One read-only Session history shared by the main pages, newest first; collapsed content stays unmounted. */
 export function DiscussionHistory({
   view,
   locale = 'en',
@@ -118,7 +118,7 @@ export function DiscussionHistory({
       {open ? (
         <Annotations
           locale={locale}
-          annotations={view.annotations}
+          annotations={view.annotations.toReversed().sort((a, b) => b.createdAt - a.createdAt)}
           targetTitle={(target) => {
             if (target.kind === 'report') {
               const report = view.reports.find(item => item.id === target.report)

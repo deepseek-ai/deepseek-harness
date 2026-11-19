@@ -13,7 +13,7 @@ export const INPUT_MODALITY_ATTRIBUTE = 'data-input-modality'
 
 const FOCUS_NAVIGATION = new Set(['Tab', 'Home', 'End', 'PageUp', 'PageDown'])
 
-let pointer = false
+let pointerType: string | null = null
 let pointerOwnsFocus = false
 let keyFocusOrigin: EventTarget | undefined
 
@@ -26,18 +26,26 @@ function publish(): void {
  * @returns True after pointer input; false after any key.
  */
 export function pointerModality(): boolean {
-  return pointer
+  return pointerType !== null
+}
+
+/**
+ * Whether the most recent pointer or keyboard input was touch.
+ * @returns True after touch input until another pointer or key is used.
+ */
+export function touchModality(): boolean {
+  return pointerType === 'touch'
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('pointerdown', () => {
-    pointer = true
+  window.addEventListener('pointerdown', (event) => {
+    pointerType = event.pointerType
     pointerOwnsFocus = true
     keyFocusOrigin = undefined
     publish()
   }, true)
   window.addEventListener('keydown', (event) => {
-    pointer = false
+    pointerType = null
     if (event.isComposing) {
       keyFocusOrigin = undefined
       return

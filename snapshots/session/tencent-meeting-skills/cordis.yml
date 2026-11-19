@@ -1,0 +1,6 @@
+- insert:
+    - id: tencent-meeting
+      name: '@deepseek-ai/dsh-tencent-meeting'
+      config:
+        binDir: !!js process.cwd() + '/tmeet-bin'
+        skillsDir: !!js process.cwd() + '/tmeet-skills'

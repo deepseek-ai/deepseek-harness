@@ -1,0 +1,88 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/tencent-meeting/README.md
+/:
+  en: bf058142ad507655
+  zh: af4c666af23c6049
+/deepseek-ai-dsh-tencent-meeting:
+  en: 8d9bc7c10be0189e
+  zh: df97cf0f74495ad0
+/deepseek-ai-dsh-tencent-meeting/summary:
+  en: 80e6bcc0f9ec8cdb
+  zh: 961d98f659e9f054
+/deepseek-ai-dsh-tencent-meeting/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tencent-meeting/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-tencent-meeting/use-this-package/install-into-a-profile:
+  en: a33500f6c577f008
+  zh: cedbc1c5cdb8bfc6
+/deepseek-ai-dsh-tencent-meeting/use-this-package/what-you-get:
+  en: 70a1d52b6c0f80af
+  zh: a3894b2233b5985d
+/deepseek-ai-dsh-tencent-meeting/use-this-package/account-operations:
+  en: ad18981ffd47798a
+  zh: 1f30d2349a2dd447
+/deepseek-ai-dsh-tencent-meeting/use-this-package/configure:
+  en: 1730401daedf703e
+  zh: 5cd9e0bc2699efe8
+/deepseek-ai-dsh-tencent-meeting/understand-the-implementation:
+  en: 8e10bf200eca551e
+  zh: 1044452f3c12d584
+/deepseek-ai-dsh-tencent-meeting/further-exploration:
+  en: a37fc14df39c8a77
+  zh: 0f0e795c5f1f9657
+/deepseek-ai-dsh-tencent-meeting/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: e99e8d5639c268d9
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 0d7bcb60f6e1a5f8
+  zh: b3c39188054f6996
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/token-effect:
+  en: 3fac42fb005f9e2d
+  zh: 540493014daf3e28
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: ce9139edf3309f2b
+  zh: 23a4744d4d530172
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 698bcd0773a8f094
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/what-the-model-sees:
+  en: d1671b06d763895e
+  zh: c267463e85e4cfad
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/token-effect:
+  en: 374e05c93f33526c
+  zh: 3e36d6182358bb55
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: d32b51405eabddc4
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees:
+  en: 3ffc81ce5500c85c
+  zh: 28425cf9445d0f8d
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/token-effect:
+  en: 3fb1f01010d97c7d
+  zh: c0aa6fb57ceadf95
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
+/deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work:
+  en: ae40715bad4af72b
+  zh: fc099653415779c3
+/deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work/dev-note:
+  en: d67cf464f2df6693
+  zh: ff08f0d56a5ea79d

@@ -24,7 +24,7 @@ kind: "package-library"
 
 资源地址 = `dsh-resource://<type>/…`，type（URI 的 host）即资源协议键（`file`，或插件在 `ResourceProtocolMap` 中声明的键）；其他 scheme 属导航协议，另行定义。`dsh-resource://file/session/<sessionId>/<path>` 指定授权 Host 读取的 Session，以及工作区相对或绝对路径。前导斜杠保留在路径中：`/etc/hosts` 对应 `dsh-resource://file/session/s//etc/hosts`，Windows 盘符对应 `dsh-resource://file/session/s/C:/x/y.txt`，UNC 对应 `dsh-resource://file/session/s///server/share/y.txt`。Host 解析路径并执行访问检查。`absolute/<path>` 形式仍可解析，但不携带授权 Session，因此 file 提供方不能读取，Preview 也不认领；两者均不借用当前或 Tab Session。语法住在 [`src/file-address.ts`](src/file-address.ts)；路径辅助函数留在 [`src/index.ts`](src/index.ts) 并再导出它。
 
-`sessionFileAddress(sessionId, path)` 将 `\` 归一为 `/`，去掉前导 `./`，但保留前导 `/` 字符。id 和每个路径段都做组件编码，`:` 保持字面。`fileAddressFor(sessionId, cwd, path)` 始终构造 Session 地址：`cwd` 内的路径转为相对路径；其他绝对路径（包括 `cwd` 未知时）仍作为该 Session 地址内的绝对路径。`absoluteFileAddress(absolutePath)` 只构造不带 Session 的形式。`parseFileAddress(address)` 检查精确的文件地址前缀、忽略查询与片段后缀、逐段解码，并为 Session 地址返回 `{ scope, sessionId, path }`，为不带 Session 的形式返回 `{ scope, path }`。其他 type 或 scheme、未知作用域、缺 id 或路径，或错误转义都返回 `undefined`。
+`sessionFileAddress(sessionId, path)` 将 `\` 归一为 `/`，去掉前导 `./`，但保留前导 `/` 字符。id 和每个路径段都做组件编码，`:` 保持字面。`fileAddressFor(sessionId, cwd, path)` 始终构造 Session 地址，并在能得到绝对路径时把它写进地址，因此 Session 的目录移动后该地址仍指向同一个文件：绝对路径原样保留，相对路径与 `cwd` 拼接。只有 `cwd` 未知时相对路径才保持相对，此时 Host 在每次读取时按 Session 的目录解析它。`absoluteFileAddress(absolutePath)` 只构造不带 Session 的形式。`parseFileAddress(address)` 检查精确的文件地址前缀、忽略查询与片段后缀、逐段解码，并为 Session 地址返回 `{ scope, sessionId, path }`，为不带 Session 的形式返回 `{ scope, path }`。其他 type 或 scheme、未知作用域、缺 id 或路径，或错误转义都返回 `undefined`。
 
 `fileMediaUrl(base, path)` 从已解码的绝对路径生成带认证文件路由的 URL，支持 HTTP(S) 应用基址与桌面端 `dsh-app://app/` 来源，保留字面量百分号与部署前缀，并拒绝其他应用基址、相对路径、网络路径前缀和控制字符。Markdown 调用方先解码所写 URL；原生文件卡片路径原样传入。
 

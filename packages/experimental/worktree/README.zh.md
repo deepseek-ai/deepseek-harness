@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
+从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。除归档清理外，所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
 
 ## 目录
 
@@ -40,7 +40,7 @@ kind: "package-reference"
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。其命令在 Session 的策略下运行，边界是记录中的源检出目录，它包含目标目录，因此自身根就是被删除 worktree 的 Session 也能恢复它。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 
-每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。每次进入都会追加一条 `plugin:worktree/entered` 记录，只有 `exit` 读取它：归档 Session 从不移除它只是进入过的检出目录，进入记录也不会让 Session 已离开的检出目录保留下来。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——或创建者的沙箱策略为只读，目录就保留。符合条件的目录在路径锁内再做一次使用检查后，用创建者的策略执行不带 force 的 `git worktree remove`，边界是记录中的源检出目录，它包含目标目录；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
+每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。每次进入都会追加一条 `plugin:worktree/entered` 记录，只有 `exit` 读取它：归档 Session 从不移除它只是进入过的检出目录，进入记录也不会让 Session 已离开的检出目录保留下来。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——目录就保留。冷创建者经 `sessionQuery.observeSession` 观察，不会被挂载或恢复运行。归档即用户授权删除该目录，因此清理不读取任何沙箱策略，其 Git 命令不经沙箱执行；只有下述检查约束它。符合条件的目录在路径锁内再做一次使用检查后，在记录中的源检出目录（它包含目标目录）执行不带 force 的 `git worktree remove`；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
 
 预期失败抛出 `WorktreeError`，其 `code` 为：名称被 Git 或池规则拒绝、起始修订为空或恢复记录违反文档约束时为 `WORKTREE_INVALID_ARGUMENT`，Git 无法解析的起始修订或基础提交则以 `WORKTREE_COMMAND_FAILED` 失败；分支或路径已存在时为 `WORKTREE_ALREADY_EXISTS`；登记被锁定时为 `WORKTREE_LOCKED`；进入时名称在池中选不到已登记的工作树为 `WORKTREE_NOT_FOUND`；Session 的目录不在任何已记录工作树内却调用退出时为 `WORKTREE_NOT_ENTERED`；命令以失败状态退出、超过 `maxOutputBytes` 或超过 `timeoutMs` 时分别为 `WORKTREE_COMMAND_FAILED`、`WORKTREE_OUTPUT_TOO_LARGE` 和 `WORKTREE_TIMEOUT`；服务释放后为 `WORKTREE_UNAVAILABLE`。目录分配之后的失败会在消息中加入保留产物的说明，并保留原错误的 `name` 与 `code`；调用方取消仍是 `AbortError`。
 
@@ -54,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
+Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略；归档清理不经沙箱执行。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|

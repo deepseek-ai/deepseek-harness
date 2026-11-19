@@ -146,7 +146,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### 模型可见内容
 
-默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 程序只绑定 `tools.cua`，普通工具仍可直接调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
+默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 模型指引介绍对象 API。PTC 指引包含桥接初始化模板：持久模式初始化一次，非持久模式在每次程序开始时初始化。程序绑定 `tools.cua` 用于分派；普通工具在 `cua_run_code` 外调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
 
 #### Token 影响
 

@@ -624,11 +624,12 @@ describe('Conversation inject API', () => {
       })), getData: () => '',
     } })
     editor.update(() => { editor.dispatchCommand(PASTE_COMMAND, event) }, { discrete: true })
-    expect(state.getSnapshot().draft).toBe('读取 @a.txt @"my project/" @b.txt ')
+    // The Session works in `/proj`; each path still stays absolute, so it names the same file after the Session moves.
+    expect(state.getSnapshot().draft).toBe('读取 @/proj/a.txt @"/proj/my project/" @/proj/b.txt ')
     const renderText = createUserTextFixture()
     const view = render(<div>{renderText({ text: state.getSnapshot().draft, facts: {} })}</div>)
     expect(view.container.querySelector('[data-ref-chip="folder"]')?.textContent).toBe('my project')
-    expect(view.container.querySelector('[data-ref-chip="folder"]')?.getAttribute('title')).toBe('@"my project/"')
+    expect(view.container.querySelector('[data-ref-chip="folder"]')?.getAttribute('title')).toBe('@"/proj/my project/"')
   })
 
   it('rejects the whole file batch before changing the draft when a later path is unrepresentable', async () => {

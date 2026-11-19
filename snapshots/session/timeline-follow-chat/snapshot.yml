@@ -1,0 +1,10 @@
+version: 1
+scenario: timeline-follow-chat
+profile: headless
+composition: default
+recording: live
+permission: danger-full-access
+header:
+  class: timeline-follow-chat
+  pin: true
+  toolSchemasSource: timeline-plan

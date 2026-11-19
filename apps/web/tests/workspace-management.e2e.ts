@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { join, sep } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { logPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import {
@@ -1100,4 +1100,83 @@ describe('web e2e: New Session after an outdated blank cache', () => {
       await scaffold.close()
     }
   })
+})
+
+it('web e2e: finds a workspace beyond the picker scroll cap and opens a new Session there', async () => {
+  const scaffold = await launchWebScaffold({ firstUse: true })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await newEnglishPage(browser)
+  const tripwire = watchConsole(page)
+  onTestFailed(() => saveFailureShot(page, 'web-e2e-workspace-picker-search'))
+
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  const trigger = page.getByRole('button', { name: 'Choose workspace', exact: true })
+  await trigger.getByText('Default workspace', { exact: true }).waitFor()
+
+  const targetPath = join(scaffold.workspaceCwd, 'target-workspace')
+  await mkdir(targetPath)
+  const target = await scaffold.ctx.workspaceRegistry.create(targetPath, 'Release workspace')
+  for (let index = 1; index <= 6; index++) {
+    const path = join(scaffold.workspaceCwd, `other-workspace-${index}`)
+    await mkdir(path)
+    await scaffold.ctx.workspaceRegistry.create(path, `Other workspace ${index}`)
+  }
+
+  await trigger.click()
+  const search = page.getByRole('searchbox', { name: 'Search workspaces' })
+  const card = page.locator('[data-menu-material]').filter({ has: search })
+  const result = card.getByRole('menuitem', { name: target.title, exact: true })
+  const add = card.getByRole('menuitem', { name: 'Add workspace…', exact: true })
+  const searchRow = card.locator('[data-search-field]').filter({ has: search })
+  const rows = card.getByRole('menu').locator(':scope > [role="presentation"]').filter({
+    has: page.getByRole('menuitem', { name: target.title, exact: true }),
+  })
+  await expect.poll(() => search.evaluate(element => element === document.activeElement)).toBe(true)
+  expect(await searchRow.evaluate((element) => {
+    const { borderTopWidth, borderLeftWidth, borderRightWidth, borderBottomWidth } = getComputedStyle(element)
+    return [borderTopWidth, borderLeftWidth, borderRightWidth].every(width => width === '0px')
+      && parseFloat(borderBottomWidth) > 0
+  })).toBe(true)
+  const lastOtherWorkspace = rows.getByRole('menuitem', { name: 'Other workspace 6', exact: true })
+  await lastOtherWorkspace.waitFor({ state: 'attached' })
+  expect((await rows.getByRole('menuitem').allTextContents()).slice(6)).toContain(target.title)
+  await expect.poll(() => rows.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
+  const viewportStyle = await rows.evaluate((node) => {
+    const style = getComputedStyle(node)
+    const rowHeight = parseFloat(style.getPropertyValue('--dsh-menu-row-height'))
+    return { overflowY: style.overflowY, maxRows: parseFloat(style.maxHeight) / rowHeight }
+  })
+  expect(viewportStyle.overflowY).toBe('auto')
+  expect(viewportStyle.maxRows).toBeCloseTo(6, 1)
+  expect(await rows.getByRole('menuitem', { name: 'Add workspace…', exact: true }).count()).toBe(0)
+
+  await search.fill('missing')
+  await card.getByRole('status').filter({ hasText: 'No matching workspaces' }).waitFor()
+  expect(await searchRow.getByRole('button', { name: 'Clear search', exact: true }).count()).toBe(0)
+  await search.fill('')
+  await lastOtherWorkspace.waitFor({ state: 'attached' })
+
+  await search.fill('missing')
+  await page.keyboard.press('Tab')
+  expect(await add.evaluate(element => element === document.activeElement)).toBe(true)
+  await page.keyboard.press('Escape')
+  await search.waitFor({ state: 'hidden' })
+  expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
+  await page.keyboard.press('Enter')
+  await search.waitFor()
+  expect(await search.inputValue()).toBe('')
+
+  await search.fill('ReLeAsE')
+  await result.waitFor()
+  expect(await card.getByRole('menuitem').allTextContents()).toEqual([target.title, 'Add workspace…'])
+  expect(await search.evaluate(element => element === document.activeElement)).toBe(true)
+  await page.keyboard.press('Enter')
+  await search.waitFor({ state: 'hidden' })
+  await trigger.getByText(target.title, { exact: true }).waitFor()
+  await expect.poll(() => target.sessionIds).toHaveLength(1)
+  expect(scaffold.ctx.sessions.get(target.sessionIds[0]!)?.header.cwd).toBe(target.path)
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
 })

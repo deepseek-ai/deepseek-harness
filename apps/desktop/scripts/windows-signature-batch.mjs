@@ -1,4 +1,4 @@
-/** Bounded public-key verification batches; every output row must match its requested file. */
+/** Bounded PowerShell 7 public-key verification batches; every output row must match its requested file. */
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
@@ -27,7 +27,7 @@ export function parseSignatureRows(stdout, stderr, files) {
 }
 
 async function inspectBatch(files) {
-  const pending = promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+  const pending = promisify(execFile)('pwsh', ['-NoProfile', '-NonInteractive', '-Command', command], {
     env: scrubWindowsSigningEnvironment(process.env), encoding: 'utf8', windowsHide: true,
     timeout: 60_000, maxBuffer: 64 * 1024 * files.length,
   })

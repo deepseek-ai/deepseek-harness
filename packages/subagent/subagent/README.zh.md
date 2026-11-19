@@ -52,7 +52,9 @@ kind: "package-reference"
 
 在 Host 插件上设置 `maxActiveSubagents`，限制每棵 subagent 树中在线和正在创建的子级数量。默认值为 `8`，接受正安全整数。顶层父级建立由本地和外部后代共享的池，根父级不占名额。新建和冷恢复在让出执行前预留名额，资源释放完成后才归还。有待处理收件箱内容以及正在停止的 activation 仍计入容量；向驻留子级发送消息复用其名额。委派深度是独立策略。
 
-每次新建或冷恢复 Activation 前都会读取当前 `maxActiveSubagents`。调高后已有树可接纳更多子代理；调低后驻留子代理继续运行，使用量降至上限以下前拒绝新接纳。
+调用方通过 `ctx.subagents.maxActiveSubagents` 读取当前上限；每次新建或冷恢复 Activation 前，准入也读取同一个值。调高后已有树可接纳更多子代理；调低后驻留子代理继续运行，使用量降至上限以下前拒绝新接纳。
+
+`ctx.subagents.capacityOf(caller)` 返回在线调用方所在树的 `{ running, limit }`。`running` 统计已占用名额，包含启动中、空闲驻留、停止中和外部子级；不包含根，且调低上限后可以超过 `limit`。读取容量不会预留名额。
 
 容量耗尽时，新建或冷恢复以 `ACTIVATION_LIMIT_REACHED` 拒绝（浏览器消息返回 `subagent/delivery-unavailable`）：等待子代理完成，或继续使用现有代理。接纳不会排队，避免等待后代的父代理又等待自己占用的名额。名额仅存在于当前进程，不限制累计 Session 历史或 token 用量。
 

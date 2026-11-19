@@ -441,6 +441,33 @@ describe('Menu submenus', () => {
     expect(document.activeElement).toBe(target)
   })
 
+  it('collapses a searchable submenu when hovering a sibling row', () => {
+    render(<Menu open anchor={null} items={entries} onClose={() => {}}
+      search={{ label: 'Filter actions', clearLabel: 'Clear filter', value: '', onChange: () => {} }} />)
+    pointer(screen.getByRole('menuitem', { name: 'Applications' }), 'pointerover', 'mouse')
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeTruthy()
+    pointer(screen.getByRole('menuitem', { name: 'Other action' }), 'pointerover', 'mouse')
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+  })
+
+  it('closes the searchable menu on Escape after ArrowDown leaves the submenu parent', () => {
+    const onClose = vi.fn()
+    render(<Menu open anchor={null} items={entries} onClose={onClose}
+      search={{ label: 'Filter actions', clearLabel: 'Clear filter', value: '', onChange: () => {} }} />)
+    const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+    expect(document.activeElement).toBe(search)
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    expect(document.activeElement).toBe(parent)
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeTruthy()
+    fireEvent.keyDown(parent, { key: 'ArrowDown' })
+    const sibling = screen.getByRole('menuitem', { name: 'Other action' })
+    expect(document.activeElement).toBe(sibling)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    fireEvent.keyDown(sibling, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('returns child focus after pointer grace so root arrow navigation can continue', () => {
     render(<Fixture />)
     openMenu()

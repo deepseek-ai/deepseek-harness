@@ -46,6 +46,7 @@ export function registerListAgents(ctx: Context): ToolDefinition {
     name: 'list_agents',
     description:
       'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
+      + 'Shared capacity reports running/limit; do not spawn more agents when capacity is limited. '
       + 'Rows carry names, descriptions, and status. A descendant\'s name is its path from the root, such as reviewer/checker. '
       + 'You can message any other agent in the subagent tree. '
       + 'running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. '
@@ -58,22 +59,32 @@ export function registerListAgents(ctx: Context): ToolDefinition {
     isConcurrencySafe: () => true,
     output: {
       schema: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            name: { type: 'string', required: true },
-            status: { type: 'string', required: true, enum: ['running', 'inactive', 'corrupt', 'unsupported', 'unavailable'] },
-            description: { type: 'string' },
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          running: { type: 'integer', required: true },
+          limit: { type: 'integer', required: true },
+          agents: {
+            type: 'array', required: true,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                name: { type: 'string', required: true },
+                status: { type: 'string', required: true, enum: ['running', 'inactive', 'corrupt', 'unsupported', 'unavailable'] },
+                description: { type: 'string' },
+              },
+            },
           },
         },
       },
-      render: (_args, entries) => [{
+      render: (_args, value) => [{
         type: 'text',
-        text: entries.map(entry =>
-          `${entry.name} [${entry.status}]${entry.description === undefined ? '' : ` — ${entry.description}`}`,
-        ).join('\n'),
+        text: [
+          `Subagent capacity: running=${value.running}, limit=${value.limit}`,
+          ...value.agents.map(entry =>
+            `${entry.name} [${entry.status}]${entry.description === undefined ? '' : ` — ${entry.description}`}`),
+        ].join('\n'),
       }],
     },
     async execute(_args, exec) {
@@ -84,12 +95,15 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
-      return [
-        { name: ROOT_AGENT_NAME, status: statusOf(ctx.agents, root.id), description: 'root agent' },
-        ...entries
-          .map(entry => project(ctx.agents, entry))
-          .filter(entry => entry !== undefined),
-      ]
+      return {
+        ...ctx.subagents.capacityOf(parent),
+        agents: [
+          { name: ROOT_AGENT_NAME, status: statusOf(ctx.agents, root.id), description: 'root agent' },
+          ...entries
+            .map(entry => project(ctx.agents, entry))
+            .filter(entry => entry !== undefined),
+        ],
+      }
     },
   })
   ctx.tools.register(definition)

@@ -103,6 +103,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-todo",
     "tool-web",
 )
+SNAPSHOT_TIME_ZONE = "UTC"
 SNAPSHOT_PROMPT = "Run the advanced packaged-runtime snapshot scenario."
 SNAPSHOT_SESSION_ID = "advanced-executable"
 SNAPSHOT_DIRECT_CHILD_PROMPT = "Reply with exactly DIRECT_CHILD_OK and nothing else."
@@ -898,6 +899,8 @@ def main() -> None:
         print("smoke-python-runtime: sdk-live passed")
         return
 
+    # Child processes that sample their own time zone inherit the snapshot zone.
+    os.environ["TZ"] = SNAPSHOT_TIME_ZONE
     with MockModel() as model:
         if args.scenario == "sdk-plugin-manager":
             assert args.exe is not None
@@ -991,7 +994,7 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                 env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(cache)},
                 request_timeout_seconds=60,
             ) as harness:
-                result = harness.run(AUTHORING_PROMPT, session_id="authoring")
+                result = harness.run(AUTHORING_PROMPT, session_id="authoring", time_zone=SNAPSHOT_TIME_ZONE)
             assert result.final_response == EXPECTED_TEXT, result.final_response
             requests = MockModelHandler.requests[first:]
             assert len(requests) == 2, requests
@@ -1486,7 +1489,7 @@ def smoke_sdk_minimal(
             base_url=base_url,
             request_timeout_seconds=60,
         ) as harness:
-            result = harness.run(MINIMAL_PROMPT, session_id="minimal-agent-smoke")
+            result = harness.run(MINIMAL_PROMPT, session_id="minimal-agent-smoke", time_zone=SNAPSHOT_TIME_ZONE)
 
         event_text = json.dumps(result.events)
         if MINIMAL_TEXT not in event_text:
@@ -1549,7 +1552,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
             },
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
         ) as harness:
-            result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke")
+            result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke", time_zone=SNAPSHOT_TIME_ZONE)
         assert result.final_response == DYNAMIC_TOOLS_TEXT, result.final_response
         assert task.read_text(encoding="utf-8") == "Call snapshot_ping once.\n"
         logs = read_session_logs(sessions)
@@ -1813,7 +1816,8 @@ def smoke_sdk_snapshot_mode(
                     MockModelHandler.direct_child_finished.set()
 
             result = harness.run(
-                SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID, on_notification=observe_child,
+                SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE,
+                on_notification=observe_child,
             )
 
         assert result.final_response == SNAPSHOT_FINAL_TEXT, (result.final_response, harness.client._runtime_diagnostics())
@@ -1975,9 +1979,9 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             )
 
         with connect() as harness:
-            first = harness.run(RESTART_FIRST_PROMPT, session_id=RESTART_FIRST_SESSION_ID)
+            first = harness.run(RESTART_FIRST_PROMPT, session_id=RESTART_FIRST_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         with connect() as harness:
-            second = harness.run(RESTART_SECOND_PROMPT, session_id=RESTART_SECOND_SESSION_ID)
+            second = harness.run(RESTART_SECOND_PROMPT, session_id=RESTART_SECOND_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         requests = MockModelHandler.requests[first_request:]
         if len(requests) != 2:
             raise AssertionError(f"restart snapshot expected two model requests: {requests}")
@@ -2015,7 +2019,7 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
                 raise AssertionError(f"resume changed the saved identity: {session.id}")
             if len(MockModelHandler.requests) != first_request + 2:
                 raise AssertionError("resume sent a model request before receiving new input")
-            resumed = session.run(RESUME_PROMPT)
+            resumed = session.run(RESUME_PROMPT, time_zone=SNAPSHOT_TIME_ZONE)
 
         requests = MockModelHandler.requests[first_request + 2:]
         if len(requests) != 1 or resumed.final_response != RESUME_TEXT:
@@ -2116,8 +2120,8 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
             )
 
         with connect() as harness:
-            failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID)
-            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID)
+            failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
+            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         results = [failed, continued]
         if [result.finish_reason for result in results] != ["error", "completed"]:
             outcomes = [

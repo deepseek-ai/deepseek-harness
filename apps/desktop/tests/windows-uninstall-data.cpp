@@ -6,6 +6,13 @@
 #include <cassert>
 #include "../installer/uninstall-data.h"
 
+extern "C" __declspec(dllimport) void* __cdecl UninstallBegin(LPCWSTR);
+extern "C" __declspec(dllimport) DWORD __cdecl UninstallPrepare(void*, LPCWSTR, LPCWSTR);
+extern "C" __declspec(dllimport) DWORD __cdecl UninstallPayload(void*, LPCWSTR, LPCWSTR, LPCWSTR);
+extern "C" __declspec(dllimport) int __cdecl UninstallFinish(void*, LPCWSTR, LPCWSTR);
+
+extern "C" __declspec(dllimport) void __cdecl UninstallPersist(void*);
+
 static void File(const std::wstring& path, DWORD attributes = FILE_ATTRIBUTE_NORMAL) {
     HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, attributes, nullptr);
     assert(file != INVALID_HANDLE_VALUE);
@@ -46,7 +53,17 @@ int wmain(int argc, wchar_t** argv) {
     assert(uninstall_data::Remove(cache.c_str(), installation.c_str(), data.c_str()) == ERROR_ACCESS_DENIED);
     assert(uninstall_data::Remove(data.c_str(), installation.c_str(), cache.c_str()) == ERROR_ACCESS_DENIED);
     assert(uninstall_data::Remove(cache.c_str(), installation.c_str(), L"relative\\home") == ERROR_INVALID_NAME);
+    std::wstring slashHome = cache;
+    for (auto& character : slashHome) if (character == L'\\') character = L'/';
+    assert(uninstall_data::Remove(data.c_str(), installation.c_str(), slashHome.c_str()) == ERROR_ACCESS_DENIED);
     assert(Exists(cache + L"\\CURRENT"));
+
+    // Unsupported protection roots stop before deleting any contents, even if they name a shared descendant.
+    for (auto home : {L"\\\\server\\share", L"\\\\server\\share\\home", L"\\\\?\\UNC\\server\\share"}) {
+        assert(uninstall_data::Remove(data.c_str(), installation.c_str(), home) == ERROR_INVALID_NAME);
+        assert(Exists(cache + L"\\CURRENT"));
+        assert(Exists(data + L"\\Local State"));
+    }
 
     // A pinned directory cannot be renamed or replaced while the helper holds it.
     {
@@ -86,6 +103,81 @@ int wmain(int argc, wchar_t** argv) {
     // A protected root elsewhere does not block removal.
     assert(uninstall_data::Remove(data.c_str(), installation.c_str(), (root + L"\\elsewhere").c_str()) == ERROR_SUCCESS);
     assert(!Exists(data));
+    // Exercise the shipped helper: a busy executable keeps the retry entry; auxiliary residue is reportable.
+    const std::wstring report = root + L"\\report.txt";
+    void* session = UninstallBegin(report.c_str());
+    assert(session);
+    assert(UninstallPrepare(session, installation.c_str(), nullptr) == ERROR_SUCCESS);
+    File(installation + L"\\app.exe");
+    File(installation + L"\\uninstall.exe");
+    File(installation + L"\\aux.log");
+    HANDLE mainFile = CreateFileW((installation + L"\\app.exe").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(mainFile != INVALID_HANDLE_VALUE);
+    assert(UninstallPayload(session, installation.c_str(), L"app.exe", L"uninstall.exe") == 1);
+    assert(Exists(installation + L"\\uninstall.exe"));
+    assert(Exists(installation + L"\\aux.log"));
+    CloseHandle(mainFile);
+    HANDLE auxiliary = CreateFileW((installation + L"\\aux.log").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(auxiliary != INVALID_HANDLE_VALUE);
+    assert(UninstallPayload(session, installation.c_str(), L"app.exe", L"uninstall.exe") == 0);
+    assert(!Exists(installation + L"\\app.exe"));
+    assert(UninstallFinish(session, installation.c_str(), L"uninstall.exe") == 1);
+    assert(!Exists(installation + L"\\uninstall.exe"));
+    assert(Exists(installation + L"\\aux.log"));
+    HANDLE reportFile = CreateFileW(report.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(reportFile != INVALID_HANDLE_VALUE);
+    char contents[16384]{};
+    DWORD length;
+    assert(ReadFile(reportFile, contents, sizeof(contents) - 1, &length, nullptr));
+    CloseHandle(reportFile);
+    assert(strstr(contents, "aux.log"));
+    assert(strstr(contents, "32"));
+    CloseHandle(auxiliary);
+    assert(DeleteFileW((installation + L"\\aux.log").c_str()));
+    assert(DeleteFileW(report.c_str()));
     assert(RemoveDirectoryW(installation.c_str()));
+
+    for (auto home : {L"C:/HarnessHome", L"~/.dsh", L"~\\.dsh", L" \t "}) {
+        assert(CreateDirectoryW(installation.c_str(), nullptr));
+        void* alternate = UninstallBegin(report.c_str());
+        assert(alternate);
+        assert(UninstallPrepare(alternate, installation.c_str(), home) == ERROR_SUCCESS);
+        assert(UninstallFinish(alternate, installation.c_str(), L"uninstall.exe") == 0);
+        assert(!Exists(installation));
+    }
+    assert(CreateDirectoryW(installation.c_str(), nullptr));
+    void* protectedSession = UninstallBegin(report.c_str());
+    std::wstring slashInstall = installation;
+    for (auto& character : slashInstall) if (character == L'\\') character = L'/';
+    assert(UninstallPrepare(protectedSession, installation.c_str(), slashInstall.c_str()) == ERROR_ACCESS_DENIED);
+    assert(UninstallPrepare(protectedSession, installation.c_str(), L"relative/home") == ERROR_INVALID_NAME);
+    UninstallPersist(protectedSession);
+    reportFile = CreateFileW(report.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    assert(reportFile != INVALID_HANDLE_VALUE);
+    ZeroMemory(contents, sizeof(contents));
+    assert(ReadFile(reportFile, contents, sizeof(contents) - 1, &length, nullptr));
+    CloseHandle(reportFile);
+    assert(strstr(contents, "Validate DSH_HOME"));
+    assert(strstr(contents, "relative/home"));
+    assert(DeleteFileW(report.c_str()));
+    assert(RemoveDirectoryW(installation.c_str()));
+
+    std::vector<std::wstring> longDirectories;
+    std::wstring longDirectory = root;
+    while (longDirectory.size() < 280) {
+        longDirectory += L"\\" + std::wstring(60, L'x');
+        assert(CreateDirectoryW((L"\\\\?\\" + longDirectory).c_str(), nullptr));
+        longDirectories.push_back(longDirectory);
+    }
+    const std::wstring longUninstaller = L"\\\\?\\" + longDirectory + L"\\uninstall.exe";
+    File(longUninstaller);
+    void* longSession = UninstallBegin(report.c_str());
+    assert(UninstallPrepare(longSession, longDirectory.c_str(), nullptr) == ERROR_SUCCESS);
+    assert(UninstallFinish(longSession, longDirectory.c_str(), L"uninstall.exe") == 0);
+    assert(!Exists(longUninstaller));
+    assert(!Exists(L"\\\\?\\" + longDirectory));
+    longDirectories.pop_back();
+    for (auto it = longDirectories.rbegin(); it != longDirectories.rend(); ++it)
+        assert(RemoveDirectoryW((L"\\\\?\\" + *it).c_str()));
     assert(RemoveDirectoryW(root.c_str()));
 }

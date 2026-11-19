@@ -17,6 +17,10 @@ import { expandOwningTurnProcess, newEnglishPage, saveFailureShot, writeComposer
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+)
 
 /** A restored preview resolves its Host path after the document's load event. */
 async function reloadPreview(page: Page, column: Locator, absolutePath: string): Promise<void> {
@@ -69,25 +73,31 @@ function parentPathFixture(path: string): string {
   ].join('\n')
 }
 
-/** Build a settled turn whose relative link follows a directory change into a nested checkout. */
-function changedDirectoryFixture(path: string): string {
-  const session = Session.create(brandString<SessionId>('changed-directory-links-source'))
-  session.append('turn/start', { turn: 1 })
-  const user = session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },
-  }), { surfaceOp: 'append' })
-  session.append('session/title', { title: 'Changed directory links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
-  session.append('workspace-root/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
-  session.append('step/start', { turn: 1, step: 1 })
-  session.append('assistant/message', {
-    turn: 1, step: 1, stream: [],
-    message: createAssistantMessage({
-      content: [{ type: 'text', text: `[Worktree notes](${path})` }],
-      source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-    }),
-  }, { surfaceOp: 'append' })
-  session.append('step/end', { turn: 1, step: 1 })
-  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+/**
+ * Build settled turns for a Session that moves between directories: each turn moves the Session
+ * to its `cwd`, when it names one, before the assistant writes `reply`.
+ */
+function movedDirectoryFixture(title: string, turns: readonly { readonly cwd?: string; readonly reply: string }[]): string {
+  const session = Session.create(brandString<SessionId>('moved-directory-links-source'))
+  for (const [index, { cwd, reply }] of turns.entries()) {
+    const turn = index + 1
+    session.append('turn/start', { turn })
+    const user = session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: `Link the files of step ${turn}.` }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    if (turn === 1) session.append('session/title', { title, messageSeqs: [user.seq], source: { kind: 'fallback' } })
+    if (cwd !== undefined) session.append('workspace-root/change', { cwd })
+    session.append('step/start', { turn, step: 1 })
+    session.append('assistant/message', {
+      turn, step: 1, stream: [],
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: reply }],
+        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      }),
+    }, { surfaceOp: 'append' })
+    session.append('step/end', { turn, step: 1 })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  }
   return [
     JSON.stringify({
       type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}', createdAt: 0,
@@ -274,7 +284,7 @@ describe('web e2e: Markdown file links', () => {
     await source.click()
     const column = page.locator('[data-rightbar-col]')
     const stored = () => page.evaluate(key => localStorage.getItem(key), `dsh.sidebar-right.v1.${id}`)
-    const address = sessionFileAddress(id, path)
+    const address = sessionFileAddress(id, `${scaffold.workspaceCwd}/${path}`)
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('parent line 24\n')
     await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'parent.txt'))
     await expect.poll(stored).toContain(address)
@@ -300,19 +310,23 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('parent line 24\n')
     // The Host-reported path and the unresolved prose path are distinct resource identities.
     expect(await tabs.allTextContents()).toEqual(['parent.txt', 'parent.txt'])
-    await expect.poll(stored).toContain(sessionFileAddress(id, 'parent.txt'))
+    await expect.poll(stored).toContain(sessionFileAddress(id, join(scaffold.workspaceCwd, 'parent.txt')))
     await source.click()
     expect(await tabs.allTextContents()).toEqual(['parent.txt', 'parent.txt'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
-  it('resolves relative links from the Session\'s current working directory', async () => {
+  it('resolves relative links and images from the Session\'s current working directory', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-changed-directory-file-links'))
     const worktree = join(scaffold.workspaceCwd, '.agents/worktrees/w')
     await mkdir(worktree, { recursive: true })
     await writeFile(join(scaffold.workspaceCwd, 'notes.txt'), 'original checkout\n')
     await writeFile(join(worktree, 'notes.txt'), 'worktree checkout\n')
-    const id = await seedSession(scaffold, changedDirectoryFixture('notes.txt'), 'changed-directory-file-links')
+    // Only the worktree holds the image, so it loads only when resolved from the Session's current directory.
+    await writeFile(join(worktree, 'chart.png'), PNG)
+    const id = await seedSession(scaffold, movedDirectoryFixture('Changed directory links', [
+      { cwd: '{{cwd}}/.agents/worktrees/w', reply: '[Worktree notes](notes.txt)\n\n![Worktree chart](chart.png)' },
+    ]), 'changed-directory-file-links')
     await page.reload({ waitUntil: 'load' })
     const workspace = page.getByRole('treeitem').first()
     await workspace.waitFor()
@@ -323,9 +337,56 @@ describe('web e2e: Markdown file links', () => {
     const column = page.locator('[data-rightbar-col]')
     await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(worktree, 'notes.txt'))
     await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('worktree checkout\n')
+    const image = page.getByRole('img', { name: 'Worktree chart', exact: true })
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(1)
+    expect(new URL(await image.getAttribute('src') ?? '', page.url()).searchParams.get('path')).toBe(join(worktree, 'chart.png'))
     const artifacts = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ path: join(artifacts, 'changed-directory-file-links.png'), animations: 'disabled' })
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('keeps absolute links and opened tabs on their files after the Session leaves their directory', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-moved-directory-file-links'))
+    const worktree = join(scaffold.workspaceCwd, '.agents/worktrees/pinned')
+    await mkdir(worktree, { recursive: true })
+    await writeFile(join(scaffold.workspaceCwd, 'pinned.txt'), 'original checkout\n')
+    await writeFile(join(worktree, 'pinned.txt'), 'worktree checkout\n')
+    const id = await seedSession(scaffold, movedDirectoryFixture('Moved directory links', [
+      {
+        cwd: '{{cwd}}/.agents/worktrees/pinned',
+        reply: '[Worktree file](<{{cwd}}/.agents/worktrees/pinned/pinned.txt>) · [Relative file](pinned.txt)',
+      },
+      { cwd: '{{cwd}}', reply: 'Back in the original checkout.' },
+    ]), 'moved-directory-file-links')
+    await page.reload({ waitUntil: 'load' })
+    const workspace = page.getByRole('treeitem').first()
+    await workspace.waitFor()
+    if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+
+    const column = page.locator('[data-rightbar-col]')
+    const openedPath = () => column.locator('[data-textpreview-path]').textContent()
+    const firstLine = () => column.locator('[data-textpreview-line="1"]').textContent()
+    // The Session is back in the original checkout; the absolute target still names the worktree file.
+    await page.getByRole('button', { name: 'Worktree file', exact: true }).click()
+    await expect.poll(openedPath).toBe(join(worktree, 'pinned.txt'))
+    await expect.poll(firstLine).toBe('worktree checkout\n')
+    // A relative target resolves from the directory the Session works in at the click.
+    await page.getByRole('button', { name: 'Relative file', exact: true }).click()
+    await expect.poll(openedPath).toBe(join(scaffold.workspaceCwd, 'pinned.txt'))
+    await expect.poll(firstLine).toBe('original checkout\n')
+    const stored = () => page.evaluate(key => localStorage.getItem(key), `dsh.sidebar-right.v1.${id}`)
+    await expect.poll(stored).toContain(sessionFileAddress(id, join(scaffold.workspaceCwd, 'pinned.txt')))
+
+    const agent = scaffold.ctx.agents.list().find(candidate => candidate.session.id === id)
+    if (agent === undefined) throw new Error('the opened Session has no live Agent')
+    await scaffold.ctx.workingDirectory.set(agent, worktree)
+    // The opened tab stores the absolute path, so a reload in the new directory restores the same file.
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'pinned.txt'))
+    await expect.poll(firstLine).toBe('original checkout\n')
+    expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['pinned.txt', 'pinned.txt'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
