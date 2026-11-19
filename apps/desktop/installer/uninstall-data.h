@@ -45,16 +45,6 @@ inline bool Normalize(LPCWSTR input, std::wstring& result) {
     return true;
 }
 
-inline size_t RootLength(const std::wstring& path) {
-    if (path.size() >= 3 && path[1] == L':' && path[2] == L'\\') return 3;
-    if (path.compare(0, 2, L"\\\\") != 0) return 0;
-    const size_t server = path.find(L'\\', 2);
-    if (server == std::wstring::npos || server == 2) return 0;
-    const size_t share = path.find(L'\\', server + 1);
-    if (server + 1 == path.size() || share == server + 1) return 0;
-    return share == std::wstring::npos ? path.size() : share + 1;
-}
-
 // DSH_HOME accepts Node's tilde and separator spellings; relative roots remain
 // unverifiable because the application's working directory is not available here.
 inline bool NormalizeHome(LPCWSTR input, std::wstring& result) {
@@ -75,78 +65,7 @@ inline bool NormalizeHome(LPCWSTR input, std::wstring& result) {
         value = profile + (value.size() > 1 ? L"\\" + value.substr(2) : L"");
     }
     for (auto& character : value) if (character == L'/') character = L'\\';
-    if (_wcsnicmp(value.c_str(), L"\\\\?\\UNC\\", 8) == 0) value = L"\\\\" + value.substr(8);
-    else if (value.compare(0, 4, L"\\\\?\\") == 0) value = value.substr(4);
-    const size_t root = RootLength(value);
-    if (!root || value.compare(0, 4, L"\\\\.\\") == 0) return false;
-    if (wcspbrk(value.c_str() + (value[1] == L':' ? 2 : 0), L":*?\"<>|\r\n\t")) return false;
-    WCHAR buffer[32768];
-    const DWORD length = GetFullPathNameW(value.c_str(), ARRAYSIZE(buffer), buffer, nullptr);
-    if (!length || length >= ARRAYSIZE(buffer)) return false;
-    result.assign(buffer, length);
-    const size_t normalizedRoot = RootLength(result);
-    while (result.size() > normalizedRoot && result.back() == L'\\') result.pop_back();
-    for (size_t start = normalizedRoot; start < result.size();) {
-        size_t end = result.find(L'\\', start);
-        if (end == std::wstring::npos) end = result.size();
-        if (end == start || result[end - 1] == L'.' || result[end - 1] == L' ') return false;
-        start = end + 1;
-    }
-    return true;
-}
-
-struct Ancestor {
-    BY_HANDLE_FILE_INFORMATION identity;
-    std::wstring suffix;
-};
-// Keep absent suffixes relative to existing ancestors. File identities also match
-// local SMB shares, mapped drives and junction aliases whose path strings differ.
-inline DWORD Ancestors(std::wstring path, std::vector<Ancestor>& ancestors) {
-    std::wstring suffix;
-    const size_t root = RootLength(path);
-    for (;;) {
-        const std::wstring extended = path.compare(0, 2, L"\\\\") == 0
-            ? L"\\\\?\\UNC\\" + path.substr(2) : L"\\\\?\\" + path;
-        HANDLE handle = CreateFileW(extended.c_str(), FILE_READ_ATTRIBUTES,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) {
-            const DWORD error = GetLastError();
-            if ((error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) || path.size() <= root) return error;
-        } else {
-            BY_HANDLE_FILE_INFORMATION identity{};
-            const BOOL read = GetFileInformationByHandle(handle, &identity);
-            const DWORD error = read ? ERROR_SUCCESS : GetLastError();
-            CloseHandle(handle);
-            if (error) return error;
-            if (!(identity.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return ERROR_DIRECTORY;
-            ancestors.push_back({identity, suffix});
-        }
-        if (path.size() <= root) break;
-        const size_t separator = path.find_last_of(L'\\');
-        suffix = path.substr(separator + 1) + (suffix.empty() ? L"" : L"\\" + suffix);
-        path.resize(separator < root ? root : separator);
-    }
-    return ERROR_SUCCESS;
-}
-
-inline DWORD CheckHome(const std::wstring& target, LPCWSTR input, bool* homeFailure = nullptr) {
-    if (homeFailure) *homeFailure = true;
-    std::wstring home;
-    if (!NormalizeHome(input, home)) return ERROR_INVALID_NAME;
-    std::vector<Ancestor> protectedAncestors, targetAncestors;
-    DWORD error = Ancestors(home, protectedAncestors);
-    if (error) return error;
-    if (homeFailure) *homeFailure = false;
-    error = Ancestors(target, targetAncestors);
-    if (error) return error;
-    if (homeFailure) *homeFailure = true;
-    for (const auto& a : protectedAncestors) for (const auto& b : targetAncestors) {
-        if (a.identity.dwVolumeSerialNumber == b.identity.dwVolumeSerialNumber
-            && a.identity.nFileIndexHigh == b.identity.nFileIndexHigh && a.identity.nFileIndexLow == b.identity.nFileIndexLow
-            && (a.suffix.empty() || b.suffix.empty() || Contains(a.suffix, b.suffix) || Contains(b.suffix, a.suffix)))
-            return ERROR_ACCESS_DENIED;
-    }
-    return ERROR_SUCCESS;
+    return Normalize(value.c_str(), result);
 }
 
 // Listing access takes part in share checks, so the open handle refuses the DELETE access a rename or removal needs.
@@ -211,9 +130,10 @@ inline DWORD Remove(LPCWSTR input, LPCWSTR installation, LPCWSTR protectedRoot, 
     if (!Normalize(input, path) || !Normalize(installation, install)) return ERROR_INVALID_NAME;
     if (Contains(path, install) || Contains(install, path)) return ERROR_ACCESS_DENIED;
     if (protectedRoot && *protectedRoot) {
+        std::wstring home;
         // An unusable protected root cannot establish separation from retained data.
-        const DWORD error = CheckHome(path, protectedRoot);
-        if (error) return error;
+        if (!NormalizeHome(protectedRoot, home)) return ERROR_INVALID_NAME;
+        if (Contains(path, home) || Contains(home, path)) return ERROR_ACCESS_DENIED;
     }
     struct ComScope {
         HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

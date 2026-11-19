@@ -173,8 +173,10 @@ inline DWORD Prepare(Session& session, LPCWSTR directory, LPCWSTR protectedRoot,
     std::wstring path;
     if (!uninstall_data::Normalize(directory, path)) return ERROR_INVALID_NAME;
     if (protectedRoot && *protectedRoot) {
-        const DWORD error = uninstall_data::CheckHome(path, protectedRoot, &homeFailure);
-        if (error) return error;
+        homeFailure = true;
+        std::wstring home;
+        if (!uninstall_data::NormalizeHome(protectedRoot, home)) return ERROR_INVALID_NAME;
+        if (uninstall_data::Contains(path, home) || uninstall_data::Contains(home, path)) return ERROR_ACCESS_DENIED;
         homeFailure = false;
     }
     const KNOWNFOLDERID* folders[] = {&FOLDERID_Profile, &FOLDERID_RoamingAppData, &FOLDERID_LocalAppData,
