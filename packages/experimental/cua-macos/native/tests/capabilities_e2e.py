@@ -48,10 +48,21 @@ def stop_application(pid):
 
 def check_toggle_mouse(helper, owner, state_file, executable):
     call = helper.call
+    source_pid = call("permissionStatus", {})["helper"]["pid"]
+
+    def observed(value):
+        return {**value, "events": [event for event in value["events"] if event.get("sourcePid") == source_pid]}
+
+    def read_owned():
+        return observed(json.loads(state_file.read_text()))
+
+    def wait_owned(predicate):
+        return observed(wait_for_state(state_file, lambda value: predicate(observed(value))))
+
     def cursor(*position):
         return json.loads(subprocess.check_output([executable, "--cursor", *map(str, position)], text=True))
 
-    state = json.loads(state_file.read_text())
+    state = read_owned()
     window = {**owner, "windowId": state["windowId"]}
     def toggle(button, direction, error=None):
         result = call("toggleMouse", {**window, "mouseButton": button, "direction": direction}, error)
@@ -59,9 +70,9 @@ def check_toggle_mouse(helper, owner, state_file, executable):
             assert result == {"dispatched": True}, result
 
     toggle("left", "down", "FOREGROUND_REQUIRED")
-    assert json.loads(state_file.read_text())["events"] == state["events"]
+    assert read_owned()["events"] == state["events"]
     call("activate", owner)
-    state = wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+    state = wait_owned(lambda s: s["active"] and s["keyWindow"])
     bounds = next(w["bounds"] for w in call("listWindows", owner) if w["windowId"] == window["windowId"])
     inside = [bounds["x"] + state["pad"][0] + 80, bounds["y"] + state["pad"][1] + 70]
     outside = [bounds["x"] - 8, inside[1]]
@@ -70,15 +81,15 @@ def check_toggle_mouse(helper, owner, state_file, executable):
     try:
         assert cursor(*outside) == outside
         toggle("left", "down", "FOREGROUND_REQUIRED")
-        assert json.loads(state_file.read_text())["events"] == state["events"]
+        assert read_owned()["events"] == state["events"]
         for index, (button, down, up) in enumerate([("left", 1, 2), ("right", 3, 4), ("middle", 25, 26)]):
             assert cursor(*inside) == inside
             call("activate", owner)
-            wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+            wait_owned(lambda s: s["active"] and s["keyWindow"])
             count = len(state["events"])
             toggle(button, "down")
             try:
-                state = wait_for_state(state_file, lambda s: len(s["events"]) > count)
+                state = wait_owned(lambda s: len(s["events"]) > count)
                 assert [(e["type"], e["button"]) for e in state["events"][count:]] == [(down, index)], state
                 assert cursor() == inside
                 assert not state["events"][-1]["pressedButtons"] & (1 << index), state
@@ -89,38 +100,38 @@ def check_toggle_mouse(helper, owner, state_file, executable):
                     wait_for_state(other_state, lambda s: bool(s["windowId"]))
                     other_app = call("getApp", {"selector": str(other.pid)})
                     call("activate", {"appHandle": other_app["appHandle"]})
-                    wait_for_state(state_file, lambda s: not s["active"])
+                    wait_owned(lambda s: not s["active"])
             finally:
                 assert cursor(*outside) == outside
                 toggle(button, "up")
-            state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)
+            state = wait_owned(lambda s: len(s["events"]) >= count + 2)
             events = state["events"][count:]
             assert [(e["type"], e["button"]) for e in events] == [(down, index), (up, index)], events
             assert events[1]["point"][0] < 0, events
             if button != "middle":
                 assert cursor() == outside
         call("activate", owner)
-        wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+        wait_owned(lambda s: s["active"] and s["keyWindow"])
         call("getState", {**window, "maxElements": 300, "maxDepth": 20})
         key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
         socket = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
         for index, (button, down, moved, up) in enumerate([("left", 1, 6, 2), ("right", 3, 7, 4), ("middle", 25, 27, 26)]):
             assert cursor(*inside) == inside
             params = {**window, "mouseButton": button, "useSystemPointer": True}
-            count = len(json.loads(state_file.read_text())["events"])
+            count = len(read_owned()["events"])
             call("toggleMouse", {**params, "direction": "down"})
             try:
-                state = wait_for_state(state_file, lambda s: len(s["events"]) > count)
+                state = wait_owned(lambda s: len(s["events"]) > count)
                 assert state["events"][-1]["pressedButtons"] & (1 << index), state
                 call("toggleMouse", {**params, "direction": "down"}, "INPUT_BUSY")
                 call("mouseMove", {**window, "x": inside[0] - bounds["x"] + 15, "y": inside[1] - bounds["y"],
                                    "useSystemPointer": True})
-                state = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 2)
+                state = wait_owned(lambda s: len(s["events"]) >= count + 2)
                 assert state["events"][-1]["type"] == moved, state
                 assert cursor() == [inside[0] + 15, inside[1]]
             finally:
                 call("toggleMouse", {**params, "direction": "up"})
-            events = wait_for_state(state_file, lambda s: len(s["events"]) >= count + 3)["events"][count:]
+            events = wait_owned(lambda s: len(s["events"]) >= count + 3)["events"][count:]
             assert [e["type"] for e in events] == [down, moved, up], events
             assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
         def wait_button(pressed):
@@ -134,7 +145,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
 
         for ending in ("releaseHeldInputs", "disconnect"):
             call("activate", owner)
-            wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+            wait_owned(lambda s: s["active"] and s["keyWindow"])
             assert cursor(*inside) == inside
             connection = Connection(socket, key)
             try:
@@ -145,7 +156,7 @@ def check_toggle_mouse(helper, owner, state_file, executable):
                 call("toggleMouse", {**params, "direction": "up"}, "INVALID_ARGUMENT")
                 wait_button(True)
                 call("activate", {"appHandle": other_app["appHandle"]})
-                wait_for_state(state_file, lambda s: not s["active"])
+                wait_owned(lambda s: not s["active"])
                 if ending != "disconnect":
                     connection.call(ending, {})
             finally:
@@ -204,6 +215,14 @@ def check_clicks(helper, window, point, state_file):
     count = len(state["events"])
     presses, menus = state["axPresses"], state["axMenus"]
     assert {"AXPress", "AXShowMenu"}.issubset(helper.call("listActions", target))
+    plain = helper.call("getActionSchema", {"action": "AXShowMenu"})
+    assert plain["type"] == "object" and plain["required"] == [] and plain["additionalProperties"] is False, plain
+    assert "description" not in plain and "description" in plain["properties"]["argument"], plain
+    setter = helper.call("getActionSchema", {"action": f"{pad['role']}.AXValue.Set"})
+    argument = setter["properties"]["argument"]
+    assert setter["required"] == ["argument"] and len(argument["oneOf"]) == 6, setter
+    assert "description" in argument and "description" not in setter, setter
+    helper.call("getActionSchema", {"action": ""}, "INVALID_ARGUMENT")
     helper.call("invoke", target)
     state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
     helper.call("performAction", {**target, "action": "AXShowMenu"})

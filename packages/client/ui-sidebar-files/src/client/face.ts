@@ -194,8 +194,8 @@ export interface FilesInjected {
    * such text, a change to those preferences searches again. Blank text ends
    * the search, aborting a running one, and the pane draws its tree again.
    * @param paneId - the pane being drawn.
-   * @param cwd - the Session's working directory, the search's root; fixed for the Session once known, so a
-   *   result always shares the pane's tree root.
+   * @param cwd - the Session's working directory, which the search and its result tree are rooted at; a
+   *   `hold` with another directory searches the held text again there.
    * @param query - the text as typed.
    */
   readonly setQuery: (paneId: PaneId, cwd: string, query: string) => void
@@ -629,6 +629,11 @@ export function filesFace(
       pane.root = node
       node.open()
       if (kept !== undefined) batch(() => { relisting(paneId, kept.expanded) })
+      // Text held while the Session entered another checkout searches that checkout with its preferences.
+      if (pane.searchQuery !== '' && pane.following?.cwd !== root) {
+        follow(paneId, pane, root)
+        runSearch(paneId, pane, root)
+      }
       step(paneId, pane)
     }
     // A navigation belongs to its target tab, not the tree that initiated it.

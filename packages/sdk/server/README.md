@@ -55,7 +55,7 @@ Without attachments, `/plan` and `/plan off` change only native plan state. `/pl
 
 Creation and edit accept images as reference material before the next round; show, pause, resume, and clear reject attachments without changing goal state. Compact and permission commands also reject attachments. Handler refusals never fall back to ordinary prompts; an image may already be stored before the handler refuses, as on Desktop. These SDK inputs accept raster images, not general file uploads or client-supplied attachment references.
 
-`session/working-directory/get` accepts `{ sessionId }`; `session/working-directory/set` accepts `{ sessionId, path }`. Both return `{ cwd }` and create an unknown Session without starting a model turn. Reads recover missing directories through the working-directory service; changes preserve origin metadata and permissions, and reach the model through logged user context.
+`session/working-directory/get` accepts `{ sessionId }`; `session/working-directory/set` accepts `{ sessionId, path }`. Both return `{ cwd }` and create an unknown Session without starting a model turn. Reads recover missing directories through the working-directory service; changes preserve origin metadata, move the `workspace-write` boundary to the new directory, and reach the model through logged user context.
 
 ### Wiring
 

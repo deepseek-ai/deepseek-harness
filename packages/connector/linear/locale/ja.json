@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Linear プラグイン",
+    "description": "会話の中で Linear の Issue、プロジェクト、コメントを使用します。",
+    "detail": "docs/DETAIL.md"
+  }
+}

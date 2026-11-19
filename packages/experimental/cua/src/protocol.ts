@@ -1,6 +1,7 @@
 /** JSON validation shared by model tool admission and the native object facade. */
 import { Buffer } from 'node:buffer'
 import { z } from 'zod'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
 const windowId = z.string().min(1)
@@ -72,6 +73,7 @@ function requestSchema<H extends z.ZodType, D extends z.ZodType, T extends z.Zod
       maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),
     operation('listActions', snapshot),
+    operation('getActionSchema', { action: z.string().min(1) }),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
     operation('invoke', snapshot),
     z.object({ method: z.literal('toggleMouse'), params: button }).strict(),
@@ -161,6 +163,13 @@ export const StateResult = z.object({
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())
+/** Validates CUA response fields and JSON values; native providers own the nested schema definitions. */
+export const ActionSchemaResult = z.object({
+  type: z.literal('object'),
+  properties: z.object({ argument: z.record(z.string(), jsonValue) }).strict(),
+  required: z.union([z.tuple([]), z.tuple([z.literal('argument')])]),
+  additionalProperties: z.literal(false),
+}).strict().transform(schema => schema as ObjectJsonSchema)
 /** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: pixelDimension, pixelHeight: pixelDimension, windowId,

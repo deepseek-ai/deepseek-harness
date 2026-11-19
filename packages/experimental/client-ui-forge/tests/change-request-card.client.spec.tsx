@@ -11,6 +11,7 @@ import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/Chan
 import { en } from '../src/client/locales.ts'
 import css from '../src/client/Forge.module.css'
 import overview from '../src/client/ChangeRequestOverview.module.css'
+import type { ChangeRequestEntry } from '../src/client/status.ts'
 import type { ForgePanelChangeRequest } from '../src/types.ts'
 import { check, entry, snapshot, unserved } from './client-fixtures.client.ts'
 import './fonts-dom.client.ts'
@@ -27,7 +28,7 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   const openLink = vi.fn<(url: string) => void>()
   const copyLink = vi.fn<(url: string) => void>()
   const retry = vi.fn<() => void>()
-  const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+  const remove = vi.fn<(entry: ChangeRequestEntry) => void>()
   const onToggle = vi.fn<() => void>()
   const actions: ChangeRequestActions = { openLink, copyLink, retry, remove, ...options.actions }
   const view = render(
@@ -127,7 +128,7 @@ describe('ChangeRequestCard head', () => {
   })
 
   it('opens the changes of a served change request from its line, and its page with a modifier key or the middle button', () => {
-    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const viewChanges = vi.fn<(entry: ChangeRequestEntry) => void>()
     const value = entry(7, snapshot(7, { url: 'https://github.com/octo/demo/pull/7#web' }))
     const b = card(value, { actions: { viewChanges } })
     expect(b.line.getAttribute('data-forge-opens')).toBe('changes')
@@ -150,7 +151,7 @@ describe('ChangeRequestCard head', () => {
     ['is not read yet', entry(1, null), true, 'https://github.com/octo/demo/pull/1'],
     ['shows on a surface without a changes view', entry(1, snapshot(1)), false, 'https://github.com/octo/demo/pull/1'],
   ] as const)('opens the page of a change request that %s from its line', (_label, value, changes, url) => {
-    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const viewChanges = vi.fn<(entry: ChangeRequestEntry) => void>()
     const b = card(value, { actions: changes ? { viewChanges } : {} })
     expect(b.line.getAttribute('data-forge-opens')).toBe('link')
     fireEvent.click(b.line)
@@ -232,6 +233,7 @@ describe('collapsed ChangeRequestCard', () => {
   it.each([
     ['not-found', en['change.failure.notFound']],
     ['unauthenticated', en['change.failure.unauthenticated']],
+    ['rate-limited', en['change.failure.rateLimited']],
     ['unavailable', en['change.failure.unavailable']],
   ] as const)('explains a %s read failure below the line in place of the status and retries it', (code, text) => {
     const failure: ForgeFailure = { code, message: 'detail' }
@@ -619,7 +621,7 @@ describe('ChangeRequestCard actions', () => {
 
   it('marks a draft ready for review, refusing a second request until the first settles', async () => {
     const pending = deferred()
-    const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(() => pending.promise)
+    const markReady = vi.fn<(entry: ChangeRequestEntry) => Promise<void>>(() => pending.promise)
     const value = entry(7, snapshot(7, { draft: true, mergeReady: true }))
     const b = card(value, { expanded: true, actions: { markReady } })
     const item = (): HTMLElement => screen.getByRole('menuitem', { name: en['change.markReady'] })
@@ -641,7 +643,7 @@ describe('ChangeRequestCard actions', () => {
 
   it('lists the methods the repository allows with the usual one chosen, and merges the confirmed head with the chosen one', async () => {
     const pending = deferred()
-    const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(() => pending.promise)
+    const merge = vi.fn<(entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>>(() => pending.promise)
     const value = entry(7, snapshot(7, { mergeReady: true, mergeMethods: ['merge', 'squash', 'rebase'], headSha: head }))
     const b = card(value, { expanded: true, actions: { merge } })
     const button = within(b.item).getByRole('button', { name: en['change.merge'] })
@@ -699,7 +701,7 @@ describe('ChangeRequestCard actions', () => {
   })
 
   it('falls back to the usual method once the repository stops allowing the chosen one', async () => {
-    const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
+    const merge = vi.fn<(entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>>(async () => {})
     const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
     const view = (methods: MergeRequest['method'][]) => (
       <ul>
@@ -750,7 +752,7 @@ describe('ChangeRequestCard actions', () => {
 describe('ChangeRequestCard changes', () => {
   it('opens the changes of a served change request from its diff size', () => {
     const value = entry(7, snapshot(7, { additions: 12345 }))
-    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const viewChanges = vi.fn<(entry: ChangeRequestEntry) => void>()
     const b = card(value, { expanded: true, actions: { viewChanges } })
     const button = within(b.item).getByRole('button', { name: 'View the changes of #7: 12,345 lines added, 3 lines deleted' })
     expect(button.textContent).toBe(`${en['change.row.changes']}+12,345${MINUS}3`)
@@ -760,7 +762,7 @@ describe('ChangeRequestCard changes', () => {
   })
 
   it('shows only the diff size of a change request no provider serves', () => {
-    const viewChanges = vi.fn<(entry: ForgePanelChangeRequest) => void>()
+    const viewChanges = vi.fn<(entry: ChangeRequestEntry) => void>()
     const b = card({ ...unserved('https://example.test/review/9'), snapshot: snapshot(9) }, { expanded: true, actions: { viewChanges } })
     expect(within(b.item).queryByRole('button', { name: /View the changes/ })).toBeNull()
     expect(within(b.item).getByText('+12')).toBeTruthy()

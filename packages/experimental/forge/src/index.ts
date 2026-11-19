@@ -6,12 +6,13 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
-  BranchUpdateRequest, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
+  BranchUpdateRequest, ChangeRequestDescription, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot,
+  ChangeRequestUpdate, Config,
   ForgeCommitList, ForgeActionFailure, ForgeDescription, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest,
   ForgeReviewData,
   ForgeReviewChange, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
   ForgeReviewWriteResult,
-  ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
+  ForgeViewedFiles, ForgeViewedRequest, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery, ForgeViewerSource, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -473,6 +474,64 @@ export class ForgeService extends Service {
   }
 
   /**
+   * List the viewer lists every registered provider offers; `forge/providers-changed` announces a change.
+   * @returns one source per provider that declares viewer lists and reads them, in registration order.
+   */
+  viewerSources(): ForgeViewerSource[] {
+    const sources: ForgeViewerSource[] = []
+    for (const { provider } of this.providers.values()) {
+      const { viewer } = provider
+      if (viewer !== undefined && provider.listForViewer !== undefined && provider.countForViewer !== undefined) {
+        sources.push({ forge: provider.forge, hosts: viewer.hosts, filters: viewer.filters, maxItems: viewer.maxItems })
+      }
+    }
+    return sources
+  }
+
+  /**
+   * Read one list of open change requests that involve the signed-in user.
+   * @param forge - forge family of a registered provider.
+   * @param query - host, list, repository, and limit of the read.
+   * @param signal - cancellation of the read.
+   * @returns the list, or why the host did not provide it; `unsupported` when the provider does not offer the host or list.
+   * @throws when no provider serves `forge`, or with `signal.reason` when it aborts.
+   */
+  async listForViewer(forge: string, query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure> {
+    return await this.invoke(this.registration(forge), signal, (provider, operation) => {
+      const reads = viewerReads(provider, query.host, query.filter)
+      return 'code' in reads ? Promise.resolve(reads) : reads.list(query, operation)
+    })
+  }
+
+  /**
+   * Count the change requests in each viewer list a provider offers on one host.
+   * @param forge - forge family of a registered provider.
+   * @param host - lowercase host name the provider lists on.
+   * @param signal - cancellation of the read.
+   * @returns the count of each list, or why the host did not provide them; `unsupported` when the provider does not list on `host`.
+   * @throws when no provider serves `forge`, or with `signal.reason` when it aborts.
+   */
+  async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> {
+    return await this.invoke(this.registration(forge), signal, (provider, operation) => {
+      const reads = viewerReads(provider, host, undefined)
+      return 'code' in reads ? Promise.resolve(reads) : reads.count(host, operation)
+    })
+  }
+
+  /**
+   * Read the description and labels of a change request.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns the description, or why the host did not provide it; `unsupported` when the provider reads no descriptions.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.readDescription?.(ref, operation)
+        ?? Promise.resolve({ code: 'unsupported', message: 'This provider does not read descriptions' } as const))
+  }
+
+  /**
    * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
    * with `forge/review-changed`.
    * @param ref - change request served by a registered provider.
@@ -745,6 +804,31 @@ export class ForgeService extends Service {
       }
     }
   }
+}
+
+const UNSUPPORTED_VIEWER: ForgeFailure = { code: 'unsupported', message: 'This provider does not read viewer lists' }
+
+/** The viewer reads of one provider, bound to it. */
+interface ViewerReads {
+  readonly list: NonNullable<ForgeProvider['listForViewer']>
+  readonly count: NonNullable<ForgeProvider['countForViewer']>
+}
+
+/**
+ * The viewer reads a provider offers on a host.
+ * @param provider - registered provider.
+ * @param host - host the read names.
+ * @param filter - list the read names, or undefined for the counts of every list.
+ * @returns the bound reads, or an `unsupported` failure naming the missing host or list.
+ */
+function viewerReads(provider: ForgeProvider, host: string, filter: ForgeViewerFilter | undefined): ViewerReads | ForgeFailure {
+  const { viewer } = provider
+  const list = provider.listForViewer?.bind(provider)
+  const count = provider.countForViewer?.bind(provider)
+  if (viewer === undefined || list === undefined || count === undefined) return UNSUPPORTED_VIEWER
+  if (!viewer.hosts.includes(host)) return { code: 'unsupported', message: `This provider does not list change requests on ${host}` }
+  if (filter !== undefined && !viewer.filters.has(filter)) return { code: 'unsupported', message: `This provider does not read the ${filter} list` }
+  return { list, count }
 }
 
 export default ForgeService

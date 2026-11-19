@@ -201,6 +201,9 @@ actor AXWorker {
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
+        if method == "getActionSchema" {
+            return .result(try ActionSchema.parameter(action: params.string("action")))
+        }
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
