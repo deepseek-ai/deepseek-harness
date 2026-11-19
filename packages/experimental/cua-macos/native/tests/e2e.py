@@ -182,7 +182,7 @@ def main():
                 call("invoke", target)
                 wait_state(lambda state: state["count"] == 1, "Diff snapshot ID did not invoke the button")
                 changed = call("getState", diff_params)
-                assert changed["tree"] != "AX tree unchanged.", changed
+                assert changed["tree"].startswith("AX diff:"), changed
                 secondary_diff = {**secondary_params, "showDiff": True}
                 assert call("getState", secondary_diff)["tree"].startswith("AX scope=window")
                 assert call("getState", diff_params)["tree"] == "AX tree unchanged."
