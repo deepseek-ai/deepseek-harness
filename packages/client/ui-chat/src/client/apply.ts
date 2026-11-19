@@ -7,8 +7,6 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
-import type { SessionAddress } from '@deepseek-ai/dsh-api-session-controller/types'
-import type {} from '@deepseek-ai/dsh-client-ui-compaction/client'
 import type { GroupKey } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -167,15 +165,6 @@ export function apply(ctx: Context): void {
     const accepted = chatSettings.getSnapshot().value?.linkOpening
     if (accepted !== undefined) linkOpening.set(accepted)
   }))
-  const compactionPreview = createSnapshotStore<boolean>(false)
-  let compactionPreviews: Context['compactionPreviews'] | undefined
-  ctx.inject(['compactionPreviews'], (scope) => {
-    scope.effect(() => {
-      compactionPreviews = scope.compactionPreviews
-      compactionPreview.set(true)
-      return () => { compactionPreviews = undefined; compactionPreview.set(false) }
-    }, 'ui-chat: compaction preview availability')
-  })
   ctx.inject(['sidebarRightTabs'], (scope) => {
     const tabs = scope.sidebarRightTabs
     const browserAvailable: ObservableSnapshot<boolean> = {
@@ -288,7 +277,6 @@ export function apply(ctx: Context): void {
           hooks: {
             presentation,
             interactionIds: ctx.uiConversation.interactions,
-            compactionPreview,
           },
           dispatchInteraction: gesture => ctx.uiConversation.interactions.dispatch(sessionId, gesture),
           // Files open in the right Sidebar, not in a desktop application: the
@@ -344,11 +332,6 @@ export function apply(ctx: Context): void {
               .catch(() => {
                 // Fork or child-title failure leaves the source view unchanged.
               })
-          },
-          openCompaction: (seq, signal) => {
-            const child = ctx.sessions.subagentAddress(sessionId)
-            const address: SessionAddress = child === undefined ? { kind: 'session', sessionId } : { kind: 'subagent', ...child }
-            return compactionPreviews?.open(sessionId, address, seq, signal) ?? Promise.resolve(null)
           },
         }
       },

@@ -56,11 +56,14 @@ const sessionId = brandString<SessionId>('session-1')
 const session = { kind: 'session' as const, sessionId }
 
 describe('ui-compaction direct previews', () => {
-  it('reads a checkpoint and passes localized Markdown directly to the preview', async () => {
+  it.each([
+    { address: session, previewId: sessionId },
+    { address: { kind: 'subagent' as const, parentSessionId: sessionId, childSessionId: brandString<SessionId>('child'), mode: 'continuable' as const }, previewId: 'child' },
+  ])('opens a $address.kind checkpoint under its own Session ID', async ({ address, previewId }) => {
     const h = await boot()
     const preview = h.ctx.get('compactionPreviews')!
-    expect(await preview.open(sessionId, session, 7, new AbortController().signal)).toBeNull()
-    expect(h.contentPreviews.open).toHaveBeenCalledWith({ mediaType: 'text/markdown', text: 'Summary\n\n*[compaction:block.image]*' }, { title: 'compaction:preview.title', key: 'compaction:session-1:7' })
+    expect(await preview.open(address, 7, new AbortController().signal)).toBeNull()
+    expect(h.contentPreviews.open).toHaveBeenCalledWith({ mediaType: 'text/markdown', text: 'Summary\n\n*[compaction:block.image]*' }, { title: 'compaction:preview.title', key: `compaction:${previewId}:7` })
     expect(h.dictionaries.has('compaction')).toBe(true)
     await h.fiber.dispose()
     expect(h.ctx.get('compactionPreviews')).toBeUndefined()
@@ -80,7 +83,7 @@ describe('ui-compaction direct previews', () => {
     const h = await boot()
     const controller = new AbortController()
     controller.abort()
-    expect(await h.ctx.get('compactionPreviews')!.open(sessionId, session, 7, controller.signal)).toBeNull()
+    expect(await h.ctx.get('compactionPreviews')!.open(session, 7, controller.signal)).toBeNull()
     expect(h.contentPreviews.open).not.toHaveBeenCalled()
   })
 
@@ -88,7 +91,7 @@ describe('ui-compaction direct previews', () => {
     const h = await boot()
     const result = Promise.withResolvers<{ ok: true; value: SessionEventsPage }>()
     h.events.mockImplementationOnce(() => result.promise)
-    const pending = h.ctx.get('compactionPreviews')!.open(sessionId, session, 7, new AbortController().signal)
+    const pending = h.ctx.get('compactionPreviews')!.open(session, 7, new AbortController().signal)
     await h.fiber.dispose()
     result.resolve({ ok: true, value: page })
     expect(await pending).toBeNull()
@@ -106,7 +109,7 @@ describe('ui-compaction direct previews', () => {
       return result.promise
     }) as never)
     const caller = new AbortController()
-    const pending = h.ctx.get('compactionPreviews')!.open(sessionId, session, 7, caller.signal)
+    const pending = h.ctx.get('compactionPreviews')!.open(session, 7, caller.signal)
     withdraw()
     await vi.waitFor(() => { expect(h.ctx.get('compactionPreviews')).toBeUndefined() })
     expect(transport?.aborted).toBe(true)
@@ -119,7 +122,7 @@ describe('ui-compaction direct previews', () => {
     expect(caller.signal.aborted).toBe(false)
     expect(h.contentPreviews.open).not.toHaveBeenCalled()
     expect(replacement.open).not.toHaveBeenCalled()
-    expect(await h.ctx.get('compactionPreviews')!.open(sessionId, session, 7, caller.signal)).toBeNull()
+    expect(await h.ctx.get('compactionPreviews')!.open(session, 7, caller.signal)).toBeNull()
     expect(replacement.open).toHaveBeenCalledOnce()
   })
 
@@ -128,9 +131,9 @@ describe('ui-compaction direct previews', () => {
     const previews = h.ctx.get('compactionPreviews')!
     const open = previews.open.bind(previews)
     h.events.mockResolvedValueOnce({ ok: true, value: { ...page, records: [] } })
-    expect(await open(sessionId, session, 7, new AbortController().signal)).toBe('compaction:preview.notFound')
+    expect(await open(session, 7, new AbortController().signal)).toBe('compaction:preview.notFound')
     h.events.mockRejectedValueOnce(new Error('connection closed'))
-    expect(await open(sessionId, session, 7, new AbortController().signal)).toBe('compaction:preview.readFailed')
+    expect(await open(session, 7, new AbortController().signal)).toBe('compaction:preview.readFailed')
     expect(h.contentPreviews.open).not.toHaveBeenCalled()
   })
 

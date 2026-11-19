@@ -1,5 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionAddress } from '@deepseek-ai/dsh-api-session-controller/types'
+import type {} from '@deepseek-ai/dsh-client-ui-compaction/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { CompactionRowInjected } from './CompactionItem.tsx'
+import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
 import { NS } from '../locale.ts'
@@ -29,6 +33,23 @@ export function registerChatNodeRenderers(
   performanceUsage: ObservableSnapshot<PerformanceUsageMode>,
   presentation: ObservableSnapshot<ChatPresentationPolicy>,
 ): void {
+  const compactionPreview = createSnapshotStore<boolean>(false)
+  let compactionPreviews: Context['compactionPreviews'] | undefined
+  ctx.inject(['compactionPreviews'], (scope) => {
+    scope.effect(() => {
+      compactionPreviews = scope.compactionPreviews
+      compactionPreview.set(true)
+      return () => { compactionPreviews = undefined; compactionPreview.set(false) }
+    }, 'ui-chat: compaction preview availability')
+  })
+  const injectCompaction = (sessionId: SessionId): CompactionRowInjected => ({
+    hooks: { compactionPreview },
+    openCompaction: (seq, signal) => {
+      const child = ctx.sessions.subagentAddress(sessionId)
+      const address: SessionAddress = child === undefined ? { kind: 'session', sessionId } : { kind: 'subagent', ...child }
+      return compactionPreviews?.open(address, seq, signal) ?? Promise.resolve(null)
+    },
+  })
   ctx.effect(() => ctx.slots.registerFactory({
     name: 'conversation.chat.reasoning.content',
     scope: 'root',
@@ -74,9 +95,9 @@ export function registerChatNodeRenderers(
     children: { 'conversation.chat.commandview': { kind: 'keyed', scope: 'session' } },
   }, CommandNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'manual-compaction', locale: NS }, ManualCompactionNodeView))
+    { name: 'conversation.chat.node', key: 'manual-compaction', locale: NS, inject: injectCompaction }, ManualCompactionNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'compaction', locale: NS }, CompactionNodeView))
+    { name: 'conversation.chat.node', key: 'compaction', locale: NS, inject: injectCompaction }, CompactionNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'inherited-history', locale: NS }, InheritedHistoryNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(

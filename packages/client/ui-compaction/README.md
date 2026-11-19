@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open a checkpoint replacement message in the shared sidebar content preview. Chat asks `ctx.compactionPreviews.open` to read the exact checkpoint when a compact row is clicked; the plugin passes its Markdown directly to `ctx.contentPreviews.open`.
+Open a checkpoint replacement message in the shared sidebar content preview. Chat asks `ctx.compactionPreviews.open(address, seq, signal)` to read the exact checkpoint when a compact row is clicked; the plugin passes its Markdown directly to `ctx.contentPreviews.open`.
 
 ## Table of Contents
 

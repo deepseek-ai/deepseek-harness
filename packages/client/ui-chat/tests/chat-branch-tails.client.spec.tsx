@@ -52,7 +52,7 @@ const useDetachedChat: ChatNodeViewProps['useChat'] = bindSnapshotSelector({
 interface MessageItemProps {
   readonly node: ConversationNode
   readonly t: ChatNodeViewProps['t']
-  readonly openCompaction?: ChatNodeViewProps['openCompaction']
+  readonly openCompaction?: React.ComponentProps<typeof CompactionNodeView>['openCompaction']
   readonly referenceLabels?: readonly string[]
   readonly skillNames?: readonly string[]
 }
@@ -84,7 +84,7 @@ function MessageItem({ node, t: translate, openCompaction, referenceLabels, skil
   }
   const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
     node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot: renderUserFactory,
-    openFile: vi.fn(), useChat: useDetachedChat, openCompaction,
+    openFile: vi.fn(), useChat: useDetachedChat,
   }
   switch (node.kind) {
     case 'user':
@@ -94,7 +94,8 @@ function MessageItem({ node, t: translate, openCompaction, referenceLabels, skil
     case 'context':
       return <ContextMessageNodeView {...props as ChatNodeViewProps<'context'>} />
     case 'compaction':
-      return <CompactionNodeView {...props as ChatNodeViewProps<'compaction'>} />
+      return <CompactionNodeView {...props as ChatNodeViewProps<'compaction'>}
+        openCompaction={openCompaction ?? vi.fn()} useCompactionPreview={select => select(openCompaction !== undefined)} />
     case 'model-retry':
       return <RetryNodeView {...props as ChatNodeViewProps<'model-retry'>} />
     case 'unknown':

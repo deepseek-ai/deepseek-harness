@@ -1,11 +1,12 @@
 // Only a structured checkpoint uses the compaction marker; all other outcomes
 // retain the command's complete settlement text.
 
-import type { ChatNodeOwnerProps, ChatViewSlotProps, CommandRowOwnerProps } from '../contract/slots.ts'
-import { CompactionItem } from './CompactionItem.tsx'
+import type { ChatViewSlotProps, CommandRowOwnerProps } from '../contract/slots.ts'
+import { CompactionItem, type CompactionRowInjected } from './CompactionItem.tsx'
 import { GenericCommandCard } from './GenericCommandCard.tsx'
 
-interface CompactionCommandCardProps extends CommandRowOwnerProps, Pick<ChatNodeOwnerProps, 'openCompaction'> {
+interface CompactionCommandCardProps extends CommandRowOwnerProps {
+  openCompaction: CompactionRowInjected['openCompaction'] | undefined
   t: ChatViewSlotProps['t']
 }
 

@@ -1,14 +1,14 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { IconBranchOutlineRegular, JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
-import { CompactionItem } from './CompactionItem.tsx'
+import { CompactionItem, type CompactionRowInjected } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
 import css from './MessageItem.module.css'
@@ -376,9 +376,10 @@ export const ContextMessageNodeView = memo(function ContextMessageNodeView({ nod
 
 /** Automatic compaction keyed Chat renderer. */
 export const CompactionNodeView = memo(function CompactionNodeView({
-  node, openCompaction, t,
-}: ChatNodeViewProps<'compaction'>) {
-  return <CompactionItem node={node.data} openCompaction={openCompaction} t={t} />
+  node, openCompaction, useCompactionPreview, t,
+}: ChatNodeViewProps<'compaction'> & InjectFace<CompactionRowInjected>) {
+  const available = useCompactionPreview(value => value)
+  return <CompactionItem node={node.data} openCompaction={available ? openCompaction : undefined} t={t} />
 })
 
 /** Divider between a forked Session's inherited history and its own messages. */

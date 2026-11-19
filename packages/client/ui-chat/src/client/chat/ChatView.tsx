@@ -64,8 +64,8 @@ const MOTION_TAIL_MS = 800
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
-  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, openCompaction,
-  usePresentation, useProjection, useInteractionIds, useCompactionPreview, dispatchInteraction, t, fileDrag,
+  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
+  usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
   const getMarkdownTriggerProps = useCallback((target: MarkdownMenuTarget) => getTriggerProps(() => {
@@ -228,7 +228,6 @@ export function ChatView({
   const interactionIds = useInteractionIds(ids => ids)
   const textInteraction = useTextInteraction(scroll.columnRef, interactionSurfaceRef, dispatchInteraction, interactionIds)
   const flowContext = useMemo<ChatFlowHookContext>(() => ({ motion: scroll.motion }), [scroll.motion])
-  const compactionPreview = useCompactionPreview(available => available)
 
   return (
     <div className={css.frame}>
@@ -284,7 +283,6 @@ export function ChatView({
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
                 cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
-                openCompaction: compactionPreview ? openCompaction : undefined,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""

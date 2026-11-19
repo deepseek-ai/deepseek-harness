@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在共享侧栏内容预览中打开 checkpoint 替换消息。点击聊天压缩行时，Chat 调用 `ctx.compactionPreviews.open` 读取指定 checkpoint，插件再把 Markdown 直接交给 `ctx.contentPreviews.open`。
+在共享侧栏内容预览中打开 checkpoint 替换消息。点击聊天压缩行时，Chat 调用 `ctx.compactionPreviews.open(address, seq, signal)` 读取指定 checkpoint，插件再把 Markdown 直接交给 `ctx.contentPreviews.open`。
 
 ## 目录
 

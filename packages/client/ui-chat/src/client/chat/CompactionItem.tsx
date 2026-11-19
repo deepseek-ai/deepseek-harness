@@ -7,12 +7,20 @@ import {
   IconChevronRightOutlineRegular,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { CompactionSummaryNode } from '../contract/snapshot.ts'
 import a11yCss from './accessibility.module.css'
 import css from './MessageItem.module.css'
 
-interface CompactionItemProps extends Pick<ChatNodeOwnerProps, 'openCompaction'> {
+/** Session-bound checkpoint navigation for manual and automatic compaction rows. */
+export interface CompactionRowInjected {
+  hooks: { compactionPreview: ObservableSnapshot<boolean> }
+  openCompaction: (seq: number, signal: AbortSignal) => Promise<string | null>
+}
+
+interface CompactionItemProps {
+  openCompaction: CompactionRowInjected['openCompaction'] | undefined
   node: CompactionSummaryNode
   /** Optional command title for a manual compaction folded into this marker. */
   title?: string

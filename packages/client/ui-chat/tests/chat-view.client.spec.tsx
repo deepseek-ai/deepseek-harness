@@ -314,12 +314,13 @@ function HarnessUserOrigin({ useRenderer, owner, options }: {
 }
 
 function HarnessChatNode({
-  standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot, renderUserChain,
+  standard, owner, hookContext, compaction, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot, renderUserChain,
 }: {
   readonly standard: HarnessStandardProps
   readonly owner: RoutedChatNodeOwner
   readonly hookContext: ChatNodeHookContext
   readonly usePerformanceUsage: React.ComponentProps<typeof TurnTailNodeView>['usePerformanceUsage']
+  readonly compaction: Pick<React.ComponentProps<typeof CompactionNodeView>, 'openCompaction' | 'useCompactionPreview'>
   readonly toolOwners: ToolOwner[]
   readonly fallback: React.ReactNode
   readonly renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot']
@@ -344,9 +345,9 @@ function HarnessChatNode({
     case 'command':
       return <CommandNodeView {...nodeProps} node={owner.node} renderSlot={renderCommandSlot} />
     case 'manual-compaction':
-      return <ManualCompactionNodeView {...nodeProps} node={owner.node} />
+      return <ManualCompactionNodeView {...nodeProps} {...compaction} node={owner.node} />
     case 'compaction':
-      return <CompactionNodeView {...nodeProps} node={owner.node} />
+      return <CompactionNodeView {...nodeProps} {...compaction} node={owner.node} />
     case 'model-retry':
       return <RetryNodeView {...nodeProps} node={owner.node} />
     case 'turn-error':
@@ -454,6 +455,7 @@ function makeHarness(
   const forkAt = vi.fn()
   const openCompaction = vi.fn<(seq: number, signal: AbortSignal) => Promise<string | null>>(async () => null)
   const compactionPreview = createSnapshotStore(true)
+  const compaction = { openCompaction, useCompactionPreview: bindSnapshotSelector(compactionPreview) }
   // Rows and the harness must observe the same chat-store instance.
   const chat = createChatStore().create()
   const transcriptView = createSnapshotStore<TranscriptViewMode>('compact')
@@ -477,7 +479,7 @@ function makeHarness(
     name === 'conversation.chat.message.images' ? renderImages(name, owner, options) : renderReasoningSlot(name, owner, options)
   const renderNodeSlot: NodeRenderer = (key, owner, opts) => {
     if (nodeSlotOverride !== undefined) return nodeSlotOverride(key, owner, opts)
-    return <HarnessChatNode standard={props} owner={owner}
+    return <HarnessChatNode compaction={compaction} standard={props} owner={owner}
       hookContext={opts.hookContext} usePerformanceUsage={usePerformanceUsage}
       toolOwners={toolOwners} fallback={opts.fallback} renderAssistantSlot={renderAssistantSlot}
       renderUserChain={renderUserChain} />
@@ -571,7 +573,6 @@ function makeHarness(
     useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
     dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
-    useCompactionPreview: bindSnapshotSelector(compactionPreview),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
@@ -587,7 +588,6 @@ function makeHarness(
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     chatScroll,
     forkAt,
-    openCompaction,
     // Absent-service default; mention tests override with a real resolver.
     fileMentions: () => undefined,
     t,

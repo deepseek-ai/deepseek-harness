@@ -1,3 +1,4 @@
+import type { CompactionRowInjected } from '../src/client/chat/CompactionItem.tsx'
 import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AssistantNodeInjected } from '../src/client/chat/AssistantNodeView.tsx'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
@@ -143,6 +144,11 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     return { instance, injected: injectFlow(reference.sessionId) }
   }
   return {
+    compactionRow(key: 'compaction' | 'manual-compaction') {
+      const entry = runtime.slots.entries('conversation.chat.node').find(row => row.options.key === key)!
+      const inject = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => CompactionRowInjected)
+      return inject(ROOT)
+    },
     get linkPreference() {
       const row = runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'link-opening')!
       const preference: object = row.inject!()
@@ -461,17 +467,17 @@ describe('Chat inject API', () => {
     const b = await bench()
     const open = vi.fn(async () => null)
     try {
-      const { injected } = b.chatViewApi(b.rootReference)
+      const injected = b.compactionRow('compaction')
       const signal = new AbortController().signal
       expect(await injected.openCompaction(42, signal)).toBeNull()
       const service = await b.runtime.mount({ apply(ctx) { ctx.provide('compactionPreviews', { open }) } })
       await vi.waitFor(() => { expect(injected.hooks.compactionPreview.getSnapshot()).toBe(true) })
       await injected.openCompaction(42, signal)
-      expect(open).toHaveBeenLastCalledWith(ROOT, { kind: 'session', sessionId: ROOT }, 42, signal)
+      expect(open).toHaveBeenLastCalledWith({ kind: 'session', sessionId: ROOT }, 42, signal)
       const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
       vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
       await injected.openCompaction(7, signal)
-      expect(open).toHaveBeenLastCalledWith(ROOT, { kind: 'subagent', ...child }, 7, signal)
+      expect(open).toHaveBeenLastCalledWith({ kind: 'subagent', ...child }, 7, signal)
       await service.dispose()
       expect(injected.hooks.compactionPreview.getSnapshot()).toBe(false)
     } finally { await b.runtime.dispose() }
@@ -480,7 +486,7 @@ describe('Chat inject API', () => {
   it('tracks preview service availability independently of sidebar tab registration', async () => {
     const b = await bench(undefined, false)
     try {
-      const preview = b.chatViewApi(b.rootReference).injected.hooks.compactionPreview
+      const preview = b.compactionRow('manual-compaction').hooks.compactionPreview
       expect(preview.getSnapshot()).toBe(false)
       const changed = vi.fn()
       const unsubscribe = preview.subscribe(changed)
