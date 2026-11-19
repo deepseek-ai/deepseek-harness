@@ -5,7 +5,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { Config } from './config.ts'
 import { isWorker } from './delegation.ts'
 import type { OwnsAgent } from './delegation.ts'
-import { languageText, outputLanguage } from './policy.ts'
+import { fixedText } from './policy.ts'
 import type { TimelineStorage } from './storage.ts'
 import { prioritizedTasks } from './tasks.ts'
 
@@ -58,7 +58,7 @@ export function installReminders(ctx: Context, config: Config, storage: Timeline
             source: {
               kind: 'timeline-priority',
               form: 'notice',
-              summary: languageText[outputLanguage(config.language, config.uiLanguage)].priority,
+              summary: fixedText(config.language, config.uiLanguage).priority,
             },
             content: [
               {

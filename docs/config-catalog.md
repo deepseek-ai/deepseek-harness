@@ -4467,7 +4467,7 @@ export interface Config {
   reportReasoningEffort?: string
 }
 
-/** A fixed output language or the app preference. */
+/** A fixed output language, the app preference, or the language the agent chooses from the chat. */
 export type Language = (typeof languages)[number]
 
 /** One language supported for Timeline model output. */
