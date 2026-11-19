@@ -1,4 +1,4 @@
-/** Required browser budget for transcript restyles while the right Sidebar is dragged beside a long history. */
+/** Required browser budgets for restyles and script-nested layout while dragging the right Sidebar beside a long history. */
 import { chromium, type Browser, type Page } from 'playwright'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, seedSession, watchConsole, webSnapshotMode } from '../../apps/web/tests/scaffold.ts'
@@ -19,21 +19,32 @@ const TAIL = '[data-chat-flow-key*="turn-tail"]'
  * changes stays far below a single multiple.
  */
 const RESTYLE_BUDGET = 1
+/** The regression put one layout inside script per step; occasional script-nested layouts need not be waste. */
+const SCRIPT_NESTED_LAYOUT_BUDGET = STEPS / 2
+const SCRIPT_EVENTS = new Set(['FunctionCall', 'EventDispatch', 'FireAnimationFrame', 'TimerFire', 'RunMicrotasks', 'v8.callFunction'])
 
 interface TraceEvent {
   name: string
   ph: string
+  pid: number
+  tid: number
+  ts: number
   dur?: number
   args?: { elementCount?: number }
 }
 
-/** Measurements of one drag; only `restyleRatio` is budgeted. */
-interface DragSample {
-  restyleRatio: number
+interface TraceSummary {
   styledElements: number
   styleMs: number
   layoutMs: number
+  layoutCount: number
+  scriptNestedLayoutCount: number
+}
+
+interface DragSample extends TraceSummary {
+  restyleRatio: number
   frameP95Ms: number
+  columnWidthBefore: number
   columnWidth: number
 }
 
@@ -46,15 +57,23 @@ function median(values: number[]): number {
 }
 
 /** Style recalculation and layout totals from a Chromium timeline trace. */
-function summarizeTrace(buffer: Buffer): { styledElements: number; styleMs: number; layoutMs: number } {
+function summarizeTrace(buffer: Buffer): TraceSummary {
   const parsed = JSON.parse(buffer.toString('utf8')) as { traceEvents: TraceEvent[] } | TraceEvent[]
   const events = (Array.isArray(parsed) ? parsed : parsed.traceEvents).filter(event => event.ph === 'X')
   const styles = events.filter(event => event.name === 'UpdateLayoutTree')
+  const layouts = events.filter(event => event.name === 'Layout')
+  const scripts = events.filter(event => SCRIPT_EVENTS.has(event.name))
+  expect(scripts.length, 'drag trace must contain script events').toBeGreaterThan(0)
+  const end = (event: TraceEvent): number => event.ts + (event.dur ?? 0)
   const ms = (list: TraceEvent[]): number => list.reduce((total, event) => total + (event.dur ?? 0), 0) / 1000
   return {
     styledElements: styles.reduce((total, event) => total + (event.args?.elementCount ?? 0), 0),
     styleMs: ms(styles),
-    layoutMs: ms(events.filter(event => event.name === 'Layout')),
+    layoutMs: ms(layouts),
+    layoutCount: layouts.length,
+    scriptNestedLayoutCount: layouts.filter(layout => scripts.some(script =>
+      script.pid === layout.pid && script.tid === layout.tid && script.ts <= layout.ts && end(layout) <= end(script),
+    )).length,
   }
 }
 
@@ -79,6 +98,8 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
   if (box === null) throw new Error('right Sidebar resize handle missing')
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
+  const readColumnWidth = (): Promise<number> => page.locator('[data-chat-flow]').first().evaluate(element => element.getBoundingClientRect().width)
+  const columnWidthBefore = await readColumnWidth()
   await page.evaluate(() => {
     const probe = { frames: [] as number[], running: true }
     ;(window as FrameProbe).benchmarkFrames = probe
@@ -106,14 +127,12 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
     return probe.frames
   })
   const gaps = frames.slice(1).map((time, index) => time - frames[index]!).sort((a, b) => a - b)
-  const columnWidth = await page.locator('[data-chat-flow]').first().evaluate(element => element.getBoundingClientRect().width)
   return {
+    ...trace,
     restyleRatio: trace.styledElements / elements,
-    styledElements: trace.styledElements,
-    styleMs: trace.styleMs,
-    layoutMs: trace.layoutMs,
     frameP95Ms: gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.95))] ?? 0,
-    columnWidth,
+    columnWidthBefore,
+    columnWidth: await readColumnWidth(),
   }
 }
 
@@ -126,7 +145,18 @@ it('accepts recorded restyle ratios and rejects a drag that restyles the transcr
   expect(() => expectRestylesWithinBudget(RESTYLE_BUDGET + 0.01)).toThrow()
 })
 
-it(`restyles a bounded share of the page while the right Sidebar is dragged beside ${String(HISTORY_TURNS)} turns`, async () => {
+it('counts each layout enclosed by script on the same thread once, including frame callbacks', () => {
+  const event = (name: string, ts: number, dur: number, pid = 1, tid = 1): TraceEvent => ({ name, ph: 'X', ts, dur, pid, tid })
+  const events = [
+    event('FireAnimationFrame', 10, 10), event('FunctionCall', 11, 5),
+    event('Layout', 10, 10), event('Layout', 12, 1),
+    event('Layout', 19, 2), event('Layout', 12, 1, 2, 1), event('Layout', 12, 1, 1, 2),
+    event('PrePaint', 30, 5), event('Layout', 31, 1),
+  ]
+  expect(summarizeTrace(Buffer.from(JSON.stringify(events)))).toMatchObject({ layoutCount: 6, scriptNestedLayoutCount: 2 })
+})
+
+it(`bounds restyles and script-nested layouts while the right Sidebar is dragged beside ${String(HISTORY_TURNS)} turns`, async () => {
   if (webSnapshotMode() !== 'replay') throw new Error('browser benchmarks require keyless replay mode')
   const samples: Record<'widen' | 'narrow', DragSample[]> = { widen: [], narrow: [] }
   for (let sample = 0; sample < SAMPLES; sample++) {
@@ -153,10 +183,14 @@ it(`restyles a bounded share of the page while the right Sidebar is dragged besi
         const elements = await page.evaluate(() => document.querySelectorAll('*').length)
         for (const [direction, key] of [[1, 'widen'], [-1, 'narrow']] as const) {
           const result = await drag(browser, page, direction, elements)
-          // The budget presumes an unchanged content width: the column stays below its floor.
-          expect(result.columnWidth).toBeLessThan(CONTENT_WIDTH_FLOOR_PX)
-          samples[key].push(result)
           console.log(JSON.stringify({ benchmark: 'rightbar-drag-browser/sample', sample, direction: key, elements, ...result }))
+          // The transcript column moves opposite the Sidebar width while the resolved content width stays at its floor.
+          expect(Math.max(result.columnWidthBefore, result.columnWidth)).toBeLessThan(CONTENT_WIDTH_FLOOR_PX)
+          if (key === 'widen') expect(result.columnWidth).toBeLessThan(result.columnWidthBefore)
+          else expect(result.columnWidth).toBeGreaterThan(result.columnWidthBefore)
+          expect(result.layoutCount).toBeGreaterThan(0)
+          expect(result.scriptNestedLayoutCount).toBeLessThanOrEqual(SCRIPT_NESTED_LAYOUT_BUDGET)
+          samples[key].push(result)
         }
         expect(consoleWatch.pageErrors).toEqual([])
       } catch (error) { failures.push(error) } finally {

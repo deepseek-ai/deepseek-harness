@@ -158,9 +158,8 @@ function WidthHandle(props: {
  * @returns two active-phase width handles, or no controls outside the active phase.
  */
 export function ConversationWidthControls({ container, phase }: ConversationWidthControlsProps) {
-  const publishWidths = useCallback((container: HTMLDivElement): void => {
+  const publishWidths = useCallback((container: HTMLDivElement, column: number): void => {
     // The axis registers these inputs without inheritance, so they belong on the body that derives from them.
-    const column = container.offsetWidth
     container.style.setProperty('--dsh-conversation-column-width', `${column}px`)
     const preference = readWidthPreference()
     if (preference === null) container.style.removeProperty('--dsh-chat-user-width')
@@ -169,9 +168,13 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
 
   useLayoutEffect(() => {
     if (container === null) return
-    const observer = new ResizeObserver(() => { publishWidths(container) })
-    observer.observe(container)
-    publishWidths(container)
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        for (const size of entry.borderBoxSize) publishWidths(container, Math.round(size.inlineSize))
+      }
+    })
+    observer.observe(container, { box: 'border-box' })
+    publishWidths(container, container.offsetWidth)
     return () => { observer.disconnect() }
   }, [container, publishWidths])
 
@@ -188,7 +191,7 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
     localStorage.setItem(WIDTH_PREF_KEY, `${resolveContentWidth(container.offsetWidth, width)}`)
   }, [container])
   const onEnd = useCallback((): void => {
-    if (container !== null) publishWidths(container)
+    if (container !== null) publishWidths(container, container.offsetWidth)
   }, [container, publishWidths])
 
   if (container === null || phase !== 'active') return null

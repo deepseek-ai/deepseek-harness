@@ -12,7 +12,7 @@ Dragging the right Sidebar beside a long transcript stalled for hundreds of mill
 
 The [right Sidebar drag benchmark](../../../../benchmarks/rightbar-drag-browser/README.md) joins the serial browser inventory. It loads a 120-turn synthetic Session completely, opens the right Sidebar, and drags its handle 40 trusted 8px mouse steps outward and back in a 1680×1000 viewport, in two fresh scaffold worlds and browsers. At that width the transcript column stays below the 680px content-width floor, and each drag asserts it, so the drag changes the column but not the resolved content width.
 
-The budget is a dimensionless count: the elements reported by every `UpdateLayoutTree` trace event during one drag, divided by the page's element count, as a median per direction, at most 1. A drag that restyles the transcript on every frame reaches about one multiple per frame; the fixed drag stays far below one multiple in total. The count does not depend on CPU speed, so it takes neither the shared time scale nor the variance headroom, and no wall-clock endpoint is budgeted or passed to the scaling report.
+The restyle budget is a dimensionless count: the elements reported by every `UpdateLayoutTree` trace event during one drag, divided by the page's element count, as a median per direction, at most 1. A drag that restyles the transcript on every frame reaches about one multiple per frame; the fixed drag stays far below one multiple in total. The count does not depend on CPU speed, so it takes neither the shared time scale nor the variance headroom, and no wall-clock endpoint is budgeted or passed to the scaling report.
 
 ## Calibration
 
@@ -26,6 +26,8 @@ Local Linux x64 Chromium samples, 40-step drags:
 
 The restyled count after the change is identical across samples and history lengths, so the ratio leaves more than five times headroom at 120 turns, while the pre-change behavior exceeds the budget fifty-fold. The case's first test replays these recorded values as its negative control.
 
+In the 120-turn Chromium trace, 40 `Layout` events per direction ran inside script before the geometry-read fix and none afterwards. A second budget allows 20 script-nested layouts per drag: it rejects repeated synchronous layout without requiring every callback to be layout-free or penalizing normal reflow after script returns.
+
 ## Alternatives considered
 
 - Budget frame gaps or style milliseconds. Rejected for the gate: they need browser-runner calibration that does not exist yet, and they also include the transcript reflow at each new column width, which a resize legitimately pays. They remain diagnostics.
@@ -34,4 +36,4 @@ The restyled count after the change is identical across samples and history leng
 
 ## Consequences
 
-A regression that again publishes per-frame inputs to the transcript fails CI within one benchmark run, with no timing calibration. The case does not measure layout or paint cost, window resizing, the Conversation's own width handles, or a docked Session panel, whose end reserve can change the content inset during a drag. Chromium's element counting may change across browser versions; an upgrade that moves the counts re-records the calibration values above and in the negative control.
+A regression that again publishes per-frame inputs to the transcript fails CI within one benchmark run, with no timing calibration. The case does not cap total layout or paint cost, nor does it cover window resizing, the Conversation's own width handles, or a docked Session panel, whose end reserve can change the content inset during a drag. Chromium's element counting may change across browser versions; an upgrade that moves the counts re-records the calibration values above and in the negative control.

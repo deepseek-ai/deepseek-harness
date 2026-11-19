@@ -79,9 +79,14 @@ class ResizeObserverStub {
 }
 
 /** Fires every recorded observer whose target list includes the element. */
-function fireResize(el: Element): void {
+function fireResize(el: Element, inlineSize = 0): void {
+  const size = [{ inlineSize, blockSize: 0 }]
+  const change: ResizeObserverEntry = {
+    target: el, contentRect: new DOMRectReadOnly(0, 0, inlineSize, 0),
+    borderBoxSize: size, contentBoxSize: size, devicePixelContentBoxSize: size,
+  }
   for (const entry of resizeObservers) {
-    if (entry.targets.includes(el)) entry.callback([], undefined as never)
+    if (entry.targets.includes(el)) entry.callback([change], undefined as never)
   }
 }
 
@@ -836,22 +841,22 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('folds and restores Views on container resize without changing selection, and disconnects on unmount', () => {
-    let width = 1000
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+    const liveWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000)
     const viewTabs = ['chat', 'trajectory', 'timeline', 'inspector', 'notes'].map(id => ({ id, label: id }))
     const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, entryActions: true })
     const row = b.view.getByRole('tablist').parentElement!
     const external = () => within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent)
     expect(external()).toEqual(viewTabs.map(tab => tab.label))
     act(() => { b.store.actions.setView('notes') })
-    width = 300
-    act(() => { fireResize(row) })
+    liveWidth.mockClear()
+    // 287.6px rounds to 288px (two Views); do not re-read a changed DOM during delivery.
+    act(() => { fireResize(row, 287.6) })
     expect(external()).toEqual(['chat', 'trajectory'])
     fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
     expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['timeline', 'inspector', 'notes'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'notes')?.active).toBe(true)
-    width = 1000
-    act(() => { fireResize(row) })
+    act(() => { fireResize(row, 1000) })
+    expect(liveWidth.mock.contexts).not.toContain(row)
     expect(external()).toEqual(viewTabs.map(tab => tab.label))
     expect(b.view.getByRole('tab', { name: 'notes' }).getAttribute('aria-selected')).toBe('true')
     expect(b.actionsOwner().entries).toEqual([])
@@ -953,11 +958,10 @@ describe('ConversationRoot resident composer', () => {
   it('publishes the column width as a px variable on the body for the shared width axis', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
-    // jsdom offsetWidth is 0 until faked: the observer publishes whatever the
-    // layout reports, and the CSS clamp() floors the axis at 680px either way.
-    Object.defineProperty(content, 'offsetWidth', { value: 1200, configurable: true })
-    act(() => { fireResize(content) })
+    const readWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+    act(() => { fireResize(content, 1199.75) })
     expect(content.style.getPropertyValue('--dsh-conversation-column-width')).toBe('1200px')
+    expect(readWidth.mock.contexts).not.toContain(content)
     // No dragged preference: the user-width override stays absent so the
     // adaptive clamp term applies.
     expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('')
@@ -967,7 +971,7 @@ describe('ConversationRoot resident composer', () => {
     const b = mount(sessionSnapshotOf())
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
     Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
-    act(() => { fireResize(content) })
+    act(() => { fireResize(content, 1600) })
     const handle = b.view.container.querySelector('[data-width-handle="right"]') as HTMLElement
     expect(handle).not.toBeNull()
     // jsdom lacks pointer capture: emulate per-element so hasPointerCapture
@@ -994,7 +998,7 @@ describe('ConversationRoot resident composer', () => {
       // Window shrinks: the displayed width re-clamps (900 − 176 = 724) but the
       // preference stays.
       Object.defineProperty(content, 'offsetWidth', { value: 900, configurable: true })
-      act(() => { fireResize(content) })
+      act(() => { fireResize(content, 900) })
       expect(content.style.getPropertyValue('--dsh-chat-user-width')).toBe('724px')
       expect(localStorage.getItem('dsh.conversation.contentWidth')).toBe('930')
       // A press without travel (a real double-click delivers two such
@@ -1020,7 +1024,7 @@ describe('ConversationRoot resident composer', () => {
     const content = b.view.container.querySelector('[data-conversation-content]') as HTMLElement
     const scrollport = content.querySelector('[data-conversation-scroll]') as HTMLElement
     Object.defineProperty(content, 'offsetWidth', { value: 1600, configurable: true })
-    act(() => { fireResize(content) })
+    act(() => { fireResize(content, 1600) })
     const handle = b.view.container.querySelector('[data-width-handle="left"]') as HTMLElement
     const names = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const
     const originals = names.map(name =>

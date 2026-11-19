@@ -3,11 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write benchmarks/rightbar-drag-browser/README.md
 /right-sidebar-drag-browser-benchmark:
-  en: bbe1460bb1b69b8d
-  zh: 3a87f9a9dbc13035
+  en: 0ec06c11a4e9680c
+  zh: 2aa104d63575bfcf
 /right-sidebar-drag-browser-benchmark/run:
   en: 0dce8b92617ea78b
   zh: 22ce9ccc29acda36
 /right-sidebar-drag-browser-benchmark/measurements:
-  en: e503574efa0e3661
-  zh: 0e5ae1bc2e804773
+  en: 9c4cc8759b4f90e8
+  zh: 027d11cb574e36e0
