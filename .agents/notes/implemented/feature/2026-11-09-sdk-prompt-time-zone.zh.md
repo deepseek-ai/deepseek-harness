@@ -29,7 +29,7 @@ Web 与 Desktop 的 prompt 携带浏览器时区，Host 规范化后把它记录
 
 ## 影响
 
-- 不传时区的 SDK 嵌入方现在上报运行时进程时区。容器中通常是 `UTC`，可能与用户时区不同；[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.1/sdk-prompt-time-zone/guide.zh.md)要求使用方传入 `timeZone` 或 `time_zone`，或设置 `TZ`。
+- 不传时区的 SDK 嵌入方现在上报运行时进程时区。容器中通常是 `UTC`，可能与用户时区不同；[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.5/sdk-prompt-time-zone/guide.zh.md)要求使用方传入 `timeZone` 或 `time_zone`，或设置 `TZ`。
 - SDK subagent 子运行时收到的 prompt 不带时区，因此上报自身进程时区；进程内子 agent 与 Web 上一样看到 `unavailable`。
 - 早于放宽检查的读取方会忽略 SDK prompt 的时区；[持久化记录](../../../../docs/persistence-changes/2026-11-09-sdk-prompt-time-zone.zh.md)保持格式版本不变。
 - `packages/sdk/server/tests/time-zone.spec.ts` 固定规范化、拒绝、采样与不可用时区，`session/query` 路由，以及 SDK 与原生命令路径上一致的 `/plan` 来源。`apps/cli/tests/profiles/sdk/keyless-smoke.e2e.ts` 通过随发行版交付的 `sdk` profile 断言模型可见的那一行。SDK snapshot 驱动发送 `timeZone: 'UTC'` 并在 `TZ=UTC` 下运行。

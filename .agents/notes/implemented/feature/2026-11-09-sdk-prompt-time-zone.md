@@ -29,7 +29,7 @@ The zone stays request-local message source data, as in the [explicit Schedule t
 
 ## Consequences
 
-- SDK embeddings that pass no zone now report the runtime process zone. In a container this is usually `UTC`, which may differ from the user's zone; the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.1/sdk-prompt-time-zone/guide.md) tells consumers to pass `timeZone` or `time_zone`, or to set `TZ`.
+- SDK embeddings that pass no zone now report the runtime process zone. In a container this is usually `UTC`, which may differ from the user's zone; the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-rc.5/sdk-prompt-time-zone/guide.md) tells consumers to pass `timeZone` or `time_zone`, or to set `TZ`.
 - SDK subagent children receive prompts without a zone, so they report their own process zone; in-process children see `unavailable`, as on Web.
 - A reader that predates the relaxed check ignores an SDK prompt zone; the [persistence record](../../../../docs/persistence-changes/2026-11-09-sdk-prompt-time-zone.md) keeps the format version.
 - `packages/sdk/server/tests/time-zone.spec.ts` pins canonical, rejected, sampled, and unusable zones, the `session/query` route, and matching `/plan` sources on the SDK and native command paths. `apps/cli/tests/profiles/sdk/keyless-smoke.e2e.ts` asserts the model-visible line through the shipped `sdk` profile. The SDK snapshot driver sends `timeZone: 'UTC'` and runs with `TZ=UTC`.
