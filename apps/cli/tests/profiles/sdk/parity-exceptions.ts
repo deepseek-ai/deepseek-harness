@@ -42,15 +42,4 @@ export const parityExceptions: readonly ParityException[] = [
   { kind: 'config', key: 'tool-workflow:/disabled', modes: ['ptc'], reason: ptcWorkflow },
   { kind: 'section', key: 'tools:sdk', modes: ['ptc'],
     reason: 'The section renders every admitted tool as a TypeScript binding, so it carries the subagent model selection and SDK workflow differences recorded above.' },
-
-  // Inconsistencies to fix.
-  { kind: 'config', key: 'plan-mode:/config/section', modes: both,
-    reason: 'The base row the SDK inherits keeps an older plan mode text ("remain listed only to keep the request shape stable") than the Desktop presets ("remain listed to keep the tool catalog unchanged").',
-    debt: { issue: '#8556' } },
-  { kind: 'config', key: 'skill-filesystem:/config', modes: ['standard'],
-    reason: 'The Desktop standard preset adds the agent-preset skills directory, which carries dsh-doc; the SDK profile does not.',
-    debt: { issue: '#8557' } },
-  { kind: 'skill', key: 'dsh-doc', side: 'desktop', modes: ['standard'],
-    reason: 'The Desktop standard preset adds the agent-preset skills directory, which carries dsh-doc; the SDK profile does not.',
-    debt: { issue: '#8557' } },
 ]
