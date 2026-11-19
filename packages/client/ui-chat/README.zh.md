@@ -162,7 +162,7 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 
 轮次轨道与回到底部按钮位于正文裁剪层外。34px 的回到底部按钮居中容纳 16px 箭头，描边固定为 1px。它们相对共享会话滚动容器做 sticky 定位；Chat 自己持有滚动容器时，则相对 Chat 外框做 absolute 定位。轮次轨道贴在滚动容器的起始边，把末端留白让给[会话面板](../ui-session-panel/README.zh.md)，预览朝正文方向弹出。正文扣除水平内边距后的可用宽度不超过 900px 时，隐藏轮次轨道；判断依据不是浏览器视口宽度。
 
-`conversation.chat.aside` slot 放一个位于正文旁边、面向整个会话的组件，例如[会话面板](../ui-session-panel/README.zh.md)。每个 Chat 视图实例（主正文区或嵌入的）都会渲染它：它位于 Chat 外框顶部的零高度图层中，定位方式与轮次轨道相同，因此不随正文滚动，并从共享滚动容器继承 `--dsh-composer-height` 与 `--dsh-conversation-viewport-height`。该图层叠在轮次轨道与回到底部按钮之上，自身不拦截指针事件。图层不做任何测量：它的样式表把末端留白（居中的正文列到外框末端边缘之间的行向空间）发布为自定义属性 `--dsh-chat-aside-gutter`，值为 `max(0px, (100% - var(--dsh-chat-content-width)) / 2)`。其中的百分比在以该图层为包含块的元素的行向尺寸里按图层宽度解析，因此占位组件用 CSS 决定自身的尺寸与位置，Chat 视图既不为它重新渲染，也不为它观察尺寸。
+`conversation.chat.aside` slot 放一个位于正文旁边、面向整个会话的组件，例如[会话面板](../ui-session-panel/README.zh.md)。每个 Chat 视图实例（主正文区或嵌入的）都会渲染它：它位于 Chat 外框顶部的零高度图层中，定位方式与轮次轨道相同，因此不随正文滚动，并从共享滚动容器继承 `--dsh-composer-height` 与 `--dsh-conversation-viewport-height`。该图层叠在轮次轨道与回到底部按钮之上，自身不拦截指针事件。图层不做任何测量：它的样式表把末端留白（正文列到外框末端边缘之间的行向空间）发布为自定义属性 `--dsh-chat-aside-gutter`。正文居中时，它的值为 `max(0px, (100% - var(--dsh-chat-content-width)) / 2)`。Conversation 主体保留[末端预留](../ui-conversation/README.zh.md#end-reserve)时，外框比滚动容器窄 `--dsh-chat-end-inset`；图层越过这段内边距延伸到滚动容器的末端边缘，留白也把它计算在内。图层的外边距跟随主体的 `--dsh-chat-end-reserve-transition`，因此内边距过渡期间图层的末端边缘始终贴着滚动容器的末端边缘。其中的百分比在以该图层为包含块的元素的行向尺寸里按图层宽度解析，因此占位组件用 CSS 决定自身的尺寸与位置，Chat 视图既不为它重新渲染，也不为它观察尺寸。
 
 正文根节点使用 `overflow-x: visible; overflow-y: clip`：裁剪纵向溢出，但不创建滚动容器。因此，在没有更近的滚动祖先时，Markdown 代码块的 sticky 头栏和展开的压缩摘要头栏仍以实际会话滚动容器为参照。限高过程组和终端区域保留各自的滚动容器。
 

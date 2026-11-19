@@ -2467,7 +2467,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.environment.row\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.environment.row\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:45',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:51',
   },
   {
     key: 'conversation.session.panel.indicator',
@@ -2531,14 +2531,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.indicator\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.indicator\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:38',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:44',
   },
   {
     key: 'conversation.session.panel.section',
     kind: 'list',
     scope: 'session',
     summary: 'Sections of the Session panel.',
-    doc: 'Sections of the Session panel. `id` addresses the section, `order` sorts\nthe sections ascending, and the required `label` is the section title,\nwhich the panel draws. A section with nothing to show renders nothing,\nand the panel hides its title with it.',
+    doc: 'Sections of the Session panel. `id` addresses the section, `order` sorts\nthe sections ascending until the reader drags them into another order,\nand the required `label` is the section title, which the panel draws.\nThe built-in Environment section always shows first. A section with\nnothing to show renders nothing, and the panel hides its title with it.',
     registerOptions: [
       {
         name: 'id',
@@ -2593,20 +2593,20 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-agent-team TeamBoard id \'shared-tasks\'',
       'client-ui-jobs JobsSection id \'background-jobs\'',
-      'client-ui-session-panel EnvironmentSection id \'environment\'',
+      'client-ui-session-panel EnvironmentSection',
       'client-ui-subagent SubagentsSection id \'subagents\'',
       'experimental-client-ui-forge ChangeRequestsSection id \'change-requests\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.section\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.section\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:23',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:24',
   },
   {
     key: 'conversation.session.panel.section.actions',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Trailing controls of one section title, keyed by the section\'s `id`.',
-    doc: 'Trailing controls of one section title, keyed by the section\'s `id`.',
+    summary: 'Trailing content of one section title, such as a count, keyed by the section\'s `id`.',
+    doc: 'Trailing content of one section title, such as a count, keyed by the\nsection\'s `id`. In every section but Environment the drag handle shows\nin its place while the title row is hovered, so it holds content to\nread, not a control to press.',
     registerOptions: [
       {
         name: 'key',
@@ -2649,7 +2649,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.section.actions\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.section.actions\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-session-panel/src/client/slots.ts:29',
+    source: 'packages/client/ui-session-panel/src/client/slots.ts:35',
   },
   {
     key: 'conversation.trajectory.images',

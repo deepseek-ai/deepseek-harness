@@ -27,6 +27,22 @@ function resolveContentWidth(columnWidth: number, preference: number | null): nu
   return Math.max(680, Math.min(columnWidth * 0.64, 880))
 }
 
+/**
+ * How much the content width changes per pixel the pointer travels outward.
+ * The centered column grows about its center, so both edges move and the
+ * width changes by twice the travel. While the body keeps an end reserve
+ * free, the column's end edge stays where the reserve holds it and only its
+ * start edge moves, by the pointer's travel.
+ * @param body - the Conversation body that holds the handles and the scrollport.
+ * @returns 1 while the scrollport pads its end for a reserve, otherwise 2.
+ */
+function widthPerPixel(body: HTMLElement): number {
+  const scrollport = body.querySelector<HTMLElement>('[data-conversation-scroll]')
+  /* v8 ignore next -- the Conversation body always contains its scroll element. */
+  if (scrollport === null) return 2
+  return Number.parseFloat(getComputedStyle(scrollport).paddingInlineEnd) > 0 ? 1 : 2
+}
+
 /** Convert a wheel event's vertical delta to scrollport pixels. */
 function wheelDeltaY(event: React.WheelEvent, scrollport: HTMLElement): number {
   if (event.deltaMode === WHEEL_DELTA_LINE) {
@@ -41,22 +57,29 @@ function wheelDeltaY(event: React.WheelEvent, scrollport: HTMLElement): number {
 function WidthHandle(props: {
   side: 'left' | 'right'
   onStart: () => number
+  /** Content-width change per pixel of outward pointer travel, read as the drag advances. */
+  scale: () => number
   onDrag: (width: number) => void
   onCommit: (width: number) => void
   onEnd: () => void
 }) {
   const dragging = useRef(false)
-  const base = useRef(0)
+  /** The width the drag has reached, before the layout's limits apply. */
+  const width = useRef(0)
   const origin = useRef(0)
   const latest = useRef(0)
+  /** Pointer X the width was last advanced to. */
+  const applied = useRef(0)
   const frame = useRef<number | null>(null)
   const callbacks = useRef(props)
   callbacks.current = props
 
   const outwardWidth = () => {
-    const dx = latest.current - origin.current
+    const dx = latest.current - applied.current
+    applied.current = latest.current
     const outward = callbacks.current.side === 'right' ? dx : -dx
-    return base.current + outward * 2
+    width.current += outward * callbacks.current.scale()
+    return width.current
   }
   const cancelFrame = () => {
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null }
@@ -67,7 +90,8 @@ function WidthHandle(props: {
     event.currentTarget.setPointerCapture(event.pointerId)
     origin.current = event.clientX
     latest.current = event.clientX
-    base.current = callbacks.current.onStart()
+    applied.current = event.clientX
+    width.current = callbacks.current.onStart()
     dragging.current = true
     event.currentTarget.toggleAttribute('data-dragging', true)
   }, [])
@@ -174,6 +198,7 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
       key={side}
       side={side}
       onStart={onStart}
+      scale={() => widthPerPixel(container)}
       onDrag={onDrag}
       onCommit={onCommit}
       onEnd={onEnd}
