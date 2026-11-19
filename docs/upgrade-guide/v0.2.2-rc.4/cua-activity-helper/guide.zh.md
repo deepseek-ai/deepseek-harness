@@ -14,5 +14,5 @@ macOS 连接握手新增整数毫秒字段 `recentActivityWindowMs`，旧版 hel
 ## 迁移
 
 1. 从对应 profile 补丁中移除 `helperPath`，使用提供方管理的组件；或按照[原生构建说明](../../../../packages/experimental/cua-macos/native/README.zh.md#build-and-service)，用相同包版本的源码重新构建指定组件。
-2. 自定义原生客户端需要在 `hello.config` 中加入 `recentActivityWindowMs`，值为 1 至 2147483647 的整数，默认 60000。
+2. 自定义原生客户端需要在 `hello.config` 中加入 `recentActivityWindowMs`，值为 1 至 2147483647 的整数，默认 10000。
 3. 调用 `cua.getCapabilities()`，确认连接返回权限状态且没有握手错误。操作系统权限仍需满足原有要求。

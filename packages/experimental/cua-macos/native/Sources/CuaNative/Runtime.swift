@@ -21,7 +21,7 @@ struct HelperConfiguration: Sendable {
     var shutdownGraceSeconds: Double = 3
     var textEventIntervalSeconds: Double = 0.00025
     var maxClickHoldMs = 5000
-    var recentActivityWindowMs = 60000
+    var recentActivityWindowMs = 10_000
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
     init(arguments: [String]) throws {

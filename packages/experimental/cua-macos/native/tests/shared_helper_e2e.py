@@ -23,7 +23,7 @@ from native_test_support import copy_helper, default_binary, ROOT, line, stop, u
 
 
 CONFIG = {"maxRequestBytes": 1024 * 1024, "maxResponseBytes": 32 * 1024 * 1024,
-          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "maxClickHoldMs": 5000, "recentActivityWindowMs": 60000, "screenshotTimeoutMs": 5000,
+          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "maxClickHoldMs": 5000, "recentActivityWindowMs": 10000, "screenshotTimeoutMs": 5000,
           "timeoutMs": 30000, "graceMs": 3000}
 
 

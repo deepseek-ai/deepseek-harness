@@ -10,8 +10,8 @@ import { expect, it, onTestFinished } from 'vitest'
 import { handleActivityResult } from '../src/recent-activity.ts'
 
 const activity = {
-  lookbackMs: 60000, externalInputMonitoring: 'listening',
-  events: [{ source: 'agent', windowId: '7', ageMs: 12000, operation: 'invoke' }],
+  lookbackMs: 10000, externalInputMonitoring: 'listening',
+  events: [{ source: 'agent', windowId: '7', ageMs: 8000, operation: 'invoke' }],
 }
 
 async function run(

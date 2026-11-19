@@ -6,13 +6,15 @@ import Testing
 
 private let process = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
 
-@Test @MainActor func reportsOtherActorsOnceWithoutSuppressingLaterIdenticalInput() {
+@Test @MainActor func reportsOtherActorsOnceWithoutSuppressingLaterIdenticalInput() throws {
     var time = 100.0
     let history = RecentActivity(now: { time })
     let a = UUID(), b = UUID()
     let target = ActivityTarget(process: process, windowID: 10)
-    history.connect(a, lookbackMs: 60000)
-    history.connect(b, lookbackMs: 60000)
+    let lookback = try HelperConfiguration(arguments: []).recentActivityWindowMs
+    #expect(lookback == 10_000)
+    history.connect(a, lookbackMs: lookback)
+    history.connect(b, lookbackMs: lookback)
     history.watch(target, owner: a)
     history.watch(target, owner: b)
     history.record(target, owner: b, operation: "invoke")
@@ -26,7 +28,7 @@ private let process = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicrose
     #expect(history.report(target, owner: a, monitoring: "listening") != nil)
     time += 1
     history.record(target, owner: b, operation: "invoke")
-    time += 61
+    time += 10.001
     #expect(history.report(target, owner: a, monitoring: "listening") == nil)
 }
 

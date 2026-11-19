@@ -1,11 +1,11 @@
 {
-  "lookbackMs": 60000,
+  "lookbackMs": 10000,
   "externalInputMonitoring": "listening",
   "events": [
     {
       "source": "agent",
       "windowId": "7",
-      "ageMs": 12000,
+      "ageMs": 8000,
       "operation": "invoke"
     },
     {

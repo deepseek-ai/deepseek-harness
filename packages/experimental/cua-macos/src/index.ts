@@ -48,7 +48,7 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
-  recentActivityWindowMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(60_000),
+  recentActivityWindowMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(10_000),
   maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
   maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),

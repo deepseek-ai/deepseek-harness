@@ -87,7 +87,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, recentActivityWindowMs: 60_000, requireSystemPointerApproval: true,
+  permissionPollIntervalMs: 1000, recentActivityWindowMs: 10_000, requireSystemPointerApproval: true,
   agentPreset: false,
   standaloneRunCode: CuaConfig({}).standaloneRunCode,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
@@ -97,7 +97,7 @@ const config = {
 const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('keeps the activity lookback macOS-owned and validates integer milliseconds', () => {
-  expect(NativeProvider.Config({}).recentActivityWindowMs).toBe(60000)
+  expect(NativeProvider.Config({}).recentActivityWindowMs).toBe(10_000)
   expect(NativeProvider.Config({ recentActivityWindowMs: 1001 }).recentActivityWindowMs).toBe(1001)
   expect(CuaConfig({})).not.toHaveProperty('recentActivityWindowMs')
   for (const recentActivityWindowMs of [0, -1, 0.5, 2 ** 31]) {
@@ -1391,7 +1391,8 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   await f.provider.dispose()
   await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
     installCua(ctx, CuaConfig(config), {
-      helperPath: config.helperPath, createChannel: (owner, nativeConfig) => native.connect(owner, nativeConfig, 60000),
+      helperPath: config.helperPath,
+      createChannel: (owner, nativeConfig) => native.connect(owner, nativeConfig, config.recentActivityWindowMs),
       getGuidance: () => COMMON_GUIDANCE,
       permissionParameters: () => ({}),
       capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemPointer,
