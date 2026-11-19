@@ -1,0 +1,70 @@
+# Bilingual-pair consistency record for core-guidelines.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines.md
+/dsh-core-guidelines:
+  en: 0d88d81c166137a1
+  zh: 6fb75b66349a71c7
+/dsh-core-guidelines/summary:
+  en: 94a60bd7d96f9dd8
+  zh: 34635496ca2df301
+/dsh-core-guidelines/table-of-contents:
+  en: 676d77a6df3ef329
+  zh: 704976c22d1fed30
+/dsh-core-guidelines/introduction:
+  en: 471d3a01e46a044f
+  zh: bb723668575e357e
+/dsh-core-guidelines/g-general:
+  en: 5a914c4912866bf1
+  zh: a123355f35847798
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format:
+  en: c77afd940b6e2b93
+  zh: 0e35654e184486ca
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format/reason:
+  en: 94643c68676a916f
+  zh: 6c4c7a43b562a670
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format/example-bad:
+  en: 65b6e95e50f03989
+  zh: a7c52ca22340707a
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format/example:
+  en: 1e720ea2922f5b63
+  zh: 84febcc229b4a659
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format/note:
+  en: 6c7f43c93975617d
+  zh: 381b92c255089193
+/dsh-core-guidelines/g-general/g-1-write-every-rule-in-the-standard-format/enforcement:
+  en: 32df1e18b06f45bc
+  zh: 9cba430d047ab565
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters:
+  en: 3f2b8e6b2e953ff8
+  zh: 6156e6d170d26434
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/reason:
+  en: cc8ca16db3a2da91
+  zh: c05a6e21786901de
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/example-bad:
+  en: 3c9a74a8c000ae05
+  zh: 96ead304ef98c8fd
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/example:
+  en: c66c0222aed09bd3
+  zh: 017f2656c010a48d
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/alternative:
+  en: 0e2a32c8d51f4d87
+  zh: faa8abfee1fb7fa1
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/exception:
+  en: 4894c74a9319c956
+  zh: a9fcac332f3d9320
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/note:
+  en: 104d10a10fd00535
+  zh: 4c1cb92cf2f50aef
+/dsh-core-guidelines/g-general/g-2-avoid-callbacks-in-public-interface-parameters/enforcement:
+  en: c850502b3e29b501
+  zh: 3c97c8807e632aa6
+/dsh-core-guidelines/f-frontend:
+  en: ba041561ab400a46
+  zh: 78263a4c6e5f61da
+/dsh-core-guidelines/b-backend:
+  en: 80f90e1debfdb017
+  zh: bec00d38ccd1af65
+/dsh-core-guidelines/d-data-exchange:
+  en: bea86bb1a2093862
+  zh: e03322d1b1045e04
