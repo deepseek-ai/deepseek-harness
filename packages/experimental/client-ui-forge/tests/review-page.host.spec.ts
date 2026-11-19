@@ -298,14 +298,17 @@ describe('forgePanel review page reads', () => {
     await expect(panel.reviewText(url, HEAD, 'src/a.ts', signal)).resolves.toBe('new\n')
     await expect(panel.reviewText(url, HEAD, 'big.bin', signal)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
 
-    await expect(panel.reviewViewed(url, HEAD, signal)).resolves.toBeNull()
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toBeNull()
     const marks = { headSha: HEAD, files: { 'src/a.ts': 'dismissed' as const }, truncated: false }
     const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(() => Promise.resolve(marks))
     Object.assign(opened.provider, { viewedFiles, setViewed: () => Promise.resolve(undefined) })
-    await expect(panel.reviewViewed(url, HEAD, signal)).resolves.toEqual(marks)
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toEqual(marks)
+    // The marks are kept for the next read that is not fresh.
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toEqual(marks)
+    expect(viewedFiles).toHaveBeenCalledOnce()
     viewedFiles.mockResolvedValueOnce({ code: 'stale', message: 'moved' }).mockResolvedValueOnce({ code: 'unavailable', message: 'down' })
-    await expect(panel.reviewViewed(url, HEAD, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
-    await expect(panel.reviewViewed(url, HEAD, signal)).rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'down' })
+    await expect(panel.reviewViewed(url, HEAD, true, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    await expect(panel.reviewViewed(url, HEAD, true, signal)).rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'down' })
   })
 
   it('reads the files and review threads at the head of the streamed status, which a review page write refreshes', async () => {
@@ -439,7 +442,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewDiff(UNSERVED, null, signal),
       () => panel.reviewCommits(UNSERVED, signal),
       () => panel.reviewText(UNSERVED, HEAD, 'src/a.ts', signal),
-      () => panel.reviewViewed(UNSERVED, HEAD, signal),
+      () => panel.reviewViewed(UNSERVED, HEAD, false, signal),
       () => panel.reviewSetViewed(UNSERVED, { path: 'src/a.ts', viewed: true, headSha: HEAD }, signal),
       () => panel.reviewMarkReady(UNSERVED, signal),
       () => panel.reviewMerge(UNSERVED, 'merge', HEAD, signal),
@@ -474,7 +477,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewDiff(url, null, aborted),
       () => panel.reviewCommits(url, aborted),
       () => panel.reviewText(url, HEAD, 'src/a.ts', aborted),
-      () => panel.reviewViewed(url, HEAD, aborted),
+      () => panel.reviewViewed(url, HEAD, false, aborted),
       () => panel.reviewMarkReady(url, aborted),
       () => panel.reviewStage(opened.session.id, url, aborted),
     ]

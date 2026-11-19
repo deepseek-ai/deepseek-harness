@@ -2458,6 +2458,17 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => panel.getAttribute('data-viewed')).toBe('changed')
   await panel.getByText('有新改动', { exact: true }).waitFor()
   await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 6')
+  /** How many times the viewed marks and the review threads were read from the code host so far. */
+  const reviewReads = async (): Promise<{ readonly marks: number; readonly threads: number }> => {
+    const queries = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0)
+      .map(line => (JSON.parse(line) as string[]).find(arg => arg.startsWith('query=')) ?? '')
+    return {
+      marks: queries.filter(query => query.includes('files(first: $first')).length,
+      threads: queries.filter(query => query.includes('reviewThreads(first: $first')).length,
+    }
+  }
+  await expect.poll(reviewReads, { timeout: 20_000 }).toEqual({ marks: 1, threads: 1 })
+  const readsBefore = await reviewReads()
 
   await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).check()
   await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
@@ -2467,6 +2478,9 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
   await expect.poll(async () => (JSON.parse(await readFile(join(root, 'state.json'), 'utf8')) as { readonly viewed?: Record<string, string> }).viewed)
     .toEqual({ 'package.json': 'VIEWED', 'docs/panel.md': 'UNVIEWED' })
+  // The Host applies each saved mark to the marks it keeps and keeps the threads, so neither is read again.
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+  expect(await reviewReads()).toEqual(readsBefore)
 
   // A refused mark returns to what GitHub keeps and says why.
   await writeFile(join(root, 'viewed.refused'), 'Resource not accessible by integration')

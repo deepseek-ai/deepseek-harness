@@ -224,7 +224,7 @@ async function base() {
     ): Read<readonly ForgeReviewerCandidate[]> => ({ ok: true, value: [{ login: 'mona', name: null, avatarUrl: null, suggested: true }] })),
     updateBranch: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
     changeRequestViewed: vi.fn(async (
-      _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
+      _sessionId: SessionId, _url: string, _headSha: string, _fresh: boolean, _signal: AbortSignal,
     ): Read<ForgeViewedFiles | null> => ({ ok: true, value: null })),
     setFileViewed: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     refresh: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
@@ -285,7 +285,7 @@ async function base() {
     reviewDiff: vi.fn(async (_url: string, _commits: ForgeCommitRange | null, _signal: AbortSignal): Read<ForgeChangeRequestDiff> =>
       ({ ok: true, value: CHANGE })),
     reviewCommits: vi.fn(async (_url: string, _signal: AbortSignal): Read<ForgeCommitList | null> => ({ ok: true, value: COMMITS })),
-    reviewViewed: vi.fn(async (_url: string, _headSha: string, _signal: AbortSignal): Read<ForgeViewedFiles | null> =>
+    reviewViewed: vi.fn(async (_url: string, _headSha: string, _fresh: boolean, _signal: AbortSignal): Read<ForgeViewedFiles | null> =>
       ({ ok: true, value: null })),
     reviewSetViewed: vi.fn(async (_url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     reviewText: vi.fn(async (_url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'c\n' })),
@@ -1053,8 +1053,8 @@ describe('mountForgePanel overview actions', () => {
     const f = await fixture()
     const signal = new AbortController().signal
     const view = f.changes(S1)
-    expect(await view.changeRequestViewed(url, 'a'.repeat(40), signal)).toEqual({ ok: true, value: null })
-    expect(f.forgePanel.changeRequestViewed).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), signal)
+    expect(await view.changeRequestViewed(url, 'a'.repeat(40), true, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.changeRequestViewed).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), true, signal)
     const request = { path: 'src/a.ts', viewed: true, headSha: 'a'.repeat(40) }
     expect(await view.setFileViewed(url, request)).toEqual(OK)
     expect(f.forgePanel.setFileViewed).toHaveBeenCalledWith(S1, url, request)
@@ -1734,8 +1734,8 @@ describe('mountForgePanel review page changes view', () => {
     expect(f.forgePanel.reviewDiff).toHaveBeenCalledWith(url, null, signal)
     expect(await f.view.changeRequestCommits(url, signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.reviewCommits).toHaveBeenCalledWith(url, signal)
-    expect(await f.view.changeRequestViewed(url, head, signal)).toEqual({ ok: true, value: null })
-    expect(f.forgePanel.reviewViewed).toHaveBeenCalledWith(url, head, signal)
+    expect(await f.view.changeRequestViewed(url, head, true, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.reviewViewed).toHaveBeenCalledWith(url, head, true, signal)
     const viewed: ForgeViewedRequest = { path: 'a.ts', viewed: true, headSha: head }
     expect(await f.view.setFileViewed(url, viewed)).toEqual(OK)
     expect(f.forgePanel.reviewSetViewed).toHaveBeenCalledWith(url, viewed)

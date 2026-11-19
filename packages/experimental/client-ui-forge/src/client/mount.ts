@@ -378,7 +378,8 @@ function registerUi(ctx: Context): void {
       changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
       changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
       viewedFiles: store.viewed,
-      changeRequestViewed: (url, headSha, signal) => ctx.remote.forgePanel.changeRequestViewed(sessionId, url, headSha, signal),
+      changeRequestViewed: (url, headSha, fresh, signal) =>
+        ctx.remote.forgePanel.changeRequestViewed(sessionId, url, headSha, fresh, signal),
       setFileViewed: (url, request) => ctx.remote.forgePanel.setFileViewed(sessionId, url, request),
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),

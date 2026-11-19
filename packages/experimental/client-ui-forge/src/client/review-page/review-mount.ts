@@ -125,7 +125,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
     changeRequestDiff: (url, commits, signal) => remote.reviewDiff(url, commits, signal),
     changeRequestCommits: (url, signal) => remote.reviewCommits(url, signal),
     viewedFiles: new ViewedFiles('forge-review-page'),
-    changeRequestViewed: (url, headSha, signal) => remote.reviewViewed(url, headSha, signal),
+    changeRequestViewed: (url, headSha, fresh, signal) => remote.reviewViewed(url, headSha, fresh, signal),
     setFileViewed: (url, request) => remote.reviewSetViewed(url, request),
     changeRequestText: (url, commit, path) => remote.reviewText(url, commit, path),
     changeRequestReview: (url, headSha, fresh, signal) => remote.reviewThreads(url, headSha, fresh, signal),
