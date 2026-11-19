@@ -2469,9 +2469,10 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByText('alpha'))
     const [one, two] = screen.getAllByRole('treeitem').slice(1) as [HTMLElement, HTMLElement]
-    two.getBoundingClientRect = () => ({
+    const rect = () => ({
       top: 150, bottom: 184, left: 0, right: 200, width: 200, height: 34, x: 0, y: 150, toJSON: () => ({}),
     })
+    two.getBoundingClientRect = rect
     fireEvent.dragStart(one, { dataTransfer: dragData() })
     fireDrag(two, 'dragOver', 180)
     dragEnd(one, 'copy')
@@ -2481,7 +2482,7 @@ describe('WorkspaceBrowser', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     const flatOne = screen.getByText('one').closest('[role="treeitem"]') as HTMLElement
     const flatTwo = screen.getByText('two').closest('[role="treeitem"]') as HTMLElement
-    flatTwo.getBoundingClientRect = two.getBoundingClientRect
+    flatTwo.getBoundingClientRect = rect
     fireEvent.dragStart(flatOne, { dataTransfer: dragData() })
     fireDrag(flatTwo, 'dragOver', 180)
     dragEnd(flatOne, 'copy')

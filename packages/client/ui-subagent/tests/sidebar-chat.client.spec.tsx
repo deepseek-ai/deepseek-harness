@@ -119,9 +119,9 @@ describe('Sidebar chat registration', () => {
       Object.assign(ctx, {
         uiWorkspace: { openWorkspace },
         sidebarRight: { openResource, mounted: { getSnapshot: () => onScreen } },
-        effect: (install: () => unknown) => {
+        effect: (install: () => (() => void) | undefined) => {
           const dispose = install()
-          if (typeof dispose === 'function') disposers.push(() => { dispose() })
+          if (dispose !== undefined) disposers.push(dispose)
           return () => {}
         },
       }),
