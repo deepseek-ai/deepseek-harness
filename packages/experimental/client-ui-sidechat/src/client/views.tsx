@@ -2,7 +2,7 @@
 import { IconCompareSplitOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ConversationViewsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SidechatNotice } from './control.ts'
 import { parseSidechatAddress } from './resource.ts'
@@ -39,18 +39,16 @@ function SidechatChatView({ renderSlot }: ConversationViewsProps) {
   return <>{renderSlot('conversation.session', { view: 'chat' })}</>
 }
 
-/** Render the shared Conversation content, Chat view and composer, with the child's Session scope. */
-export function SidechatConversation({
-  sessionId, useSession, useConversation, useSessions, renderFactorySlot,
-}: PropsRuntime<'sidechat.conversation'> & PropsRenderFactories) {
-  const session = useSession(value => value)
-  const conversation = useConversation(value => value)
-  const active = conversation.activeTargets.size > 0 || (!session.blank && !session.awaitingFirstTurn) || session.running
-  const shellPhase = active ? 'active' : session.promptAttempted ? 'engaging' : 'blank'
-  const summaryBlank = useSessions(state => state.byId[sessionId]?.blank)
-  const settling = shellPhase === 'blank' && session.openState === 'loading' && summaryBlank !== true
-  const hero = shellPhase === 'blank' && (session.openState === 'open' || summaryBlank === true)
-  return renderFactorySlot('conversation.content', { variant: 'embedded', phase: settling ? 'settling' : hero ? 'hero' : 'active', hero }, {
+/** A side conversation never shows the Hero, so its Workspace picker is never offered; a pick resolves without adoption. */
+const ignoreWorkspacePick: WorkspaceSelectedHandler = () => Promise.resolve()
+
+/**
+ * Render the shared Conversation content, Chat view and composer, with the child's Session scope.
+ * A side conversation always carries inherited history, so it never shows the blank-Session hero.
+ */
+export function SidechatConversation({ useSession, renderFactorySlot }: PropsRuntime<'sidechat.conversation'> & PropsRenderFactories) {
+  const phase = useSession(session => session.openState === 'loading' ? 'settling' : 'active')
+  return renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero: false, onWorkspaceSelected: ignoreWorkspacePick }, {
     slots: { views: SidechatChatView },
   })
 }

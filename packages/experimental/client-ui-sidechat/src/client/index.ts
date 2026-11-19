@@ -12,6 +12,11 @@ import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import { parseSidechatAddress, SIDECHAT_ADDRESS, sidechatResourceProvider } from './resource.ts'
 import { SidechatConversation, SidechatTab, SidechatTitle, SidechatToast, type SidechatNoticeInjected } from './views.tsx'
 
+// Type-only re-exports publish the slot, resource and locale augmentations through the `/client` entry.
+export type {} from './locales.ts'
+export type {} from './resource.ts'
+export type {} from './views.tsx'
+
 /** Services used by the side conversation plugin. */
 export const inject = ['slots', 'locale', 'sessions', 'resources', 'sidebarRight', 'sidebarRightTabs', 'commandUi']
 
@@ -23,13 +28,13 @@ export function apply(ctx: Context): void {
   const id = '@deepseek-ai/dsh-client-ui-sidechat'
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'sidechat: dictionaries')
   const control = new SidechatControl(ctx)
-  ctx.effect(() => () => control.dispose(), 'sidechat: in-flight forks')
+  ctx.effect(() => () => { control.dispose() }, 'sidechat: in-flight forks')
   const t = ctx.locale.bind(NS)
-  // A blank Session has nothing to branch; a running first Turn forks at its newest durable event.
+  // Always available: an unavailable command lets a typed `/side` reach the model as a message.
+  // The control declines a source with a fork in flight; a Session without history fails on the Host.
   ctx.effect(() => ctx.commandUi.register({
     name: 'side', label: () => t('command'), description: () => t('command.description'), icon: IconCompareSplitOutlineRegular,
-    available: session => ctx.sessions.list.getSnapshot().byId[session.sessionId]?.blank === false
-      && !control.pending.getSnapshot().includes(session.sessionId),
+    available: () => true,
     ui: { kind: 'action', run: (session) => { control.fork(session.sessionId) } },
   }), 'sidechat: /side command')
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({

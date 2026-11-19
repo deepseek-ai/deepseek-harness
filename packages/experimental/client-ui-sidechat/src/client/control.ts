@@ -26,7 +26,6 @@ export class SidechatControl {
   readonly notice = createSnapshotStore<SidechatNotice | null>(null)
   private serial = 0
   private closed = false
-  private readonly tasks = new Set<Promise<void>>()
 
   /** @param ctx - Client Session and right-Sidebar services. */
   constructor(private readonly ctx: Context) {}
@@ -43,15 +42,12 @@ export class SidechatControl {
     const main = this.ctx.sidebarRight.mounted.getSnapshot()
     if (main === undefined) return
     const atSeq = latestDurableSeq(this.ctx.sessions.binding(sessionId)?.eventSource.getSnapshot())
-    const task = this.create(sessionId, atSeq, main)
-    this.tasks.add(task)
-    void task.finally(() => { this.tasks.delete(task) })
+    void this.create(sessionId, atSeq, main)
   }
 
-  /** Stop publishing results and wait for already-issued forks. */
-  async dispose(): Promise<void> {
+  /** Stop publishing results; a fork already issued settles on the Host without further effect here. */
+  dispose(): void {
     this.closed = true
-    await Promise.all(this.tasks)
   }
 
   /** Clear the displayed failure. */

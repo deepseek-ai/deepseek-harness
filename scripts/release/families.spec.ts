@@ -62,6 +62,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
       '@deepseek-ai/dsh-experimental-client-ui-forge',
       '@deepseek-ai/dsh-client-ui-read-aloud',
+      '@deepseek-ai/dsh-client-ui-sidechat',
       '@deepseek-ai/dsh-experimental-client-ui-stats',
       '@deepseek-ai/dsh-experimental-client-ui-voice-input',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp',
