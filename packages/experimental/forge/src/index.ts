@@ -81,10 +81,12 @@ interface Watch {
   joinAt: number | undefined
   /** Level of the poll in flight, when there is one. */
   reading: StatusLevel | undefined
-  /** Epoch milliseconds when the latest poll at either level settled, or when the state a brief watcher knew was read. */
-  settledAt: number | undefined
+  /** Epoch milliseconds when the latest poll at either level started, or when the state a brief watcher knew was read. */
+  polledAt: number | undefined
   /** Whether the latest status reported an unknown mergeability. */
   unknownMergeability: boolean
+  /** Epoch milliseconds until which an announced change keeps polls at the active interval; undefined without one. */
+  expectingUntil: number | undefined
   failures: number
   /** Head commit whose `stale` diff or review read last polled at once, so further stale reads at it wait for the regular poll. */
   staleHead: string | undefined
@@ -621,7 +623,7 @@ export class ForgeService extends Service {
   watch(ref: ChangeRequestRef, listener: ChangeRequestListener, options: ChangeRequestWatchOptions = {}): () => void {
     const dispose = this.ctx.effect(() => {
       const now = Date.now()
-      const watch = this.open(ref, { dueAt: now, joinAt: undefined, settledAt: undefined, unknownMergeability: false })
+      const watch = this.open(ref, { dueAt: now, joinAt: undefined, polledAt: undefined, unknownMergeability: false })
       const { latest } = watch
       const outdated = latest === undefined ? watch.listeners.size === 0
         : options.maxAgeMs !== undefined && now - latest.fetchedAt > options.maxAgeMs
@@ -649,11 +651,11 @@ export class ForgeService extends Service {
    */
   watchBrief(ref: ChangeRequestRef, listener: ChangeRequestBriefListener, known?: ChangeRequestKnownState): () => void {
     const dispose = this.ctx.effect(() => {
-      let timing: WatchTiming = { dueAt: Date.now(), joinAt: undefined, settledAt: undefined, unknownMergeability: false }
+      let timing: WatchTiming = { dueAt: Date.now(), joinAt: undefined, polledAt: undefined, unknownMergeability: false }
       if (known !== undefined) {
         timing = {
           ...waitOf(known.fetchedAt, nextPollDelay(known, this.config, false)),
-          settledAt: known.fetchedAt,
+          polledAt: known.fetchedAt,
           unknownMergeability: known.mergeability === 'unknown',
         }
       }
@@ -671,9 +673,10 @@ export class ForgeService extends Service {
   /**
    * Poll a watched change request at once, including after a terminal state.
    * A fetch already in flight is followed immediately by another fetch; an
-   * unwatched change request is unchanged. With `options.maxAgeMs`, a change
-   * request whose poll is in flight, or whose latest poll at either level
-   * settled within that many milliseconds, is left alone.
+   * unwatched change request is unchanged. With `options.maxAgeMs`, the caller
+   * needs a status no older than that many milliseconds: a change request
+   * whose latest poll at either level, in flight or settled, started within
+   * them is left alone, and so is a merged one, whose status is final.
    * @param ref - change request to poll.
    * @param options - when the caller needs a status newer than the latest one.
    */
@@ -682,8 +685,26 @@ export class ForgeService extends Service {
     if (watch === undefined) return
     const now = Date.now()
     if (options.maxAgeMs !== undefined) {
-      if (watch.reading !== undefined || (watch.settledAt !== undefined && now - watch.settledAt <= options.maxAgeMs)) return
+      // Only a merged change request has no poll scheduled while none is in flight.
+      if (watch.dueAt === undefined && watch.reading === undefined) return
+      if (watch.polledAt !== undefined && now - watch.polledAt <= options.maxAgeMs) return
     }
+    watch.dueAt = now
+    this.schedule()
+  }
+
+  /**
+   * Announce that a watched change request is about to change, as after a push to its head branch. It is polled at
+   * once and then every `activeIntervalMs`, until a status reports running checks or a closed or merged change
+   * request, and for at most `idleIntervalMs`; after that the regular cadence applies. A fetch already in flight is
+   * followed immediately by another fetch; an unwatched change request is unchanged.
+   * @param ref - change request the caller expects to change.
+   */
+  expectChange(ref: ChangeRequestRef): void {
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (watch === undefined) return
+    const now = Date.now()
+    watch.expectingUntil = now + this.config.idleIntervalMs
     watch.dueAt = now
     this.schedule()
   }
@@ -704,7 +725,7 @@ export class ForgeService extends Service {
     if (watch === undefined) {
       watch = {
         key, ref, listeners: new Set(), briefListeners: new Set(), latest: undefined, reading: undefined, failures: 0, staleHead: undefined,
-        ...timing,
+        expectingUntil: undefined, ...timing,
       }
       this.watches.set(key, watch)
     }
@@ -851,9 +872,11 @@ export class ForgeService extends Service {
   private async fetch(forge: string, level: StatusLevel, batch: readonly Watch[]): Promise<void> {
     const lane = laneOf(forge, level)
     this.fetching.add(lane)
+    const startedAt = Date.now()
     for (const watch of batch) {
       watch.dueAt = undefined
       watch.reading = level
+      watch.polledAt = startedAt
     }
     let read: Reading | ForgeFailure
     const registration = this.providers.get(forge)
@@ -907,11 +930,16 @@ export class ForgeService extends Service {
       if ('snapshot' in outcome) update = { key, fetchedAt, snapshot: outcome.snapshot }
       const state = 'snapshot' in outcome ? outcome.snapshot : outcome.brief
       brief = { key, fetchedAt, brief: state }
-      wait = waitOf(fetchedAt, nextPollDelay(state, this.config, watch.unknownMergeability))
+      let delay = nextPollDelay(state, this.config, watch.unknownMergeability)
+      if (watch.expectingUntil !== undefined) {
+        // Running checks are the announced change, and nothing follows a closed or merged change request.
+        if (state.state !== 'open' || state.checksRollup === 'pending' || fetchedAt >= watch.expectingUntil) watch.expectingUntil = undefined
+        else delay = this.config.activeIntervalMs
+      }
+      wait = waitOf(fetchedAt, delay)
       watch.unknownMergeability = state.mergeability === 'unknown'
     }
     if (update !== undefined) watch.latest = update
-    watch.settledAt = fetchedAt
     // A refresh requested after this fetch started needs a subsequent fetch, even for a terminal result.
     watch.dueAt = refreshAt ?? wait.dueAt
     watch.joinAt = refreshAt === undefined ? wait.joinAt : undefined
@@ -931,7 +959,7 @@ export class ForgeService extends Service {
 }
 
 /** What a new watch starts with: when it polls first, and what its watcher already knows. */
-type WatchTiming = Pick<Watch, 'dueAt' | 'joinAt' | 'settledAt' | 'unknownMergeability'>
+type WatchTiming = Pick<Watch, 'dueAt' | 'joinAt' | 'polledAt' | 'unknownMergeability'>
 
 /**
  * Time the poll after a status.

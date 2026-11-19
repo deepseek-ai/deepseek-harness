@@ -203,6 +203,16 @@ const turns = new WeakMap<Session, number>()
  * @param calls - shell calls with their rendered results.
  */
 export function shellTurn(session: Session, calls: readonly ShellCall[]): void {
+  startShellTurn(session, calls)()
+}
+
+/**
+ * Append a turn in which the model runs `calls` in a single step, up to their results.
+ * @param session - live Session receiving the events.
+ * @param calls - shell calls with their rendered results.
+ * @returns appends the end of the step and of the turn.
+ */
+export function startShellTurn(session: Session, calls: readonly ShellCall[]): () => void {
   const turn = (turns.get(session) ?? 0) + 1
   turns.set(session, turn)
   const step = 1
@@ -228,8 +238,10 @@ export function shellTurn(session: Session, calls: readonly ShellCall[]): void {
       message: createToolResultMessage({ callId: brandString<ToolCallId>(call.callId), content: [{ type: 'text', text: call.output }], isError: call.isError ?? false }),
     }, { surfaceOp: 'append' })
   }
-  session.append('step/end', { turn, step })
-  session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  return () => {
+    session.append('step/end', { turn, step })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  }
 }
 
 /** One shell call inside a program, the text its settled dispatch carries, and its tool arguments. */

@@ -804,8 +804,9 @@ export interface ChangeRequestWatchOptions {
   /**
    * Age in milliseconds past which the latest status is too old. A watcher that joins a change request whose
    * snapshot was already read polls at once when the latest snapshot or failure is older and no snapshot poll is in
-   * flight; without it, the watcher waits for the regular poll. A refresh polls at once unless a poll is in flight or
-   * the latest poll at either level settled within it; without it, a refresh always polls.
+   * flight; without it, the watcher waits for the regular poll. A refresh polls at once unless the change request is
+   * merged or its latest poll at either level, in flight or settled, started within it; without it, a refresh always
+   * polls.
    */
   readonly maxAgeMs?: number
 }

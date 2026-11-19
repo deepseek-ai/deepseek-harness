@@ -1,4 +1,7 @@
-/** When polls run: which change requests one fetch reads together, how an unknown mergeability is paced, and when a refresh reads. */
+/**
+ * When polls run: which change requests one fetch reads together, how an unknown mergeability and an announced change
+ * are paced, and when a refresh reads.
+ */
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { changeRequestKey } from '../src/index.ts'
@@ -199,6 +202,101 @@ describe('forge poll cadence', () => {
     release()
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(3)
+  })
+
+  it('follows a poll in flight that started before the bound of a refresh with another one', async () => {
+    const provider = briefProvider(1)
+    const release = hold(provider, 'snapshot')
+    const context = await setup(provider)
+    context.forge.watch(ref(1), ignore)
+    await vi.advanceTimersByTimeAsync(300)
+
+    context.forge.refresh(ref(1), { maxAgeMs: 300 })
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    await vi.advanceTimersByTimeAsync(200)
+    context.forge.refresh(ref(1), { maxAgeMs: 199 })
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(3)
+  })
+
+  it('leaves a merged change request alone for a refresh with a maximum age, and polls it for a plain one', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { state: 'merged' }))
+    const context = await setup(provider)
+    context.forge.watch(ref(1), ignore)
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    context.forge.refresh(ref(1), { maxAgeMs: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+
+    context.forge.refresh(ref(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+  })
+
+  it('polls an announced change at once and at the active interval for one idle interval, then at the regular cadence', async () => {
+    const provider = briefProvider(1)
+    const context = await setup(provider)
+    context.forge.watchBrief(ref(1), ignore)
+    await vi.advanceTimersByTimeAsync(500)
+
+    context.forge.expectChange(ref(1))
+    context.forge.expectChange(ref(9))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.briefFetches).toEqual([[ref(1)], [ref(1)]])
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(provider.briefFetches).toHaveLength(5)
+    // The poll one idle interval after the announcement ends it.
+    await vi.advanceTimersByTimeAsync(1)
+    expect(provider.briefFetches).toHaveLength(6)
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(provider.briefFetches).toHaveLength(6)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(provider.briefFetches).toHaveLength(7)
+  })
+
+  it('ends an announced change once a status reports running checks', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1)))
+    const context = await setup(provider)
+    context.forge.watch(ref(1), ignore)
+    await vi.advanceTimersByTimeAsync(0)
+
+    provider.results.set(key, snapshot(ref(1), { checksRollup: 'pending' }))
+    context.forge.expectChange(ref(1))
+    await vi.advanceTimersByTimeAsync(0)
+    provider.results.set(key, snapshot(ref(1)))
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(provider.fetches).toHaveLength(3)
+
+    // Checks that settled within the idle interval of the announcement are followed at the idle interval.
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(provider.fetches).toHaveLength(3)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(provider.fetches).toHaveLength(4)
+  })
+
+  it.each([
+    ['closed', 3],
+    ['merged', 2],
+  ] as const)('ends an announced change for a %s change request', async (state, fetches) => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { state }))
+    const context = await setup(provider)
+    context.forge.watch(ref(1), ignore)
+    await vi.advanceTimersByTimeAsync(0)
+
+    context.forge.expectChange(ref(1))
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(provider.fetches).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(provider.fetches).toHaveLength(fetches)
   })
 
   it('lets a snapshot poll in flight answer a watcher that joins with a maximum age', async () => {

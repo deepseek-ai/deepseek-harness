@@ -94,8 +94,9 @@ describe('forge panel that starts again', () => {
       changeRequests: [{ url: pullUrl(7), origin: 'discovered', update: null, snapshot: snapshot(seven) }],
     })
     await second.until(state => state.changeRequests[0]?.update != null)
-    await inspectedAgain(repo, opened, second, 1)
     expect(opened.provider.fetches).toHaveLength(fetched + 1)
+    // The first inspection of the new panel has ended once a later one publishes.
+    await inspectedAgain(repo, opened, second, 1)
     expect(opened.provider.probes).toEqual(['fake.test'])
     expect(opened.provider.lookups).toEqual(['octo/demo feat'])
   })
