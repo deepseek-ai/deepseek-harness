@@ -4223,6 +4223,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-docs -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting -->
+<a id="deepseek-aidsh-tencent-meeting"></a>
+
+## `@deepseek-ai/dsh-tencent-meeting`
+
+- `inject`: `cliAccounts` · `upstreamSkills`
+- `source`: [`packages/connector/tencent-meeting/src/index.ts:28`](../packages/connector/tencent-meeting/src/index.ts)
+
+```ts config-catalog
+/** Where tmeet and the upstream guide are. */
+export interface Config {
+  /** Absolute directory holding the `tmeet` executable; defaults to the installed `@tencentcloud/tmeet` executable for this platform. */
+  binDir?: string
+  /** Absolute directory holding the upstream guide at its repository paths; when set, nothing is downloaded. */
+  skillsDir?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
 <a id="deepseek-aidsh-terminal-bash"></a>
 

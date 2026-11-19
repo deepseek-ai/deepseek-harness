@@ -132,6 +132,9 @@ importers:
       '@deepseek-ai/dsh-tencent-docs':
         specifier: workspace:*
         version: link:packages/connector/tencent-docs
+      '@deepseek-ai/dsh-tencent-meeting':
+        specifier: workspace:*
+        version: link:packages/connector/tencent-meeting
       '@deepseek-ai/dsh-terminal-panel':
         specifier: workspace:*
         version: link:packages/experimental/terminal-panel
@@ -8239,6 +8242,40 @@ importers:
       '@deepseek-ai/dsh-tool-testkit':
         specifier: workspace:*
         version: link:../../test-support/tool-testkit
+
+  packages/connector/tencent-meeting:
+    dependencies:
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../util/values
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      '@tencentcloud/tmeet':
+        specifier: 1.0.18
+        version: 1.0.18
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-cli-account':
+        specifier: workspace:*
+        version: link:../cli-account
+      '@deepseek-ai/dsh-client-ui-connector-account':
+        specifier: workspace:*
+        version: link:../../client/ui-connector-account
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../skill/skill
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-upstream-skills':
+        specifier: workspace:*
+        version: link:../upstream-skills
 
   packages/connector/upstream-skills:
     dependencies:
@@ -23664,6 +23701,11 @@ packages:
   '@tanstack/virtual-core@3.17.8':
     resolution: {integrity: sha512-BfEvehNpOT75r5Ksc5xW6NZuXujTfb7nlSEyVu4XHG3gdxNg1KqXruWbDewXOUaUYIo4oRbSfkjIajz4MAT8tA==}
 
+  '@tencentcloud/tmeet@1.0.18':
+    resolution: {integrity: sha512-YFePEDfYhJp95mwOv8GEQ0Q5rqm2tdqHuuCKlgULI7kQicU59a2KkAYnQQgRWhHsxyxTsuWYfeQYG6qZJ6pObw==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   '@testing-library/dom@10.4.2':
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
     engines: {node: '>=18'}
@@ -31153,6 +31195,8 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
 
   '@tanstack/virtual-core@3.17.8': {}
+
+  '@tencentcloud/tmeet@1.0.18': {}
 
   '@testing-library/dom@10.4.2':
     dependencies:

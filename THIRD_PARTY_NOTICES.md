@@ -70,6 +70,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`@shikijs/langs`](https://github.com/shikijs/shiki) | MIT |
 | [`@standard-schema/spec`](https://github.com/standard-schema/standard-schema) | MIT |
 | [`@tanstack/react-virtual`](https://github.com/TanStack/virtual) | MIT |
+| [`@tencentcloud/tmeet`](https://github.com/TencentCloud/tencentmeeting-cli) | MIT |
 | [`@trycua/cua-driver`](https://github.com/trycua/cua) | MIT |
 | [`@vscode/ripgrep`](https://github.com/microsoft/vscode-ripgrep) | MIT |
 | [`@wecom/cli`](https://github.com/WecomTeam/wecom-cli) | MIT |
