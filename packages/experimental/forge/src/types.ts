@@ -714,6 +714,15 @@ export interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>
+  /**
+   * Most change requests of one host that one polling call of {@link ForgeProvider.fetch} reads, a positive safe
+   * integer. The registry then calls `fetch` once for every that many due change requests of a host, one call after
+   * another, each within its own fetch deadline, and publishes the results of a call when it returns. Omission
+   * declares that one call reads every due change request of the forge.
+   */
+  readonly snapshotBatchSize?: number
+  /** The same bound for one polling call of {@link ForgeProvider.fetchBriefs}. */
+  readonly briefBatchSize?: number
   /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
   fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
@@ -828,6 +837,6 @@ export interface Config {
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
-  /** Deadline in milliseconds for one provider fetch. */
+  /** Deadline in milliseconds for one provider fetch: one polling call, or one read of complete checks. */
   fetchTimeoutMs?: number
 }

@@ -132,9 +132,12 @@ describe.skipIf(process.platform === 'win32')('forge-github plugin status querie
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
   })
 
-  /** A `gh` that appends the pull request numbers of each query to a log and answers `node` for each. */
+  /**
+   * A `gh` that appends the pull request numbers of each query to a log and answers `node` for each; a query that
+   * names pull request `hangOn` never answers.
+   */
   async function recordingGh(
-    node: Record<string, unknown>,
+    node: Record<string, unknown>, hangOn?: number,
   ): Promise<{ readonly command: string; readonly queries: () => Promise<number[][]> }> {
     const root = await mkdtemp(join(tmpdir(), 'forge-github-status-'))
     cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
@@ -144,6 +147,7 @@ describe.skipIf(process.platform === 'win32')('forge-github plugin status querie
       '#!/bin/sh',
       'numbers=$(printf "%s" "$*" | grep -o "pullRequest(number: [0-9]*)" | grep -o "[0-9]*" | tr "\\n" " ")',
       `printf "%s\\n" "$numbers" >> ${JSON.stringify(log)}`,
+      ...hangOn === undefined ? [] : [`case " $numbers" in *" ${hangOn} "*) exec sleep 60;; esac`],
       'fields=""; index=0',
       `for number in $numbers; do fields="$fields\${fields:+,}\\"p$index\\":"${JSON.stringify(JSON.stringify(node))}; index=$((index + 1)); done`,
       'printf "{\\"data\\":{\\"r0\\":{%s}}}" "$fields"',
@@ -157,7 +161,7 @@ describe.skipIf(process.platform === 'win32')('forge-github plugin status querie
   }
 
   it.each([
-    ['brief', {}, 51, [50, 1]],
+    ['brief', {}, 51, [25, 25, 1]],
     ['brief', { briefBatchSize: 3 }, 4, [3, 1]],
     ['snapshot', {}, 9, [8, 1]],
     ['snapshot', { snapshotBatchSize: 3 }, 4, [3, 1]],
@@ -176,5 +180,23 @@ describe.skipIf(process.platform === 'win32')('forge-github plugin status querie
 
     await vi.waitFor(() => { expect(seen.size).toBe(count) }, { timeout: 10_000 })
     expect((await gh.queries()).map(numbers => numbers.length)).toEqual(sizes)
+  })
+
+  it('gives each query a fetch deadline of its own, so a query whose gh run hangs fails only its own pull requests', async () => {
+    const gh = await recordingGh(pullRequestNode(0), 1)
+    const context = new Context()
+    cleanups.push(async () => { await context.fiber.dispose() })
+    // The deadline of the registry equals the one of a `gh` run, as it does by default.
+    await context.plugin(ForgeService, { fetchTimeoutMs: 1_000 })
+    await context.plugin(ForgeGitHub, { ghCommand: gh.command, timeoutMs: 1_000, snapshotBatchSize: 2 })
+    const outcomes = new Map<number, string>()
+
+    for (const number of [1, 2, 3, 4]) {
+      context.forge.watch(pull(number), (update) => { outcomes.set(number, 'failure' in update ? update.failure.code : 'snapshot') })
+    }
+
+    await vi.waitFor(() => { expect(outcomes.size).toBe(4) }, { timeout: 10_000 })
+    expect([...outcomes].sort(([left], [right]) => left - right)).toEqual([[1, 'unavailable'], [2, 'unavailable'], [3, 'snapshot'], [4, 'snapshot']])
+    expect(await gh.queries()).toEqual([[1, 2], [3, 4]])
   })
 })

@@ -31,11 +31,11 @@ export interface Config {
    */
   maxReviewThreads?: number
   /**
-   * Most pull requests one snapshot query reads; a snapshot read of more pull requests on one host sends several queries
-   * in turn.
+   * Most pull requests one snapshot query reads. The forge registry polls that many pull requests of a host per call,
+   * each call within its own fetch deadline; a read of more pull requests on one host sends several queries in turn.
    */
   snapshotBatchSize?: number
-  /** Most pull requests one brief query reads; a brief read of more pull requests on one host sends several queries in turn. */
+  /** The same bound for one brief query. */
   briefBatchSize?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number
@@ -52,7 +52,7 @@ export const Config: z<Config> = z.object({
   maxOutputBytes: z.number().default(8_388_608),
   maxReviewThreads: z.number().default(1_000),
   snapshotBatchSize: z.number().default(8),
-  briefBatchSize: z.number().default(50),
+  briefBatchSize: z.number().default(25),
   maxCommits: z.number().default(250),
   maxViewedFiles: z.number().default(3_000),
   maxViewerItems: z.number().default(50),

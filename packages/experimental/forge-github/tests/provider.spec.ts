@@ -333,6 +333,12 @@ describe('GitHub provider fetch', () => {
 })
 
 describe('GitHub provider snapshot queries', () => {
+  it('names the sizes of its queries to the registry', () => {
+    const subject = provider(fakeGh(() => output('')).run, { snapshotBatchSize: 3, briefBatchSize: 7 })
+
+    expect([subject.snapshotBatchSize, subject.briefBatchSize]).toEqual([3, 7])
+  })
+
   /** Pull request numbers one snapshot query reads, in alias order. */
   function documentNumbers(args: readonly string[]): number[] {
     const query = args.find(arg => arg.startsWith('query=')) ?? ''

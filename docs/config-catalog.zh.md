@@ -1339,7 +1339,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:824`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:833`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1350,7 +1350,7 @@ export interface Config {
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
-  /** Deadline in milliseconds for one provider fetch. */
+  /** Deadline in milliseconds for one provider fetch: one polling call, or one read of complete checks. */
   fetchTimeoutMs?: number
 }
 ```
@@ -1381,11 +1381,11 @@ export interface Config {
    */
   maxReviewThreads?: number
   /**
-   * Most pull requests one snapshot query reads; a snapshot read of more pull requests on one host sends several queries
-   * in turn.
+   * Most pull requests one snapshot query reads. The forge registry polls that many pull requests of a host per call,
+   * each call within its own fetch deadline; a read of more pull requests on one host sends several queries in turn.
    */
   snapshotBatchSize?: number
-  /** Most pull requests one brief query reads; a brief read of more pull requests on one host sends several queries in turn. */
+  /** The same bound for one brief query. */
   briefBatchSize?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number

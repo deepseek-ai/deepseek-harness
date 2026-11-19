@@ -74,6 +74,8 @@ export class GitHubProvider implements ForgeProvider {
   readonly changeRequestNoun = 'pull-request'
   readonly viewer: ForgeViewerCapability
   private readonly served: ReadonlySet<string>
+  readonly snapshotBatchSize: number
+  readonly briefBatchSize: number
 
   async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
     const failure = this.hostFailure(ref.repository.host)
@@ -113,6 +115,9 @@ export class GitHubProvider implements ForgeProvider {
     this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
     this.served = new Set(this.hosts)
     this.viewer = { hosts: this.hosts, filters: VIEWER_FILTERS, maxItems: limits.maxViewerItems }
+    // One polling call of the registry then holds one query, which has the call's deadline to itself.
+    this.snapshotBatchSize = limits.snapshotBatchSize
+    this.briefBatchSize = limits.briefBatchSize
   }
 
   /**

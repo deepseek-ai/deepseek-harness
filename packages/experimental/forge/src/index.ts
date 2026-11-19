@@ -98,7 +98,9 @@ interface Watch {
  * its brief otherwise. Each forge has at most one snapshot fetch and one brief
  * fetch in flight; each batches every due change request of that forge at its
  * level, and those past the midpoint of the wait after a status, so change
- * requests that became due at different times come to share one fetch.
+ * requests that became due at different times come to share one fetch. A fetch
+ * calls a provider that names a batch size once per that many change requests
+ * of a host, and settles the results of each call when it returns.
  */
 export class ForgeService extends Service {
   static Config: z<Config> = z.object({
@@ -154,11 +156,18 @@ export class ForgeService extends Service {
    * results from the withdrawn registration are discarded.
    * @param provider - provider to serve `provider.forge` on `provider.hosts`.
    * @returns the disposer that unregisters the provider and waits for its calls to finish.
-   * @throws when another provider already serves the same forge or one of the same hosts, compared without case.
+   * @throws when another provider already serves the same forge or one of the same hosts, compared without case, and
+   * when the provider names a batch size that is not a positive safe integer.
    */
   register(provider: ForgeProvider): () => Promise<void> {
     const dispose = this.ctx.effect(() => {
       if (this.providers.has(provider.forge)) throw new Error(`forge: a provider for "${provider.forge}" is already registered`)
+      for (const key of ['snapshotBatchSize', 'briefBatchSize'] as const) {
+        const size = provider[key]
+        if (size !== undefined && (!Number.isSafeInteger(size) || size <= 0)) {
+          throw new Error(`forge: ${key} of the "${provider.forge}" provider must be a positive safe integer`)
+        }
+      }
       for (const { provider: other } of this.providers.values()) {
         const taken = new Set(other.hosts.map(host => host.toLowerCase()))
         const host = provider.hosts.find(candidate => taken.has(candidate.toLowerCase()))
@@ -868,46 +877,82 @@ export class ForgeService extends Service {
     this.schedule()
   }
 
-  /** Fetch one forge's batch at one level, as briefs when the level is `brief` and the provider reads them; never rejects. */
+  /**
+   * Fetch one forge's batch at one level, as briefs when the level is `brief` and the provider reads them. The batch
+   * is read in the parts {@link partsOf} names, one provider call after another; each call has its own
+   * `fetchTimeoutMs` deadline, and its watches are settled before the next call starts, so a call that fails or
+   * outlives its deadline fails only its own change requests. Never rejects.
+   */
   private async fetch(forge: string, level: StatusLevel, batch: readonly Watch[]): Promise<void> {
     const lane = laneOf(forge, level)
     this.fetching.add(lane)
-    const startedAt = Date.now()
     for (const watch of batch) {
       watch.dueAt = undefined
       watch.reading = level
-      watch.polledAt = startedAt
     }
-    let read: Reading | ForgeFailure
     const registration = this.providers.get(forge)
     try {
-      if (registration === undefined) {
-        read = this.missing(forge)
-      } else {
-        using timeout = deadline(this.lifetime.signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
-        const refs = batch.map(watch => watch.ref)
-        read = await this.invoke(registration, timeout.signal, async (provider, operation): Promise<Reading> =>
-          level === 'brief' && provider.fetchBriefs !== undefined
-            ? { kind: 'brief', results: await provider.fetchBriefs(refs, operation) }
-            : { kind: 'snapshot', results: await provider.fetch(refs, operation) })
+      for (const part of partsOf(batch, registration?.provider, level)) {
+        const reading = this.claim(part, level)
+        if (reading.length === 0) continue
+        const read = await this.read(forge, registration, level, reading)
+        // The results of a withdrawn registration are discarded; its withdrawal settled the watches.
+        if (this.lifetime.signal.aborted || registration !== this.providers.get(forge)) return
+        for (const watch of reading) {
+          // A watch whose level changed during this call may be in a call of the other lane by now.
+          if (watch.reading === level) watch.reading = undefined
+          if (this.watches.get(watch.key) !== watch) continue
+          this.settle(watch, 'code' in read ? { failure: read, level } : outcomeOf(watch.key, level, read), watch.dueAt)
+        }
       }
-    } catch (error) {
-      read = { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
     } finally {
       this.fetching.delete(lane)
-      // A watch whose level changed during this read may be in a read of the other lane by now.
       for (const watch of batch) if (watch.reading === level) watch.reading = undefined
-    }
-    if (this.lifetime.signal.aborted) return
-    if (registration !== this.providers.get(forge)) {
       this.schedule()
-      return
     }
-    for (const watch of batch) {
-      if (this.watches.get(watch.key) !== watch) continue
-      this.settle(watch, 'code' in read ? { failure: read, level } : outcomeOf(watch.key, level, read), watch.dueAt)
+  }
+
+  /**
+   * Take the watches of one part that its provider call reads: those still watched that no fetch of the other level
+   * has read since the fetch started. A watch whose watchers changed its level while it waited is made due for the
+   * fetch of that level instead.
+   */
+  private claim(part: readonly Watch[], level: StatusLevel): Watch[] {
+    const startedAt = Date.now()
+    const reading: Watch[] = []
+    let moved = false
+    for (const watch of part) {
+      if (this.watches.get(watch.key) !== watch || watch.reading !== level) continue
+      if (levelOf(watch) !== level) {
+        watch.reading = undefined
+        watch.dueAt ??= startedAt
+        moved = true
+        continue
+      }
+      // This call answers a refresh that was asked for while the watch waited for it.
+      watch.dueAt = undefined
+      watch.polledAt = startedAt
+      reading.push(watch)
     }
-    this.schedule()
+    if (moved) this.schedule()
+    return reading
+  }
+
+  /** Read one part of a batch within its own `fetchTimeoutMs` deadline; a call that rejects or outlives it is the part's failure. */
+  private async read(
+    forge: string, registration: Registration | undefined, level: StatusLevel, part: readonly Watch[],
+  ): Promise<Reading | ForgeFailure> {
+    if (registration === undefined) return this.missing(forge)
+    try {
+      using timeout = deadline(this.lifetime.signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
+      const refs = part.map(watch => watch.ref)
+      return await this.invoke(registration, timeout.signal, async (provider, operation): Promise<Reading> =>
+        level === 'brief' && provider.fetchBriefs !== undefined
+          ? { kind: 'brief', results: await provider.fetchBriefs(refs, operation) }
+          : { kind: 'snapshot', results: await provider.fetch(refs, operation) })
+    } catch (error) {
+      return { code: 'unavailable', message: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   /**
@@ -969,6 +1014,24 @@ type WatchTiming = Pick<Watch, 'dueAt' | 'joinAt' | 'polledAt' | 'unknownMergeab
  */
 function waitOf(settledAt: number, delay: number | undefined): Pick<Watch, 'dueAt' | 'joinAt'> {
   return delay === undefined ? { dueAt: undefined, joinAt: undefined } : { dueAt: settledAt + delay, joinAt: settledAt + delay / 2 }
+}
+
+/**
+ * Split the batch of one fetch into the parts that one provider call reads each.
+ * @param batch - watches of one forge that are read at `level`.
+ * @param provider - the forge's provider, or undefined without one.
+ * @param level - what the fetch reads.
+ * @returns the whole batch as one part, unless the provider names a batch size for the method that reads `level`:
+ * then the watches of each host, compared without case, in parts of at most that size.
+ */
+function partsOf(batch: readonly Watch[], provider: ForgeProvider | undefined, level: StatusLevel): readonly (readonly Watch[])[] {
+  const size = level === 'brief' && provider?.fetchBriefs !== undefined ? provider.briefBatchSize : provider?.snapshotBatchSize
+  if (size === undefined) return [batch]
+  const parts: Watch[][] = []
+  for (const hosted of Map.groupBy(batch, watch => watch.ref.repository.host.toLowerCase()).values()) {
+    for (let start = 0; start < hosted.length; start += size) parts.push(hosted.slice(start, start + size))
+  }
+  return parts
 }
 
 /** The level polls of a watch read at: the snapshot while a snapshot watcher remains. */

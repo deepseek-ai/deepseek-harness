@@ -42,7 +42,7 @@ kind: "package-reference"
 
 轮询只返回 head 提交的前 100 条检查上下文，不追读后续页。预览不完整时设置 `checksTruncated` 并保留 GitHub 的汇总状态，局部计数不代表完整列表。`fetchChecks(ref, signal)` 仅按需读取指定 PR 的完整详情，后续页固定使用首次响应的 rollup。所有 JSON 响应（包括评审讨论分页）的 UTF-8 字节总量受 `maxOutputBytes` 限制，超出时返回 `too-large`。分页失败或游标不前进只使此次详情读取失败，保留轮询结果。同一应用、工作流、触发事件与检查名称的运行只保留运行 id 最新的一条；新的排队运行会替代旧的已完成运行。缺少数字数据库 id 的运行无法确定先后，因此按节点 id 保留。提交状态上下文按名称保留最新结果。完整列表从这些结果计算总体指示；未知上下文类型保留 GitHub 的汇总状态。
 
-快照读取把同一主机最多 `snapshotBatchSize`（默认 8）个 pull request 放进一个 GraphQL 查询，`fetchBriefs` 则最多放 `briefBatchSize`（默认 50）个。两者都依次发送查询；快照查询读完自己的评审讨论分页后，才发送下一个查询。简报查询读取 `url`、`title`、`state`、`isDraft`、`mergeable`、`reviewDecision` 以及 head 提交的 `statusCheckRollup.state`，不读取检查列表、评审人、评审讨论和仓库的合并设置。简报的检查汇总结果就是这个 `statusCheckRollup.state`；检查列表完整的快照则根据自己保留的检查得出结果。某个查询的 `gh` 无法启动、超过 `timeoutMs` 或输出超过 `maxOutputBytes`，或被 GitHub 拒绝时，只有该查询内的 pull request 失败；响应中不带路径的 GraphQL 错误也只影响该查询内的 pull request。读取被取消后不再发送后续查询。
+快照读取把同一主机最多 `snapshotBatchSize`（默认 8）个 pull request 放进一个 GraphQL 查询，`fetchBriefs` 则最多放 `briefBatchSize`（默认 25）个。提供方把这两个大小告知 forge 注册表，注册表每次调用轮询同一主机的这么多个 pull request，所以一次轮询的每个查询独占注册表的 `fetchTimeoutMs` 时限，查询得到应答后它的结果就会发布。一次读取指定了同一主机更多的 pull request 时，依次发送各个查询；快照查询读完自己的评审讨论分页后，才发送下一个查询。简报查询读取 `url`、`title`、`state`、`isDraft`、`mergeable`、`reviewDecision` 以及 head 提交的 `statusCheckRollup.state`，不读取检查列表、评审人、评审讨论和仓库的合并设置。简报的检查汇总结果就是这个 `statusCheckRollup.state`；检查列表完整的快照则根据自己保留的检查得出结果。某个查询的 `gh` 无法启动、超过 `timeoutMs` 或输出超过 `maxOutputBytes`，或被 GitHub 拒绝时，只有该查询内的 pull request 失败；响应中不带路径的 GraphQL 错误也只影响该查询内的 pull request。读取被取消后不再发送后续查询。
 
 每次快照读取按每页最多 100 个统计评审讨论，直到已统计 `maxReviewThreads`（默认 1,000）个为止；第一页之后每读一页多一次 GraphQL 查询。讨论更多的 pull request 设置 `threadsTruncated`，其 `unresolvedThreads` 只统计已读取的讨论。讨论分页失败或游标不前进时，该 pull request 的状态读取失败，同批其他 pull request 不受影响；不发布不完整的计数。
 
@@ -120,7 +120,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 - **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
 - **评审讨论上限**——每次状态读取每个 pull request 最多统计、每次评审读取最多读取 `maxReviewThreads` 个评审讨论；超出时 `unresolvedThreads` 只是下限，由 `threadsTruncated` 标出，评审读取的结果标记为 `truncated`。
-- **批次时限**——一次状态读取的各个查询，以及评审讨论很多的 pull request 的续页，都在 `ctx.forge` 的同一个 `fetchTimeoutMs` 时限内运行；读取超过该时限时，其中每个 pull request 都报告 `unavailable`，已得到应答的查询中的 pull request 也不例外。`timeoutMs` 与该时限的默认值都是 30 秒，因此默认配置下某个查询的 `gh` 挂起会让整次读取失败；只有 `timeoutMs` 短于该时限的剩余时间时，挂起的查询才只影响自己的 pull request。
+- **调用时限**——一个快照查询和它的 pull request 的续页，在 `ctx.forge` 的同一个 `fetchTimeoutMs` 时限内运行；评审讨论很多的 pull request 可能让它所在的查询超过该时限，这时该查询里最多 `snapshotBatchSize` 个 pull request 都报告 `unavailable`，而不只是讨论很多的那个。
 - **简报的检查结果**——简报报告 GitHub 的检查汇总状态，检查列表完整的快照则自行得出结果；同一个 pull request 的两个结果不一致时，没有机制去对齐它们。
 - **基准分支被改写**——diff 从 head 与 GitHub 在 pull request 最后一次更新时记录的基准提交的合并基准开始。基准分支被强制推送后，该合并基准可能不同于 GitHub pull request 页面使用的合并基准，因此在 pull request 更新前，补丁可能多出或缺少提交。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。

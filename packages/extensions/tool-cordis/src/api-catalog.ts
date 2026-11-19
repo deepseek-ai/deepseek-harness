@@ -1340,14 +1340,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forge',
     summary: 'Registry of forge providers.',
-    description: 'Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level.',
+    description: 'Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level, and those past the midpoint of the wait after a status, so change requests that became due at different times come to share one fetch. A fetch calls a provider that names a batch size once per that many change requests of a host, and settles the results of each call when it returns.',
     methods: [
       {
         signature: 'register(provider: ForgeProvider): () => Promise<void>',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
         parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
         returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
-        throws: ['when another provider already serves the same forge or one of the same hosts, compared without case.'],
+        throws: ['when another provider already serves the same forge or one of the same hosts, compared without case, and when the provider names a batch size that is not a positive safe integer.'],
       },
       {
         signature: 'describe(forge: string): ForgeDescription | undefined',
@@ -1553,9 +1553,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer that stops this watch.',
       },
       {
-        signature: 'refresh(ref: ChangeRequestRef): void',
-        description: 'Poll a watched change request at once, including after a terminal state. A fetch already in flight is followed immediately by another fetch; an unwatched change request is unchanged.',
-        parameters: [{ name: 'ref', description: 'change request to poll.' }],
+        signature: 'refresh(ref: ChangeRequestRef, options: ChangeRequestWatchOptions = {}): void',
+        description: 'Poll a watched change request at once, including after a terminal state. A fetch already in flight is followed immediately by another fetch; an unwatched change request is unchanged. With `options.maxAgeMs`, the caller needs a status no older than that many milliseconds: a change request whose latest poll at either level, in flight or settled, started within them is left alone, and so is a merged one, whose status is final.',
+        parameters: [{ name: 'ref', description: 'change request to poll.' }, { name: 'options', description: 'when the caller needs a status newer than the latest one.' }],
+      },
+      {
+        signature: 'expectChange(ref: ChangeRequestRef): void',
+        description: 'Announce that a watched change request is about to change, as after a push to its head branch. It is polled at once and then every `activeIntervalMs`, until a status reports running checks or a closed or merged change request, and for at most `idleIntervalMs`; after that the regular cadence applies. A fetch already in flight is followed immediately by another fetch; an unwatched change request is unchanged.',
+        parameters: [{ name: 'ref', description: 'change request the caller expects to change.' }],
       },
       {
         signature: 'latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined',
@@ -1670,9 +1675,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-too-large` or `forgePanel/diff-failed` when the host does not provide the file.'],
       },
       {
-        signature: '@Remote async reviewViewed(url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
-        description: 'Read the signed-in user\'s viewed marks on the files of a change request the review page shows.',
-        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff.' }, { name: 'signal', description: 'request cancellation.' }],
+        signature: '@Remote async reviewViewed(url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
+        description: 'Read the signed-in user\'s viewed marks on the files of a change request the review page shows, as ForgePanelController.changeRequestViewed keeps them.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff.' }, { name: 'fresh', description: 'whether to read the host although kept marks could answer, as after a refresh.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the marks, or null when the provider keeps no viewed marks.',
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head` or `forgePanel/viewed-failed` as {@link ForgePanelController.changeRequestViewed} does.'],
       },
@@ -1763,6 +1768,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.',
       },
       {
+        signature: '@Remote async revisit(sessionId: SessionId, signal: AbortSignal): Promise<void>',
+        description: 'Bring a followed Session\'s panel up to date after its surface showed again: reinspect the checkout, poll the change requests whose latest poll is older than `statusMaxAgeMs`, probe sign-in again unless the last probe found the host ready, and look the upstream branch up again while the Session shows no change request; an unfollowed Session is unchanged.',
+        parameters: [{ name: 'sessionId', description: 'Session whose panel is revisited; revisiting neither loads nor resumes it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'settles once the inspection and the sign-in probe have ended; poll results reach the panel stream later.',
+      },
+      {
         signature: '@Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>',
         description: 'Read the changes one scope covers in the checkout of the Session\'s current directory, with Git using the Session\'s sandbox policy.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'which changes to read.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1832,9 +1843,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/lens-missing` while no lens holds the identity or once its registration ends; `forgePanel/lens-stale` before a change request\'s status was read, when the files differ from `request.version`, and when local files changed while the lens ran; `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.'],
       },
       {
-        signature: '@Remote async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
-        description: 'Read the signed-in user\'s viewed marks on the files of a change request of a Session, which the host keeps for the whole change request.',
-        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff; marks read at another head are refused.' }, { name: 'signal', description: 'request cancellation.' }],
+        signature: '@Remote async changeRequestViewed( session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal, ): Promise<ForgeViewedFiles | null>',
+        description: 'Read the signed-in user\'s viewed marks on the files of a change request of a Session, which the host keeps for the whole change request. Marks read at the same head are kept in memory and returned until they are `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a mark saved through `ctx.forge` at that head replaces the kept state of its file, so the read after a save costs no request.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff; marks read at another head are refused.' }, { name: 'fresh', description: 'whether to read the host although kept marks could answer, as after a refresh.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the marks at `headSha`, or null when the provider keeps no viewed marks.',
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`, which is then polled again; `forgePanel/viewed-failed` when the host does not provide the marks otherwise.'],
       },
@@ -7690,7 +7701,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapsho /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    readonly snapshotBatchSize?: number;\n    readonly briefBatchSize?: number;\n    fetchCh /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
