@@ -14,7 +14,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import {
   ConversationSlotPanel, FixedChatConversationView, parseSubagentChatAddress,
-  registerSidebarChat, subagentChatAddress, SUBAGENT_CHAT_ID, type SidebarChatTabProps,
+  registerSidebarChat, sessionChatAddress, subagentChatAddress, SUBAGENT_CHAT_ID, type SidebarChatTabProps,
 } from '../src/client/sidebar-chat/index.tsx'
 import { SidebarChatTab } from '../src/client/sidebar-chat/index.tsx'
 
@@ -42,6 +42,12 @@ describe('Sidebar chat address', () => {
       .toEqual({ ...ADDRESS, mode: 'unknown' })
   })
 
+  it('addresses a root Session without a routing query', () => {
+    const resource = sessionChatAddress(CHILD)
+    expect(resource).toBe('dsh-resource://subagentchat/session/child%231')
+    expect(parseSubagentChatAddress(resource)).toBe(CHILD)
+  })
+
   it.each([
     'not an address',
     'https://chat/session/child?parent=parent&mode=continuable',
@@ -51,6 +57,7 @@ describe('Sidebar chat address', () => {
     'dsh-resource://subagentchat/session/child?parent=&mode=continuable',
     'dsh-resource://subagentchat/session/child?parent=parent&mode=invalid',
     'dsh-resource://subagentchat/session/%?parent=parent&mode=continuable',
+    'dsh-resource://subagentchat/session/%',
   ])('rejects %s', (address) => {
     expect(parseSubagentChatAddress(address)).toBeUndefined()
   })
@@ -75,6 +82,7 @@ describe('Sidebar chat registration', () => {
             displayTitle: 'Projected title',
             projectionValues: { subagent: { mode: 'continuable', label: 'Worker', seq: 1 } },
           },
+          [PARENT]: { displayTitle: 'Root title' },
         },
         phase: 'ready',
         projectionsBySession: {},
@@ -85,6 +93,7 @@ describe('Sidebar chat registration', () => {
     let provider: ResourceProvider<'subagentchat'> | undefined
     let definition: SidebarRightTabDefinition | undefined
     const registrations: { options: Record<string, unknown>; component: unknown }[] = []
+    const disposers: (() => void)[] = []
     const openWorkspace = vi.fn(() => Promise.resolve())
     const ctx = {
       sessions: { retain, refreshProjections, list } as unknown as ISessions,
@@ -97,10 +106,19 @@ describe('Sidebar chat registration', () => {
           return () => {}
         },
       },
-      effect: (install: () => unknown) => { install(); return () => {} },
+      effect: (install: () => unknown) => {
+        const dispose = install()
+        if (typeof dispose === 'function') disposers.push(dispose as () => void)
+        return () => {}
+      },
     } as unknown as Context
 
-    registerSidebarChat(Object.assign(ctx, { uiWorkspace: { openWorkspace } }), (key: string) => key === 'sidebar.chat' ? 'Chat' : key)
+    const openResource = vi.fn()
+    let onScreen: SessionId | undefined = PARENT
+    registerSidebarChat(
+      Object.assign(ctx, { uiWorkspace: { openWorkspace }, sidebarRight: { openResource, mounted: { getSnapshot: () => onScreen } } }),
+      (key: string) => key === 'sidebar.chat' ? 'Chat' : key,
+    )
 
     expect(definition?.id).toBe(SUBAGENT_CHAT_ID)
     expect(definition?.kind).toBe('subagentchat')
@@ -108,11 +126,36 @@ describe('Sidebar chat registration', () => {
     expect(definition?.canOpen?.('dsh-resource://subagentchat/invalid')).toBe(false)
     expect(definition?.title(subagentChatAddress(ADDRESS))).toBe('Worker')
     expect(definition?.title(subagentChatAddress({ ...ADDRESS, childSessionId: 'unknown' as SessionId }))).toBe('unknown')
+    expect(definition?.title(sessionChatAddress(PARENT))).toBe('Root title')
     expect(definition?.title('invalid')).toBe('Chat')
     expect(registrations.map(entry => entry.options.name)).toEqual([
       'sidebar.right.pane.tab',
       'sidebar.chat.conversation',
+      'shell.overlay',
     ])
+    // A dropped root Session opens in the on-screen Session's Sidebar column.
+    const drop = registrations[2]?.options.inject as () => {
+      hooks: { sessionDrag: { getSnapshot: () => SessionId | undefined } }
+      openAside: (sessionId: SessionId) => void
+    }
+    drop().openAside(CHILD)
+    expect(openResource).toHaveBeenCalledWith(sessionChatAddress(CHILD), { kind: 'subagentchat', destination: 'sidebar' })
+    onScreen = undefined
+    drop().openAside(CHILD)
+    expect(openResource).toHaveBeenCalledOnce()
+    onScreen = PARENT
+    // The tracker compares the dragged row with the Sidebar's on-screen Session and stops listening on disposal.
+    const dragStart = (): void => {
+      const event = new Event('dragstart', { bubbles: true })
+      Object.defineProperty(event, 'dataTransfer', { value: { getData: () => CHILD } })
+      document.body.dispatchEvent(event)
+    }
+    dragStart()
+    expect(drop().hooks.sessionDrag.getSnapshot()).toBe(CHILD)
+    document.body.dispatchEvent(new Event('dragend', { bubbles: true }))
+    for (const dispose of disposers) dispose()
+    dragStart()
+    expect(drop().hooks.sessionDrag.getSnapshot()).toBeUndefined()
     // A Workspace picked in the child's Hero opens as the main Session, as it does in the main Conversation.
     const children = registrations[0]?.options.children as {
       'sidebar.chat.conversation': { inject: { openWorkspace: (workspaceId: string, adopt: () => void) => Promise<void> } }

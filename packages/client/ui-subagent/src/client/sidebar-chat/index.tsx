@@ -1,18 +1,19 @@
-/** Right-Sidebar presentation of an existing subagent Conversation. */
+/** Right-Sidebar presentation of an existing subagent or dragged root Session Conversation. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ISessions, SessionReference,
+  ISessions, SessionReference, SessionTarget,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
-  PropsRenderFactories, PropsRenderSlots, PropsRuntime, TranslateNS,
+  HostObservable, PropsRenderFactories, PropsRenderSlots, PropsRuntime, TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
-import type { NS } from '../locales.ts'
+import { NS } from '../locales.ts'
 import css from './SidebarChat.module.css'
+import { SESSION_DRAG_TYPE, SessionDropZone, type SessionDropZoneInjected } from './SessionDropZone.tsx'
 
 /** Stable implementation identity for the Sidebar tab body. */
 export const SUBAGENT_CHAT_ID = '@deepseek-ai/dsh-client-ui-subagent'
@@ -22,7 +23,7 @@ export const SUBAGENT_CHAT_ADDRESS = 'dsh-resource://subagentchat/session/'
 
 /** Value retained by one live chat resource occurrence. */
 export interface SubagentChatResource {
-  readonly address: SubagentAddress
+  readonly address: SessionTarget
   readonly reference: SessionReference
 }
 
@@ -57,11 +58,21 @@ export function subagentChatAddress(address: SubagentAddress): string {
 }
 
 /**
+ * Address one root Session, which carries no routing query.
+ * @param sessionId - Session dragged from the Session list.
+ * @returns canonical Sidebar resource address.
+ */
+export function sessionChatAddress(sessionId: SessionId): string {
+  return `${SUBAGENT_CHAT_ADDRESS}${encodeURIComponent(sessionId)}`
+}
+
+/**
  * Parse one canonical Sidebar chat resource address.
  * @param value - possible chat resource address.
- * @returns the encoded direct-parent address, or undefined for another or malformed resource.
+ * @returns the encoded direct-parent address, the root Session id of an address without a query,
+ * or undefined for another or malformed resource.
  */
-export function parseSubagentChatAddress(value: string): SubagentAddress | undefined {
+export function parseSubagentChatAddress(value: string): SessionTarget | undefined {
   let url: URL
   try {
     url = new URL(value)
@@ -71,21 +82,19 @@ export function parseSubagentChatAddress(value: string): SubagentAddress | undef
   if (url.protocol !== 'dsh-resource:' || url.hostname.toLowerCase() !== 'subagentchat') return undefined
   const parts = url.pathname.split('/').filter(Boolean)
   if (parts.length !== 2 || parts[0] !== 'session') return undefined
+  let sessionId: SessionId
+  try {
+    sessionId = decodeURIComponent(parts[1] as string) as SessionId
+  } catch (_invalidEncoding) {
+    return undefined
+  }
+  if (url.search === '') return sessionId
   const parentSessionId = url.searchParams.get('parent')
   const mode = url.searchParams.get('mode')
   if (parentSessionId === null || parentSessionId === '' || (mode !== 'one-shot' && mode !== 'continuable' && mode !== 'unknown')) {
     return undefined
   }
-  try {
-    const childSessionId = decodeURIComponent(parts[1] as string)
-    return {
-      parentSessionId: parentSessionId as SessionId,
-      childSessionId: childSessionId as SessionId,
-      mode,
-    }
-  } catch (_invalidEncoding) {
-    return undefined
-  }
+  return { parentSessionId: parentSessionId as SessionId, childSessionId: sessionId, mode }
 }
 
 function waitForAbort(signal: AbortSignal): Promise<void> {
@@ -113,6 +122,54 @@ function subagentChatResourceProvider(sessions: ISessions): ResourceProvider<'su
       } finally {
         reference.release()
       }
+    },
+  }
+}
+
+/**
+ * Track Session rows dragged from the Session list while another Session is on screen.
+ * @param doc - document whose drag events carry the rows' data.
+ * @param mounted - reads the on-screen Session.
+ * @returns the dragged Session observable and its listener disposer.
+ */
+export function trackSessionDrags(doc: Document, mounted: () => SessionId | undefined): {
+  readonly source: HostObservable<SessionId | undefined>
+  readonly dispose: () => void
+} {
+  let current: SessionId | undefined
+  const listeners = new Set<() => void>()
+  const publish = (next: SessionId | undefined): void => {
+    if (next === current) return
+    current = next
+    for (const listener of listeners) listener()
+  }
+  // The row's React handler has set the drag data by the time dragstart bubbles here.
+  const start = (event: DragEvent): void => {
+    const id = event.dataTransfer?.getData(SESSION_DRAG_TYPE) as SessionId | undefined
+    const onScreen = mounted()
+    publish(id !== undefined && id !== '' && onScreen !== undefined && onScreen !== id ? id : undefined)
+  }
+  const end = (): void => { publish(undefined) }
+  // A source row unmounted mid-drag fires dragend on a detached node; the first
+  // button-free mouse move after the drag clears the zone instead.
+  const move = (event: MouseEvent): void => { if (event.buttons === 0) end() }
+  doc.addEventListener('dragstart', start)
+  doc.addEventListener('dragend', end)
+  doc.addEventListener('drop', end)
+  doc.addEventListener('mousemove', move)
+  return {
+    source: {
+      getSnapshot: () => current,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    },
+    dispose: () => {
+      doc.removeEventListener('dragstart', start)
+      doc.removeEventListener('dragend', end)
+      doc.removeEventListener('drop', end)
+      doc.removeEventListener('mousemove', move)
     },
   }
 }
@@ -188,10 +245,11 @@ export function registerSidebarChat(ctx: Context, t: TranslateNS<typeof NS>): vo
     priority: 'builtin',
     canOpen: address => parseSubagentChatAddress(address) !== undefined,
     title: (address) => {
-      const child = parseSubagentChatAddress(address)?.childSessionId
-      return child === undefined
-        ? t('sidebar.chat')
-        : ctx.sessions.list.getSnapshot().byId[child]?.projectionValues?.subagent?.label ?? child
+      const target = parseSubagentChatAddress(address)
+      if (target === undefined) return t('sidebar.chat')
+      const id = typeof target === 'string' ? target : target.childSessionId
+      const summary = ctx.sessions.list.getSnapshot().byId[id]
+      return summary?.projectionValues?.subagent?.label ?? summary?.displayTitle ?? id
     },
   } satisfies SidebarRightTabDefinition), 'ui-subagent: Sidebar chat type')
   const chatInjected: SidebarChatInjected = {
@@ -205,4 +263,24 @@ export function registerSidebarChat(ctx: Context, t: TranslateNS<typeof NS>): vo
   ctx.effect(() => ctx.slots.inject('sidebar.chat.conversation', () => ctx.slots.register({
     name: 'sidebar.chat.conversation',
   }, ConversationSlotPanel)), 'ui-subagent: Sidebar Conversation')
+  // Headless profiles can instantiate client registrations without a document.
+  if (typeof document === 'undefined') return
+  ctx.effect(() => {
+    const drags = trackSessionDrags(document, () => ctx.sidebarRight.mounted.getSnapshot())
+    const injected: SessionDropZoneInjected = {
+      hooks: { sessionDrag: drags.source },
+      openAside: (sessionId) => {
+        // The on-screen Session can leave between dragstart and drop.
+        if (ctx.sidebarRight.mounted.getSnapshot() === undefined) return
+        ctx.sidebarRight.openResource(sessionChatAddress(sessionId), { kind: 'subagentchat', destination: 'sidebar' })
+      },
+    }
+    const disposeZone = ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+      name: 'shell.overlay', id: 'subagent.session-drop', locale: NS, inject: () => injected,
+    }, SessionDropZone))
+    return () => {
+      disposeZone()
+      drags.dispose()
+    }
+  }, 'ui-subagent: Session drop target')
 }

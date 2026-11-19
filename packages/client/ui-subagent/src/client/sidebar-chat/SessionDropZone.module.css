@@ -1,0 +1,68 @@
+/* The drop target covers the right column's default 40% band, like the dock
+   kit's edge band, and draws the dock kit's drop hint: a blurred ground under
+   a dashed card that takes the accent while the pointer is over it. */
+.zone {
+  position: fixed;
+  top: var(--dsh-frame-top-clearance, 0px);
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  display: flex;
+  width: max(300px, 40vw);
+  max-width: 100vw;
+  padding: 8px;
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
+  backdrop-filter: blur(6px);
+  animation: zoneIn 140ms ease-out;
+}
+
+.card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  border: 1.5px dashed var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.zone[data-active] .card {
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color) 8%, transparent);
+  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+/* The left sidebar's panel icon, mirrored, as on the right Sidebar's expand button. */
+.icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transform: scaleX(-1);
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-weight: 500;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes zoneIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zone { animation: none; }
+  .card { transition: none; }
+}
