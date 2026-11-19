@@ -234,7 +234,9 @@ export class SessionCommandController {
     } catch {
       throw new RemoteError('gateway/bad-request', 'atSeq must be a non-negative safe integer', {})
     }
-    if (request.origin !== undefined && request.origin !== 'side') {
+    // The Remote request is untrusted wire input, so a value outside the declared type is rejected here.
+    const origin: string | undefined = request.origin
+    if (origin !== undefined && origin !== 'side') {
       throw new RemoteError('gateway/bad-request', 'origin must be "side"', {})
     }
     let observed: SessionObservation
