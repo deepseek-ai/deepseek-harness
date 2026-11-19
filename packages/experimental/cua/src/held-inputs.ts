@@ -190,17 +190,14 @@ export class CuaHeldInputs {
       }
       return next()
     })
+    yield ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+      // This live notification runs after append publication, so removal can safely write its own event.
+      if (message.source.kind === 'cua-held-inputs' && this.owners.get(agent)?.closing) agent.inbox.remove(message.id)
+    }, { prepend: true })
     yield ctx.on('session/event', (session, event) => {
-      if (event.type !== 'turn/end' && event.type !== 'agent/inbox/spliced') return
+      if (event.type !== 'turn/end') return
       const agent = ctx.agents.get(session.id)
       if (agent?.session !== session) return
-      if (event.type === 'agent/inbox/spliced') {
-        // Cancellation can finish cleanup before a delayed tool result queues its earlier held-state snapshot.
-        if (this.owners.get(agent)?.closing) {
-          for (const message of event.data.inserted) if (message.source.kind === 'cua-held-inputs') agent.inbox.remove(message.id)
-        }
-        return
-      }
       this.turnSignals.get(agent)?.remove()
       this.turnSignals.delete(agent)
       if (event.data.reason.kind === 'aborted' || event.data.reason.kind === 'error') this.stop(agent)
