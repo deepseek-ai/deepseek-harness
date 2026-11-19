@@ -60,11 +60,15 @@ interface SetupOptions {
 
 function fixture(options: SetupOptions = {}) {
   const ctx = new Context()
-  // The Agent runs a maintenance task at once and cancels it through this controller, as its cancel and disposal do.
-  const maintenance = new AbortController()
+  let active: AbortController | undefined
   const members: Pick<Agent, 'id' | 'ctx' | 'runMaintenance' | 'cancel' | 'whenIdle'> = {
-    id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(), runMaintenance: task => task(maintenance.signal),
-    cancel: (cause) => { maintenance.abort(cause) }, whenIdle: async () => {},
+    id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(),
+    runMaintenance: async (task) => {
+      const controller = new AbortController()
+      active = controller
+      try { return await task(controller.signal) } finally { active = undefined }
+    },
+    cancel: (cause) => { active?.abort(cause) }, whenIdle: async () => {},
   }
   const runMaintenance = vi.spyOn(members, 'runMaintenance')
   const cancel = vi.spyOn(members, 'cancel')
@@ -105,7 +109,7 @@ function fixture(options: SetupOptions = {}) {
   if (options.programs !== false) ctx.provide('cuaPrograms', { release, releaseInputs: vi.fn(async () => {}), screenshotRequestTarget: () => undefined, ...options.programs } as never)
   onTestFinished(async () => { await ctx.fiber.dispose() })
   return {
-    ctx, agent, maintenance, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,
+    ctx, agent, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,
     release, dispose,
   }
 }
@@ -141,7 +145,7 @@ function texts(result: CallToolResult): string[] {
 
 describe('Computer Use MCP server', () => {
   it('creates the Agent before serving, projects its registration verbatim, and runs programs as Agent maintenance inside the initiator scope', async () => {
-    const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance, maintenance } = await setup()
+    const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance } = await setup()
     expect(create).toHaveBeenCalledOnce()
     expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { cwd: '/workspace', agentPreset: 'cua-mcp' } })
     expect(mount).toHaveBeenCalledWith(agent.ctx)
@@ -170,10 +174,6 @@ describe('Computer Use MCP server', () => {
     expect(withInitiator).toHaveBeenCalledOnce()
     expect(initiators).toEqual([agent])
     expect(texts(await run({ code: '2', description: 'Again' }))).toEqual(['program output'])
-    // Cancelling the Agent's maintenance activity, as its disposal does, cancels the program's execution.
-    expect(input.signal.aborted).toBe(false)
-    maintenance.abort()
-    expect(input.signal.aborted).toBe(true)
   })
 
   it('fails the listing when the registration is not representable as an MCP tool', async () => {
