@@ -66,4 +66,19 @@ describe('SidechatControl.fork', () => {
     await vi.waitFor(() => { expect(opened).toHaveLength(1) })
     expect(forks).toEqual([{ sessionId: SOURCE, increaseTitle: true }])
   })
+
+})
+
+describe('sidechat resource provider', () => {
+  it('retains the child with its conversation facet so the tab folds the event window', async () => {
+    const { sidechatResourceProvider } = await import('../src/client/resource.ts')
+    const retain = vi.fn(() => ({ release: vi.fn() }))
+    const abort = new AbortController()
+    const provider = sidechatResourceProvider({ retain: retain as never })
+    const stream = provider.open(sidechatAddress(CHILD), { signal: abort.signal })[Symbol.asyncIterator]()
+    expect((await stream.next()).done).toBe(false)
+    expect(retain).toHaveBeenCalledExactlyOnceWith(CHILD, { source: 'sidechat', facets: { conversation: true }, signal: abort.signal })
+    abort.abort()
+    expect((await stream.next()).done).toBe(true)
+  })
 })

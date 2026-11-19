@@ -31,7 +31,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { control.dispose() }, 'sidechat: in-flight forks')
   const t = ctx.locale.bind(NS)
   // Always available: an unavailable command lets a typed `/side` reach the model as a message.
-  // The control declines a source with a fork in flight; a Session without history fails on the Host.
+  // The control declines a source with a fork in flight.
   ctx.effect(() => ctx.commandUi.register({
     name: 'side', label: () => t('command'), description: () => t('command.description'), icon: IconCompareSplitOutlineRegular,
     available: () => true,

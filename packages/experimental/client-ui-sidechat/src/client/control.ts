@@ -34,7 +34,8 @@ export class SidechatControl {
    * Fork at the newest durable event the Client has seen, including inside a running Turn, and open the
    * child in the right Sidebar of the Session on screen. Forking from a side conversation therefore adds
    * the child beside it, not inside it. Without a retained event window the Host selects the latest
-   * completed Turn.
+   * completed Turn. A blank source forks its configuration events into an empty child, which behaves
+   * like a new Session. A source with a fork in flight and a disposed control are ignored.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {

@@ -45,7 +45,8 @@ export function parseSidechatAddress(address: string): SessionId | undefined {
 }
 
 /**
- * Retain the child Session while its resource is mounted; releasing never cancels the Host Agent.
+ * Retain the child Session with its `conversation` facet while its resource is mounted, so the tab's Chat
+ * folds the event window; releasing never cancels the Host Agent.
  * Acquisition failures and malformed addresses yield a failure frame.
  * @param sessions - ordinary Session reference owner.
  * @returns the resource provider.
@@ -62,7 +63,7 @@ export function sidechatResourceProvider(sessions: Pick<ISessions, 'retain'>): R
       if (signal.aborted) return
       let reference: SessionReference
       try {
-        reference = sessions.retain(id, { source: 'sidechat', signal })
+        reference = sessions.retain(id, { source: 'sidechat', facets: { conversation: true }, signal })
       } catch (error) {
         yield { ok: false, error: remoteErrorOf(error)
           ?? new RemoteError('gateway/internal', error instanceof Error ? error.message : String(error), {}) }
