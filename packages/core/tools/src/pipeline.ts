@@ -11,7 +11,7 @@ import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutp
 import { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, type ApprovalErrorCode } from './error-codes.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
 import type { ToolsService } from './index.ts'
-import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
+import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolExecutionFailure, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
 
 /** Executor-owned lookup and restrictions applied before extensible execution policy. */
 export interface ToolExecutionSource {
@@ -403,7 +403,7 @@ export class ToolExecutionPipeline {
    * @returns the materialized final result.
    * @internal
    */
-  private async finish(exec: ToolRunContext, result: ToolExecutionResult): Promise<ToolExecutionResult> {
+  private finish(exec: ToolRunContext, result: ToolExecutionResult): ToolExecutionResult | Promise<ToolExecutionResult> {
     let materializedResult: ToolExecutionResult
     try {
       materializedResult = this.materializeFinalResult(result)
@@ -418,18 +418,25 @@ export class ToolExecutionPipeline {
     }
     const cleanups = this.failureCleanups.get(exec)
     this.failureCleanups.delete(exec)
-    if (finalResult.isError && cleanups) {
-      const errors: string[] = []
-      for (const cleanup of cleanups) {
-        try { await cleanup() } catch (error) { errors.push(toolErrorMessage(error)) }
-      }
-      if (errors.length) {
-        const feedback = `Tool cleanup failed: ${errors.join('\n')}`
-        finalResult = this.materializeFinalResult({
-          ...finalResult, error: { ...finalResult.error, message: `${finalResult.error.message}\n${feedback}` },
-          content: [...finalResult.content, { type: 'text', text: feedback }],
-        })
-      }
+    if (finalResult.isError && cleanups) return this.finishFailure(exec, finalResult, cleanups)
+    this.notifyResult(exec, finalResult)
+    return finalResult
+  }
+
+  /** Await all cleanup for this failed call and preserve the original error identity and policy feedback. */
+  private async finishFailure(exec: ToolRunContext, result: ToolExecutionFailure,
+    cleanups: readonly (() => void | Promise<void>)[]): Promise<ToolExecutionResult> {
+    const errors: string[] = []
+    for (const cleanup of cleanups) {
+      try { await cleanup() } catch (error) { errors.push(toolErrorMessage(error)) }
+    }
+    let finalResult: ToolExecutionResult = result
+    if (errors.length) {
+      const feedback = `Tool cleanup failed: ${errors.join('\n')}`
+      finalResult = this.materializeFinalResult({
+        ...result, error: { ...result.error, message: `${result.error.message}\n${feedback}` },
+        content: [...result.content, { type: 'text', text: feedback }],
+      })
     }
     this.notifyResult(exec, finalResult)
     return finalResult
