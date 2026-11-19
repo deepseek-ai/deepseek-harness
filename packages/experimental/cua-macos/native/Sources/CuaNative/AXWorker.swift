@@ -152,6 +152,11 @@ actor AXWorker {
         targets[id] = .running(identity)
         return id
     }
+    func discardSnapshot(_ scope: SnapshotScope) {
+        snapshots.removeValue(forKey: scope)
+        if let windowID = scope.windowID { observedWindowBounds[scope.appHandle]?.removeValue(forKey: windowID) }
+        else { observedWindowBounds.removeValue(forKey: scope.appHandle) }
+    }
     private func snapshot(_ handle: String, _ id: String) throws -> NativeSnapshot {
         guard let result = snapshots.values.first(where: { $0.scope.appHandle == handle && $0.id == id }) else {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot expired; read fresh getAccessibilityTree")
@@ -285,9 +290,9 @@ actor AXWorker {
         var previousTree: AXTreeBaseline?
         if method == "getState" {
             let windowID = try params.optionalWindowID()
-            previousTree = snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))?.tree
-            if let windowID { observedWindowBounds[handle]?.removeValue(forKey: windowID) }
-            else { observedWindowBounds.removeValue(forKey: handle) }
+            let scope = SnapshotScope(appHandle: handle, windowID: windowID)
+            previousTree = snapshots[scope]?.tree
+            discardSnapshot(scope)
         }
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {

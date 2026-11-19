@@ -111,3 +111,22 @@ func axDifferenceRequiresMatchingReadOptions(_ changed: [String: JSONValue]) thr
         }
     }
 }
+
+@Test(arguments: ["NATIVE_CANCELLED", "NATIVE_TIMEOUT"])
+func cancelledReadDiscardsThePublishedWindowBeforeAnotherRequest(code: String) throws {
+    let control = NativeRequestControl()
+    let request = try NativeRequest(data: Data(#"{"id":"read","method":"getState","params":{"appHandle":"fixture","windowId":"7"}}"#.utf8))
+    let delivery = try #require(AXReadDelivery(request, control: control))
+    control.startOperation()
+    defer { control.finish() }
+    let full = try tree(titles)
+    var published = [delivery.scope: AXTreeBaseline(projection: full, options: try options())!]
+    #expect(delivery.scopeToDiscard == nil)
+    control.cancel(NativeFailure(code: code, message: "Read interrupted"), grace: 1, axTimeout: 1,
+                   unresponsive: {}, blockedReply: {})
+    let scope = try #require(delivery.scopeToDiscard)
+    #expect(scope == SnapshotScope(appHandle: "fixture", windowID: 7))
+    published.removeValue(forKey: scope)
+    let current = AXTreeBaseline(projection: full, options: try options())
+    #expect(try AXTreeDifference.render(projection: full, current: current, previous: published[scope], showDiff: true, checkCancellation: {}) == full.tree)
+}

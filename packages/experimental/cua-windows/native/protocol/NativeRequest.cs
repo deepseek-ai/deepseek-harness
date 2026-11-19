@@ -62,9 +62,6 @@ public sealed record NativeRequest(string Id, string Method, JsonElement Params)
     {
         if (!Schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid)
             throw new NativeFailure("INVALID_ARGUMENT", "The request does not match the CUA operation schema");
-        if (value.GetProperty("method").GetString() == "getState"
-            && value.GetProperty("params").TryGetProperty("showDiff", out var showDiff) && showDiff.GetBoolean())
-            throw new NativeFailure("UNSUPPORTED", "showDiff is not implemented on Windows yet. Omit it or pass false to read the full accessibility tree.");
         return new(value.GetProperty("id").GetString()!, value.GetProperty("method").GetString()!, value.GetProperty("params"));
     }
 }

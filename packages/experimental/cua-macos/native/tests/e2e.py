@@ -177,6 +177,11 @@ def main():
                 unchanged = call("getState", diff_params)
                 assert unchanged["tree"] == "AX tree unchanged.", unchanged
                 assert unchanged["snapshotId"] != first["snapshotId"]
+                # A successful reply already in flight may be discarded by a cancelling Host.
+                helper.process.stdin.write(json.dumps({"type": "cancel", "id": str(helper.sequence)}) + "\n")
+                helper.process.stdin.flush()
+                unchanged = call("getState", diff_params)
+                assert unchanged["tree"].startswith("AX scope=window"), unchanged
                 button = next(e for e in unchanged["elements"] if e["title"] == "Increment primary")
                 target = {**owner, "snapshotId": unchanged["snapshotId"], "elementId": button["elementId"]}
                 call("invoke", target)
