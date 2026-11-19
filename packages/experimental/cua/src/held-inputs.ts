@@ -39,7 +39,7 @@ class InputOwner {
   }
 
   async reminder(): Promise<string | undefined> {
-    if (!this.client) return
+    if (this.closing || !this.client) return
     const inputs = heldInputs.parse(await this.client.request('getHeldInputs', { taskId: this.agent.id }, this.controller.signal))
     if (inputs.length === 0) {
       this.removeCleanup?.()
@@ -51,6 +51,7 @@ class InputOwner {
   }
 
   async releaseReminder(): Promise<string | undefined> {
+    if (this.closing) return
     const released = await this.close()
     return released.length > 0 ? renderInputs(released, 'released') : undefined
   }

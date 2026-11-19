@@ -382,7 +382,7 @@ it('reports native held input after programs, keeps it across turns, and stops r
 
 it('releases keyboard and mouse in mixed reverse order on program failure', async () => {
   const f = await setup([holdProgram,
-    'await app.sendKeyEvent("shift", "down"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("d", "down"); throw Error("program failed")'],
+    'await app.sendKeyEvent("shift", "down"); var win = await app.getWindow("7"); await win.toggleMouse("left", "down"); await app.sendKeyEvent("d", "down"); throw Error("program failed")', 'inspect("recovered")'],
   'macos', undefined, true, true)
   await f.run()
   expect(f.native.events).toEqual(['w:down', 'shift:down', 'left:down', 'd:down', 'd:up', 'left:up', 'shift:up', 'w:up'])
@@ -390,7 +390,7 @@ it('releases keyboard and mouse in mixed reverse order on program failure', asyn
   expect(reminders(f.agent)).toHaveLength(1)
   expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
   const results = f.agent.session.deriveMessages().filter(message => message.role === 'tool')
-  expect(results.map(result => result.isError)).toEqual([false, true])
+  expect(results.map(result => result.isError)).toEqual([false, true, false])
 })
 
 it('reminders name the actual mouse target and omit explicitly released inputs', async () => {

@@ -56,7 +56,7 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
   expect(COMMON_GUIDANCE).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
-  expect(COMMON_GUIDANCE).toContain('a system reminder lists any keys and mouse buttons still held')
+  expect(COMMON_GUIDANCE).toContain('a system reminder lists any remaining keys and mouse buttons')
   const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
   expect(sharedKeyEvent).toBeDefined()
   expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)
