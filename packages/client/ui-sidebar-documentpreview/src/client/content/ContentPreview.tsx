@@ -9,6 +9,7 @@ import { FileTypeIcon, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useScrollport } from '../scrollport.ts'
 import { RendererMenu, WrapToggle } from '../ViewerTools.tsx'
 import shared from '../TextPreview.module.css'
+import { DocumentBody } from '../DocumentBody.tsx'
 import { documentContentOf } from './content.ts'
 import { freshView } from './store.ts'
 import { iconKindOf } from './title.ts'
@@ -24,9 +25,19 @@ export function ContentPreview({ useTabInfo, renderFactorySlot }: ContentTabProp
   const { tab } = useTabInfo()
   const params = tab.navigation.params
   const input = params !== undefined && 'previewContent' in params ? params : undefined
-  return renderFactorySlot('sidebar.right.content.preview', {
+  return renderFactorySlot('sidebar.right.document.body', {
     title: input?.previewTitle ?? tab.title, content: input?.previewContent, useTabInfo,
   })
+}
+
+type BodyProps = FactoryComponentPropsOf<'sidebar.right.document.body'>
+
+/** Dispatch file inputs directly and give titled content the shared preview toolbar.
+ * @param props - selected file renderer or caller-supplied content and title.
+ * @returns the document body for this tab.
+ */
+export function DocumentViewer(props: BodyProps): ReactNode {
+  return 'rendererId' in props ? <DocumentBody {...props} /> : <ContentViewer {...props} />
 }
 
 /** In-memory content declares no file dependencies, so the renderer's dependency callbacks do nothing. */
@@ -37,10 +48,10 @@ function ignoreResources(): void {}
  * @param props - title, content, enclosing tab, and viewer controls.
  * @returns the shared preview header and body.
  */
-export function ContentViewer({
+function ContentViewer({
   content, title, useTabInfo, useStore, useDocumentPreviews,
-  select, toggleWrap, scroll, mediaTypeCandidates, renderFactorySlot, t,
-}: FactoryComponentPropsOf<'sidebar.right.content.preview'>): ReactNode {
+  select, toggleWrap, scroll, mediaTypeCandidates, renderSlot, t,
+}: Extract<BodyProps, { title: string }>): ReactNode {
   const { tab } = useTabInfo()
   const address = tab.contentId
   const view = useStore(state => state.byTab[tab.id]) ?? freshView()
@@ -100,10 +111,9 @@ export function ContentViewer({
         data-contentpreview-wrap={view.wrap ? '' : undefined}
         onScrollCapture={onScroll}
       >
-        {renderFactorySlot('sidebar.right.document.body', {
-          rendererId, useTabInfo, resourceAddress: address, content: rendered,
-          wrap: view.wrap, scrollportRef: bindScrollport, addResource: ignoreResources, setResources: ignoreResources,
-        })}
+        <DocumentBody rendererId={rendererId} useTabInfo={useTabInfo} resourceAddress={address} content={rendered}
+          wrap={view.wrap} scrollportRef={bindScrollport} addResource={ignoreResources} setResources={ignoreResources}
+          renderSlot={renderSlot} useDocumentPreviews={useDocumentPreviews} t={t} />
       </div>
     )
   }

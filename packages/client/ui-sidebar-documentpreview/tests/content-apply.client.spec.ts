@@ -13,9 +13,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { ResourceRegistry } from '@deepseek-ai/dsh-client-resources/src/client/resources.ts'
 import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-registry.ts'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
-import { apply } from '../src/client/content/index.ts'
+import { apply, registerDocumentViewer } from '../src/client/content/index.ts'
 import { retainDocumentTabs } from '../src/client/document/tab-lifetime.ts'
-import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, DocumentViewer } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
 import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import type { ContentPreviewStore } from '../src/client/content/store.ts'
@@ -57,7 +57,10 @@ async function boot() {
   ctx.provide('documentPreviews', previews)
   ctx.provide('slots', slots as never)
   ctx.provide('locale', locale as never)
-  const fiber = ctx.plugin({ inject: [...inject], apply: (scope: Context) => { apply(scope, retainDocumentTabs(scope)) } })
+  const fiber = ctx.plugin({ inject: [...inject], apply(scope: Context) {
+    scope.effect(() => registerDocumentViewer(scope, retainDocumentTabs(scope)))
+    apply(scope)
+  } })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
   return { tabs, previews, registered, fiber }
@@ -67,7 +70,7 @@ describe('direct content previews', () => {
   it('registers the shared tab and removes it with its service', async () => {
     const h = await boot()
     expect(h.tabs.get('content')).toMatchObject({ id: CONTENTPREVIEW_ID, patterns: ['dsh-resource://content-preview/**'] })
-    expect(h.registered.map(entry => entry.component)).toEqual([ContentViewer, ContentPreview, ContentTitle])
+    expect(h.registered.map(entry => entry.component)).toEqual([DocumentViewer, ContentPreview, ContentTitle])
     expect(h.tabs.get('content')?.title?.('dsh-resource://content-preview/item')).toBe('t:content.title')
     await h.fiber.dispose()
     expect(h.tabs.get('content')).toBeUndefined()

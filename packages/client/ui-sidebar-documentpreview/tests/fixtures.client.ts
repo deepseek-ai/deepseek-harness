@@ -28,7 +28,7 @@ import { createTextStore } from '../src/client/store.ts'
 import type { TextStore } from '../src/client/store.ts'
 import type { DocumentBodyInput, DocumentPreviewProps } from '../src/client/document/contract.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
-import { DocumentBody } from '../src/client/DocumentBody.tsx'
+import { DocumentViewer } from '../src/client/content/ContentPreview.tsx'
 import { TextBody } from '../src/client/text/TextBody.tsx'
 import { textBodyDefinition } from '../src/client/text/index.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -52,7 +52,7 @@ export function createResources(): ResourceRegistry {
  */
 export function documentSlots(body: BodySlot, definitions: readonly DocumentPreviewDefinition[] = []): TextPreviewProps['renderFactorySlot'] {
   return (name: string, input: unknown) => name === 'sidebar.right.document.body'
-    ? createElement(DocumentBody, {
+    ? createElement(DocumentViewer, {
       ...input as DocumentBodyInput, renderSlot: body, t,
       useDocumentPreviews: <S>(select: (value: readonly DocumentPreviewDefinition[]) => S): S => select(definitions),
     } as FactoryComponentPropsOf<'sidebar.right.document.body'>)

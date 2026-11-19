@@ -141,7 +141,7 @@ The `content` tab receives content and title through transient navigation parame
 
 The tab chooses a renderer by media type and uses the shared `sidebar.right.document.body` Factory. It offers the file preview's renderer menu and wrap control, remembers scroll and renderer selection per tab, and releases that state when the tab closes. Text becomes a complete text page; bytes are decoded or text encoded according to the renderer's loading mode. Content previews omit `baseAddress`, so relative workspace references remain unresolved. Unsupported media types show an explicit explanation.
 
-The shared `sidebar.right.content.preview` Factory renders both caller-supplied content and loaded compaction summaries with the same header and controls. The title comes from the latest navigation input, falling back to the recorded title after reload. The body region and chip use the same title.
+Plan and compaction tabs call `sidebar.right.document.body` with `{ title, content, useTabInfo }` for the shared header and renderer controls. File tabs pass `rendererId` and their loaded document to the same Factory and keep their file toolbar. The title comes from the latest navigation input, falling back to the recorded title after reload. The body region and chip use the same title.
 
 ## Model Experience
 

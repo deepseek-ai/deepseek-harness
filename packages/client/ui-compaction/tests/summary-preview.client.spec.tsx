@@ -29,7 +29,7 @@ it('renders a saved summary using the shared Markdown body and its localized tit
   expect(view.getByText('preview.title')).toBeTruthy()
   expect(view.container.querySelector('svg[width="16"] [data-file-type-mark]')).toBeTruthy()
   expect(view.getByText('Rendered summary')).toBeTruthy()
-  expect(renderFactorySlot).toHaveBeenCalledWith('sidebar.right.content.preview', {
+  expect(renderFactorySlot).toHaveBeenCalledWith('sidebar.right.document.body', {
     title: 'preview.title', content: { mediaType: 'text/markdown', text: '# Heading\n' }, useTabInfo,
   })
 })

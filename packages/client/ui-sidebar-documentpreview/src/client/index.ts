@@ -35,8 +35,6 @@ import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 import { DocumentPreviewRegistry } from './document/registry.ts'
 import { documentTabInfoFactory } from './document/contract.ts'
 import { retainDocumentTabs } from './document/tab-lifetime.ts'
-import type { DocumentBodyInjected } from './document/contract.ts'
-import { DocumentBody } from './DocumentBody.tsx'
 import { apply as registerText } from './text/index.ts'
 import { apply as registerMarkdown } from './markdown/index.ts'
 import { apply as registerHtml } from './html/index.ts'
@@ -45,7 +43,7 @@ import { apply as registerPdf } from './pdf/index.ts'
 import { apply as registerCode } from './code/index.ts'
 import { apply as registerOffice } from './office/index.ts'
 import { apply as registerExcel } from './excel/index.ts'
-import { apply as registerContent } from './content/index.ts'
+import { apply as registerContent, registerDocumentViewer } from './content/index.ts'
 import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
 import type { DocumentPreviewConfig } from '../types.ts'
 import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../defaults.ts'
@@ -112,13 +110,7 @@ export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewCo
     ctx.resources,
   )
   const source = { getSnapshot: previews.getSnapshot, subscribe: previews.subscribe }
-  ctx.effect(() => ctx.slots.registerFactory({
-    name: 'sidebar.right.document.body', scope: 'session', locale: NS,
-    children: {
-      'sidebar.right.tab.document': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } },
-    },
-    inject: (): DocumentBodyInjected => ({ hooks: { documentPreviews: source } }),
-  }, DocumentBody), 'ui-sidebar-documentpreview: document body factory')
+  ctx.effect(() => registerDocumentViewer(ctx, retainDocumentTabs(ctx)), 'ui-sidebar-documentpreview: document viewer')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     {
       name: 'sidebar.right.pane.tab', key: TEXTPREVIEW_ID, locale: NS, store,
@@ -146,5 +138,5 @@ export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewCo
   registerOffice(ctx, config.office.get() ?? OFFICE_DEFAULTS)
   registerExcel(ctx, config.excel.get() ?? EXCEL_DEFAULTS)
   registerCode(ctx)
-  registerContent(ctx, retainDocumentTabs(ctx))
+  registerContent(ctx)
 }

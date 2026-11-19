@@ -1,7 +1,8 @@
 /** Register shared content rendering with direct navigation inputs. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '../index.ts'
-import { ContentPreview, ContentViewer } from './ContentPreview.tsx'
+import { ContentPreview, DocumentViewer } from './ContentPreview.tsx'
+import { documentTabInfoFactory } from '../document/contract.ts'
 import { ContentTitle } from './ContentTitle.tsx'
 import { contentFace, type ContentFaceSources } from './face.ts'
 import { createContentPreviewStore } from './store.ts'
@@ -13,22 +14,30 @@ export const CONTENTPREVIEW_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpre
 const NS = 'sidebarDocumentPreview'
 
 /**
- * Register the content tab renderer and title.
+ * Register the shared document Factory and its keyed renderer slot.
  * @param ctx - context carrying the tab registry, the resource model, the renderer registry, slots, and copy.
  * @param retainTab - retains a content tab's view state until its record ends or the plugin is disposed.
+ * @returns disposer for the viewer and its renderer slot.
  */
-export function apply(ctx: Context, retainTab: ContentFaceSources['retainTab']): void {
-  const t = ctx.locale.bind(NS)
+export function registerDocumentViewer(ctx: Context, retainTab: ContentFaceSources['retainTab']): () => void {
   const previews = ctx.documentPreviews
   const face = contentFace({
     mediaTypeCandidates: mediaType => previews.mediaTypeCandidates(mediaType),
     hooks: { documentPreviews: { getSnapshot: previews.getSnapshot, subscribe: previews.subscribe } },
     retainTab,
   })
-  ctx.effect(() => ctx.slots.registerFactory({
-    name: 'sidebar.right.content.preview', scope: 'session', locale: NS,
+  return ctx.slots.registerFactory({
+    name: 'sidebar.right.document.body', scope: 'session', locale: NS,
+    children: { 'sidebar.right.tab.document': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } } },
     store: createContentPreviewStore(), inject: face,
-  }, ContentViewer), 'ui-sidebar-documentpreview: shared content viewer')
+  }, DocumentViewer)
+}
+
+/** Register the transient content tab and its title.
+ * @param ctx - sidebar tab registry, slots, and locale.
+ */
+export function apply(ctx: Context): void {
+  const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab', key: CONTENTPREVIEW_ID },
     ContentPreview,

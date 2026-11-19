@@ -19,8 +19,7 @@ import { apply, inject } from '../src/client/index.ts'
 import { OfficeFontAction } from '../src/client/office/OfficeFontAction.tsx'
 import { OfficeBody } from '../src/client/office/OfficeBody.tsx'
 import { TextPreview } from '../src/client/TextPreview.tsx'
-import { DocumentBody } from '../src/client/DocumentBody.tsx'
-import type { DocumentBodyInjected } from '../src/client/document/contract.ts'
+import type { ContentPreviewInjected } from '../src/client/content/face.ts'
 import { TextTitle } from '../src/client/TextTitle.tsx'
 import { TextBody } from '../src/client/text/TextBody.tsx'
 import { PLAIN_BODY_ID } from '../src/client/text/index.ts'
@@ -34,7 +33,7 @@ import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
-import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, DocumentViewer } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
 import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
@@ -130,11 +129,10 @@ describe('ui-sidebar-documentpreview apply', () => {
     ])
     // The document body Factory owns the renderer slot so other tab types can render it.
     expect(factories.map(({ options, component }) => [options.name, options.scope, options.locale, component])).toEqual([
-      ['sidebar.right.document.body', 'session', 'sidebarDocumentPreview', DocumentBody],
-      ['sidebar.right.content.preview', 'session', 'sidebarDocumentPreview', ContentViewer],
+      ['sidebar.right.document.body', 'session', 'sidebarDocumentPreview', DocumentViewer],
     ])
     expect(Object.keys(factories[0]!.options.children!)).toEqual(['sidebar.right.tab.document'])
-    const source = (factories[0]!.options.inject!() as DocumentBodyInjected).hooks.documentPreviews
+    const source = (factories[0]!.options.inject!() as ContentPreviewInjected).hooks.documentPreviews
     expect(source.getSnapshot()).toBe(ctx.get('documentPreviews')?.getSnapshot())
     expect(registered[0]?.store).toBeDefined()
     expect(typeof registered[0]?.inject).toBe('function')

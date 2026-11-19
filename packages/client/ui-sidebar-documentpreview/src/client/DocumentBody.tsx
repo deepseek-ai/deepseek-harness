@@ -1,14 +1,7 @@
-/**
- * The `sidebar.right.document.body` Factory: one document renderer occurrence.
- *
- * The Factory owns the keyed `sidebar.right.tab.document` declaration, so every
- * tab type that renders documents calls it instead of declaring the slot. It
- * dispatches the owner inputs to the body registered under `rendererId` and,
- * when none is registered, names the implementation from its registry
- * definition, or by its id when the definition is gone too.
- */
+/** Dispatch the selected renderer through the document Factory’s keyed slot. */
 import type { ReactNode } from 'react'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { DocumentBodyInput } from './document/contract.ts'
 import css from './TextPreview.module.css'
 
 /**
@@ -19,7 +12,7 @@ import css from './TextPreview.module.css'
 export function DocumentBody({
   rendererId, useTabInfo, addResource, setResources, resourceAddress, baseAddress, content, wrap, scrollportRef,
   renderSlot, useDocumentPreviews, t,
-}: FactoryComponentPropsOf<'sidebar.right.document.body'>): ReactNode {
+}: DocumentBodyInput & Pick<FactoryComponentPropsOf<'sidebar.right.document.body'>, 'renderSlot' | 'useDocumentPreviews' | 't'>): ReactNode {
   const definition = useDocumentPreviews(definitions => definitions.find(candidate => candidate.id === rendererId))
   const owner = {
     addResource, setResources, resourceAddress, content, wrap, scrollportRef,

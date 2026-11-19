@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { DocumentBody } from '../src/client/DocumentBody.tsx'
+import { DocumentViewer } from '../src/client/content/ContentPreview.tsx'
 import type { DocumentBodyInput } from '../src/client/document/contract.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
 import { ADDRESS, t } from './fixtures.client.ts'
@@ -37,7 +37,7 @@ function renderBody(value: DocumentBodyInput, registered: boolean, definitions: 
     ...value, renderSlot, t,
     useDocumentPreviews: <S,>(select: (snapshot: readonly DocumentPreviewDefinition[]) => S): S => select(definitions),
   } as Props
-  return { view: render(<DocumentBody {...props} />), renderSlot }
+  return { view: render(<DocumentViewer {...props} />), renderSlot }
 }
 
 describe('document body Factory', () => {

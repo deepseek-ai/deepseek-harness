@@ -30,7 +30,7 @@ export function SummaryPreview({ useTabInfo, useResource, renderFactorySlot, t }
       {missing ? t('preview.notFound') : failed ? t('preview.readFailed') : t('preview.loading')}
     </div>
   }
-  return renderFactorySlot('sidebar.right.content.preview', {
+  return renderFactorySlot('sidebar.right.document.body', {
     title: t('preview.title'), content: { mediaType: 'text/markdown', text: resource.value.markdown }, useTabInfo,
   })
 }

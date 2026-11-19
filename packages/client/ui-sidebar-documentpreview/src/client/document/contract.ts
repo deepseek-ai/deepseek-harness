@@ -4,11 +4,9 @@
  */
 import type { ContentPreviewInjected } from '../content/face.ts'
 import type { ContentPreviewStore } from '../content/store.ts'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PropsRuntime, SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PreviewContent, UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RefCallback } from 'react'
-import type { DocumentPreviewDefinition } from './registry.ts'
 
 /** One loaded text window, retaining source line positions. */
 export interface DocumentTextPage {
@@ -72,26 +70,12 @@ export type DocumentBodyInput = DocumentBodyOwner & {
   readonly useTabInfo: UseSidebarRightTabInfo
 }
 
-/** Private Factory inputs; the framework binds the registry source to useDocumentPreviews. */
-export interface DocumentBodyInjected {
-  readonly hooks: { readonly documentPreviews: ObservableSnapshot<readonly DocumentPreviewDefinition[]> }
-}
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotFactoryMap {
-    /** Document viewer with tab title, renderer selection, wrapping, and scroll state. */
-    'sidebar.right.content.preview': {
-      scope: 'session'
-      props: { title: string; content: PreviewContent | undefined; useTabInfo: UseSidebarRightTabInfo }
-      locale: 'sidebarDocumentPreview'
-      store: ContentPreviewStore
-      inject: ContentPreviewInjected
-    }
-
-    /** One document renderer occurrence, dispatched by implementation id. */
+    /** A selected file renderer, or titled content with a shared toolbar and media-type renderer selection. */
     'sidebar.right.document.body': {
       scope: 'session'
-      props: DocumentBodyInput
+      props: DocumentBodyInput | { title: string; content: PreviewContent | undefined; useTabInfo: UseSidebarRightTabInfo }
       children: {
         'sidebar.right.tab.document': {
           kind: 'keyed'
@@ -99,7 +83,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
           inject: { hooks: { tabInfo: SlotHookFactory<'sidebar.right.tab.document', UseSidebarRightTabInfo> } }
         }
       }
-      inject: DocumentBodyInjected
+      store: ContentPreviewStore
+      inject: ContentPreviewInjected
       locale: 'sidebarDocumentPreview'
     }
   }

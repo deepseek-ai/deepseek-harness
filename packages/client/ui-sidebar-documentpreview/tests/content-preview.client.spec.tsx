@@ -14,10 +14,12 @@ import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { DocumentBodyInput } from '../src/client/document/contract.ts'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
-import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, DocumentViewer } from '../src/client/content/ContentPreview.tsx'
 import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { contentFace } from '../src/client/content/face.ts'
 import { createContentPreviewStore } from '../src/client/content/store.ts'
+
+type RenderedDocument = Omit<DocumentBodyInput, 'useTabInfo'>
 
 const TAB_ID = 'tab-1' as TabId
 const ADDRESS = 'dsh-resource://content-preview/item'
@@ -64,7 +66,7 @@ const bytesRenderer: DocumentPreviewDefinition = {
 }
 
 /** The document body Factory double: shows the content it received and can claim the scrollport. */
-function FakeDocument({ input, innerScrollport }: { input: DocumentBodyInput; innerScrollport: boolean }): ReactNode {
+function FakeDocument({ input, innerScrollport }: { input: RenderedDocument; innerScrollport: boolean }): ReactNode {
   const { content } = input
   return (
     <div data-factory={input.rendererId} data-wrap={String(input.wrap)} data-base={String('baseAddress' in input)}>
@@ -87,7 +89,7 @@ function setup(options: { innerScrollport?: boolean } = {}) {
     address: ADDRESS,
     snapshot: { status: 'loading', value: undefined, failure: undefined } as ResourceSnapshot<PreviewContent>,
   }
-  const inputs: DocumentBodyInput[] = []
+  const inputs: RenderedDocument[] = []
   const useTabInfo = () => ({
     sidebar: { expanded: true, fullscreen: false },
     panel: { id: 'pane-1', isFloating: false },
@@ -103,7 +105,8 @@ function setup(options: { innerScrollport?: boolean } = {}) {
     actions: instance.actions,
     ...face,
     useDocumentPreviews: bindSnapshotSelector(face.hooks.documentPreviews),
-    renderFactorySlot: (_name: string, input: DocumentBodyInput) => {
+    renderSlot: (_name: string, owner: Omit<RenderedDocument, 'rendererId'>, slot: { entryKey: string }) => {
+      const input = { ...owner, rendererId: slot.entryKey }
       inputs.push(input)
       return createElement(FakeDocument, { input, innerScrollport: options.innerScrollport ?? false })
     },
@@ -111,8 +114,8 @@ function setup(options: { innerScrollport?: boolean } = {}) {
   })
   const props = (): ComponentProps<typeof ContentPreview> => ({
     useTabInfo,
-    renderFactorySlot: (_name: string, input: Pick<ComponentProps<typeof ContentViewer>, 'title' | 'content' | 'useTabInfo'>) =>
-      createElement(ContentViewer, { ...viewerProps(), ...input } as never),
+    renderFactorySlot: (_name: string, input: Extract<ComponentProps<typeof DocumentViewer>, { title: string }>) =>
+      createElement(DocumentViewer, { ...viewerProps(), ...input } as never),
   }) as never
   const view = render(createElement(ContentPreview, props()))
   const rerender = (): void => { view.rerender(createElement(ContentPreview, props())) }

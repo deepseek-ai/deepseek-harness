@@ -8,10 +8,9 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
-import { documentTabInfoFactory } from '../src/client/document/contract.ts'
 import { apply, MARKDOWN_BODY_ID, markdownDefinition } from '../src/client/markdown/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { DocumentBody } from '../src/client/DocumentBody.tsx'
+import { registerDocumentViewer } from '../src/client/content/index.ts'
 import { en as previewEn, zh as previewZh } from '../src/client/locales.ts'
 
 const runtimes: SlotTestRuntime[] = []
@@ -62,12 +61,7 @@ describe('Markdown implementation registration', () => {
     // The renderer waits through `ctx.slots.inject` until the Factory declares its slot.
     const feature = await runtime.mount({ inject: ['slots', 'locale', 'documentPreviews'], apply })
     expect(previews.getSnapshot().map(definition => definition.id)).toEqual([MARKDOWN_BODY_ID])
-    const source = { getSnapshot: previews.getSnapshot, subscribe: previews.subscribe }
-    const registerFactory = (): (() => void) => runtime.slots.registerFactory({
-      name: 'sidebar.right.document.body', scope: 'session', locale: 'sidebarDocumentPreview',
-      children: { 'sidebar.right.tab.document': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } } },
-      inject: () => ({ hooks: { documentPreviews: source } }),
-    }, DocumentBody)
+    const registerFactory = (): (() => void) => registerDocumentViewer(runtime.ctx, () => {})
     let unregister = registerFactory()
     await runtime.flush()
     expect(runtime.slots.entries('sidebar.right.tab.document')).toHaveLength(1)
