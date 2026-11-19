@@ -164,6 +164,10 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     },
   },
   'desktop-ptc-context': { expectedFinalResponse: 'SDK snapshot OK' },
+  'desktop-ptc-context-scoped': {
+    expectedFinalResponse: 'SDK snapshot OK',
+    patches: [fileURLToPath(new URL('./desktop-ptc-context-scoped/runtime.cordis.yml', import.meta.url))],
+  },
   'cua-run-code': {
     expectedFinalResponse: 'The retained application and window report Count: 2. The counter persisted across calls, and the program exposes only tools.cua. The screenshot was attached after the first call.',
     environment: { DSH_PERMISSION_MODE: 'danger-full-access' },
@@ -225,11 +229,23 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     patches: [fileURLToPath(new URL('./tool-error-details/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ERROR_DETAILS_OK',
   },
+  'tool-error-details-scoped': {
+    patches: [fileURLToPath(new URL('./tool-error-details-scoped/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'ERROR_DETAILS_OK',
+  },
   'ptc-cancel': {
     patches: [fileURLToPath(new URL('./ptc-cancel/runtime.cordis.yml', import.meta.url))],
   },
   'ptc-turn': {
     patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'CODE_ONE+CODE_TWO',
+    expectedTools: { run_code: ['code', 'description'] },
+  },
+  'ptc-cancel-scoped': {
+    patches: [fileURLToPath(new URL('./ptc-cancel-scoped/runtime.cordis.yml', import.meta.url))],
+  },
+  'ptc-turn-scoped': {
+    patches: [fileURLToPath(new URL('./ptc-turn-scoped/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'CODE_ONE+CODE_TWO',
     expectedTools: { run_code: ['code', 'description'] },
   },
@@ -1492,13 +1508,15 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(texts).not.toContain(done?.data.text)
         expect(texts).toContain('SDK_COMPACT_READY')
       }
-      if (scenario.name === 'ptc-cancel') {
+      if (scenario.name === 'ptc-cancel' || scenario.name === 'ptc-cancel-scoped') {
         const events = results.flatMap(result => result.events)
         expect(events.find(event => event.type === 'tool/result')).toMatchObject({ data: {
           message: {
             toolCallId: 'ptc-cancel',
             isError: true,
-            content: [{ type: 'text', text: 'Error: tool call aborted' }],
+            content: [{ type: 'text', text: scenario.name === 'ptc-cancel'
+              ? 'Error: tool call aborted'
+              : 'Error: tool call aborted: execution canceled; retained variables were preserved' }],
           },
           error: { name: 'AbortError', code: 'ABORTED' },
         } })
@@ -1625,7 +1643,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
           message: { content: [{ type: 'text', text: expect.stringContaining('subagent limit reached (active child limit: 1)') }], isError: true },
         } })
       }
-      if (scenario.name === 'tool-error-details') {
+      if (scenario.name === 'tool-error-details' || scenario.name === 'tool-error-details-scoped') {
         const events = results.flatMap(result => result.events)
         const headers = events.filter(event => event.type === 'request/header')
           .map(event => (event.data.header as { tools: { name: string }[] }).tools.map(tool => tool.name))

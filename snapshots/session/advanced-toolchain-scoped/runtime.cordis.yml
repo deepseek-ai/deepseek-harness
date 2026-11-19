@@ -1,0 +1,9 @@
+# Order delegation settlement before the subsequent workflow call.
+- insert:
+    - id: await-subagents
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-settlement-barrier.ts'
+
+# Replays the advanced-toolchain Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

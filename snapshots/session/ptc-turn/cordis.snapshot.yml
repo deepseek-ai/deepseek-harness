@@ -57,3 +57,8 @@
                 defaultMaxTokens: 256000
                 reasoningEfforts: [off, low, high, max]
                 defaultReasoningEffort: max
+
+# Recorded programs are async function bodies, so replay keeps the per-call runtime.
+- id: ptc-runtime
+  config:
+    executionMode: per-call
