@@ -40,7 +40,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   const runtimeId = () => [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'ptc-runtime')?.fiber?.uid
   const beforeRuntime = runtimeId()
   expect(beforeRuntime).toBeTypeOf('number')
-  expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+  expect(scaffold.ctx.ptcRuntime.programFormat).toBe('scoped-repl')
   const names = [name]
   await page.locator('[data-plugin-panel]').getByRole('button', { name: '更多', exact: true }).click()
   const cua = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
@@ -58,6 +58,6 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   }
   expect(await readFile(manifest, 'utf8')).toBe(before)
   expect(runtimeId()).toBe(beforeRuntime)
-  expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
+  expect(scaffold.ctx.ptcRuntime.programFormat).toBe('scoped-repl')
   expect(scaffold.ctx.get('computerUse')).toBeUndefined()
 })
