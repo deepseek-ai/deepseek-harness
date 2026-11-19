@@ -119,6 +119,10 @@ it('keeps explicitly configured global raw-tool registration', async () => {
   const handle = await create('cua-global', 'standard')
   expect(ctx.tools.get('cua', handle.agent)).toBeDefined()
   expect(ctx.tools.get('cua_run_code', handle.agent)).toBeUndefined()
+  const guidance = (await cuaPrompts(ctx, handle.agent)).join('\n')
+  expect(guidance).toContain('Fixture CUA guidance')
+  expect(guidance).not.toContain('Raw tools use { method, params }')
+  expect(guidance).not.toContain('getAccessibilityTree maps to getState')
   expect(ctx.get('cuaPrograms')).toBeUndefined()
   await mounted.dispose()
   expect(ctx.tools.get('cua', handle.agent)).toBeUndefined()
@@ -501,7 +505,8 @@ it.each([
   { programFormat: 'script', retainsState: false },
   { programFormat: 'repl', retainsState: false },
   { programFormat: 'function-body', retainsState: true },
-] as const)('selects CUA initialization from retention for $programFormat/$retainsState', async (runtime) => {
+  { programFormat: 'function-body', retainsState: false },
+] as const)('provides CUA initialization for $programFormat/$retainsState', async (runtime) => {
   const { ctx, create } = await setup()
   ctx.provide('ptcRuntime', runtime)
   await ctx.plugin(provider, {})
@@ -511,5 +516,7 @@ it.each([
   expect(prompt?.includes('Persistent PTC initialization:')).toBe(runtime.retainsState)
   expect(prompt?.includes('use the host-provided bridge initialization once and retain the returned objects')).toBe(runtime.retainsState)
   expect(prompt?.includes('cua comes from that bridge and is not a preinstalled global')).toBe(runtime.retainsState)
-  expect(prompt?.includes('var cua = connectCua(() => tools.cua);')).toBe(runtime.retainsState)
+  expect(prompt).toContain('var cua = connectCua(() => tools.cua);')
+  expect(prompt?.includes('at the start of every program')).toBe(!runtime.retainsState)
+  expect(prompt).not.toContain('Raw tools use { method, params }')
 })

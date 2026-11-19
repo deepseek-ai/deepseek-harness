@@ -179,7 +179,6 @@ it('guides complex input combinations through platform-supported primitive opera
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     expect(catalog).toContain(advice)
     expect(catalog.indexOf(advice)).toBeGreaterThan(catalog.indexOf('- sendKeyEvent('))
-    expect(catalog.indexOf(advice)).toBeLessThan(catalog.indexOf('Raw tools use { method, params }'))
   }
 })
 
@@ -189,7 +188,13 @@ it('keeps consent, lock, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
-  expect(COMMON_GUIDANCE).toContain('snapshotId')
+})
+
+it('omits raw protocol details from operation guidance', () => {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog).not.toContain('Raw tools use { method, params }')
+    expect(catalog).not.toContain('snapshotId')
+  }
 })
 
 it('prioritizes reported API availability over instruction text in the prologue', () => {
