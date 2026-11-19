@@ -2453,7 +2453,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+      "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
       "items": {
         "type": "string"
       }
@@ -2579,7 +2579,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Replacement advisory write scopes for edit.",
+      "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
       "items": {
         "type": "string"
       }
