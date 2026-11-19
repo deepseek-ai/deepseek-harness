@@ -48,6 +48,8 @@ it('dispatches a keyed page and returns focus to its invoking summary on Escape'
   expect(screen.getByRole('group', { name: 'Fixture settings' })).toBeTruthy()
   fireEvent.blur(toggle, { relatedTarget: null })
   expect(screen.getByText('Fixture explanation')).toBeTruthy()
+  // Explanation text keeps its default press so it stays selectable.
+  expect(fireEvent.mouseDown(screen.getByText('Fixture explanation'))).toBe(true)
   fireEvent.keyDown(toggle, { key: 'Escape' })
   expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Fixture settings' }))
   expect(screen.queryByRole('switch')).toBeNull()
