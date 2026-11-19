@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 Plans and pending reviews now use the shared `content` tab instead of standalone `plan` or `plan-review` tab types. Previously saved tabs of those types show an unavailable message after upgrading. Content supplied to the new tab is transient and expires on browser reload.
 
-Custom document bodies use the `sidebar.right.document.body` Factory. Its input separates `resourceAddress` from optional `baseAddress`, which controls relative file resolution. Compaction markers retain `summaryEventSeq` and omit inline `summary` text. The preview reads the recorded summary from a stable Session resource address, including after browser reload.
+Custom document bodies use the `sidebar.right.document.body` Factory. Its input separates `resourceAddress` from optional `baseAddress`, which controls relative file resolution. Compaction markers retain `summaryEventSeq` and omit inline `summary` text. After a reload, reopen the summary from its compaction row.
 
 ## Migration
 

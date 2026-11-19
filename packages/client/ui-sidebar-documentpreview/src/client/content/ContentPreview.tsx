@@ -5,7 +5,7 @@ import clsx from 'clsx'
 import type {
   FactoryComponentPropsOf, PropsRenderFactories, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { FileTypeIcon, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useScrollport } from '../scrollport.ts'
 import { RendererMenu, WrapToggle } from '../ViewerTools.tsx'
 import shared from '../TextPreview.module.css'
@@ -32,7 +32,7 @@ export function ContentPreview({ useTabInfo, renderFactorySlot }: ContentTabProp
 
 type BodyProps = FactoryComponentPropsOf<'sidebar.right.document.body'>
 
-/** Dispatch file inputs directly and give titled content the shared preview toolbar.
+/** Dispatch file inputs directly and show content controls when available.
  * @param props - selected file renderer or caller-supplied content and title.
  * @returns the document body for this tab.
  */
@@ -46,7 +46,7 @@ function ignoreResources(): void {}
 /**
  * Render tab content through the selected document renderer.
  * @param props - title, content, enclosing tab, and viewer controls.
- * @returns the shared preview header and body.
+ * @returns the preview body and available controls.
  */
 function ContentViewer({
   content, title, useTabInfo, useStore, useDocumentPreviews,
@@ -128,17 +128,16 @@ function ContentViewer({
       data-contentpreview-media-type={mediaType}
       data-document-preview={rendererId}
     >
-      <div className={shared.header}>
-        <Tooltip label={title} side="bottom" delayMs={500} onlyWhenClipped>
-          <span className={css.title} data-contentpreview-title>{title}</span>
-        </Tooltip>
-        {selected !== undefined && candidates.length > 1 && (
-          <RendererMenu candidates={candidates} selected={selected} onSelect={(id) => { select(tab.id, tab.signal, id) }} t={t} />
-        )}
-        {selected?.wrap === true && (
-          <WrapToggle wrap={view.wrap} t={t} data-contentpreview-tool="wrap" onToggle={() => { toggleWrap(tab.id, tab.signal) }} />
-        )}
-      </div>
+      {selected !== undefined && (candidates.length > 1 || selected.wrap) && (
+        <div className={shared.header} data-contentpreview-toolbar>
+          {candidates.length > 1 && (
+            <RendererMenu candidates={candidates} selected={selected} onSelect={(id) => { select(tab.id, tab.signal, id) }} t={t} />
+          )}
+          {selected.wrap && (
+            <WrapToggle wrap={view.wrap} t={t} data-contentpreview-tool="wrap" onToggle={() => { toggleWrap(tab.id, tab.signal) }} />
+          )}
+        </div>
+      )}
       {body}
     </div>
   )

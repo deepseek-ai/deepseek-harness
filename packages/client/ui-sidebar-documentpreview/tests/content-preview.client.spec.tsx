@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The content body's states, renderer selection, content conversion, view
- * state, and shared header. The renderer registry, the view store, and
+ * state, and optional controls. The renderer registry, the view store, and
  * the face are real; the tab and the document body
  * Factory are scripted.
  */
@@ -137,7 +137,7 @@ describe('content preview body', () => {
     expect(h.root().textContent).toContain('content.expired')
   })
 
-  it('names the preview region after the title the header shows', () => {
+  it('names the preview region after its tab', () => {
     const h = setup()
     h.registry.register(markdownRenderer)
     expect(screen.getByRole('region', { name: 'Recorded title' })).toBe(h.root())
@@ -145,7 +145,7 @@ describe('content preview body', () => {
     expect(screen.getByRole('region', { name: 'Stored title' })).toBe(h.root())
   })
 
-  it('renders text through the single matching renderer with one complete page and its header', () => {
+  it('renders text through the single matching renderer with one complete page and no toolbar', () => {
     const h = setup()
     h.registry.register(markdownRenderer)
     h.show(live(markdown))
@@ -158,7 +158,8 @@ describe('content preview body', () => {
     expect(input.content).toEqual({ kind: 'text', text: '# Plan\nbody\n', pages: [{ offset: 1, text: '# Plan\nbody', lines: 2 }], eof: true })
     input.addResource('dsh-resource://file/x')
     input.setResources([])
-    expect(h.root().querySelector('[data-contentpreview-title]')?.textContent).toBe('Stored title')
+    expect(h.root().getAttribute('aria-label')).toBe('Stored title')
+    expect(h.root().querySelector('[data-contentpreview-toolbar]')).toBeNull()
     expect(h.root().querySelector('[data-document-viewer-menu]')).toBeNull()
     expect(h.root().querySelector('[data-contentpreview-tool="wrap"]')).toBeNull()
   })

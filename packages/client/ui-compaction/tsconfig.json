@@ -21,28 +21,13 @@
       "path": "../locale/tsconfig.client.json"
     },
     {
-      "path": "../resources"
-    },
-    {
       "path": "../ui-sidebar-documentpreview/tsconfig.client.json"
     },
     {
       "path": "../ui-slots"
     },
     {
-      "path": "../../typert/protocol"
-    },
-    {
-      "path": "../ui-renderer"
-    },
-    {
       "path": "../ui-sidebar-right"
-    },
-    {
-      "path": "../../core/session"
-    },
-    {
-      "path": "../ui-primitives"
     }
   ]
 }

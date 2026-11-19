@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-Chat 通过 `ctx.compactionPreviews.open(address, summarySeq, signal)` 打开已记录的压缩摘要。侧栏保存 `dsh-resource://compaction/` 地址，恢复标签时从会话历史重新读取 Markdown。
+Chat 通过 `ctx.compactionPreviews.open(address, summarySeq, signal)` 打开已记录的摘要。刷新浏览器后，从压缩行重新打开摘要。
 
 ## 目录
 
@@ -24,14 +24,14 @@ Chat 通过 `ctx.compactionPreviews.open(address, summarySeq, signal)` 打开已
 <a id="what-it-registers"></a>
 ## 注册了什么
 
-插件注册 `compaction` 资源提供方。当文档预览服务可用时，插件注册摘要标签、标题、正文及会话导航服务。
+文档预览可用时，插件向 Chat 提供压缩摘要预览服务。
 
 <a id="reading-a-summary"></a>
 ## 读取摘要
 
-地址标识会话及摘要序号。子代理地址包含父会话、子会话和模式。标签使用 `throughSeq` 和 `maxMessages: 1` 读取对应的 `compaction/summary` 事件。摘要缺失、为空或读取失败时，标签显示错误。已取消的打开请求跳过导航，关闭标签时释放资源订阅。
+服务使用会话地址、`throughSeq` 和 `maxMessages: 1` 读取指定的 `compaction/summary` 事件。摘要缺失、为空或读取失败时，发起请求的压缩行显示错误。取消请求会停止导航。
 
-摘要文本块按顺序拼接，使用与计划相同的 Markdown 标签图标、预览顶栏和渲染器控件。重复打开同一地址会复用标签。
+服务将按顺序拼接的 Markdown 文本传给 `sidebarRight.openContent`。重复打开同一事件会复用标签。
 
 <a id="model-experience"></a>
 ## 模型体验

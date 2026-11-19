@@ -219,20 +219,7 @@ function withCompaction(raw: string, meter: TokenMeter): string {
   return renderSeedFixture(decoded.headerLine, events)
 }
 
-/**
- * Locate the seeded checkpoint and its Sidebar address.
- * @param scaffold - the running scenario.
- * @returns the replacement message seq and its `dsh-resource://compaction/<session>/<seq>` address.
- */
-function checkpointOf(scaffold: WebScaffold): { seq: number; address: string } {
-  const session = scaffold.ctx.sessions.get(brandString<SessionId>(SEED_ID))
-  const checkpoint = session?.snapshotEvents().find(event => event.type === 'user/message'
-    && event.data.source.kind === 'compact-checkpoint')
-  if (checkpoint === undefined) throw new Error('seeded history has no compaction checkpoint')
-  const summary = session?.snapshotEvents().find(event => event.type === 'compaction/summary')
-  if (summary === undefined) throw new Error('seeded history has no compaction summary')
-  return { seq: checkpoint.seq, address: `dsh-resource://compaction/${SEED_ID}/${summary.seq}` }
-}
+const SUMMARY_PREVIEW = '[data-contentpreview-url^="dsh-resource://content-preview/compaction%3A"]'
 
 /** The manual compaction marker; its hidden label names the Sidebar action. */
 function compactionMarker(page: Page): Locator {
@@ -592,15 +579,13 @@ describe('web e2e: seeded history renders through cold resume', () => {
 
   it.skipIf(MODE === 'record')('opens the compaction checkpoint in a content tab without expanding Chat', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-compaction'))
-    const { seq, address } = checkpointOf(scaffold)
     const marker = compactionMarker(page)
     await marker.waitFor({ timeout: 10_000 })
     expect(await marker.getAttribute('aria-expanded')).toBeNull()
-    expect(await marker.getAttribute('data-compaction-seq')).toBe(String(seq))
     const frame = page.locator('[style*="grid-template-columns"]').first()
     expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
     const column = page.locator('[data-rightbar-col]')
-    const preview = column.locator(`[data-contentpreview-url="${address}"]`)
+    const preview = column.locator(SUMMARY_PREVIEW)
     try {
       await marker.click()
       await preview.locator('[data-document-markdown]').waitFor({ state: 'visible', timeout: 10_000 })
@@ -614,7 +599,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       expect(await transcript.getByRole('heading', { name: 'Cold resume compact summary' }).count()).toBe(0)
       expect(await marker.getAttribute('aria-expanded')).toBeNull()
       await compareOrRefreshGolden(CHECKPOINT_SIDEBAR_EXPECTED,
-        await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd), MODE)
+        await captureStableAria(page, SUMMARY_PREVIEW, scaffold.workspaceCwd), MODE)
     } finally {
       // Later cases share this page and require only the file tab, with the Sidebar closed.
       await closeCheckpointTab(column)
@@ -730,23 +715,24 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(restoredPreview).toBe(preview)
   })
 
-  it.skipIf(MODE === 'record')('restores the summary directly from the saved sidebar tab on reload', async () => {
+  it.skipIf(MODE === 'record')('reopens the expired summary from its chat row after reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-compaction-reload'))
     // Runs after the cases that capture Chat goldens: reloading resets their
     // expanded rows. The previous case left the Sidebar open on the file tab.
-    const { address } = checkpointOf(scaffold)
     const column = page.locator('[data-rightbar-col]')
-    const rendered = column.locator(`[data-contentpreview-url="${address}"] [data-document-markdown]`)
+    const rendered = column.locator(`${SUMMARY_PREVIEW} [data-document-markdown]`)
     try {
       await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 10_000 })
-      const before = await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)
+      const before = await captureStableAria(page, SUMMARY_PREVIEW, scaffold.workspaceCwd)
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
+      await column.locator(`${SUMMARY_PREVIEW}[data-contentpreview-state="expired"]`).waitFor()
+      await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 15_000 })
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])
-      expect(await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)).toBe(before)
+      expect(await captureStableAria(page, SUMMARY_PREVIEW, scaffold.workspaceCwd)).toBe(before)
     } finally {
       await closeCheckpointTab(column)
     }

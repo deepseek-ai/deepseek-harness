@@ -48,7 +48,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-sidebar/`](ui-sidebar/README.md) | Presents workspace and session navigation | — |
 | [`ui-sidebar-right/`](ui-sidebar-right/README.md) | Owns the right Sidebar and its tab types | `ctx.sidebarRight`, `ctx.sidebarRightTabs` |
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.md) | Displays documents in right Sidebar tabs: workspace files, and in-memory content that is not a workspace file | `ctx.documentPreviews` |
-| [`ui-compaction/`](ui-compaction/README.md) | Opens recorded compaction summaries in restorable sidebar tabs | `ctx.compactionPreviews` |
+| [`ui-compaction/`](ui-compaction/README.md) | Opens recorded compaction summaries in temporary sidebar tabs | `ctx.compactionPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.md) | Browses sandboxed HTTP(S) pages, including loopback services, in right-Sidebar tabs | — |
 | [`resources/`](resources/README.md) | Unified resource model: protocol providers behind the `useResource` session standard hook | `ctx.resources` |
 | [`ui-sidebar-files/`](ui-sidebar-files/README.md) | The workspace files page and one workspace tree per pane beside docked and floating previews | — |

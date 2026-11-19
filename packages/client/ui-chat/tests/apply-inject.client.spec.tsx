@@ -77,16 +77,9 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
   const browserAvailable = createSnapshotStore(true)
-  const compactionTabs = createSnapshotStore(false)
   const sidebarRightTabs = {
     get: vi.fn<(kind: string) => object | undefined>(() => browserAvailable.getSnapshot() ? {} : undefined),
-    candidates: vi.fn<(address: string) => readonly object[]>(address =>
-      compactionTabs.getSnapshot() && address.startsWith('dsh-resource://compaction/') ? [{ kind: 'compaction' }] : []),
-    subscribe: (listener: () => void) => {
-      const stopBrowser = browserAvailable.subscribe(listener)
-      const stopCompaction = compactionTabs.subscribe(listener)
-      return () => { stopBrowser(); stopCompaction() }
-    },
+    subscribe: (listener: () => void) => browserAvailable.subscribe(listener),
     register: vi.fn(() => () => {}),
   }
   if (withBrowserRegistry) runtime.ctx.provide('sidebarRightTabs', sidebarRightTabs as never)
@@ -154,7 +147,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable, compactionTabs,
+    runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }

@@ -48,7 +48,7 @@ kind: "package-group"
 | [`ui-sidebar/`](ui-sidebar/README.zh.md) | 展示工作区与会话导航 | — |
 | [`ui-sidebar-right/`](ui-sidebar-right/README.zh.md) | 管理右侧 Sidebar 及其 tab 类型 | `ctx.sidebarRight`, `ctx.sidebarRightTabs` |
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.zh.md) | 在右侧 Sidebar 的 tab 中显示文档：工作区文件，以及不是工作区文件的内存内容 | `ctx.documentPreviews` |
-| [`ui-compaction/`](ui-compaction/README.zh.md) | 在可恢复的侧栏标签中显示已记录的压缩摘要 | `ctx.compactionPreviews` |
+| [`ui-compaction/`](ui-compaction/README.zh.md) | 在临时侧栏标签中显示已记录的压缩摘要 | `ctx.compactionPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.zh.md) | 在右侧 Sidebar tab 中浏览 sandboxed HTTP(S) 页面，包括 loopback 服务 | — |
 | [`resources/`](resources/README.zh.md) | 统一资源模型：`useResource` 会话标准钩子背后的协议提供方 | `ctx.resources` |
 | [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 工作区文件页，以及停靠与浮动文件预览旁每个分栏一棵的工作区目录树 | — |

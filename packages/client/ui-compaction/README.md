@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Chat opens a recorded summary with `ctx.compactionPreviews.open(address, summarySeq, signal)`. The sidebar persists the `dsh-resource://compaction/` address and reloads the Markdown from Session history when the tab is restored.
+Chat opens a recorded summary with `ctx.compactionPreviews.open(address, summarySeq, signal)`. After reloading the browser, reopen it from its compaction row.
 
 ## Table of Contents
 
@@ -24,14 +24,14 @@ Chat opens a recorded summary with `ctx.compactionPreviews.open(address, summary
 <a id="what-it-registers"></a>
 ## What it registers
 
-The plugin registers a `compaction` resource provider. While document previews are loaded, it registers the summary tab, its title and body, and the Session navigation service.
+While document previews are available, the plugin provides the compaction preview service to Chat.
 
 <a id="reading-a-summary"></a>
 ## Reading a summary
 
-The address identifies the Session and summary sequence. For a subagent it includes the parent, child, and mode. The tab reads the exact `compaction/summary` event with `throughSeq` and `maxMessages: 1`. Missing or empty summaries and read failures appear in the tab. An aborted opener skips navigation, and closing the tab releases its resource subscription.
+The service reads the exact `compaction/summary` event with the Session address, `throughSeq`, and `maxMessages: 1`. Missing or empty summaries and read failures appear on the requesting row. Cancellation stops navigation.
 
-Summary text blocks are joined in order and displayed with the same Markdown tab icon, preview header, and renderer controls as plans. Reopening the same address reuses the tab.
+The service passes the joined Markdown text to `sidebarRight.openContent`. Reopening the same event reuses its tab.
 
 <a id="model-experience"></a>
 ## Model Experience

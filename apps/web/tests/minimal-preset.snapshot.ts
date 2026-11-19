@@ -297,7 +297,7 @@ describe('minimal manual compaction', () => {
       .toEqual([{ type: 'text', text: 'MINIMAL_COMPACT_OK' }])
   })
 
-  it.skipIf(MODE === 'record')('opens a manual summary and restores it after reload', async () => {
+  it.skipIf(MODE === 'record')('opens a manual summary and reopens it from the card after reload', async () => {
     onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-compact') })
     const checkpoint = handle.agent.session.snapshotEvents().find(event => event.type === 'user/message'
       && event.data.source.kind === 'compact-checkpoint')
@@ -305,7 +305,7 @@ describe('minimal manual compaction', () => {
     const summary = handle.agent.session.snapshotEvents().find(event => event.type === 'compaction/summary')
     if (summary === undefined) throw new Error('manual compaction produced no summary')
     const markdown = summary.data.summary.map(block => block.type === 'text' ? block.text : '').join('')
-    const address = `dsh-resource://compaction/minimal-compact-smoke/${summary.seq}`
+    const summaryPreview = '[data-contentpreview-url^="dsh-resource://content-preview/compaction%3A"]'
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     // Capture the final Sidebar layout, not the grid transition.
@@ -320,12 +320,13 @@ describe('minimal manual compaction', () => {
     expect(await card.getAttribute('data-compaction-seq')).toBe(String(checkpoint.seq))
     await card.click()
     const column = page.locator('[data-rightbar-col]')
-    const preview = column.locator(`[data-contentpreview-url="${address}"]`)
+    const preview = column.locator(summaryPreview)
     const rendered = preview.locator('[data-document-markdown]')
     await rendered.waitFor({ state: 'visible' })
     expect(await card.getAttribute('aria-expanded')).toBeNull()
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['Context summary'])
-    expect(await preview.locator('[data-contentpreview-title]').textContent()).toBe('Context summary')
+    expect(await preview.getAttribute('aria-label')).toBe('Context summary')
+    expect(await preview.locator('[data-contentpreview-toolbar]').count()).toBe(0)
     expect(await column.locator('[data-dockkit-tab-title] svg[width="16"] [data-file-type-mark]').count()).toBe(1)
     const body = preview.locator('[data-document-markdown]')
     const words = (text: string): string => text.replace(/\s+/g, ' ').trim()
@@ -333,15 +334,16 @@ describe('minimal manual compaction', () => {
     expect(await page.locator('[data-conversation-scroll]').getByText('<compacted-summary>', { exact: false }).count()).toBe(0)
     await compareOrRefreshGolden(join(snapshotDir, 'ui.expected.md'),
       await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), MODE)
-    const sidebar = await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)
+    const sidebar = await captureStableAria(page, summaryPreview, scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(snapshotDir, 'checkpoint.expected.md'), sidebar, MODE)
-    // The restored tab reads its saved summary without another click.
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    await preview.locator('[data-contentpreview-status="expired"]').waitFor()
+    await card.click()
     await rendered.waitFor({ state: 'visible', timeout: 15_000 })
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['Context summary'])
-    expect(await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)).toBe(sidebar)
+    expect(await captureStableAria(page, summaryPreview, scaffold.workspaceCwd)).toBe(sidebar)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
