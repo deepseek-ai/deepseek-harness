@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin do Feishu",
+    "description": "Use documentos, mensagens e outros recursos autorizados do Feishu nas conversas.",
+    "detail": "docs/DETAIL.md"
+  }
+}

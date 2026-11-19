@@ -42,6 +42,7 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/connector/tencent-docs': { category: 'optional', reason: 'Separately installed app plugin that requires the user to authorize a Tencent Docs account.' },
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },
   'packages/fs/tool-str-replace-editor': { category: 'optional', reason: 'Explicit alternative to the default filesystem editing tools.' },
+  'packages/connector/feishu': { category: 'optional', reason: 'Separately installed app plugin: the Feishu CLI, its skills, and the account operations of a user-authorized Feishu account.' },
   'packages/fs/fs-observation-policy': { category: 'optional', reason: 'Read-before-mutation guard that a deployment enables on the disabled dsh-base row.' },
   'packages/sdk/client': { category: 'sdk', reason: 'Published TypeScript embedding client runs in the consumer process.' },
   'packages/typert/generator': { category: 'build', reason: 'Build-time generation of type metadata.' },

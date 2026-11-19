@@ -18,7 +18,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -119,7 +120,8 @@
           }
         ],
         "source": {
-          "kind": "user"
+          "kind": "user",
+          "clientTimeZone": "UTC"
         },
         "role": "user",
         "id": "{{messageId}}"
@@ -1033,7 +1035,8 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "user",
+                  "clientTimeZone": "UTC"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -1183,7 +1186,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"

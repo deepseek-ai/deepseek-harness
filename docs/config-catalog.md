@@ -1668,6 +1668,23 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-worktree -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
+<a id="deepseek-aidsh-feishu"></a>
+
+## `@deepseek-ai/dsh-feishu`
+
+- `inject`: `cliAccounts` · `skills`
+- `source`: [`packages/connector/feishu/src/index.ts:30`](../packages/connector/feishu/src/index.ts)
+
+```ts config-catalog
+/** Where lark-cli is. */
+export interface Config {
+  /** Absolute directory holding the `lark-cli` executable; defaults to the installed `@larksuite/cli` package. */
+  binDir?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-feishu -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-file-reference-local -->
 <a id="deepseek-aidsh-file-reference-local"></a>
 
