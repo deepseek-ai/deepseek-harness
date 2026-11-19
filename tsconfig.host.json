@@ -339,8 +339,6 @@
     { "path": "./packages/extensions/plugin-recommendations" },
 
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
-    { "path": "./packages/experimental/client-ui-connectors/tsconfig.host.json" },
-    { "path": "./packages/experimental/connectors-bundle" },
     { "path": "./packages/experimental/cot-translation-bundle" },
     { "path": "./packages/experimental/session-search" },
     { "path": "./packages/experimental/ralph-bundle" },

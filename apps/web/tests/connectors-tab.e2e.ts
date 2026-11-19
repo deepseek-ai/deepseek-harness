@@ -8,13 +8,20 @@ import { expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-const BUNDLE = '@deepseek-ai/dsh-experimental-connectors-bundle'
+const BUNDLE = '@deepseek-ai/dsh-connectors'
 const FEISHU = '@deepseek-ai/dsh-feishu'
 const WECOM = '@deepseek-ai/dsh-wecom'
 const EXPECTED = fileURLToPath(new URL('./expected/connectors-tab/connectors-tab.expected.md', import.meta.url))
 
-const bundleManifest = (name: string, version: string): string =>
-  JSON.stringify({ name, version, dsh: { bundle: { patch: './cordis.patch.yml' } } })
+/**
+ * A stand-in connector bundle: its patch inserts its own row, an empty plugin. The workspace's connector package of the
+ * same name resolves first as the bundle layer and inserts the same row, which imports this entry.
+ */
+const connectorFiles = (name: string, id: string, version: string) => ({
+  'package.json': JSON.stringify({ name, version, type: 'module', main: 'index.js', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+  'cordis.patch.yml': `- insert:\n    - id: ${id}\n      name: '${name}'\n`,
+  'index.js': 'export function apply() {}\n',
+})
 
 it('lists the official connectors, opens an installed one\'s page, and installs a missing one at the running DSH version', async () => {
   const root = await mkdtemp(join(tmpdir(), 'connectors-tab-web-'))
@@ -27,8 +34,7 @@ it('lists the official connectors, opens an installed one\'s page, and installs 
   const { version } = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string }
   const feishuDir = join(root, 'feishu')
   await mkdir(feishuDir)
-  await writeFile(join(feishuDir, 'package.json'), bundleManifest(FEISHU, '1.0.0'))
-  await writeFile(join(feishuDir, 'cordis.patch.yml'), '[]\n')
+  for (const [file, text] of Object.entries(connectorFiles(FEISHU, 'feishu', '1.0.0'))) await writeFile(join(feishuDir, file), text)
   const overlay = join(root, 'cordis.patch.yml')
   await writeFile(overlay, `- id: plugin-manager\n  config: ${JSON.stringify({ pnpmCommand: process.execPath })}\n`)
   const scaffold = owned.scaffold = await launchWebScaffold({
@@ -37,15 +43,14 @@ it('lists the official connectors, opens an installed one\'s page, and installs 
   // Node stands in for pnpm and runs the profile directory's file named after the subcommand: `config` names the
   // registry, `view` answers with the WeCom bundle at the asked version, and `add` records its arguments and installs it.
   const profile = join(scaffold.harnessHome, 'profiles', 'scaffold')
-  const wecom = bundleManifest(WECOM, version)
+  const wecom = connectorFiles(WECOM, 'wecom', version)
   await writeFile(join(profile, 'config'), 'console.log("https://registry.npmjs.org/")\n')
-  await writeFile(join(profile, 'view'), `console.log(${JSON.stringify(wecom)})\n`)
+  await writeFile(join(profile, 'view'), `console.log(${JSON.stringify(wecom['package.json'])})\n`)
   await writeFile(join(profile, 'add'), `
     const fs = require('node:fs')
     fs.writeFileSync('.added', JSON.stringify(process.argv.slice(2)))
     fs.mkdirSync('node_modules/${WECOM}', { recursive: true })
-    fs.writeFileSync('node_modules/${WECOM}/package.json', ${JSON.stringify(wecom)})
-    fs.writeFileSync('node_modules/${WECOM}/cordis.patch.yml', '[]\\n')
+    for (const [file, text] of Object.entries(${JSON.stringify(wecom)})) fs.writeFileSync('node_modules/${WECOM}/' + file, text)
     const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'))
     fs.writeFileSync('package.json', JSON.stringify({ ...manifest, dependencies: { ...manifest.dependencies, '${WECOM}': '${version}' } }))
   `)

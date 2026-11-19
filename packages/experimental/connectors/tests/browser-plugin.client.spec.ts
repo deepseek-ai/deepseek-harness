@@ -7,6 +7,9 @@ import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
 import type { ConnectorsFace } from '../src/client/connectors-store.ts'
+import { apply as applyHost } from '../src/index.ts'
+
+it('keeps the Host entry empty', () => { expect(applyHost).not.toThrow() })
 
 it('contributes the Connectors tab, follows Host changes, and withdraws the tab with its fiber', async () => {
   const ctx = new Context()

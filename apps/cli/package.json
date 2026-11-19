@@ -121,7 +121,7 @@
     "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-bundle": "workspace:*",
     "@deepseek-ai/dsh-deepseek-chat-import": "workspace:*",
-    "@deepseek-ai/dsh-experimental-connectors-bundle": "workspace:*"
+    "@deepseek-ai/dsh-connectors": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",

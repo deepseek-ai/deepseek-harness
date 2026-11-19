@@ -1,14 +1,15 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-client-ui-connectors",
-  "description": "Plugins page tab that lists the official connectors",
-  "version": "0.2.2-rc.4",
+  "name": "@deepseek-ai/dsh-connectors",
+  "description": "Plugins page tab that lists, installs, and opens the official connectors",
+  "version": "0.2.2-rc.5",
+  "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/experimental/client-ui-connectors"
+    "directory": "packages/experimental/connectors"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -18,37 +19,34 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./src/*": "./src/*",
-    "./package.json": "./package.json",
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./assets/*": "./lib/assets/*",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "icon.svg",
     "locale/*.json",
+    "docs",
     "lib/index.js",
     "lib/client.js",
     "lib/assets",
-    "lib/types/**/*.d.ts"
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
-  "license": "MIT",
   "scripts": {
     "bundle": "tsdown",
     "watch": "tsdown --watch"
   },
-  "dsh": {
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-api-remotes",
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-plugin-manager"
-      ]
-    }
-  },
+  "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   },
@@ -66,5 +64,19 @@
     "@testing-library/react": "^16.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": false
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ],
+      "platform": "web"
+    }
   }
 }
