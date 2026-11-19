@@ -77,6 +77,19 @@ describe('DeepSeekHarness', () => {
     expect(request).toHaveBeenCalledWith('session/prompt', { sessionId: 'literal', contentBlocks: blocks })
   })
 
+  it('sends a low-level prompt time zone as the timeZone wire field', async () => {
+    const harness = harnessWith()
+    await harness.start()
+    const request = vi.spyOn(harness.client, 'request')
+    const blocks = normalizeInput('when is noon?')
+    await harness.client.prompt('zone', blocks, { timeZone: 'UTC' })
+    await harness.client.prompt('zone', blocks, {})
+    expect(request.mock.calls.map(([method, params]) => [method, params])).toEqual([
+      ['session/prompt', { sessionId: 'zone', contentBlocks: blocks, timeZone: 'UTC' }],
+      ['session/prompt', { sessionId: 'zone', contentBlocks: blocks }],
+    ])
+  })
+
   it('returns a command result without waiting for turn or idle notifications', async () => {
     const harness = harnessWith()
     await harness.start()

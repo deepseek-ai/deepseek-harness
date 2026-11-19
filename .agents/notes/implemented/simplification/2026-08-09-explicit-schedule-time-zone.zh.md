@@ -12,9 +12,9 @@ Status: implemented
 
 ## 决策
 
-浏览器时区是请求本地的来源数据。Web client 会为每条提示词采样 `Intl.DateTimeFormat().resolvedOptions().timeZone`。Host 接受可选的 `clientTimeZone`，在 RPC 边界校验并规范化 `UTC` 或 IANA Area/Location，再将其记录在确切的那条 `user-rpc` 消息上。无效值会使提示词准入被拒绝。非浏览器 client 可以省略它。
+浏览器时区是请求本地的来源数据。Web client 会为每条提示词采样 `Intl.DateTimeFormat().resolvedOptions().timeZone`。Host 接受可选的 `clientTimeZone`，在 RPC 边界校验并规范化 `UTC` 或 IANA Area/Location，再将其记录在确切的那条 `user-rpc` 消息上。无效值会使提示词准入被拒绝。非浏览器 client 可以省略它；SDK prompt 在不带 `rpcId` 的 `sdk-user` 来源上上报显式或采样的进程时区，见 [SDK prompt 逐条上报时区](../feature/2026-11-09-sdk-prompt-time-zone.zh.md)。
 
-Time-context 从 open turn 中的原始 user-rpc 消息派生唯一、混合或缺失的浏览器事实。唯一时区会用于格式化时钟，并告诉模型把未明确限定时区的日期和时间解释为该时区。浏览器时区记录混合或缺失时，模型会被告知询问用户。配置或进程时区只作为显示 fallback，绝不会被呈现为用户权威。
+Time-context 从 open turn 中带 `clientTimeZone` 的原始 user 消息派生唯一、混合或缺失的浏览器事实。唯一时区会用于格式化时钟，并告诉模型把未明确限定时区的日期和时间解释为该时区。浏览器时区记录混合或缺失时，模型会被告知询问用户。配置或进程时区只作为显示 fallback，绝不会被呈现为用户权威。
 
 Schedule 不接受隐式本地时区。`at` 要么是带显式偏移量且严格符合 RFC 3339 的字符串，要么是精确的 `{ date, time, time_zone }`。即使 time-context 刚向模型展示了浏览器时区，结构化形式仍要求自己的时区。Schedule 不导入 time-context、不检查 user message 来源、不读取 Session header，也不产生确认错误。它的 parser 会校验显式值、拒绝夏令时缺口、在重叠时选择第一个时点，并且只存储规范化后的 UTC `scheduledAt`。
 
@@ -43,5 +43,5 @@ Host 测试固定别名的规范化、可省略行为和进入 Agent（智能体
 - 无需持久 Session 时区子系统，浏览器本地自然语言也能工作。
 - Schedule 具有一个显式且可独立测试的绝对时间边界。
 - 旅行与并发 tab 只影响各自的提示词；浏览器时区记录混合的 turn 会询问用户，而不是改变共享状态。
-- 非浏览器 client 仍然有效，但必须提供足够的自然语言上下文或显式工具参数。
+- 未上报时区的非浏览器 client 仍然有效，但必须提供足够的自然语言上下文或显式工具参数。
 - 模型仍可能产生解释错误；工具只保证显式日历值有效且具有确定性。

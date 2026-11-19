@@ -164,7 +164,7 @@ function ProcessReasoning({ hidden, reveal, useGroupAction, children }: {
   children: ReactNode
 }) {
   const ref = useGroupAction(hidden, reveal ?? NOOP)
-  return <div ref={ref} data-turn-process-inline={hidden || undefined}>{children}</div>
+  return <div ref={ref} className={css.reasoning} data-turn-process-inline={hidden || undefined}>{children}</div>
 }
 
 const NOOP = (): void => {}

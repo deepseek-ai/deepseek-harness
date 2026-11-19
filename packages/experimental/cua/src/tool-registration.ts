@@ -16,7 +16,7 @@ import { CUA_PROMPT_SECTION_NAME } from './guidance.ts'
 
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
   + 'The global cua object is ready to use; retain application and window objects across calls. '
-  + 'Only tools.cua is available inside the program. Call other session tools directly. '
+  + 'Call other session tools directly outside cua_run_code. '
   + 'Use inspect(...values) to display selected text and images.'
 
 /** Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`. */
@@ -79,11 +79,14 @@ export function installCuaTools(
   const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
-    return !runtime?.retainsState ? guidance : `${guidance}
+    if (runtime === undefined) return guidance
+    return `${guidance}
 
-In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.
+${runtime.retainsState
+  ? 'In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.'
+  : 'If using per-call PTC, include the bridge initialization at the start of every program before using cua; variables and objects do not persist between calls.'}
 
-Persistent PTC initialization:
+${runtime.retainsState ? 'Persistent' : 'Per-call'} PTC initialization:
 
 \`\`\`ts
 var { connectCua } = await import(${ptcBridgeUrl});

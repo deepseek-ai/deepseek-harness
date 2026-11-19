@@ -39,12 +39,12 @@ The turn rail sits at the scrollport's start edge with its marks, focus ring, an
 - **The dock kit's floating window.** `FloatLayer` windows are draggable, resizable, and positioned in viewport coordinates; a summary anchored to the transcript gutter needs none of that and would have to fight the window's own placement rules.
 - **Viewport-width breakpoints.** The transcript width is adaptive and draggable and the right sidebar takes a variable track, so a viewport breakpoint either covers the transcript or hides the panel with room to spare.
 - **CSS-only hiding with a click-time read.** A container query on the gutter can hide the docked panel, and the toggle could read the computed result when pressed, as the background-job trigger does. The toggle would still render without knowing whether the panel shows, so `aria-expanded` and its tooltip would be wrong whenever the preference says dock but the gutter is too narrow.
-- **Squeezing the transcript to make room.** Docking on laptop widths by moving the transcript column aside changes the centered column, the composer, and both width handles; it remains a separate layout decision.
+- **Narrowing the transcript to make room.** Docking in narrower frames by narrowing the transcript column changes the reading width without the reader asking. The column moves into its start gutter for the panel and keeps its width ([decision](2026-11-16-session-panel-makes-room.md)).
 - **A Session-scoped standard hook for the gutter.** Adding a hook to every Session-scoped Slot would make every component fixture in the client restate it; the docking decision has two readers, the panel and the toggle, and both read it from the plugin's own state.
 
 ## Consequences
 
-- With the default transcript width, which stops at 880px, the body must be 1576px wide to dock, so laptop widths use the overlay; the panel never covers the transcript unless the user opens it.
+- With the default transcript width, which stops at 880px, the body must be 1576px wide to dock in the gutter alone; narrower bodies dock by [moving the transcript aside](2026-11-16-session-panel-makes-room.md), and those too narrow for that use the overlay; the panel never covers the transcript unless the user opens it.
 - Sections from independent plugins share one surface, ordering, and title style without depending on each other, and an occupied section id can be replaced by a higher-priority registration.
 - `ui-chat` gained one slot and one custom property on its layer and observes nothing for them. Each mounted panel adds one `ResizeObserver` on its dock probe, which calls back only when the docking decision flips. `ui-conversation` caps the default transcript width at 880px.
 - The panel shows only in Chat Views; elsewhere the toggle stays in the header, unavailable. Every Chat View occurrence renders the aside, so a Session shown in the main body and in an embedded Conversation at once shows its overlay in both.

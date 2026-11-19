@@ -11,6 +11,16 @@ Every backend uses startActivation. Capability flags validate request options; p
 Optional Host-chosen `cwd` selects the child's initial directory; a relative path resolves against the parent's current directory. Omitting it captures that directory at admission. The model-facing delegation tools pass no directory. Local child Sessions retain the parent's original project, and cold resume retains their logged directory state.
 
 ```ts type-equiv
+/** Current concurrency capacity of one subagent tree; observing it reserves no slots. */
+interface SubagentCapacity {
+  /** Occupied slots, including starting, resident, and stopping children; excludes the root. */
+  readonly running: number
+  /** Configured maximum; running may exceed it after the limit is lowered. */
+  readonly limit: number
+}
+```
+
+```ts type-equiv
 /**
  * Start-time options supported by a registered backend. The manager checks
  * every requested option before preparing a local child or starting an external
@@ -481,6 +491,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
  * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
+
+/**
+ * Observe the shared concurrency capacity of the caller's subagent tree.
+ * @param caller - exact live root or resident tree member.
+ * @returns occupied slots and the current limit; this observation reserves no capacity.
+ */
+capacityOf(caller: Agent): SubagentCapacity
 
 /**
  * Report the model-facing names of a live tree member and its direct creator.

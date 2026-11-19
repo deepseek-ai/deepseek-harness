@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungssteuerung",
+    "description": "Nachrichten an andere Sitzungen senden und Annahmebestätigungen erhalten."
+  }
+}

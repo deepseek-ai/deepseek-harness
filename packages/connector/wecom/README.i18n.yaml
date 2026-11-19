@@ -1,0 +1,88 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/wecom/README.md
+/:
+  en: 61517a3b25e2a2c5
+  zh: 55ef5e89541516e0
+/deepseek-ai-dsh-wecom:
+  en: 97ebb140059d2cd9
+  zh: b9753254b9a084f3
+/deepseek-ai-dsh-wecom/summary:
+  en: 06358926dfdfecee
+  zh: 5ae37704e7983a03
+/deepseek-ai-dsh-wecom/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-wecom/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-wecom/use-this-package/install-into-a-profile:
+  en: 6227d6e43ec8c108
+  zh: 48e0f252de253d14
+/deepseek-ai-dsh-wecom/use-this-package/what-you-get:
+  en: 7581623b2b257fe0
+  zh: cdd670dfd6d0183d
+/deepseek-ai-dsh-wecom/use-this-package/authorization-operations:
+  en: a5d3467ec57a5657
+  zh: ea5a0e1c3c539046
+/deepseek-ai-dsh-wecom/use-this-package/configure:
+  en: dfbcda32182eb7eb
+  zh: 554086e7081a313a
+/deepseek-ai-dsh-wecom/understand-the-implementation:
+  en: 2b6b63d9e4e2e41c
+  zh: 6268453811f2efcb
+/deepseek-ai-dsh-wecom/further-exploration:
+  en: 7a8fda721faaf5ef
+  zh: b4233b8a77994ae6
+/deepseek-ai-dsh-wecom/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: 3447e587c56a25d6
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 92eb47194f3c8cc3
+  zh: b9cfda74948e4b1a
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/token-effect:
+  en: 5c0018a8ae3cd3d3
+  zh: 341e13c2f26125be
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: ce9139edf3309f2b
+  zh: bca06594b3e557e5
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 54aa7db097eafd3c
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/what-the-model-sees:
+  en: ff5d75fb84ce8130
+  zh: 0f236bf0534755a9
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/token-effect:
+  en: 1ed287a86abbc585
+  zh: 5d55a6fd61786866
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: 0d57cdec5e828828
+/deepseek-ai-dsh-wecom/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees:
+  en: 44f38c8383be971a
+  zh: 5975e1948617e18b
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-wecom/model-experience/cli-path/token-effect:
+  en: 2caf581d193f3dba
+  zh: 3b5e94d4cc69ca3b
+/deepseek-ai-dsh-wecom/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
+/deepseek-ai-dsh-wecom/known-limitations-and-deferred-work:
+  en: 7a9e3ee8135294ee
+  zh: a016e5b728757c1f
+/deepseek-ai-dsh-wecom/known-limitations-and-deferred-work/dev-note:
+  en: 71cc23fc507e649e
+  zh: 3dbd0498845467cc

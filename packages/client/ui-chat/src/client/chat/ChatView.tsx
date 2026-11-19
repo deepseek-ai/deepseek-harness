@@ -21,6 +21,7 @@ import { mergeTurnRailItems } from './turn-rail-items.ts'
 import { useTextInteraction } from './text-interaction.ts'
 import { useChatScroll } from './use-chat-scroll.ts'
 import { fileMediaUrl, resolveWorkspacePath, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import css from './ChatView.module.css'
 
 /** Host/OS refusal text for the file-open dialog; empty throws keep a locale fallback. */
@@ -100,15 +101,17 @@ export function ChatView({
   const inbox = useProjection('inbox') as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
+  // The directory the Session works in now: a relative image target resolves from it, as a relative link does.
+  const directory = useSessions(s => selectSessionDirectory(s, sessionId))
   const fileImages = useMemo(() => ({
     fileDrag,
-    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(cwd, path)),
-    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(cwd, path)),
+    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(directory, path)),
+    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(directory, path)),
     labels: {
       open: t('image.open'), loading: t('image.loading'), failed: t('image.failed'),
       dialog: t('image.dialog'), close: t('image.close'),
     },
-  }), [cwd, t, fileDrag, sessionId])
+  }), [directory, t, fileDrag, sessionId])
   const codeLabels = useMemo(() => markdownLabels(t).code, [t])
   // Every fence in the flow dispatches by language; the content is the plain
   // code block, so a language without a layer renders as code without diff rows.

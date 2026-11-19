@@ -15,6 +15,11 @@ import type { SubagentResult, SubagentRun, SubagentRunId } from './types.ts'
 export class ActivationPool {
   private readonly slots = new Set<symbol>()
 
+  /** Slots reserved by starting, resident, or stopping children. */
+  get size(): number {
+    return this.slots.size
+  }
+
   /**
    * Reserve before reconstruction; release also tolerates unpublished rollback.
    * @param capacity - the maximum simultaneous activations in this pool.

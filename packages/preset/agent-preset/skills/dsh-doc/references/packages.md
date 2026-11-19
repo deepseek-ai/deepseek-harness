@@ -156,10 +156,13 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-cli-account` | yes | Host Service of CLI app plugins: each plugin registers its third-party CLI and account, and the Service gives the model the CLI's absolute path, runs one account operation at a time, and shows the account on the Plugins page |
+| `@deepseek-ai/dsh-feishu` | yes | Feishu plugin: the official lark-cli with its embedded skills, and account connection from the Plugins page |
 | `@deepseek-ai/dsh-linear` | yes | Linear plugin: Linear's hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-notion` | yes | Notion plugin: Notion's hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-tencent-docs` | yes | Tencent Docs plugin: Tencent Docs' hosted MCP server, authorized through the shared MCP manager |
+| `@deepseek-ai/dsh-tencent-meeting` | yes | Tencent Meeting plugin: the official tmeet with its skill, and account connection from the Plugins page |
 | `@deepseek-ai/dsh-upstream-skills` | yes | Host Service of CLI app plugins: each plugin registers its entry skill and a pinned directory of the vendor's GitHub repository, and the Service downloads that directory into the DSH cache and lists the entry skill over it |
+| `@deepseek-ai/dsh-wecom` | yes | WeCom plugin: the official wecom-cli with its skills, and authorization from the Plugins page |
 
 ## context
 
@@ -422,6 +425,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-session-title` | yes | Log-backed session title service and provider registry for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-title-first-prompt-llm` | yes | First-message LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-session-turn-outline` | no | Whole-log turn outline projection (turnOutline) for the DeepSeek Harness |
+| `@deepseek-ai/dsh-tool-session-control` | no | Send model-authored messages to ordinary Web Sessions with acceptance receipts |
 | `@deepseek-ai/dsh-working-directory` | yes | Session working directories with durable changes and model context |
 
 ## session-query

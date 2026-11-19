@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "隐藏详情",
     "INSTALLER_EXTRACT_SAVED": "完整错误报告已保存到 %s",
     "INSTALLER_EXTRACT_UNSAVED": "无法保存完整错误报告，请使用“复制错误信息”保留。",
-    "INSTALLER_EXTRACT_COPIED": "错误信息已复制到剪贴板。"
+    "INSTALLER_EXTRACT_COPIED": "错误信息已复制到剪贴板。",
+    "INSTALLER_UNINSTALL_OWNER": "当前设备在多个位置安装了 DeepSeek Harness",
+    "INSTALLER_UNINSTALL_REGISTRATION": "部分内容未能清理成功。你可以保存清理报告，查看具体项目和原因。",
+    "INSTALLER_UNINSTALL_REGISTERED": "系统登记的安装位置：",
+    "INSTALLER_UNINSTALL_SCOPE": "选择继续，将清理以下目录，以及仍指向它的命令、快捷方式和系统登记：",
+    "INSTALLER_UNINSTALL_CONTINUE": "继续清理卸载目录",
+    "INSTALLER_UNINSTALL_SAVE": "保存清理报告…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "报告未能保存，请重新选择保存位置。",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "卸载未完成",
+    "INSTALLER_UNINSTALL_UNSAFE": "无法确认删除范围，本次操作未开始删除。",
+    "INSTALLER_UNINSTALL_UNKNOWN": "清理操作未返回完整结果，后续清理已停止。",
+    "INSTALLER_UNINSTALL_BLOCKED": "无法删除以下文件。请关闭可能使用该文件的程序，检查访问权限后重试。",
+    "INSTALLER_UNINSTALL_COMPLETE": "卸载已完成"
   },
   "uninstaller": {
     "welcome": "欢迎",

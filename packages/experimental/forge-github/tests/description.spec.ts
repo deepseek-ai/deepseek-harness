@@ -8,7 +8,8 @@ import { pull } from './fixtures.ts'
 const signal = new AbortController().signal
 
 const limits: GitHubLimits = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+  maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 
 function fakeGh(handler: (args: readonly string[]) => GhOutput): { run: GhRunner; calls: string[][] } {

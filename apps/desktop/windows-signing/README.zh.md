@@ -38,15 +38,30 @@ description: "配置和维护 Windows 打包 runner、签名凭据、EV Token �
 
 完整的注册、标签、路由和审批配置顺序见 [CI 发布配置](../publishing/ci/README.zh.md#setup-sequence)。任务安装器需要 Windows .NET Framework 4.5+ 编译器，路径为 `%SystemRoot%/Microsoft.NET/Framework64/v4.0.30319/csc.exe`。它将 GUI 可执行文件编译到 `runner/dsh-task/launcher.exe`；该程序不分配控制台地启动 PowerShell，并等待其退出。`run.ps1` 自身的输出和错误分别写入名称唯一的 `launcher-*.out.log` 和 `launcher-*.err.log`，文件名包含 UTC 时间、PID 和随机标识。启动器失败时禁用周期启动，包括尚未读取重试预算时发生的失败。任务结果 `2` 表示启动器失败，`3` 表示无法写入错误日志，`4` 表示禁用任务也失败，需要操作者在计划任务中手动禁用。直接子进程退出后，最多等待五秒排空输出；超时返回 `5`，将诊断写入 `launcher-*.drain.log`：输出可能不完整，但周期恢复仍受原有重试预算约束。后代进程可能在 runner 退出后继续运行；日志排空不会终止它们。记录的停止目标是启动器进程，因此 stop 覆盖启动器及其后代。正常 runner 输出仍保存在 `run-*.log`。
 
-以 runner 的 Windows 用户运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action install -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging`，使用该机器安装的 PowerShell 7。安装器检查环境，并将启动脚本复制到 `runner/dsh-task`；注册、工具和凭据仍单独管理。它注册一个初始禁用、权限受限的交互式计划任务，不保存账户密码。任务优先级 4 让 runner 及子进程使用普通 CPU、I/O 和内存优先级；计划任务默认值 7 会降低三者的优先级，使依赖安装变慢。已有任务保留原设置：在 runner 空闲时停止、卸载并重新安装任务，再启动。执行 `-Action start` 或 `-Action status` 时只传 `-RunnerRoot`；配置目录及重试选项仅适用于安装。任务在该用户登录桌面后启动，重启后也需要登录，注销时停止。它不提供无人值守开机，也不解锁签名 Token。
+以 runner 的 Windows 用户运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action install -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging`，使用该机器安装的 PowerShell 7。安装器检查环境，并将启动脚本复制到 `runner/dsh-task`；注册、工具和凭据仍单独管理。它注册一个初始禁用、权限受限的交互式计划任务，不保存账户密码。任务优先级 4 让 runner 及子进程使用普通 CPU、I/O 和内存优先级；计划任务默认值 7 会降低三者的优先级，使依赖安装变慢。已有任务保留原设置：在 runner 空闲时停止、卸载并重新安装任务，再启动。执行 `-Action start` 或 `-Action status` 时只传 `-RunnerRoot`；配置目录及重试选项仅适用于安装。任务在该用户登录桌面后启动，重启后也需要登录，注销时停止。默认的 `Interactive` 模式需要桌面登录；两种启动模式都不会解锁签名 Token。
 
-任务只允许一个实例，且没有执行时限。周期触发器每隔 `-RestartMinutes` 分钟（默认 `1`）检查一次，并恢复已退出的启动器，包括意外的零退出码。持久预算允许首次启动及 `-RestartCount` 次重启（默认 `10`），直到再次显式启动。每次桌面登录也会消耗预算，`status` 显示剩余启动次数；预算耗尽后，仅登录不能重启 runner。对正在运行的任务执行 start 不会重置预算。预算或配置文件缺失、无效时，自动启动会禁用，需修复后恢复。GitHub 启动器负责 runner 更新；任务恢复不会重跑失败的 workflow，也不会清除签名互锁。重试耗尽后，检查 `runner/dsh-task/run-*.log`、runner 的 `_diag` 日志和 `status`，修复原因后运行 `start`。任务运行不等于连接成功：确认出现 `Connected to GitHub` 和 `Listening for Jobs`，再到 Actions 确认任务分配。`run-*.log` 和 `launcher-*.log` 均保留，由操作者管理清理。
+任务只允许一个实例，且没有执行时限。周期触发器每隔 `-RestartMinutes` 分钟（默认 `1`）检查一次，并恢复已退出的启动器，包括意外的零退出码。持久预算允许首次启动及 `-RestartCount` 次重启（默认 `10`），直到再次显式启动。每次触发器启动任务也会消耗预算，`status` 显示剩余启动次数；预算耗尽后，仅登录或重启机器不能重启 runner。对正在运行的任务执行 start 不会重置预算。预算或配置文件缺失、无效时阻止 runner 启动并请求禁用任务；若计划任务访问被拒绝，管理员需禁用触发器。预留启动次数后发生的失败保留有界恢复；runner 日志不可用时回退到启动器 stderr。GitHub 启动器负责 runner 更新；任务恢复不会重跑失败的 workflow，也不会清除签名互锁。重试耗尽后，检查 `runner/dsh-task/run-*.log`、runner 的 `_diag` 日志和 `status`，修复原因后运行 `start`。任务运行不等于连接成功：确认出现 `Connected to GitHub` 和 `Listening for Jobs`，再到 Actions 确认任务分配。`run-*.log` 和 `launcher-*.log` 均保留，由操作者管理清理。
 
-维护前暂停新 workflow 的触发，等待 runner 空闲。`-Action stop` 在该 runner 存在活跃 worker 时拒绝停止，否则禁用后续启动并停止任务进程树；本地检查无法阻止 GitHub 同时分配任务。`-Action uninstall` 要求任务已停止并禁用，保留注册、配置和日志。拉取仓库更新不会更新已安装的副本。升级时先记录原来的 -ConfigRoot、可选的 -NetworkRoot 和重试设置，再从更新后的 checkout 依次执行 `stop`、`uninstall`、携带原设置的 `install` 和 `start`，最后重新确认监听与 job 分配。迁移手动启动的 runner 时，只在空闲后停止原启动器，再启动计划任务；不要同时运行两个启动器。
+维护前暂停新 workflow 的触发，等待 runner 空闲。`-Action stop` 在该 runner 存在活跃 worker 时拒绝停止，否则禁用后续启动并停止任务进程树；本地检查无法阻止 GitHub 同时分配任务。`-Action uninstall` 要求任务已停止并禁用，保留注册、配置和日志。拉取仓库更新不会更新已安装的副本。升级时先记录启动模式、原来的 -ConfigRoot、可选的 -NetworkRoot 和重试设置，再从更新后的 checkout 依次执行 `stop`、`uninstall`、携带原设置的 `install` 和 `start`；Boot 模式还需在 `start` 前执行 `register-boot`，最后重新确认监听与 job 分配。迁移手动启动的 runner 时，只在空闲后停止原启动器，再启动计划任务；不要同时运行两个启动器。
 
 操作者可在 Windows 上运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-task.ps1`，使用隔离的假 runner 验证安装、无控制台的首次启动与自动恢复、防止重复启动、停止、子进程退出、启动／日志失败时的禁用处理和卸载。此显式运行的测试创建临时任务并保留诊断文件，不连接 GitHub 或访问签名硬件。`pwsh -NoProfile -File apps/desktop/tests/windows-runner-launcher.ps1` 无需计划任务，检查 GUI 可执行文件、子进程无控制台、退出状态、诊断输出以及存在继承管道写端时的有界排空；Windows CI 会执行该测试。真实机器验收还需检查空闲 runner 上线且不出现 Terminal 窗口、Actions job 分配，以及经操作者批准的重启后登录。签名打包和注销／重启验收需要操作者单独验证。
 
+### Windows 无人值守启动
+
+runner 需要在桌面登录前接单时使用 `Boot` 模式。由原 runner 账户准备文件，该账户可保持标准用户；仅注册步骤使用独立的管理员提权会话。管理员必须从已核验、归管理员所有且 runner 账户无法写入脚本及其父目录的 checkout 执行命令，不得提权执行 runner checkout 中的脚本；该步骤读取已准备的配置，不执行 runner 所属的启动器或预检。任务授予运行账户管理权限，始终以受限权限和优先级 4 运行。管理使用 Task Scheduler COM 和原生进程快照，不要求 CIM 命名空间访问权限。
+
+1. 暂停 workflow 触发，等待空闲并停止现有启动器。已有任务由所属账户先执行 `stop` 再执行 `uninstall`，保留配置、缓存及签名互锁。安装会拒绝活跃或路径不可读的 runner 进程，以及原生 runner 的 `.service` 注册。
+2. 以 runner 账户运行 `pwsh -NoProfile -File apps/desktop/scripts/windows-runner-task.ps1 -Action install -StartupMode Boot -RunnerRoot <registered-runner-directory> -ConfigRoot <machine-root>/packaging`，保留原有 `-NetworkRoot` 和重试选项。此步骤检查工具和网络、编译启动器并准备启动快照，不注册任务。
+3. 在管理员提权 PowerShell 中运行 `pwsh -NoProfile -File <administrator-owned-checkout>/apps/desktop/scripts/windows-runner-task.ps1 -Action register-boot -RunnerRoot <registered-runner-directory> -RunAs <machine-or-domain\runner-account>`。账户必须与准备阶段一致。在本机提示中输入该账户的 Windows 密码，不是 Hello PIN 或签名 PIN。注册只提交一次凭据，创建初始禁用的 Password/AtStartup 任务。失败后先检查计划任务再重试，因为注册可能已经完成；不会自动重试认证。
+4. 以 runner 账户运行同一管理脚本，传入 `-Action start -RunnerRoot <registered-runner-directory>`，再执行 `-Action status`。核对账户、`LogonType=Password`、`BootTrigger=True`、剩余启动次数和监听日志。恢复登录后启动时，停止并卸载任务，再不带 `-StartupMode Boot` 安装并启动。
+
+管理员须确保批处理登录权限、没有覆盖它的拒绝策略，以及 runner 对工具、私有配置、缓存和日志的访问权限。账户密码变更后，暂停触发并等待空闲，由 runner 账户执行 `stop`、`uninstall`，管理员重新执行 `register-boot`，再由 runner 账户执行 `start`；保留准备文件，无需再次 `install`。网络依赖、磁盘和签名硬件须在登录前可用，服务时段应避免睡眠。脚本不配置桌面自动登录。正常重启也消耗持久启动预算，没有健康运行后自动重置或耗尽告警；维护时检查 `status` 的 `RemainingLaunches`，空闲时执行 `stop` 再 `start` 可重置预算。恢复不能清除签名互锁或重试失败的硬件签名。
+
+Windows CI 使用隔离替身检查任务 XML、准备阶段、无效配置、凭据缺失／不匹配及提示抛错和单次注册，不注册真实 Boot 任务。交互式取消可能由 PowerShell 宿主直接终止，凭据替身测试不代表该宿主行为已经验收。部署操作者须在每台新机器验证独立管理员与标准账户的注册、任务管理权限，以及不登录桌面的重启、实际接单和签名打包。旧机器结果不能替代新启动快照的验收。
+
 ### 可选网络依赖
+
+安装 Boot 启动前，先明确网络进程由谁管理。只有在重启后、不登录桌面的条件下验证转发进程及所需目标地址可用，才能依赖外部服务。服务显示 `Running`、已保存恢复设置或登录后探测成功都不足以证明这一点：桌面软件可能在注销或关机时停止转发进程并清除恢复状态。若网络依赖此类软件，请使用下述专用子进程模式，或部署独立管理的登录前服务。`runner-network.json` 只配置检查和代理变量，不会启动代理；省略 `-NetworkRoot` 就意味着由外部管理者负责网络启动。
 
 `ConfigRoot` 中没有 `runner-network.json` 时，启动仍使用清理继承环境后的直连行为。要配置网络依赖，请在 checkout 外创建操作者管理的该 JSON 文件，且只包含 `proxyUrl`、`noProxy`、`serviceName`、`probeUrl`、`attempts`、`timeoutSeconds` 和 `retrySeconds`。前四个字段为字符串，后三个预算为 1 至 60 的整数。直连时将 `proxyUrl` 留空，没有 Windows 服务管理依赖时将 `serviceName` 留空。URL 必须使用 HTTP(S)，不能包含凭据、查询参数或片段；代理 URL 不能包含路径。启动脚本在清理环境后设置 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 和 `NODE_USE_ENV_PROXY`，并要求 Node HEAD 探测成功才允许启动 runner。服务就绪检查不会启动或停止 Windows 服务。
 
@@ -54,11 +69,15 @@ description: "配置和维护 Windows 打包 runner、签名凭据、EV Token �
 
 安装时会启动依赖进行就绪检查，并在注册任务前停止它。runner 存活期间，守卫仅在自己拥有的网络进程退出后，按配置间隔重新启动它；启动连续失败时仍会重试，但不会重启 runner、重跑任务或重试签名。退出、重启和启动失败消息写入 `run-*.log`，依赖进程的输出会被丢弃。重启消息只表明进程已创建，不代表网络可用；请在 runner 日志中确认重新连接。进程仍存活但无响应时需要操作者排查。守卫独占锁定 `NetworkRoot`，回收残留子进程前核对 PID、启动时间和可执行文件，并在 runner 退出时停止子进程。不可恢复的守卫错误会保留活动 runner 直到其退出，并报告恢复已停止。重新安装时保留 `NetworkRoot`；仅拉取代码不会替换已安装的辅助脚本。
 
-Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network.ps1` 和 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network-process.ps1`。在已配置的打包机器上，给第一条命令添加 `-CheckStartup`，可验证实际启动环境清理后的网络配置。这些测试不会使用签名硬件或外部网络端点。
+Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network.ps1` 和 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network-process.ps1`。在已配置的打包机器上，给第一条命令添加 `-CheckStartup`，可验证实际启动环境清理后的网络配置。就绪探测设置退出状态并让 Node 正常完成清理，保留响应体取消、请求超时和外层进程期限保护。测试通过真实重定向子进程路径覆盖 HTTP 成功、非 2xx、代理连接拒绝和请求超时，不使用签名硬件或外部网络端点。
+
+新机器准备和测试网络时，保持 runner 禁用。禁用的 runner 任务不会启动其托管的网络子进程；应单独测试该子进程，不启动 listener。经操作者批准重启后，在登录桌面或手动打开网络客户端之前，验证所选代理及所需目标地址，记录当时是否存在桌面 Shell，以及由哪个进程提供代理。若失败，先检查网络管理者的启动和关闭日志，再重试。网络验收通过后，才由操作者启用 runner，验证 Boot 启动与任务分配；签名另行验收。
 
 <a id="signing-configuration"></a>
 
 ## 签名配置
+
+Windows 打包要求 `PATH` 中提供 PowerShell 7（`pwsh`）。工具链检查在构建前验证 Authenticode 支持；运行时签名检查使用此引擎处理超过 260 个字符的路径。
 
 通过[机器 preset 配置](../packaging/README.zh.md#configuration-and-local-builds)选择公开设置与签名文件；不选择 preset 时使用目标 dotenv 文件。
 

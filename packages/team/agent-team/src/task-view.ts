@@ -25,6 +25,7 @@ export function taskReady(state: TeamState, task: TeamTaskSnapshot): boolean {
 
 /**
  * Derive one task view with saved owner identity, readiness, and advisory write overlaps.
+ * Only pending and in-progress tasks warn about other in-progress tasks.
  * A committing caller may pass its pre-append state because `task` supplies the
  * new value explicitly; blocker readiness, and other task scopes
  * do not change when that snapshot is appended.
@@ -34,10 +35,12 @@ export function taskReady(state: TeamState, task: TeamTaskSnapshot): boolean {
  */
 export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamTaskView {
   const warnings = new Set<string>()
-  for (const other of state.tasks) {
-    if (other.id === task.id || other.status !== 'in_progress') continue
-    if (task.writeScopes.some(left => other.writeScopes.some(right => scopesOverlap(left, right)))) {
-      warnings.add(`write scopes overlap with ${other.id}`)
+  if (task.status === 'pending' || task.status === 'in_progress') {
+    for (const other of state.tasks) {
+      if (other.id === task.id || other.status !== 'in_progress') continue
+      if (task.writeScopes.some(left => other.writeScopes.some(right => scopesOverlap(left, right)))) {
+        warnings.add(`write scopes overlap with ${other.id}`)
+      }
     }
   }
   return {

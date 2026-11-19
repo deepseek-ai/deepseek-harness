@@ -1,4 +1,3 @@
-import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   CommandNode, CompactionSummaryNode, ConversationMatch, ConversationNodeContext, ConversationNodeDefinition,
@@ -100,15 +99,10 @@ function compactSource(event: Parameters<ConversationNodeDefinition['match']>[0]
  * @returns final compaction summary Node data.
  */
 function compactSummary(match: ConversationMatch | undefined, checkpoint: ConversationMatch): CompactionSummaryNode {
-  let summary: string | null = null
   let shadowedItemCount: number | null = null
   let shadowedTokenCount: number | null = null
   if (match?.event.type === 'compaction/summary') {
     const data = match.event.data
-    if (Array.isArray(data.summary)) {
-      const text = extractTextContent(data.summary)
-      summary = text.trim() === '' ? null : text
-    }
     shadowedItemCount = Array.isArray(data.shadowedSeqs)
       && data.shadowedSeqs.every(seq => Number.isSafeInteger(seq) && seq >= 0)
       ? data.shadowedSeqs.length
@@ -122,7 +116,6 @@ function compactSummary(match: ConversationMatch | undefined, checkpoint: Conver
     kind: 'compaction',
     seq: checkpoint.event.seq,
     time: checkpoint.event.time,
-    summary,
     summaryEventSeq: match?.event.seq ?? null,
     shadowedItemCount,
     shadowedTokenCount,

@@ -9,7 +9,7 @@ import type { IntervalReport, StoredRequest } from './records.ts'
 import type { Config } from './config.ts'
 import type { OwnsAgent } from './delegation.ts'
 import type { TimelineStorage } from './storage.ts'
-import { languageText, MINUTE_MS, outputLanguage } from './policy.ts'
+import { fixedText, MINUTE_MS } from './policy.ts'
 import { summarizeReport } from './summary.ts'
 import { activeRanges, mergeRanges, reportPeriods, reportRanges } from './periods.ts'
 
@@ -280,7 +280,7 @@ export function installReports(ctx: Context, config: Config, storage: TimelineSt
         workMs,
         ranges,
         summary: {
-          progress: [languageText[outputLanguage(settings.language, settings.uiLanguage)].noActivity],
+          progress: [fixedText(settings.language, settings.uiLanguage).noActivity],
           uncertainties: [],
           userActions: [],
         },
