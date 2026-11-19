@@ -86,7 +86,8 @@ Callbacks caused bugs before, so prefer other designs where possible.
 
 #### 原因
 
-回调让被调用方在它自己选定的时机运行调用方的代码。签名无法说明回调何时运行、运行几次、是否会在返回的 promise 落定后运行，以及它抛出的异常去向何处。被调用方因此变成分发器，必须[隔离回调异常](defensive-patterns/general.zh.md#contain-callback-exceptions-in-the-dispatcher)，并在取消或 dispose（资源释放）后停止调用回调。函数无法跨越进程边界，因此这样的接口以后无法改为 `@Remote` 方法或 SDK 方法。
+- 难以阅读和推理。回调参数的类型没有说明被调用方何时调用它、调用几次，以及它抛异常时会怎样。
+- 无法序列化。函数无法跨越进程边界，因此这样的接口不能作为 `@Remote` 方法或 SDK 方法。
 
 #### 反例
 

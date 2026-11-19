@@ -86,7 +86,8 @@ Review: flag a rule that deviates from this format. `verify-translation-pairing`
 
 #### Reason
 
-A callback lets the callee run caller code at times the callee chooses. The signature does not say when the callback runs, how often, whether it runs after the returned promise settles, or where its exceptions go. The callee becomes a dispatcher that must [contain callback exceptions](defensive-patterns/general.md#contain-callback-exceptions-in-the-dispatcher) and stop calling after cancellation or disposal. A function cannot cross a process boundary, so the interface cannot later become a `@Remote` or SDK method.
+- Hard to read and reason about. The type of a callback parameter does not say when the callee calls it, how often, or what happens when it throws.
+- Not serializable. A function cannot cross a process boundary, so the interface cannot be a `@Remote` or SDK method.
 
 #### Example, bad
 
