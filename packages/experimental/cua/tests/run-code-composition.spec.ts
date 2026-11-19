@@ -587,6 +587,48 @@ it('records release after a thinking pause so the resumed model sees the new inp
   expect(JSON.stringify(f.model.requests[0]?.messages)).toContain('CUA inputs were released during cleanup')
 })
 
+it('removes a pending held reminder when a pause preserves the inbox', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const inserted: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+    if (agent !== f.agent || message.source.kind !== 'cua-held-inputs') return
+    inserted.resolve()
+    agent.cancel({ kind: 'user' }, { keepInbox: true })
+  })
+  const running = f.run()
+  await inserted.promise
+  await running
+  expect(f.agent.inbox.nextStep.map(message => message.source.kind)).toContain('cua-inputs-released')
+  expect(f.agent.inbox.nextStep.map(message => message.source.kind)).not.toContain('cua-held-inputs')
+  f.model.restart(['inspect("resumed")'])
+  await f.run()
+  const resumed = JSON.stringify(f.model.requests[0]?.messages)
+  expect(resumed).toContain('CUA inputs were released during cleanup')
+  expect(resumed).not.toContain('CUA inputs are still held')
+})
+
+it('drains an abnormal prior turn’s input before another program dispatches', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  await f.run()
+  expect(f.native.held).toHaveLength(1)
+  f.model.restart([])
+  f.model.beforeStream = async () => { throw new Error('Model failed after the previous turn left a key held') }
+  const release = f.native.controlNext('releaseHeldInputs')
+  const failing = f.run()
+  await release.entered
+  let next: Promise<unknown> | undefined
+  try {
+    expect(f.agent.session.snapshotEvents().at(-1)?.type).toBe('turn/end')
+    expect(f.native.held).toHaveLength(1)
+    delete f.model.beforeStream
+    f.model.restart([holdProgram])
+    next = f.run()
+    expect(f.native.held).toHaveLength(1)
+    expect(f.native.events).toEqual(['w:down'])
+  } finally { release.reply(); await failing; await next }
+  expect(f.native.events).toEqual(['w:down', 'w:up', 'w:down'])
+})
+
 it('drops a delayed held-state reminder after cancellation has already released the input', async () => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
   const post: PromiseWithResolvers<void> = Promise.withResolvers()

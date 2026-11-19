@@ -11,6 +11,7 @@ internal sealed class FixtureForm : Form
     internal readonly TextBox Editor = new() { Name = "editor", AccessibleName = "CUA test text", Multiline = true, Bounds = new(20, 20, 440, 100) };
     private readonly Button button = new() { Name = "submit", Text = "Record click", Bounds = new(20, 140, 180, 40) };
     private int clicks;
+    private readonly List<string> inputEvents = [];
     private int leftDowns, leftUps, rightDowns, rightUps, middleDowns, middleUps;
     private readonly ToolTip tooltip = new();
 
@@ -20,6 +21,9 @@ internal sealed class FixtureForm : Form
         StartPosition = FormStartPosition.Manual;
         Location = new(100, 100);
         ClientSize = new(500, 300);
+        KeyPreview = true;
+        KeyDown += (_, e) => WatchKey(e.KeyCode, "down");
+        KeyUp += (_, e) => WatchKey(e.KeyCode, "up");
         Controls.Add(Editor);
         Controls.Add(button);
         button.Click += (_, _) => clicks++;
@@ -30,8 +34,14 @@ internal sealed class FixtureForm : Form
         tooltip.SetToolTip(button, "CUA hover is retained");
     }
 
+    private void WatchKey(Keys key, string direction)
+    {
+        if (key is Keys.W or Keys.ShiftKey) inputEvents.Add($"{key}:{direction}");
+    }
+
     private void Count(MouseButtons pressed, bool down)
     {
+        inputEvents.Add($"{pressed}:{(down ? "down" : "up")}");
         switch (pressed)
         {
             case MouseButtons.Left: if (down) leftDowns++; else leftUps++; break;
@@ -74,6 +84,7 @@ internal sealed class FixtureForm : Form
         ups = new { left = leftUps, right = rightUps, middle = middleUps },
         button = new { x = button.Left + button.Width / 2, y = button.Top + button.Height / 2 },
         selection = new { start = Editor.SelectionStart, length = Editor.SelectionLength },
+        inputEvents = inputEvents.ToArray(), wDown = (GetAsyncKeyState(87) & 0x8000) != 0,
         buttons = MouseButtons.ToString(), minimized = WindowState == FormWindowState.Minimized, visible = Visible,
     };
 
@@ -83,6 +94,7 @@ internal sealed class FixtureForm : Form
         base.Dispose(disposing);
     }
 
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern nint WindowFromPoint(Point point);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint window, uint flags);

@@ -8,13 +8,13 @@ import { NativeError, type NativeClient } from './native-client.ts'
 
 const target = { appHandle: z.string(), mode: z.enum(['application', 'window', 'system']) }
 const heldInputs = z.array(z.discriminatedUnion('kind', [
-  z.object({ ...target, kind: z.literal('key'), key: z.string() }),
+  z.object({ ...target, kind: z.literal('key'), key: z.string(), windowId: z.string().optional() }),
   z.object({ ...target, kind: z.literal('mouse'), button: z.enum(['left', 'right', 'middle']), windowId: z.string() }),
 ]))
 
 function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'released'): string {
   const rows = inputs.map(input => input.kind === 'key'
-    ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)} (${input.mode} input).`
+    ? `- Key ${JSON.stringify(input.key)}, appHandle ${JSON.stringify(input.appHandle)}${input.windowId === undefined ? '' : `, windowId ${JSON.stringify(input.windowId)}`} (${input.mode} input).`
     : `- Mouse ${input.button}, appHandle ${JSON.stringify(input.appHandle)}, windowId ${JSON.stringify(input.windowId)} (${input.mode} input).`)
   const title = state === 'held' ? 'CUA inputs are still held:' : 'CUA inputs were released during cleanup:'
   return ['<system-reminder>', title, ...rows,
@@ -63,7 +63,7 @@ class InputOwner {
         if (!this.client) return []
         if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before held-input cleanup was confirmed. Inspect the desktop manually before starting a new task')
         const released = heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id }))
-        if (this.notifySessionOnRelease && released.length > 0) this.released(released)
+        if (this.notifySessionOnRelease) this.released(released)
         return released
       } catch (error) {
         this.failed(error)
@@ -108,6 +108,10 @@ export class CuaHeldInputs {
       emitAgentEvent(this.ctx, agent, 'agent/error', { turn: this.ctx.agents.turnBoundaryOf(agent.session).lastTurn, step: 0, error })
     }, (inputs) => {
       try {
+        for (const message of [...agent.inbox.nextStep, ...agent.inbox.nextTurn]) {
+          if (message.source.kind === 'cua-held-inputs') agent.inbox.remove(message.id)
+        }
+        if (inputs.length === 0) return
         agent.inject(createUserMessage({
           content: [{ type: 'text', text: renderInputs(inputs, 'released') }],
           source: { kind: 'cua-inputs-released', form: 'notice', summary: 'CUA inputs released' },
@@ -147,30 +151,34 @@ export class CuaHeldInputs {
       const signal = execution.signal
       const abort = (): void => { this.stop(agent) }
       signal.addEventListener('abort', abort, { once: true })
+      const releaseAfter = async (message: string): Promise<void> => {
+        signal.removeEventListener('abort', abort)
+        try { await this.release(agent) }
+        catch (error) { throw new NativeError('INPUT_CLEANUP_UNCONFIRMED',
+          `${message}. Held-input cleanup failed: ${String(error)}`, { cause: error }) }
+      }
       try {
-        const result = await next()
+        const result = await next().catch(async (error: unknown) => {
+          await releaseAfter(`Program failed: ${String(error)}`)
+          throw error
+        })
         if (result.isError || signal.aborted) {
-          signal.removeEventListener('abort', abort)
-          try { await this.release(agent) }
-          catch (error) { throw new NativeError('INPUT_CLEANUP_UNCONFIRMED',
-            `${result.isError ? result.error.message : 'Program cancelled'}. Held-input cleanup failed: ${String(error)}`, { cause: error }) }
+          await releaseAfter(result.isError ? result.error.message : 'Program cancelled')
         } else if (execution.parent === undefined) {
           const owner = this.owners.get(agent)
           const inTurn = ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null
-          const text = await owner?.reminder(inTurn)
+          const text = await owner?.reminder(inTurn).catch(async (error: unknown) => {
+            await releaseAfter(signal.aborted ? 'Program cancelled' : `Held-input query failed: ${String(error)}`)
+            throw error
+          })
           // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
-          if (signal.aborted) { await this.release(agent); return result }
+          if (signal.aborted) { await releaseAfter('Program cancelled'); return result }
           if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
               source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
           ] }
         }
         return result
-      } catch (error) {
-        signal.removeEventListener('abort', abort)
-        try { await this.release(agent) }
-        catch (cleanupError) { throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', `Program failed: ${String(error)}. Held-input cleanup failed: ${String(cleanupError)}`, { cause: error }) }
-        throw error
       } finally {
         signal.removeEventListener('abort', abort)
         await this.owners.get(agent)?.settled()

@@ -56,7 +56,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
 5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
 
-`win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. The selected window must be in the foreground for both directions. A press also requires a pointer hit on that window; a release can occur outside it.
+`win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. A down requires the selected window to be in the foreground and under the pointer. Release through the original Window object. An up releases the desktop button without switching focus or moving the pointer.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -65,7 +65,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 #### What the model sees
 
-The program receives application and window identifiers, observations, and action results. Selection alone does not provide an accessibility tree.
+The program receives application and window identifiers, observations, and action results. Selection alone does not provide an accessibility tree. After a successful program, a reminder lists any held keys and buttons with their window and desktop input mode. Program failure, cancellation, reset and disconnect release owned input in reverse order.
 
 #### Token effect
 
@@ -82,7 +82,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
 - Hover, click, scroll and drag use the system pointer. `requireSystemPointerApproval` does not prompt separately for Windows pointer operations.
 - Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.
-- Windows has not yet implemented native held-input reporting or unified failure/cancellation cleanup. Explicitly pair every key and mouse down with up; do not rely on reminders or automatic release.
+- Windows routes input through the desktop. After focus changes or the original window closes, a confirmed release means the desktop accepted the up. The original window may not receive the event. If the desktop is unavailable or refuses to confirm release, further CUA input for the task is blocked. Inspect the desktop before starting another task.
 - The helper does not check each key or button release during cleanup. If an input remains held after a failure, release it manually before continuing.
 - Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.
 - The Windows handshake requires a positive `maxClickHoldMs`. With zero, it fails with `INVALID_CONFIG` before ordinary clicks or status queries can run.

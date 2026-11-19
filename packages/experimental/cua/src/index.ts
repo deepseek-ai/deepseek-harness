@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { MouseControl } from './mouse-control.ts'
 import { CuaHeldInputs } from './held-inputs.ts'
-import { withSystemPointerGuidance } from './guidance.ts'
+import { withHeldInputGuidance, withSystemPointerGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
@@ -212,7 +212,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
   const formatGuidance = (text: string): string => {
-    const instructions = systemPointer ? withSystemPointerGuidance(text) : text
+    const inputGuidance = heldInputs ? withHeldInputGuidance(text) : text
+    const instructions = systemPointer ? withSystemPointerGuidance(inputGuidance) : inputGuidance
     return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   }
   const guidance = formatGuidance(backend.getGuidance('raw'))

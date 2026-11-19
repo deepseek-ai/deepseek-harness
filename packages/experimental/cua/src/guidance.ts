@@ -58,11 +58,19 @@ Available at app or window level depending on the platform.
 - pressKey(key: string, modifiers?: Modifier[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
 - sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier.
 
-Explicit downs from sendKeyEvent and toggleMouse remain held across programs and turns until an explicit up releases them at their original recipient. After a successful run_code or cua_run_code, a system reminder lists any remaining keys and mouse buttons, their targets and input modes. No reminder is added when none remain. Program failure, a received cancellation, connection closure, and disposal release owned inputs together in reverse dispatch order. A client pause between completed MCP calls is not observable by the server, so held input can remain pressed. pressKey, typeText, click, and complete drag release their own inputs within the operation.
-
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.`
+
+/** Add held-input behavior where the provider supplies native ownership and cleanup.
+ * @param guidance - Provider instructions including the shared operation catalog.
+ * @returns Instructions for a provider with held-input state support.
+ */
+export function withHeldInputGuidance(guidance: string): string {
+  return guidance.replace('click, drag, and pressKey are convenience operations;', `Explicit downs from sendKeyEvent and toggleMouse remain held across programs and turns until an explicit up releases them through the same target. After a successful run_code or cua_run_code, a system reminder lists any remaining keys and mouse buttons, their targets and input modes. No reminder is added when none remain. Program failure, a received cancellation, connection closure, and disposal release owned inputs together in reverse dispatch order. A client pause between completed MCP calls is not observable by the server, so held input can remain pressed. pressKey, typeText, click, and complete drag release their own inputs within the operation.
+
+click, drag, and pressKey are convenience operations;`)
+}
 
 /**
  * Describe the system-pointer option for a provider that declares the capability.

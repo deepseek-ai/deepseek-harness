@@ -94,6 +94,9 @@ def check_toggle_mouse(helper, owner, state_file, executable):
                 assert cursor() == inside
                 assert not state["events"][-1]["pressedButtons"] & (1 << index), state
                 assert cursor(*outside) == outside
+                if button == "right":
+                    os.kill(state["pid"], signal.SIGUSR1)
+                    wait_owned(lambda s: s["windowX"] == bounds["x"] + 40)
                 if button == "middle":
                     other_state = state_file.with_name("other.json")
                     other = subprocess.Popen([executable, other_state])
@@ -108,6 +111,10 @@ def check_toggle_mouse(helper, owner, state_file, executable):
             events = state["events"][count:]
             assert [(e["type"], e["button"]) for e in events] == [(down, index), (up, index)], events
             assert events[1]["point"][0] < 0, events
+            if button == "right":
+                assert events[1]["point"][0] == outside[0] - bounds["x"] - 40, events
+                os.kill(state["pid"], signal.SIGUSR1)
+                wait_owned(lambda s: s["windowX"] == bounds["x"])
             if button != "middle":
                 assert cursor() == outside
         call("activate", owner)

@@ -185,10 +185,10 @@ export interface CuaSurface {
    * Send one key-down or key-up event at the current input focus.
    * Explicit downs persist across programs and turns; successful programs remind about remaining holds.
    * MCP client pauses between completed calls do not notify the provider and leave held input unchanged.
-   * Program failure, cancellation, connection closure and disposal release owned input. Windows support is pending.
+   * Program failure, cancellation, connection closure and disposal release owned input on supported providers.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
-   * @param direction - Down establishes a hold; up immediately releases owned input at its saved recipient.
+   * @param direction - Down establishes a hold; up immediately releases owned input through its original input route.
    * @returns Whether the provider successfully executed the requested operation.
    */
   sendKeyEvent(key: string, direction: 'down' | 'up'): Promise<CuaActionResult>
@@ -275,8 +275,8 @@ export interface CuaApp extends CuaSurface {
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
   /**
-   * Inspect permissions without requesting them. Turn-managed providers omit explicit hold methods outside an active turn.
-   * @returns Reported native capabilities for this execution context.
+   * Inspect permissions and the provider’s supported methods without requesting access.
+   * @returns Reported native capabilities.
    */
   getCapabilities(): Promise<CuaCapabilities>
   /**

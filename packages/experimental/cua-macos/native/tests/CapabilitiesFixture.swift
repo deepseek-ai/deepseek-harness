@@ -49,6 +49,8 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
     var events: [[String: Any]] = []
     var axPresses = 0
     var axMenus = 0
+    private var moveSignal: DispatchSourceSignal?
+    private var moved = false
     init(statePath: String) { self.statePath = statePath }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bar = NSMenu()
@@ -66,6 +68,16 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         window.title = "DSH CUA capability checks"
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
+        signal(SIGUSR1, SIG_IGN)
+        let move = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        move.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.window.setFrameOrigin(NSPoint(x: self.window.frame.minX + (self.moved ? -40 : 40), y: self.window.frame.minY))
+            self.moved.toggle()
+            self.persist()
+        }
+        move.resume()
+        moveSignal = move
         window.collectionBehavior = [.canJoinAllApplications, .stationary]
         text = CapabilityTextView(frame: NSRect(x: 20, y: 230, width: 600, height: 235))
         text.isRichText = true
@@ -135,7 +147,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         let frame = pad.convert(pad.bounds, to: nil)
         let selection = text.selectedRange()
         let result: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
-            "active": NSApplication.shared.isActive, "keyWindow": window.isKeyWindow,
+            "windowX": window.frame.minX, "active": NSApplication.shared.isActive, "keyWindow": window.isKeyWindow,
             "textFocused": window.firstResponder === text, "pasteAttempts": pasteAttempts,
             "text": text.string, "selection": [selection.location, selection.length], "runs": runs, "events": events, "axPresses": axPresses, "axMenus": axMenus,
             "pad": [frame.minX, window.frame.height - frame.maxY, frame.width, frame.height]]

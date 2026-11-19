@@ -517,13 +517,18 @@
                 "down",
                 "up"
               ]
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
             "appHandle",
             "windowId",
             "mouseButton",
-            "direction"
+            "direction",
+            "taskId"
           ],
           "additionalProperties": false
         }
@@ -1118,12 +1123,17 @@
                 "down",
                 "up"
               ]
+            },
+            "taskId": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
             "appHandle",
             "key",
-            "direction"
+            "direction",
+            "taskId"
           ],
           "additionalProperties": false
         }
@@ -1474,6 +1484,68 @@
           },
           "required": [
             "permission"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "getHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "taskId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "taskId"
           ],
           "additionalProperties": false
         }

@@ -238,6 +238,42 @@ describe('Computer Use MCP composition', () => {
     expect(native.held).toEqual([])
   })
 
+  it.each(['reset', 'image failure'] as const)('cleans up held input when %s interrupts response delivery', async (ending) => {
+    const { ctx, native, client, run } = await setup()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    const original = ctx.attachments.readImageRequest.bind(ctx.attachments)
+    const read = vi.spyOn(ctx.attachments, 'readImageRequest').mockImplementation(async (...args) => {
+      if (native.calls.some(call => call.method === 'getHeldInputs')) {
+        entered.resolve()
+        await finish.promise
+        if (ending === 'image failure') throw new Error('Fixture screenshot could not be delivered')
+      }
+      return original(...args)
+    })
+    onTestFinished(() => { finish.resolve(); read.mockRestore() })
+    const running = run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await app.sendKeyEvent("w", "down"); inspect(await win.getScreenshot())')
+      .then(value => texts(value).join(' '), error => String(error))
+    await entered.promise
+    let reset: ReturnType<typeof client.callTool> | undefined
+    try {
+      expect(native.held.map(press => press.key)).toEqual(['w'])
+      if (ending === 'reset') {
+        let resetDone = false
+        const release = native.controlNext('releaseHeldInputs')
+        reset = client.callTool({ name: 'cua_reset', arguments: {} }).then((result) => { resetDone = true; return result })
+        await release.entered
+        release.reply()
+        expect(resetDone).toBe(false)
+      }
+    } finally { finish.resolve() }
+    const result = await running
+    expect(result).not.toContain('CUA inputs are still held')
+    if (ending === 'image failure') expect(result).toContain('Fixture screenshot could not be delivered')
+    expect((await reset)?.isError).not.toBe(true)
+    expect(native.held).toEqual([])
+  })
+
   it('reports refused cleanup after a cancelled MCP request and prevents further native input', async () => {
     const { ctx, native, run } = await setup()
     await run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")')

@@ -1,7 +1,7 @@
 /** Model-facing guidance lists the object API with platform availability and input constraints. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, withHeldInputGuidance, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
@@ -55,8 +55,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
-  expect(COMMON_GUIDANCE).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
-  expect(COMMON_GUIDANCE).toContain('a system reminder lists any remaining keys and mouse buttons')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('a system reminder lists any remaining keys and mouse buttons')
   const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
   expect(sharedKeyEvent).toBeDefined()
   expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/cua-held-inputs/guide.md
 /:
-  en: aa41a4beebdac9bf
-  zh: 0c027e6be34dae49
+  en: 9256c8b808ebc45d
+  zh: ca6524b78cd7f365
 /cua-reports-held-input-after-programs:
   en: 37252a5d19c7fe09
   zh: f1b33b7da3935155
 /cua-reports-held-input-after-programs/change:
-  en: 4bd67513168d23c2
-  zh: 62139119ecfdc51e
+  en: 2812241cf189be50
+  zh: ee90f8e5c6c55512
 /cua-reports-held-input-after-programs/migration:
-  en: ff2470e52eb67983
-  zh: 8fd179145c4da20a
+  en: e14ac0c327d75964
+  zh: 7899f47c4a3cc78c

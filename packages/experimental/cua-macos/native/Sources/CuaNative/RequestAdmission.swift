@@ -81,6 +81,3 @@ struct RequestParameters: Sendable {
     }
     func point(_ x: String = "x", _ y: String = "y") throws -> WindowPoint { WindowPoint(x: try number(x), y: try number(y)) }
 }
-
-extension RequestParameters {
-}

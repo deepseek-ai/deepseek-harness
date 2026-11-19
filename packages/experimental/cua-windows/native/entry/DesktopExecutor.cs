@@ -8,14 +8,28 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed class ClientState
 {
+    internal Guid Connection { get; } = Guid.NewGuid();
     internal Dictionary<string, AppState> Apps { get; } = new(StringComparer.Ordinal);
     internal AppState App(string handle) => Apps.GetValueOrDefault(handle)
         ?? throw new NativeFailure("STALE_APP", "Select the application again on this connection");
     internal void Clear() { foreach (var app in Apps.Values) app.Dispose(); Apps.Clear(); }
 }
 
-internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IAsyncDisposable
+internal sealed class DesktopExecutor : IAsyncDisposable
 {
+    private readonly MtaDispatcher mta;
+    private readonly StaDispatcher sta;
+    private readonly HeldInputs inputs = new(control => (Win32.GetAsyncKeyState(control) & 0x8000) != 0,
+        input => Input.Send(input), DesktopSession.RequireInteractive);
+    private readonly HeldInputHooks hooks;
+
+    internal DesktopExecutor(MtaDispatcher mta, StaDispatcher sta)
+    {
+        this.mta = mta;
+        this.sta = sta;
+        hooks = new(inputs);
+    }
+
     private readonly WindowCapture capture = new();
     private readonly ClipboardPaste clipboard = new();
     private readonly SemaphoreSlim queue = new(1);
@@ -51,7 +65,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     internal async Task<object> Execute(NativeRequest request, ClientState state, NativeConfig config, CancellationToken cancellation,
         Action<NativeFailure> reportFailure)
     {
-        var context = new RequestContext(config, cancellation, mta, sta, reportFailure);
+        var context = new RequestContext(config, cancellation, mta, sta, reportFailure, inputs);
         if (request.Method == "screenshot")
         {
             AppState app;
@@ -84,6 +98,21 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             if (request.Method == "getActionSchema") return PatternActions.Schema(String(parameters, "action"));
             if (request.Method is "requestPermission" or "openPermissionSettings")
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
+            if (request.Method == "getHeldInputs") return inputs.Get(state.Connection, String(parameters, "taskId"));
+            if (request.Method == "releaseHeldInputs")
+                return inputs.Release(state.Connection, String(parameters, "taskId"), cancellation, config.GraceMs);
+
+            if (request.Method is "sendKeyEvent" or "toggleMouse" && String(parameters, "direction") == "up")
+            {
+                var window = WindowId(parameters) ?? throw new NativeFailure("INVALID_ARGUMENT", "Release through the original window");
+                var task = String(parameters, "taskId");
+                var recipient = String(parameters, "appHandle");
+                var before = Win32.GetForegroundWindow();
+                var dispatched = request.Method == "sendKeyEvent"
+                    ? Input.ReleaseKey(state.Connection, task, recipient, window, String(parameters, "key"), context)
+                    : Input.ReleaseButton(state.Connection, task, recipient, window, String(parameters, "mouseButton"), context);
+                return ActionResult(before, dispatched);
+            }
             DesktopSession.RequireInteractive();
             if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
@@ -97,6 +126,8 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             }
             var app = state.App(String(parameters, "appHandle"));
             var foreground = Win32.GetForegroundWindow();
+            if (request.Method is "sendKeyEvent" or "toggleMouse" or "pressKey" or "typeText" or "paste" or "mouseMove" or "scroll" or "drag" or "click")
+                inputs.RequireOwner(state.Connection, OptionalString(parameters, "taskId"), app.Handle, WindowId(parameters) ?? 0);
             switch (request.Method)
             {
                 case "launchApp":
@@ -143,7 +174,8 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "sendKeyEvent":
                 {
                     var target = Selected(app, parameters, context);
-                    var dispatched = Input.KeyEvent(app, target, String(parameters, "key"), String(parameters, "direction"), context);
+                    await sta.Invoke(hooks.Start, cancellation);
+                    var dispatched = Input.KeyDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "key"), context);
                     return ActionResult(foreground, dispatched);
                 }
                 case "paste":
@@ -174,8 +206,9 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "toggleMouse":
                 {
                     var target = Selected(app, parameters, context);
-                    Input.ToggleMouse(app, target, String(parameters, "mouseButton"), String(parameters, "direction"), context);
-                    return ActionResult(foreground);
+                    await sta.Invoke(hooks.Start, cancellation);
+                    var dispatched = Input.ButtonDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "mouseButton"), context);
+                    return ActionResult(foreground, dispatched);
                 }
                 case "scroll":
                 {
@@ -279,9 +312,18 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         finally { queue.Release(); }
     }
 
-    public ValueTask DisposeAsync()
+    internal async Task ReleaseConnection(ClientState state, int graceMs)
     {
+        if (!inputs.HasConnection(state.Connection)) return;
+        using var deadline = new CancellationTokenSource(graceMs);
+        await queue.WaitAsync(deadline.Token);
+        try { inputs.Release(state.Connection, null, deadline.Token, graceMs); }
+        finally { queue.Release(); }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await sta.Invoke(hooks.Dispose, CancellationToken.None);
         queue.Dispose();
-        return default;
     }
 }
