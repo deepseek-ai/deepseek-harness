@@ -1,15 +1,18 @@
 /* The drop target covers the right column's default 40% band, like the dock
    kit's edge band, and draws the dock kit's drop hint: a blurred ground under
-   a dashed card that takes the accent while the pointer is over it. */
+   a dashed card that takes the accent while the pointer is over it. It stacks
+   above the narrow-window drawer (71) and its mask (70), below menus and
+   toasts, and leaves the default 280px drawer width uncovered so the list
+   stays reachable for reordering. */
 .zone {
   position: fixed;
+  z-index: 72;
   top: var(--dsh-frame-top-clearance, 0px);
   right: 0;
   bottom: 0;
   box-sizing: border-box;
   display: flex;
-  width: max(300px, 40vw);
-  max-width: 100vw;
+  width: min(max(300px, 40vw), calc(100vw - 280px));
   padding: 8px;
   pointer-events: auto;
   background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);

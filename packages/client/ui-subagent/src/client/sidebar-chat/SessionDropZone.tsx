@@ -1,5 +1,6 @@
 /** Drop target that opens a Session dragged from the Session list in the right Sidebar. */
 import { useState, type DragEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -46,7 +47,8 @@ function DropTarget({ label, onDrop }: { readonly label: string; readonly onDrop
     event.dataTransfer.dropEffect = 'copy'
     setOver(true)
   }
-  return (
+  // A body portal stacks above the narrow-window drawer mask, which covers the frame's overlay layer.
+  return createPortal(
     <div
       className={css.zone}
       data-session-drop-zone=""
@@ -67,6 +69,7 @@ function DropTarget({ label, onDrop }: { readonly label: string; readonly onDrop
         <IconPanelLeftOutlineRegular className={css.icon} aria-hidden="true" />
         <span className={css.label}>{label}</span>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -94,10 +94,13 @@ describe('Session drop zone', () => {
 
   it('renders only during a Session drag and opens the dropped Session aside', () => {
     const view = mount(undefined)
-    expect(view.container.innerHTML).toBe('')
+    expect(document.querySelector('[data-session-drop-zone]')).toBeNull()
     view.set(OTHER)
     const label = screen.getByText('Open in sidebar')
-    const zone = view.container.querySelector('[data-session-drop-zone]') as HTMLElement
+    // The zone portals to the body so it stacks above the narrow-window drawer mask.
+    const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
+    expect(zone.parentElement).toBe(document.body)
+    expect(view.container.innerHTML).toBe('')
     expect(zone.hasAttribute('data-active')).toBe(false)
 
     const over = fire(zone, 'dragOver')
@@ -122,6 +125,6 @@ describe('Session drop zone', () => {
     expect(zone.hasAttribute('data-active')).toBe(false)
 
     view.set(undefined)
-    expect(view.container.innerHTML).toBe('')
+    expect(document.querySelector('[data-session-drop-zone]')).toBeNull()
   })
 })
