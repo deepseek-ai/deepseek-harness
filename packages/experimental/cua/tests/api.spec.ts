@@ -1154,3 +1154,17 @@ it('forwards bounded traversal limits on a window-only provider', async () => {
     method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxDepth: 1, maxElements: 1 },
   })
 })
+
+it.each([true, false, undefined])('forwards showDiff=%s for app and window reads without retaining the option', async (showDiff) => {
+  const f = fixture()
+  const app = await f.api.getApp('Editor')
+  const window = await app.getWindow('23')
+  for (const [surface, target] of [[app, {}], [window, { windowId: '23' }]] as const) {
+    await surface.getAccessibilityTree(showDiff === undefined ? undefined : { showDiff })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: {
+      appHandle: selected.appHandle, ...target, ...showDiff === undefined ? {} : { showDiff },
+    } })
+    await surface.getAccessibilityTree()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, ...target } })
+  }
+})

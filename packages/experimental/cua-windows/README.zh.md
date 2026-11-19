@@ -77,6 +77,8 @@ kind: "package-reference"
 
 ## 已知限制与后续工作
 
+`getAccessibilityTree` 或原始 `getState` 的 `showDiff: true` 返回 `UNSUPPORTED`，Windows 的 AX 差分输出暂未实现。省略该选项或传 `false` 可读取完整树。
+
 <a id="known-limitations-and-deferred-work"></a>
 
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。

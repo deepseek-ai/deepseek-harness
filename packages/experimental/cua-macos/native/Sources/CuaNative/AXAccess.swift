@@ -7,6 +7,7 @@ private typealias AXWindowFunction = @convention(c) (AXUIElement, UnsafeMutableP
 
 struct AXProjection {
     let tree: String
+    let lines: [AXTreeLine]
     let elements: [JSONValue]
     let indexed: [Int: AXUIElement]
     let focusedWindowID: UInt32?
@@ -741,7 +742,7 @@ final class AXAccess {
                 var lines: [String] = []
                 if hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
                 if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
-                return AXProjection(tree: lines.joined(separator: "\n"), elements: [], indexed: [:], focusedWindowID: focusedID,
+                return AXProjection(tree: lines.joined(separator: "\n"), lines: [], elements: [], indexed: [:], focusedWindowID: focusedID,
                                     truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
             let dialog = try matches.contains { root in

@@ -18,6 +18,7 @@ struct NativeSnapshot {
     let id: String
     let scope: SnapshotScope
     let elements: [Int: AXUIElement]
+    let tree: AXTreeBaseline?
 }
 struct CaptureTarget: Sendable {
     let appHandle: String
@@ -281,9 +282,10 @@ actor AXWorker {
             observedWindowBounds[handle] = observedWindowBounds[handle]?.filter { ids.contains($0.key) }
             return .result(.array(windows.map(\.json)))
         }
+        var previousTree: AXTreeBaseline?
         if method == "getState" {
             let windowID = try params.optionalWindowID()
-            snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))
+            previousTree = snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))?.tree
             if let windowID { observedWindowBounds[handle]?.removeValue(forKey: windowID) }
             else { observedWindowBounds.removeValue(forKey: handle) }
         }
@@ -308,11 +310,12 @@ actor AXWorker {
         case "getState":
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
+            let options = try AXTreeReadOptions(params)
             let projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
-                    maxElements: params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: params.integer("maxDepth", in: NativeProtocol.depthRange),
-                    includeMenus: params.optionalBoolean("includeMenus") ?? false, details: params.optionalBoolean("details") ?? false)
+                    maxElements: options.maxElements, maxDepth: options.maxDepth,
+                    includeMenus: options.includeMenus, details: options.details)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -324,14 +327,18 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
+            let tree = AXTreeBaseline(projection: projection, options: options)
+            let output = try AXTreeDifference.render(projection: projection, current: tree, previous: previousTree,
+                showDiff: params.optionalBoolean("showDiff") ?? false, checkCancellation: { try self.cancellation.check() })
+            try cancellation.check()
+            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed, tree: tree)
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
             var state: [String: JSONValue] = ["appHandle": .string(handle),
                 "windowId": window.map { .string(String($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
-                "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
+                "snapshotId": .string(id), "tree": .string(output), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]
             if projection.hasUnreadableElements { state["hasUnreadableElements"] = .bool(true) }
             return .result(.object(state))

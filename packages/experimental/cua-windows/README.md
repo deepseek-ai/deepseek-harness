@@ -77,6 +77,8 @@ Inspected results append to model history. Retaining an App, Window, or returned
 
 ## Known Limitations and Deferred Work
 
+`showDiff: true` on `getAccessibilityTree` or raw `getState` returns `UNSUPPORTED` because Windows AX difference output is not implemented yet. Omit the option or pass `false` to read the full tree.
+
 <a id="known-limitations-and-deferred-work"></a>
 
 - The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
