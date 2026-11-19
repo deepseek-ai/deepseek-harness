@@ -1,4 +1,4 @@
-# Agent Note: Prefer rebase with rerere for PR refreshes
+# Agent Note: 以启用 rerere 的 rebase 刷新 PR 分支
 
 Status: implemented
 
@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-agent 以 rebase 刷新独立 PR 分支和堆叠 PR 分支，包括评审后。rebase 前，agent 在每个克隆中用 `git config rerere.enabled true` 启用一次 Git 的已记录冲突解决复用（rerere），Git 会记录每个已解决的冲突，并在之后的 rebase 中再次出现相同冲突时应用记录的解决结果。Git 把复用的解决结果留在未暂存状态以供检查；agent 检查并暂存后再继续 rebase。
+agent 以 rebase 刷新独立 PR 分支和堆叠 PR 分支，包括评审后。rebase 前，agent 在每个克隆中用 `git config rerere.enabled true` 启用一次 Git 的已记录冲突解决复用（rerere），Git 会记录每个已解决的冲突，并在之后的 rebase 中再次出现相同冲突时应用记录的解决结果。agent 不设置 `rerere.autoUpdate`，因此 Git 把复用的解决结果留在未暂存状态以供检查；agent 检查并暂存后再继续 rebase。
 
 只有 PR 作者明确要求时才使用 merge-forward。增量 merge-forward 流程，以及在合入更新的 base 之前保留进行中检查点的规则，仍可用于这种情况。
 

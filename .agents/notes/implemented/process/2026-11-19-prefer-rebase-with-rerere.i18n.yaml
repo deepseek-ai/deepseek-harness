@@ -4,13 +4,13 @@
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-11-19-prefer-rebase-with-rerere.md
 /agent-note-prefer-rebase-with-rerere-for-pr-refreshes:
   en: bee37c92f02c4b62
-  zh: 9db32f3400ca6426
+  zh: da3f086fc09072b3
 /agent-note-prefer-rebase-with-rerere-for-pr-refreshes/problem:
   en: 3c585b97c13a98b1
   zh: 040d30dcaadfbdf2
 /agent-note-prefer-rebase-with-rerere-for-pr-refreshes/decision:
-  en: 03821a54b63dd691
-  zh: 34f599c07fdef838
+  en: 8c6753ecfaf6b246
+  zh: d6850cd7ee0afb2a
 /agent-note-prefer-rebase-with-rerere-for-pr-refreshes/alternatives-considered:
   en: 35d2f27bc5712a11
   zh: 5bd1eaaaa200666f
