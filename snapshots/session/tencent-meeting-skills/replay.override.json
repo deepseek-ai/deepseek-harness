@@ -1,0 +1,18 @@
+{
+  "patches": [
+    {
+      "at": 0,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          { "type": "block-start", "index": 0, "blockType": "reasoning" },
+          { "type": "block-end", "index": 0, "block": { "type": "reasoning", "text": "Check the sign-in through tmeet." } },
+          { "type": "block-start", "index": 1, "blockType": "tool-call" },
+          { "type": "block-end", "index": 1, "block": { "type": "tool-call", "id": "call_tmeet_status", "name": "bash", "arguments": "{\"command\":\"\\\"{{fromRequest:Tencent Meeting CLI: run .tmeet. by its absolute path .(/[^;]+?).; the bare name}}\\\" auth status\",\"description\":\"Check the Tencent Meeting sign-in\"}" } },
+          { "type": "usage", "usage": { "inputTokens": 200, "outputTokens": 20, "cacheReadTokens": 0, "reasoningTokens": 5 } },
+          { "type": "finish", "reason": { "kind": "tool-calls" } }
+        ]
+      }
+    }
+  ]
+}

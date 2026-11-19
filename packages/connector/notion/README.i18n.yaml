@@ -1,0 +1,73 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/notion/README.md
+/:
+  en: 0aa30500a6748dff
+  zh: ecfb242e80df586f
+/deepseek-ai-dsh-notion:
+  en: ebcdb43f309b330c
+  zh: 364385eb8bbf6171
+/deepseek-ai-dsh-notion/summary:
+  en: 05703b12e01e8b04
+  zh: 9dff7eb9cfbeae68
+/deepseek-ai-dsh-notion/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-notion/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-notion/use-this-package/install-into-a-profile:
+  en: 917f72b8c57fa68a
+  zh: d2e5a6d4337c6048
+/deepseek-ai-dsh-notion/use-this-package/authorize-and-sign-out:
+  en: 2b77a82c90e41194
+  zh: ab7d72148ead15d3
+/deepseek-ai-dsh-notion/use-this-package/turn-off-and-uninstall:
+  en: 8fb8e3a36288a635
+  zh: 3ba01fe30e802d1f
+/deepseek-ai-dsh-notion/use-this-package/configure:
+  en: 74b045a61a3fec72
+  zh: 69d64b33e8d1812e
+/deepseek-ai-dsh-notion/understand-the-implementation:
+  en: 5a12bb3e000c4cc9
+  zh: 6431dcb502c1d7af
+/deepseek-ai-dsh-notion/further-exploration:
+  en: ed7d1edadf2feef5
+  zh: 6746823e51e4f4f3
+/deepseek-ai-dsh-notion/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance:
+  en: 01b6ec6d681e457b
+  zh: 7fe0d1c9d1037bd4
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/what-the-model-sees:
+  en: a62a8dbe1f7b7944
+  zh: 32a94fa68d8b30c2
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/what-the-model-sees/guidance-text:
+  en: 8f57292f6821da96
+  zh: b2d3bc7e5c9cbc05
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/token-effect:
+  en: 263969c79903e387
+  zh: d45f9e49d9a252c3
+/deepseek-ai-dsh-notion/model-experience/naming-and-connection-guidance/kv-cache-effect:
+  en: e9668826c9355444
+  zh: 66f609e3779fd510
+/deepseek-ai-dsh-notion/model-experience/notion-server-tools-and-instructions:
+  en: ae0fe892d237cd8d
+  zh: bfd6c55b83ff9f8c
+/deepseek-ai-dsh-notion/model-experience/notion-server-tools-and-instructions/what-the-model-sees:
+  en: 1acff8ce3a0dbdc4
+  zh: f392c0dfc07c8b2c
+/deepseek-ai-dsh-notion/model-experience/notion-server-tools-and-instructions/token-effect:
+  en: ea047c321d077856
+  zh: d50bd0a0579c0a6c
+/deepseek-ai-dsh-notion/model-experience/notion-server-tools-and-instructions/kv-cache-effect:
+  en: 5bed63237f352122
+  zh: a82a734d98bf1ba7
+/deepseek-ai-dsh-notion/known-limitations-and-deferred-work:
+  en: 9f145e50fb31de42
+  zh: fdc6da981ae79456
+/deepseek-ai-dsh-notion/known-limitations-and-deferred-work/dev-note:
+  en: be76e387a7ea3a71
+  zh: d53904834ac3525c

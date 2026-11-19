@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在已加载 web 服务和为它释放凭据的 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md) 的组合中挂载本提供方；它以 `deepseek-official` 搜索提供方身份注册，因此当它是唯一可用的搜索后端时，`ctx.web.search()` 会自动解析到它——也可以用 `searchProvider: deepseek-official` 固定。
+在已加载 web 服务和为它释放凭据的 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md) 的组合中挂载本提供方；它以 `deepseek-official` 搜索提供方身份注册，因此当它是唯一可用的搜索后端时，`ctx.web.search()` 会自动解析到它；没有配置搜索提供方时，为 `deepseek-official` 或 `deepseek-account` 模型路由上的模型请求发起的搜索也解析到它（[提供方选择](../web/README.zh.md#provider-selection)）——也可以用 `searchProvider: deepseek-official` 固定。
 
 ### 何时选择
 
-当部署希望使用 DeepSeek 原生服务端 web 搜索、且其用户登录 DeepSeek 账号或持有 `DEEPSEEK_API_KEY` 时选择此后端——提供方按[鉴权](#authentication)所述复用这些凭据。一次搜索比专用检索端点更重：DeepSeek 在完整模型轮次内执行搜索，因此每次搜索都要预期一次 Messages 调用的延迟与生成 token，每次请求最多 `maxUses` 次服务端搜索。当单次搜索的成本或延迟占主导时避免使用它。
+当部署希望使用 DeepSeek 原生服务端 web 搜索、且其用户登录 DeepSeek 账号或持有 `DEEPSEEK_API_KEY` 时选择此后端——提供方按[鉴权](#authentication)所述复用这些凭据。一次搜索比专用检索端点更重：DeepSeek 在完整模型轮次内执行搜索，因此每次搜索都要预期一次 Messages 调用的延迟与生成 token，每次请求最多 `maxUses` 次服务端搜索。DeepSeek 不对它按次收费，因此其成本是该模型轮次的 token。当延迟占主导时避免使用它。
 
 ### 最小配置
 
@@ -67,7 +67,7 @@ kind: "package-reference"
 
 ### 搜索返回什么
 
-`content` 始终省略：DeepSeek 的提供方文本不作为答案受到信任。`sources[]` 来自 `web_search_tool_result` 块内的 `web_search_result` 条目——`url` 和 `title` 直接取自同名字段，`publishedAt` 取自 `page_age`——snippet 在存在摘录时按 URL 关联的 `cited_text` 条目拼接。结果按 URL 去重，且由于 DeepSeek 不公开结果数量旋钮，服务通过截断并标记来强制执行 `maxResults`。
+`content` 始终省略：DeepSeek 的提供方文本不作为答案受到信任。`sources[]` 来自 `web_search_tool_result` 块内的 `web_search_result` 条目——`url` 和 `title` 直接取自同名字段，`publishedAt` 取自 `page_age`，`snippet` 取自条目自带的 `snippet`，条目没有时取自按 URL 关联且存在摘录的 `cited_text` 条目。结果按 URL 去重，且由于 DeepSeek 不公开结果数量旋钮，服务通过截断并标记来强制执行 `maxResults`。
 
 ### 请求日志
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-失败抛出携带可按机器路由 code 的 `WebError`：凭据缺失为 `WEB_PROVIDER_CREDENTIAL_MISSING`，调用方取消为 `WEB_ABORTED`，提供方或传输失败，包括响应中没有 `web_search_tool_result` 块，为 `WEB_PROVIDER_ERROR`。HTTP 重定向会在接触 `Location` 指向的目标之前被拒绝。请求发出后的每项失败都会指出已解析的搜索端点，并说明搜索端点配置独立于聊天端点。如果该端点不符合用户预期，错误消息会要求会话模型指导用户进入 Plugins > Built-in plugin settings > Web search and fetch，在 Search 中选择 DeepSeek（旧版），修改其 Base URL 并保存。该页面不可用时，消息会把 `web-search-deepseek.baseURL` 作为部署配置方式。模型不得替用户选择或修改端点。面向模型的 `web_search` 工具会在自己的错误包装层内呈现这段文本。
+失败抛出携带可按机器路由 code 的 `WebError`：凭据缺失为 `WEB_PROVIDER_CREDENTIAL_MISSING`，调用方取消为 `WEB_ABORTED`，提供方或传输失败，包括响应中没有 `web_search_tool_result` 块，为 `WEB_PROVIDER_ERROR`。HTTP 重定向会在接触 `Location` 指向的目标之前被拒绝。请求发出后的每项失败都会指出已解析的搜索端点，并说明搜索端点配置独立于聊天端点。如果该端点不符合用户预期，错误消息会要求会话模型指导用户进入 Plugins > Built-in plugin settings > Web search and fetch，在 Search 中选择 DeepSeek 服务端搜索，修改其 Base URL 并保存。该页面不可用时，消息会把 `web-search-deepseek.baseURL` 作为部署配置方式。模型不得替用户选择或修改端点。面向模型的 `web_search` 工具会在自己的错误包装层内呈现这段文本。
 
 -----
 
@@ -104,7 +104,7 @@ kind: "package-reference"
 
 ### 请求流程
 
-每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取搜索端点的凭据：账号路由上的会话取账号登录凭据，否则取经由 `ctx.credentials`（或环境）读取的引用密钥，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`；文本块中的 `cited_text` 条目按其 URL 拼接为 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
+每次搜索先把当前 Config 段投影为提供方选项——端点、模型、密钥引用、上限——然后向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取搜索端点的凭据：账号路由上的会话取账号登录凭据，否则取经由 `ctx.credentials`（或环境）读取的引用密钥，追加仅用于日志的会话事件，并以原生 `web_search` 服务器工具分发 Messages 请求。响应中的 `web_search_tool_result` 块变为 `sources[]`，各带其条目自带的 snippet；文本块中的 `cited_text` 条目按 URL 关联，作为没有 snippet 的条目的 snippet；结果按 URL 去重；服务在返回路径上强制执行请求的来源上限。
 
 就绪判断捕获相同的选项，但不读取 API 密钥的值：它依次询问 `ctx.deepseekAuth` 为这次搜索返回的每个候选其凭据是否已配置，在账号路由上的会话里先是面向搜索端点的账号登录凭据，然后经由 `ctx.credentials.describe()`（或环境）询问密钥引用。字面密钥总是算作已配置。
 
@@ -148,7 +148,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-通过 `dsh-tool-web`，会话模型会看到结构化搜索块中去重后的 URL、标题、日期与引用 snippet；提供方文本不会作为答案受到信任。该提供方的具体失败消息包括带有处理指引的凭据缺失消息（其中也提到 DeepSeek 账号登录）、`DeepSeek search credential resolution failed: <error>` 和 `DeepSeek search aborted`。账号鉴权的搜索收到 HTTP 401 时，会追加引导用户重新登录 DeepSeek 的指引。被账号退登结束的搜索报告 `The DeepSeek account signed out before this web search finished. Guide the user to sign in to DeepSeek again; the search endpoint does not need changing.`其他请求、HTTP、原生搜索和响应正文失败会追加已解析端点及前述条件式配置指引。错误包装属于消费方。
+通过 `dsh-tool-web`，会话模型会看到结构化搜索块中去重后的 URL、标题、日期与 snippet；提供方文本不会作为答案受到信任。该提供方的具体失败消息包括带有处理指引的凭据缺失消息（其中也提到 DeepSeek 账号登录）、`DeepSeek search credential resolution failed: <error>` 和 `DeepSeek search aborted`。账号鉴权的搜索收到 HTTP 401 时，会追加引导用户重新登录 DeepSeek 的指引。被账号退登结束的搜索报告 `The DeepSeek account signed out before this web search finished. Guide the user to sign in to DeepSeek again; the search endpoint does not need changing.` 其他请求、HTTP、原生搜索和响应正文失败会追加已解析端点及前述条件式配置指引。错误包装属于消费方。
 
 #### Token 影响
 
@@ -184,7 +184,7 @@ kind: "package-reference"
 - **就绪判断只检查凭据是否存在，不检查是否有效**——错误的密钥，或不提供原生 `web_search_20250305` 服务器工具的端点，都视为就绪，因此 `web_search` 继续提供，每次调用都以结构化错误失败。
 - **搜索不跟随聊天地址**——官方路由经网关聊天时，搜索仍把密钥发往配置的搜索端点（默认是官方端点），除非该端点接受这个密钥，否则调用失败。
 - **超量返回的来源仍消耗 token**——协议没有结果数量旋钮，`maxResults` 只能由服务在事后截断。
-- **来源通常没有 `snippet`**——只有当文本块引用（`cited_text`）匹配其 URL 时，来源才会获得 snippet，而 DeepSeek 的 Anthropic 兼容端点返回的文本块不带 `citations`。
+- **来源的 `snippet` 取决于端点**——它是端点随结果条目返回的摘录，否则是匹配其 URL 的文本块引用（`cited_text`）；两者都不返回的 Anthropic 兼容端点产生没有 snippet 的来源。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -196,6 +196,6 @@ kind: "package-reference"
 
 #### 专用检索端点
 
-无需完整模型轮次的 DeepSeek Search 与 Fetch API 位于 [dsh-web-deepseek-api](../web-deepseek-api/README.zh.md)，由「网页搜索与获取」设置页的搜索和获取下拉框分别选择。内置配置选择 Search API，因此仅在选用 `searchProvider: deepseek-official` 时（例如网关未提供 Search API 路由）本提供方才会运行。
+无需完整模型轮次的 DeepSeek Search 与 Fetch API 位于 [dsh-web-deepseek-api](../web-deepseek-api/README.zh.md)，由「网页搜索与获取」设置页的搜索和获取下拉框分别选择。内置配置不固定搜索提供方，因此本提供方为 DeepSeek 模型路由上的模型请求运行，其他路由运行 Search API；`searchProvider: deepseek-official` 会在所有路由上选用本提供方（例如网关未提供 Search API 路由时）。
 
 </details>

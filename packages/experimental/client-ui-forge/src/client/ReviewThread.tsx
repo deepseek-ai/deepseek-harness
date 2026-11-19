@@ -6,7 +6,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { CardMenu, DeleteConfirm } from './ReviewThreads.tsx'
 import { EMPTY_FILE_REVIEW, type FileReviewState, type ReviewThread as Thread } from './review-queue.ts'
-import { reviewRange } from './review.ts'
+import { INPUT_QUOTE_COPY, reviewRange, settleQuote } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewThreads.module.css'
 import composerCss from './ReviewComposer.module.css'
@@ -49,7 +49,8 @@ export function ReviewThread({ thread, actions, locked, outdated, t }: PropsLoca
   const confirming = mode === 'delete' && thread.kind === 'pending'
   const quoted = editing ? { ...thread.selection, comment: { ...comment, body } } : thread.selection
   const range = reviewRange(comment)
-  const status = thread.kind === 'pending' ? 'review.browserDraft' : thread.kind === 'published' ? 'review.published' : 'review.quoted'
+  const copy = actions.quoteCopy ?? INPUT_QUOTE_COPY
+  const status = thread.kind === 'pending' ? 'review.browserDraft' : thread.kind === 'published' ? 'review.published' : copy.added
   const save = (): boolean => actions.records?.editThread(thread.key, body) === true
   const queue = actions.queue
   const waiting = locked || moving
@@ -105,8 +106,8 @@ export function ReviewThread({ thread, actions, locked, outdated, t }: PropsLoca
     {error !== null && !confirming && <div className={composerCss.error} role="alert">{error}</div>}
     <div className={css.actions}>
       <Button size="sm" disabled={quoted.comment.body.trim() === ''} onClick={() => {
-        if (!actions.addToInput(quoted)) setError(t('review.inputFailed'))
-      }}>{t('review.addToInput')}</Button>
+        settleQuote(actions.addToInput(quoted), (accepted) => { if (!accepted) setError(t(copy.failed)) })
+      }}>{t(copy.add)}</Button>
       {editing && <Button size="sm" disabled={waiting || body.trim() === ''} onClick={() => {
         if (save()) { setMode('view'); setError(null) } else setError(t('review.saveFailed'))
       }}>{t('review.done')}</Button>}

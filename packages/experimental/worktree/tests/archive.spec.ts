@@ -6,6 +6,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import type { ConfinedArgv, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionStore, { appendPluginRecord, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -65,7 +66,14 @@ function agentFor(ctx: Context, session: Session): Agent {
   return agent
 }
 
-async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; maxOutputBytes?: number } = {}) {
+async function fixture(options: {
+  cache?: boolean
+  retainOnArchive?: boolean
+  maxOutputBytes?: number
+  mode?: SandboxMode
+  /** Point the deployment's default directory inside the checkout the fixture creates. */
+  defaultInWorktree?: boolean
+} = {}) {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-archive-')))
   cleanups.push(() => rm(temporary, { recursive: true, force: true }))
   const root = await repository(temporary)
@@ -78,8 +86,13 @@ async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; ma
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(UnusedSandbox)
-  await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: root })
-  await ctx.plugin(WorkingDirectoryService)
+  // A confined default records each policy and runs the command unconfined.
+  const confine = vi.spyOn(ctx.sandbox, 'confine')
+  if (options.mode !== undefined) confine.mockImplementation(async argv => ({ argv: [...argv] }) as ConfinedArgv)
+  await ctx.plugin(SandboxPolicyService, { mode: options.mode ?? 'danger-full-access', workspaceRoot: root })
+  await ctx.plugin(WorkingDirectoryService, options.defaultInWorktree === true
+    ? { defaultDirectory: join(root, '.agents', 'worktrees', 'archive-me') }
+    : {})
   await ctx.plugin(SessionPersistence, { root: join(temporary, 'sessions'), compression: 'none' })
   await ctx.plugin(ArchiveQueries)
   await ctx.plugin(Storage)
@@ -89,37 +102,62 @@ async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; ma
   ctx.provide('storageDomain', domain)
   if (options.cache === true) await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 1_000, writeIntervalMs: 60_000 })
   await ctx.plugin(WorkspaceRegistry)
-  const { cache: _cache, ...config } = options
+  const { cache: _cache, mode: _mode, defaultInWorktree: _defaultInWorktree, ...config } = options
   const worktrees = ctx.plugin(WorktreeService, config)
   await worktrees
   const session = ctx.sessions.create(brandString<SessionId>('archive-owner'), { meta: { cwd: root } })
   const agent = agentFor(ctx, session)
   await ctx.agents.register(agent)
   const worktree = await ctx.worktrees.create(agent, { name: 'archive-me' })
-  return { ctx, root, session, agent, worktree, temporary, worktrees }
+  return { ctx, root, session, agent, worktree, temporary, worktrees, confine }
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>
 
 /** The settled attempt of `session`, or null when the service registered none. */
 async function settled(f: Fixture, session: Session = f.session): Promise<WorktreeCleanup | null> {
-  const scheduled = await f.ctx.worktrees.cleanupOf(session, null)
-  return scheduled === null ? null : await f.ctx.worktrees.cleanupOf(session, scheduled.revision)
+  const scheduled = await f.ctx.worktrees.cleanupOf(session.id, null)
+  return scheduled === null ? null : await f.ctx.worktrees.cleanupOf(session.id, scheduled.revision)
 }
 
 async function persisted(f: Fixture, session: Session): Promise<void> {
-  await using writer = await f.ctx.sessionPersistence.create(session.header)
+  const inherited = session.inheritedEventCount
+  await using writer = await f.ctx.sessionPersistence.create(session.header, inherited === 0 ? {} : { inheritedEventCount: inherited })
   await writer.append(session.snapshotEvents())
   await writer.flush()
   await writer.close()
 }
 
 /** A live Session whose store entry the test detaches itself, leaving only its persisted log. */
-function detachable(f: Fixture, id: string, meta: { cwd?: string }): { session: Session; detach: () => void } {
-  const session = f.ctx.sessions.prepare(brandString<SessionId>(id), { meta })
+function detachable(
+  f: Fixture, id: string, meta: { cwd?: string; isSeeded?: boolean }, fork?: Session,
+): { session: Session; detach: () => void } {
+  const seed = fork?.snapshotEvents()
+  const session = f.ctx.sessions.prepare(brandString<SessionId>(id), {
+    meta, ...seed === undefined ? {} : { seed, inheritedEventCount: SessionLogOffset(seed.length) },
+  })
   const detach = f.ctx.sessions.enter(session)
   f.ctx.sessions.announce(session)
   return { session, detach }
+}
+
+/**
+ * A Session that created a checkout, optionally recorded a sandbox mode, and
+ * went cold: persisted, its Agent unregistered, and its store entry detached.
+ */
+async function coldCreator(f: Fixture, id: string, options: { mode?: SandboxMode; cache?: boolean } = {}) {
+  const owner = detachable(f, id, { cwd: f.root })
+  const agent = agentFor(f.ctx, owner.session)
+  const registration = f.ctx.agents.register(agent)
+  await registration
+  const worktree = await f.ctx.worktrees.create(agent, { name: id })
+  if (options.mode !== undefined) owner.session.append('sandbox/mode', { mode: options.mode })
+  if (options.cache === true) await f.ctx.sessionProjectionCache.write(owner.session)
+  await persisted(f, owner.session)
+  await registration()
+  owner.detach()
+  expect(f.ctx.sessions.get(owner.session.id)).toBeUndefined()
+  return { session: owner.session, worktree }
 }
 
 describe('archive-triggered worktree cleanup', () => {
@@ -132,13 +170,13 @@ describe('archive-triggered worktree cleanup', () => {
     const statuses: WorktreeCleanup['status'][] = []
     f.ctx.on('worktree/cleanup', ({ cleanup }) => { statuses.push(cleanup.status) })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
-    expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toMatchObject({ status: 'scheduled' })
+    expect(await f.ctx.worktrees.cleanupOf(f.session.id, null)).toMatchObject({ status: 'scheduled' })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
     expect(statuses).toEqual(['scheduled', 'removed'])
     await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
-    // The creator's root is the checkout being removed; `sandbox.spec.ts` covers the source-checkout boundary of its commands.
+    // The creator's root is the checkout being removed.
     expect(f.ctx.workingDirectory.get(f.session)).toBe(f.worktree.path)
   })
 
@@ -185,7 +223,7 @@ describe('archive-triggered worktree cleanup', () => {
     })
     cleanups.push(async () => { release.resolve(undefined) })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
-    expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toMatchObject({ status: 'scheduled' })
+    expect(await f.ctx.worktrees.cleanupOf(f.session.id, null)).toMatchObject({ status: 'scheduled' })
     release.resolve(undefined)
     expect(await settled(f)).toMatchObject({ status: 'removed' })
   })
@@ -224,13 +262,13 @@ describe('archive-triggered worktree cleanup', () => {
     const f = await fixture()
     const other = f.ctx.sessions.create(brandString<SessionId>('no-checkout'), { meta: { cwd: f.root } })
     await f.ctx.workspaceRegistry.archiveSession(other.id)
-    expect(await f.ctx.worktrees.cleanupOf(other, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(other.id, null)).toBeNull()
     const seed = f.session.snapshotEvents()
     const fork = f.ctx.sessions.create(brandString<SessionId>('fork'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
     })
     await f.ctx.workspaceRegistry.archiveSession(fork.id)
-    expect(await f.ctx.worktrees.cleanupOf(fork, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(fork.id, null)).toBeNull()
     await access(f.worktree.path)
   })
 
@@ -244,7 +282,7 @@ describe('archive-triggered worktree cleanup', () => {
     expect(await settled(f)).toMatchObject({ status: 'retained' })
     await access(f.worktree.path)
     await f.ctx.workspaceRegistry.archiveSession(fork.id)
-    expect(await f.ctx.worktrees.cleanupOf(fork, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(fork.id, null)).toBeNull()
     await access(f.worktree.path)
     await f.ctx.workspaceRegistry.unarchiveSession(f.session.id)
     const borrower = f.ctx.sessions.create(brandString<SessionId>('borrower'), { meta: { cwd: f.worktree.path } })
@@ -276,30 +314,54 @@ describe('archive-triggered worktree cleanup', () => {
     expect(await settled(f)).toMatchObject({ status: 'retained' })
   })
 
-  it('removes a persisted checkout without loading its Agent, reading cold Sessions from the projection cache when present', async () => {
-    const f = await fixture({ cache: true })
-    const owner = detachable(f, 'cold-owner', { cwd: f.root })
-    const agent = agentFor(f.ctx, owner.session)
-    const registration = f.ctx.agents.register(agent)
-    await registration
-    const worktree = await f.ctx.worktrees.create(agent, { name: 'cold-ui' })
+  it.each([
+    ['its log', false],
+    ['the projection cache', true],
+  ])('removes a cold creator\'s checkout through one observation from %s without attaching it', async (_source, cache) => {
+    const f = await fixture({ cache })
+    const owner = await coldCreator(f, 'cold-owner', { cache })
     const bystander = detachable(f, 'cold-bystander', { cwd: f.root })
-    await f.ctx.sessionProjectionCache.write(owner.session)
-    await f.ctx.sessionProjectionCache.write(bystander.session)
-    await persisted(f, owner.session)
+    if (cache) await f.ctx.sessionProjectionCache.write(bystander.session)
     await persisted(f, bystander.session)
-    await registration()
-    owner.detach()
     bystander.detach()
-    expect(f.ctx.sessions.get(owner.session.id)).toBeUndefined()
-    const inspect = vi.spyOn(f.ctx.sessionQuery, 'inspectSession')
+    const attached: SessionId[] = []
+    f.ctx.on('session/created', (session) => { attached.push(session.id) })
+    f.ctx.on('worktree/cleanup', () => { attached.push(...f.ctx.sessions.get(owner.session.id) === undefined ? [] : [owner.session.id]) })
+    const observe = vi.spyOn(f.ctx.sessionQuery, 'observeSession')
     await f.ctx.workspaceRegistry.archiveSession(owner.session.id)
     expect(await settled(f, owner.session)).toMatchObject({ status: 'removed' })
-    // The creator is prepared once for its own creations and policy; the cached bystander never is.
-    expect(inspect.mock.calls.map(call => call[0])).toEqual([owner.session.id, owner.session.id])
+    // The creator is observed once for its creations. An uncached bystander is observed once by the
+    // eligibility check and once by the locked recheck; a cached one never is.
+    const reads = cache ? [] : Array<SessionId>(2).fill(bystander.session.id)
+    expect(observe.mock.calls.map(call => call[0])).toEqual([owner.session.id, ...reads])
+    expect(attached).toEqual([])
     expect(f.ctx.sessions.get(owner.session.id)).toBeUndefined()
     expect(f.ctx.agents.list().some(agent => agent.session.id === owner.session.id)).toBe(false)
-    await expect(access(worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(owner.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it.each([
+    ['a live', false],
+    ['a cold', true],
+  ])('removes %s creator\'s checkout unconfined even under a recorded read-only mode and a confined default', async (_kind, cold) => {
+    const f = await fixture({ mode: 'read-only' })
+    if (!cold) f.session.append('sandbox/mode', { mode: 'read-only' })
+    const owner = cold ? await coldCreator(f, 'cold-read-only', { mode: 'read-only' }) : f
+    f.confine.mockClear()
+    await f.ctx.workspaceRegistry.archiveSession(owner.session.id)
+    expect(await settled(f, owner.session)).toMatchObject({ status: 'removed' })
+    expect(f.confine).not.toHaveBeenCalled()
+    await expect(access(owner.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('retains a checkout while a cold fork still carries its creation', async () => {
+    const f = await fixture()
+    const fork = detachable(f, 'cold-fork', { cwd: f.root, isSeeded: true }, f.session)
+    await persisted(f, fork.session)
+    fork.detach()
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'retained' })
+    await access(f.worktree.path)
   })
 
   it('retains a checkout while a live fork that moved elsewhere still carries its creation', async () => {
@@ -317,10 +379,15 @@ describe('archive-triggered worktree cleanup', () => {
     expect(removeCheckout).not.toHaveBeenCalled()
   })
 
-  it('treats a cached cold Session that recorded no directory as working nowhere', async () => {
-    const f = await fixture({ cache: true })
+  it.each([
+    ['cached', true],
+    ['uncached', false],
+  ])('treats a %s cold Session that recorded no directory as working nowhere, not in the default directory', async (_source, cache) => {
+    // The default directory lies inside the checkout, so reading it for an unrecorded directory would retain the checkout.
+    const f = await fixture({ cache, defaultInWorktree: true })
+    expect(f.ctx.workingDirectory.defaultDirectory).toBe(f.worktree.path)
     const nowhere = detachable(f, 'cold-nowhere', {})
-    await f.ctx.sessionProjectionCache.write(nowhere.session)
+    if (cache) await f.ctx.sessionProjectionCache.write(nowhere.session)
     await persisted(f, nowhere.session)
     nowhere.detach()
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -342,14 +409,6 @@ describe('archive-triggered worktree cleanup', () => {
     f.ctx.on('workspace/session-activity', async (_request, next) => [{ kind: 'turn' }, ...await next()])
     await f.ctx.workspaceRegistry.archiveSession(f.session.id, { stopActivity: true })
     expect(await settled(f)).toMatchObject({ status: 'removed' })
-  })
-
-  it('retains a checkout under its creator\'s read-only policy', async () => {
-    const f = await fixture()
-    f.session.append('sandbox/mode', { mode: 'read-only' })
-    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
-    expect(await settled(f)).toMatchObject({ status: 'retained' })
-    await access(f.worktree.path)
   })
 
   it('keeps the archive and reports a failed removal', async () => {
@@ -381,7 +440,7 @@ describe('archive-triggered worktree cleanup', () => {
     release.resolve(undefined)
     await unarchive
     expect(f.ctx.workspaceRegistry.archivedSessionIds).not.toContain(f.session.id)
-    expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(f.session.id, null)).toBeNull()
     await access(f.worktree.path)
     expect(await f.ctx.workingDirectory.ensure(f.agent)).toBe(f.worktree.path)
   })
@@ -423,7 +482,7 @@ describe('archive-triggered worktree cleanup', () => {
     await f.ctx.workspaceRegistry.archiveSession(cold.session.id)
     // A cold Session's creations are only known once its log or cache was read, so the placeholder settles to nothing.
     expect(await settled(f, cold.session)).toBeNull()
-    expect(await f.ctx.worktrees.cleanupOf(cold.session, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(cold.session.id, null)).toBeNull()
     await f.ctx.workspaceRegistry.unarchiveSession(cold.session.id)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).not.toContain(cold.session.id)
   })
@@ -472,14 +531,14 @@ describe('archive-triggered worktree cleanup', () => {
     expect(f.ctx.sessionProjections.snapshot(visitor).values.worktree).toEqual([])
 
     await f.ctx.workspaceRegistry.archiveSession(visitor.id)
-    expect(await f.ctx.worktrees.cleanupOf(visitor, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(visitor.id, null)).toBeNull()
     await access(f.worktree.path)
   })
 
   it('registers no attempt while retainOnArchive is set, and resumes once it is cleared', async () => {
     const f = await fixture({ retainOnArchive: true })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
-    expect(await f.ctx.worktrees.cleanupOf(f.session, null)).toBeNull()
+    expect(await f.ctx.worktrees.cleanupOf(f.session.id, null)).toBeNull()
     await access(f.worktree.path)
     await f.ctx.workspaceRegistry.unarchiveSession(f.session.id)
     await f.worktrees.update({ retainOnArchive: false })
@@ -499,8 +558,8 @@ describe('archive-triggered worktree cleanup', () => {
     cleanups.push(async () => { release.resolve(undefined) })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     await entered.promise
-    const scheduled = await f.ctx.worktrees.cleanupOf(f.session, null)
-    const result = f.ctx.worktrees.cleanupOf(f.session, scheduled!.revision)
+    const scheduled = await f.ctx.worktrees.cleanupOf(f.session.id, null)
+    const result = f.ctx.worktrees.cleanupOf(f.session.id, scheduled!.revision)
     const disposing = f.ctx.fiber.dispose()
     release.resolve(undefined)
     await disposing

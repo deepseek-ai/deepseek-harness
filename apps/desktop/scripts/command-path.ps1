@@ -1,6 +1,7 @@
 <# Per-user PATH ownership. The worker owns its mutex through registry publication. #>
 function Invoke-DshCommandPath {
-    param([hashtable]$Request, [string]$EnvironmentKey, [string]$OwnerKey, [string]$MachinePath, [string]$MutexName)
+    param([hashtable]$Request, [string]$EnvironmentKey, [string]$OwnerKey, [string]$MachinePath, [string]$MutexName,
+        [string]$RemovedInstallation)
     $ErrorActionPreference = 'Stop'
     function Fail([string]$Code, [string]$Message) {
         $error = [InvalidOperationException]::new($Message)
@@ -50,6 +51,23 @@ function Invoke-DshCommandPath {
         $current = Comparable $directory
         $old = if ($owned) { Comparable ([string]$owned) } else { $null }
         $kept = $parts
+        # Unowned PATH cleanup is restricted to the exact CLI directory of an absent installation.
+        if ($RemovedInstallation -and $Request.operation -eq 'remove' -and -not $old) {
+            if (-not [IO.Path]::IsPathRooted($RemovedInstallation) -or
+                $current -ne (Comparable (Join-Path $RemovedInstallation 'resources\runtime\cli\bin'))) {
+                Fail 'EINVAL' 'The command directory does not belong to the removed installation.'
+            }
+            $matches = @($parts | Where-Object { (Comparable $_) -eq $current })
+            if ($matches.Count) {
+                $absent = $false
+                try { [void][IO.File]::GetAttributes($RemovedInstallation) } catch {
+                    $cause = $_.Exception.GetBaseException()
+                    if (($cause.HResult -band 0xffff) -in @(2, 3)) { $absent = $true } else { throw }
+                }
+                if (-not $absent) { Fail 'EEXIST' 'The installation directory remains; unowned PATH entries were retained.' }
+                $kept = @($parts | Where-Object { (Comparable $_) -ne $current })
+            }
+        }
         if ($old -and ($Request.operation -eq 'install' -or ($Request.operation -eq 'remove' -and $old -eq $current))) {
             $ownedMatches = @($parts | Where-Object { $_ -ceq $owned }).Count
             if ($ownedMatches -gt $retained) {

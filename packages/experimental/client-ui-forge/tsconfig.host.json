@@ -21,6 +21,7 @@
     "src/review-cache.ts",
     "src/states.ts",
     "src/types.ts",
+    "src/viewer-lists.ts",
     "src/wildmatch.ts",
     "src/worktree.ts"
   ],

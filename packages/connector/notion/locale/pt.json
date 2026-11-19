@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin do Notion",
+    "description": "Use páginas, bancos de dados e outros conteúdos autorizados do Notion nas conversas.",
+    "detail": "docs/DETAIL.md"
+  }
+}

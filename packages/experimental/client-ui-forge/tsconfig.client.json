@@ -18,10 +18,16 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../api/remote-access/tsconfig.client.json"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/workspace-controller/tsconfig.client.json"
     },
     {
       "path": "../../client/locale/tsconfig.client.json"
@@ -57,6 +63,9 @@
       "path": "../../client/ui-settings/tsconfig.client.json"
     },
     {
+      "path": "../../client/ui-sidebar"
+    },
+    {
       "path": "../../client/ui-sidebar-right"
     },
     {
@@ -79,6 +88,9 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../util/text-search"
     },
     {
       "path": "../../util/workspace-path"

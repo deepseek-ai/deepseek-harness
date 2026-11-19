@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Скрыть детали",
     "INSTALLER_EXTRACT_SAVED": "Полный отчет сохранен в %s.",
     "INSTALLER_EXTRACT_UNSAVED": "Полный отчет не удалось сохранить. Используйте Скопировать сведения об ошибке, чтобы сохранить их.",
-    "INSTALLER_EXTRACT_COPIED": "Подробности об ошибке скопированы в буфер обмена."
+    "INSTALLER_EXTRACT_COPIED": "Подробности об ошибке скопированы в буфер обмена.",
+    "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness установлен в нескольких местах",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Некоторые элементы не удалось очистить. Сохраните отчёт для просмотра подробностей.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Зарегистрированное расположение:",
+    "INSTALLER_UNINSTALL_SCOPE": "Будут удалены этот каталог и указывающие на него команды, ярлыки и записи:",
+    "INSTALLER_UNINSTALL_CONTINUE": "Продолжить очистку каталога удаления",
+    "INSTALLER_UNINSTALL_SAVE": "Сохранить отчёт об очистке…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "Не удалось сохранить отчёт. Выберите другое расположение.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "Удаление не завершено",
+    "INSTALLER_UNINSTALL_UNSAFE": "Не удалось проверить область удаления. Удаление не начато.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "Операция очистки не вернула полный результат. Дальнейшая очистка остановлена.",
+    "INSTALLER_UNINSTALL_BLOCKED": "Не удалось удалить этот файл. Закройте программы, которые могут его использовать, проверьте права доступа и повторите попытку.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Удаление завершено"
   },
   "uninstaller": {
     "welcome": "Вас приветствует мастер удаления",

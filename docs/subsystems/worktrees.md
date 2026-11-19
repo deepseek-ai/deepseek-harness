@@ -210,14 +210,14 @@ async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | Entere
 /**
  * Read the archive cleanup of a Session's created checkout; waiting never
  * starts one. Absent without the Workspace and query providers.
- * @param session - archived Session whose cleanup is read.
+ * @param sessionId - archived Session whose cleanup is read; reading neither loads nor resumes it.
  * @param revision - null reads at once; a matching revision waits for that attempt to settle.
  * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
  */
-async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>
+async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null>
 ```
 
-Types: [Agent](core.md) · [Session](session.md)
+Types: [Agent](core.md) · [SessionId](core.md)
 
 Source: [`packages/experimental/worktree/src/index.ts`](../../packages/experimental/worktree/src/index.ts)
 
