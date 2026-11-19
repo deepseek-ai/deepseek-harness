@@ -831,6 +831,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AssembleContext: 'system-prompt.md',
   PromptContext: 'system-prompt.md',
   PromptContextOrderName: 'system-prompt.md',
+  SystemUpdate: 'system-prompt.md',
   PromptSection: 'system-prompt.md',
   PromptSectionOrderName: 'system-prompt.md',
   SystemPrompt: 'system-prompt.md',

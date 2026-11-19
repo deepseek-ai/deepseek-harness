@@ -100,6 +100,54 @@ describe('canonical event payload acceptance', () => {
     }
   })
 
+  it('validates canonical section text references through every persisted event entry path', () => {
+    const section = { name: 'policy', order: 0, state: 'active', contentIndex: 1, noticeIndex: [0] } as const
+    const message = createMessage({ role: 'system', content: [
+      { type: 'text', text: 'Replacement notice.\n\n' },
+      { type: 'text', text: 'instructions' },
+      { type: 'text', text: 'legacy instructions' },
+    ], source: { kind: 'system-prompt', sections: [section] } })
+    const event: SessionEvent<'system/message'> = {
+      type: 'system/message', seq: SessionSeq(0), time: 1, surfaceOp: 'append',
+      data: { turn: 1, step: 1, message },
+    }
+    const withSource = (source: object): SessionEvent => ({
+      ...event, data: { ...event.data, message: { ...message, source } },
+    }) as SessionEvent
+    for (const accept of [entryPaths.seed!, entryPaths.restore!, entryPaths.adopt!, entryPaths.snapshot!]) {
+      expect(() => accept(structuredClone(event))).not.toThrow()
+      const invalidEntries = [
+        null, {}, { ...section, name: '' }, { ...section, order: '0' },
+        { ...section, state: 'unknown' }, { ...section, contentIndex: -1 }, { ...section, contentIndex: 3 },
+        { ...section, contentIndex: 0.5 }, { ...section, contentIndex: '1' }, { name: 'policy', order: 0, state: 'active' },
+        { ...section, state: 'retired' },
+        ...[null, 0, '0', [-1], [3], [0.5], ['0'], [0, 0], [1]].map(noticeIndex => ({ ...section, noticeIndex })),
+      ]
+      for (const sections of [null, ...invalidEntries.map(entry => [entry]), [section, section],
+        [section, { ...section, name: 'second' }], [section, { ...section, name: 'second', contentIndex: 2 }]]) {
+        expect(() => accept(withSource({ kind: 'system-prompt', sections }))).toThrow(/section attribution/)
+      }
+      const nontext = { ...event, data: { ...event.data, message: { ...message,
+        content: [{ type: 'reasoning', text: 'not instructions' }],
+      } } }
+      expect(() => accept(nontext as SessionEvent)).toThrow(/section attribution/)
+      for (const marker of ['complete', 'reset']) {
+        expect(() => accept(withSource({ ...message.source, [marker]: false }))).toThrow(/system prompt marker/)
+      }
+      for (const source of [
+        { ...message.source, reset: true },
+        { kind: 'system-prompt', reset: true, sections: [] },
+        { kind: 'system-prompt', sections: [{ ...section, noticeIndex: [0, 2] }] },
+        { kind: 'system-prompt', sections: [{ ...section, noticeIndex: [] }] },
+        { kind: 'system-prompt', sections: [{ name: 'policy', state: 'retired', noticeIndex: [0] }] },
+        { kind: 'system-prompt', sections: [{ name: 'policy', order: 0, state: 'retired' }] },
+      ]) expect(() => accept(withSource(source))).not.toThrow()
+      for (const source of [
+        { kind: 'system-prompt', reset: true },
+      ]) expect(() => accept(withSource(source))).toThrow(/section attribution/)
+    }
+  })
+
   for (const [path, accept] of Object.entries(entryPaths)) {
     describe(path, () => {
       it.each(invalidData)('rejects $name with a located error', ({ event, rule }) => {

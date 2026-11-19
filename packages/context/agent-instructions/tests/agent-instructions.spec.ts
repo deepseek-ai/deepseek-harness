@@ -301,6 +301,7 @@ async function mountAgentInstructions(ctx: Context, config: AgentInstructionsCon
 }
 
 async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -4645,6 +4646,7 @@ describe('dynamic nested workspace context injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -4687,6 +4689,7 @@ describe('dynamic nested workspace context injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -4736,6 +4739,7 @@ describe('dynamic nested workspace context injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -5314,6 +5318,7 @@ describe('dynamic nested workspace context injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -5720,6 +5725,7 @@ describe('dynamic nested workspace context injection', () => {
     provideWorkingDirectoryFixture(ctx)
     try {
       const nested = join(root, 'pkg/AGENTS.md')
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -5869,6 +5875,7 @@ describe('dynamic nested workspace context injection', () => {
       await mkdir(join(root, '.git'), { recursive: true })
       await write(join(root, 'pkg/AGENTS.md'), 'nested package rule')
       await write(join(root, 'pkg/deep/file.txt'), 'hello')
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -5925,6 +5932,7 @@ describe('dynamic nested workspace context injection', () => {
       await mkdir(join(root, '.git'), { recursive: true })
       await write(join(root, 'pkg/AGENTS.md'), 'nested package rule')
       await write(join(root, 'pkg/deep/file.txt'), 'hello')
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -6196,6 +6204,7 @@ describe('dynamic nested workspace context injection', () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)

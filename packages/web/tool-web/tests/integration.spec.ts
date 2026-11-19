@@ -5,6 +5,7 @@
  * nothing bypasses the tool registry. Fetch verifies world effects against loopback HTTP; search uses the real
  * DeepSeek Search API provider with only its network boundary stubbed.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -47,6 +48,7 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 
   ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -162,6 +164,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
     slowBase = `http://127.0.0.1:${(slowServer.address() as AddressInfo).port}`
 
     tctx = new Context()
+    await tctx.plugin(SessionProjectionRegistry)
     await tctx.plugin(SystemPrompt)
     await tctx.plugin(ToolRuntime)
     await tctx.plugin(NativeToolExecutor)

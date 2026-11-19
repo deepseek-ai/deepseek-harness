@@ -185,7 +185,7 @@ describe('Messages request conversion', () => {
     ] })
     expect(nativeBody([user(), update]).system).toBeUndefined()
     expect(() => nativeBody([user(), assistant([{ type: 'text', text: 'done' }]), update])).toThrow(/preceding user/)
-    expect(() => nativeBody([user(), createSystemMessage('')])).toThrow(/empty in-history/)
+    expect(nativeBody([user(), createSystemMessage('')]).messages).toEqual(nativeBody([user()]).messages)
     expect(() => nativeBody([user(), assistant([call(), call('b')]), update, result()])).toThrow(/immediate results/)
   })
 
@@ -298,29 +298,44 @@ describe('Messages request conversion', () => {
     expect(body([user(), system]).system).toBe('instructions')
   })
 
-  it('uses the latest complete system snapshot without changing tool history or durable messages', () => {
+  it('collects all system additions without changing tool history or durable messages', () => {
     const conversation = [user(), assistant([call()]), result(), assistant([{ type: 'text', text: 'done' }]), user('continue')]
     const history = [createSystemMessage('obsolete'), ...conversation.slice(0, 2),
       createSystemMessage('intermediate'), ...conversation.slice(2, 4),
       createSystemMessage('current'), conversation[4]!]
     const saved = JSON.stringify(history)
-    expect(body(history)).toEqual({ ...body(conversation), system: 'current' })
-    expect(body(history, { system: 'one-shot prefix' }).system).toBe('one-shot prefix\n\ncurrent')
+    expect(body(history)).toEqual({ ...body(conversation), system: 'obsolete\n\nintermediate\n\ncurrent' })
+    expect(body(history, { system: 'one-shot prefix' }).system).toBe('one-shot prefix\n\nobsolete\n\nintermediate\n\ncurrent')
     expect(JSON.stringify(history)).toBe(saved)
   })
 
-  it('replaces adjacent system snapshots and joins blocks only within the current snapshot', () => {
+  it('preserves adjacent system additions and joins their text blocks', () => {
     const latest = createMessage({ role: 'system', source: { kind: 'system-prompt' },
       content: [{ type: 'text', text: 'part one' }, { type: 'text', text: ' and part two' }] })
-    expect(body([createSystemMessage('old'), latest, user()]).system).toBe('part one and part two')
+    expect(body([createSystemMessage('old'), latest, user()]).system).toBe('old\n\npart one\n\nand part two')
   })
 
-  it.each([[], [{ type: 'text' as const, text: '' }]].map(content => ({ content })))('clears earlier prompt snapshots with empty content %#', ({ content }) => {
+  it.each([false, true])('separates system sections with adapter-owned blank lines, legacy separators=%s', (legacy) => {
+    const sections = createMessage({ role: 'system', source: { kind: 'system-prompt', sections: [
+      { name: 'first', order: 0, state: 'active', contentIndex: 0 },
+      { name: 'second', order: 1, state: 'active', contentIndex: legacy ? 2 : 1 },
+    ] }, content: [
+      { type: 'text', text: ' First. ' },
+      ...legacy ? [{ type: 'text' as const, text: '\n\n' }] : [],
+      { type: 'text', text: 'Second.' },
+    ] })
+    expect(body([sections, user()]).system).toBe('First.\n\nSecond.')
+    expect(nativeBody([user(), sections]).messages.at(-1)).toMatchObject({
+      role: 'system', content: [{ type: 'text', text: 'First.\n\nSecond.' }],
+    })
+  })
+
+  it.each([[], [{ type: 'text' as const, text: '' }]].map(content => ({ content })))('ignores empty messages without clearing earlier additions %#', ({ content }) => {
     const cleared = createMessage({ role: 'system', source: { kind: 'system-prompt' }, content })
     const history = [createSystemMessage('old'), user(), cleared]
-    expect(body(history).system).toBeUndefined()
-    expect(body(history, { system: 'one-shot prefix' }).system).toBe('one-shot prefix')
-    expect(body(history, { system: '' }).system).toBeUndefined()
+    expect(body(history).system).toBe('old')
+    expect(body(history, { system: 'one-shot prefix' }).system).toBe('one-shot prefix\n\nold')
+    expect(body(history, { system: '' }).system).toBe('old')
   })
 
   it('rejects non-text system content even when a later snapshot supersedes it', () => {

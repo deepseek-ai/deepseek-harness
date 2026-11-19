@@ -1,5 +1,6 @@
 /** Node-half coverage for the model guidance paired with Web file references. */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -16,6 +17,7 @@ afterEach(async () => {
 describe('desktop file-reference prompt', () => {
   it('registers final-response file-reference guidance only while mounted', async () => {
     ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     const mounted = ctx.plugin({ apply, inject })
     await mounted.await()
@@ -37,6 +39,6 @@ describe('desktop file-reference prompt', () => {
 
     await mounted.dispose()
     expect((await ctx.systemPrompt.assemble()).sections
-      .some(entry => entry.name === 'ui:deliverable-file-references')).toBe(false)
+      .find(entry => entry.name === 'ui:deliverable-file-references')).toBeUndefined()
   })
 })

@@ -2,6 +2,7 @@
 
 import { expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import { McpClientHost, type ConfigInput } from '@deepseek-ai/dsh-mcp-client'
@@ -11,6 +12,7 @@ import { startHttpMcpFixture } from './http-fixture.ts'
 async function hosted() {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   const entry = ctx.plugin(McpClientHost)

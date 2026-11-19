@@ -31,11 +31,11 @@ interface Bench {
 async function harness(withTodoTool: boolean): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(UserQuestionService)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (withTodoTool) await ctx.plugin(ToolTodo, { allowParallelInProgress: true })
   const session = ctx.sessions.create()

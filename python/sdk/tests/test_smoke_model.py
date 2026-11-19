@@ -345,6 +345,35 @@ def test_snapshot_value_scrubs_system_nodes_without_erasing_header_fields() -> N
     assert normalize(empty, []) == empty
 
 
+def test_snapshot_system_sections_preserve_separators_and_attribution() -> None:
+    source = {"kind": "system-prompt", "sections": [
+        {"name": "active", "order": 0, "state": "active", "contentIndex": 1},
+        {"name": "retired", "order": 1, "state": "retired", "contentIndex": 3},
+    ]}
+    system = {
+        "type": "system/message",
+        "data": {"message": {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "notice\n\n"},
+                {"type": "text", "text": "prompt"},
+                {"type": "text", "text": "\n\n"},
+                {"type": "text", "text": "retirement"},
+            ],
+            "source": source,
+        }},
+    }
+    normalized = SMOKE["normalize_snapshot_value"](system, [])
+    assert normalized["data"]["message"]["source"] == source
+    assert normalized["data"]["message"]["content"] == [
+        {"type": "text", "text": "{{system}}\n\n"},
+        {"type": "text", "text": "{{system}}"},
+        {"type": "text", "text": "\n\n"},
+        {"type": "text", "text": "{{system}}"},
+    ]
+    assert system["data"]["message"]["content"][1]["text"] == "prompt"
+
+
 def test_snapshot_value_preserves_deterministic_tool_repair_ids() -> None:
     normalize = SMOKE["normalize_snapshot_value"]
     repair = {

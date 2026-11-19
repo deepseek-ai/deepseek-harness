@@ -1287,6 +1287,31 @@ describe('scrubSessionSnapshot', () => {
 })
 
 describe('scrubSystemPrompts', () => {
+  it('scrubs source and notice text while retaining separators and attribution', () => {
+    const source = { kind: 'system-prompt', sections: [
+      { name: 'workspace', order: 0, state: 'active', contentIndex: 1, noticeIndex: [0] },
+      { name: 'plugin', order: 1, state: 'retired', noticeIndex: [3] },
+    ] }
+    const record = { type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: 'Replacement notice.\n\n' },
+        { type: 'text', text: 'Workspace /volatile/path' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: 'Plugin retired.' },
+      ], source,
+    } } }
+    const normalized = scrubSystemPrompts(JSON.stringify(record))
+    expect(JSON.parse(normalized)).toEqual({ type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: '{{system}}\n\n' },
+        { type: 'text', text: '{{system}}' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: '{{system}}' },
+      ], source,
+    } } })
+    expect(scrubSystemPrompts(normalized)).toBe(normalized)
+  })
+
   it('scrubs only system/message text while keeping header tools verbatim', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,

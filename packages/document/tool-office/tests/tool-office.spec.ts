@@ -142,11 +142,11 @@ async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   provideWorkingDirectoryFixture(ctx, dir)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(options.ptc === true ? PtcToolExecutor : NativeToolExecutor)
   if (options.ptc === true) await ctx.plugin(FakeRuntime)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: dir })
   if (options.attachments !== false) {

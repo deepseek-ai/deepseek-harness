@@ -165,6 +165,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'tool:pty',
     order: ctx.systemPrompt.getSectionOrder('TOOL_PTY'),
     text: 'Use a terminal session only when work needs persistent terminal state or interactive stdin; prefer shell/read/write/edit for bounded one-shot operations. Track every terminal session id and close sessions that no longer matter. An inferred_idle or timeout result does not prove the foreground command exited.',
+    retirement: 'The pty tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

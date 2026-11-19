@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
@@ -19,6 +20,7 @@ const testToolSignal = new AbortController().signal
 /** Mount the registry (with its systemPrompt dependency) on a fresh context. */
 async function mount(): Promise<Context> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

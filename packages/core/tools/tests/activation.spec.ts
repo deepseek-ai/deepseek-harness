@@ -1,4 +1,5 @@
 /** Conditional registrations share step admission with direct and nested execution. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, expect, it } from 'vitest'
@@ -21,6 +22,7 @@ afterEach(async () => {
 async function setup() {
   const ctx = new Context()
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

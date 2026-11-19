@@ -56,6 +56,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:~"
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

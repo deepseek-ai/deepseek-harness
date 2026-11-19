@@ -718,7 +718,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract compactRegion( start: SessionSeq, end: SessionSeq, agent: CompactionAgentContext, signal?: AbortSignal, ): Promise<CompactionResult>',
-        description: 'Forcibly compact a range of surface nodes into a single summary node. `start` and `end` name an inclusive span by surface position, not numeric seq order; replacements can make visible seqs non-monotonic. Both edges must be balanced so assistant tool calls remain paired with their results. A model- backed implementation forwards cancellation and rejects active, missing, reversed, or unbalanced ranges. The target session is `agent.session`. Its replacement user message must use compactCheckpointSource with the transaction\'s `CompactionId`. Use toolPairingBalancedBefore and toolPairingBalancedAfter for the edge checks.',
+        description: 'Compact a balanced range of conversation nodes into a single summary node. The initial system node, when present, lies outside the selected range. `start` and `end` name an inclusive span by surface position, not numeric seq order; replacements can make visible seqs non-monotonic. Both edges must be balanced so assistant tool calls remain paired with their results. A model- backed implementation forwards cancellation and rejects active, missing, reversed, or unbalanced ranges. The target session is `agent.session`. Its replacement user message must use compactCheckpointSource with the transaction\'s `CompactionId`. Use toolPairingBalancedBefore and toolPairingBalancedAfter for the edge checks.',
         parameters: [{ name: 'start', description: 'first surface seq, inclusive.' }, { name: 'end', description: 'last surface seq, inclusive.' }, { name: 'agent', description: 'context whose session is mutated and whose routing options guide summarization.' }, { name: 'signal', description: 'optional cancellation; model-backed implementations must forward it.' }],
         returns: 'the appended event seqs, summary, replaced range, and token accounting.',
         throws: ['when compaction is active or the range is missing, reversed, or unbalanced.'],
@@ -2857,7 +2857,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'set(agent: Agent, active: boolean): \'committed\' | \'queued\' | \'cancelled\' | \'noop\'',
-        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no in-turn pre-step will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further in-turn pre-step runs. During an open turn the selection remains pending until the next accepted in-turn pre-step. Repeated selection of the current or already-pending state is a no-op.',
+        description: 'Select whether plan mode should be active. Between turns the method appends the change immediately because no in-turn pre-step will run until another prompt starts a turn. The open-turn fold is the idle signal: agent status stays `running` through post-turn checkpointing, when no further in-turn pre-step runs. During an open turn the selection remains pending until the next accepted in-turn pre-step. Repeated selection of the current or already-pending state is a no-op. Each committed user selection contributes a user-switch notice.',
         parameters: [{ name: 'agent', description: 'The agent to switch.' }, { name: 'active', description: 'Whether plan mode should be active.' }],
         returns: 'what happened: `committed` (logged now), `queued` (awaiting the next accepted in-turn pre-step), `cancelled` (an opposite pending selection was cleared; the logged state already matches), or `noop` (already in that state).',
       },
@@ -4494,9 +4494,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'section(section: PromptSection): () => void',
-        description: 'Register an ordered prompt section in the calling context\'s scope. A scoped section shadows a global section with the same name; duplicates within one layer and non-finite orders throw. Registration and disposal emit `system-prompt/change`.',
-        parameters: [{ name: 'section', description: 'the section to register.' }],
-        returns: 'the exact Cordis effect disposer.',
+        description: 'Register a section; the nearest scope wins, then the latest registration within that scope. Disposal reveals the next live definition. Retirement is admitted only after no registration remains in the visible scope chain.',
+        parameters: [{ name: 'section', description: 'definition, canonical order and optional transition notices.' }],
+        returns: 'the exact Cordis disposer; retirement is observed at later assembly.',
       },
       {
         signature: 'getSectionOrder(name: PromptSectionOrderName): number',
@@ -4542,9 +4542,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async assemble(context: AssembleContext = {}): Promise<PromptAssembly>',
-        description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the presentation waterfall. Scoped sections and variables shadow globals. The waterfall\'s text is authoritative except that an effective complete section is restored afterwards as the sole prompt section; tool declarations stay provider-owned.',
+        description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the presentation waterfall. Scoped variables shadow globals; section IDs have one effective owner. The waterfall\'s text is authoritative except that an effective complete section is restored afterwards as the sole prompt section; tool declarations stay provider-owned. Section text and lifecycle are fixed here; `systemUpdates()` compares them with committed state later.',
         parameters: [{ name: 'context', description: 'the optional scope, step tool set, and plugin-defined assembly fields.' }],
-        returns: 'the post-waterfall assembly with ordered tool declarations and any complete prompt enforced.',
+        returns: 'the post-waterfall presentation and the system updates for the supplied Session.',
       },
     ],
   },
@@ -4831,7 +4831,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'setExecutor(executor: ToolExecutor): () => void',
-        description: 'Provide the executor for the calling scope; an unscoped contribution is the deployment default. Rendering any executor-owned section requires the viewing scope\'s selection to remain available.',
+        description: 'Provide the executor for the calling scope; an unscoped contribution is the deployment default. Rendering any executor-owned section requires the viewing scope\'s selection to remain available. Disposal retires its sections; a replacement\'s same-name sections supersede those notices.',
         parameters: [{ name: 'executor', description: 'initialized provider owned by the contributing plugin.' }],
         returns: 'the effect disposer. Unloading leaves the selection unavailable until it is replaced.',
       },
@@ -6052,7 +6052,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'system-prompt/assemble\'(this: Scoped<SystemPrompt>, assembly: PromptPresentation, context: AssembleContext, next: () => Promise<PromptPresentation>): Promise<PromptPresentation>',
     summary: 'Presentation waterfall over assembled sections, contexts, and variables.',
-    description: 'Presentation waterfall over assembled sections, contexts, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope\'s assemblies. The returned text is authoritative; tool declarations remain provider-owned. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope\'s system prompt.',
+    description: 'Presentation waterfall over assembled sections, contexts, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope\'s assemblies. Returned section text determines updates; omitting a previously admitted section leaves its instructions unchanged. Empty text withdraws its instructions; registration disposal retires it. Tool declarations remain provider-owned. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope\'s system prompt.',
     parameters: [{ name: 'assembly', description: 'the mutable assembly built from registered providers.' }, { name: 'context', description: 'the caller\'s per-assembly context.' }],
   },
   {
@@ -6541,7 +6541,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AssembleContext',
-    declaration: 'export interface AssembleContext {\n    scope?: ScopeKey;\n    signal?: AbortSignal;\n}',
+    declaration: 'export interface AssembleContext {\n    session?: Session;\n    scope?: ScopeKey;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'AssembledContext',
@@ -6549,7 +6549,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AssembledSection',
-    declaration: 'export interface AssembledSection {\n    name: string;\n    text: string;\n    interpolate?: boolean;\n}',
+    declaration: 'export interface AssembledSection {\n    complete?: boolean;\n    replacement?: string;\n    retire?: boolean;\n    order: number;\n    name: string;\n    text: string;\n    interpolate?: boolean;\n}',
   },
   {
     name: 'AssistantMessage',
@@ -9149,7 +9149,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PromptAssembly',
-    declaration: 'export interface PromptAssembly extends PromptPresentation {\n    tools: ToolSchema[];\n}',
+    declaration: 'export interface PromptAssembly extends PromptPresentation {\n    systemUpdates: (retry: boolean) => readonly SystemUpdate[];\n    tools: ToolSchema[];\n}',
   },
   {
     name: 'PromptContext',
@@ -9173,7 +9173,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PromptSection',
-    declaration: 'export interface PromptSection {\n    readonly name: string;\n    readonly order: number;\n    readonly text: string | ((context: AssembleContext) => string);\n    readonly interpolate?: boolean;\n    readonly complete?: boolean;\n}',
+    declaration: 'export interface PromptSection {\n    readonly name: string;\n    readonly order: number;\n    readonly text: string | ((context: AssembleContext) => string);\n    readonly interpolate?: boolean;\n    readonly complete?: boolean;\n    readonly replacement?: string;\n    readonly retirement?: string;\n}',
   },
   {
     name: 'PromptSectionOrderName',
@@ -10249,7 +10249,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSurface',
-    declaration: 'export interface SessionSurface {\n    readonly nodes: readonly SessionSeq[];\n    readonly replaceGeneration: number;\n    readonly contentGeneration: number;\n}',
+    declaration: 'export interface SessionSurface {\n    readonly nodes: readonly SessionSeq[];\n    readonly systemNodes: readonly SystemSurfaceNode[];\n    readonly replaceGeneration: number;\n    readonly contentGeneration: number;\n}',
   },
   {
     name: 'SessionSurfaceSnapshot',
@@ -10865,15 +10865,27 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SystemPrompt',
-    declaration: 'export class SystemPrompt extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    getSectionOrder(name: PromptSectionOrderName): number;\n    getContextOrder(name: PromptContextOrderName): number;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly;\n    async assemble(context: AssembleContext = {}): Promise<PromptAssembly>;\n}',
+    declaration: 'export class SystemPrompt extends Service {\n    static inject;\n    static Config: z<Config>;\n    constructor(ctx: Context, config: Config);\n    section(section: PromptSection): () => void;\n    getSectionOrder(name: PromptSectionOrderName): number;\n    getContextOrder(name: PromptContextOrderName): number;\n    context(context: PromptContext): () => void;\n    suppressRuntimeContext(): () => void;\n    tools(provider: (context: AssembleContext) => ToolProviderResult): () => void;\n    variable(name: string, provider: (context: AssembleContext) => string | undefined): () => void;\n    refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptAssembly;\n    async assemble(context: AssembleContext = {}): Promise<PromptAssembly>;\n}',
   },
   {
     name: 'SystemPromptMessageSource',
-    declaration: 'export interface SystemPromptMessageSource {\n    kind: \'system-prompt\';\n}',
+    declaration: 'export interface SystemPromptMessageSource {\n    kind: \'system-prompt\';\n    readonly complete?: true;\n    readonly reset?: true;\n    readonly sections?: readonly SystemPromptSectionState[];\n}',
+  },
+  {
+    name: 'SystemPromptSectionState',
+    declaration: 'export type SystemPromptSectionState = {\n    readonly name: string;\n    readonly noticeIndex?: readonly number[];\n} & ({\n    readonly state: \'active\';\n    readonly order: number;\n    readonly contentIndex: number;\n} | {\n    readonly state: \'retired\';\n    readonly contentIndex?: never;\n});',
   },
   {
     name: 'SystemPromptUpdate',
     declaration: 'export type SystemPromptUpdate = \'in-history\';',
+  },
+  {
+    name: 'SystemSurfaceNode',
+    declaration: 'export interface SystemSurfaceNode {\n    readonly seq: SessionSeq;\n    readonly isEmpty: boolean;\n}',
+  },
+  {
+    name: 'SystemUpdate',
+    declaration: 'export interface SystemUpdate {\n    readonly message: SystemMessage;\n    readonly intent: SurfaceIntent<\'system/message\'>;\n}',
   },
   {
     name: 'TableKeyOf',
