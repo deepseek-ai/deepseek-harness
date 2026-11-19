@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-20-rightbar-drag-restyle-budget.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-11-20-rightbar-drag-restyle-budget.md
+/agent-note-right-sidebar-drag-restyle-budget:
+  en: a467dea2219bda57
+  zh: 7bcd04d8a6dd8481
+/agent-note-right-sidebar-drag-restyle-budget/problem:
+  en: 693e8d1e4423b78f
+  zh: c63608002d762c12
+/agent-note-right-sidebar-drag-restyle-budget/decision:
+  en: 7b21bc1115988534
+  zh: 4929a26024ec4237
+/agent-note-right-sidebar-drag-restyle-budget/calibration:
+  en: 5a234a9e422c36dc
+  zh: e48d9f7fb8445cd9
+/agent-note-right-sidebar-drag-restyle-budget/alternatives-considered:
+  en: 721cbfb3276fcb5b
+  zh: 9557ee132f77f5a6
+/agent-note-right-sidebar-drag-restyle-budget/consequences:
+  en: 6f1a2842da26a0df
+  zh: 9bd23e840e900a7e

@@ -40,7 +40,7 @@ describe('Conversation body end reserve', () => {
   it('keeps the continuously varying lengths on the body and publishes resolved lengths to its descendants', () => {
     // Registered without inheritance: a resize that changes them every frame does not restyle the transcript.
     const registered = Object.fromEntries([...css.matchAll(/@property\s+(--[\w-]+)\s*\{([^{}]*)\}/g)]
-      .map(([, name, block]) => [name, (block ?? '').replace(/\s+/g, ' ').trim()]))
+      .map((match): [string, string] => [match[1] ?? '', (match[2] ?? '').replace(/\s+/g, ' ').trim()]))
     expect(registered).toEqual({
       '--dsh-conversation-column-width': "syntax: '<length>'; inherits: false; initial-value: 0px;",
       '--dsh-conversation-viewport-width': "syntax: '<length>'; inherits: false; initial-value: 0px;",
