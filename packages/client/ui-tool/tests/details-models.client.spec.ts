@@ -110,6 +110,11 @@ describe('control detail adapters', () => {
       { title: 'root agent', subtitle: 'lead', badge: { label: 'Running', tone: 'info' }, fields: [] },
       { title: 'reviewer', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
     ])
+    expect(details('list_agents', 'Subagent capacity: running=2, limit=8\nlead [running] — root agent\nreviewer/checker [inactive] — Check tests\nold-id [unavailable]')).toEqual(agents)
+    expect(details('list_agents', JSON.stringify({
+      running: 2, limit: 8,
+      agents: [{ name: 'lead', status: 'running', description: 'root agent' }, { name: 'reviewer', status: 'inactive' }],
+    }))).toEqual(structured)
     expect(details('list_agents', 'reviewer running')).toBeNull()
     expect(details('list_agents', '(no subagents)')?.empty).toBe('No results')
     expect(details('job_list', 'j1 [bash] running — Build')?.items[0]?.fields).toContainEqual({ label: 'Type', value: 'bash' })
