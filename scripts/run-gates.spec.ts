@@ -27,6 +27,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
+  vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -866,6 +867,29 @@ describe('Typert contract preparation', () => {
       'lint',
       'doc-typecheck',
     ])
+  })
+
+  it.each([
+    ['with-deps', ['install', '--with-deps', 'chromium', 'webkit']],
+    ['browsers', ['install', 'chromium', 'webkit']],
+  ] as const)('installs %s Playwright browsers beside the build for the browser readers only', (mode, install) => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', mode)
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
+    const needsOf = (id: string) => subject.find(item => item.id === id)?.needs
+
+    expect(subject.find(item => item.id === 'playwright-install')).toMatchObject({
+      args: ['/private/pnpm.cjs', '--filter', '@deepseek-ai/dsh-web-frontend', 'exec', 'playwright', ...install],
+    })
+    expect(needsOf('playwright-install')).toBeUndefined()
+    expect(needsOf('snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('web-snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('expected-output')).toEqual(['build'])
+  })
+
+  it('rejects an unknown Playwright install mode', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'deps')
+
+    expect(() => withPnpmEntrypoint(() => gatesForMode('ci-consumers'))).toThrow(/DSH_CI_PLAYWRIGHT_INSTALL must be with-deps or browsers/)
   })
 
   it('reuses contracts from the validated consumer build', () => {
