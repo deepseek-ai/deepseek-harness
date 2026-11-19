@@ -16,13 +16,13 @@
  * constituent. The indexed access names the same union without the pair.
  */
 
+/** The values of a record, as one union. */
+type ValuesOf<T> = T[keyof T]
+
 /** Content owned by the open tab; bytes and text are not persisted in layout. */
 export type PreviewContent =
   | { readonly mediaType: string; readonly text: string }
   | { readonly mediaType: string; readonly bytes: Uint8Array<ArrayBuffer> }
-
-/** The values of a record, as one union. */
-type ValuesOf<T> = T[keyof T]
 
 /** Resource type → the parameters a resource of that type accepts. Merge-extensible. */
 export interface SidebarRightResourceParamsMap {
