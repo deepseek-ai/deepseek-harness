@@ -46,7 +46,7 @@ Load the service and let a single mounted backend auto-select, or pin a provider
 
 | Field | Default | Meaning |
 |---|---|---|
-| `searchProvider` | (unset) | Pinned search provider id; unset auto-selects when exactly one is usable |
+| `searchProvider` | (unset) | Pinned search provider id; unset prefers the usable DeepSeek provider of the [request's model route](#provider-selection), and otherwise auto-selects when exactly one is usable |
 | `fetchProvider` | (unset) | Pinned fetch provider id; unset auto-selects when exactly one is usable |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web) is the exhaustive source for every accepted field and its JSDoc.
@@ -63,8 +63,9 @@ const result = await ctx.web.search({ query: 'deepseek harness', maxResults: 8 }
 const page = await ctx.web.fetch({ url: 'https://example.com' })
 ```
 
-Both calls accept an optional `AbortSignal` that is forwarded to the provider for cancellation. The normalized request and result shapes are the contract callers build on; the vocabulary section of the [web subsystem](../../../docs/subsystems/web.md) reference describes them exhaustively.
+A search made for a model request also carries that request's provider route as `llmProvider`, which [provider selection](#provider-selection) reads. Both calls accept an optional `AbortSignal` that is forwarded to the provider for cancellation. The normalized request and result shapes are the contract callers build on; the vocabulary section of the [web subsystem](../../../docs/subsystems/web.md) reference describes them exhaustively.
 
+<a id="provider-selection"></a>
 ### Provider selection
 
 Each call resolves its provider at execution time, and registration or load order never matters. A configured provider id wins when it is registered and usable; without a configured id, the service runs the single usable provider or fails clearly:
@@ -74,11 +75,12 @@ Each call resolves its provider at execution time, and registration or load orde
 | configured id registered and usable | runs that provider |
 | configured id not registered | `WEB_PROVIDER_CONFIGURED_MISSING` |
 | configured id registered but unavailable | `WEB_PROVIDER_CONFIGURED_UNAVAILABLE` |
+| no search id, the provider preferred for the request's `llmProvider` is registered and usable | runs that provider |
 | no id, exactly one registered usable provider | runs it |
 | no id, no usable provider | `WEB_PROVIDER_UNAVAILABLE` |
 | no id, multiple usable providers | `WEB_PROVIDER_AMBIGUOUS` |
 
-The shipped `deepseek-official` and `deepseek-search-api` search ids select legacy Messages search and the direct Search API respectively.
+The shipped `deepseek-official` and `deepseek-search-api` search ids select legacy Messages search and the direct Search API respectively. While no search provider is configured, a search prefers `deepseek-official` for a model request on the `deepseek-official` or `deepseek-account` model route, because DeepSeek makes no per-search charge for Messages search, and `deepseek-search-api` for a request on any other route and for a search that serves no model request. The preference is fixed in this package and applies only while the preferred provider is registered and usable, so a composition without these providers selects as the table states. The [base composition](../../bundle/base/cordis.patch.yml) mounts both and configures no search provider. A configured `searchProvider`, or `$DSH_WEB_SEARCH_PROVIDER`, applies to every route.
 
 A provider's availability is a cheap local check — for example whether its API key is present — and never makes network calls, so selection stays fast and deterministic.
 
@@ -112,7 +114,7 @@ A search or fetch backend outside the shipped composition is a plugin package th
 <a id="search-readiness"></a>
 ### Search and fetch readiness
 
-`searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask the provider that `search()` or `fetch()` would select whether an operation made for a model request on that chat route has a credential to send; [`dsh-tool-web`](../tool-web/README.md#search-readiness) uses the answers to decide whether each model step admits `web_search` and `web_fetch`. A provider answers through its optional `ready(llmProvider)`, a configuration-only check that must not make network calls; a provider without it counts as ready. When selection fails, the readiness method answers true, because the operation reports that failure as a structured `WebError`. Readiness never changes which provider is selected.
+`searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask the provider that `search()` or `fetch()` would select, for a search the one selected for a request with that `llmProvider`, whether an operation made for a model request on that chat route has a credential to send; [`dsh-tool-web`](../tool-web/README.md#search-readiness) uses the answers to decide whether each model step admits `web_search` and `web_fetch`. A provider answers through its optional `ready(llmProvider)`, a configuration-only check that must not make network calls; a provider without it counts as ready. When selection fails, the readiness method answers true, because the operation reports that failure as a structured `WebError`. Readiness never changes which provider is selected.
 
 ```text
 // false only when the selected provider cannot authenticate this route's operations:
@@ -139,7 +141,7 @@ This section explains the design decisions behind the service; the observable be
 The package is built on one deliberate separation:
 
 - **One seam, two independent operations.** Search and fetch share no request schema and no business logic, but they share one service so provider selection, cancellation, errors, and product configuration have a single owner. The parallel `Search`/`Fetch` method pairs are intentional.
-- **Selection is never order-dependent.** A capability either pins a provider id or auto-selects when exactly one usable provider is registered; `search()`/`fetch()` resolve the provider at execution time.
+- **Selection is never order-dependent.** A capability either pins a provider id or auto-selects when exactly one usable provider is registered, and an unpinned search prefers the DeepSeek provider of the request's model route; `search()`/`fetch()` resolve the provider at execution time.
 - **The service owns the result bound.** `maxResults` is enforced by the seam after the provider returns, so an over-returning provider can never leak more sources than the caller asked for.
 
 ### Source map
@@ -155,7 +157,7 @@ The request and result types define the normalized vocabulary callers build on �
 
 ### Selection flow
 
-At call time the service resolves the provider — configured id first, then the unique usable provider — and throws the matching `WebError` when no clear winner exists. A search result then passes through `capSources`, which truncates `sources[]` to `maxResults` and flags `truncated`. `searchReady()` and `fetchReady()` resolve the same provider as the matching operation, answer true when resolution throws, and otherwise return the provider's `ready()` answer, or true when it has none. Registration is effect-based: providers register with the calling fiber and unregister when it disposes, and a duplicate id within a capability kind is rejected at registration.
+At call time the service resolves the provider — configured id first, then for a search the usable provider preferred for the request's route, then the unique usable provider — and throws the matching `WebError` when no clear winner exists. A search result then passes through `capSources`, which truncates `sources[]` to `maxResults` and flags `truncated`. `searchReady()` and `fetchReady()` resolve the same provider as the matching operation, answer true when resolution throws, and otherwise return the provider's `ready()` answer, or true when it has none. Registration is effect-based: providers register with the calling fiber and unregister when it disposes, and a duplicate id within a capability kind is rejected at registration.
 
 </details>
 
@@ -193,8 +195,9 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 These limits define when the service is incomplete on its own. They are current package constraints.
 
 - **No availability observation** — `listProviders()` and `web/providers-changed` report which providers are registered, not whether they are usable; there is no capability-status query, and `searchReady()` and `fetchReady()` report only the selected provider's credential readiness and answer true when selection fails. Availability is observable only by running a search or fetch and routing the thrown code, and the no-provider failure is the generic `WEB_PROVIDER_UNAVAILABLE` with no per-provider reason enumeration ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)).
-- **Search requests carry only `query` and `maxResults`** — provider-neutral controls (recency, domain filters, regional hints, search depth) are deferred until the backends can honor them ([seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md)).
+- **Search requests carry only `query`, `maxResults`, and `llmProvider`** — provider-neutral controls (recency, domain filters, regional hints, search depth) are deferred until the backends can honor them ([seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md)).
 - **`WebFetchBody` has no `pdf` arm** — text-extractable PDF support is named deferred work; the closed union makes adding it a compile-enforced change across the web packages.
+- **The per-route search preference is fixed** — the two DeepSeek model routes and the two DeepSeek search provider ids are constants of this package, so a deployment changes the outcome only by configuring `searchProvider`, and a provider-neutral rule is deferred until a second pair of routes and providers needs one.
 - **Provider-backed page extraction is out of scope of `fetch()`** — a Firecrawl/Tavily-style `web_extract` capability is deferred rather than widening the fetch operation.
 
 <a id="dev-note"></a>

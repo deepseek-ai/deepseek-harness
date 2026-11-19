@@ -111,6 +111,7 @@ const PYTHON_METADATA: Record<string, { license: string; repo: string; role?: st
   openpyxl: { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/openpyxl' },
   pandas: { license: 'BSD-3-Clause', repo: 'https://github.com/pandas-dev/pandas' },
   pillow: { license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
+  pypdf: { license: 'BSD-3-Clause', repo: 'https://github.com/py-pdf/pypdf' },
   'python-dateutil': { license: 'Apache-2.0 OR BSD-3-Clause', repo: 'https://github.com/dateutil/dateutil' },
   'python-docx': { license: 'MIT', repo: 'https://github.com/python-openxml/python-docx' },
   'python-pptx': { license: 'MIT', repo: 'https://github.com/scanny/python-pptx' },

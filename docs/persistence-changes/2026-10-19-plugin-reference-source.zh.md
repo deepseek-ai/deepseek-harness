@@ -27,20 +27,20 @@ id: 2026-10-19-plugin-reference-source
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "1730344fc2b73b282bc8065cd729388c3454a1966ffc2557bda89c177162f05e"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "ec2dee2e721b44b81c89fe32a39be6b1c1961eb790a0dbe2e40069793460f893"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "0f8fa34035bd1a85ca754bafa2471820f0960d6560b9682a3a703f61932f322f"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "3eed4e5f38b6da32f004fb5f3728d7a60cf825af00d0578a6cb4c3cbf2ac820a"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "9bd33bff02f1b5a1fe4b55c2e26210631f03b78f3e641f56cc72d27d59b911f2"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "1a44706a633848c4fcd0a32d82546c3519b746817358429d1f919c97a1ddc8aa"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "8a21956a397f18ddf306b055e199fa9818e102eaf67a82348e7a0e18633287dd"
+    previous: "2026-11-09-sdk-prompt-time-zone"
+    after: "f61013ef7874a2cc06f4134274e07a3b0491c04a72e36373ec3f85c9bf094eb0"
     decision: same-version
 ```
 

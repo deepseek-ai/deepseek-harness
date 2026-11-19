@@ -9,3 +9,10 @@
     searchApiKeyEnv: DSH_SNAPSHOT_SEARCH_KEY
     # The fixture maps this recorded authority to its OS-assigned listener.
     searchBaseURL: http://127.0.0.1:43118/api/v1/tools
+
+# The conversation runs on a DeepSeek model route, where an unconfigured search selects Messages search.
+- id: web
+  name: '@deepseek-ai/dsh-web'
+  config:
+    searchProvider: deepseek-search-api
+    fetchProvider: http

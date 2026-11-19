@@ -16,7 +16,7 @@ Status: implemented
 
 Schedule 消费它，并保留全部域内决策。`canonicalizeTimeZone`、`decodeInstant`、`parseAtInput` 与 `futureInstant` 仍是 Schedule 的入口，保留既有错误码与诊断文案；它们调用共享解析器并映射其原因。纯 Cron/RRULE 解析与有界发生时点搜索归本库所有，接收显式参考时间，并通过 `fourDigitYearEpoch` 校验已提交时点。Schedule 拥有持久记录、折叠与状态转移权威、抗注入的框架文本、每日与每周日期遍历、投递限制及领域错误。共享值不拥有任务状态、墙钟或定时器。
 
-`dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条 user-rpc 时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
+`dsh-time-context` 同样消费它，并保留自己更严格的策略。`deriveBrowserTimeZoneContext` 通过 `canonicalizeTimeZone` 读取每条用户消息上报的时区，并拒绝规范答案与所报值不同的别名，因此请求边界仍然要求另一个进程能解析回同一名称。三条拒绝与它们的文案归 time-context 所有；共享入口只回答规范名称或一个原因；被拒绝的结果中只有 `unsupported` 会携带本库捕获到的平台错误，使该拒绝在两个消费方都保留其 `cause`。
 
 `Duration` 以单一毫秒计数保存一段时间；它做成类而不是 branded number，是因为 TypeScript 的算术会抹掉 brand：两个不同品牌的数字相加得到的是无品牌的 `number`，所以 brand 挡不住秒与毫秒的混用，而实例可以。单位选毫秒，是因为本仓库的每个生产者与消费者本来就用它（`Date.now()`、`SessionEvent.time`、Session 日志、客户端），也因为 double 能精确表示 `Date` 全范围内的每一个毫秒，这个单位不消耗任何精度。实例被冻结，不覆盖任何强制转换钩子，且时间段受可精确表示的毫秒范围约束——这正是拆分精确的前提。公开面就是 `fromMilliseconds` 与整数量拆解 `decompose()`，即已迁移消费方所调用的两个入口。
 

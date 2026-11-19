@@ -205,8 +205,15 @@ class HarnessClient:
         *,
         on_notification: Callable[[Notification], None] | None = None,
         notification_subscription: "NotificationSubscription | None" = None,
+        time_zone: str | None = None,
     ) -> str:
+        """Queue one prompt without command routing and return its message id.
+
+        ``time_zone`` is UTC or an IANA Area/Location name; omitted, the runtime samples its process zone.
+        """
         payload: JsonObject = {"sessionId": session_id, "contentBlocks": content_blocks}
+        if time_zone is not None:
+            payload["timeZone"] = time_zone
         response = self.request(
             "session/prompt",
             payload,
@@ -235,13 +242,14 @@ class HarnessClient:
         )
 
     def _query(
-        self, session_id: str, input: str | list[JsonObject],
+        self, session_id: str, input: str | list[JsonObject], time_zone: str | None = None,
     ) -> str | CommandExecution:
         """Return a validated prompt receipt or command result for high-level run callers."""
         blocks = [{"type": "text", "text": input}] if isinstance(input, str) else input
-        result = self._request_raw("session/query", {
-            "sessionId": session_id, "contentBlocks": blocks,
-        })
+        params: JsonObject = {"sessionId": session_id, "contentBlocks": blocks}
+        if time_zone is not None:
+            params["timeZone"] = time_zone
+        result = self._request_raw("session/query", params)
         if isinstance(result, dict):
             if result.get("kind") == "prompt" and isinstance(result.get("messageId"), str) and result["messageId"]:
                 return result["messageId"]

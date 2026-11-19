@@ -5,6 +5,7 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import {
   deriveBrowserTimeZoneContext,
   renderBrowserTimeZoneContext,
+  reportedBrowserTimeZone,
 } from '../src/request-zone.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -21,7 +22,7 @@ function browserMessage(timeZone: string): UserMessage {
 }
 
 describe('browser request-zone context', () => {
-  it('derives missing, unique, and sorted mixed zones from user-rpc messages only', () => {
+  it('derives missing, unique, and sorted mixed zones from user messages only', () => {
     const plugin = createUserMessage({
       content: [{ type: 'text', text: 'plugin' }],
       source: { kind: 'test' },
@@ -38,6 +39,22 @@ describe('browser request-zone context', () => {
       kind: 'mixed',
       timeZones: ['America/New_York', 'Asia/Shanghai'],
     })
+  })
+
+  it('reads a string clientTimeZone from any user source, with or without an rpcId', () => {
+    const user = (source: object): UserMessage => createUserMessage({
+      content: [{ type: 'text', text: 'zone' }],
+      source: source as never,
+    })
+    expect(reportedBrowserTimeZone(user({ kind: 'user', rpcId: 'rpc', clientTimeZone: 'Asia/Shanghai' }))).toBe('Asia/Shanghai')
+    expect(reportedBrowserTimeZone(user({ kind: 'user', clientTimeZone: 'Europe/London' }))).toBe('Europe/London')
+    expect(reportedBrowserTimeZone(user({ kind: 'user', rpcId: 'rpc' }))).toBeUndefined()
+    expect(reportedBrowserTimeZone(user({ kind: 'user' }))).toBeUndefined()
+    expect(reportedBrowserTimeZone(user({ kind: 'retry', rpcId: 'rpc', clientTimeZone: 'Asia/Shanghai' }))).toBeUndefined()
+    expect(deriveBrowserTimeZoneContext([
+      user({ kind: 'user', clientTimeZone: 'Europe/London' }),
+      browserMessage('Europe/London'),
+    ])).toEqual({ kind: 'resolved', timeZone: 'Europe/London' })
   })
 
   it('validates every browser zone before classifying a mixed turn', () => {

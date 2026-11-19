@@ -117,6 +117,18 @@ export function flagOf(snapshot: ChangeRequestSnapshot): ChangeRequestFlag | und
 }
 
 /**
+ * The fields of one change request that the cards, the changes view, and the review page read: a Session binding, or a
+ * change request the review page shows without one.
+ */
+export type ChangeRequestEntry = Pick<ForgePanelChangeRequest, 'url' | 'ref' | 'forge' | 'update' | 'snapshot' | 'reviewRevision'>
+
+/** The panel facts the changes view reads: a Session's panel state, or one change request the review page shows. */
+export type ChangesPanelState = Pick<ForgePanelState, 'checkout' | 'repository' | 'local'> & {
+  /** Change requests the view can show, by URL. */
+  readonly changeRequests: readonly ChangeRequestEntry[]
+}
+
+/**
  * Whether a change request needs the user, the condition its card draws as `blocked`.
  * @param entry - bound change request.
  * @returns whether the header marks it.
@@ -141,7 +153,7 @@ export function defaultExpanded(entries: readonly ForgePanelChangeRequest[]): Re
  * @param state - panel state of the Session.
  * @returns the change request, or undefined without one or while HEAD is detached.
  */
-export function openChangeRequestOf(state: ForgePanelState): ForgePanelChangeRequest | undefined {
+export function openChangeRequestOf(state: ChangesPanelState): ChangeRequestEntry | undefined {
   const branch = state.checkout.state === 'ready' ? state.checkout.checkout.branch : null
   if (branch === null) return undefined
   return state.changeRequests.find(entry => entry.snapshot?.state === 'open' && entry.snapshot.headBranch === branch)
