@@ -141,7 +141,7 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 
 标签按媒体类型选择渲染器，并使用共享 `sidebar.right.document.body` Factory。它复用文件预览的渲染器菜单和换行控件，按标签保存滚动位置与渲染器选择，关闭标签时释放状态。文本转换为完整文本页；字节和文本按渲染器加载模式解码或编码。内容预览省略 `baseAddress`，因此不会解析工作区相对引用。不支持的媒体类型会显示明确说明。
 
-顶栏扩展使用 `sidebar.right.tab.content.actions`，仅在正文可用时收到 `{ address, content }`。标题来自最新导航输入，刷新后回退到已记录的标题，正文区域和标签使用同一标题。
+共享的 `sidebar.right.content.preview` Factory 为直接传入的正文和已加载的压缩摘要渲染相同的顶栏与控件。标题来自最新导航输入，刷新后回退到已记录的标题，正文区域和标签使用同一标题。
 
 <a id="model-experience"></a>
 ## 模型体验

@@ -2,9 +2,11 @@
  * Document renderer slot and its dispatching Factory: the owner supplies shared
  * content state, renderers own their presentation.
  */
+import type { ContentPreviewInjected } from '../content/face.ts'
+import type { ContentPreviewStore } from '../content/store.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PropsRuntime, SlotHookFactory } from '@deepseek-ai/dsh-client-ui-slots'
-import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { PreviewContent, UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RefCallback } from 'react'
 import type { DocumentPreviewDefinition } from './registry.ts'
 
@@ -77,6 +79,15 @@ export interface DocumentBodyInjected {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotFactoryMap {
+    /** Document viewer with tab title, renderer selection, wrapping, and scroll state. */
+    'sidebar.right.content.preview': {
+      scope: 'session'
+      props: { title: string; content: PreviewContent | undefined; useTabInfo: UseSidebarRightTabInfo }
+      locale: 'sidebarDocumentPreview'
+      store: ContentPreviewStore
+      inject: ContentPreviewInjected
+    }
+
     /** One document renderer occurrence, dispatched by implementation id. */
     'sidebar.right.document.body': {
       scope: 'session'

@@ -1,2 +1,3 @@
 - region "Context summary":
+  - text: Context summary
   - paragraph: Implement minimal image reading through the existing filesystem tool, preserving permissions, model capability checks, and standard mode. Enable automatic and manual compaction.

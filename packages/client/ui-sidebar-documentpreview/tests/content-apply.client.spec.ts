@@ -15,7 +15,7 @@ import { SidebarRightTabRegistry } from '@deepseek-ai/dsh-client-ui-sidebar-righ
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { apply } from '../src/client/content/index.ts'
 import { retainDocumentTabs } from '../src/client/document/tab-lifetime.ts'
-import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
 import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import type { ContentPreviewStore } from '../src/client/content/store.ts'
@@ -39,13 +39,15 @@ async function boot() {
   const tabs = new SidebarRightTabRegistry(ctx)
   const previews = new DocumentPreviewRegistry()
   const registered: Recorded[] = []
+  const record = (options: Omit<Recorded, 'component'>, component: unknown) => {
+    const entry = { ...options, component }
+    registered.push(entry)
+    return () => { registered.splice(registered.indexOf(entry), 1) }
+  }
   const slots = {
     inject: vi.fn((_name: string, register: () => () => void) => register()),
-    register: vi.fn((options: Omit<Recorded, 'component'>, component: unknown) => {
-      const entry: Recorded = { ...options, component }
-      registered.push(entry)
-      return () => { registered.splice(registered.indexOf(entry), 1) }
-    }),
+    register: record,
+    registerFactory: record,
   }
   const locale = { bind: vi.fn(() => (key: string) => `t:${key}`) }
   const openResource = vi.fn<Context['sidebarRight']['openResource']>()
@@ -65,7 +67,7 @@ describe('direct content previews', () => {
   it('registers the shared tab and removes it with its service', async () => {
     const h = await boot()
     expect(h.tabs.get('content')).toMatchObject({ id: CONTENTPREVIEW_ID, patterns: ['dsh-resource://content-preview/**'] })
-    expect(h.registered.map(entry => entry.component)).toEqual([ContentPreview, ContentTitle])
+    expect(h.registered.map(entry => entry.component)).toEqual([ContentViewer, ContentPreview, ContentTitle])
     expect(h.tabs.get('content')?.title?.('dsh-resource://content-preview/item')).toBe('t:content.title')
     await h.fiber.dispose()
     expect(h.tabs.get('content')).toBeUndefined()

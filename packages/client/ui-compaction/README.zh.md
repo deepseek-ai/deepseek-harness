@@ -31,7 +31,7 @@ Chat 通过 `ctx.compactionPreviews.open(address, summarySeq, signal)` 打开已
 
 地址标识会话及摘要序号。子代理地址包含父会话、子会话和模式。标签使用 `throughSeq` 和 `maxMessages: 1` 读取对应的 `compaction/summary` 事件。摘要缺失、为空或读取失败时，标签显示错误。已取消的打开请求跳过导航，关闭标签时释放资源订阅。
 
-摘要文本块按顺序拼接，由共享 Markdown 文档渲染器显示。重复打开同一地址会复用标签。
+摘要文本块按顺序拼接，使用与计划相同的 Markdown 标签图标、预览顶栏和渲染器控件。重复打开同一地址会复用标签。
 
 <a id="model-experience"></a>
 ## 模型体验

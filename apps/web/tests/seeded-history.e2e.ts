@@ -600,7 +600,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     const frame = page.locator('[style*="grid-template-columns"]').first()
     expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
     const column = page.locator('[data-rightbar-col]')
-    const preview = column.locator(`[data-compaction-preview="${address}"]`)
+    const preview = column.locator(`[data-contentpreview-url="${address}"]`)
     try {
       await marker.click()
       await preview.locator('[data-document-markdown]').waitFor({ state: 'visible', timeout: 10_000 })
@@ -614,7 +614,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       expect(await transcript.getByRole('heading', { name: 'Cold resume compact summary' }).count()).toBe(0)
       expect(await marker.getAttribute('aria-expanded')).toBeNull()
       await compareOrRefreshGolden(CHECKPOINT_SIDEBAR_EXPECTED,
-        await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd), MODE)
+        await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd), MODE)
     } finally {
       // Later cases share this page and require only the file tab, with the Sidebar closed.
       await closeCheckpointTab(column)
@@ -736,17 +736,17 @@ describe('web e2e: seeded history renders through cold resume', () => {
     // expanded rows. The previous case left the Sidebar open on the file tab.
     const { address } = checkpointOf(scaffold)
     const column = page.locator('[data-rightbar-col]')
-    const rendered = column.locator(`[data-compaction-preview="${address}"] [data-document-markdown]`)
+    const rendered = column.locator(`[data-contentpreview-url="${address}"] [data-document-markdown]`)
     try {
       await compactionMarker(page).click()
       await rendered.waitFor({ state: 'visible', timeout: 10_000 })
-      const before = await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd)
+      const before = await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)
       const warningStart = tripwire.warnings.length
       await page.reload({ waitUntil: 'load' })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
       await rendered.waitFor({ state: 'visible', timeout: 15_000 })
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['a.txt', CHECKPOINT_TITLE])
-      expect(await captureStableAria(page, `[data-compaction-preview="${address}"]`, scaffold.workspaceCwd)).toBe(before)
+      expect(await captureStableAria(page, `[data-contentpreview-url="${address}"]`, scaffold.workspaceCwd)).toBe(before)
     } finally {
       await closeCheckpointTab(column)
     }

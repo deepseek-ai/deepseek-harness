@@ -40,6 +40,9 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../ui-primitives"
     }
   ]
 }

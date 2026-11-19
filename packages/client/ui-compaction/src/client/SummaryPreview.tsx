@@ -1,4 +1,5 @@
 /** Render a persisted compaction summary through the shared Markdown document body. */
+import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import type {} from './resource.ts'
@@ -11,11 +12,8 @@ type SummaryProps = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<'compac
  * @returns the summary title.
  */
 export function SummaryTitle({ t }: PropsLocale<'compaction'>) {
-  return <>{t('preview.title')}</>
+  return <><FileTypeIcon kind="markdown" size={16} className={css.titleIcon} />{t('preview.title')}</>
 }
-
-/** Summary documents have no file dependencies or renderer-owned scrollport. */
-function ignore(): void {}
 
 /** Render a saved summary address or its current read status.
  * @param props - tab, resource subscription, shared document Factory, and locale.
@@ -32,13 +30,7 @@ export function SummaryPreview({ useTabInfo, useResource, renderFactorySlot, t }
       {missing ? t('preview.notFound') : failed ? t('preview.readFailed') : t('preview.loading')}
     </div>
   }
-  const text = resource.value.markdown
-  const pageText = text.replace(/\n$/, '')
-  return <section className={css.preview} data-compaction-preview={tab.contentId} aria-label={t('preview.title')}>
-    {renderFactorySlot('sidebar.right.document.body', {
-      rendererId: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/markdown', useTabInfo, resourceAddress: tab.contentId,
-      content: { kind: 'text', text, eof: true, pages: [{ offset: 1, text: pageText, lines: pageText.split('\n').length }] },
-      wrap: true, scrollportRef: ignore, addResource: ignore, setResources: ignore,
-    })}
-  </section>
+  return renderFactorySlot('sidebar.right.content.preview', {
+    title: t('preview.title'), content: { mediaType: 'text/markdown', text: resource.value.markdown }, useTabInfo,
+  })
 }

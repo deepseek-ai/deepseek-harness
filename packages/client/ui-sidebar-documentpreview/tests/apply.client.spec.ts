@@ -34,7 +34,7 @@ import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
-import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
 import { ContentTitle } from '../src/client/content/ContentTitle.tsx'
 import { CONTENTPREVIEW_ID } from '../src/client/content/index.ts'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
@@ -120,7 +120,7 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
-      ['sidebar.right.pane.tab', CONTENTPREVIEW_ID, 'sidebarDocumentPreview', ContentPreview],
+      ['sidebar.right.pane.tab', CONTENTPREVIEW_ID, undefined, ContentPreview],
       ['sidebar.right.pane.tab.title', CONTENTPREVIEW_ID, undefined, ContentTitle],
     ])
     // Both services come from this plugin: renderers for every tab type, content sources for `content`.
@@ -131,6 +131,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     // The document body Factory owns the renderer slot so other tab types can render it.
     expect(factories.map(({ options, component }) => [options.name, options.scope, options.locale, component])).toEqual([
       ['sidebar.right.document.body', 'session', 'sidebarDocumentPreview', DocumentBody],
+      ['sidebar.right.content.preview', 'session', 'sidebarDocumentPreview', ContentViewer],
     ])
     expect(Object.keys(factories[0]!.options.children!)).toEqual(['sidebar.right.tab.document'])
     const source = (factories[0]!.options.inject!() as DocumentBodyInjected).hooks.documentPreviews

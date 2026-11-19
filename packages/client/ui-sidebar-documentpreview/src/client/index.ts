@@ -60,12 +60,6 @@ export type { ReadDocumentBytes, DocumentFileBytes, ReadWorkspaceFilePage, Sessi
 export type { TextPage, TextState, TextStore, TextTabState } from './store.ts'
 export type { DocumentBodyInput, DocumentContent, DocumentPreviewProps, DocumentTextPage } from './document/contract.ts'
 export type { DocumentLoadMode, DocumentPreviewDefinition } from './document/registry.ts'
-import type {} from './content/contract.ts'
-export type { ContentPreviewProps } from './content/ContentPreview.tsx'
-export type { ContentTitleProps } from './content/ContentTitle.tsx'
-export type { ContentPreviewInjected, MediaTypeRenderer } from './content/face.ts'
-export type { ContentPreviewState, ContentPreviewStore, ContentViewState } from './content/store.ts'
-export { createContentPreviewStore } from './content/store.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

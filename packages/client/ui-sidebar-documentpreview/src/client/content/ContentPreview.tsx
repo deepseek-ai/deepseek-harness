@@ -3,45 +3,46 @@ import { useEffect, useMemo } from 'react'
 import type { ReactNode, UIEvent } from 'react'
 import clsx from 'clsx'
 import type {
-  InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
+  FactoryComponentPropsOf, PropsRenderFactories, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { FileTypeIcon, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useScrollport } from '../scrollport.ts'
 import { RendererMenu, WrapToggle } from '../ViewerTools.tsx'
 import shared from '../TextPreview.module.css'
 import { documentContentOf } from './content.ts'
-import type { ContentPreviewInjected } from './face.ts'
 import { freshView } from './store.ts'
-import type { ContentPreviewStore } from './store.ts'
 import { iconKindOf } from './title.ts'
 import css from './ContentPreview.module.css'
 
-/** The body's composed props: the tab, its resource, the view store, the face, and copy. */
-export type ContentPreviewProps =
-  & PropsRuntime<'sidebar.right.pane.tab'>
-  & PropsRenderSlots<'sidebar.right.tab.content.actions'>
-  & PropsRenderFactories
-  & PropsStore<ContentPreviewStore>
-  & InjectFace<ContentPreviewInjected>
-  & PropsLocale<'sidebarDocumentPreview'>
+type ContentTabProps = PropsRuntime<'sidebar.right.pane.tab'> & PropsRenderFactories
+
+/** Read the current navigation input of a transient content tab.
+ * @param props - enclosing tab and shared viewer.
+ * @returns the content viewer, including its expired state after reload.
+ */
+export function ContentPreview({ useTabInfo, renderFactorySlot }: ContentTabProps): ReactNode {
+  const { tab } = useTabInfo()
+  const params = tab.navigation.params
+  const input = params !== undefined && 'previewContent' in params ? params : undefined
+  return renderFactorySlot('sidebar.right.content.preview', {
+    title: input?.previewTitle ?? tab.title, content: input?.previewContent, useTabInfo,
+  })
+}
 
 /** In-memory content declares no file dependencies, so the renderer's dependency callbacks do nothing. */
 function ignoreResources(): void {}
 
 /**
- * The content type's body, registered under `sidebar.right.pane.tab`.
- * @param props - composed slot props.
- * @returns the rendered content with its header, or a status line.
+ * Render tab content through the selected document renderer.
+ * @param props - title, content, enclosing tab, and viewer controls.
+ * @returns the shared preview header and body.
  */
-export function ContentPreview({
-  useTabInfo, useStore, useDocumentPreviews,
-  select, toggleWrap, scroll, mediaTypeCandidates, renderSlot, renderFactorySlot, t,
-}: ContentPreviewProps): ReactNode {
+export function ContentViewer({
+  content, title, useTabInfo, useStore, useDocumentPreviews,
+  select, toggleWrap, scroll, mediaTypeCandidates, renderFactorySlot, t,
+}: FactoryComponentPropsOf<'sidebar.right.content.preview'>): ReactNode {
   const { tab } = useTabInfo()
   const address = tab.contentId
-  const params = tab.navigation.params
-  const input = params !== undefined && 'previewContent' in params ? params : undefined
-  const content = input?.previewContent
   const view = useStore(state => state.byTab[tab.id]) ?? freshView()
   const definitions = useDocumentPreviews(value => value)
   const mediaType = content?.mediaType
@@ -56,7 +57,6 @@ export function ContentPreview({
     () => content === undefined || loading === undefined ? undefined : documentContentOf(content, loading),
     [content, loading],
   )
-  const title = input?.previewTitle ?? tab.title
 
   const { scrollportRef, bindBody, bindScrollport } = useScrollport(view.scrollTop)
   // Return to the remembered offset once content renders: on a remount, after
@@ -128,7 +128,6 @@ export function ContentPreview({
         {selected?.wrap === true && (
           <WrapToggle wrap={view.wrap} t={t} data-contentpreview-tool="wrap" onToggle={() => { toggleWrap(tab.id, tab.signal) }} />
         )}
-        {content !== undefined && renderSlot('sidebar.right.tab.content.actions', { address, content })}
       </div>
       {body}
     </div>

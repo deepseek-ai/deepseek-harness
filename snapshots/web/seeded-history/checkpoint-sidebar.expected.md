@@ -1,4 +1,5 @@
 - region "Context summary":
+  - text: Context summary
   - heading "Cold resume compact summary" [level=2]
   - list:
     - listitem: The exact summary remains available.

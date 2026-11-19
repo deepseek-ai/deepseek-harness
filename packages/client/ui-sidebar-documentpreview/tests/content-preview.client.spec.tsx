@@ -1,22 +1,20 @@
 // @vitest-environment jsdom
 /**
  * The content body's states, renderer selection, content conversion, view
- * state, and header contributions. The renderer registry, the view store, and
- * the face are real; the resource, the actions slot, and the document body
+ * state, and shared header. The renderer registry, the view store, and
+ * the face are real; the tab and the document body
  * Factory are scripted.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { createElement } from 'react'
-import type { ReactNode } from 'react'
+import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { DocumentBodyInput } from '../src/client/document/contract.ts'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
-import { ContentPreview } from '../src/client/content/ContentPreview.tsx'
-import type { ContentPreviewProps } from '../src/client/content/ContentPreview.tsx'
+import { ContentPreview, ContentViewer } from '../src/client/content/ContentPreview.tsx'
 import type { PreviewContent } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { contentFace } from '../src/client/content/face.ts'
 import { createContentPreviewStore } from '../src/client/content/store.ts'
@@ -90,32 +88,31 @@ function setup(options: { innerScrollport?: boolean } = {}) {
     snapshot: { status: 'loading', value: undefined, failure: undefined } as ResourceSnapshot<PreviewContent>,
   }
   const inputs: DocumentBodyInput[] = []
-  const actionOwners: unknown[] = []
-  const props = (): ContentPreviewProps => ({
-    useTabInfo: () => ({
-      sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1', isFloating: false },
-      tab: {
-        id: TAB_ID, kind: 'content', contentId: state.address, title: 'Recorded title', visible: true,
-        navigation: { address: state.address, params: state.snapshot.value === undefined ? undefined : { previewContent: state.snapshot.value, previewTitle: 'Stored title' }, revision: 1 },
-        signal: record.signal,
-        actions: { bindCommands: vi.fn(), openResource: vi.fn(), openTab: vi.fn(), close: vi.fn() },
-      },
-    }),
-    useResource: () => state.snapshot,
+  const useTabInfo = () => ({
+    sidebar: { expanded: true, fullscreen: false },
+    panel: { id: 'pane-1', isFloating: false },
+    tab: {
+      id: TAB_ID, kind: 'content', contentId: state.address, title: 'Recorded title', visible: true,
+      navigation: { address: state.address, params: state.snapshot.value === undefined ? undefined : { previewContent: state.snapshot.value, previewTitle: 'Stored title' }, revision: 1 },
+      signal: record.signal,
+      actions: { bindCommands: vi.fn(), openResource: vi.fn(), openTab: vi.fn(), close: vi.fn() },
+    },
+  })
+  const viewerProps = () => ({
     useStore: bindSnapshotSelector(instance),
     actions: instance.actions,
     ...face,
     useDocumentPreviews: bindSnapshotSelector(face.hooks.documentPreviews),
-    renderSlot: (_key: string, owner: unknown) => {
-      actionOwners.push(owner)
-      return createElement('span', { 'data-actions-slot': '' })
-    },
     renderFactorySlot: (_name: string, input: DocumentBodyInput) => {
       inputs.push(input)
       return createElement(FakeDocument, { input, innerScrollport: options.innerScrollport ?? false })
     },
     t,
+  })
+  const props = (): ComponentProps<typeof ContentPreview> => ({
+    useTabInfo,
+    renderFactorySlot: (_name: string, input: Pick<ComponentProps<typeof ContentViewer>, 'title' | 'content' | 'useTabInfo'>) =>
+      createElement(ContentViewer, { ...viewerProps(), ...input } as never),
   }) as never
   const view = render(createElement(ContentPreview, props()))
   const rerender = (): void => { view.rerender(createElement(ContentPreview, props())) }
@@ -124,7 +121,7 @@ function setup(options: { innerScrollport?: boolean } = {}) {
     rerender()
   }
   const root = (): HTMLElement => view.container.querySelector<HTMLElement>('[data-contentpreview-state]')!
-  return { registry, instance, record, state, inputs, actionOwners, view, props, rerender, show, root }
+  return { registry, instance, record, state, inputs, view, props, rerender, show, root }
 }
 
 const live = (value: PreviewContent): ResourceSnapshot<PreviewContent> => ({ status: 'live', value, failure: undefined })
@@ -135,7 +132,6 @@ describe('content preview body', () => {
     const h = setup()
     expect(h.root().dataset.contentpreviewState).toBe('expired')
     expect(h.root().textContent).toContain('content.expired')
-    expect(h.actionOwners).toEqual([])
   })
 
   it('names the preview region after the title the header shows', () => {
@@ -146,7 +142,7 @@ describe('content preview body', () => {
     expect(screen.getByRole('region', { name: 'Stored title' })).toBe(h.root())
   })
 
-  it('renders text through the single matching renderer with one complete page and its contributions', () => {
+  it('renders text through the single matching renderer with one complete page and its header', () => {
     const h = setup()
     h.registry.register(markdownRenderer)
     h.show(live(markdown))
@@ -162,7 +158,6 @@ describe('content preview body', () => {
     expect(h.root().querySelector('[data-contentpreview-title]')?.textContent).toBe('Stored title')
     expect(h.root().querySelector('[data-document-viewer-menu]')).toBeNull()
     expect(h.root().querySelector('[data-contentpreview-tool="wrap"]')).toBeNull()
-    expect(h.actionOwners.at(-1)).toEqual({ address: ADDRESS, content: markdown })
   })
 
   it('keeps the converted content reference while the value is unchanged', () => {
@@ -182,7 +177,6 @@ describe('content preview body', () => {
     expect(h.root().dataset.contentpreviewState).toBe('unsupported')
     expect(h.root().textContent).toContain('content.noRenderer(mediaType=image/png)')
     expect(h.root().dataset.documentPreview).toBeUndefined()
-    expect(h.actionOwners).toHaveLength(1)
   })
 
   it('offers the other renderers in an open-with menu and remembers the choice', () => {
