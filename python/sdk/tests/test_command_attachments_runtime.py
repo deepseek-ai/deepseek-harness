@@ -17,7 +17,7 @@ from test_commands_runtime import (
     _read_events, _request_texts, _runtime, _wait_activity,
 )
 from test_goal_runtime import _command, _until
-from test_plan_runtime import _GUIDANCE, _effective_system
+from test_plan_runtime import _GUIDANCE, _system_text
 
 
 _IMAGE_MODEL = "deepseek-flash"
@@ -72,7 +72,7 @@ def test_plan_image_reaches_the_model_and_persists_as_a_reference(
         _wait_activity(runtime, session)
         [request] = runtime.model.captured()
         _assert_request_images(request, picture)
-        assert _GUIDANCE in _effective_system(request)
+        assert _GUIDANCE in _system_text(request)
         assert line not in _request_texts(request)
         if body:
             assert body in _request_texts(request)

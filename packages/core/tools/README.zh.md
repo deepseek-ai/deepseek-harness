@@ -81,7 +81,7 @@ ctx.tools.register(defineTool({
 - name: '@deepseek-ai/dsh-tool-executor-native'
 ```
 
-Agent 步骤的并发上限使用 [agent-loop 配置](../agent-loop/README.zh.md)。执行器设置参见[原生](../tool-executor-native/README.zh.md)或 [PTC](../tool-executor-ptc/README.zh.md) 包。自定义提供者只需实现 `describe(definitions)` 和 `execute(batch)`，共享流水线为可选项。注册表分别为提示词描述和每次 `ctx.tools.execute()` 批次选择当前作用域的执行器。已接纳批次仍由所选提供者结算，即使该提供者已卸载；根据提供者的卸载策略，结果可能包含取消错误。注册替代提供者之前，新批次会被拒绝。
+Agent 步骤的并发上限使用 [agent-loop 配置](../agent-loop/README.zh.md)。执行器设置参见[原生](../tool-executor-native/README.zh.md)或 [PTC](../tool-executor-ptc/README.zh.md) 包。自定义提供者只需实现 `describe(definitions)` 和 `execute(batch)`，共享流水线为可选项。注册表分别为提示词描述和每次 `ctx.tools.execute()` 批次选择当前作用域的执行器。已接纳批次仍由所选提供者结算，即使该提供者已卸载；根据提供者的卸载策略，结果可能包含取消错误。注册替代提供者之前，新批次会被拒绝。执行器提示词段遵循普通[段生命周期规则](../system-prompt/README.zh.md)：清理会移除注册，下一次组装再比较替代注册或准备退役通知。
 
 ### 按 agent 限制工具
 

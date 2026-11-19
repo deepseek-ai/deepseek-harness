@@ -52,7 +52,9 @@ The limits section on the **Plugins → Subagent** page edits the Host’s `suba
 
 Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
 
-The current `maxActiveSubagents` value is sampled before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
+Consumers read the current limit through `ctx.subagents.maxActiveSubagents`; admission samples the same value before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
+
+`ctx.subagents.capacityOf(caller)` returns `{ running, limit }` for the live caller's tree. `running` counts occupied slots, including starting, idle resident, stopping, and external children; it excludes the root and may exceed `limit` after a decrease. Reading capacity reserves no slot.
 
 At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (browser prompts receive `subagent/delivery-unavailable`): wait for a child to finish or continue using the existing agents. Admission does not queue, because a parent waiting for descendants must not wait for its own occupied slot. Slots are process-local and do not constrain cumulative Session history or token usage.
 

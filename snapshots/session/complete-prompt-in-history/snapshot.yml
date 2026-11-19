@@ -1,0 +1,9 @@
+version: 1
+scenario: complete-prompt-in-history
+profile: headless
+composition: complete-prompt-in-history
+recording: authored
+header:
+  class: complete-prompt-in-history
+  pin: true
+  promptChanges: 3

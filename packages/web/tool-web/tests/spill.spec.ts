@@ -6,6 +6,7 @@
  * tool-specific spill code, and the model-facing text changes ONLY by the
  * deliberate spill notice (the full formatted result lands in the spill file).
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -50,6 +51,7 @@ beforeEach(async () => {
   spillRoot = mkdtempSync(join(tmpdir(), 'dsh-spill-web-'))
 
   ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

@@ -11,6 +11,16 @@
 由 Host 选定的可选 `cwd` 指定子级的初始目录；相对路径以父级的当前目录为基准解析。省略时，在准入阶段捕获该目录。面向模型的委派工具不传目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
 
 ```ts type-equiv
+/** Current concurrency capacity of one subagent tree; observing it reserves no slots. */
+interface SubagentCapacity {
+  /** Occupied slots, including starting, resident, and stopping children; excludes the root. */
+  readonly running: number
+  /** Configured maximum; running may exceed it after the limit is lowered. */
+  readonly limit: number
+}
+```
+
+```ts type-equiv
 /**
  * Start-time options supported by a registered backend. The manager checks
  * every requested option before preparing a local child or starting an external
@@ -483,6 +493,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
  * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
+
+/**
+ * Observe the shared concurrency capacity of the caller's subagent tree.
+ * @param caller - exact live root or resident tree member.
+ * @returns occupied slots and the current limit; this observation reserves no capacity.
+ */
+capacityOf(caller: Agent): SubagentCapacity
 
 /**
  * Report the model-facing names of a live tree member and its direct creator.

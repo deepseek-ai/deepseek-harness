@@ -82,10 +82,10 @@ interface SetupOptions {
 
 async function setup(options?: SetupOptions) {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  await ctx.plugin(SessionProjectionRegistry)
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const provider = options?.provider === false ? undefined : options?.provider ?? new StubProvider()
@@ -418,7 +418,7 @@ describe('dsh-tool-ralph', () => {
     expect(tool.presentCall!({ nope: true })).toBeUndefined()
     await fiber.dispose()
     expect(ctx.tools.get('ralph')).toBeUndefined()
-    expect((await ctx.systemPrompt.assemble()).sections.some(candidate => candidate.name === 'tool:ralph')).toBe(false)
+    expect((await ctx.systemPrompt.assemble()).sections.find(candidate => candidate.name === 'tool:ralph')).toBeUndefined()
   })
 
   it('has the namespace-plugin export shape', () => {

@@ -51,7 +51,7 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 ## Optional overlays
 
-`config/examples/` ships opt-in overlays for GitHub review webhooks, memory MCP servers, and runtime Cordis tools. They are never part of a default profile; the [user guides](../../docs/user/guide/index.md) and [developer practice guides](../../docs/user/develop/practice/index.md) own setup and safety instructions.
+`config/examples/` ships opt-in overlays for GitHub review webhooks, memory MCP servers, [cross-Session messages](../../docs/user/session-control.md) in Web profiles, and runtime Cordis tools. They are never part of a default profile; the [user guides](../../docs/user/guide/index.md) and [developer practice guides](../../docs/user/develop/practice/index.md) own setup and safety instructions.
 
 ## Installed payload
 

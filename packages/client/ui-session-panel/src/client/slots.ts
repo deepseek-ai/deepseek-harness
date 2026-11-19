@@ -16,16 +16,22 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
      * Sections of the Session panel. `id` addresses the section, `order` sorts
-     * the sections ascending, and the required `label` is the section title,
-     * which the panel draws. A section with nothing to show renders nothing,
-     * and the panel hides its title with it.
+     * the sections ascending until the reader drags them into another order,
+     * and the required `label` is the section title, which the panel draws.
+     * The built-in Environment section always shows first. A section with
+     * nothing to show renders nothing, and the panel hides its title with it.
      */
     'conversation.session.panel.section': {
       kind: 'list'
       scope: 'session'
       owner: SessionPanelSectionOwnerProps
     }
-    /** Trailing controls of one section title, keyed by the section's `id`. */
+    /**
+     * Trailing content of one section title, such as a count, keyed by the
+     * section's `id`. In every section but Environment the drag handle shows
+     * in its place while the title row is hovered, so it holds content to
+     * read, not a control to press.
+     */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**
      * Marks over the panel toggle, such as an attention dot. Each occupant is
@@ -101,9 +107,9 @@ export interface PanelFoldProps {
 
 /** How the panel currently shows. */
 export type SessionPanelPresentation =
-  /** Beside the transcript in the Chat View's end gutter. */
+  /** Beside the transcript in the Chat View's end gutter, which the transcript moves aside to leave where it is narrower. */
   | 'docked'
-  /** Over the transcript, opened from the toggle while the gutter is too narrow. */
+  /** Over the transcript, opened from the toggle while the panel has no room to dock. */
   | 'overlay'
 
 /** Values every section receives from the panel. */
@@ -130,7 +136,7 @@ export interface SessionPanelSectionEntry {
 
 /** Panel visibility shared by the toggle and the panel. */
 export interface SessionPanelVisibility {
-  /** Whether the panel docks while the gutter has room; persisted across reloads. */
+  /** Whether the panel docks while it has room, in the gutter or where the transcript moves aside for it; persisted across reloads. */
   readonly pinned: boolean
   /** Session whose overlay is open, or null. */
   readonly overlay: SessionId | null
@@ -138,14 +144,15 @@ export interface SessionPanelVisibility {
 
 /**
  * Whether each Session whose Chat View holds a panel has room to dock it:
- * true when the end gutter of at least one of its Chat Views holds the docked
- * panel. A Session without an entry shows no Chat View.
+ * true when, in at least one of its Chat Views, the end gutter holds the
+ * docked panel or the transcript can move aside to leave that gutter. A
+ * Session without an entry shows no Chat View.
  */
 export type SessionPanelDockable = ReadonlyMap<SessionId, boolean>
 
 /**
- * Whether the end gutter of each mounted panel's Chat View holds the docked
- * panel, by the id the panel gave its dock probe.
+ * Whether each mounted panel's Chat View has room for the docked panel, by
+ * the id the panel gave its dock probe.
  */
 export type SessionPanelProbes = ReadonlyMap<string, boolean>
 
@@ -178,7 +185,7 @@ export interface SessionPanelInjected {
   }
   /**
    * Create the ref of one mounted panel's dock probe, the element whose
-   * stylesheet width says whether the Chat View's end gutter holds the docked
+   * stylesheet width says whether the Chat View has room for the docked
    * panel. The plugin observes the element while it is attached and records
    * the probe's room under `probe`, and the Session's for the toggle.
    * @param sessionId - Session the panel's Chat View shows.
@@ -191,6 +198,15 @@ export interface SessionPanelInjected {
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.
    */
   readonly closeOverlay: (sessionId: SessionId) => void
+  /**
+   * Move a section beside another in every Session's panel; the order
+   * persists across reloads. Environment does not move, and a section always
+   * lands after it.
+   * @param id - section to move.
+   * @param target - section it lands beside.
+   * @param placement - the side of the target it lands on.
+   */
+  readonly moveSection: (id: string, target: string, placement: 'before' | 'after') => void
 }
 
 /** Business face of the project row. */

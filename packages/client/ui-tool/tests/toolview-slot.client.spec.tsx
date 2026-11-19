@@ -291,7 +291,7 @@ describe('keyed toolview hole through the real machinery', () => {
     const view = b.runtime.renderRoot()
     view.getByText('src/a.ts').click()
     await vi.waitFor(() => {
-      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1/src/a.ts')
+      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1//w/src/a.ts')
     })
     // Nothing on this path reaches the local machine any more.
     expect(b.openWorkspacePath).not.toHaveBeenCalled()

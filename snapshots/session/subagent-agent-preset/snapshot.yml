@@ -6,6 +6,5 @@ recording: authored
 header:
   class: subagent-agent-preset
   pin: true
-  systemPromptSource: text-turn
   childSystemPrompts: [1]
   childToolSchemas: [1]

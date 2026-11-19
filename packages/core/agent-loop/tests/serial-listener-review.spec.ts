@@ -83,7 +83,12 @@ describe('serial creation listener integrations', () => {
       await expect(ctx.agents.create({
         sessionId: brandString<SessionId>('review-file-reference'),
         setup(agentCtx) {
-          agentCtx.systemPrompt.section({ name: 'context:file-reference', order: 0, text: 'occupied' })
+          let rejected = false
+          agentCtx.on('system-prompt/change', () => {
+            if (rejected) return
+            rejected = true
+            throw new Error('context:file-reference activation failed')
+          })
         },
       })).rejects.toThrow('context:file-reference')
       expect(errors.some(error => error.includes('context:file-reference'))).toBe(true)

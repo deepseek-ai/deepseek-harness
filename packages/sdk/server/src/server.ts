@@ -6,7 +6,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-fs'
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { resolve } from 'node:path'
 import { QueryActivity } from './query-activity.ts'
@@ -59,6 +59,23 @@ interface SessionRecord {
   handle: AgentHandle
   /** Latest live failure not superseded by a subsequently committed terminal. */
   failure: { readonly error: unknown; readonly atOffset: SessionLogOffset } | undefined
+  /** When the registry dropped this Agent while the server still held its handle, and the first plugin unloading at that time. */
+  disposal: { readonly at: Date; readonly origin: string | undefined } | undefined
+}
+
+/** A process event observed by the hosting plugin entry. */
+export interface RuntimeProcessEvent {
+  /** Event name and, for a failure, the first line of its message. */
+  readonly description: string
+  readonly at: Date
+}
+
+/** What the hosting plugin entry observes about the runtime that surrounds the server. */
+export interface RuntimeObservation {
+  /** Whether disposal of the whole runtime is in progress, which ends every plugin in the process. */
+  unloading(): boolean
+  /** The last process event recorded before that disposal began; an observation, not an established cause. */
+  lastProcessEvent(): RuntimeProcessEvent | undefined
 }
 
 function encodedImage(block: SessionPromptParams['contentBlocks'][number]): block is SdkEncodedImageBlock {
@@ -105,6 +122,8 @@ function promptTimeZone(requested: string | undefined): string | undefined {
 export interface HarnessSdkJsonRpcServerOptions {
   /** Report max-token termination as an accepted result instead of an infrastructure error. */
   maxTokensAsSuccess?: boolean
+  /** Runtime state that a liveness failure reports; without it the failure makes no statement about the runtime. */
+  runtime?: RuntimeObservation
 }
 
 function successStatus(reason: string, options: HarnessSdkJsonRpcServerOptions): 'ok' | 'error' {
@@ -134,6 +153,9 @@ export class HarnessSdkJsonRpcServer {
   private readonly disposers: (() => void)[] = []
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
+  private readonly unloading = new Set<Fiber>()
+  /** Name of the plugin whose unload began while no other was in progress; overlapping unloads can make it an unrelated plugin. */
+  private unloadOrigin: string | undefined
   private initialized = false
   private approvalRequests = false
   private readonly lifetime = new AbortController()
@@ -206,6 +228,19 @@ export class HarnessSdkJsonRpcServer {
       const record = this.sessions.get(agent.session.id)
       if (record?.handle.agent !== agent) return
       record.failure = { error, atOffset: agent.session.seq }
+    }))
+    this.disposers.push(ctx.on('agent/disposed', ({ agent }) => {
+      const record = this.sessions.get(agent.session.id)
+      if (record?.handle.agent === agent) record.disposal = { at: new Date(), origin: this.unloadOrigin }
+    }))
+    this.disposers.push(ctx.on('internal/status', (fiber, previous) => {
+      if (fiber.state === FiberState.UNLOADING) {
+        if (this.unloading.size === 0) this.unloadOrigin = fiber.name
+        this.unloading.add(fiber)
+      } else if (previous === FiberState.UNLOADING) {
+        this.unloading.delete(fiber)
+        if (this.unloading.size === 0) this.unloadOrigin = undefined
+      }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
@@ -459,10 +494,27 @@ export class HarnessSdkJsonRpcServer {
     return this.sessions.get(root.session.id)?.handle.agent === root
   }
 
+  /** Reject a retained record whose Agent left the registry, naming what the server observed. */
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
-    if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) {
-      throw new Error(`session agent was disposed outside the server: ${sessionId}`)
+    // Root disposal also unloads the registry; reading it as optional keeps one failure for both stages.
+    if (this.ctx.get('agents')?.get(rec.handle.agent.id) === rec.handle.agent) return
+    throw new Error(`session agent was disposed outside the server: ${sessionId}; ${this.disposalContext(rec)}`)
+  }
+
+  private disposalContext(rec: SessionRecord): string {
+    const runtime = this.options.runtime
+    if (runtime?.unloading()) {
+      const event = runtime.lastProcessEvent()
+      return event === undefined
+        ? 'the runtime is shutting down; no process event was observed before teardown'
+        : `the runtime is shutting down; last process event before teardown: ${event.description} at ${event.at.toISOString()}`
     }
+    if (this.shuttingDown) return 'the SDK server is shutting down'
+    // Runtime disposal removes this server's listeners before the Agent leaves, so a record exists only here.
+    const at = rec.disposal === undefined ? '' : ` at ${rec.disposal.at.toISOString()}`
+    const running = runtime === undefined ? '' : ' while the runtime keeps running'
+    const origin = rec.disposal?.origin ? `; first plugin unloading at that time: "${rec.disposal.origin}"` : ''
+    return `the agent loop was unloaded${at}${running}${origin}`
   }
 
   /**
@@ -677,7 +729,7 @@ export class HarnessSdkJsonRpcServer {
       meta: { cwd },
       agentOptions,
     }))
-    const rec: SessionRecord = { handle, failure: undefined }
+    const rec: SessionRecord = { handle, failure: undefined, disposal: undefined }
     this.sessions.set(sessionId, rec)
     return rec
   }

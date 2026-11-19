@@ -190,6 +190,23 @@ describe('the composer task strip', () => {
     expect(toggleSidebar).toHaveBeenCalledWith(false)
     expect(update.mock.invocationCallOrder[0]).toBeLessThan(toggleSidebar.mock.invocationCallOrder[0] ?? 0)
   })
+  it('toggles once from any part of the strip and keeps draft removal separate', () => {
+    render(<TaskDock {...props(view, 2, view, false, true)} />)
+    for (const target of [
+      screen.getByText('Prepare the release'),
+      screen.getByRole('progressbar'),
+      screen.getByText('62.50%'),
+      screen.getByRole('button', { name: en.openTaskTree + en.closeTaskTree }),
+    ]) {
+      toggleSidebar.mockClear()
+      fireEvent.click(target)
+      expect(toggleSidebar).toHaveBeenCalledExactlyOnceWith(false)
+    }
+    toggleSidebar.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: en.removeDraftTree }))
+    expect(removeTree).toHaveBeenCalledOnce()
+    expect(toggleSidebar).not.toHaveBeenCalled()
+  })
   it('allows collapsing the selected task-tree root, while details still request the tree', () => {
     const current = { ...state, tree: tree.id, tab: 'tasks' as const, details: { tasks: [], timeline: [] } }
     const { rerender } = render(<TaskDock {...props()} useStore={selector => selector(current)} />)

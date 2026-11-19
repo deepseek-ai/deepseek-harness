@@ -1,4 +1,5 @@
 /** Producer-to-UI regression for shell results bounded by the real spill policy. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -44,6 +45,7 @@ const shellArgs = { command: 'fixture-output', description: 'Return shell output
 async function executeShell(text: string, nested: boolean, name = 'bash', maxInlineTokens = 256) {
   const ctx = new Context()
   try {
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin((nested ? 'ptc' : 'native') === 'ptc' ? PtcToolExecutor : NativeToolExecutor)

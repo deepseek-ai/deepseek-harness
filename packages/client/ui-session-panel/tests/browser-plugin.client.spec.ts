@@ -116,6 +116,22 @@ describe('ui-session-panel browser half', () => {
     off()
   })
 
+  it('moves a section from the panel and keeps the order for the roster, with Environment first', async () => {
+    const { ctx } = await bench()
+    const panel = faceOf(ctx, 'conversation.chat.aside', undefined) as SessionPanelInjected
+    const ids = (): string[] => panel.hooks.sections.getSnapshot().map(section => section.id)
+    const disposers = [
+      ctx.slots.register({ name: 'conversation.session.panel.section', id: 'subagents', order: 200, label: 'Subagents' }, () => null),
+      ctx.slots.register({ name: 'conversation.session.panel.section', id: 'jobs', order: 300, label: 'Jobs' }, () => null),
+    ]
+    expect(ids()).toEqual(['environment', 'subagents', 'jobs'])
+    panel.moveSection('jobs', 'subagents', 'before')
+    expect(ids()).toEqual(['environment', 'jobs', 'subagents'])
+    panel.moveSection('environment', 'subagents', 'after')
+    expect(ids()).toEqual(['environment', 'jobs', 'subagents'])
+    for (const dispose of disposers) dispose()
+  })
+
   it('gives the project row the Host facts and follows connection resets', async () => {
     const { ctx, host } = await bench()
     const row = faceOf(ctx, 'conversation.session.panel.environment.row', 'project') as ProjectRowInjected

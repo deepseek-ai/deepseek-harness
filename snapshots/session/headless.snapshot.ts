@@ -842,9 +842,15 @@ function verifyMcpError(log: string, secret: string, oauth: boolean): void {
     const headers = prefix.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
     expect(headers[0]?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(true)
     expect(headers.at(-1)?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(false)
-    expect(log).toContain('MCP_AUTHORIZED_INSTRUCTION')
     const system = messages.filter(message => message?.role === 'system')
-    expect(JSON.stringify(system)).not.toContain('MCP_AUTHORIZED_INSTRUCTION')
+    expect(system).toHaveLength(2)
+    expect(JSON.stringify(system[0])).toContain('MCP_AUTHORIZED_INSTRUCTION')
+    // Losing authorization keeps the server's section registered with empty text, admitted under its notice.
+    const update = system[1]!
+    const section = update.source.sections?.find(candidate => candidate.name === 'mcp:protected')
+    expect(section).toMatchObject({ state: 'active', noticeIndex: [expect.any(Number)] })
+    expect(update.content.map(block => block.type === 'text' ? block.text : undefined))
+      .toEqual(['The earlier instructions supplied by MCP server "protected" no longer apply.', ''])
   }
 }
 
@@ -852,7 +858,7 @@ function verifyNoMcpServers(log: string, ptc: boolean): void {
   const events = parseSessionLog(log)
   const headers = events.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
   const prompts = events.flatMap(event => event.type === 'system/message'
-    ? event.data.message.content.filter(block => block.type === 'text').map(block => block.text) : [])
+    ? [event.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('')] : [])
   expect(headers.length).toBeGreaterThan(0)
   expect(prompts.length).toBeGreaterThan(0)
   for (const header of headers) {
@@ -1566,6 +1572,23 @@ describe('headless recorded-session snapshots', () => {
               expect(results).toHaveLength(2)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office task routing')
+            }
+            if (scenario.name === 'complete-prompt-in-history') {
+              const events = parseSessionLog(actualLogs[0]!.content)
+              const systems = events.filter(event => event.type === 'system/message')
+              expect(systems.map(event => event.surfaceOp)).toEqual(['append', 'append', 'append', 'append'])
+              expect(systems.map(event => event.data.message.source.complete === true)).toEqual([false, true, true, false])
+              expect(events.filter(event => event.type === 'system/message' || event.type === 'tool/result')
+                .map(event => event.type)).toEqual([
+                'system/message', 'tool/result', 'system/message', 'tool/result',
+                'system/message', 'tool/result', 'system/message',
+              ])
+              const sections = systems.map(event => event.data.message.source.sections?.map(section => section.name))
+              expect(sections[1]).toEqual(['snapshot:complete'])
+              expect(sections[2]).toEqual(['snapshot:complete'])
+              expect(sections[3]?.filter(name => name !== 'snapshot:complete')).toEqual(sections[0])
+              expect(systems[3]!.data.message.source.sections?.find(section => section.name === 'snapshot:complete'))
+                .toMatchObject({ name: 'snapshot:complete', state: 'retired' })
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {

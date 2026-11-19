@@ -5,6 +5,7 @@
  * postmortem 0001.
  */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -28,6 +29,7 @@ describe('dsh-tool-web real-load-path guard', () => {
 
   it('boots over ctx.web through the unwrapped module without an inject error', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

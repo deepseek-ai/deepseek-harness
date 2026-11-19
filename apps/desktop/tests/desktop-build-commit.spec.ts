@@ -73,6 +73,18 @@ describe('desktop toolchain preflight', () => {
     expect(failures.find(failure => failure.tool === 'vswhere')?.detail).toContain('ProgramFiles(x86)')
   })
 
+  it('reports missing PowerShell before Windows packaging', async () => {
+    const empty = await mkdtemp(join(tmpdir(), 'dsh-no-pwsh-'))
+    directories.push(empty)
+    const failures = await probeDesktopToolchain('win32', { PATH: empty })
+    expect(failures.find(failure => failure.tool === 'pwsh')?.detail).toContain('PowerShell 7')
+  })
+
+  it.skipIf(process.platform !== 'win32')('accepts the Windows Authenticode toolchain', async () => {
+    const failures = await probeDesktopToolchain('win32', process.env)
+    expect(failures.filter(failure => failure.tool === 'pwsh')).toEqual([])
+  })
+
   it('writes nothing into the working directory while probing', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'dsh-probe-cwd-'))
     directories.push(directory)

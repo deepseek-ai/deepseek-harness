@@ -224,10 +224,11 @@ async function base() {
     ): Read<readonly ForgeReviewerCandidate[]> => ({ ok: true, value: [{ login: 'mona', name: null, avatarUrl: null, suggested: true }] })),
     updateBranch: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
     changeRequestViewed: vi.fn(async (
-      _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
+      _sessionId: SessionId, _url: string, _headSha: string, _fresh: boolean, _signal: AbortSignal,
     ): Read<ForgeViewedFiles | null> => ({ ok: true, value: null })),
     setFileViewed: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     refresh: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
+    revisit: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null, _name: string | null): Promise<RemoteResult<void>> => OK),
     cancelWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     stopCreation: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
@@ -284,7 +285,7 @@ async function base() {
     reviewDiff: vi.fn(async (_url: string, _commits: ForgeCommitRange | null, _signal: AbortSignal): Read<ForgeChangeRequestDiff> =>
       ({ ok: true, value: CHANGE })),
     reviewCommits: vi.fn(async (_url: string, _signal: AbortSignal): Read<ForgeCommitList | null> => ({ ok: true, value: COMMITS })),
-    reviewViewed: vi.fn(async (_url: string, _headSha: string, _signal: AbortSignal): Read<ForgeViewedFiles | null> =>
+    reviewViewed: vi.fn(async (_url: string, _headSha: string, _fresh: boolean, _signal: AbortSignal): Read<ForgeViewedFiles | null> =>
       ({ ok: true, value: null })),
     reviewSetViewed: vi.fn(async (_url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     reviewText: vi.fn(async (_url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'c\n' })),
@@ -810,7 +811,7 @@ describe('mountForgePanel Session panel actions', () => {
     await f.dispose()
   })
 
-  it('refreshes each Session automatically at most once every 10 seconds', async () => {
+  it('revisits each Session automatically at most once every 10 seconds', async () => {
     const f = await fixture()
     for (const id of [S1, S2]) f.section(id).hooks.panel.subscribe(() => {})
     await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
@@ -822,14 +823,16 @@ describe('mountForgePanel Session panel actions', () => {
     refreshIfStale()
     refreshIfStale()
     f.checkout(S2).refreshIfStale()
-    expect(f.forgePanel.refresh.mock.calls).toEqual([[S1], [S2]])
+    expect(f.forgePanel.revisit.mock.calls).toEqual([[S1], [S2]])
     now.mockReturnValue(1_009_999)
     refreshIfStale()
-    expect(f.forgePanel.refresh).toHaveBeenCalledTimes(2)
+    expect(f.forgePanel.revisit).toHaveBeenCalledTimes(2)
     now.mockReturnValue(1_010_000)
     refreshIfStale()
-    expect(f.forgePanel.refresh.mock.calls).toEqual([[S1], [S2], [S1]])
-    f.forgePanel.refresh.mockResolvedValueOnce(REFUSED.failed)
+    expect(f.forgePanel.revisit.mock.calls).toEqual([[S1], [S2], [S1]])
+    // The refresh a reader asks for is a separate, forced read.
+    expect(f.forgePanel.refresh).not.toHaveBeenCalled()
+    f.forgePanel.revisit.mockResolvedValueOnce(REFUSED.failed)
     now.mockReturnValue(1_020_000)
     refreshIfStale()
     await settle()
@@ -837,24 +840,64 @@ describe('mountForgePanel Session panel actions', () => {
     await f.dispose()
   })
 
-  it('defers an automatic refresh asked for before the panel state arrives until the Host follows the panel', async () => {
+  it('defers an automatic revisit asked for before the panel state arrives until the Host follows the panel', async () => {
     const f = await fixture()
     const unsubscribe = f.section(S1).hooks.panel.subscribe(() => {})
     f.checkout(S1).refreshIfStale()
     await vi.waitFor(() => { expect(f.forgePanel.follow).toHaveBeenCalledOnce() })
-    expect(f.forgePanel.refresh).not.toHaveBeenCalled()
+    expect(f.forgePanel.revisit).not.toHaveBeenCalled()
     f.streams[0]?.push(ready())
-    await vi.waitFor(() => { expect(f.forgePanel.refresh).toHaveBeenCalledWith(S1) })
+    await vi.waitFor(() => { expect(f.forgePanel.revisit).toHaveBeenCalledWith(S1) })
     f.streams[0]?.push(ready({ local: null }))
     await settle()
-    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
-    // A later stream refreshes nothing on its own: only a refresh that was asked for waits for the first state.
+    expect(f.forgePanel.revisit).toHaveBeenCalledOnce()
+    // A later stream revisits nothing on its own: only a revisit that was asked for waits for the first state.
     f.ctx.emit('connection/reset')
     await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
     f.streams[1]?.push(ready())
     await settle()
-    expect(f.forgePanel.refresh).toHaveBeenCalledOnce()
+    expect(f.forgePanel.revisit).toHaveBeenCalledOnce()
     unsubscribe()
+    await f.dispose()
+  })
+
+  it('closes the panel, Session list, and review count streams once the page was hidden for 30 seconds, and opens them when it shows', async () => {
+    const f = await fixture()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    const show = (state: DocumentVisibilityState): void => {
+      visibility.mockReturnValue(state)
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    const panel = f.section(S1).hooks.panel.subscribe(() => {})
+    const list = f.list('row').hooks.states.subscribe(() => {})
+    const extensions = f.changes(S1).hooks.extensions.subscribe(() => {})
+    const face = f.entry('sidebar.panellist.trailing', ReviewNavCount)?.inject?.()
+    assert(face !== undefined && isReviewCountFace(face))
+    const count = face.hooks.count.subscribe(() => {})
+    await vi.waitFor(() => { expect(f.streams).toHaveLength(1) })
+    vi.useFakeTimers()
+    try {
+      show('hidden')
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(f.streams[0]?.disposed).toHaveBeenCalled()
+      expect(f.stateStreams[0]?.disposed).toHaveBeenCalled()
+      expect(f.countStreams[0]?.disposed).toHaveBeenCalled()
+      // The extension stream reads nothing from a code host and stays open.
+      expect(f.extensionStreams[0]?.disposed).not.toHaveBeenCalled()
+
+      show('visible')
+      await vi.waitFor(() => { expect(f.streams).toHaveLength(2) })
+      expect(f.stateStreams).toHaveLength(2)
+      expect(f.countStreams).toHaveLength(2)
+      expect(f.extensionStreams).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+      visibility.mockRestore()
+    }
+    panel()
+    list()
+    extensions()
+    count()
     await f.dispose()
   })
 
@@ -1010,8 +1053,8 @@ describe('mountForgePanel overview actions', () => {
     const f = await fixture()
     const signal = new AbortController().signal
     const view = f.changes(S1)
-    expect(await view.changeRequestViewed(url, 'a'.repeat(40), signal)).toEqual({ ok: true, value: null })
-    expect(f.forgePanel.changeRequestViewed).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), signal)
+    expect(await view.changeRequestViewed(url, 'a'.repeat(40), true, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.changeRequestViewed).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), true, signal)
     const request = { path: 'src/a.ts', viewed: true, headSha: 'a'.repeat(40) }
     expect(await view.setFileViewed(url, request)).toEqual(OK)
     expect(f.forgePanel.setFileViewed).toHaveBeenCalledWith(S1, url, request)
@@ -1691,8 +1734,8 @@ describe('mountForgePanel review page changes view', () => {
     expect(f.forgePanel.reviewDiff).toHaveBeenCalledWith(url, null, signal)
     expect(await f.view.changeRequestCommits(url, signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.reviewCommits).toHaveBeenCalledWith(url, signal)
-    expect(await f.view.changeRequestViewed(url, head, signal)).toEqual({ ok: true, value: null })
-    expect(f.forgePanel.reviewViewed).toHaveBeenCalledWith(url, head, signal)
+    expect(await f.view.changeRequestViewed(url, head, true, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.reviewViewed).toHaveBeenCalledWith(url, head, true, signal)
     const viewed: ForgeViewedRequest = { path: 'a.ts', viewed: true, headSha: head }
     expect(await f.view.setFileViewed(url, viewed)).toEqual(OK)
     expect(f.forgePanel.reviewSetViewed).toHaveBeenCalledWith(url, viewed)

@@ -423,9 +423,9 @@ function assembledSystem(log: PersistedLog): string {
   const event = log.content.trimEnd().split('\n')
     .map(line => JSON.parse(line) as LoggedSystemMessage)
     .find(candidate => candidate.type === 'system/message')
-  const system = event?.data?.message?.content?.[0]?.text
-  if (typeof system !== 'string') throw new Error('session log has no system/message text')
-  return system
+  const content = event?.data?.message?.content
+  if (content === undefined) throw new Error('session log has no system/message text')
+  return content.map(block => block.text).join('')
 }
 
 function assembledRuntimeContexts(log: PersistedLog): string[] {
@@ -1339,6 +1339,12 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const events = parseSessionLog(parent.content)
         expect(events.filter(event => event.type === 'plan/mode').map(event => event.data.active))
           .toEqual([true, false, true, false])
+        expect(events.filter(event => event.type === 'user/message').filter(event => event.data.source.kind === 'plan-mode')
+          .map(event => event.data.content)).toEqual([
+          [{ type: 'text', text: 'The user switched this session to plan mode.' }],
+          [{ type: 'text', text: 'The user switched this session to plan mode.' }],
+          [{ type: 'text', text: 'The user switched this session back to the default mode.' }],
+        ])
         expect(events.filter(event => event.type === 'command/run').map(event => ({ name: event.data.name, args: event.data.args })))
           .toEqual([{ name: 'plan', args: ' Prepare a plan through exit_plan_mode; revise after feedback and acknowledge approval.' },
             { name: 'plan', args: '' }, { name: 'plan', args: ' off' }])
@@ -1350,8 +1356,9 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(modelRequests).toHaveLength(6)
         const active = modelRequests.map((request) => {
           const messages = request.messages as JsonObject[]
-          const system = messages.filter(message => message.role === 'system').at(-1)
-          return JSON.stringify(system).includes('You are in plan mode.')
+          const system = JSON.stringify(messages.filter(message => message.role === 'system'))
+          return system.lastIndexOf('Plan mode is active. Follow the plan-mode instructions.')
+            > system.lastIndexOf('Plan mode is inactive. The plan-mode instructions no longer apply.')
         })
         expect(active).toEqual([false, true, true, false, true, false])
         expect(modelRequests.map(request => (request.tools as JsonObject[]).some(tool => tool.name === 'exit_plan_mode')))
@@ -1468,7 +1475,12 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(continuationRequest.tools).toEqual(initialRequest.tools)
         expect(continuationRequest.provider).toBe(initialRequest.provider)
         expect(continuationRequest.model).toBe(initialRequest.model)
-        expect(continuationMessages[0]).toEqual(initialMessages[0])
+        expect(continuationMessages[0]).toEqual({
+          ...initialMessages[0],
+          id: expect.any(String),
+          source: { ...(initialMessages[0]?.source as JsonObject), reset: true },
+        })
+        expect(continuationMessages[0]?.id).not.toBe(initialMessages[0]?.id)
         expect(summaryMessages.slice(0, -1)).toEqual(initialMessages)
         expect(summaryMessages.at(-1)).toMatchObject({ role: 'user', content: [{
           type: 'text', text: expect.stringContaining('You are now acting as a compaction engine'),
@@ -1734,7 +1746,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(systems.map(event => event.surfaceOp)).toEqual(['append', 'append'])
         const prompts = systems.map(event => (event.data as {
           message: { content: Array<{ text: string }> }
-        }).message.content[0]!.text)
+        }).message.content.map(block => block.text).join(''))
         expect(prompts[0]).not.toContain('Snapshot guidance added after the first read')
         expect(prompts[1]).toContain('Snapshot guidance added after the first read')
         expect(prompts[1]).not.toBe(prompts[0])

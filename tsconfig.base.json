@@ -643,6 +643,7 @@
       "@deepseek-ai/dsh-tool-pwsh-persistent": ["./packages/shell/tool-pwsh-persistent/src"],
       "@deepseek-ai/dsh-tool-ralph": ["./packages/experimental/tool-ralph/src"],
       "@deepseek-ai/dsh-tool-schedule": ["./packages/schedule/tool-schedule/src"],
+      "@deepseek-ai/dsh-tool-session-control": ["./packages/session/tool-session-control/src"],
       "@deepseek-ai/dsh-tool-session-list": ["./packages/session-query/tool-session-list/src"],
       "@deepseek-ai/dsh-tool-session-query": ["./packages/experimental/tool-session-query/src"],
       "@deepseek-ai/dsh-tool-skill": ["./packages/skill/tool-skill/src"],

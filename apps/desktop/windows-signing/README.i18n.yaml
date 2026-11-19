@@ -21,14 +21,17 @@
   en: bb889e9514678d1c
   zh: 48cbec1e907d6a2b
 /windows-signing-and-runner-operations/machine-setup-and-runner-startup/supervised-startup:
-  en: cada81c15a20ecc2
-  zh: 80b7a4af7b1e0e5d
+  en: f4fcb23be1f3df4a
+  zh: f3699f0a64a9b94b
+/windows-signing-and-runner-operations/machine-setup-and-runner-startup/unattended-windows-startup:
+  en: 3b6ae5eb5177dba8
+  zh: 0e7a3edeca2286c6
 /windows-signing-and-runner-operations/machine-setup-and-runner-startup/optional-network-dependency:
-  en: 60f34f8637b3c252
-  zh: 805435964ab20263
+  en: 31ffd631dd215fc6
+  zh: ebfe8a3a64ed6e02
 /windows-signing-and-runner-operations/signing-configuration:
-  en: 4b5548818375eb9a
-  zh: 8c975adbb1dca9c8
+  en: b38f6fbfcfd73f7a
+  zh: f3afb7053af7480b
 /windows-signing-and-runner-operations/signing-and-timestamp-completion:
   en: a8d23c931cafc236
   zh: 28fd4860549cdc7b

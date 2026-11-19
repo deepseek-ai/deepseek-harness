@@ -12,6 +12,7 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 ## Sources of truth
 
 - [AGENTS.md](../../../AGENTS.md) and [packages/AGENTS.md](../../../packages/AGENTS.md): standing repository and package authoring rules.
+- [DSH Core Guidelines](../../../docs/core-guidelines/README.md): numbered design rules every change follows; cite a violated rule by its ID.
 - [docs/defensive-patterns/](../../../docs/defensive-patterns/README.md): the architecture requirements a change must satisfy and the habits behind them. Each page owns one artifact; read every page the diff touches:
   - [general.md](../../../docs/defensive-patterns/general.md) — timing, async state, value representation, shared ownership, decentralization, refactors, migrations, performance evidence, disposal, callbacks, subprocesses.
   - [package-surface.md](../../../docs/defensive-patterns/package-surface.md) — exports, package shape, build faces, dependency declarations, resolve hooks.
