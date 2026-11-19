@@ -1056,6 +1056,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['When the process cleanup fails.'],
       },
       {
+        signature: 'releaseInputs(agent: Agent): Promise<void>',
+        description: 'Release the Agent\'s tracked input while retaining its program variables and application grants. Providers without held-input state support retain their existing cancellation behavior.',
+        parameters: [{ name: 'agent', description: 'Owner of the input to release.' }],
+        returns: 'Completion after native acknowledgement, or rejection when cleanup is unconfirmed.',
+      },
+      {
         signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
         description: 'Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured. A host that forwards screenshots outside a model request reads the same request version with it, so the image a caller sees matches the coordinate space the provider mapped.',
         parameters: [{ name: 'image', description: 'Durable screenshot attachment from a `cua` result.' }],

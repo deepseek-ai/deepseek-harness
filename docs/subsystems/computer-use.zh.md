@@ -164,6 +164,14 @@ Host control over the dedicated `cua_run_code` environments; registered as `ctx.
 release(agent: Agent): Promise<void>
 
 /**
+ * Release the Agent's tracked input while retaining its program variables and application grants.
+ * Providers without held-input state support retain their existing cancellation behavior.
+ * @param agent - Owner of the input to release.
+ * @returns Completion after native acknowledgement, or rejection when cleanup is unconfirmed.
+ */
+releaseInputs(agent: Agent): Promise<void>
+
+/**
  * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
  * A host that forwards screenshots outside a model request reads the same request version with it, so the
  * image a caller sees matches the coordinate space the provider mapped.
