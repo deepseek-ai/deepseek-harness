@@ -18,6 +18,7 @@
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/session-panel-layout.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
+    "apps/web/tests/cordis-inspect-subagent.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",
     "apps/web/tests/deepseek-chat-import.e2e.ts",
     "apps/web/tests/japanese-plugin-metadata.e2e.ts",

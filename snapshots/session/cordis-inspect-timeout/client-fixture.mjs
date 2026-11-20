@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 export const name = 'client-inspect-timeout-fixture'
-export const inject = ['cordisInspect', 'agents', 'llm', 'typertGateway']
+export const inject = ['cordisInspect', 'llm', 'typertGateway']
 
 /**
  * Register a silent event source and open real Gateway Client streams on demand.
@@ -90,9 +90,7 @@ export async function apply(ctx) {
   let queries = 0
   ctx.on('cordis/inspect-query', (request) => {
     if (++queries !== 1) return
-    const agent = ctx.agents.get(request.agentId)
-    if (agent === undefined) throw new Error('Client inspect request has no owning Agent')
-    ctx.cordisInspect.resolveClientQuery(agent, request.requestId, {
+    ctx.cordisInspect.resolveClientQuery(request.agentId, request.requestId, {
       ok: false,
       reason: 'provider-error',
       message: 'no catalogued Service named "remote"',
