@@ -137,13 +137,11 @@ it('refuses the action when reconciliation fails or the root closes meanwhile', 
   expect(f.act).not.toHaveBeenCalled()
 })
 
-it('refuses to record decisions of actions no kind registered or of phases the projection derives', async () => {
+it('refuses to record decisions of actions no kind registered', async () => {
   const f = await fixture()
   const cardId = f.offer()
   expect(() => { f.ctx.actionCards.record(f.agent, { cardId, action: 'other_action', phase: 'done' }) })
     .toThrow('action-cards: cannot record a decision for unregistered action "other_action"')
-  expect(() => { f.ctx.actionCards.record(f.agent, { cardId, action: ACTION, phase: 'replaced' }) })
-    .toThrow('action-cards: phase "replaced" is derived from the log and cannot be recorded')
   expect(f.view().decisions).toEqual({})
   // An unloading kind still records the outcome of work it had started.
   await f.kindFiber.dispose()

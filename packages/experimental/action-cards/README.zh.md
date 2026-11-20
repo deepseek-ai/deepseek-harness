@@ -29,15 +29,15 @@ kind: "package-reference"
 
 ### 注册卡片种类
 
-种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝，只有“暂不需要”仍可忽略尚未开始的卡片。种类自己的 Skill 告诉模型何时提供卡片以及代码块里写什么。种类需要给出：动作名、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段、可选的 `reconcile`（每次操作前根据会话之外的状态更新卡片的已记录决定），以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定（该方法拒绝没有种类注册过的动作和推导得出的 `replaced` 阶段），并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
+种类所在的包注入 `actionCards`，并在自己的插件中调用 `ctx.actionCards.register(kind)`；该插件卸载时种类随之移除，此后对其卡片的操作会以 unavailable 拒绝，只有“暂不需要”仍可忽略尚未开始的卡片。种类自己的 Skill 告诉模型何时提供卡片以及代码块里写什么。种类需要给出：动作名、卡片 `details` 的 zod 校验、接受的用户操作及各自需要的共享检查（`global` 表示需要全局 Remote 权限，`writes` 表示只读会话中拒绝）、仍可忽略卡片的已记录阶段、可选的状态说明、状态通知要报告的决定数据字段、可选的 `reconcile`（每次操作前根据会话之外的状态更新卡片的已记录决定），以及处理 `dismiss` 以外所有操作的处理器。处理器用 `ctx.actionCards.record()` 记录每个新决定（该方法拒绝没有种类注册过的动作），并返回 `accepted`、带当前决定的 `settled`、`refused` 或 `unconfirmed`。
 
 ### 卡片规则
 
 - 卡片是语言为 `action-card` 的围栏代码块，内容是一个 JSON 对象，包含 `action`、`title`、`brief` 和对象类型的 `details`。围栏前最多有 3 个空格，或最多 3 个空格加一个列表项标记的代码块才算数；引用块里的、缩进 4 格及以上的，以及其他围栏代码块里的代码块不提供卡片。一轮中第一个能解析的这种代码块成为卡片，以所在助手消息的 id 作为卡片 id。同一轮之后的代码块、思考内容里的代码块、被打断的回答里的代码块、标题或说明为空的代码块，以及 subagent 会话里的所有代码块都不会产生卡片，也不会告知模型。
-- 收下卡片时不检查种类：动作没有种类注册、或 `details` 未通过种类校验的卡片照样出现，并替换此前所有尚未开始的卡片，除“暂不需要”外的操作一律以 unavailable 拒绝。
-- 任何种类的新卡片都会替换此前所有尚未开始的卡片。替换从日志推导，从不单独记录。
+- 收下卡片时不检查种类：动作没有种类注册、或 `details` 未通过种类校验的卡片照样出现，除“暂不需要”外的操作一律以 unavailable 拒绝。
+- 不同轮次的卡片各自可用，每张卡片的状态由其自身 ID 对应的决定记录确定。
 - fork 出的会话从父会话继承的事件不会产生卡片。
-- 每次操作（包括“暂不需要”）之前，种类的 `reconcile` 先根据会话之外的状态更新卡片。之后，对尚未开始的卡片，以及处于种类列出阶段的卡片，“暂不需要”会被记录；已忽略、已替换的卡片不再接受任何操作。卡片的种类未注册时，“暂不需要”仍可忽略尚未开始的卡片，其他操作一律以 unavailable 拒绝。
+- 每次操作（包括“暂不需要”）之前，种类的 `reconcile` 先根据会话之外的状态更新卡片。之后，对尚未开始的卡片，以及处于种类列出阶段的卡片，“暂不需要”会被记录；已忽略的卡片不再接受任何操作。卡片的种类未注册时，“暂不需要”仍可忽略尚未开始的卡片，其他操作一律以 unavailable 拒绝。
 - 同一张卡片上的并发操作共用一次处理。操作要求调用者是卡片所在 Session 的精确在线 Agent 实例，且 `origin` 不是 `subagent`。
 
 -----
@@ -48,9 +48,9 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包默认导出 `actionCards` Remote 服务，不注册任何工具。日志里的回答就是持久的提议：`actionCards` 会话投影（状态版本 3）用 [`src/fence.ts`](src/fence.ts) 读取每条 `assistant/message` 的文字块，按 CommonMark 的围栏规则找出顶层和列表项里的围栏代码块，并按 Chat 客户端分派代码块的方式匹配语言，收下本轮第一个合格的代码块。投影还从 `plugin:action-cards/decision` 读取决定，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。会话头的 `origin` 标出 subagent 会话，其投影不收任何卡片。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
+本包默认导出 `actionCards` Remote 服务，不注册任何工具。日志里的回答就是持久的提议：`actionCards` 会话投影（状态版本 4）用 [`src/fence.ts`](src/fence.ts) 读取每条 `assistant/message` 的文字块，按 CommonMark 的围栏规则找出顶层和列表项里的围栏代码块，并按 Chat 客户端分派代码块的方式匹配语言，收下本轮第一个合格的代码块。投影还从 `plugin:action-cards/decision` 读取决定，并保留尚未报告的决定，直到 `through` 覆盖它们的状态通知写入日志。会话头的 `origin` 标出 subagent 会话，其投影不收任何卡片。投影的客户端视图 `{ proposals, decisions }` 不进入会话摘要。
 
-Remote `act(sessionId, cardId, verb, payload?)` 先检查服务所有者、在线根 Agent 和卡片；“暂不需要”在种类未注册时也继续处理，其他操作还需要种类、操作和 Remote 权限。然后同一张卡片共用一次处理。种类的 `reconcile` 先运行，之后再次检查在线根 Agent；已忽略或已替换的卡片原样返回，“暂不需要”被记录，写入类操作在只读会话中被拒绝，其余操作在该 Agent 的发起方作用域内交给种类处理器。`record()` 也接受种类已注销的动作，因为 Cordis 并发释放插件的各个 effect，卸载中的种类仍要记录已开始工作的结果。一个 `agent/pre-step` 监听器在后续监听器准备好本步之后追加状态通知。
+Remote `act(sessionId, cardId, verb, payload?)` 先检查服务所有者、在线根 Agent 和卡片；“暂不需要”在种类未注册时也继续处理，其他操作还需要种类、操作和 Remote 权限。然后同一张卡片共用一次处理。种类的 `reconcile` 先运行，之后再次检查在线根 Agent；已忽略的卡片原样返回，“暂不需要”被记录，写入类操作在只读会话中被拒绝，其余操作在该 Agent 的发起方作用域内交给种类处理器。`record()` 也接受种类已注销的动作，因为 Cordis 并发释放插件的各个 effect，卸载中的种类仍要记录已开始工作的结果。一个 `agent/pre-step` 监听器在后续监听器准备好本步之后追加状态通知。
 
 | 源码 | 内容 |
 |---|---|
@@ -116,9 +116,7 @@ Latest status of action cards from user actions and background work. These are s
 - 代码块没有产生卡片时模型不会知道：格式错误的代码块、同一轮的第二个代码块或 subagent 的代码块都不显示任何东西，而回答里可能已经邀请用户点卡片。
 - Host 逐行查找代码块，只认字面上就是 `action-card` 的语言，而 Chat 客户端会隐藏它渲染出的每一个 `action-card` 代码块。引用块里的代码块、嵌套列表项里缩进 4 格及以上的代码块、语言用转义或字符引用写成的代码块会被隐藏，但不提供卡片；HTML 块或 `$$`、`\[ … \]` 数学块里的代码块会提供卡片，但其文字仍然可见。各 Skill 要求在回答末尾写一个顶层代码块。
 - 用已移除的 `propose_action` 工具录下的会话，这些调用不再显示卡片；用 `callId` 指代卡片的决定记录会被跳过。
-- 未通过种类校验或动作没有注册的卡片仍会替换此前尚未开始的卡片，被替换的卡片不再提供任何操作。
 - 卡片只在主对话中提供。subagent 会话（包括 Creator 子 Agent 的会话）不收任何卡片，因为只有在线的根 Agent 才能对卡片进行操作。
-- 所有种类合计每轮只展示一张卡片。任何种类的新卡片都会替换此前所有尚未开始的卡片，因此第二个种类的卡片会替换第一个种类尚未开始的卡片。
 - 用户操作的拒绝原因有意设计为普通字符串：服务定义 `closing`、`not-live-root`、`unknown`、`unavailable`、`access-denied` 和 `read-only`，各种类可以添加自己的原因，浏览器端正文为已知原因显示文案，其余按 unavailable 处理。
 - 每个种类在两端各自校验 `details`：Host 端的 schema 在每次操作前校验，浏览器端正文用自己的 schema 校验，因此两个 schema 要一起修改。
 

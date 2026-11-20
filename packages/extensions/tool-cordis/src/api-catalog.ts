@@ -97,7 +97,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'record(agent: Agent, decision: ActionCardDecision): void',
         description: 'Record a card decision in the Session log; the next model request reports it.',
         parameters: [{ name: 'agent', description: 'agent whose Session owns the card.' }, { name: 'decision', description: 'the card\'s new state.' }],
-        throws: ['when no kind ever registered the decision\'s action with this service, or its phase is one the projection derives.'],
+        throws: ['when no kind ever registered the decision\'s action with this service.'],
       },
       {
         signature: 'view(session: Session): ActionCardView',

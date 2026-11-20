@@ -120,7 +120,7 @@ it('dismisses a card through the fallback Not now when the Host records the dism
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
-it.each([['dismissed', en.dismissed], ['replaced', en.replaced], ['finished', undefined], ['toString', undefined]] as const)(
+it.each([['dismissed', en.dismissed], ['finished', undefined]] as const)(
   'shows the fallback status of a %s card without actions', (phase, text) => {
     render(<ActionCard {...props(new Map(), { cardId, action: 'test_action', phase })} />)
     expect(screen.queryByRole('status')?.textContent).toBe(text)
