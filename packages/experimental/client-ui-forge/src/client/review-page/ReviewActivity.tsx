@@ -7,19 +7,21 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconClockOutlineRegular,
-  IconCloseCircleFillRegular, IconEditOutlineRegular, IconEyeOutlineRegular, IconUserOutlineRegular, MarkdownText, StateDot,
+  IconCloseCircleFillRegular, IconEditOutlineRegular, IconEyeOutlineRegular, IconUserOutlineRegular, MarkdownText, ShortcutKeys,
   type MarkdownLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestActivity, ForgeCommentAuthor, ReviewVerdict } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { openOnLabel } from '../forge-copy.ts'
 import { formatAgo } from '../format.ts'
 import { ChangeRequestGlyph } from '../glyphs.tsx'
 import type { NS } from '../locales.ts'
 import { Avatar } from '../ReviewThreads.tsx'
 import { activityEntries, longBody, type ActivityCommit, type ActivityEvent } from './review-activity.ts'
 import { descriptionMarkdown } from './review-lists.ts'
+import { ActivitySkeleton } from './ReviewSkeleton.tsx'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -280,7 +282,19 @@ function Event({ item, onOpenChanges, now, markdown, t }: {
   }
 }
 
-/** The field that adds a comment: it keeps its text until the host saved the comment, and says why one was not saved. */
+/**
+ * The keys that send a comment, as the shortcut reference labels them: Command with Enter on Apple platforms, Control
+ * with Enter elsewhere. The desktop shell names the platform on the document; a browser names it itself.
+ */
+function sendKeys(): readonly string[] {
+  const platform = document.documentElement.dataset['platform'] ?? navigator.platform
+  return /darwin|mac|iphone|ipad/iu.test(platform) ? ['⌘', 'Enter'] : ['Ctrl', '+', 'Enter']
+}
+
+/**
+ * The field that adds a comment: three lines that grow with the text, over a row that says where the comment goes and
+ * holds the button that sends it. It keeps its text until the host saved the comment, and says why one was not saved.
+ */
 function Composer({ url, forge, comment, onPosted, t }: {
   readonly url: string
   readonly forge: string | null
@@ -292,15 +306,16 @@ function Composer({ url, forge, comment, onPosted, t }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const field = useRef<HTMLTextAreaElement>(null)
-  // The field is as tall as its text, up to the height its style allows.
+  const keys = useMemo(sendKeys, [])
+  // The field is as tall as its text, between the heights its style allows.
   useEffect(() => {
     const element = field.current
     element?.style.setProperty('height', 'auto')
     element?.style.setProperty('height', `${element.scrollHeight}px`)
   }, [text])
-  // The field and the button are disabled while a comment is sent, so one is sent at a time.
+  // One comment is sent at a time; the field stays focused and read-only meanwhile.
   const post = async (): Promise<void> => {
-    if (text.trim() === '') return
+    if (busy || text.trim() === '') return
     setBusy(true)
     setError(null)
     const result = await comment(url, text)
@@ -316,8 +331,8 @@ function Composer({ url, forge, comment, onPosted, t }: {
   }
   return (
     <div className={css.activityCompose}>
-      <div className={css.activityComposer}>
-        <textarea ref={field} rows={1} value={text} disabled={busy} aria-label={t('reviewPage.activity.commentPlaceholder')}
+      <div className={css.activityComposer} aria-busy={busy}>
+        <textarea ref={field} rows={3} value={text} readOnly={busy} aria-label={t('reviewPage.activity.commentPlaceholder')}
           placeholder={t('reviewPage.activity.commentPlaceholder')} onChange={(event) => { setText(event.target.value) }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
@@ -325,9 +340,16 @@ function Composer({ url, forge, comment, onPosted, t }: {
               void post()
             }
           }} />
-        <Button size="sm" variant="outline" disabled={busy || text.trim() === ''} onClick={() => { void post() }}>
-          {t('reviewPage.activity.comment')}
-        </Button>
+        <div className={css.activityComposerFoot}>
+          <span className={css.activityComposerHint}>
+            {forge === null ? t('reviewPage.activity.commentHintPlain') : t('reviewPage.activity.commentHint', { forge })}
+          </span>
+          <span className={css.activityComposerKeys} aria-hidden="true"><ShortcutKeys keys={keys} /></span>
+          <Button size="sm" variant="primary" className={css.activitySend} disabled={busy || text.trim() === ''}
+            onClick={() => { void post() }}>
+            {t(busy ? 'reviewPage.activity.commenting' : 'reviewPage.activity.comment')}
+          </Button>
+        </div>
       </div>
       {error !== null && <p className={css.activityError} role="alert">{error}</p>}
     </div>
@@ -355,13 +377,13 @@ export function ReviewActivity({
         </div>
       )}
       {activity === undefined
-        ? failure === null && <StateDot state="ongoing" />
+        ? failure === null && <ActivitySkeleton />
         : (
           <>
             {activity.truncated && (
               <p className={css.activityOlder}>
                 {t('reviewPage.activity.older')}
-                <button type="button" className={css.activityMore} onClick={() => { openLink(url) }}>{t('change.view')}</button>
+                <button type="button" className={css.activityMore} onClick={() => { openLink(url) }}>{openOnLabel(t, forge)}</button>
               </p>
             )}
             {entries.length === 0 && <p className={css.muted}>{t('reviewPage.activity.empty')}</p>}

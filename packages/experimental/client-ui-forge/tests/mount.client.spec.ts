@@ -13,7 +13,8 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeReadiness,
+  AutoMergeRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList,
+  ForgeReadiness,
   ForgeRerunRequest,
   ForgeReviewData,
   ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles,
@@ -100,6 +101,8 @@ function stream<F = ForgePanelState>(signal: AbortSignal) {
 }
 
 const OK: RemoteResult<void> = { ok: true, value: undefined }
+/** The automatic merge turned on for a confirmed head. */
+const AUTO_ON = { enabled: true as const, method: 'squash' as const, headSha: 'b'.repeat(40) }
 
 /** What a Remote read resolves to. */
 type Read<T> = Promise<RemoteResult<T>>
@@ -223,6 +226,7 @@ async function base() {
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     merge: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    setAutoMerge: vi.fn(async (_sessionId: SessionId, _url: string, _request: AutoMergeRequest): Promise<RemoteResult<void>> => OK),
     rerunChecks: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeRerunRequest): Promise<RemoteResult<void>> => OK),
     requestReviews: vi.fn(async (
       _sessionId: SessionId, _url: string, _reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[],
@@ -283,6 +287,7 @@ async function base() {
     reviewPoll: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMarkReady: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMerge: vi.fn(async (_url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    reviewSetAutoMerge: vi.fn(async (_url: string, _request: AutoMergeRequest): Promise<RemoteResult<void>> => OK),
     reviewChecks: vi.fn(async (_url: string, _headSha: string, _signal: AbortSignal): Read<ChangeRequestSnapshot> =>
       ({ ok: true, value: snapshot(7) })),
     reviewRerunChecks: vi.fn(async (_url: string, _request: ForgeRerunRequest): Promise<RemoteResult<void>> => OK),
@@ -1011,6 +1016,21 @@ describe('mountForgePanel change request actions', () => {
     expect(f.notice()).toMatchObject(notice)
     await f.dispose()
   })
+
+  it.each([
+    ['turns it on and confirms it', AUTO_ON, OK, { key: 'toast.autoMergeEnabled', tone: 'success', params: { name: '#7' } }],
+    ['turns it off and confirms it', { enabled: false as const }, OK, { key: 'toast.autoMergeCancelled', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', AUTO_ON, REFUSED.stale, { key: 'toast.autoMergeStale', tone: 'failure', params: { name: '#7' } }],
+    ['reports why the host refused', AUTO_ON, REFUSED.refused,
+      { key: 'toast.autoMergeFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+  ])('sets the automatic merge through the Remote and %s', async (_label, request, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.setAutoMerge.mockResolvedValueOnce(result)
+    await f.section(S1).autoMerge(entry(7, snapshot(7)), request)
+    expect(f.forgePanel.setAutoMerge).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', request)
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
 })
 
 describe('mountForgePanel overview actions', () => {
@@ -1718,12 +1738,11 @@ describe('mountForgePanel review page card actions', () => {
     f.actions.viewChanges?.(entry(7, snapshot(7)))
     expect(f.showChanges).toHaveBeenCalledOnce()
 
-    f.actions.retry()
-    await settle()
+    // The read settles with the Host's answer, so a surface can show the refresh while it runs.
+    await f.actions.retry()
     expect(f.forgePanel.reviewPoll).toHaveBeenCalledWith(url)
     f.forgePanel.reviewPoll.mockResolvedValueOnce(REFUSED.failed)
-    f.actions.retry()
-    await settle()
+    await f.actions.retry()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
     await f.dispose()
   })
@@ -1755,6 +1774,21 @@ describe('mountForgePanel review page card actions', () => {
     f.forgePanel.reviewMerge.mockResolvedValueOnce(result)
     await f.actions.merge?.(entry(7, snapshot(7)), { method: 'squash', headSha: 'b'.repeat(40) })
     expect(f.forgePanel.reviewMerge).toHaveBeenCalledWith(url, 'squash', 'b'.repeat(40))
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it.each([
+    ['turns it on and confirms it', AUTO_ON, OK, { key: 'toast.autoMergeEnabled', tone: 'success', params: { name: '#7' } }],
+    ['turns it off and confirms it', { enabled: false as const }, OK, { key: 'toast.autoMergeCancelled', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', AUTO_ON, REFUSED.stale, { key: 'toast.autoMergeStale', tone: 'failure', params: { name: '#7' } }],
+    ['tells the reader to check an outcome the host did not confirm', AUTO_ON, REFUSED.unknown,
+      { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
+  ])('sets the automatic merge by its URL and %s', async (_label, request, result, notice) => {
+    const f = await card()
+    f.forgePanel.reviewSetAutoMerge.mockResolvedValueOnce(result)
+    await f.actions.autoMerge?.(entry(7, snapshot(7)), request)
+    expect(f.forgePanel.reviewSetAutoMerge).toHaveBeenCalledWith(url, request)
     expect(f.notice()).toMatchObject(notice)
     await f.dispose()
   })

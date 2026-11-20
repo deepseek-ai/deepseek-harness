@@ -5,11 +5,12 @@
  */
 
 import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { IconChevronLeftOutlineRegular, IconCloseOutlineRegular, IconRightUpOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronLeftOutlineRegular, IconCloseOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeDiffFile } from '../types.ts'
 import { FileLabel } from './FileLabel.tsx'
+import { ForgeGlyph } from './glyphs.tsx'
 import { SegmentedChoice } from './ReviewControls.tsx'
 import { Avatar } from './ReviewThreads.tsx'
 import { anchorRange, inFileOrder, passesFilter, THREAD_FILTERS, type ThreadFilter, type ThreadPlace } from './review-threads.ts'
@@ -41,6 +42,8 @@ export interface ThreadListProps extends PropsLocale<typeof NS> {
   readonly open: (entry: PlacedThread, covering: boolean) => void
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
+  /** Forge family of the change request's provider, whose mark the opening action carries; null without a provider. */
+  readonly forge: string | null
   /** Close the list at the reader's request. */
   readonly close: () => void
 }
@@ -157,7 +160,7 @@ export function ThreadList(props: ThreadListProps): ReactNode {
       <div className={css.footer}>
         {props.truncated && <>{t('thread.truncated', { count: threads.length })}{' · '}</>}
         <button type="button" className={css.link} onClick={() => { props.openLink(props.url) }}>
-          <IconRightUpOutlineRegular size={14} />{t('thread.openAll')}
+          <ForgeGlyph forge={props.forge} />{t('thread.openAll')}
         </button>
       </div>
     </aside>

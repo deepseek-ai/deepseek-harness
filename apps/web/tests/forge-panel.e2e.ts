@@ -193,6 +193,10 @@ if (args[0] === 'api' && args[1] === 'graphql' && args.includes('--input')) {
     }
     state.updated = variables.input.updateMethod
     payload = { clientMutationId: null }
+  } else if (field === 'enablePullRequestAutoMerge' || field === 'disablePullRequestAutoMerge') {
+    // The automatic merge of pull request 7, which later status reads report.
+    state.autoMerge = field === 'enablePullRequestAutoMerge' ? variables.input.mergeMethod : null
+    payload = { clientMutationId: null }
   } else if (field === 'addPullRequestReview') {
     current.pending = { id: 'review-1', commit: variables.commit, threads: [] }
     for (const thread of variables.threads ?? []) current.pending.threads.push(draft(thread))
@@ -297,6 +301,9 @@ if (args[0] === 'api' && args[1] === 'graphql') {
         nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
       viewerCanUpdateBranch: (overview.viewerCanUpdateBranch ?? false) && state.updated === undefined, canBeRebased: overview.canBeRebased ?? false,
+      viewerCanEnableAutoMerge: (overview.autoMergeAllowed ?? false) && (state.autoMerge ?? null) === null,
+      viewerCanDisableAutoMerge: (state.autoMerge ?? null) !== null, isMergeQueueEnabled: false,
+      autoMergeRequest: (state.autoMerge ?? null) === null ? null : { mergeMethod: state.autoMerge, enabledBy: { login: VIEWER } },
       reviewRequests: reviewing, latestReviews: overview.latestReviews ?? none, latestOpinionatedReviews: overview.latestOpinionatedReviews ?? none,
       closingIssuesReferences: overview.closingIssues ?? none,
       ...overview.mergeable === undefined ? {} : { mergeable: overview.mergeable },
@@ -311,6 +318,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
         pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
       viewerCanUpdateBranch: false, canBeRebased: true, reviewRequests: none, latestReviews: none, latestOpinionatedReviews: none,
+      viewerCanEnableAutoMerge: false, viewerCanDisableAutoMerge: false, isMergeQueueEnabled: false, autoMergeRequest: null,
       closingIssuesReferences: none,
     },
   }
@@ -942,6 +950,55 @@ it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code r
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls.filter(call => call[4] === 'POST'))
     .toEqual([['api', '--hostname', 'github.com', '--method', 'POST', 'repos/octo/demo/issues/7/comments', '--input', '-']])
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('keeps the link actions in the detail header, folds them when it is narrow, and turns the automatic merge on and off', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-header', 'normal', {
+    lists: { 'review-requested': [7], 'authored': [], 'involved': [] },
+  })
+  // Pull request 7 is blocked by its checks and its review; the repository lets the viewer turn the automatic merge on.
+  await writeFile(join(root, 'overview.json'), JSON.stringify({ viewerPermission: 'WRITE', autoMergeAllowed: true }))
+  // The scaffold expects its recorded model call to be consumed, so the borrowed conversation runs first.
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '代码评审', exact: true }).click()
+  await page.locator(`[data-forge-review-item="${PULL}"]`).click()
+  const detail = page.locator(`[data-forge-review-detail="${PULL}"]`)
+  await detail.getByRole('heading', { level: 1, name: 'Add the pull request panel' }).waitFor()
+
+  // The three link actions show as buttons, the first with the code host's name; the menu that folds them is hidden.
+  const links = detail.locator('[data-forge-review-actions]')
+  const more = detail.getByRole('button', { name: '更多操作', exact: true })
+  expect(await links.getByRole('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label'))))
+    .toEqual(['在 GitHub 中打开', '复制链接', '刷新状态'])
+  expect(await more.isVisible()).toBe(false)
+
+  // The automatic merge: on for the head the page shows, then the state with its cancellation.
+  await detail.getByRole('button', { name: '自动合并', exact: true }).click()
+  await page.getByRole('menu').getByText('满足合并条件后，将 #7 合并到 main', { exact: true }).waitFor()
+  await page.getByRole('menuitem', { name: '启用自动合并', exact: true }).click()
+  const enabled = detail.getByRole('button', { name: '已启用自动合并', exact: true })
+  await enabled.waitFor()
+  await enabled.click()
+  await page.getByRole('menu').getByText(/由 lin 启用/).waitFor()
+  await page.getByRole('menuitem', { name: '取消自动合并', exact: true }).click()
+  await detail.getByRole('button', { name: '自动合并', exact: true }).waitFor()
+  const mutations = (await readFile(join(root, 'mutations.jsonl'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line))
+  expect(mutations).toEqual([
+    { field: 'enablePullRequestAutoMerge', variables: { input: { pullRequestId: 'pull-7', mergeMethod: 'SQUASH', expectedHeadOid: HEAD7 } } },
+    { field: 'disablePullRequestAutoMerge', variables: { input: { pullRequestId: 'pull-7' } } },
+  ])
+
+  // A narrow detail folds the three link actions into the menu and keeps the merge action beside it on one row.
+  await page.setViewportSize({ width: 700, height: 900 })
+  await more.waitFor()
+  expect(await links.isVisible()).toBe(false)
+  const bar = await detail.locator('header > div').first().boundingBox()
+  expect(bar?.height).toBe(32)
+  await more.click()
+  expect(await page.getByRole('menu').getByRole('menuitem').allTextContents()).toEqual(['在 GitHub 中打开', '复制变更请求链接', '刷新状态'])
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 })
@@ -1654,7 +1711,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   if (await expand.count() > 0) await expand.click()
   await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })
   await wide.getByRole('status').filter({ hasText: '变更太大，无法在这里显示' }).waitFor({ timeout: 20_000 })
-  await wide.getByRole('button', { name: '在浏览器中查看', exact: true }).waitFor()
+  await wide.getByRole('button', { name: '在 GitHub 中查看', exact: true }).waitFor()
   expect(await wide.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
 
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])

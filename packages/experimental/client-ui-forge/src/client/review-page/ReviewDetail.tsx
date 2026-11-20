@@ -1,30 +1,35 @@
 /**
  * The review page's detail of one change request: its header with state, repository, labels, title, author, times, and
- * branches; the ready-or-merge and more actions; and the summary, changes, and chat tabs. The summary shows the
- * description and the activity beside the status column.
+ * branches; the merge action beside the actions that open the change request on its code host, copy its link, and read
+ * it again; and the summary, changes, and chat tabs. The summary shows the description and the activity beside the
+ * status column. While the change request is read, a skeleton of the same layout stands in for it.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular, MarkdownText, Menu,
-  StateDot, Tooltip, type MenuEntry,
+  Button, IconCheckOutlineRegular, IconChevronLeftOutlineRegular, IconCopyOutlineRegular, IconEllipsisOutlineRegular,
+  IconPanelLeftOutlineRegular, MarkdownText, Menu, Tooltip, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestSnapshot, ForgeFailure,
+  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestSnapshot, ForgeDescription, ForgeFailure,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeReviewChangeRequest } from '../../types.ts'
+import loading from '../ChangesLoading.module.css'
 import { ChangeRequestPrimary, type ChangeRequestActions } from '../ChangeRequestCard.tsx'
+import { openOnLabel } from '../forge-copy.ts'
 import { formatAgo } from '../format.ts'
-import { ChangeRequestGlyph } from '../glyphs.tsx'
+import { ChangeRequestGlyph, ForgeGlyph } from '../glyphs.tsx'
+import { RefreshGlyph } from '../RefreshGlyph.tsx'
 import type { StreamRead } from './host-stream.ts'
 import type { ForgePanelKey, NS } from '../locales.ts'
 import { descriptionMarkdown } from './review-lists.ts'
 import type { ReviewTab } from './review-store.ts'
 import { ReviewActivity } from './ReviewActivity.tsx'
 import { ReviewLabels } from './ReviewLabels.tsx'
+import { ActivitySkeleton, DescriptionSkeleton, HeaderSkeleton, StatusSkeleton } from './ReviewSkeleton.tsx'
 import { ReviewStatus } from './ReviewStatus.tsx'
 import { TONE_LABEL, toneOf } from '../status.ts'
 import css from './ReviewPage.module.css'
@@ -33,6 +38,9 @@ type Translate = PropsLocale<typeof NS>['t']
 
 /** How long before signed image addresses expire the description is read again, in milliseconds. */
 const IMAGE_RENEWAL_MS = 30_000
+
+/** How long the copy action shows that it copied, in milliseconds. */
+const COPIED_MS = 1500
 
 const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'reviewPage.notFound',
@@ -150,36 +158,84 @@ function MarkReady({ frame, actions, t }: {
   )
 }
 
-/** The more-actions menu: open in the browser, copy the link, and read the status again. */
-function MoreMenu({ url, actions, t }: { readonly url: string; readonly actions: ChangeRequestActions; readonly t: Translate }): ReactNode {
+/**
+ * The actions that leave the page or read again: open the change request on its code host, copy its link, and read its
+ * status again. They show as three icon buttons; where the header is narrow its style shows them folded into one menu
+ * instead, so both forms render.
+ */
+function LinkActions({ url, forge, actions, onRefresh, t }: {
+  readonly url: string
+  readonly forge: ForgeDescription | null
+  readonly actions: ChangeRequestActions
+  /** Read the status again; a promise it returns settles when the read ends. */
+  readonly onRefresh: () => void | Promise<void>
+  readonly t: Translate
+}): ReactNode {
   const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => { setCopied(false) }, COPIED_MS)
+    return () => { clearTimeout(timer) }
+  }, [copied])
+  const openLabel = openOnLabel(t, forge?.label ?? null)
+  const copy = (): void => {
+    actions.copyLink(url)
+    setCopied(true)
+  }
+  const refresh = (): void => {
+    setRefreshing(true)
+    void Promise.resolve(onRefresh()).finally(() => { setRefreshing(false) })
+  }
   const items: MenuEntry[] = [
-    { id: 'open', label: t('change.view') },
+    { id: 'open', label: openLabel },
     { id: 'copy', label: t('change.copy') },
     { id: 'refresh', label: t('reviewPage.refresh') },
   ]
   return (
-    <Menu
-      open={open}
-      onClose={() => { setOpen(false) }}
-      portal
-      align="end"
-      anchor={(
-        <Tooltip label={t('reviewPage.more')} side="bottom">
-          <button type="button" className={css.iconButton} aria-label={t('reviewPage.more')} aria-haspopup="menu" aria-expanded={open}
-            onClick={() => { setOpen(!open) }}>
-            <IconEllipsisOutlineRegular size={16} />
+    <>
+      <span className={css.linkActions} data-forge-review-actions="">
+        <Tooltip label={openLabel} side="bottom">
+          <button type="button" className={css.iconButton} aria-label={openLabel} onClick={() => { actions.openLink(url) }}>
+            <ForgeGlyph forge={forge?.forge ?? null} size={16} />
           </button>
         </Tooltip>
-      )}
-      items={items}
-      onSelect={(id) => {
-        setOpen(false)
-        if (id === 'open') actions.openLink(url)
-        else if (id === 'copy') actions.copyLink(url)
-        else actions.retry()
-      }}
-    />
+        <Tooltip label={t(copied ? 'reviewPage.copied' : 'reviewPage.copyLink')} side="bottom">
+          <button type="button" className={css.iconButton} aria-label={t('reviewPage.copyLink')} onClick={copy}>
+            {copied ? <IconCheckOutlineRegular size={16} className={css.copied} /> : <IconCopyOutlineRegular size={16} />}
+          </button>
+        </Tooltip>
+        <Tooltip label={t('reviewPage.refresh')} side="bottom" align="end">
+          <button type="button" className={css.iconButton} aria-label={t('reviewPage.refresh')} onClick={refresh}>
+            <RefreshGlyph busy={refreshing} size={16} />
+          </button>
+        </Tooltip>
+      </span>
+      <span className={css.moreAction}>
+        <Menu
+          open={open}
+          onClose={() => { setOpen(false) }}
+          portal
+          align="end"
+          anchor={(
+            <Tooltip label={t('reviewPage.more')} side="bottom">
+              <button type="button" className={css.iconButton} aria-label={t('reviewPage.more')} aria-haspopup="menu" aria-expanded={open}
+                onClick={() => { setOpen(!open) }}>
+                <IconEllipsisOutlineRegular size={16} />
+              </button>
+            </Tooltip>
+          )}
+          items={items}
+          onSelect={(id) => {
+            setOpen(false)
+            if (id === 'open') actions.openLink(url)
+            else if (id === 'copy') copy()
+            else refresh()
+          }}
+        />
+      </span>
+    </>
   )
 }
 
@@ -214,7 +270,7 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
           <h3 className={css.caption}>{t('reviewPage.description')}</h3>
           {markdown === null
             ? description.failure === null
-              ? <StateDot state="ongoing" />
+              ? <DescriptionSkeleton />
               : (
                 <div className={css.notice} role="status">
                   <span>{t('reviewPage.descriptionFailed', { message: description.failure })}</span>
@@ -262,9 +318,45 @@ export function ReviewDetail({
       </Tooltip>
     </>
   )
+  const forge = frame?.forge ?? null
   if (frame === undefined || snapshot === null) {
     const failure = frame?.update !== undefined && frame.update !== null && 'failure' in frame.update ? frame.update.failure : undefined
-    let body: ReactNode = <StateDot state="ongoing" />
+    const stopped = read.stopped !== null
+    const links = <LinkActions url={url} forge={forge} actions={actions} onRefresh={stopped ? read.retry : actions.retry} t={t} />
+    if (!stopped && failure === undefined) {
+      // Nothing is read yet: the layout of the detail in skeleton rows, with the actions that need only the URL.
+      return (
+        <div className={css.detail} data-forge-review-detail={url} aria-busy="true">
+          <span className={css.visuallyHidden} role="status">{t('reviewPage.detailLoading')}</span>
+          <header className={css.detailHeader}>
+            <div className={css.detailBar}>
+              {listToggle}
+              <span className={clsx(loading.fill, css.skeletonChip)} aria-hidden="true" />
+              <span className={clsx(loading.fill, css.skeletonRepository)} aria-hidden="true" />
+              <span className={css.labelsSlot} />
+              <span className={css.headerActions}>{links}</span>
+            </div>
+            <HeaderSkeleton />
+          </header>
+          <div className={css.panel}>
+            <div className={css.summary}>
+              <div className={css.document}>
+                <section aria-label={t('reviewPage.description')}>
+                  <h3 className={css.caption}>{t('reviewPage.description')}</h3>
+                  <DescriptionSkeleton />
+                </section>
+                <section className={css.activity} aria-label={t('reviewPage.activity')}>
+                  <h3 className={css.caption}>{t('reviewPage.activity')}</h3>
+                  <ActivitySkeleton />
+                </section>
+              </div>
+              <StatusSkeleton />
+            </div>
+          </div>
+        </div>
+      )
+    }
+    let body: ReactNode
     if (read.stopped?.code === 'forgePanel/unrecognized-url') {
       body = (
         <>
@@ -275,21 +367,21 @@ export function ReviewDetail({
           )}
         </>
       )
-    } else if (read.stopped !== null || failure !== undefined) {
+    } else {
       body = (
         <>
           <p className={css.emptyTitle}>{failure === undefined ? t('reviewPage.loadFailed') : t(FAILURE[failure.code])}</p>
           {failure !== undefined && failure.message !== '' && <p className={css.emptyHint}>{failure.message}</p>}
           <div className={css.actions}>
-            <Button size="sm" variant="outline" onClick={read.stopped === null ? actions.retry : read.retry}>{t('retry')}</Button>
-            <Button size="sm" variant="outline" onClick={() => { actions.openLink(url) }}>{t('change.view')}</Button>
+            <Button size="sm" variant="outline" onClick={() => { void (stopped ? read.retry : actions.retry)() }}>{t('retry')}</Button>
+            <Button size="sm" variant="outline" onClick={() => { actions.openLink(url) }}>{openOnLabel(t, forge?.label ?? null)}</Button>
           </div>
         </>
       )
     }
     return (
       <div className={css.detail} data-forge-review-detail={url}>
-        <div className={css.detailBar}>{listToggle}</div>
+        <div className={css.detailBar}>{listToggle}<span className={css.headerActions}>{links}</span></div>
         <div className={css.centered} role="status">{body}</div>
       </div>
     )
@@ -317,7 +409,8 @@ export function ReviewDetail({
           </span>
           <a className={css.repository} href={snapshot.url} target="_blank" rel="noreferrer"
             onClick={(event) => { event.preventDefault(); actions.openLink(snapshot.url) }}>
-            {`${repository.owner}/${repository.name}`}<span className={css.number}>{name}</span>
+            <span className={css.repositoryName}>{`${repository.owner}/${repository.name}`}</span>
+            <span className={css.number}>{name}</span>
           </a>
           <span className={css.labelsSlot}>
             {description.description !== null && (
@@ -327,8 +420,11 @@ export function ReviewDetail({
           <span className={css.headerActions}>
             {snapshot.state === 'open' && snapshot.draft
               ? <MarkReady frame={frame} actions={actions} t={t} />
-              : <ChangeRequestPrimary entry={frame} snapshot={snapshot} name={name} actions={actions} className={css.primary} t={t} />}
-            <MoreMenu url={snapshot.url} actions={actions} t={t} />
+              : (
+                <ChangeRequestPrimary entry={frame} snapshot={snapshot} name={name} actions={actions} className={css.primary} blocked
+                  t={t} />
+              )}
+            <LinkActions url={snapshot.url} forge={forge} actions={actions} onRefresh={actions.retry} t={t} />
           </span>
         </div>
         <h1 className={css.detailTitle}>{snapshot.title}</h1>

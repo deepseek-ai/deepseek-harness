@@ -1431,6 +1431,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>',
+        description: 'Turn the host\'s automatic merge of a change request on, while its head is still the request\'s `headSha`, or off, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>',
         description: 'Read complete check details independently of periodic polling.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the detail view.' }],
@@ -1733,6 +1740,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
       },
       {
+        signature: '@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request the review page shows on, while its head is still the request\'s `headSha`, or off.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
         signature: '@Remote async reviewRerunChecks(url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
         description: 'Rerun the failed checks of a change request the review page shows.',
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'the head commit whose checks the user saw.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1919,6 +1932,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Merge a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request of a Session on, while its head is still the request\'s `headSha`, or off; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past the request\'s `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise, cannot be reached, or sets no automatic merge; `forgePanel/action-unknown` when the host\'s answer did not confirm the change.'],
       },
       {
         signature: '@Remote async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
@@ -6677,6 +6696,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
   },
   {
+    name: 'AutoMergeRequest',
+    declaration: 'export type AutoMergeRequest = {\n    readonly enabled: true;\n    readonly method: MergeMethod;\n    readonly headSha: string;\n} | {\n    readonly enabled: false;\n};',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -6745,6 +6768,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ChangeRequestActivityItem = {\n    readonly at: string;\n    readonly actor: ForgeCommentAuthor | null;\n} & ({\n    readonly kind: \'comment\';\n    readonly body: string;\n    readonly url: string | null;\n} | {\n    readonly kind: \'review\';\n    readonly verdict: ReviewVerdict;\n    readonly body: string;\n    readonly comments: number;\n    readonly url: string | null;\n} | {\n    readonly kind: \'commit\';\n    readonly sha: string;\n    readonly title: string;\n} | {\n    readonly kind: \'merged\' | \'closed\' | \'reopened\' | \'ready-for-review\' | \'converted-to-draft\' | \'force-pushed\';\n} | {\n    readonly kind: \'auto-merge-enabled\' | \'auto-merge-disabled\';\n} | {\n    readonly kind: \'review-requested\';\n    readonly reviewer: string | null;\n} | {\n    readonly kind: \'renamed\';\n    readonly from: string;\n    readonly to: string;\n} | {\n    readonly kind: \'other\';\n    readonly text: string;\n});',
   },
   {
+    name: 'ChangeRequestAutoMerge',
+    declaration: 'export interface ChangeRequestAutoMerge {\n    readonly enabled: boolean;\n    readonly method: MergeMethod | null;\n    readonly enabledBy: string | null;\n    readonly canEnable: boolean;\n    readonly canDisable: boolean;\n}',
+  },
+  {
     name: 'ChangeRequestBrief',
     declaration: 'export type ChangeRequestBrief = Pick<ChangeRequestSnapshot, \'ref\' | \'url\' | \'title\' | \'state\' | \'draft\' | \'mergeability\' | \'reviewDecision\' | \'checksRollup\'>;',
   },
@@ -6798,7 +6825,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly autoMerge?: ChangeRequestAutoMerge;\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',

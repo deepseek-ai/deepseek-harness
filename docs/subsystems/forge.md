@@ -132,6 +132,14 @@ interface ForgeProvider {
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /**
+   * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+   * resolving to undefined once the host accepted it. Omission declares that the provider sets no automatic merge, and
+   * its snapshots then carry no `autoMerge`.
+   */
+  setAutoMerge?(
+    ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined>
+  /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
    * head is another commit, the read resolves to a `stale` failure. `base`, when given, is the `baseSha` the
@@ -370,6 +378,11 @@ interface ChangeRequestSnapshot {
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
   /**
+   * How the change request stands with its host's automatic merge; omitted by a provider that sets none, whose change
+   * requests then offer no automatic merge.
+   */
+  readonly autoMerge?: ChangeRequestAutoMerge
+  /**
    * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
    * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
    * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
@@ -518,6 +531,32 @@ interface MergeRequest {
   /** Commit object name the head must still have; the merge is refused once the head moves. */
   readonly headSha: string
 }
+```
+
+`ctx.forge.setAutoMerge` turns the host's automatic merge of a change request on, for the head commit the user confirmed and with one of the snapshot's `mergeMethods`, or off; the host then merges the change request by itself once its merge requirements are met. A snapshot's `autoMerge` says whether it is on, with which method and turned on by whom when the host names them, and whether the signed-in user can turn it on or off now. A provider that sets no automatic merge omits both, and `setAutoMerge` then fails without asking the host.
+
+```ts type-equiv
+/** How a change request stands with its host's automatic merge. */
+interface ChangeRequestAutoMerge {
+  /** Whether the host merges the change request by itself once its merge requirements are met. */
+  readonly enabled: boolean
+  /** How the commits enter the base branch then, while enabled and the host names the method; null otherwise. */
+  readonly method: MergeMethod | null
+  /** Login of the account that turned it on, while enabled and the host names one; null otherwise. */
+  readonly enabledBy: string | null
+  /** Whether the signed-in user can turn it on now through `setAutoMerge`; false while it is on. */
+  readonly canEnable: boolean
+  /** Whether the signed-in user can turn it off now through `setAutoMerge`; false while it is off. */
+  readonly canDisable: boolean
+}
+```
+
+```ts type-equiv
+/** Turning a change request's automatic merge on for the head commit the user saw, or off. */
+type AutoMergeRequest =
+  /** `method` is one of the snapshot's `mergeMethods`; the host refuses once the head is no longer `headSha`. */
+  | { readonly enabled: true; readonly method: MergeMethod; readonly headSha: string }
+  | { readonly enabled: false }
 ```
 
 ```ts type-equiv
@@ -1676,7 +1715,7 @@ interface ForgeLocalChanges {
 
 ### Review page
 
-The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, `reviewActivity`, `reviewComment`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, while the other hosts keep their cadence; the count reads every `reviewCountIntervalMs` in the same way, and lists of every repository refresh it too. A scope is every repository of every host or one `ForgeReviewRepository`, which names its host and is read on that host only. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, the failure of the latest read, and, for a host that refused the viewer, the sign-in command its provider's `readiness` names; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
+The [code review page](../../packages/experimental/client-ui-forge/README.md#use-this-package) reads change requests by URL instead of through a Session binding. Its `forgePanel` methods (`reviewLists`, `reviewCount`, `reviewChangeRequest`, `reviewDescription`, `reviewActivity`, `reviewComment`, `reviewSetAutoMerge`, and the `review*` reads and actions that mirror the Session-bound ones) resolve the URL with `ForgeService.changeRequestFromUrl`, fail with `forgePanel/unrecognized-url` when no provider serves it, and name no Session resource, so only callers that may use the Host's code host credentials reach them. One list hub reads the [viewer lists](#viewer-lists-and-descriptions) only while a list or count stream lasts: streams of one repository scope share one reader that reads every list of every host each `reviewListIntervalMs`, hosts in parallel and each host's lists in order, stops the round's further reads on a host that refuses the viewer or is rate-limited, and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, while the other hosts keep their cadence; the count reads every `reviewCountIntervalMs` in the same way, and lists of every repository refresh it too. A scope is every repository of every host or one `ForgeReviewRepository`, which names its host and is read on that host only. `reviewLists` streams `ForgeReviewFrame` values with each host's lists, the items of the latest successful read, the failure of the latest read, and, for a host that refused the viewer, the sign-in command its provider's `readiness` names; `reviewCount` streams `ForgeReviewCountFrame` values; and `reviewChangeRequest` streams `ForgeReviewChangeRequest` values for the shown change request, which is polled through `ForgeService.watch` while its stream lasts.
 
 The chat tab starts in the blank Session `connectWorkspace` resolves and records the change request with `reviewStage`; the Host keeps that choice in memory and binds the change request once the Session's next message enters its inbox, so an untouched blank stays unbound.
 
@@ -1932,6 +1971,17 @@ async reviewerCandidates( ref: ChangeRequestRef, query: string, signal: AbortSig
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+ * then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>
 
 /**
  * Read complete check details independently of periodic polling.
@@ -2422,6 +2472,17 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
+ * Turn the code host's automatic merge of a change request the review page shows on, while its head is still the
+ * request's `headSha`, or off.
+ * @param url - web URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
+
+/**
  * Rerun the failed checks of a change request the review page shows.
  * @param url - web URL of the change request.
  * @param request - the head commit whose checks the user saw.
@@ -2781,6 +2842,20 @@ registerLens(lens: ForgeLens): () => Promise<void>
  * reason when the host refuses otherwise or cannot be reached.
  */
 @Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Turn the code host's automatic merge of a change request of a Session on, while its head is still the request's
+ * `headSha`, or off; the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past the request's `headSha`; `forgePanel/action-failed` with the
+ * host's reason when the host refuses otherwise, cannot be reached, or sets no automatic merge;
+ * `forgePanel/action-unknown` when the host's answer did not confirm the change.
+ */
+@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
 
 /**
  * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user

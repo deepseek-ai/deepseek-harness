@@ -50,6 +50,8 @@ kind: "package-reference"
 
 pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为 `CLEAN`、`HAS_HOOKS` 或 `UNSTABLE`，且已登录用户具有 write、maintain 或 admin 权限时，`mergeReady` 为真。`mergeMethods` 列出仓库允许的压缩合并、合并提交与变基合并方式，用户默认的合并方式排在最前。标记为可评审运行 `gh pr ready <number> --repo <host>/<owner>/<name>`。合并经 `gh api` 调用 `PUT repos/<owner>/<name>/pulls/<number>/merge`，带上合并方式与预期的 head SHA，因此有新提交到达后 GitHub 会拒绝，报告为 `stale`。与 `gh pr merge` 不同，它从不启用自动合并、从不加入合并队列，也从不删除 head 分支。被拒绝的操作报告 GitHub 的原因，提到身份验证的诊断转为 `unauthenticated`。
 
+每个快照都带有 `autoMerge`，取自快照查询的四个字段。pull request 有 `autoMergeRequest` 时 `enabled` 为 true，其 `mergeMethod` 与 `enabledBy` 的登录名给出 `method` 与 `enabledBy`；压缩合并、合并提交与变基合并之外的合并方式读作 null。`canDisable` 即 GitHub 的 `viewerCanDisableAutoMerge`，`canEnable` 即其 `viewerCanEnableAutoMerge`，但在带合并队列的基准分支上（`isMergeQueueEnabled`）`canEnable` 为 false。以 admin 权限读取本仓库 150 个 open pull request 时，全部 71 个草稿、全部 4 个已启用自动合并的，以及唯一一个合并状态为 `CLEAN` 的，`viewerCanEnableAutoMerge` 都为 false；其余 74 个中有 72 个为 true。`setAutoMerge` 先读取 pull request 的节点 id 与 head。启用时，head 不是 `request.headSha` 则不发送 mutation，直接返回 `stale`；否则以合并方式与 `expectedHeadOid` 调用 `enablePullRequestAutoMerge`，因此新提交到来后 GitHub 会拒绝；关闭时调用 `disablePullRequestAutoMerge`，与 head 无关。mutation 与 `writeReview` 使用同一个发送方式，且从不重试：拒绝为 `failed`，无法确认结果的答复为 `unknown`，都附 GitHub 的原因。GraphQL 的拒绝不带能说明 head 已移动的 HTTP 状态，因此启用被拒绝后会再读一次 head，此时 head 已是另一个提交则返回 `stale`。
+
 `diff` 在一次 GraphQL 查询中读取 `headRefOid` 与 `baseRefOid`，head 不是请求的提交时返回 `stale`；请求的提交必须是完整的 40 位或 64 位十六进制提交。否则经 `gh api --allow-escape-sequences` 以 diff 媒体类型读取 `repos/<owner>/<name>/compare/<baseRefOid>...<headSha>`，即两个提交的合并基准到 head 的补丁，两端都不跟随移动的分支。每个状态快照把 `baseRefOid` 作为 `baseSha` 携带（GitHub 返回的不是完整提交时省略）；拿到它时，`diff` 在 GraphQL 查询确认 head 的同时就开始这次比较，head 已过时或基准提交不同时会取消提前开始的比较并等它结束，然后才返回。实测的所有 open 与已合并 pull request 上，该补丁与不接受提交参数的 `gh pr diff` 逐字节一致。与 pull request diff 不同，compare 接口会返回超过 300 个文件的 diff，因此这类 diff 只有在输出超过 `maxOutputBytes` 或 GitHub 自身拒绝时才为 `too-large`。`--allow-escape-sequences` 保留文件内容中的终端转义序列；否则 `gh` 2.97 及以上版本拒绝输出。更早的 `gh` 在发出请求前就以 `unknown flag` 拒绝该选项，且原样输出这类序列，因此遇到这一拒绝时去掉该选项重读一次。`fileText` 经 `gh api` 以 raw 媒体类型读取 `repos/<owner>/<name>/contents/<path>?ref=<commit>`，只接受完整的 40 位或 64 位十六进制提交。`fileUrl` 返回 `https://<host>/<owner>/<name>/blob/<commit>/<path>`。两者的路径都逐段做百分号编码。`commits` 经 GraphQL 读取拉取请求的提交，每页 100 个，owner、name、number 与游标作为变量传入，直到 `maxCommits`；每一页报告的 head 与提交总数必须与第一页相同，游标也不能与之前任何一页重复，否则返回 `unavailable`。`compare` 用与 `diff` 相同的 compare 请求读取两个完整提交的合并基准到第二个提交的补丁。`mergeBase` 从 `repos/<owner>/<name>/compare/<base>...<head>?page=2&per_page=1` 读取 `merge_base_commit.sha`；这一页比较结果不列文件。返回值不是完整提交时为 `unavailable`。被拒绝的读取在 HTTP 404 时为 `not-found`，诊断提到身份验证时为 `unauthenticated`，GitHub 以 HTTP 406 拒绝或报告 `too_large` 错误时（diff 或文件超过其大小上限即会如此）为 `too-large`，HTTP 429 或提到主限流、次级限流的消息为 `rate-limited`，其余为 `unavailable`，并带有 GitHub 的原因。输出超过 `maxOutputBytes` 的读取为 `too-large`，超过 `timeoutMs` 的为 `unavailable`。
 
 提交评审时先检查 PR 当前的 head，再通过 REST API 发布单条行内评论或一次完整评审，并显式指定 `commit_id`。多行评论携带所属侧及包含端点的起止行号。用户有待提交评审时 GitHub 会拒绝单条评论，因此更改视图只在没有待提交评审时提供单条评论。评审结论为“评论”“批准”或“请求更改”。JSON 请求正文通过标准输入传递。provider 不会重试写操作；发送后的超时、异常响应或服务端错误会返回结果不明，由调用方到 GitHub 核对。检查与写入之间到来的新提交可能让已明确定位到旧提交的评审过时；GitHub 的这些接口不提供原子的 head 前置条件。
@@ -90,7 +92,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 | [`src/mutation.ts`](src/mutation.ts) | 发送单个 GraphQL mutation 并判定其结果 |
 | [`src/gh.ts`](src/gh.ts) | 在宿主上执行 `gh`，清理环境变量并施加限制 |
 | [`src/viewed.ts`](src/viewed.ts) | 读取与写入已审阅文件 |
-| [`src/overview.ts`](src/overview.ts) | 评审请求、评审者搜索与分支更新 |
+| [`src/overview.ts`](src/overview.ts) | 评审请求、评审者搜索、分支更新与自动合并 |
 | [`src/activity.ts`](src/activity.ts) | 读取时间线，并映射为活动记录 |
 | [`src/pull-request-node.ts`](src/pull-request-node.ts) | 在核对过的 head 上读取 pull request 节点 id，供写操作使用 |
 | [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL，并校验写入请求的名称与提交 |
@@ -127,8 +129,8 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 - **简报的检查结果**——简报报告 GitHub 的检查汇总状态，检查列表完整的快照则自行得出结果；同一个 pull request 的两个结果不一致时，没有机制去对齐它们。
 - **基准分支被改写**——diff 从 head 与 GitHub 在 pull request 最后一次更新时记录的基准提交的合并基准开始。基准分支被强制推送后，该合并基准可能不同于 GitHub pull request 页面使用的合并基准，因此在 pull request 更新前，补丁可能多出或缺少提交。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
-- **速率限制**——每次简报轮询为每个主机的每 `briefBatchSize` 个 pull request 消耗一次 GraphQL 查询；每次快照轮询为每个主机的每 `snapshotBatchSize` 个 pull request 消耗一次，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。每次活动读取消耗一次 GraphQL 查询，每次添加评论消耗一次 REST 请求。
-- **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
+- **速率限制**——每次简报轮询为每个主机的每 `briefBatchSize` 个 pull request 消耗一次 GraphQL 查询；每次快照轮询为每个主机的每 `snapshotBatchSize` 个 pull request 消耗一次，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。每次活动读取消耗一次 GraphQL 查询，每次添加评论消耗一次 REST 请求。每次设置自动合并消耗一次 GraphQL 查询和一个 mutation；启用被拒绝后再多一次查询。
+- **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，`merge` 也不会把变更请求加入队列。在带合并队列的基准分支上 `autoMerge.canEnable` 为 false，因为 GitHub 在那里忽略自动合并请求的合并方式；`setAutoMerge` 本身不检查是否有合并队列，在 GitHub 上启用的自动合并仍会如实报告。
 - **活动记录上限**——每次活动读取只列出所映射类型中最近的 100 条时间线记录，`truncated` 标出还有更早记录的 pull request，更早的记录无法读取。标签变更、指派、来自其他 issue 与 pull request 的引用，以及其他各类时间线记录都不列出。读取只有一次请求，因此这些记录的输出合计超过 `maxOutputBytes` 时，读取以 `too-large` 失败。
 - **评论权限**——GitHub 没有说明当前登录用户能否评论的字段，因此对被仓库所有者屏蔽、或被互动限制排除的用户，`viewerCanComment` 仍为 true；GitHub 只在评论发出时才拒绝该用户的评论。
 

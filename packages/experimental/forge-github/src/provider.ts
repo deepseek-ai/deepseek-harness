@@ -2,8 +2,8 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef,
-  ChangeRequestSnapshot, ForgeActionFailure,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestDescription, ChangeRequestKey,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
   ForgeCommitList, ForgeFailure, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery,
   ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
@@ -22,7 +22,7 @@ import type { PageResult, SnapshotPages, SnapshotQuery, StatusQuery } from './gr
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 import { readViewed, writeViewed } from './viewed.ts'
-import { gitHubReviewerCandidates, requestGitHubReviews, updateGitHubBranch } from './overview.ts'
+import { gitHubReviewerCandidates, requestGitHubReviews, setGitHubAutoMerge, updateGitHubBranch } from './overview.ts'
 import { writeGitHubReview } from './review-writes.ts'
 import { readReviewThreads } from './threads.ts'
 import { readDescription } from './description.ts'
@@ -309,6 +309,17 @@ export class GitHubProvider implements ForgeProvider {
       'api', '--hostname', host, '--method', 'PUT', `repos/${owner}/${name}/pulls/${ref.number}/merge`,
       '-f', `merge_method=${request.method}`, '-f', `sha=${request.headSha}`,
     ], signal)
+  }
+
+  /**
+   * Turn GitHub's auto-merge of a pull request on, with the merge method and the confirmed head as `expectedHeadOid`,
+   * or off, through one GraphQL mutation that is never retried.
+   * @see setGitHubAutoMerge
+   */
+  async setAutoMerge(ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    return await setGitHubAutoMerge(this.graphql, this.mutate, ref, request, signal)
   }
 
   /**

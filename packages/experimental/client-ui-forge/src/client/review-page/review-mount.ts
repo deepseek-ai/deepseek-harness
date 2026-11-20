@@ -86,13 +86,17 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
   const actionsFor = (url: string, showChanges: () => void): ChangeRequestActions => ({
     openLink,
     copyLink: copyText,
-    retry: () => { void remote.reviewPoll(url).then(result => settled(result, 'toast.refreshFailed')) },
+    retry: async () => { settled(await remote.reviewPoll(url), 'toast.refreshFailed') },
     markReady: async (entry) => {
       reportAction(entry, await remote.reviewMarkReady(url), { done: 'toast.markedReady', failed: 'toast.markReadyFailed' })
     },
     merge: async (entry, request) => {
       reportAction(entry, await remote.reviewMerge(url, request.method, request.headSha),
         { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
+    },
+    autoMerge: async (entry, request) => {
+      reportAction(entry, await remote.reviewSetAutoMerge(url, request),
+        { done: request.enabled ? 'toast.autoMergeEnabled' : 'toast.autoMergeCancelled', stale: 'toast.autoMergeStale', failed: 'toast.autoMergeFailed' })
     },
     readChecks: async (_url, headSha, signal) => {
       const result = await remote.reviewChecks(url, headSha, signal)

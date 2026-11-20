@@ -329,6 +329,10 @@ function registerUi(ctx: Context): void {
         reportAction(entry, await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha),
           { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
       },
+      autoMerge: async (entry, request) => {
+        reportAction(entry, await ctx.remote.forgePanel.setAutoMerge(sessionId, entry.url, request),
+          { done: request.enabled ? 'toast.autoMergeEnabled' : 'toast.autoMergeCancelled', stale: 'toast.autoMergeStale', failed: 'toast.autoMergeFailed' })
+      },
       rerunChecks: async (entry, request) => {
         reportAction(entry, await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request),
           { done: 'toast.rerunRequested', stale: 'toast.rerunStale', failed: 'toast.rerunFailed' })

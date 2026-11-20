@@ -399,6 +399,20 @@ describe('forgePanel review page actions', () => {
     await expect(panel.reviewMarkReady(url, signal)).rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Not a draft' })
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${HEAD}`, `merge 7 rebase ${HEAD}`, 'ready 7'])
 
+    // The automatic merge reaches the provider as asked; one that sets none fails without asking the host.
+    const on = { enabled: true as const, method: 'squash' as const, headSha: HEAD }
+    await expect(panel.reviewSetAutoMerge(url, on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider sets no automatic merge' })
+    const setAutoMerge = vi.fn<NonNullable<ForgeProvider['setAutoMerge']>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { setAutoMerge })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).resolves.toBeUndefined()
+    await expect(panel.reviewSetAutoMerge(url, { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(setAutoMerge.mock.calls.map(([target, request]) => [target, request])).toEqual([[ref(7), on], [ref(7), { enabled: false }]])
+    setAutoMerge.mockResolvedValueOnce({ code: 'stale', message: 'Head moved' })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'Head moved' })
+    setAutoMerge.mockResolvedValueOnce({ code: 'unknown', message: 'no answer' })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'no answer' })
+
     await expect(panel.reviewRerunChecks(url, { headSha: HEAD }, signal))
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider reruns no checks' })
     await expect(panel.reviewReviewerCandidates(url, '', signal))
@@ -473,6 +487,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewSetViewed(UNSERVED, { path: 'src/a.ts', viewed: true, headSha: HEAD }, signal),
       () => panel.reviewMarkReady(UNSERVED, signal),
       () => panel.reviewMerge(UNSERVED, 'merge', HEAD, signal),
+      () => panel.reviewSetAutoMerge(UNSERVED, { enabled: false }, signal),
       () => panel.reviewRerunChecks(UNSERVED, { headSha: HEAD }, signal),
       () => panel.reviewRequestReviews(UNSERVED, [{ kind: 'user', login: 'mona' }], signal),
       () => panel.reviewReviewerCandidates(UNSERVED, '', signal),
@@ -508,6 +523,7 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewText(url, HEAD, 'src/a.ts', aborted),
       () => panel.reviewViewed(url, HEAD, false, aborted),
       () => panel.reviewMarkReady(url, aborted),
+      () => panel.reviewSetAutoMerge(url, { enabled: false }, aborted),
       () => panel.reviewStage(opened.session.id, url, aborted),
     ]
 

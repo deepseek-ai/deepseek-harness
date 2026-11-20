@@ -1,10 +1,11 @@
-/** GitHub writes and reads of the change request overview: review requests, reviewer candidates, and branch updates. */
+/** GitHub writes and reads of the change request overview: review requests, reviewer candidates, branch updates, and auto-merge. */
 
 import type {
-  BranchUpdateRequest, ChangeRequestRef, ForgeActionFailure, ForgeFailure, ForgeReviewerCandidate, ForgeReviewersRequest,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestRef, ForgeActionFailure, ForgeFailure, ForgeReviewerCandidate, ForgeReviewersRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GraphqlReader } from './commits.ts'
+import { MERGE_METHOD_NAMES } from './graphql.ts'
 import type { GraphqlWriter } from './mutation.ts'
 import { pullRequestNode } from './pull-request-node.ts'
 import { checkedRepository, isCommit } from './urls.ts'
@@ -36,6 +37,16 @@ function teamOf(login: string): readonly [string, string] | undefined {
 /** Merge or rebase the base branch into the head branch; variable `input` is an `UpdatePullRequestBranchInput`. */
 export const UPDATE_BRANCH_MUTATION = `mutation($input: UpdatePullRequestBranchInput!) {
   updatePullRequestBranch(input: $input) { clientMutationId }
+}`
+
+/** Turn auto-merge on with a merge method for an expected head; variable `input` is an `EnablePullRequestAutoMergeInput`. */
+export const ENABLE_AUTO_MERGE_MUTATION = `mutation($input: EnablePullRequestAutoMergeInput!) {
+  enablePullRequestAutoMerge(input: $input) { clientMutationId }
+}`
+
+/** Turn auto-merge off; variable `input` is a `DisablePullRequestAutoMergeInput`. */
+export const DISABLE_AUTO_MERGE_MUTATION = `mutation($input: DisablePullRequestAutoMergeInput!) {
+  disablePullRequestAutoMerge(input: $input) { clientMutationId }
 }`
 
 /** Most accounts one candidate listing returns. */
@@ -160,6 +171,43 @@ export async function updateGitHubBranch(
   return await write(ref.repository.host, { query: UPDATE_BRANCH_MUTATION, field: 'updatePullRequestBranch', variables: {
     input: { pullRequestId: id, expectedHeadOid: request.headSha, updateMethod: request.method === 'rebase' ? 'REBASE' : 'MERGE' },
   } }, signal)
+}
+
+/**
+ * Turn a pull request's auto-merge on with `enablePullRequestAutoMerge`, or off with `disablePullRequestAutoMerge`.
+ * Turning it on reads the head first and sends no mutation once it is another commit; GitHub also checks
+ * `expectedHeadOid` itself. A refusal of turning it on is followed by one more read of the head, and is `stale` when
+ * the head is another commit by then. Turning it off reads the pull request at any head.
+ * @param read - runs one GraphQL query.
+ * @param write - runs one GraphQL mutation.
+ * @param ref - pull request address.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - cancellation of every request.
+ * @returns undefined once GitHub accepted the change, `stale` when the head moved, or why GitHub refused or did not
+ * confirm it.
+ * @throws when the head commit of a request that turns auto-merge on is not a full commit object name.
+ */
+export async function setGitHubAutoMerge(
+  read: GraphqlReader, write: GraphqlWriter, ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+): Promise<ForgeActionFailure | undefined> {
+  const { host } = ref.repository
+  if (!request.enabled) {
+    const id = await pullRequestNode(read, ref, null, signal)
+    if (typeof id !== 'string') return id
+    return await write(host, { query: DISABLE_AUTO_MERGE_MUTATION, field: 'disablePullRequestAutoMerge',
+      variables: { input: { pullRequestId: id } } }, signal)
+  }
+  const { headSha } = request
+  if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+  const id = await pullRequestNode(read, ref, headSha, signal)
+  if (typeof id !== 'string') return id
+  const failure = await write(host, { query: ENABLE_AUTO_MERGE_MUTATION, field: 'enablePullRequestAutoMerge', variables: {
+    input: { pullRequestId: id, mergeMethod: MERGE_METHOD_NAMES[request.method], expectedHeadOid: headSha },
+  } }, signal)
+  if (failure?.code !== 'failed') return failure
+  // A refusal carries no HTTP status that names a moved head, as the REST merge's 409 does.
+  const moved = await pullRequestNode(read, ref, headSha, signal)
+  return typeof moved !== 'string' && moved.code === 'stale' ? moved : failure
 }
 
 /**

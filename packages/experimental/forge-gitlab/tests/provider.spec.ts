@@ -21,10 +21,13 @@ function provider(answer: (path: string, call: GlabCall) => GlabOutput | Promise
   return { subject: new GitLabProvider(glab.run, [HOST, 'GitLab.com', 'gitlab.com'], { ...limits, ...overrides }), calls: glab.calls }
 }
 
-/** A status query answer that gives merge request `iid` its node, null for a missing project, or a missing merge request. */
-function statusAnswer(call: GlabCall, nodes: Readonly<Record<string, unknown>>): GlabOutput {
+/**
+ * A status query answer that gives merge request `iid` its node, null for a missing project, or a missing merge request,
+ * and names `viewer` as the signed-in user when one is given.
+ */
+function statusAnswer(call: GlabCall, nodes: Readonly<Record<string, unknown>>, viewer?: string): GlabOutput {
   const { variables } = sent(call)
-  const data: Record<string, unknown> = {}
+  const data: Record<string, unknown> = viewer === undefined ? {} : { currentUser: { username: viewer } }
   for (const [name, value] of Object.entries(variables)) {
     if (!name.startsWith('i')) continue
     const node = nodes[String(value)]
@@ -128,6 +131,19 @@ describe('GitLab provider status', () => {
     expect([...results.values()].map(result => 'code' in result ? result.code : result.mergeability)).toEqual(['unknown', 'mergeable'])
     expect(calls.filter(call => call.args.at(-1) === mrPath(1))).toHaveLength(1)
     expect(calls.filter(call => call.args.at(-1) === mrPath(2))).toHaveLength(0)
+  })
+
+  it('lets the author GitLab names as the signed-in user turn off an automatic merge they may not merge', async () => {
+    const userPermissions = { canMerge: false, pushToSourceBranch: true, updateMergeRequest: true }
+    const on = mergeRequestNode({ autoMergeEnabled: true, mergeUser: { username: 'lin' }, userPermissions })
+    const readAs = async (viewer: string) => {
+      const { subject } = provider((path, call) => path === 'graphql' ? statusAnswer(call, { 1: project(on) }, viewer) : noIssues())
+      return (await subject.fetch([merge(1)], signal)).get(changeRequestKey(merge(1)))
+    }
+    await expect(readAs('octo')).resolves.toMatchObject({
+      autoMerge: { enabled: true, method: 'merge', enabledBy: 'lin', canEnable: false, canDisable: true },
+    })
+    await expect(readAs('zhou')).resolves.toMatchObject({ autoMerge: { enabled: true, canDisable: false } })
   })
 
   it('reports an answer it cannot read as unavailable', async () => {
@@ -263,6 +279,30 @@ describe('GitLab provider actions', () => {
     await expect(provider(() => json({})).subject.merge(unserved, { method: 'merge', headSha: sha('a') }, signal)).resolves.toMatchObject({ code: 'failed' })
     await expect(provider(() => json({})).subject.markReady(unserved, signal)).resolves.toMatchObject({ code: 'failed' })
     await expect(provider(() => json({})).subject.merge(merge(6), { method: 'merge', headSha: 'HEAD' }, signal)).rejects.toThrow('forge-gitlab: invalid head commit "HEAD"')
+  })
+
+  it('turns the automatic merge on at the confirmed head through GraphQL and off through one REST request', async () => {
+    const accepted = json({ data: { mergeRequestAccept: { errors: [] } } })
+    const { subject, calls } = provider(path => path === 'graphql' ? accepted : json({ iid: 6 }))
+    await expect(subject.setAutoMerge(merge(6), { enabled: true, method: 'squash', headSha: sha('a') }, signal)).resolves.toBeUndefined()
+    await expect(subject.setAutoMerge(merge(6), { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(calls.map(call => call.args.slice(3))).toEqual([
+      ['graphql', '--input', '-', '-H', 'Content-Type: application/json'], ['-X', 'POST', `${mrPath(6)}/cancel_auto_merge`],
+    ])
+    expect(sent(calls[0]).variables).toEqual({ path: 'group/sub/app', iid: '6', sha: sha('a'), squash: true })
+  })
+
+  it('refuses an automatic merge on an unserved host or at an invalid head without a request', async () => {
+    const unserved = merge(6, { ...app, host: 'elsewhere.test' })
+    const { subject, calls } = provider(() => json({}))
+    for (const request of [{ enabled: true, method: 'merge', headSha: sha('a') }, { enabled: false }] as const) {
+      await expect(subject.setAutoMerge(unserved, request, signal)).resolves.toEqual({
+        code: 'failed', message: 'forge-gitlab does not serve elsewhere.test; add it to the provider\'s hosts setting',
+      })
+    }
+    await expect(subject.setAutoMerge(merge(6), { enabled: true, method: 'merge', headSha: 'HEAD' }, signal))
+      .rejects.toThrow('forge-gitlab: invalid head commit "HEAD"')
+    expect(calls).toEqual([])
   })
 
   it('adds a comment through one request that creates a note', async () => {

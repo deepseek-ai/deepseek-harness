@@ -113,10 +113,11 @@ describe('ReviewActivity', () => {
     const read = deferred<RemoteResult<ChangeRequestActivity | null>>()
     const b = await renderActivity(null, { read: vi.fn(() => read.promise) })
     const region = b.view.getByRole('region', { name: 'Activity' })
-    expect(region.querySelector('[data-state="ongoing"]')).not.toBeNull()
+    expect(region.querySelector('[data-forge-review-skeleton="activity"]')).not.toBeNull()
     expect(region.textContent).toBe('Activity')
     read.settle(ok(activity([])))
     await settle()
+    expect(region.querySelector('[data-forge-review-skeleton]')).toBeNull()
     expect(region.textContent).toBe('ActivityNo activity yet')
     expect(b.view.queryByRole('textbox')).toBeNull()
   })
@@ -205,8 +206,11 @@ describe('ReviewActivity', () => {
   it('says when earlier activity is not listed and opens the change request for it', async () => {
     const b = await renderActivity(activity([commit('a', 'One')], { truncated: true }))
     expect(b.view.getByText('Earlier activity is not listed')).toBeTruthy()
-    fireEvent.click(b.view.getByRole('button', { name: 'Open in browser' }))
+    fireEvent.click(b.view.getByRole('button', { name: 'Open on GitHub' }))
     expect(b.props.openLink).toHaveBeenCalledWith(URL7)
+    // Once the provider left, the link names the browser.
+    b.rerender({ forge: null })
+    expect(b.view.getByRole('button', { name: 'Open in browser' })).toBeTruthy()
   })
 
   it('reports a read that failed, reads again on Retry, and keeps the rows of an earlier read', async () => {
@@ -270,14 +274,34 @@ describe('ReviewActivity', () => {
     expect(button.disabled).toBe(false)
     fireEvent.click(button)
     expect(comment).toHaveBeenCalledWith(URL7, 'Thanks for the fix')
-    // While the comment is sent, neither the field nor the button acts.
-    expect([field.disabled, button.disabled]).toEqual([true, true])
+    // While the comment is sent, the field keeps its text read-only and neither the button nor the keys send another.
+    expect([field.readOnly, button.disabled, button.textContent]).toEqual([true, true, 'Posting…'])
+    expect(field.closest('[aria-busy="true"]')).not.toBeNull()
+    fireEvent.keyDown(field, { key: 'Enter', ctrlKey: true })
+    expect(comment).toHaveBeenCalledOnce()
     sent.settle(ok(undefined))
     await settle()
     expect(field.value).toBe('')
-    expect(field.disabled).toBe(false)
+    expect([field.readOnly, button.textContent]).toEqual([false, 'Comment'])
     expect(read).toHaveBeenCalledTimes(2)
     expect(b.view.queryByRole('alert')).toBeNull()
+  })
+
+  it('says where the comment goes and which keys send it', async () => {
+    const b = await renderActivity(activity([], { viewerCanComment: true }))
+    const composer = b.view.getByRole('textbox', { name: 'Leave a comment' }).parentElement as HTMLElement
+    expect(composer.textContent).toBe('Posts to GitHub · Markdown supportedCtrl+EnterComment')
+    expect((b.view.getByRole('textbox', { name: 'Leave a comment' }) as HTMLTextAreaElement).rows).toBe(3)
+    cleanup()
+    // The desktop shell names an Apple platform on the document; without a provider the hint names no code host.
+    document.documentElement.dataset['platform'] = 'darwin'
+    try {
+      const apple = await renderActivity(activity([], { viewerCanComment: true }), { forge: null })
+      const field = apple.view.getByRole('textbox', { name: 'Leave a comment' })
+      expect(field.parentElement?.textContent).toBe('Markdown supported⌘EnterComment')
+    } finally {
+      delete document.documentElement.dataset['platform']
+    }
   })
 
   it('sends on Command or Control with Enter, and not on Enter alone, while composing, or for a blank text', async () => {

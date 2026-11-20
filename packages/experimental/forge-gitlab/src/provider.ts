@@ -2,10 +2,11 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef,
-  ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository,
-  ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult,
-  ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery, MergeRequest,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest,
+  ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList,
+  ForgeViewerQuery, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { readActivity } from './activity.ts'
@@ -14,15 +15,16 @@ import { readCommits } from './commits.ts'
 import { readDescription } from './description.ts'
 import { comparePatch, fileTextOf, isCommit, mergeBaseOf, newestVersion, textPatch, versionFileDiffs, versionPatch } from './diff.ts'
 import type { GlabRunner } from './glab.ts'
-import { gitLabReviewerCandidates, requestGitLabReviews, rerunGitLabChecks, updateGitLabBranch } from './overview.ts'
+import { gitLabReviewerCandidates, requestGitLabReviews, rerunGitLabChecks, setGitLabAutoMerge, updateGitLabBranch } from './overview.ts'
 import { pool } from './pool.ts'
 import type { VersionFile } from './position.ts'
 import { readReviewThreads } from './review.ts'
 import type { PositionFile } from './review.ts'
 import {
   closingIssuesOf, JOB_PAGE, jobsPageSchema, JOBS_QUERY, needsMergeCheck, POLL_JOBS, projectSchema, snapshotOf, statusQuery,
+  statusViewer,
 } from './status.ts'
-import type { JobNode, MergeRequestNode } from './status.ts'
+import type { JobNode, StatusParts } from './status.ts'
 import { checkedProject, encodedPath, mergeRequestPath, parseMergeRequestUrl, parseRemoteUrl, repositoryOf } from './urls.ts'
 import { countViewerLists, readInvolvedList, readViewerList, readViewerName, VIEWER_FILTERS, VIEWER_PAGE } from './viewer.ts'
 import { submitGitLabReview, writeGitLabReview } from './writes.ts'
@@ -266,6 +268,15 @@ export class GitLabProvider implements ForgeProvider {
   }
 
   /**
+   * Turn the automatic merge on through the GraphQL `mergeRequestAccept` mutation at the confirmed head, or off through
+   * REST `cancel_auto_merge`.
+   * @see setGitLabAutoMerge
+   */
+  async setAutoMerge(ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    return this.writable(ref, request.enabled ? request.headSha : null) ?? await setGitLabAutoMerge(this.api, ref, request, signal)
+  }
+
+  /**
    * Publish a comment or a complete review through discussions and draft notes after a check of the head.
    * @see submitGitLabReview
    */
@@ -415,12 +426,16 @@ export class GitLabProvider implements ForgeProvider {
       return results
     }
     const data = z.record(z.string(), z.unknown()).parse(read.body)
+    const viewer = statusViewer(data)
     for (const [index, ref] of refs.entries()) {
       const key = changeRequestKey(ref)
       const project = projectSchema.safeParse(data[`m${index}`])
       if (!project.success) results.set(key, { code: 'unavailable', message: 'unexpected GitLab response to the status read' })
       else if (project.data === null || project.data.mergeRequest === null) results.set(key, { code: 'not-found', message: `merge request ${ref.number} was not found` })
-      else results.set(key, await this.snapshot(ref, project.data.mergeRequestsFfOnlyEnabled, project.data.mergeRequest, allJobs, signal))
+      else {
+        const parts = { ref, fastForwardOnly: project.data.mergeRequestsFfOnlyEnabled, viewer, node: project.data.mergeRequest }
+        results.set(key, await this.snapshot(parts, allJobs, signal))
+      }
     }
     return results
   }
@@ -430,8 +445,9 @@ export class GitLabProvider implements ForgeProvider {
    * to check its conflicts when it has not since a change.
    */
   private async snapshot(
-    ref: ChangeRequestRef, fastForwardOnly: boolean, node: MergeRequestNode, allJobs: boolean, signal: AbortSignal,
+    parts: Pick<StatusParts, 'ref' | 'fastForwardOnly' | 'viewer' | 'node'>, allJobs: boolean, signal: AbortSignal,
   ): Promise<ChangeRequestSnapshot | ForgeFailure> {
+    const { ref, node } = parts
     const jobs: JobNode[] = [...node.headPipeline?.jobs?.nodes ?? []]
     let page = node.headPipeline?.jobs?.pageInfo
     let bytes = Buffer.byteLength(JSON.stringify(node))
@@ -454,8 +470,7 @@ export class GitLabProvider implements ForgeProvider {
     if (needsMergeCheck(node)) await this.api.rest(ref.repository.host, mergeRequestPath(ref), signal)
     const closing = await this.closingIssues(ref, node.updatedAt, signal)
     return snapshotOf({
-      ref, fastForwardOnly, node, jobs, jobsTruncated: page?.hasNextPage ?? false,
-      closingIssues: closing.issues, closingIssuesTruncated: closing.truncated,
+      ...parts, jobs, jobsTruncated: page?.hasNextPage ?? false, closingIssues: closing.issues, closingIssuesTruncated: closing.truncated,
     })
   }
 

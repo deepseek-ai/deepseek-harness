@@ -1,8 +1,8 @@
 /** GitLab merge request status through GraphQL, mapped to forge snapshots. */
 
 import type {
-  ChangeRequestCheck, ChangeRequestIssue, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, ChecksRollup,
-  CheckState, ForgeCheckId, ForgeFailure, MergeMethod, ReviewDecision, ReviewVerdict,
+  ChangeRequestAutoMerge, ChangeRequestCheck, ChangeRequestIssue, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot,
+  ChecksRollup, CheckState, ForgeCheckId, ForgeFailure, MergeMethod, ReviewDecision, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { avatarUrlOf, parseIssueUrl } from './urls.ts'
@@ -15,6 +15,9 @@ export const POLL_JOBS = 50
 
 /** Jobs per page of a complete check read. */
 export const JOB_PAGE = 100
+
+/** The automatic merge strategy that merges once every merge check passes, as `availableAutoMergeStrategies` names it. */
+const CHECKS_PASS_STRATEGY = 'merge_when_checks_pass'
 
 /** Job fields every job page reads. */
 const JOB_FIELDS = 'name status allowFailure stage { name } webPath startedAt finishedAt'
@@ -30,6 +33,7 @@ export const MERGE_REQUEST_FRAGMENT = `fragment MergeRequestStatus on MergeReque
   sourceBranch targetBranch
   diffRefs { baseSha headSha }
   detailedMergeStatus mergeStatusEnum conflicts divergedFromTargetBranch rebaseInProgress
+  autoMergeEnabled availableAutoMergeStrategies mergeUser { username }
   diffStatsSummary { additions deletions }
   squash squashOnMerge squashReadOnly approved
   resolvableDiscussionsCount resolvedDiscussionsCount
@@ -46,8 +50,8 @@ export const JOBS_QUERY = `query($path: ID!, $iid: String!, $cursor: String!) {
 }`
 
 /**
- * Build one query that reads the status of several merge requests, each under the alias `m<index>` with the variables
- * `p<index>` (project path) and `i<index>` (number as a string).
+ * Build one query that reads the signed-in user's username and the status of several merge requests, each under the
+ * alias `m<index>` with the variables `p<index>` (project path) and `i<index>` (number as a string).
  * @param count - number of merge requests.
  * @returns the GraphQL document.
  */
@@ -55,7 +59,8 @@ export function statusQuery(count: number): string {
   const declared = Array.from({ length: count }, (_, index) => `$p${index}: ID!, $i${index}: String!`)
   const selected = Array.from({ length: count }, (_, index) =>
     `m${index}: project(fullPath: $p${index}) { mergeRequestsFfOnlyEnabled mergeRequest(iid: $i${index}) { ...MergeRequestStatus } }`)
-  return `query(${['$jobs: Int!', ...declared].join(', ')}) {\n  ${selected.join('\n  ')}\n}\n${MERGE_REQUEST_FRAGMENT}`
+  const fields = ['currentUser { username }', ...selected].join('\n  ')
+  return `query(${['$jobs: Int!', ...declared].join(', ')}) {\n  ${fields}\n}\n${MERGE_REQUEST_FRAGMENT}`
 }
 
 const pageInfo = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable().optional() })
@@ -91,6 +96,9 @@ export const mergeRequestSchema = z.object({
   conflicts: z.boolean(),
   divergedFromTargetBranch: z.boolean(),
   rebaseInProgress: z.boolean(),
+  autoMergeEnabled: z.boolean(),
+  availableAutoMergeStrategies: z.array(z.string()).nullable(),
+  mergeUser: z.object({ username: z.string() }).nullable(),
   squash: z.boolean(),
   squashOnMerge: z.boolean(),
   squashReadOnly: z.boolean(),
@@ -116,6 +124,15 @@ export const projectSchema = z.object({
   mergeRequestsFfOnlyEnabled: z.boolean(),
   mergeRequest: mergeRequestSchema.nullable(),
 }).nullable()
+
+/**
+ * Read the signed-in user's username from the answer to a status query.
+ * @param data - the `data` object of the answer.
+ * @returns the username, or null when the answer names no signed-in user.
+ */
+export function statusViewer(data: Readonly<Record<string, unknown>>): string | null {
+  return z.object({ username: z.string() }).safeParse(data['currentUser']).data?.username ?? null
+}
 
 /** A following page of head pipeline jobs as {@link JOBS_QUERY} reads it. */
 export const jobsPageSchema = z.object({
@@ -174,6 +191,8 @@ export interface StatusParts {
   readonly ref: ChangeRequestRef
   /** Whether the project merges by fast-forward only. */
   readonly fastForwardOnly: boolean
+  /** Username of the signed-in user, or null when GitLab named none. */
+  readonly viewer: string | null
   /** The merge request node. */
   readonly node: MergeRequestNode
   /** Every job read for the head pipeline, in GitLab's order. */
@@ -224,6 +243,7 @@ export function snapshotOf(parts: StatusParts): ChangeRequestSnapshot | ForgeFai
     mergeability,
     mergeReady: open && !node.draft && status === 'MERGEABLE' && mergeability === 'mergeable' && node.userPermissions.canMerge,
     mergeMethods: mergeMethods(parts.fastForwardOnly, node),
+    autoMerge: autoMergeOf(parts, open),
     branchUpdates: rebase ? ['rebase'] : [],
     reviewDecision: reviewDecision(node, status),
     reviewers: reviewers(node, host),
@@ -250,6 +270,29 @@ function mergeMethods(fastForwardOnly: boolean, node: MergeRequestNode): MergeMe
   const base: MergeMethod = fastForwardOnly ? 'rebase' : 'merge'
   if (node.squashReadOnly) return [node.squashOnMerge ? 'squash' : base]
   return node.squash ? ['squash', base] : [base, 'squash']
+}
+
+/**
+ * How a merge request stands with GitLab's automatic merge, which counts as on only while the merge request is open.
+ * Its method is the one a merge uses then: squashing when GitLab reports that the merge squashes, else the project's
+ * merge commit or fast-forward. It can be turned on while the merge request is open and not a draft, the signed-in user
+ * may merge it, and GitLab lists the strategy that waits for every merge check as available; GitLab lists none for a
+ * merge request that can merge now, and a merge train strategy does not count. Every user who may merge it can turn it
+ * off, and so can its author.
+ */
+function autoMergeOf(parts: StatusParts, open: boolean): ChangeRequestAutoMerge {
+  const { node } = parts
+  const enabled = open && node.autoMergeEnabled
+  const mayMerge = node.userPermissions.canMerge
+  const authored = node.author?.username === parts.viewer
+  return {
+    enabled,
+    method: !enabled ? null : node.squashOnMerge ? 'squash' : parts.fastForwardOnly ? 'rebase' : 'merge',
+    enabledBy: enabled ? node.mergeUser?.username ?? null : null,
+    canEnable: open && !node.draft && !node.autoMergeEnabled && mayMerge
+      && (node.availableAutoMergeStrategies ?? []).includes(CHECKS_PASS_STRATEGY),
+    canDisable: enabled && (mayMerge || authored),
+  }
 }
 
 /**

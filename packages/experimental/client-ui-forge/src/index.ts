@@ -6,7 +6,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateMethod, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer,
+  AutoMergeRequest, BranchUpdateMethod, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef,
+  ChangeRequestReviewer,
   ChangeRequestSnapshot, ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
   ForgeFailure,
   ForgeLineComment, ForgeReadiness, ForgeRerunRequest, ForgeReviewChange, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest,
@@ -621,6 +622,22 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
+   * Turn the code host's automatic merge of a change request the review page shows on, while its head is still the
+   * request's `headSha`, or off.
+   * @param url - web URL of the change request.
+   * @param request - on with the merge method and the head commit the user confirmed, or off.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+   * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+   */
+  @Remote
+  async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.setAutoMerge(this.served(url).ref, request, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
    * Rerun the failed checks of a change request the review page shows.
    * @param url - web URL of the change request.
    * @param request - the head commit whose checks the user saw.
@@ -1178,6 +1195,25 @@ export class ForgePanelController extends TypertRemoteService {
   async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const failure = await this.home.forge.merge(this.bound(session, url).ref, { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Turn the code host's automatic merge of a change request of a Session on, while its head is still the request's
+   * `headSha`, or off; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - on with the merge method and the head commit the user confirmed, or off.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past the request's `headSha`; `forgePanel/action-failed` with the
+   * host's reason when the host refuses otherwise, cannot be reached, or sets no automatic merge;
+   * `forgePanel/action-unknown` when the host's answer did not confirm the change.
+   */
+  @Remote
+  async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.setAutoMerge(this.bound(session, url).ref, request, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 

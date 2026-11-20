@@ -132,6 +132,14 @@ interface ForgeProvider {
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /**
+   * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+   * resolving to undefined once the host accepted it. Omission declares that the provider sets no automatic merge, and
+   * its snapshots then carry no `autoMerge`.
+   */
+  setAutoMerge?(
+    ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined>
+  /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
    * head is another commit, the read resolves to a `stale` failure. `base`, when given, is the `baseSha` the
@@ -370,6 +378,11 @@ interface ChangeRequestSnapshot {
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
   /**
+   * How the change request stands with its host's automatic merge; omitted by a provider that sets none, whose change
+   * requests then offer no automatic merge.
+   */
+  readonly autoMerge?: ChangeRequestAutoMerge
+  /**
    * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
    * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
    * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
@@ -518,6 +531,32 @@ interface MergeRequest {
   /** Commit object name the head must still have; the merge is refused once the head moves. */
   readonly headSha: string
 }
+```
+
+`ctx.forge.setAutoMerge` 为用户确认过的 head 提交启用代码托管平台的自动合并（方式取快照 `mergeMethods` 中的一种），或取消它；启用后，变更请求满足合并条件时由平台自行合并。快照的 `autoMerge` 说明它是否已启用、平台给出时的合并方式与启用人，以及当前用户现在能否启用或取消。不设置自动合并的提供方两者都不提供，此时 `setAutoMerge` 不询问平台，直接返回失败。
+
+```ts type-equiv
+/** How a change request stands with its host's automatic merge. */
+interface ChangeRequestAutoMerge {
+  /** Whether the host merges the change request by itself once its merge requirements are met. */
+  readonly enabled: boolean
+  /** How the commits enter the base branch then, while enabled and the host names the method; null otherwise. */
+  readonly method: MergeMethod | null
+  /** Login of the account that turned it on, while enabled and the host names one; null otherwise. */
+  readonly enabledBy: string | null
+  /** Whether the signed-in user can turn it on now through `setAutoMerge`; false while it is on. */
+  readonly canEnable: boolean
+  /** Whether the signed-in user can turn it off now through `setAutoMerge`; false while it is off. */
+  readonly canDisable: boolean
+}
+```
+
+```ts type-equiv
+/** Turning a change request's automatic merge on for the head commit the user saw, or off. */
+type AutoMergeRequest =
+  /** `method` is one of the snapshot's `mergeMethods`; the host refuses once the head is no longer `headSha`. */
+  | { readonly enabled: true; readonly method: MergeMethod; readonly headSha: string }
+  | { readonly enabled: false }
 ```
 
 ```ts type-equiv
@@ -1680,7 +1719,7 @@ interface ForgeLocalChanges {
 
 ### 代码评审页
 
-[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`、`reviewActivity`、`reviewComment`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`、`reviewActivity`、`reviewComment`、`reviewSetAutoMerge`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
 
 对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
 
@@ -1936,6 +1975,17 @@ async reviewerCandidates( ref: ChangeRequestRef, query: string, signal: AbortSig
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+ * then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>
 
 /**
  * Read complete check details independently of periodic polling.
@@ -2426,6 +2476,17 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
+ * Turn the code host's automatic merge of a change request the review page shows on, while its head is still the
+ * request's `headSha`, or off.
+ * @param url - web URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
+
+/**
  * Rerun the failed checks of a change request the review page shows.
  * @param url - web URL of the change request.
  * @param request - the head commit whose checks the user saw.
@@ -2785,6 +2846,20 @@ registerLens(lens: ForgeLens): () => Promise<void>
  * reason when the host refuses otherwise or cannot be reached.
  */
 @Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Turn the code host's automatic merge of a change request of a Session on, while its head is still the request's
+ * `headSha`, or off; the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past the request's `headSha`; `forgePanel/action-failed` with the
+ * host's reason when the host refuses otherwise, cannot be reached, or sets no automatic merge;
+ * `forgePanel/action-unknown` when the host's answer did not confirm the change.
+ */
+@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
 
 /**
  * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user

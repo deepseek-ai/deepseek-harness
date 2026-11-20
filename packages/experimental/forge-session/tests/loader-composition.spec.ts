@@ -99,6 +99,10 @@ const node = (number) => ({
   reviewDecision: null,
   viewerCanUpdateBranch: false,
   canBeRebased: false,
+  viewerCanEnableAutoMerge: false,
+  viewerCanDisableAutoMerge: false,
+  isMergeQueueEnabled: false,
+  autoMergeRequest: null,
   reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
   reviewRequests: { totalCount: 0, nodes: [] },
   latestReviews: { totalCount: 0, nodes: [] },
@@ -152,6 +156,7 @@ for (const [name, iid] of Object.entries(variables)) {
     detailedMergeStatus: 'MERGEABLE', mergeStatusEnum: 'CAN_BE_MERGED', conflicts: false, divergedFromTargetBranch: false, rebaseInProgress: false,
     squash: false, squashOnMerge: false, squashReadOnly: false, approved: false, resolvableDiscussionsCount: 0, resolvedDiscussionsCount: 0,
     userPermissions: { canMerge: true, pushToSourceBranch: true, updateMergeRequest: true },
+    autoMergeEnabled: false, availableAutoMergeStrategies: [], mergeUser: null,
     approvedBy: { pageInfo: { hasNextPage: false }, nodes: [] }, reviewers: { pageInfo: { hasNextPage: false }, nodes: [] },
     headPipeline: { id: 'gid://gitlab/Ci::Pipeline/1', status: 'SUCCESS', userPermissions: { updatePipeline: true },
       jobs: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [

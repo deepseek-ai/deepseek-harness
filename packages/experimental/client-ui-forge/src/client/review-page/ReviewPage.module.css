@@ -1,7 +1,7 @@
 /* The review page: a list column beside the detail of one change request. Below 880px of page width one column shows:
    the list, or the detail with a back button. */
 .root {
-  container-type: inline-size;
+  container: forge-review / inline-size;
   height: 100%;
   min-height: 0;
 }
@@ -539,6 +539,100 @@
   height: 8px;
 }
 
+/* The detail's skeleton. Each row has the height of the content it stands for: the state chip and the repository in
+   the 32px bar, the 28px title, the 20px line under it, the tabs, 22px lines of text, and 30px rows. */
+.skeletonChip {
+  flex: none;
+  width: 82px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.skeletonRepository {
+  flex: 1000 1 72px;
+  max-width: 236px;
+  height: 10px;
+}
+
+.skeletonTitle {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 8px 0 4px;
+}
+
+.skeletonTitle > span {
+  width: 62%;
+  height: 14px;
+}
+
+.skeletonDetailMeta {
+  display: flex;
+  align-items: center;
+  height: 20px;
+}
+
+.skeletonDetailMeta > span {
+  width: 46%;
+  height: 8px;
+}
+
+.skeletonTab {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 8px 10px;
+  border-bottom: 2px solid transparent;
+}
+
+.skeletonTab > span {
+  width: 28px;
+  height: 10px;
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeletonLines > span {
+  height: 10px;
+  margin: 6px 0;
+}
+
+.skeletonLines > i {
+  height: 10px;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.skeletonRow > .skeletonBar {
+  margin: 0;
+}
+
+.skeletonAvatar {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.skeletonSummary {
+  width: 112px;
+  height: 10px;
+  margin-left: auto;
+}
+
+.skeletonHeadless {
+  padding-top: 4px;
+}
+
 .empty,
 .centered {
   display: flex;
@@ -587,7 +681,10 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* The bar is a container of its own: its width, not the page's, decides whether the link actions fold. The page's
+   rules name the page container, since an unnamed query inside the bar would read the bar. */
 .detailBar {
+  container: forge-review-bar / inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -617,11 +714,24 @@
   font-size: 12px;
 }
 
+/* A flex item wraps by its base size, so the repository link and the labels slot start small and grow: the bar then
+   keeps the actions on its first row. Free room goes to the repository link until its text fits, then to the labels,
+   which fold into a count; with no room left the repository name is cut and its number stays. */
 .repository {
-  flex: none;
+  display: flex;
+  flex: 1000 1 72px;
+  min-width: 0;
+  max-width: max-content;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   text-decoration: none;
+}
+
+.repositoryName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (hover: hover) {
@@ -631,12 +741,14 @@
 }
 
 .number {
+  flex: none;
   margin-left: 4px;
 }
 
+/* The least width holds the count the labels fold into. */
 .labelsSlot {
-  flex: 1 1 120px;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 36px;
 }
 
 .labels {
@@ -684,6 +796,32 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/* Open on the code host, copy the link, read again: three icon buttons at the bar's end, after the merge action. */
+.linkActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.copied {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* The same three actions as one menu, which a narrow bar shows in place of the buttons. */
+.moreAction {
+  display: none;
+}
+
+@container forge-review-bar (max-width: 719px) {
+  .linkActions {
+    display: none;
+  }
+
+  .moreAction {
+    display: inline-flex;
+  }
 }
 
 .primary {
@@ -963,28 +1101,31 @@ button.activityLine:focus-visible,
   margin: 0;
 }
 
+/* The comment field: three lines that grow with the text, over a row that says where the comment goes and holds the
+   button that sends it. */
 .activityCompose {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .activityComposer {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .activityComposer:focus-within {
   border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent);
 }
 
 .activityComposer textarea {
-  flex: 1;
-  min-width: 0;
-  max-height: 160px;
-  padding: 4px 0;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  max-height: 240px;
+  padding: 10px 12px 4px;
   border: 0;
   outline: 0;
   resize: none;
@@ -997,6 +1138,40 @@ button.activityLine:focus-visible,
 
 .activityComposer textarea::placeholder {
   color: var(--dsw-alias-label-tertiary);
+}
+
+.activityComposerFoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+}
+
+.activityComposerHint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityComposerKeys {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.activitySend {
+  flex: none;
+  min-width: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activityComposer {
+    transition: none;
+  }
 }
 
 .activityError {
@@ -1150,13 +1325,13 @@ button.activityLine:focus-visible,
   white-space: nowrap;
 }
 
-@container (max-width: 960px) {
+@container forge-review (max-width: 960px) {
   .summary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@container (max-width: 880px) {
+@container forge-review (max-width: 880px) {
   .page {
     grid-template-columns: minmax(0, 1fr);
   }
