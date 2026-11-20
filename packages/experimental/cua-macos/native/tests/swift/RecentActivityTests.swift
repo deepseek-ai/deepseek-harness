@@ -93,7 +93,7 @@ private let second: UInt64 = 1_000_000_000
     history.connect(owner, lookbackMs: 60_000)
     let observed = history.observe(target, handle: "app", owner: owner)
     let monitor = ExternalInputMonitor(activity: history, ownerOfWindow: { $0 == 10 ? getpid() : nil })
-    let event = try #require(CGEvent(source: nil))
+    let event = try #require(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: .zero, mouseButton: .left))
     event.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(getpid()))
     time += second
     event.timestamp = time
@@ -106,7 +106,7 @@ private let second: UInt64 = 1_000_000_000
     monitor.receive(.scrollWheel, event: event)
     #expect(history.take(owner: owner, handle: "app", observations: ["10": observed]).isEmpty)
     event.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: 10)
-    monitor.receive(.scrollWheel, event: event)
+    monitor.receive(.leftMouseDown, event: event)
     #expect(history.take(owner: owner, handle: "app", observations: ["10": observed]) == [
         .object(["source": .string("external-input"), "windowId": .string("10"), "ageSeconds": .number(0)]),
     ])
