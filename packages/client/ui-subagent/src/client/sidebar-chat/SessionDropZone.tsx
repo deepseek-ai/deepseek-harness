@@ -1,23 +1,31 @@
 /** Drop target that opens a Session dragged from the Session list in the right Sidebar. */
-import { useState, type CSSProperties, type DragEvent } from 'react'
+import { useState, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionDragType } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { PaneId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { NS } from '../locales.ts'
 import css from './SessionDropZone.module.css'
 
 /** Drag data type the Session list sets to a dragged row's Session id. */
 export const SESSION_DRAG_TYPE: SessionDragType = 'application/x-dsh-session'
 
-/** A Session row in flight and where the drop target starts. */
+/** Viewport rectangle, in px, where a dragged Session can land. */
+export interface SessionDropTarget {
+  /** Docked Sidebar pane the Session opens in; absent for the area a collapsed Sidebar would open in. */
+  readonly paneId?: PaneId
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+}
+
+/** A Session row in flight and where it can land. */
 export interface SessionDrag {
   readonly sessionId: SessionId
-  /** Right edge of the navigation column the row left, in px; the target covers the window to its right. */
-  readonly inset: number
-  /** Width of the on-screen Session's right Sidebar, in px, which the target takes; zero when unknown. */
-  readonly width: number
+  readonly targets: readonly SessionDropTarget[]
 }
 
 /** Session drag tracking and the open operation supplied by the plugin. */
@@ -26,8 +34,8 @@ export interface SessionDropZoneInjected {
     /** Session dragged from the list that the on-screen Session's Sidebar can open; undefined otherwise. */
     readonly sessionDrag: HostObservable<SessionDrag | undefined>
   }
-  /** Open the Session's Conversation in the on-screen Session's right Sidebar. */
-  readonly openAside: (sessionId: SessionId) => void
+  /** Open the Session's Conversation in the on-screen Session's right Sidebar, in the named docked pane if any. */
+  readonly openAside: (sessionId: SessionId, paneId?: PaneId) => void
 }
 
 /** Props of the `shell.overlay` drop target. */
@@ -35,20 +43,28 @@ export type SessionDropZoneProps =
   PropsRuntime<'shell.overlay'> & PropsLocale<typeof NS> & InjectFace<SessionDropZoneInjected>
 
 /**
- * Show the right-edge drop target while a Session row is dragged.
+ * Show a drop target over each place in the right Sidebar a dragged Session row can open in.
  * @param props - tracked drag, open operation, and copy.
  * @returns the drop target, or nothing outside a Session drag.
  */
 export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZoneProps) {
   const drag = useSessionDrag(value => value)
   if (drag === undefined) return null
-  const { sessionId, inset, width } = drag
-  return <DropTarget key={sessionId} inset={inset} width={width} label={t('open.sidebar')} onDrop={() => { openAside(sessionId) }} />
+  const { sessionId, targets } = drag
+  // A body portal stacks above the narrow-window drawer mask, which covers the frame's overlay layer.
+  return createPortal(
+    <>
+      {targets.map(target => (
+        <DropTarget key={`${sessionId}:${target.paneId ?? ''}`} target={target} label={t('open.sidebar')}
+          onDrop={() => { openAside(sessionId, target.paneId) }} />
+      ))}
+    </>,
+    document.body,
+  )
 }
 
-function DropTarget({ inset, width, label, onDrop }: {
-  readonly inset: number
-  readonly width: number
+function DropTarget({ target, label, onDrop }: {
+  readonly target: SessionDropTarget
   readonly label: string
   readonly onDrop: () => void
 }) {
@@ -61,12 +77,11 @@ function DropTarget({ inset, width, label, onDrop }: {
     event.dataTransfer.dropEffect = 'copy'
     setOver(true)
   }
-  // A body portal stacks above the narrow-window drawer mask, which covers the frame's overlay layer.
-  return createPortal(
+  return (
     <div
       className={css.zone}
-      style={{ '--session-drop-inset': `${String(inset)}px`, ...(width > 0 ? { '--session-drop-width': `${String(width)}px` } : {}) } as CSSProperties}
-      data-session-drop-zone=""
+      style={{ left: target.left, top: target.top, width: target.width, height: target.height }}
+      data-session-drop-zone={target.paneId ?? ''}
       data-active={over || undefined}
       onDragEnter={accept}
       onDragOver={accept}
@@ -84,7 +99,6 @@ function DropTarget({ inset, width, label, onDrop }: {
         <IconPanelLeftOutlineRegular className={css.icon} aria-hidden="true" />
         <span className={css.label}>{label}</span>
       </div>
-    </div>,
-    document.body,
+    </div>
   )
 }

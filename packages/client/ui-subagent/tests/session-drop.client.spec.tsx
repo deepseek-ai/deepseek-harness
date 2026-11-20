@@ -3,6 +3,7 @@ import { cleanup, createEvent, fireEvent, render, screen } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { PaneId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { trackSessionDrags } from '../src/client/sidebar-chat/index.tsx'
 import { SessionDropZone, type SessionDrag, type SessionDropZoneProps } from '../src/client/sidebar-chat/SessionDropZone.tsx'
 
@@ -20,7 +21,7 @@ function dispatchDrag(type: string, data: Record<string, string> = {}, target: E
   target.dispatchEvent(event)
 }
 
-const outside = { sessionId: OTHER, inset: 0, width: 0 }
+const outside = { sessionId: OTHER, targets: [{ left: 0, top: 0, width: 0, height: 0 }] }
 
 describe('Session drag tracking', () => {
   it('publishes a dragged list Session that another on-screen Session can open', () => {
@@ -64,7 +65,7 @@ describe('Session drag tracking', () => {
     expect(drags.source.getSnapshot()).toEqual(outside)
   })
 
-  it('starts the target at the right edge of the frame column the row left', () => {
+  it('measures the on-screen Sidebar: its docked panes while open, else the area it would open in', () => {
     const frame = document.createElement('div')
     const column = document.createElement('nav')
     const row = document.createElement('div')
@@ -73,8 +74,10 @@ describe('Session drag tracking', () => {
     column.append(row)
     frame.append(column, overlay)
     document.body.append(frame)
-    column.getBoundingClientRect = () => ({ right: 279.6 }) as DOMRect
-    // The on-screen Session's right Sidebar panel sets the target's width; another Session's is ignored.
+    column.getBoundingClientRect = () => ({ right: 279.6, top: 0 }) as DOMRect
+    const width = vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1440)
+    const height = vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800)
+    // Another Session's panel is ignored.
     const panel = document.createElement('div')
     panel.setAttribute('data-sidebar-right-panel', 'push')
     panel.setAttribute('data-sidebar-right-session', MAIN)
@@ -85,13 +88,47 @@ describe('Session drag tracking', () => {
     otherPanel.getBoundingClientRect = () => ({ width: 900 }) as DOMRect
     frame.append(otherPanel, panel)
     const drags = trackSessionDrags(document, () => MAIN)
+    // Collapsed: the area the Sidebar would open in, never left of the navigation column.
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
-    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, inset: 280, width: 520 })
-    // A drag whose target is not an element starts at the window edge.
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, targets: [{ left: 920, top: 0, width: 520, height: 800 }] })
     dispatchDrag('dragend')
+    panel.getBoundingClientRect = () => ({ width: 1300 }) as DOMRect
+    dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, targets: [{ left: 280, top: 0, width: 1160, height: 800 }] })
+    dispatchDrag('dragend')
+
+    // Open: one target per visible docked pane, so the divider between panes and the chat area stay uncovered.
+    panel.setAttribute('data-sidebar-right-open', '')
+    const pane = (id: string, rect: Partial<DOMRect>): HTMLElement => {
+      const element = document.createElement('section')
+      element.setAttribute('data-dockkit-pane', id)
+      element.getBoundingClientRect = () => rect as DOMRect
+      panel.append(element)
+      return element
+    }
+    const left = pane('p1', { left: 920.4, top: 0, width: 259.5, height: 800 })
+    pane('p2', { left: 1181, top: 0, width: 259, height: 800 })
+    pane('hidden', { left: 0, top: 0, width: 0, height: 0 })
+    dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, targets: [
+      { paneId: 'p1', left: 920, top: 0, width: 260, height: 800 },
+      { paneId: 'p2', left: 1181, top: 0, width: 259, height: 800 },
+    ] })
+    dispatchDrag('dragend')
+    // An open panel without a measured pane falls back to the panel area.
+    for (const element of panel.querySelectorAll('[data-dockkit-pane]')) element.remove()
+    left.remove()
+    dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, targets: [{ left: 280, top: 0, width: 1160, height: 800 }] })
+    dispatchDrag('dragend')
+    // A drag whose target is not an element starts at the window edge.
+    panel.remove()
+    otherPanel.remove()
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, document)
-    expect(drags.source.getSnapshot()).toEqual({ ...outside, width: 520 })
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, targets: [{ left: 0, top: 0, width: 1440, height: 800 }] })
     drags.dispose()
+    width.mockRestore()
+    height.mockRestore()
     frame.remove()
   })
 })
@@ -101,7 +138,12 @@ describe('Session drop zone', () => {
     let current = initial
     const openAside = vi.fn()
     const source: HostObservable<SessionDrag | undefined> = {
-      getSnapshot: () => current === undefined ? undefined : { sessionId: current, inset: 280, width: current === OTHER ? 516 : 0 },
+      getSnapshot: () => current === undefined ? undefined : {
+        sessionId: current,
+        targets: current === OTHER
+          ? [{ left: 924, top: 0, width: 516, height: 800 }]
+          : [{ paneId: 'p1' as PaneId, left: 920, top: 0, width: 260, height: 800 }, { paneId: 'p2' as PaneId, left: 1181, top: 0, width: 259, height: 800 }],
+      },
       subscribe: () => () => {},
     }
     const props = {
@@ -136,9 +178,7 @@ describe('Session drop zone', () => {
     // The zone portals to the body so it stacks above the narrow-window drawer mask.
     const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
     expect(zone.parentElement).toBe(document.body)
-    // The target is as wide as the Sidebar would open, and never reaches left of the navigation column.
-    expect(zone.style.getPropertyValue('--session-drop-inset')).toBe('280px')
-    expect(zone.style.getPropertyValue('--session-drop-width')).toBe('516px')
+    expect([zone.style.left, zone.style.top, zone.style.width, zone.style.height]).toEqual(['924px', '0px', '516px', '800px'])
     expect(view.container.innerHTML).toBe('')
     expect(zone.hasAttribute('data-active')).toBe(false)
 
@@ -160,12 +200,15 @@ describe('Session drop zone', () => {
     document.removeEventListener('drop', documentDrop)
     expect(drop.event.defaultPrevented).toBe(true)
     expect(documentDrop).not.toHaveBeenCalled()
-    expect(view.openAside).toHaveBeenCalledExactlyOnceWith(OTHER)
+    expect(view.openAside).toHaveBeenCalledExactlyOnceWith(OTHER, undefined)
     expect(zone.hasAttribute('data-active')).toBe(false)
 
-    // Without a known Sidebar width the target spans the window right of the navigation column.
+    // A split Sidebar shows one target per pane, and a drop opens the Session in that pane.
     view.set(MAIN)
-    expect(document.querySelector<HTMLElement>('[data-session-drop-zone]')!.style.getPropertyValue('--session-drop-width')).toBe('')
+    const panes = document.querySelectorAll<HTMLElement>('[data-session-drop-zone]')
+    expect([...panes].map(element => element.dataset.sessionDropZone)).toEqual(['p1', 'p2'])
+    fire(panes[1]!, 'drop')
+    expect(view.openAside).toHaveBeenLastCalledWith(MAIN, 'p2')
 
     view.set(undefined)
     expect(document.querySelector('[data-session-drop-zone]')).toBeNull()

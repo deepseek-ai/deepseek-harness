@@ -5,7 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { PaneId, SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
   HostObservable, PropsRenderFactories, PropsRenderSlots, PropsRuntime, TranslateNS,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -13,7 +13,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { NS } from '../locales.ts'
 import css from './SidebarChat.module.css'
-import { SESSION_DRAG_TYPE, SessionDropZone, type SessionDrag, type SessionDropZoneInjected } from './SessionDropZone.tsx'
+import {
+  SESSION_DRAG_TYPE, SessionDropZone, type SessionDrag, type SessionDropTarget, type SessionDropZoneInjected,
+} from './SessionDropZone.tsx'
 
 /** Stable implementation identity for the Sidebar tab body. */
 export const SUBAGENT_CHAT_ID = '@deepseek-ai/dsh-client-ui-subagent'
@@ -139,11 +141,40 @@ function frameColumnOf(node: Element): Element | undefined {
 }
 
 /**
+ * Measure where a dragged Session can land in the on-screen Session's right Sidebar.
+ * @param doc - document holding the frame.
+ * @param onScreen - the Session whose Sidebar receives the drop.
+ * @param column - navigation column the row left; the target never reaches left of it.
+ * @returns one target per docked pane while the Sidebar is open, else the area the Sidebar would open in.
+ */
+function dropTargets(doc: Document, onScreen: SessionId, column: Element | undefined): SessionDropTarget[] {
+  const inset = Math.round(column?.getBoundingClientRect().right ?? 0)
+  const panel = [...doc.querySelectorAll('[data-sidebar-right-panel]')]
+    .find(element => element.getAttribute('data-sidebar-right-session') === onScreen)
+  if (panel?.hasAttribute('data-sidebar-right-open') === true) {
+    const panes = [...panel.querySelectorAll('[data-dockkit-pane]')].flatMap((pane) => {
+      const rect = pane.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0 ? [{ paneId: pane.getAttribute('data-dockkit-pane') as PaneId, rect }] : []
+    })
+    if (panes.length > 0) {
+      return panes.map(({ paneId, rect }) => ({
+        paneId, left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height),
+      }))
+    }
+  }
+  // A collapsed panel keeps its resolved width; zero means it cannot fit beside the conversation.
+  const viewport = doc.documentElement.clientWidth
+  const width = Math.round(panel?.getBoundingClientRect().width ?? 0)
+  const left = Math.max(inset, width > 0 ? viewport - width : inset)
+  const top = Math.round(column?.getBoundingClientRect().top ?? 0)
+  return [{ left, top, width: Math.max(0, viewport - left), height: Math.max(0, doc.documentElement.clientHeight - top) }]
+}
+
+/**
  * Track Session rows dragged from the Session list while another Session is on screen.
  * @param doc - document whose drag events carry the rows' data.
  * @param mounted - reads the on-screen Session.
- * @returns the dragged Session with the right edge of the column it left and the on-screen Sidebar's width, in px,
- * and the listener disposer.
+ * @returns the dragged Session with its drop targets, and the listener disposer.
  */
 export function trackSessionDrags(doc: Document, mounted: () => SessionId | undefined): {
   readonly source: HostObservable<SessionDrag | undefined>
@@ -165,14 +196,7 @@ export function trackSessionDrags(doc: Document, mounted: () => SessionId | unde
       return
     }
     const column = event.target instanceof Element ? frameColumnOf(event.target) : undefined
-    // The panel keeps its resolved width while collapsed; zero means it cannot fit beside the conversation.
-    const panel = [...doc.querySelectorAll('[data-sidebar-right-panel]')]
-      .find(element => element.getAttribute('data-sidebar-right-session') === onScreen)
-    publish({
-      sessionId: id,
-      inset: Math.round(column?.getBoundingClientRect().right ?? 0),
-      width: Math.round(panel?.getBoundingClientRect().width ?? 0),
-    })
+    publish({ sessionId: id, targets: dropTargets(doc, onScreen, column) })
   }
   const end = (): void => { publish(undefined) }
   // A source row unmounted mid-drag fires dragend on a detached node; the first
@@ -294,10 +318,12 @@ export function registerSidebarChat(ctx: Context, t: TranslateNS<typeof NS>): vo
     const drags = trackSessionDrags(document, () => ctx.sidebarRight.mounted.getSnapshot())
     const injected: SessionDropZoneInjected = {
       hooks: { sessionDrag: drags.source },
-      openAside: (sessionId) => {
+      openAside: (sessionId, paneId) => {
         // The on-screen Session can leave between dragstart and drop.
         if (ctx.sidebarRight.mounted.getSnapshot() === undefined) return
-        ctx.sidebarRight.openResource(sessionChatAddress(sessionId), { kind: 'subagentchat', destination: 'sidebar' })
+        ctx.sidebarRight.openResource(sessionChatAddress(sessionId), paneId === undefined
+          ? { kind: 'subagentchat', destination: 'sidebar' }
+          : { kind: 'subagentchat', paneId })
       },
     }
     const disposeZone = ctx.slots.inject('shell.overlay', () => ctx.slots.register({

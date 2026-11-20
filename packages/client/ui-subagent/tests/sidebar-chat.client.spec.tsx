@@ -143,14 +143,16 @@ describe('Sidebar chat registration', () => {
     ])
     // A dropped root Session opens in the on-screen Session's Sidebar column.
     const drop = registrations[2]?.options.inject as () => {
-      hooks: { sessionDrag: { getSnapshot: () => { sessionId: SessionId; inset: number; width: number } | undefined } }
-      openAside: (sessionId: SessionId) => void
+      hooks: { sessionDrag: { getSnapshot: () => { sessionId: SessionId } | undefined } }
+      openAside: (sessionId: SessionId, paneId?: string) => void
     }
     drop().openAside(CHILD)
     expect(openResource).toHaveBeenCalledWith(sessionChatAddress(CHILD), { kind: 'subagentchat', destination: 'sidebar' })
+    drop().openAside(CHILD, 'pane-2')
+    expect(openResource).toHaveBeenLastCalledWith(sessionChatAddress(CHILD), { kind: 'subagentchat', paneId: 'pane-2' })
     onScreen = undefined
     drop().openAside(CHILD)
-    expect(openResource).toHaveBeenCalledOnce()
+    expect(openResource).toHaveBeenCalledTimes(2)
     onScreen = PARENT
     // The tracker compares the dragged row with the Sidebar's on-screen Session and stops listening on disposal.
     const dragStart = (): void => {
@@ -159,7 +161,7 @@ describe('Sidebar chat registration', () => {
       document.body.dispatchEvent(event)
     }
     dragStart()
-    expect(drop().hooks.sessionDrag.getSnapshot()).toEqual({ sessionId: CHILD, inset: 0, width: 0 })
+    expect(drop().hooks.sessionDrag.getSnapshot()?.sessionId).toBe(CHILD)
     document.body.dispatchEvent(new Event('dragend', { bubbles: true }))
     for (const dispose of disposers) dispose()
     dragStart()
