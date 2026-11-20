@@ -69,7 +69,7 @@ function requestSchema<I extends z.ZodRawShape>(input: I) {
     operation('getState', { ...app, windowId: windowId.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
-      showDiff: z.boolean().optional().describe('On macOS, return changes from the previous comparable tree, or the full tree when comparison is unavailable or larger. Omitted or false returns the full tree. Windows does not implement true.'),
+      showDiff: z.boolean().optional().describe('On macOS, start a numbered tree and return changes on subsequent comparable reads. Omitted or false returns the full tree. Windows does not implement true.'),
       maxElements: traversalLimit.optional().describe('Maximum nodes to visit on this read. Omission uses the provider setting.'),
       maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),

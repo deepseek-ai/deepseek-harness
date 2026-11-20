@@ -30,14 +30,13 @@ struct AXTreeReadOptions: Equatable {
 struct AXTreeBaseline {
     let options: AXTreeReadOptions
     let lines: [AXTreeLine]
-    let focusedWindowID: UInt32?
 
     /// The snapshot's action lookup and structured element records must use the same numbers as the displayed tree.
     static func observe(_ projection: inout AXProjection, options: AXTreeReadOptions,
-                        previous: AXTreeBaseline?, checkCancellation: () throws -> Void) throws -> AXTreeBaseline? {
+                        previous: AXTreeBaseline?, windowTitle: String? = nil, checkCancellation: () throws -> Void) throws -> AXTreeBaseline? {
         guard !projection.truncated, !projection.hasUnreadableElements else { return nil }
         var lines = projection.lines
-        let full = AXTreeBaseline(options: options, lines: lines, focusedWindowID: projection.focusedWindowID)
+        let full = AXTreeBaseline(options: options, lines: lines)
         let focus = lines.firstIndex(where: \.focused)
         func focusSummary(_ rows: [AXTreeLine]) -> String {
             guard let focus else { return "" }
@@ -45,7 +44,7 @@ struct AXTreeBaseline {
             return "\nThe focused UI element is \(line.id) \(line.body)"
         }
         projection.tree += focusSummary(lines)
-        guard let previous, options == previous.options, previous.focusedWindowID == full.focusedWindowID else { return full }
+        guard let previous, options == previous.options else { return full }
 
         let old = Dictionary(uniqueKeysWithValues: previous.lines.map { ($0.element, $0) })
         let retained = try matches(before: previous.lines, after: lines, checkCancellation: checkCancellation)
@@ -66,9 +65,10 @@ struct AXTreeBaseline {
             }
         }
         let deleted = previous.lines.compactMap { live.contains($0.element) ? nil : $0.id }.sorted()
-        var delta = "There has been no change in the accessibility tree."
+        let target = windowTitle.map { " for Window: " + String(reflecting: $0) } ?? ""
+        var delta = "There has been no change in the accessibility tree" + target + "."
         if !deleted.isEmpty || !changes.isEmpty {
-            var output = ["The following is a diff from the previous accessibility tree. ~ marks changes and + marks additions."]
+            var output = ["The following is a diff from the previous accessibility tree" + target + " with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range."]
             if !deleted.isEmpty { output.append("Removed element IDs: " + ranges(deleted)) }
             output += changes
             guard output.count <= lines.count else { return full }
@@ -77,17 +77,17 @@ struct AXTreeBaseline {
 
         // Full observations number rows densely. Publish only the remapped IDs for actionable rows.
         var actions: [Int: AXUIElement] = [:]
-        for i in projection.elements.indices {
-            guard var record = projection.elements[i].object, let text = record["elementId"]?.string,
-                  let dense = Int(text), let action = projection.indexed[dense] else { preconditionFailure("Missing projected AX action") }
-            let id = lines[dense].id
-            actions[id] = action
-            record["elementId"] = .string(String(id))
-            projection.elements[i] = .object(record)
+        var actionIndex = 0
+        for (dense, line) in lines.enumerated() where projection.indexed[dense] != nil {
+            var record = projection.elements[actionIndex].object!
+            actions[line.id] = line.element
+            record["elementId"] = .string(String(line.id))
+            projection.elements[actionIndex] = .object(record)
+            actionIndex += 1
         }
         projection.indexed = actions
         projection.tree = delta + focusSummary(lines)
-        return AXTreeBaseline(options: options, lines: lines, focusedWindowID: full.focusedWindowID)
+        return AXTreeBaseline(options: options, lines: lines)
     }
 
     /// Retain an ordered subsequence of each parent's children. A move removes the old subtree and inserts the new one.

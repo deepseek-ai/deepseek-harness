@@ -22,7 +22,7 @@ export function createNativeFixture(selectorPid) {
     let acquired = false
     let generation = 0
     let observed
-    let lastTree
+    let lastNumberedCount
     let heldCallId
     function dispatch(method, params) {
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
@@ -40,8 +40,16 @@ export function createNativeFixture(selectorPid) {
       if (method === 'getState') {
         observed = `fixture-snapshot-${++generation}`
         const tree = `- [0] AXButton "Increment"\n- AXStaticText "Count: ${state.count}"`
-        const output = params.showDiff && tree === lastTree ? 'AX tree unchanged.' : tree
-        lastTree = tree
+        let output = tree
+        if (params.showDiff || lastNumberedCount !== undefined) {
+          const row = '1 AXStaticText "Count: ' + state.count + '"'
+          const target = ' for Window: "CUA fixture"'
+          output = !params.showDiff || lastNumberedCount === undefined ? '0 AXButton "Increment"\n' + row
+            : lastNumberedCount === state.count ? 'There has been no change in the accessibility tree' + target + '.'
+            : 'The following is a diff from the previous accessibility tree' + target
+              + ' with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\n~' + row
+          lastNumberedCount = state.count
+        }
         return { appHandle: 'fixture-app', windowId: params.windowId ?? null, snapshotId: observed,
           tree: output, windows: [window], truncated: false }
       }

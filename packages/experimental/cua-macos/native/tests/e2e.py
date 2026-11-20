@@ -175,7 +175,7 @@ def main():
                 first = call("getState", diff_params)
                 assert first["tree"].startswith("AX scope=window"), first
                 unchanged = call("getState", diff_params)
-                assert unchanged["tree"].startswith("There has been no change in the accessibility tree."), unchanged
+                assert unchanged["tree"].startswith("There has been no change in the accessibility tree for Window:"), unchanged
                 assert unchanged["snapshotId"] != first["snapshotId"]
                 button = next(e for e in unchanged["elements"] if e["title"] == "Increment primary")
                 target = {**owner, "snapshotId": unchanged["snapshotId"], "elementId": button["elementId"]}
@@ -185,14 +185,14 @@ def main():
                 assert changed["tree"].startswith("The following is a diff"), changed
                 secondary_diff = {**secondary_params, "showDiff": True}
                 assert call("getState", secondary_diff)["tree"].startswith("AX scope=window")
-                assert call("getState", diff_params)["tree"].startswith("There has been no change in the accessibility tree.")
+                assert call("getState", diff_params)["tree"].startswith("There has been no change in the accessibility tree for Window:")
                 assert call("getState", {**diff_params, "details": True})["tree"].startswith("AX scope=window")
                 assert call("getState", diff_params)["tree"].startswith("AX scope=window")
                 limited = call("getState", {**diff_params, "maxElements": 1})
                 assert limited["truncated"] and "truncated" in limited["tree"], limited
                 assert call("getState", diff_params)["tree"].startswith("AX scope=window")
                 assert call("getState", {**diff_params, "showDiff": False})["tree"].startswith("AX scope=window")
-                assert call("getState", diff_params)["tree"].startswith("AX scope=window")
+                assert call("getState", diff_params)["tree"].startswith("There has been no change in the accessibility tree for Window:")
                 call("getState", {**diff_params, "showDiff": "true"}, "INVALID_ARGUMENT")
                 assert call("getState", diff_params)["tree"].startswith("AX scope=window")
                 helper.eof()

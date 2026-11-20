@@ -317,11 +317,12 @@ actor AXWorker {
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
             let options = try AXTreeReadOptions(params)
             let showDiff = try params.optionalBoolean("showDiff") ?? false
+            let numbered = showDiff || previousTree != nil
             var projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
                     maxElements: options.maxElements, maxDepth: options.maxDepth,
-                    includeMenus: options.includeMenus, details: options.details, numbered: showDiff)
+                    includeMenus: options.includeMenus, details: options.details, numbered: numbered)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -333,8 +334,8 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            let tree = showDiff ? try AXTreeBaseline.observe(&projection, options: options, previous: previousTree,
-                checkCancellation: { try self.cancellation.check() }) : nil
+            let tree = numbered ? try AXTreeBaseline.observe(&projection, options: options, previous: showDiff ? previousTree : nil,
+                windowTitle: window.flatMap { id in observedWindows.first { $0.windowID == id }?.title }, checkCancellation: { try self.cancellation.check() }) : nil
             try cancellation.check()
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed, tree: tree)
             for observed in observedWindows where window == nil || observed.windowID == window {
