@@ -25,6 +25,7 @@ import {
 // DSH_COVERAGE_PARTITIONS to every child).
 beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
+  vi.stubEnv('DSH_COVERAGE_SHARD', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
@@ -755,6 +756,37 @@ describe('gate graph validation', () => {
       env: { DSH_COVERAGE_EXEMPT_HEAVY: '1' },
       streamOutput: true,
     })
+  })
+
+  it.each([
+    ['1/2', true],
+    ['2/2', false],
+  ] as const)('runs coverage file shard %s with the exempt heavy suites only on the first shard', (shard, ownsExempt) => {
+    const subject = withEnv('DSH_COVERAGE_SHARD', shard, () => withEnv('DSH_COVERAGE_PARTITIONS', '4', () =>
+      withPnpmEntrypoint(() => gatesForMode('ci-coverage-shard'))))
+
+    expect(subject.map(item => [item.id, item.needs ?? []])).toEqual([
+      ['native-system', []],
+      ['coverage', ['native-system']],
+      ...ownsExempt ? [['coverage-exempt-heavy', ['native-system']]] : [],
+    ])
+    expect(subject[1]).toMatchObject({
+      args: ['/private/pnpm.cjs', 'run', 'test:coverage:partitioned'],
+      env: { DSH_COVERAGE_EXEMPT_HEAVY: '1' },
+    })
+  })
+
+  it('refuses a coverage shard lane without a shard', () => {
+    expect(() => withEnv('DSH_COVERAGE_PARTITIONS', '4', () =>
+      withPnpmEntrypoint(() => gatesForMode('ci-coverage-shard'))))
+      .toThrow('ci-coverage-shard requires DSH_COVERAGE_SHARD')
+  })
+
+  it('leaves the exempt share of the coverage budget only on the first shard', () => {
+    expect(ciWorkerEnvironment('ci-coverage-shard', { DSH_COVERAGE_MAX_WORKERS: '6', DSH_COVERAGE_SHARD: '1/2' }, 16))
+      .toHaveProperty('DSH_COVERAGE_PARTITIONS', '4')
+    expect(ciWorkerEnvironment('ci-coverage-shard', { DSH_COVERAGE_MAX_WORKERS: '6', DSH_COVERAGE_SHARD: '2/2' }, 16))
+      .toHaveProperty('DSH_COVERAGE_PARTITIONS', '6')
   })
 
   it('rejects an invalid coverage partition count before starting a gate', () => {
