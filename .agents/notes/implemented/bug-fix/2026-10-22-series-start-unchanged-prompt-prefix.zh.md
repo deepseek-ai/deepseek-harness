@@ -1,39 +1,35 @@
-# Agent Note: 渲染未变的新序列保留存活的系统节点
+# Agent Note: 系列开始时未变化的提示词保留存活系统节点
 
 Status: implemented
 
 [English](2026-10-22-series-start-unchanged-prompt-prefix.md) | 中文
 
-## Problem
+## 问题
 
-在 in-history 路由上，提示词变化会追加为后续的 `system/message`，因此 node 0 保持陈旧，由最新存活节点承载渲染文本。surface 替换（压缩、工具结果剪枝、图片省略）会开启新的请求序列。在渲染文本已经与该最新节点一致时重写 node 0，会清空该节点并把完全相同的文本写进 node 0。于是 wire 请求的第一条消息发生变化，提供方前缀缓存从第一个 token 起未命中，尽管提示词文本没有任何变化。
+surface 替换可能只使对话历史靠后的部分失效。在该请求序列开始时将未变化的系统指令移回 node 0，会在没有改变指令的情况下从头破坏提供方前缀缓存。
 
-真实会话 `session-da55bbc9-…` 第 710 轮第 2 步：`compaction/prune` 替换了一条工具结果（seq 34669、34670）；下一次请求写入的 7,618 个字符与它清空的节点完全相同（seq 34672、34673），`request/header` 记录 reason `series`（seq 34674），该步计费 722,332 个未命中输入 token、1,152 个缓存读取 token（命中率 0.16%），而相邻步骤约为 99.9%。第 707 轮的构建更新追加了提示词节点；第 710 轮没有任何东西改变渲染文本。
+## 决策
 
-## Decision
+新请求序列开始时，将未变化的已准入系统节点保留在原位。系统提示词服务比较已提交的规范段文本，与请求序列标记独立。替换无关的用户或工具内容不需要重建指令。压缩是[延迟从当前来源重建](../architecture/2026-11-09-deferred-system-compaction.zh.md)的独立触发条件，而非序列标记的结果。[分段准入决策](../architecture/2026-10-21-section-based-system-updates.zh.md)负责增量更新、退役、完整覆盖和适配器表示。
 
-`SystemPromptProjection.project` 只在有效文本必须移动时重写 node 0：不具备能力的路由、空渲染文本，或最新存活非空节点文本与渲染文本不同的新序列开始。当路由为 in-history、渲染文本非空、且最新存活节点已经持有它时，投影不产生任何更新，节点保持在已缓存历史携带它的位置。loop 仍通过 `request/header` 记录请求序列（`series`，或带 `startsSeries: true` 的 `change`），并照旧重建声明；当「渲染未变则跳过」与工具 schema 起因的新序列重合时，header 记录声明变化但不带 `startsSeries`。
+请求序列和工具声明处理保持独立。surface 替换仍会开始新序列，声明也仍可重建；两者本身都不会移动系统指令。不支持工具更新的路由会收到完整的活跃声明，即使未变化的系统指令不产生系统事件或额外的 `startsSeries` 标记。
 
-重试恢复保持原有保证：重试压缩遮蔽最新节点后，有效文本回退到更旧的节点，与渲染文本不同，于是头节点在用户消息再次被接纳之前重写。投影从不会在已接纳的用户消息之后追加更新。
+## 验证
 
-## Verification
+- [`admission.spec.ts`](../../../../packages/core/system-prompt/tests/admission.spec.ts) 验证未变文本不产生增量，而压缩独立地标记待执行完整重建。
+- [`system-prompt-admission.spec.ts`](../../../../packages/core/agent-loop/tests/system-prompt-admission.spec.ts) 验证显式序列开始、无关替换、工具变化和恢复期间的未变前缀，以及压缩移除系统节点后的重试恢复。
+- [`in-history-series-start`](../../../../snapshots/session/in-history-series-start/) 录制会话验证替换无关历史后保留两条系统消息，且不产生冗余系统事件。
 
-- [`system-prompt-projection.spec.ts`](../../../../packages/core/agent-loop/tests/system-prompt-projection.spec.ts) 固定「能力路由的新序列开始时存活节点文本已一致则不产生操作」的决策。
-- [`system-prompt-admission.spec.ts`](../../../../packages/core/agent-loop/tests/system-prompt-admission.spec.ts) 固定 wire 请求：渲染文本未变的压缩替换保留两条系统消息，上一次请求的消息仍构成前缀，相邻步骤重新获得提供方前缀。
-- [`in-history-series-start`](../../../../snapshots/session/in-history-series-start/) 录制会话通过 shipped headless profile 回放「提示词变化 + 后续 surface 替换」，固定渲染未变的新序列保留两份提示词版本且不写 `system/message` 事件。
+## 考虑过的替代方案
 
-## Alternatives considered
+**每次序列开始都归并。** 已拒绝，因为尾部替换不会使整个缓存前缀失效。
 
-**永远保留追加节点、从不重写。** 更简单，但无法追加提示词的路由、或必须清空的提示词仍需要单一当前头节点；新序列开始时若渲染文本确实变化，也不能在失败尝试已接纳的用户消息之后追加。拒绝。
+**始终保留已准入节点。** 拒绝，因为压缩可能移除指令，并明确为下一次模型尝试采用当前活跃来源。完整重建也会清除保留的新增内容；旧头节点本身不是当前状态的权威来源。
 
-**只要 head 不同就跳过归并。** 在目标路由变为不具备能力时，陈旧 head 会重新成为权威，因为该路由忽略后续系统节点；决定后续节点是否生效的是路由能力，而不是 head 文本。拒绝。
+**不再将局部替换视为序列开始。** 已拒绝，因为压缩与图像卸载仍需要请求序列处理。提示词准入负责独立的指令决策。
 
-**让局部 surface 替换不再算新序列。** 剪枝只改一条工具结果的文本，缓存损失是局部的，但图片省略与压缩决定仍合理地开启新序列；投影不应依赖是哪种替换制造了边界。拒绝：提示词决策属于投影。
+**比较重建的线上请求。** 已拒绝，因为这会重复请求重建，并将准入与适配器序列化耦合。规范 Session 记录已标识指令及其对话位置。
 
-**比较重建后的请求而不是 surface 文本。** loop 从 surface 事件派生请求，比较历史 wire 消息会重复请求重建，而且仍然需要同样的有效文本比较。拒绝。
+## 影响
 
-## Consequences
-
-- 具备能力的路由在新序列开始后可能在模型历史中保留更早的提示词版本；在被后续归并或压缩遮蔽之前，它们会计入输入 token。
-- 不支持工具更新的路由上，工具 schema 变化开启的新序列不再写出 `system/message` 事件，因此其 header 记录声明变化但不带 `startsSeries`。请求仍通过不支持更新的路由投影（`projectToolUpdates`）携带完整的生效声明集合，而 `Session.toolHistory()` 保留其增量基线、不再重置。
-- 渲染文本确实不同时归并仍然生效：路由切换、与压缩同时发生的提示词更新，以及遮蔽最新节点的重试。
+保留的系统历史仍消耗输入 token。只有适配器表示也保留其位置时，保留位置才有助于前缀复用；这不保证缓存命中。重试复用已接受指令。压缩恢复会在再次模型尝试前根据同一批已捕获段重建指令，而不重复准入用户输入。

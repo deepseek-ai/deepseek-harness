@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -137,6 +137,7 @@ describe('SessionPanel', () => {
       owners.push(owner as SessionPanelSectionOwnerProps)
       return <p>{`${opts?.only ?? ''} body`}</p>
     }) as SessionPanelProps['renderSlot']
+    const moveSection = vi.fn<(id: string, target: string, placement: 'before' | 'after') => void>()
     const attached = vi.fn<(element: HTMLElement | null) => void>()
     const createProbeRef = vi.fn((_sessionId: SessionId, probe: string) => {
       probeIds.add(probe)
@@ -149,10 +150,11 @@ describe('SessionPanel', () => {
       useProbes: <S,>(select: (probes: SessionPanelProbes) => S): S => select(new Map([...probeIds].map(id => [id, dockable]))),
       createProbeRef,
       closeOverlay,
+      moveSection,
       renderSlot,
       t,
     } as SessionPanelProps
-    return { props, owners, closeOverlay, createProbeRef, attached }
+    return { props, owners, closeOverlay, createProbeRef, attached, moveSection }
   }
 
   it('attaches its dock probe through the injected ref once and detaches it on unmount', () => {
@@ -366,6 +368,277 @@ describe('SessionPanel', () => {
       toggle.remove()
       outside.remove()
     }
+  })
+
+  it('marks its dock probe to ask the transcript for room while the docking preference is on, whether or not it shows', () => {
+    const marked = (container: HTMLElement): boolean => container.querySelector('[data-session-panel-probe]')!.hasAttribute('data-session-panel-reserve')
+    const docked = render(<SessionPanel {...panelProps(true, DOCKED).props} />)
+    expect(marked(docked.container)).toBe(true)
+    // Without room the panel is hidden or an overlay, and the mark stays: the transcript makes room once it can.
+    docked.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
+    expect(marked(docked.container)).toBe(true)
+    // The toggle turned docking off: the transcript keeps its place.
+    docked.rerender(<SessionPanel {...panelProps(true, { pinned: false, overlay: null }).props} />)
+    expect(marked(docked.container)).toBe(false)
+  })
+
+  describe('motion', () => {
+    const HIDDEN: SessionPanelVisibility = { pinned: false, overlay: null }
+    const probeOf = (container: HTMLElement): Element => container.querySelector('[data-session-panel-probe]')!
+    const panelOf = (): HTMLElement | null => screen.queryByRole('complementary')
+    /**
+     * End an element's animation. jsdom's style object has no unprefixed `animation`, so React listens for the
+     * prefixed event name there; a browser delivers the unprefixed one.
+     */
+    const endAnimation = (element: Element): void => {
+      for (const type of ['animationend', 'webkitAnimationEnd']) fireEvent(element, new Event(type, { bubbles: true }))
+    }
+    /** The page does not ask for reduced motion. */
+    const allowMotion = (): void => { vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }))) }
+
+    it('plays the entrance when a press shows the panel, marks the probe meanwhile, and ends both with the animation', () => {
+      allowMotion()
+      const view = render(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      const panel = panelOf()!
+      expect(panel.getAttribute('data-session-panel-motion')).toBe('enter')
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(true)
+      // A row's own animation ending inside the panel does not end the entrance.
+      endAnimation(screen.getByText('environment body'))
+      expect(panel.getAttribute('data-session-panel-motion')).toBe('enter')
+      endAnimation(panel)
+      expect(panelOf()).toBe(panel)
+      expect(panel.hasAttribute('data-session-panel-motion')).toBe(false)
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+    })
+
+    it('keeps a panel a press hid until its exit ends, with the presentation it had, and hands focus to the toggle at once', () => {
+      allowMotion()
+      const toggle = document.createElement('button')
+      toggle.id = `dsh-session-panel-toggle-${SID}`
+      document.body.append(toggle)
+      try {
+        const docked = panelProps(true, DOCKED)
+        const view = render(<SessionPanel {...docked.props} />)
+        const panel = panelOf()!
+        expect(panel.hasAttribute('data-session-panel-motion')).toBe(false)
+        screen.getByRole('button', { name: '刷新' }).focus()
+        const hidden = panelProps(true, HIDDEN)
+        view.rerender(<SessionPanel {...hidden.props} />)
+        expect(panelOf()).toBe(panel)
+        expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['docked', 'exit'])
+        expect(hidden.owners.every(owner => owner.presentation === 'docked')).toBe(true)
+        expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(true)
+        // The docking preference is off, so the transcript takes its room back while the panel leaves.
+        expect(probeOf(view.container).hasAttribute('data-session-panel-reserve')).toBe(false)
+        expect(document.activeElement).toBe(toggle)
+        endAnimation(panel)
+        expect(panelOf()).toBeNull()
+        expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+      } finally {
+        toggle.remove()
+      }
+    })
+
+    it('plays the exit of a closed overlay without keeping its dismissal, and the entrance again when a press shows it meanwhile', () => {
+      allowMotion()
+      const open = panelProps(false, { pinned: true, overlay: SID })
+      const view = render(<SessionPanel {...open.props} />)
+      const panel = panelOf()!
+      const closed = panelProps(false, DOCKED)
+      view.rerender(<SessionPanel {...closed.props} />)
+      expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['overlay', 'exit'])
+      fireEvent.keyDown(document, { key: 'Escape' })
+      fireEvent.pointerDown(document.body)
+      expect(closed.closeOverlay).not.toHaveBeenCalled()
+      view.rerender(<SessionPanel {...panelProps(false, { pinned: true, overlay: SID }).props} />)
+      expect(panelOf()).toBe(panel)
+      expect([panel.getAttribute('data-session-panel'), panel.getAttribute('data-session-panel-motion')]).toEqual(['overlay', 'enter'])
+    })
+
+    it('shows and hides at once when the room to dock changes, as on a mount, a Session switch, or a resized window', () => {
+      allowMotion()
+      const view = render(<SessionPanel {...panelProps(false, DOCKED).props} />)
+      expect(panelOf()).toBeNull()
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      expect(panelOf()!.hasAttribute('data-session-panel-motion')).toBe(false)
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+      view.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
+      expect(panelOf()).toBeNull()
+      // A change of the room while the panel stays hidden changes nothing either.
+      view.rerender(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      view.rerender(<SessionPanel {...panelProps(false, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+    })
+
+    it('plays nothing for a reader who asked for reduced motion', () => {
+      const view = render(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      view.rerender(<SessionPanel {...panelProps(true, DOCKED).props} />)
+      expect(panelOf()!.hasAttribute('data-session-panel-motion')).toBe(false)
+      view.rerender(<SessionPanel {...panelProps(true, HIDDEN).props} />)
+      expect(panelOf()).toBeNull()
+      expect(probeOf(view.container).hasAttribute('data-session-panel-moving')).toBe(false)
+    })
+  })
+
+  describe('section order', () => {
+    const THREE: readonly SessionPanelSectionEntry[] = [...SECTIONS, { id: 'jobs', label: '后台任务' }]
+    const sectionOf = (id: string): HTMLElement => document.querySelector<HTMLElement>(`[data-session-panel-section="${id}"]`)!
+    const headOf = (id: string): HTMLElement => sectionOf(id).firstElementChild as HTMLElement
+    const gripOf = (id: string): Element | null => headOf(id).querySelector('[data-session-panel-grip]')
+    const transfer = () => ({
+      setData: vi.fn(), effectAllowed: '', dropEffect: '',
+      setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
+    })
+    /** Give a section a box from `top` down, 40px tall and 300px wide; jsdom lays nothing out. */
+    const place = (id: string, top: number): void => {
+      vi.spyOn(sectionOf(id), 'getBoundingClientRect').mockReturnValue({
+        top, bottom: top + 40, left: 0, right: 300, width: 300, height: 40, x: 0, y: top, toJSON: () => ({}),
+      })
+    }
+    /** jsdom's DragEvent fallback drops pointer coordinates from event options. */
+    const drag = (
+      target: HTMLElement, kind: 'dragOver' | 'dragLeave' | 'drop', point: { x?: number; y: number }, dataTransfer = transfer(),
+    ) => {
+      const event = createEvent[kind](target)
+      Object.defineProperties(event, {
+        clientX: { value: point.x ?? 150 }, clientY: { value: point.y }, dataTransfer: { value: dataTransfer },
+      })
+      fireEvent(target, event)
+      return { event, dataTransfer }
+    }
+    const marks = (): (string | null)[][] => ['environment', 'change-requests', 'jobs'].map(id => [
+      sectionOf(id).getAttribute('data-dragging'), sectionOf(id).getAttribute('data-drop-target'),
+    ])
+    const NONE = [[null, null], [null, null], [null, null]]
+    function threeSections() {
+      const base = panelProps(true, DOCKED)
+      return { ...base, props: { ...base.props, useSections: selectorOf(THREE) } as SessionPanelProps }
+    }
+
+    it('makes every title row but Environment a drag source that ends with a handle, which is a mark and no control', () => {
+      const { props } = threeSections()
+      render(<SessionPanel {...props} />)
+      for (const id of ['change-requests', 'jobs']) {
+        expect(headOf(id).draggable).toBe(true)
+        const grip = gripOf(id)!
+        expect(headOf(id).lastElementChild).toBe(grip)
+        expect([grip.tagName, grip.getAttribute('aria-hidden')]).toEqual(['SPAN', 'true'])
+      }
+      // The panel's only button is the control a section put in its own title row.
+      expect(screen.getAllByRole('button').map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['刷新'])
+      // Environment keeps its place: its title row is no drag source and has no handle.
+      expect(headOf('environment').draggable).toBe(false)
+      expect(gripOf('environment')).toBeNull()
+      const dataTransfer = transfer()
+      fireEvent.dragStart(headOf('environment'), { dataTransfer })
+      expect(dataTransfer.setData).not.toHaveBeenCalled()
+      expect(marks()).toEqual(NONE)
+    })
+
+    it('starts no drag while only one shown section can move, since it could land nowhere else', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      // CSS hides a section whose body rendered nothing; here, the other movable one.
+      sectionOf('change-requests').style.display = 'none'
+      const dataTransfer = transfer()
+      const start = createEvent.dragStart(headOf('jobs'))
+      Object.defineProperty(start, 'dataTransfer', { value: dataTransfer })
+      fireEvent(headOf('jobs'), start)
+      expect(start.defaultPrevented).toBe(true)
+      expect(dataTransfer.setData).not.toHaveBeenCalled()
+      expect(marks()).toEqual(NONE)
+      expect(moveSection).not.toHaveBeenCalled()
+      // With both shown the drag starts.
+      sectionOf('change-requests').style.display = ''
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer })
+      expect(dataTransfer.setData).toHaveBeenCalledWith('application/x-dsh-session-panel-section', 'jobs')
+    })
+
+    it('marks the dragged section and the edge it would land at, and moves it on the drop', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      place('environment', 100)
+      place('change-requests', 140)
+      place('jobs', 180)
+      const dataTransfer = transfer()
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer })
+      expect(dataTransfer.setData).toHaveBeenCalledWith('application/x-dsh-session-panel-section', 'jobs')
+      expect(dataTransfer.effectAllowed).toBe('move')
+      // The drag image is a copy of the title row.
+      expect(dataTransfer.setDragImage).toHaveBeenCalledTimes(1)
+      expect(dataTransfer.setDragImage.mock.calls[0]?.[0].textContent).toContain('后台任务')
+      expect(marks()).toEqual([[null, null], [null, null], ['', null]])
+
+      const over = drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
+      expect(over.event.defaultPrevented).toBe(true)
+      expect(over.dataTransfer.dropEffect).toBe('move')
+      expect(marks()).toEqual([[null, null], [null, 'before'], ['', null]])
+      drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
+      drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
+      expect(marks()).toEqual([[null, null], [null, 'after'], ['', null]])
+      // A leave for a child of the same section keeps the mark; one whose pointer is outside the section clears it.
+      drag(sectionOf('change-requests'), 'dragLeave', { y: 160 })
+      expect(marks()[1]).toEqual([null, 'after'])
+      // Another section's leave does not clear this one's mark.
+      drag(sectionOf('environment'), 'dragLeave', { y: 300 })
+      expect(marks()[1]).toEqual([null, 'after'])
+      for (const outside of [{ y: 139 }, { y: 180 }, { x: -1, y: 160 }, { x: 300, y: 160 }]) {
+        drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
+        drag(sectionOf('change-requests'), 'dragLeave', outside)
+        expect(marks()[1]).toEqual([null, null])
+      }
+      // Over the dragged section itself there is nowhere to land.
+      drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
+      expect(drag(sectionOf('jobs'), 'dragOver', { y: 190 }).event.defaultPrevented).toBe(true)
+      expect(marks()).toEqual([[null, null], [null, null], ['', null]])
+
+      drag(sectionOf('change-requests'), 'dragOver', { y: 150 })
+      const drop = drag(sectionOf('change-requests'), 'drop', { y: 150 })
+      expect(drop.event.defaultPrevented).toBe(true)
+      expect(moveSection.mock.calls).toEqual([['jobs', 'change-requests', 'before']])
+      expect(marks()).toEqual(NONE)
+      fireEvent.dragEnd(headOf('jobs'))
+      expect(marks()).toEqual(NONE)
+    })
+
+    it('lands a section after Environment whichever half of it the pointer is over', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      place('environment', 100)
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer: transfer() })
+      drag(sectionOf('environment'), 'dragOver', { y: 105 })
+      expect(marks()[0]).toEqual([null, 'after'])
+      drag(sectionOf('environment'), 'dragOver', { y: 135 })
+      expect(marks()[0]).toEqual([null, 'after'])
+      drag(sectionOf('environment'), 'drop', { y: 105 })
+      expect(moveSection.mock.calls).toEqual([['jobs', 'environment', 'after']])
+    })
+
+    it('clears the marks when the drag ends without a drop', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      place('change-requests', 140)
+      fireEvent.dragStart(headOf('jobs'), { dataTransfer: transfer() })
+      drag(sectionOf('change-requests'), 'dragOver', { y: 170 })
+      fireEvent.dragEnd(headOf('jobs'))
+      expect(marks()).toEqual(NONE)
+      expect(moveSection).not.toHaveBeenCalled()
+      // A drag end that this panel did not start changes nothing.
+      fireEvent.dragEnd(headOf('jobs'))
+      expect(marks()).toEqual(NONE)
+    })
+
+    it('ignores a drag that did not start on one of its title rows', () => {
+      const { props, moveSection } = threeSections()
+      render(<SessionPanel {...props} />)
+      place('change-requests', 140)
+      expect(drag(sectionOf('change-requests'), 'dragOver', { y: 150 }).event.defaultPrevented).toBe(false)
+      expect(drag(sectionOf('change-requests'), 'drop', { y: 150 }).event.defaultPrevented).toBe(false)
+      expect(marks()).toEqual(NONE)
+      expect(moveSection).not.toHaveBeenCalled()
+    })
   })
 })
 

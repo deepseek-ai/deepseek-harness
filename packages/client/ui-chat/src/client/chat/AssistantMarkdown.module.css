@@ -59,11 +59,14 @@
 }
 
 /* hidden="until-found" keeps a zero-height reasoning box in flex layout, and
-   so does the class-less wrapper of a reasoning block whose row renders
-   nothing (signature-only reasoning has no display text). Cancel the one gap
-   each box would otherwise leave. */
+   so does the wrapper of a reasoning block whose row renders nothing
+   (signature-only reasoning has no display text). Cancel the one gap each box
+   would otherwise leave. The class lets Chromium test this rule only on
+   reasoning wrappers; a subject without a class, id, attribute or tag is
+   tested on every element whose style is recalculated, which slows streaming
+   into a long history. */
 .body > [data-turn-process-inline][hidden],
-.body > :empty:not([class]) {
+.body > .reasoning:empty {
   margin-bottom: calc(-1 * var(--dsh-assistant-block-gap));
 }
 

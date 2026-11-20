@@ -42,6 +42,20 @@ export function repositorySettings(overrides: Record<string, unknown> = {}): Rec
   }
 }
 
+/** One pull request node as a brief query returns it. */
+export function briefNode(number: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    url: `https://github.com/octo/demo/pull/${number}`,
+    title: `Change ${number}`,
+    state: 'OPEN',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    reviewDecision: null,
+    commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] },
+    ...overrides,
+  }
+}
+
 /** A pull request node with the fields the snapshot query selects. */
 export function pullRequestNode(number: number, overrides: Record<string, unknown> = {}, contexts: unknown[] = [], rollupState: string | null = 'SUCCESS'): Record<string, unknown> {
   return {

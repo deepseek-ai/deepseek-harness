@@ -15,9 +15,16 @@ export function directoryInstallSection(source: string): string
 export function directoryInstallerExits(source: string): string
 
 /**
- * Keep user-data removal in the native helper, which refuses unsafe roots and never follows links.
+ * Preserve data but clean old registrations when replacing another installation directory.
+ * @param source Pinned NSIS installUtil.nsh contents.
+ * @returns Helper reserving --updated for replacement at the same path.
+ */
+export function directoryInstallUtil(source: string): string
+
+/**
+ * Retain the original uninstall directory and bypass shared cleanup for directory-only removal.
  * @param source - Pinned upstream uninstaller source.
- * @returns Uninstaller with long-path application removal and no upstream RMDir data removal.
+ * @returns Uninstaller with long-path removal, native data cleanup, and upgrade rollback; updated-mode ownership mismatches exit with code 2.
  */
 export function directoryUninstaller(source: string): string
 

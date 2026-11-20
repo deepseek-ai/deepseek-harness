@@ -18,7 +18,8 @@ import {
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspaceZh, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel, writeComposerDraft, ZH_BROWSER_LOCALE,
+  connectFreshWorkspaceZh, dismissSessionPanel, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel,
+  writeComposerDraft, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 declare global {
@@ -855,6 +856,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(notice).toBeLessThan(events.findIndex(event => event.type === 'assistant/message'))
 
   // A change request bound the way a `gh pr create` result binds one.
+  // The panel docked beside the conversation above; the toggle's attention mark is read with it hidden.
+  await dismissSessionPanel(page)
   scaffold.ctx.forgeSession.track(session, PULL)
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   expect(await sessionPanelToggle(page).getAttribute('aria-expanded')).toBe('false')
@@ -875,6 +878,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     await captureStableAria(page, '[data-forge-session-hover]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
   await page.mouse.move(0, 0)
   await rowHover.waitFor({ state: 'detached' })
+  // The Host's sign-in probe has answered once the panel state names a readiness, so a later probe would come from showing the panel.
+  for await (const state of scaffold.ctx.forgePanel.follow(session, AbortSignal.timeout(20_000))) if (state.readiness !== null) break
+  const probes = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.startsWith('["auth"')).length
   const panel = await showSessionPanel(page)
   const checkout = panel.locator('[data-forge-checkout]')
   const checkoutName = checkout.getByText(branch, { exact: true })
@@ -895,6 +901,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     }), MODE)
   const beforeChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(beforeChecks.some(args => args.includes('id=rollup-7'))).toBe(false)
+  // Showing the panel revisited it on the Host, which probes sign-in again only while the host is not ready.
+  expect(beforeChecks.filter(args => args[0] === 'auth')).toHaveLength(probes)
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
@@ -1142,6 +1150,14 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     await captureStableAria(page, '[data-composer-input]', scaffold.workspaceCwd), MODE)
   expect((await readPersistedEvents(scaffold, sessionId)).some(event => event.type === 'user/message'
     && event.data.content.some(block => block.type === 'text' && block.text.includes('## User Comment')))).toBe(false)
+  // Removing a reference card leaves its quote in the composer, and the notice's Undo puts the card back at its line.
+  const extra = local.locator('[data-forge-diff-file="src/extra.ts"]')
+  await extra.getByRole('button', { name: '评论 R1 的操作', exact: true }).click()
+  await page.getByRole('menuitem', { name: '移除', exact: true }).click()
+  await expect.poll(() => extra.locator('[data-forge-review-thread]').count()).toBe(0)
+  expect(await page.locator('[data-composer-input]').first().innerText()).toContain('请检查这项修改')
+  await page.getByRole('alert').filter({ hasText: '已移除' }).getByRole('button', { name: '撤销', exact: true }).click()
+  await extra.locator('[data-forge-review-thread="agent"]').getByText('请检查这项修改', { exact: true }).waitFor()
   const reviewed = scaffold.whenTurnSettled()
   await page.locator('[data-composer-input]').first().press('Enter')
   await reviewed
@@ -1156,9 +1172,9 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   const bases = page.locator('[data-forge-base-menu]')
   await bases.getByRole('menuitem', { name: 'topic', exact: true }).waitFor({ timeout: 20_000 })
   await compareOrRefreshGolden(join(EXPECTED, 'base-menu.expected.md'), await captureStableAria(page, '[data-forge-base-menu]', scaffold.workspaceCwd), MODE)
-  await bases.getByRole('textbox', { name: '搜索分支' }).fill('TOP')
+  await page.getByRole('searchbox', { name: '搜索分支' }).fill('TOP')
   await expect.poll(() => bases.getByRole('menuitem').allTextContents()).toEqual(['topic'])
-  await bases.getByRole('textbox', { name: '搜索分支' }).press('Enter')
+  await page.getByRole('searchbox', { name: '搜索分支' }).press('Enter')
   await local.getByRole('button', { name: '基准分支：topic', exact: true }).waitFor()
   await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
     .toEqual(['src/extra.ts', 'README.md', 'notes.md'])
@@ -1620,6 +1636,9 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
     return { start: { x, y: start.y + start.height / 2 }, end: { x, y: end.y + end.height / 2 } }
   }
   await number('R3').waitFor()
+  // The strip after README.md's last hunk leaves once the file's text was read for highlighting, which moves the rows
+  // of notes.txt below it up; the positions this test measures for a drag hold only after that.
+  await file.locator('[data-forge-diff-gap]').waitFor({ state: 'detached', timeout: 20_000 })
 
   // The plus appears only on the hovered side of the hovered row, for the code as for the line number.
   expect(await plus('R3').isVisible()).toBe(false)
@@ -1708,9 +1727,11 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   await base.click()
   const menu = page.getByRole('menu')
   await menu.getByRole('menuitem', { name: 'worktree/long-menu-regression-44', exact: true }).waitFor()
+  // The searchable menu puts its `menu` role on the rows below the search field, inside the card.
+  const baseCard = page.locator('[data-menu-popup]')
   await expect.poll(async () => {
     const trigger = await base.boundingBox()
-    const card = await menu.boundingBox()
+    const card = await baseCard.boundingBox()
     return trigger === null || card === null ? Infinity : Math.abs(trigger.x + trigger.width - card.x - card.width)
   }).toBeLessThan(1)
   await page.keyboard.press('Escape')
@@ -2445,6 +2466,17 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => panel.getAttribute('data-viewed')).toBe('changed')
   await panel.getByText('有新改动', { exact: true }).waitFor()
   await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 6')
+  /** How many times the viewed marks and the review threads were read from the code host so far. */
+  const reviewReads = async (): Promise<{ readonly marks: number; readonly threads: number }> => {
+    const queries = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0)
+      .map(line => (JSON.parse(line) as string[]).find(arg => arg.startsWith('query=')) ?? '')
+    return {
+      marks: queries.filter(query => query.includes('files(first: $first')).length,
+      threads: queries.filter(query => query.includes('reviewThreads(first: $first')).length,
+    }
+  }
+  await expect.poll(reviewReads, { timeout: 20_000 }).toEqual({ marks: 1, threads: 1 })
+  const readsBefore = await reviewReads()
 
   await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).check()
   await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
@@ -2454,6 +2486,9 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
   await expect.poll(async () => (JSON.parse(await readFile(join(root, 'state.json'), 'utf8')) as { readonly viewed?: Record<string, string> }).viewed)
     .toEqual({ 'package.json': 'VIEWED', 'docs/panel.md': 'UNVIEWED' })
+  // The Host applies each saved mark to the marks it keeps and keeps the threads, so neither is read again.
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+  expect(await reviewReads()).toEqual(readsBefore)
 
   // A refused mark returns to what GitHub keeps and says why.
   await writeFile(join(root, 'viewed.refused'), 'Resource not accessible by integration')

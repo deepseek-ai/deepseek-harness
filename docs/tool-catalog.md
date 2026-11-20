@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionController`, `ctx.workspaceRegistry`, `a calling Agent` | `tool/call`, `agent/inbox/spliced in the recipient`, `tool/result` | - | The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -51,6 +52,38 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-tool-session-control"></a>
+
+## `@deepseek-ai/dsh-tool-session-control`
+
+### `session_send_message`
+
+Send a message to an independent session. Use this tool only when the user explicitly asks you to send a message to another session.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The target session ID."
+    },
+    "message": {
+      "type": "string",
+      "description": "Nonblank message to deliver."
+    }
+  },
+  "required": [
+    "session_id",
+    "message"
+  ]
+}
+```
+
+Source: [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target.
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -2288,7 +2321,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `list_agents`
 
-List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
+List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
 
 ```json
 {
@@ -2447,7 +2480,7 @@ Create one unowned pending task on the shared Team task board.
     },
     "write_scopes": {
       "type": "array",
-      "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+      "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
       "items": {
         "type": "string"
       }
@@ -2573,7 +2606,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "write_scopes": {
       "type": "array",
-      "description": "Replacement advisory write scopes for edit.",
+      "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
       "items": {
         "type": "string"
       }

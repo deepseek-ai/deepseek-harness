@@ -91,7 +91,7 @@ export async function registration(
  * @param ctx - execution-world filesystem provider.
  * @param directory - configured relative worktree pool.
  * @param request - saved checkout identity.
- * @param git - confined Git runners with the owner's policy.
+ * @param git - Git runners under the policy the caller chose.
  * @param signal - cancellation before or during removal.
  * @param admit - synchronous final admission after inspection; false retains the checkout.
  * @returns true when removed; false when inspection or admission retains it; Git failures reject.
@@ -117,7 +117,7 @@ export async function removeCheckout(
  * @param ctx - execution-world filesystem provider.
  * @param directory - configured relative worktree pool.
  * @param request - saved checkout identity.
- * @param git - confined Git runners with the owner's policy.
+ * @param git - Git runners under the policy the caller chose.
  * @param signal - cancellation of inspection.
  * @returns false for an ineligible checkout; inspection failures reject.
  */

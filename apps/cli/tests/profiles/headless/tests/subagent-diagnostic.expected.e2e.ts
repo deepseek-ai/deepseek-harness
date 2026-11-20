@@ -11,6 +11,7 @@ import {
   fixtureContext,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
+  REPLAY_CREDENTIAL_ENV,
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
@@ -118,6 +119,7 @@ describe('parent-owned cold child catalog snapshot', () => {
       binArgs: [configPath, task],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_SNAPSHOT_FILE: replayOverride,
         DSH_SNAPSHOT_OVERRIDE: replayOverride,
       },
@@ -129,7 +131,10 @@ describe('parent-owned cold child catalog snapshot', () => {
         const sessionsDir = join(runCwd, '.sessions')
         const files = (await readdir(sessionsDir, { recursive: true })).filter(file => file.endsWith('.jsonl'))
         const logs = await Promise.all(files.map(async file => readFile(join(sessionsDir, file), 'utf8')))
-        const parent = logs.find(content => content.includes('"subagent-diagnostic-parent"'))
+        const parent = logs.find((content) => {
+          const header = JSON.parse(content.split('\n')[0]!) as SessionHeader
+          return header.id === parentId
+        })
         if (parent === undefined) throw new Error('missing persisted parent log')
 
         // Discovery reads child catalogs without requiring activation descriptors.

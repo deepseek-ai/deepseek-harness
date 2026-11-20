@@ -10,7 +10,7 @@ import Darwin
     private let worker: AXWorker
     private let capture: WindowCapture
     private let permissions: SystemPermissions
-    private let permissionOwner: UUID
+    private let connectionID: UUID
     private let activity: RecentActivity
     private let inputMonitor: ExternalInputMonitor
     private let clipboard = ClipboardPaste()
@@ -31,17 +31,17 @@ import Darwin
     private var nextCancelled = false
 
     init(configuration: HelperConfiguration, capture: WindowCapture, channel: SharedSocket,
-         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions, permissionOwner: UUID,
+         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions, connectionID: UUID,
          activity: RecentActivity, inputMonitor: ExternalInputMonitor,
          onClose: @escaping @MainActor @Sendable () -> Void,
          onFatal: @escaping @Sendable (NativeFailure, Double) -> Void) {
         self.configuration = configuration
         self.capture = capture
         self.permissions = permissions
-        self.permissionOwner = permissionOwner
+        self.connectionID = connectionID
         self.activity = activity
         self.inputMonitor = inputMonitor
-        activity.connect(permissionOwner, lookbackMs: configuration.recentActivityWindowMs)
+        activity.connect(connectionID, lookbackMs: configuration.recentActivityWindowMs)
         self.cancellation = cancellation
         self.channel = channel
         self.scheduler = scheduler
@@ -171,16 +171,25 @@ import Darwin
     private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         try cancellation.check()
+        if request.method == "releaseSystemButton" {
+            scheduler.systemPointer.release(connection: connectionID)
+            return AXWorker.actionResult
+        }
         if request.method == "screenshot" { try capture.requireAvailable() }
         let target = await worker.activityTarget(params)
-        if let target { activity.watch(target, owner: permissionOwner); inputMonitor.start() }
+        if let target { activity.watch(target, owner: connectionID); inputMonitor.start() }
         let observes = ["getState", "screenshot", "listWindows", "listActions"].contains(request.method)
         // A completed attempt can have partial effects even after a failure or cancellation.
-        defer { if let target, !observes { activity.record(target, owner: permissionOwner, operation: request.method) } }
+        defer { if let target, !observes { activity.record(target, owner: connectionID, operation: request.method) } }
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
-        if request.method == "permissionStatus" {
+        if request.method == "toggleMouse", try params.optionalBoolean("useSystemInput") == true,
+           try params.string("direction") == "up" {
+            try scheduler.systemPointer.up(connection: connectionID, app: params.string("appHandle"), window: params.windowID(),
+                                          button: WindowPointerInput.button(params.string("mouseButton")))
+            result = AXWorker.actionResult
+        } else if request.method == "permissionStatus" {
             result = permissions.status()
         } else if request.method == "applicationIcons" {
             var icons: [String: JSONValue] = [:]
@@ -193,7 +202,7 @@ import Darwin
             let text = try PermissionGuideText(instruction: params.string("instruction"), backLabel: params.string("backLabel"),
                 finderLabel: params.string("finderLabel"), unavailableMessage: params.string("unavailableMessage"),
                 settingsMessage: params.string("settingsMessage"))
-            result = try permissions.request(params.string("permission"), owner: permissionOwner, text: text,
+            result = try permissions.request(params.string("permission"), owner: connectionID, text: text,
                 interval: Double(params.integer("pollIntervalMs", in: 100...Int(Int32.max))) / 1000)
         } else if request.method == "openPermissionSettings" {
             result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
@@ -225,8 +234,12 @@ import Darwin
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
             case .mouseMove(let route, let point):
                 let latch = cancellation
-                try WindowPointerInput.mouseMove(in: route, at: point, checkCancellation: { try latch.check() })
+                try scheduler.systemPointer.move(connection: connectionID, in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
+            case .systemButtonDown(let route, let button):
+                try scheduler.systemPointer.down(connection: connectionID, app: params.string("appHandle"), in: route, button: button,
+                                                 checkCancellation: { try cancellation.check() })
+                result = AXWorker.actionResult
             case .paste(let plan):
                 try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes, readTimeout: plan.readTimeout,
                     checkCancellation: { try cancellation.check() }) { requireClipboard in
@@ -239,7 +252,7 @@ import Darwin
             }
         }
         if let target, var fields = result.object,
-           let report = activity.report(target, owner: permissionOwner, monitoring: inputMonitor.status) {
+           let report = activity.report(target, owner: connectionID, monitoring: inputMonitor.status) {
             fields["recentActivity"] = report
             return .object(fields)
         }
@@ -270,8 +283,9 @@ import Darwin
     private func shutdown() {
         guard !stopping else { return }
         stopping = true
-        permissions.closeGuide(owner: permissionOwner)
+        permissions.closeGuide(owner: connectionID)
         cancellation.cancel()
+        scheduler.systemPointer.release(connection: connectionID)
         deadline?.cancel()
         deadline = nil
         cancelRequest(NativeFailure(code: "NATIVE_CANCELLED", message: "Native client disconnected"))

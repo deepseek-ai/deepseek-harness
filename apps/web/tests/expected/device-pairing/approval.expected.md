@@ -1,0 +1,10 @@
+- region "配对申请":
+  - heading "配对申请" [level=3]
+  - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准
+  - note:
+    - paragraph: 批准后，该浏览器将获得此应用的完整访问权限，也可以批准其他设备
+  - text: 配对码
+  - code: {{pairing-code}}
+  - paragraph: 来源 IP 127.0.0.1
+  - button "批准"
+  - button "拒绝"

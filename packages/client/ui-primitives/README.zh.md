@@ -51,7 +51,7 @@ kind: "package-library"
 | `Input` | 单行文本输入，用于搜索框与行内表单。ref 指向原生输入框，供焦点控制使用，并在卸载时清空。 |
 | `InlineEditor` | 自动聚焦的多行行内编辑器，用于排队消息、goal 等短草稿。它随文本和宽度增高，最多六行，之后滚动；Enter 保存，Shift+Enter 换行，输入法组合中的 Enter 不生效，Escape 取消。调用方提供本地化 `label`，并在 elevated 表面上重绑滚动条。 |
 | `ZoomControls`, `DOCUMENT_ZOOM` | 悬浮文档缩放控件，接收本地化标签、固定预设，以及可见性和交互状态回调。省略 `fit` 时不显示适配项。工具栏带 `data-document-zoom-controls`，可见时另带 `data-document-zoom-visible`。owner 的 `className` 覆盖 `bottom` 与 `max-width`，不受样式表加载顺序影响；`inset-inline-start` 和 `transform` 负责居中与进出场位移，`opacity` 负责淡入淡出，三者都由原语保留。渲染器共用导出的缩放范围。 |
-| `Menu`, `MenuItemButton` | 由 `items` 数据行、分隔线与分组标题构成的下拉菜单，支持嵌套子菜单；`children` 在同一列表中加入组件行，每行一个 `MenuItemButton`（`separatorBefore` 开启新分组）。`MenuItemButton.current` 通过 `aria-current` 标识当前页面或视图，不改变选中状态或外观。所有行共享样式、键盘走位与焦点归还；两类行的关闭都是 owner 状态的改变。打开期间 `↑`／`↓`（以及 Home、End）在列表中走位，Tab 选定聚焦行，Shift+Tab 关闭并把焦点还给锚点；Escape 先退出已打开的子菜单，再关闭根菜单。选定一行同样把键盘还给锚点——除非拥有者自己移动了焦点。只拦截位于锚点或列表内的键盘，`autoFocus` 仅决定打开时是否聚焦首行。 带 `disabledReason` 的禁用 `MenuItemButton` 仍可悬停和聚焦（`aria-disabled`），但不能激活；它在 `Tooltip` 中显示原因，并把原因作为该行的描述。 |
+| `Menu`, `MenuItemButton` | 由 `items` 数据行、分隔线与分组标题构成的下拉菜单，支持嵌套子菜单；`children` 在同一列表中加入组件行，每行一个 `MenuItemButton`（`separatorBefore` 开启新分组）。`MenuItemButton.current` 通过 `aria-current` 标识当前页面或视图，不改变选中状态或外观。所有行共享样式、键盘走位与焦点归还；两类行的关闭都是 owner 状态的改变。打开期间 `↑`／`↓`（以及 Home、End）在列表中走位，Tab 选定聚焦行，Shift+Tab 关闭并把焦点还给锚点；Escape 先退出已打开的子菜单，再关闭根菜单。选定一行同样把键盘还给锚点——除非拥有者自己移动了焦点。只拦截位于锚点或列表内的键盘。未设置 `search` 时，`autoFocus` 会在打开时聚焦首个可聚焦的菜单项。 带 `disabledReason` 的禁用 `MenuItemButton` 仍可悬停和聚焦（`aria-disabled`），但不能激活；它在 `Tooltip` 中显示原因，并把原因作为该行的描述。 |
 | `MenuGroup`、`observeStickyMenuGroups` | 为自定义菜单与列表框提供本地化、可访问的分组，共用吸顶标题样式与原生交叉／尺寸观察；调用方负责观察器的生命周期。 |
 | `Pill` | 可选中的胶囊按钮，用于视图切换与筛选器；接受 `active` 与 `onClick`。 |
 | `SegmentedTabs` | 受控的等宽分段标签，支持滑动指示条及左／右方向键、Home、End 导航。调用方提供文案、标签与面板 id，以及面板内容。默认 `size="md"` 总高 42px、内边距 4px；`size="sm"` 总高 34px、内边距 2px。 |
@@ -139,6 +139,8 @@ kind: "package-library"
 这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock`、`WebBlock` 与 `ZoomControls` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
 
 `Menu` 的 `anchorRef` 指定组件外部的触发元素，支持同一次提交中稍后挂载的元素，以及在两次打开之间替换的元素。打开的菜单在它之外的另一个弹出触发器（带 `aria-haspopup` 的控件）被激活时关闭，包括会拦截自身指针按下的触发器，例如共享右键菜单的按钮；`isExternalTrigger` 认领的触发器由所属弹窗自行处理。`autoFocus` 菜单通过键盘关闭时，会恢复到打开前仍在页面中的焦点控件。`anchorPoint` 接收客户端视口坐标，与 `event.clientX`/`clientY` 和 `getBoundingClientRect()` 一致。Safari 在菜单打开或坐标变化时将其转换为布局视口坐标一次，后续缩放和平移由 CSS 处理，不持续监听视口或测量矩形。`Menu.contextual` 从该指针位置定位而不避让顶部栏，并在弹窗内右键时关闭。右键弹窗没有实际渲染的 `role="menuitem"` 行时保持隐藏，包括旧 Slot 返回空内容的情况。结构化 `items` 按分隔线组预留图标栏；`footer` 与各子菜单独立计算分组。右键菜单的 `footer` 以分隔线开头时，直接使用该线，不再叠加边框。不透明的 `children` 保留原有布局；数据行后方的旧 Slot 保留其声明的首条分隔线。`exiting` 在淡出期间保留不可交互的弹窗；`returnFocus` 在异步准备后恢复原控件焦点。`MenuSurface.phase` 分别对材质层、直接内容和 macOS 背景淡入淡出，让材质层继续模糊页面。`MENU_TRANSITION_MS` 同时提供 CSS 动画与弹窗生命周期计时。普通下拉菜单不经过右键菜单的准备延迟。
+
+`Menu.search` 在菜单项上方固定搜索框，打开时将焦点移入搜索框。设置 `skipAutoFocusOnTouch` 后，触摸打开时不会自动聚焦。调用方负责筛选菜单项并提供本地化的搜索标签。设置 `clearLabel` 会显示清除按钮，清除后焦点返回搜索框。在输入框内按 Enter 会激活滚动区中的首个可用结果。方向键会进入菜单项组，遍历其中可聚焦的按钮，包括子组件的控件和带禁用说明的菜单项。按 Tab 时，有清除按钮就先聚焦该按钮，再移到首个可聚焦的菜单项。没有可聚焦的菜单项时，从最后一个搜索控件按 Tab 会把焦点移回搜索框。即使没有渲染任何菜单项，弹层仍作为前台键盘交互层。`maxVisibleRows` 按行高限制滚动区的高度。
 
 -----
 

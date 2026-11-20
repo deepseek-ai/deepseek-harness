@@ -239,6 +239,7 @@ it('propagates unreadable metadata and payload entries unchanged instead of blam
 it('reports preparation failures with structured tool errors', async () => {
   const ctx = new Context()
   try {
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -306,6 +307,7 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
   const ctx = new Context()
   try {
     ctx.baseUrl = pathToFileURL(directory).href + '/'
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(Loader)
     ctx.loader.builtins.include = Include
     Object.assign(ctx.loader.builtins, {

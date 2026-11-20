@@ -75,7 +75,12 @@ export function TaskDock({
   const progress = overall?.progress ?? 0
   return (
     <section className="timeline-dock" aria-label={t('tasks')} data-current-tree={showingTree}>
-      <div className="timeline-dock-bar" data-status={overall?.status ?? 'pending'}>
+      {/* The toggle button gives keyboard access; its click reaches this handler like any other click on the bar. */}
+      <div
+        className="timeline-dock-bar"
+        data-status={overall?.status ?? 'pending'}
+        onClick={() => { toggle(tree) }}
+      >
         <Tooltip label={tree.title} side="top" portal delayMs={500}>
           <span className="timeline-dock-title">{tree.title}</span>
         </Tooltip>
@@ -95,7 +100,7 @@ export function TaskDock({
           portal
           delayMs={500}
         >
-          <Button size="sm" className="timeline-dock-action" onClick={() => { toggle(tree) }}>
+          <Button size="sm" className="timeline-dock-action timeline-dock-toggle">
             <span className="timeline-dock-label timeline-dock-open">{t('openTaskTree')}</span>
             <span className="timeline-dock-label timeline-dock-close">{t('closeTaskTree')}</span>
             <IconRightUpOutlineRegular size={16} />
@@ -105,10 +110,11 @@ export function TaskDock({
           <Tooltip label={t(removeFailed ? 'draftRemoveFailed' : 'removeDraftTree')} side="top" portal>
             <Button
               size="sm"
-              className="timeline-dock-action"
+              className="timeline-dock-action timeline-dock-remove"
               aria-label={t(removeFailed ? 'draftRemoveFailed' : 'removeDraftTree')}
               disabled={removing}
-              onClick={() => {
+              onClick={(event) => {
+                event.stopPropagation()
                 setRemoving(true)
                 setFailed(undefined)
                 void removeTree(tree.id)
@@ -121,6 +127,7 @@ export function TaskDock({
             </Button>
           </Tooltip>
         ) : null}
+        <span className="timeline-dock-highlight" aria-hidden="true" />
       </div>
     </section>
   )

@@ -13,6 +13,14 @@ import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 
+/** Current concurrency capacity of one subagent tree; observing it reserves no slots. */
+export interface SubagentCapacity {
+  /** Occupied slots, including starting, resident, and stopping children; excludes the root. */
+  readonly running: number
+  /** Configured maximum; running may exceed it after the limit is lowered. */
+  readonly limit: number
+}
+
 /** Identifies one subagent residency epoch across its lifecycle event pair. */
 export type SubagentRunId = Branded<'SubagentRunId'>
 

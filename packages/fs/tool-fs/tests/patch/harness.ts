@@ -43,11 +43,11 @@ export async function setup(options: { policy?: boolean; mode?: SandboxMode; pro
   onTestFinished(() => ctx.fiber.dispose())
   onTestFinished(() => { vi.restoreAllMocks() })
   provideWorkingDirectoryFixture(ctx, workspace)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin((options.toolMode ?? 'native') === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
   if (options.mode !== undefined) {
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: options.mode })
     await ctx.plugin(SandboxedFileSystem, { cwd: providerRoot })
   } else await ctx.plugin(options.provider ?? LocalFileSystem, { cwd: providerRoot })

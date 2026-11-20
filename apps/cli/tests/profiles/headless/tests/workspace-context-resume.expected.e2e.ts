@@ -12,6 +12,7 @@ import {
   fixtureContext,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
+  REPLAY_CREDENTIAL_ENV,
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
@@ -147,6 +148,7 @@ describe('agent-instructions resume snapshot', () => {
       binArgs: [configPath, 'Acknowledge the current workspace instruction.'],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_SNAPSHOT_FILE: replayFixture,
         DSH_SNAPSHOT_OVERRIDE: replayOverride,
       },
@@ -204,6 +206,7 @@ describe('agent-instructions resume snapshot', () => {
       binArgs: [configPath, 'Acknowledge the current workspace instruction.'],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_SNAPSHOT_FILE: replayFixture,
         DSH_SNAPSHOT_OVERRIDE: replayOverride,
       },

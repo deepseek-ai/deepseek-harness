@@ -16,9 +16,9 @@ Status: implemented
 
 工作树创建通过 `set` 进入检出目录。模型只有一个进入检出的工具 `enter_worktree`：名称在 Session 所在检出的池中选中一个工作树。已有的工作树通过 `ctx.worktrees.enter` 进入，没有同名工作树时通过 `ctx.worktrees.create` 新建。名称无法离开该池，因此模型仍然不能选择任意目录。`ctx.worktrees.exit` 以 `exit_worktree` 的形式提供，它找到包含 Session 目录的已记录工作树，把 Session 送回创建或进入该工作树时所在的检出。子代理的 header 保留父级的原始项目，并通过 `set` 从父级的目录或 Host 选定的目录启动。
 
-## Deferred
+每个消费方都读取这个目录。模型的文件、搜索与进程工具从它解析相对路径，用户看到的、以及描述项目的一切都以它为界：沙箱 `workspace-write` 边界、工作区文件服务与桌面文件拖拽、变更记录器、文件树、交付物、在应用中打开操作与 Session 行、新开的侧栏终端、`@` 文件候选、技能目录、项目指令发现和 LSP 工作区。
 
-沙箱写边界、工作区文件服务、桌面文件拖拽、变更记录器，以及客户端文件树、交付物、在应用中打开的操作和 Session 行仍然读取 `header.cwd`。在这些消费方改读 Session 的目录之前，它们的行为与本决策之前相同，位于原始项目之外的工作树只有在原始项目的边界已经允许时才可写。
+沙箱策略不读取任何 Git 布局：它以 Session 的目录为界，只加入部署配置的目录，以及 Host 插件通过 `registerWritableRoot` 为该 Session 注册的目录。仓库的 Git 目录位于链接工作树之外，因此移入工作树之后，写入它的 Git 命令（例如 `git commit`）在 `workspace-write` 下会被拒绝，直到有授权覆盖该目录；原始项目也不再可写。为 Session 所在检出目录授权其 Git 目录，属于一个读取 Git 布局并注册该目录的独立插件，本决策将其延后。Host 对 Session 并不在其中工作的检出目录做维护时保留原来的边界：归档时移除 worktree、恢复被删除的 worktree、在源仓库中读取其分支，都在 worktree 服务与 forge 面板自己构造的策略下运行，即沿用 Session 的模式与授权、以记录中的源检出目录为根。Session 自身的根可能正是被删除的目录，而进程沙箱无法绑定缺失或正在消失的根。
 
 ## Alternatives considered
 
@@ -40,10 +40,10 @@ Status: implemented
 
 **两个公开读取接口。** 用 `get` 读相对路径的基准、用 `rootOf` 读工作区根，可以保留每个已存储的目录，但每个消费方都要在两个值之间做选择，而这两个值在从这个版本起启动的每个 Session 中都相等。只保留一个读取接口，就不需要这种选择。
 
-**保留每个已存储的目录。** 把每条已存储的 `working-directory/change` 都读作目录，消费方跟随目录之后，已存储的模型 `cd`（包括进入用户主目录的）会成为写边界。
+**保留每个已存储的目录。** 把每条已存储的 `working-directory/change` 都读作目录，由于消费方跟随目录，已存储的模型 `cd`（包括进入用户主目录的）会成为写边界。
 
 **保留原始项目之内的已存储目录。** 进入过工作树的 Session 会在工作树中恢复，但这条规则分不清工作树与 `cd`：已存储的进入子目录的 `cd` 会收窄写边界和文件视图，而位于 Session 打开目录之外的工作树会被丢弃。
 
 ## Consequences
 
-消费方通过 `get` 读取一个目录。无论 `working-directory/change` 事件记录了什么目录，已存储的 Session 都在原始项目中恢复，并从那里跟随 Host 移动。曾在工作树中工作的 Session 通过 `enter_worktree` 回到工作树；在此之前，它的相对路径在原始项目中解析。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。工作树快照夹具覆盖进入、离开和失去工作树。迁移 Deferred 中列出的消费方是另一项变更。
+消费方通过 `get` 读取一个目录。无论 `working-directory/change` 事件记录了什么目录，已存储的 Session 都在原始项目中恢复，并从那里跟随 Host 移动。曾在工作树中工作的 Session 通过 `enter_worktree` 回到工作树；在此之前，它的相对路径在原始项目中解析。模型只能通过 `enter_worktree` 进入检出：新建的检出，或池中已登记的检出。其他位置的检出需要 Host 操作。ACP、SDK 与 Web 的生产方以规范拼写记录原始项目，因此 Host 移回原始项目时不记录变更。在链接工作树中工作的 Session，无论是进入的还是直接在其中打开的，在没有仓库 Git 目录授权时都不能在 `workspace-write` 下运行 `git commit`；在此前的边界下，进入项目内工作树的 Session 可以。SDK 的 `setWorkingDirectory` 调用以及在 Host 选定目录启动的子代理，会让 `workspace-write` 边界随目录一起移动。工作树快照夹具覆盖进入、离开和失去工作树。

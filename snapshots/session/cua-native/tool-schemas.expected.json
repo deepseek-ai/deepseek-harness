@@ -375,6 +375,33 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "getActionSchema"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "performAction"
               },
               "params": {
@@ -494,6 +521,10 @@
                       "down",
                       "up"
                     ]
+                  },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -540,8 +571,8 @@
                         "minLength": 1,
                         "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -580,8 +611,8 @@
                         "type": "boolean",
                         "const": false
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -623,8 +654,8 @@
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -716,6 +747,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -794,6 +829,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -875,6 +914,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1093,6 +1136,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
+                  },
                   "windowId": {
                     "type": "string",
                     "minLength": 1
@@ -1134,6 +1181,10 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
                   },
                   "windowId": {
                     "type": "string",
@@ -1352,8 +1403,8 @@
                         "type": "number",
                         "minimum": 0
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -1431,8 +1482,8 @@
                         "minimum": 0,
                         "maximum": 999
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -1673,7 +1724,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}

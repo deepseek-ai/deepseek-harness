@@ -43,6 +43,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes, and the list can become empty as windows close.
 - `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Window operations check that the target still belongs to the selected application.
 - `window.getAccessibilityTree()` explicitly reads accessibility state. Element IDs belong to the current observation; reading another window of the same App replaces the facade's current snapshot. Do not mix elements or snapshots across windows.
+- Use `getActionSchema(action)` to query an action's parameter JSON Schema.
 - `window.getScreenshot()` captures that explicit window and does not read or replace its accessibility tree. Screenshots can remain usable when an accessibility read fails.
 - `app.activate()` explicitly requests foreground activation. `app.show()` restores a default window without requesting activation; `window.show()` restores the named window. An absent default returns `WINDOW_NOT_FOUND`; an ambiguous default returns `AMBIGUOUS_WINDOW`.
 
@@ -54,6 +55,8 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 3. `pressKey`, `click`, and `drag` accept `ctrl` (or `control`), `alt`, and `shift`. Only `click` and `drag` accept `win`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
 5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
+
+`win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. The selected window must be in the foreground for both directions. A press also requires a pointer hit on that window; a release can occur outside it.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -77,7 +80,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 <a id="known-limitations-and-deferred-work"></a>
 
 - The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
-- Hover, click, scroll and drag use the system pointer. `requireSystemPointerApproval` does not prompt separately for Windows pointer operations.
+- Hover, click, scroll and drag use the system pointer. `requireSystemInputApproval` does not prompt separately for Windows pointer operations.
 - Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.
 - The helper does not check each key or button release during cleanup. If an input remains held after a failure, release it manually before continuing.
 - Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.

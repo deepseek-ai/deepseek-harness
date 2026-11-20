@@ -3,7 +3,8 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, CheckState, ChecksRollup,
+  ChangeRequestBrief, ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, CheckState,
+  ChecksRollup,
   ForgeCheckId, ForgeFailure, ForgeRepository, Mergeability, MergeMethod, ReviewDecision, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
@@ -62,6 +63,9 @@ export const THREADS_QUERY = `query($id: ID!, $cursor: String!, $first: Int!) {
 }`
 
 const REPOSITORY_FIELDS = 'squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed viewerPermission viewerDefaultMergeMethod'
+
+/** Fields of one pull request's brief: its own scalars and the combined state of the head commit's checks, without the check list. */
+const BRIEF_FIELDS = 'url title state isDraft mergeable reviewDecision commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }'
 
 /** Head-branch lookup; variables `owner`, `name`, and `branch` are passed as strings. */
 export const HEAD_QUERY = `query($owner: String!, $name: String!, $branch: String!) {
@@ -138,6 +142,18 @@ export interface SnapshotPages {
 
 const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
 
+/** The closing issues references of a pull request, the snapshot's and a viewer list item's. */
+export const closingIssuesSchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  nodes: z.array(z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.string(),
+    url: z.string(),
+    repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
+  })),
+})
+
 const reviewsSchema = z.object({
   totalCount: z.number().int().nonnegative(),
   nodes: z.array(z.object({ state: z.string(), commit: z.object({ oid: z.string() }).nullable(), author: actorSchema.nullable() })),
@@ -179,16 +195,7 @@ const pullRequestSchema = z.object({
   }),
   latestReviews: reviewsSchema,
   latestOpinionatedReviews: reviewsSchema,
-  closingIssuesReferences: z.object({
-    totalCount: z.number().int().nonnegative(),
-    nodes: z.array(z.object({
-      number: z.number().int().positive(),
-      title: z.string(),
-      state: z.string(),
-      url: z.string(),
-      repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
-    })),
-  }),
+  closingIssuesReferences: closingIssuesSchema,
   commits: z.object({
     nodes: z.array(z.object({
       commit: z.object({
@@ -242,6 +249,16 @@ const pullRequestCommitsSchema = z.object({ data: z.object({ repository: z.objec
   baseRefOid: z.string().refine(isCommit),
 }) }) }) })
 
+const briefSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+  isDraft: z.boolean(),
+  mergeable: z.string(),
+  reviewDecision: z.string().nullable(),
+  commits: z.object({ nodes: z.array(z.object({ commit: z.object({ statusCheckRollup: z.object({ state: z.string() }).nullable() }) })) }),
+})
+
 type PullRequestNode = z.infer<typeof pullRequestSchema>
 type RepositoryNode = z.infer<typeof repositorySchema>
 
@@ -255,7 +272,7 @@ const MERGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE'])
 const TRIAGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE', 'TRIAGE'])
 
 /** Outcome of a submitted review by GitHub state; a pending review is not submitted. */
-const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
+export const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
   APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', COMMENTED: 'commented', DISMISSED: 'dismissed',
 }
 
@@ -270,25 +287,30 @@ const METHODS: readonly {
   { method: 'rebase', allowed: 'rebaseMergeAllowed', name: 'REBASE' },
 ]
 
-/** One batched snapshot query and the change request behind each alias. */
-export interface SnapshotQuery {
+/** One batched status query and the change request behind each alias. */
+export interface StatusQuery {
   /** GraphQL document with one aliased field per change request. */
   readonly document: string
   /** Change requests keyed by alias path `r<i>.p<j>`. */
   readonly targets: ReadonlyMap<string, ChangeRequestRef>
+}
+
+/** One batched snapshot query. */
+export interface SnapshotQuery extends StatusQuery {
   /** Most review threads counted per change request. */
   readonly maxReviewThreads: number
 }
 
 /**
- * Build one query that reads every change request in `refs`, grouping them by
- * repository. Owners, names, and numbers are validated before they are inlined.
+ * Build one query that reads the same fields of every change request in `refs`, grouping them by repository. Owners,
+ * names, and numbers are validated before they are inlined.
  * @param refs - change requests on one host.
- * @param maxReviewThreads - positive integer bound on the review threads counted per change request.
+ * @param repositoryFields - selection read once per repository, or the empty string.
+ * @param pullRequestSelection - selection read per pull request.
  * @returns the document and its alias targets.
  * @throws when an owner, name, or number cannot be inlined safely.
  */
-export function snapshotQuery(refs: readonly ChangeRequestRef[], maxReviewThreads: number): SnapshotQuery {
+function statusQuery(refs: readonly ChangeRequestRef[], repositoryFields: string, pullRequestSelection: string): StatusQuery {
   const repositories = new Map<string, { repository: ForgeRepository; numbers: Map<number, ChangeRequestRef> }>()
   for (const ref of refs) {
     const { owner, name } = checkedRepository(ref)
@@ -309,21 +331,84 @@ export function snapshotQuery(refs: readonly ChangeRequestRef[], maxReviewThread
       targets.set(`r${r}.p${p}`, ref)
     }
     const owner = JSON.stringify(repository.owner)
-    fields.push(`r${r}: repository(owner: ${owner}, name: ${JSON.stringify(repository.name)}) { ${REPOSITORY_FIELDS} ${pulls.join(' ')} }`)
+    fields.push(`r${r}: repository(owner: ${owner}, name: ${JSON.stringify(repository.name)}) { ${repositoryFields} ${pulls.join(' ')} }`)
   }
   const document = `query { ${fields.join(' ')} }
-fragment ChangeRequestFields on PullRequest { ${pullRequestFields(Math.min(PAGE_SIZE, maxReviewThreads))} }`
-  return { document, targets, maxReviewThreads }
+fragment ChangeRequestFields on PullRequest { ${pullRequestSelection} }`
+  return { document, targets }
+}
+
+/**
+ * Build one query that reads the snapshot of every change request in `refs`.
+ * @param refs - change requests on one host.
+ * @param maxReviewThreads - positive integer bound on the review threads counted per change request.
+ * @returns the document and its alias targets.
+ * @throws when an owner, name, or number cannot be inlined safely.
+ */
+export function snapshotQuery(refs: readonly ChangeRequestRef[], maxReviewThreads: number): SnapshotQuery {
+  return { ...statusQuery(refs, REPOSITORY_FIELDS, pullRequestFields(Math.min(PAGE_SIZE, maxReviewThreads))), maxReviewThreads }
+}
+
+/**
+ * Build one query that reads the brief of every change request in `refs`.
+ * @param refs - change requests on one host.
+ * @returns the document and its alias targets.
+ * @throws when an owner, name, or number cannot be inlined safely.
+ */
+export function briefQuery(refs: readonly ChangeRequestRef[]): StatusQuery {
+  return statusQuery(refs, '', BRIEF_FIELDS)
+}
+
+/** What a status response holds for one alias target. */
+interface StatusTarget {
+  readonly ref: ChangeRequestRef
+  readonly key: ChangeRequestKey
+  /** The pull request node as GitHub returned it, not yet validated. */
+  readonly node: unknown
+  /** The repository node as GitHub returned it, not yet validated. */
+  readonly repository: unknown
+  /** What to report when the node does not hold the fields the query asked for. */
+  readonly failure: ForgeFailure
+}
+
+/**
+ * Resolve every alias target of a status response, including GitHub's partial-error form. Path-scoped errors apply to
+ * their repository or pull request; errors without a path apply to every unresolved target.
+ * @param body - parsed JSON printed by `gh api graphql`.
+ * @param query - the query that produced the response.
+ * @returns the nodes and the failure of each target, in query order.
+ */
+function statusTargets(body: unknown, query: StatusQuery): StatusTarget[] {
+  const parsed = responseSchema.safeParse(body)
+  const repositories = new Set([...query.targets.keys()].map(alias => alias.split('.')[0]))
+  return [...query.targets].map(([alias, ref]) => {
+    const key = changeRequestKey(ref)
+    if (!parsed.success) {
+      return { ref, key, node: undefined, repository: undefined, failure: { code: 'unavailable', message: 'unexpected GitHub response' } }
+    }
+    const [repositoryAlias = '', pullAlias = ''] = alias.split('.')
+    const errors = parsed.data.errors ?? []
+    const error = errors.find(entry => entry.path?.[0] === repositoryAlias && (entry.path.length === 1 || entry.path[1] === pullAlias))
+      ?? errors.find(entry => entry.path === undefined || !repositories.has(String(entry.path[0])))
+    const repository = parsed.data.data?.[repositoryAlias]
+    const node = repository?.[pullAlias]
+    let failure: ForgeFailure
+    if (error !== undefined) {
+      const code = error.type === 'NOT_FOUND' ? 'not-found' : error.type === 'RATE_LIMITED' ? 'rate-limited' : 'unavailable'
+      failure = { code, message: error.message }
+    } else if (node === null || node === undefined) failure = { code: 'not-found', message: 'pull request not found' }
+    else failure = { code: 'unavailable', message: 'unexpected pull request fields' }
+    return { ref, key, node, repository, failure }
+  })
 }
 
 /**
  * Map a snapshot response, including GitHub's partial-error form, into one
- * result per alias target. Path-scoped errors apply to their repository or
- * pull request; errors without a path apply to every unresolved target. A
- * repository without readable merge settings offers no merge. Review threads
- * are counted across pages up to `query.maxReviewThreads`. Polling returns
- * the first check page; an explicit detail read can complete its pagination.
- * A continuation page that fails or does not advance fails its target.
+ * result per alias target. A repository without readable merge settings offers
+ * no merge. Review threads are counted across pages up to
+ * `query.maxReviewThreads`. Polling returns the first check page; an explicit
+ * detail read can complete its pagination. A continuation page that fails or
+ * does not advance fails its target.
  * @param body - parsed JSON printed by `gh api graphql`.
  * @param query - the query that produced the response.
  * @param pages - continuation reads of review threads and, for a detail read, of checks on the same commit.
@@ -333,33 +418,46 @@ export async function mapSnapshotResponse(
   body: unknown, query: SnapshotQuery, pages: SnapshotPages,
 ): Promise<Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
   const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
-  const parsed = responseSchema.safeParse(body)
-  const repositories = new Set([...query.targets.keys()].map(alias => alias.split('.')[0]))
-  for (const [alias, ref] of query.targets) {
-    const key = changeRequestKey(ref)
-    if (!parsed.success) {
-      results.set(key, { code: 'unavailable', message: 'unexpected GitHub response' })
+  for (const target of statusTargets(body, query)) {
+    const node = pullRequestSchema.safeParse(target.node)
+    if (!node.success) {
+      results.set(target.key, target.failure)
       continue
     }
-    const [repositoryAlias = '', pullAlias = ''] = alias.split('.')
-    const errors = parsed.data.errors ?? []
-    const error = errors.find(entry => entry.path?.[0] === repositoryAlias && (entry.path.length === 1 || entry.path[1] === pullAlias))
-      ?? errors.find(entry => entry.path === undefined || !repositories.has(String(entry.path[0])))
-    const raw = parsed.data.data?.[repositoryAlias]?.[pullAlias]
-    const node = pullRequestSchema.safeParse(raw)
-    const settings = repositorySchema.safeParse(parsed.data.data?.[repositoryAlias])
-    if (node.success) {
-      const { id, reviewThreads } = node.data
-      const rollup = node.data.commits.nodes[0]?.commit.statusCheckRollup
-      const { checks } = pages
-      const failure = await readPages(reviewThreads, query.maxReviewThreads, 'review thread',
-        async (cursor, first) => await pages.threads(id, cursor, first))
-        ?? (rollup === undefined || rollup === null || checks === undefined ? undefined
-          : await readPages(rollup.contexts, Number.POSITIVE_INFINITY, 'check', async cursor => await checks(rollup.id, cursor)))
-      results.set(key, failure ?? toSnapshot(ref, node.data, settings.success ? settings.data : undefined))
-    } else if (error !== undefined) results.set(key, { code: error.type === 'NOT_FOUND' ? 'not-found' : 'unavailable', message: error.message })
-    else if (raw === null || raw === undefined) results.set(key, { code: 'not-found', message: 'pull request not found' })
-    else results.set(key, { code: 'unavailable', message: 'unexpected pull request fields' })
+    const settings = repositorySchema.safeParse(target.repository)
+    const { id, reviewThreads } = node.data
+    const rollup = node.data.commits.nodes[0]?.commit.statusCheckRollup
+    const { checks } = pages
+    const failure = await readPages(reviewThreads, query.maxReviewThreads, 'review thread',
+      async (cursor, first) => await pages.threads(id, cursor, first))
+      ?? (rollup === undefined || rollup === null || checks === undefined ? undefined
+        : await readPages(rollup.contexts, Number.POSITIVE_INFINITY, 'check', async cursor => await checks(rollup.id, cursor)))
+    results.set(target.key, failure ?? toSnapshot(target.ref, node.data, settings.success ? settings.data : undefined))
+  }
+  return results
+}
+
+/**
+ * Map a brief response, including GitHub's partial-error form, into one result per alias target. The combined check
+ * outcome is GitHub's own for the head commit, as a snapshot reports it when its check list is incomplete.
+ * @param body - parsed JSON printed by `gh api graphql`.
+ * @param query - the query that produced the response.
+ * @returns a brief or a failure for every target.
+ */
+export function mapBriefResponse(body: unknown, query: StatusQuery): Map<ChangeRequestKey, ChangeRequestBrief | ForgeFailure> {
+  const results = new Map<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>()
+  for (const target of statusTargets(body, query)) {
+    const node = briefSchema.safeParse(target.node)
+    results.set(target.key, node.success ? {
+      ref: target.ref,
+      url: node.data.url,
+      title: node.data.title,
+      state: changeRequestState(node.data.state),
+      draft: node.data.isDraft,
+      mergeability: mergeability(node.data.mergeable),
+      reviewDecision: reviewDecision(node.data.reviewDecision),
+      checksRollup: checksRollup(node.data.commits.nodes[0]?.commit.statusCheckRollup?.state),
+    } : target.failure)
   }
   return results
 }
@@ -657,7 +755,12 @@ function statusContextState(state: string): CheckState {
   }
 }
 
-function checksRollup(state: string | undefined): ChecksRollup {
+/**
+ * Map GitHub's `StatusCheckRollup.state`.
+ * @param state - the rollup state, or undefined for a head commit without checks.
+ * @returns the combined check outcome; states outside the documented set read as pending.
+ */
+export function checksRollup(state: string | undefined): ChecksRollup {
   switch (state) {
     case undefined: return 'none'
     case 'SUCCESS': return 'success'
@@ -675,7 +778,12 @@ function mergeability(value: string): Mergeability {
   }
 }
 
-function reviewDecision(value: string | null): ReviewDecision {
+/**
+ * Map GitHub's `PullRequest.reviewDecision`.
+ * @param value - the decision, or null when the base branch requires none.
+ * @returns the aggregate review outcome.
+ */
+export function reviewDecision(value: string | null): ReviewDecision {
   switch (value) {
     case 'APPROVED': return 'approved'
     case 'CHANGES_REQUESTED': return 'changes-requested'

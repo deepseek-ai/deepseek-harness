@@ -1,9 +1,6 @@
-/**
- * The search shared by the branch pickers: the query, the listing it read, the search field's focus, and the status a
- * menu shows instead of rows.
- */
+/** The search shared by the branch pickers: the query, the listing it read, and the status a menu shows instead of rows. */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -24,8 +21,6 @@ export interface BranchSearch<T> {
   readonly retry: () => void
   /** Clear the search text, as when the menu closes. */
   readonly reset: () => void
-  /** The search field, which takes the keyboard once the menu shows unless the pointer is coarse. */
-  readonly field: RefObject<HTMLInputElement>
 }
 
 /**
@@ -42,7 +37,6 @@ export function useBranchSearch<T>(
   const [query, setQuery] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [listing, setListing] = useState<RemoteResult<T> | null>(null)
-  const field = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (!shown) return
     const controller = new AbortController()
@@ -54,16 +48,9 @@ export function useBranchSearch<T>(
       controller.abort()
     }
   }, [shown, query, attempt, list])
-  // The portalled menu measures itself hidden before its first frame, and a hidden field cannot take the keyboard.
-  // A touch screen keeps its on-screen keyboard closed until the field is tapped.
-  useEffect(() => {
-    if (!shown || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)) return
-    const frame = requestAnimationFrame(() => { field.current?.focus() })
-    return () => { cancelAnimationFrame(frame) }
-  }, [shown])
   const retry = useCallback(() => { setAttempt(count => count + 1) }, [])
   const reset = useCallback(() => { setQuery('') }, [])
-  return { query, setQuery, listing, retry, reset, field }
+  return { query, setQuery, listing, retry, reset }
 }
 
 /**

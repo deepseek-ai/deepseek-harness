@@ -25,14 +25,29 @@ async function pixels(page: Page, url: string, size: number) {
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const at = (y * size + x) * 4
-        if (data[at + 3] === 0 || data[at]! + data[at + 1]! + data[at + 2]! >= 384) continue
+        // Measure contrast over white so transparent corners cannot count as whale ink.
+        const opacity = data[at + 3]! / 255
+        const brightness = (data[at]! + data[at + 1]! + data[at + 2]!) * opacity + 765 * (1 - opacity)
+        if (brightness >= 384) continue
         ink += 1
         radius = Math.max(radius, Math.hypot(x - (size - 1) / 2, y - (size - 1) / 2))
       }
     }
+    const alpha = (x: number, y: number): number => data[(y * size + x) * 4 + 3]!
+    const cornerSamples = (points: readonly (readonly [number, number])[]): number[] => points.flatMap(([x, y]) => {
+      const atX = Math.round(x * (size - 1))
+      const atY = Math.round(y * (size - 1))
+      return [alpha(atX, atY), alpha(size - 1 - atX, atY),
+        alpha(atX, size - 1 - atY), alpha(size - 1 - atX, size - 1 - atY)]
+    })
     return {
       width: image.naturalWidth, height: image.naturalHeight, radius, ink,
       corners: [0, size - 1, (size - 1) * size, size * size - 1].map(index => data[index * 4 + 3]),
+      // These points straddle the 230/1024-radius curve at diagonal and shallow angles.
+      outsideCurve: cornerSamples([[0.05, 0.05], [0.1, 0.01]]),
+      insideCurve: cornerSamples([[0.08, 0.08], [0.2, 0.03]]),
+      edgeCenters: [alpha(size / 2, 0), alpha(size - 1, size / 2),
+        alpha(size / 2, size - 1), alpha(0, size / 2)],
     }
   }, { url, size })
 }
@@ -79,7 +94,7 @@ it('ships install metadata with the built web application', async () => {
   })
 })
 
-it('decodes every generated and shipped icon with its full artwork and opaque corners', async () => {
+it('decodes every generated and shipped icon with full artwork and its intended corner treatment', async () => {
   const browser = await chromium.launch({ headless: true })
   try {
     const page = await browser.newPage()
@@ -95,10 +110,14 @@ it('decodes every generated and shipped icon with its full artwork and opaque co
       const reference = await pixels(page, svgUrl(tileDocument(source)), variant.size)
       expect(reference.ink).toBeGreaterThan(0)
       const scale = variant.kind === 'maskable' ? MASKABLE_ARTWORK_SCALE : 1
+      const cornerAlpha = variant.kind === 'rounded' ? 0 : 255
       for (const bytes of [png, await readFile(join(DIST_ROOT, variant.file))]) {
         const image = await pixels(page, pngUrl(bytes), variant.size)
         expect([image.width, image.height], variant.file).toEqual([variant.size, variant.size])
-        expect(image.corners, variant.file).toEqual([255, 255, 255, 255])
+        expect(image.corners, variant.file).toEqual(Array.from({ length: 4 }, () => cornerAlpha))
+        expect(image.outsideCurve, variant.file).toEqual(Array.from({ length: 8 }, () => cornerAlpha))
+        expect(image.insideCurve, variant.file).toEqual(Array.from({ length: 8 }, () => 255))
+        expect(image.edgeCenters, variant.file).toEqual([255, 255, 255, 255])
         expect(image.ink, variant.file).toBeGreaterThan(0)
         // Two pixels allow rasterizer and downsampling differences without
         // accepting missing or undersized artwork in the published PNG.

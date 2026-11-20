@@ -27,20 +27,20 @@ id: 2026-11-18-cua-activity-context
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "80d7a49ed6017af1a023488430fc8e9b7679f7af50c8b5ad6c843ae3a90719af"
+    previous: "2026-10-21-system-section-admissions"
+    after: "41586248fbed6edc749e789f57533377519bb1f5941f8a53149a31e4a3a984d7"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "cb5e0389ac2f78305e882f895e4e55d31f44e48c28292ed44adff6193354fc67"
+    previous: "2026-10-21-system-section-admissions"
+    after: "54588f397f0f084fbde634df6be453defaf348a21fdbec869031951f2d9974d8"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "696c7e4bb21e7754a5546078c1b45a82c4a7f0fbeab860bacf89070266d6a16c"
+    previous: "2026-10-21-system-section-admissions"
+    after: "9a8fdf1cc2efb1e06832a5191db0636146cd6f073cc4acc61d6ff8fa813def9f"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "8bac8ab331c25847ac29a4852578098b8684e44c6bcdfecb8f507db3cfed7402"
+    previous: "2026-10-21-system-section-admissions"
+    after: "94e41fc6c2fc24fb9dd979f52c2842d385a89ea92ad9ae52315b6420f523f00d"
     decision: same-version
 ```
 

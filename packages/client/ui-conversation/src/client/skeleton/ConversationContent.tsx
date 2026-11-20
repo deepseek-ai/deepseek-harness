@@ -23,7 +23,7 @@ export function ConversationContent(props: ConversationContentProps) {
   const {
     sessionId, phase, hero, useSession, useSessions, useSessionStatus,
     useWorkspaces, useInput, useComposerBlock, renderSlot, renderSlotChain,
-    selectWorkspace, t, useFactorySlot,
+    moveDraft, t, useFactorySlot,
   } = props
   const session = useSession(snapshot => snapshot)
   const Views = useFactorySlot('views', ConversationSessionView)
@@ -46,24 +46,37 @@ export function ConversationContent(props: ConversationContentProps) {
   // scroll body: the seat's height as --dsh-composer-height, so controls clear
   // the composer as it grows, and the scrollport's own height as
   // --dsh-conversation-viewport-height, so a control can sit in the band the
-  // seat leaves visible. Callback ref, not an effect; stable identity prevents
-  // observer churn while the first blank session fills the resident body
-  // outlet.
+  // seat leaves visible. The scrollport's width goes on the body as
+  // --dsh-conversation-viewport-width, where the end reserve's lengths derive
+  // from it for the scrollport and the width handles alike; the width counts
+  // the scrollport's padding, so the inset it sizes does not change it.
+  // Callback ref, not an effect; stable identity prevents observer churn
+  // while the first blank session fills the resident body outlet.
   const seatObserver = useRef<ResizeObserver | null>(null)
   const seatResizeRef = useCallback((seat: HTMLDivElement | null): void => {
     seatObserver.current?.disconnect()
     seatObserver.current = null
     const scroller = seat?.parentElement ?? null
     if (seat === null || scroller === null) return
+    const content = scroller.closest<HTMLElement>('[data-conversation-content]')
+    /* v8 ignore next -- the scroll body renders only inside the Conversation body. */
+    if (content === null) return
+    let width: number | undefined
     seatObserver.current = new ResizeObserver(() => {
       scroller.style.setProperty('--dsh-composer-height', `${seat.offsetHeight}px`)
       scroller.style.setProperty(
         '--dsh-conversation-viewport-height',
         `${scroller.clientHeight}px`,
       )
+      // The body is an ancestor of the whole transcript: write its property only when the width changes,
+      // not on every report of the composer's height.
+      if (scroller.clientWidth === width) return
+      width = scroller.clientWidth
+      content.style.setProperty('--dsh-conversation-viewport-width', `${width}px`)
     })
     seatObserver.current.observe(seat)
-    seatObserver.current.observe(scroller)
+    // The scrollport's border box: its end inset changes only the content box, and no published length depends on that.
+    seatObserver.current.observe(scroller, { box: 'border-box' })
   }, [])
 
   const sessionWorkspace = sessionId === undefined
@@ -123,7 +136,7 @@ export function ConversationContent(props: ConversationContentProps) {
         onPick: (workspaceId) => {
           setPickerOpen(false)
           setPendingWorkspaceId(workspaceId)
-          void selectWorkspace(workspaceId).catch(() => {
+          void props.onWorkspaceSelected(workspaceId, moveDraft).catch(() => {
             setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
           })
         },
@@ -164,7 +177,7 @@ export function ConversationContent(props: ConversationContentProps) {
 
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {hero && <HeroShell t={t} renderSlot={renderSlot} />}
+      {hero && <HeroShell t={t} renderSlot={renderSlot} headline={props.headline} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}

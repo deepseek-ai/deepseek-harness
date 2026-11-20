@@ -404,6 +404,10 @@ jobs:
       DSH_WEB_SNAPSHOT_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
       DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '' }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
+      # Browsers install beside the build; only the browser readers wait for them.
+      # The persistent VM image owns Playwright's Linux system packages, so the
+      # failover pool skips apt instead of mutating the shared host each run.
+      DSH_CI_PLAYWRIGHT_INSTALL: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && 'browsers' || 'with-deps' }}
       # A failing gate aborts its running siblings: a failing build stops the
       # independent Node compatibility smoke, and a failing reader (e.g.
       # publint) stops the remaining artifact consumers.
@@ -492,9 +496,11 @@ jobs:
           path: ~/.cache/dsh-ci/bubblewrap
           key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
-      # Blacksmith's Ubuntu HTTP archive endpoints can be unreachable while HTTPS works.
-      - name: Use HTTPS for Ubuntu archives on Blacksmith
-        if: vars.DSH_CI_FAILOVER_LINUX == 'blacksmith'
+      # Ubuntu HTTP archive mirrors can stall for tens of seconds per package
+      # (Blacksmith lists http://azure.archive.ubuntu.com first), so ephemeral
+      # runners fetch the archive over HTTPS before the Playwright gate's apt.
+      - name: Use HTTPS for Ubuntu archives
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         run: |
           sudo python3 - <<'PY'
           from pathlib import Path
@@ -507,22 +513,9 @@ jobs:
           for source in sources:
               if source.is_file():
                   source.write_text(re.sub(
-                      r'http://((?:[a-z]{2}\.)?archive\.ubuntu\.com|security\.ubuntu\.com)/',
-                      r'https://\1/', source.read_text()))
+                      r'http://(?:[a-z0-9-]+\.)*(archive|security)\.ubuntu\.com/',
+                      r'https://\1.ubuntu.com/', source.read_text()))
           PY
-
-      - name: Install Playwright Chromium, WebKit, and hosted dependencies
-        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
-        # Ephemeral runner images can carry Ubuntu mirrors whose HTTP endpoints are unreachable.
-        run: |
-          sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i -E 's@http://([a-z]{2}\.)?archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g; s@http://security\.ubuntu\.com/ubuntu@https://security.ubuntu.com/ubuntu@g' {} +
-          pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium webkit
-
-      # The persistent VM image owns Playwright's Linux system packages; do
-      # not mutate the shared host with apt on every failover run.
-      - name: Install Playwright Chromium and WebKit on the failover VM
-        if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
 
       - name: Build and execute the Linux Office runtime
         run: CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads"

@@ -58,6 +58,37 @@ describe('ReviewCache', () => {
     expect(cache.get(c, 'v1', 0)).toEqual(review('w'))
   })
 
+  it('amends a read kept at the version of a write, keeping its age, and forgets one kept at another version', () => {
+    const cache = new ReviewCache<ForgeReviewData>(size * 4, 100)
+    const truncated = (read: ForgeReviewData): ForgeReviewData => ({ ...read, truncated: true })
+    cache.set(a, 'v1', review('x'), 1_000, cache.token())
+    cache.set(b, 'v1', review('y'), 1_000, cache.token())
+
+    cache.amend(a, 'v1', truncated)
+    cache.amend(b, 'v2', truncated)
+    cache.amend(c, 'v1', truncated)
+
+    expect(cache.get(a, 'v1', 1_099)).toEqual({ ...review('x'), truncated: true })
+    expect(cache.get(a, 'v1', 1_100)).toBeUndefined()
+    expect(cache.get(b, 'v1', 1_050)).toBeUndefined()
+    expect(cache.get(c, 'v1', 1_050)).toBeUndefined()
+  })
+
+  it('keeps no read that started before an amendment, and no amended read larger than the byte limit', () => {
+    const cache = new ReviewCache<ForgeReviewData>(size, 100)
+    const early = cache.token()
+    cache.set(a, 'v1', review('x'), 0, early)
+    cache.amend(b, 'v1', read => read)
+    cache.set(b, 'v1', review('y'), 0, early)
+    expect(cache.get(b, 'v1', 0)).toBeUndefined()
+    expect(cache.get(a, 'v1', 0)).toEqual(review('x'))
+
+    cache.amend(a, 'v1', () => review('longer'))
+    expect(cache.get(a, 'v1', 0)).toBeUndefined()
+    cache.set(b, 'v1', review('y'), 0, cache.token())
+    expect(cache.get(b, 'v1', 0)).toEqual(review('y'))
+  })
+
   it('keeps no read larger than the byte limit and forgets the read it replaced', () => {
     const cache = new ReviewCache(size, 100)
     cache.set(a, 'v1', review('x'), 0, cache.token())

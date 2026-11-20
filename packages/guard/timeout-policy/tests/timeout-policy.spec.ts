@@ -5,6 +5,7 @@
  * `exec.signal` aborts, mirroring how a real capability forwards the signal and
  * reaches quiescence.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -25,6 +26,7 @@ const testToolSignal = new AbortController().signal
 /** Mount the registry + the zero-config timeout-policy enforcer. */
 async function setup() {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -208,6 +210,7 @@ describe('timeout-policy contract', () => {
 describe('timeout-policy disposal (HMR safety)', () => {
   it('removes its tools/execute listener when the plugin fiber disposes', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -237,6 +240,7 @@ describe('dsh-tool-call-timeout-policy real-load-path guard', () => {
 
   it('boots over ctx.tools through the unwrapped module and wraps a budgeted tool', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

@@ -84,7 +84,9 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         pad.received = { [weak self] event in
             guard let self else { return }
             var value: [String: Any] = ["type": event.type.rawValue, "timestamp": event.timestamp, "flags": event.modifierFlags.rawValue,
-                                       "shift": event.modifierFlags.contains(.shift), "command": event.modifierFlags.contains(.command)]
+                                       "shift": event.modifierFlags.contains(.shift), "command": event.modifierFlags.contains(.command),
+                                       "systemShift": CGEventSource.keyState(.combinedSessionState, key: 56),
+                                       "systemW": CGEventSource.keyState(.combinedSessionState, key: 13)]
             if [.keyDown, .keyUp].contains(event.type) {
                 value["keyCode"] = event.keyCode
                 value["characters"] = event.characters ?? ""
@@ -140,6 +142,22 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
             "pad": [frame.minX, window.frame.height - frame.maxY, frame.width, frame.height]]
         try! JSONSerialization.data(withJSONObject: result).write(to: URL(fileURLWithPath: statePath), options: .atomic)
     }
+}
+if CommandLine.arguments.dropFirst().first == "--key-state" {
+    let codes: [CGKeyCode] = [55, 56]
+    let state = Dictionary(uniqueKeysWithValues: codes.map { (String($0), CGEventSource.keyState(.combinedSessionState, key: $0)) })
+    print(String(data: try JSONSerialization.data(withJSONObject: state), encoding: .utf8)!)
+    exit(0)
+}
+// The opt-in pointer test samples and restores the desktop cursor independently of the helper.
+if CommandLine.arguments.dropFirst().first == "--cursor" {
+    let coordinates = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    if coordinates.count == 2 {
+        guard CGWarpMouseCursorPosition(CGPoint(x: coordinates[0], y: coordinates[1])) == .success else { exit(1) }
+    }
+    guard let position = CGEvent(source: nil)?.location else { exit(1) }
+    print("[\(position.x),\(position.y)]")
+    exit(0)
 }
 let statePath = CommandLine.arguments.dropFirst().first ?? Bundle.main.object(forInfoDictionaryKey: "DSHFixtureStatePath") as? String
 if let statePath {

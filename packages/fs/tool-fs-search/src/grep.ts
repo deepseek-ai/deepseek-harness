@@ -281,6 +281,7 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
       ? ''
       : 'Use the grep tool — not shell grep or rg — to search file contents.'
         + (ctx.tools.get('read', scope) === undefined ? '' : ' Use read on a matched file when you need surrounding context.'),
+    retirement: 'The grep tool is no longer available. Its guidance no longer applies.',
   })
 
   const tool = defineTool({

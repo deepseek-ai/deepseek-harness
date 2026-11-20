@@ -9,38 +9,38 @@
   en: 743695093b8a920e
   zh: 3784b6641780bd27
 /deepseek-ai-dsh-persona/summary:
-  en: c05b764e4f370ac6
-  zh: 27e6f3bf61fb651a
+  en: d0c75ff01fb017e4
+  zh: 0b38aa28d9be6ccc
 /deepseek-ai-dsh-persona/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-persona/use-this-package:
-  en: 9b74e4172eaf5fdd
-  zh: ab94a985d1f96523
+  en: 6404ae1637a12294
+  zh: f0c482174d45fef3
 /deepseek-ai-dsh-persona/use-this-package/configuration:
-  en: 7b9e9ccc76ca6af9
-  zh: 641d20ccfbda6b91
+  en: 0aef6d00c1a39266
+  zh: 56f7258bc18cd584
 /deepseek-ai-dsh-persona/use-this-package/persona-behavior:
-  en: c2dc9192f0658eeb
-  zh: 7ce8414d9e1a5b5a
+  en: 65e877d875449c5f
+  zh: 364b952825d2b6d9
 /deepseek-ai-dsh-persona/use-this-package/when-to-use-it:
-  en: 4721bb61679c0279
-  zh: 51aaa09929dd06d0
+  en: b07444ab57b3e37f
+  zh: cf04dd79385603d6
 /deepseek-ai-dsh-persona/understand-the-implementation:
   en: 42b15ac6321706aa
   zh: 4ed0861911abaf5d
 /deepseek-ai-dsh-persona/understand-the-implementation/how-the-row-registers:
-  en: 72eeb11ca6e5401e
-  zh: f8b036d1d0444b56
-/deepseek-ai-dsh-persona/understand-the-implementation/why-the-row-is-scope-only:
-  en: bcd57eaefa6d1ff8
-  zh: 8d7de63d2bfaa5ef
+  en: 269c2cbf5ae2f8ad
+  zh: f9fe879e0cca4acf
+/deepseek-ai-dsh-persona/understand-the-implementation/how-overrides-compose:
+  en: 281db27acd893366
+  zh: 1bd040f55dbd9cdb
 /deepseek-ai-dsh-persona/understand-the-implementation/source-map:
-  en: 45e09ad507fbe1fb
-  zh: 006ec9c79c1771a7
+  en: 8c43d805ee2999a7
+  zh: d50c981e9e1db9dd
 /deepseek-ai-dsh-persona/further-exploration:
-  en: 2636f1f672f3d32e
-  zh: f1b4a371cc90cbd1
+  en: 83eeab77ab6594df
+  zh: b1ad5d560825db01
 /deepseek-ai-dsh-persona/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -48,17 +48,17 @@
   en: 2b53c1d07ef68f24
   zh: 33a3c17ab56adf57
 /deepseek-ai-dsh-persona/model-experience/the-persona-section/what-the-model-sees:
-  en: bf6f1c045961e762
-  zh: 2e42611e7c3ca35e
+  en: 4236e11cd32c85f0
+  zh: 8f2661ce11f10f9c
 /deepseek-ai-dsh-persona/model-experience/the-persona-section/token-effect:
-  en: 346e80f3b7a8c7fd
-  zh: da0e19a955d56c51
+  en: cf1571583243999b
+  zh: 9ef9e43233d6f5d8
 /deepseek-ai-dsh-persona/model-experience/the-persona-section/kv-cache-effect:
-  en: e9f96cf496c544c7
-  zh: b986f1b22d1beb70
+  en: 420a69e2e445a878
+  zh: d4b104d01066dfe1
 /deepseek-ai-dsh-persona/known-limitations-and-deferred-work:
-  en: 9a7dba778a006276
-  zh: 3c2030dfcfe83e34
+  en: 7ddd1309757ce8a8
+  zh: 9ad789161f72047a
 /deepseek-ai-dsh-persona/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

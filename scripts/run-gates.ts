@@ -427,6 +427,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
     pnpmScript('empty-catch', 'verify-empty-catch', { label: 'no new silent catches' }),
+    pnpmScript('css-selectors', 'verify-css-selectors', { label: 'bucketed CSS selectors' }),
     pnpmScript('cordis-root', 'verify-cordis-root', { label: 'no new Cordis root reads' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
     pnpmScript('plugin-entry-exports', 'verify-plugin-entry-exports', { label: 'plugin entry exports' }),
@@ -545,6 +546,8 @@ function ciArtifactGates(): Gate[] {
 
 function ciConsumerGates(): Gate[] {
   const builtTree = ['build']
+  const playwrightInstall = ciPlaywrightInstallGate()
+  const browserTree = playwrightInstall === undefined ? builtTree : [...builtTree, playwrightInstall.id]
   // The HMR web test starts `dev:web`, which rewrites the shared `lib/` and
   // `apps/web/dist/` trees. Let every build-artifact reader settle before that
   // writer starts; `after` preserves the web diagnostic even if a reader fails.
@@ -563,9 +566,11 @@ function ciConsumerGates(): Gate[] {
       env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
     }),
     pnpmScript('publint', 'publint', { needs: builtTree }),
-    snapshotGate(builtTree),
+    // test:snapshot includes the built-client apps/web/tests/*.snapshot.ts files, which launch Chromium.
+    snapshotGate(browserTree),
     expectedOutputGate(builtTree),
-    webSnapshotGate(builtTree, buildArtifactReaders),
+    ...playwrightInstall === undefined ? [] : [playwrightInstall],
+    webSnapshotGate(browserTree, buildArtifactReaders),
     pnpmScript('doc-typecheck', 'doc-typecheck:contracts-ready', {
       needs: builtTree,
       env: { DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' },
@@ -576,6 +581,28 @@ function ciConsumerGates(): Gate[] {
     }),
     builtBinSmokeGate(builtTree),
   ]
+}
+
+/**
+ * Install the Playwright browsers as a gate that runs beside the build; only the browser readers need it.
+ * `DSH_CI_PLAYWRIGHT_INSTALL` selects `with-deps` (ephemeral runners, which also install
+ * system packages through apt) or `browsers` (persistent hosts whose image owns those packages);
+ * unset leaves browser installation to the caller.
+ */
+function ciPlaywrightInstallGate(): Gate | undefined {
+  const raw = process.env.DSH_CI_PLAYWRIGHT_INSTALL
+  if (raw === undefined || raw === '') return undefined
+  if (raw !== 'with-deps' && raw !== 'browsers') {
+    throw new Error(`run-gates: DSH_CI_PLAYWRIGHT_INSTALL must be with-deps or browsers, got ${JSON.stringify(raw)}.`)
+  }
+  const args = ['--filter', '@deepseek-ai/dsh-web-frontend', 'exec', 'playwright', 'install',
+    ...raw === 'with-deps' ? ['--with-deps'] : [], 'chromium', 'webkit']
+  return {
+    id: 'playwright-install',
+    label: 'Playwright browsers',
+    displayCommand: `pnpm ${args.join(' ')}`,
+    ...pnpmInvocation(args),
+  }
 }
 
 function webSnapshotGate(needs: string[], after?: string[]): Gate {

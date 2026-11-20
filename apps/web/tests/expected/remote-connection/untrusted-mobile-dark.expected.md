@@ -1,0 +1,11 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - status:
+    - paragraph: 请先将此访问地址加入 Host 的可信主机配置，才能使用下方的登录方式
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - code: {{access-address}}
+    - button "复制链接"
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

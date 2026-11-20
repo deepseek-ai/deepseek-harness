@@ -27,6 +27,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
+  vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -383,7 +384,7 @@ describe('gate graph validation', () => {
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'product-use', 'official-bundle-catalog', 'provider-data', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'node-next-types',
       'optional-dependency-imports', 'client-packages', 'installer-locales', 'locale-metadata', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
-      'plugin-record-callers', 'no-unknown-casts', 'empty-catch', 'cordis-root', 'no-top-level-await', 'plugin-entry-exports',
+      'plugin-record-callers', 'no-unknown-casts', 'empty-catch', 'css-selectors', 'cordis-root', 'no-top-level-await', 'plugin-entry-exports',
       'cordis-config', 'runtime-closure',
     ])
   })
@@ -866,6 +867,29 @@ describe('Typert contract preparation', () => {
       'lint',
       'doc-typecheck',
     ])
+  })
+
+  it.each([
+    ['with-deps', ['install', '--with-deps', 'chromium', 'webkit']],
+    ['browsers', ['install', 'chromium', 'webkit']],
+  ] as const)('installs %s Playwright browsers beside the build for the browser readers only', (mode, install) => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', mode)
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
+    const needsOf = (id: string) => subject.find(item => item.id === id)?.needs
+
+    expect(subject.find(item => item.id === 'playwright-install')).toMatchObject({
+      args: ['/private/pnpm.cjs', '--filter', '@deepseek-ai/dsh-web-frontend', 'exec', 'playwright', ...install],
+    })
+    expect(needsOf('playwright-install')).toBeUndefined()
+    expect(needsOf('snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('web-snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('expected-output')).toEqual(['build'])
+  })
+
+  it('rejects an unknown Playwright install mode', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'deps')
+
+    expect(() => withPnpmEntrypoint(() => gatesForMode('ci-consumers'))).toThrow(/DSH_CI_PLAYWRIGHT_INSTALL must be with-deps or browsers/)
   })
 
   it('reuses contracts from the validated consumer build', () => {

@@ -1,0 +1,7 @@
+version: 1
+scenario: ptc-cancel-scoped
+profile: sdk
+composition: ptc
+recording: authored
+header:
+  class: ptc-scoped

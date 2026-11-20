@@ -2,6 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import ConnectorAccounts from '@deepseek-ai/dsh-client-ui-connector-account'
 import type { ConnectorAccountEntry } from '@deepseek-ai/dsh-client-ui-connector-account/types'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { cliPathContextText } from '../src/context.ts'
@@ -66,6 +67,7 @@ async function host({ page = true, commandTimeoutMs = 5_000 } = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { includeRuntimeContext: false })
   if (page) await ctx.plugin(ConnectorAccounts)
   await ctx.plugin(CliAccounts, { commandTimeoutMs })

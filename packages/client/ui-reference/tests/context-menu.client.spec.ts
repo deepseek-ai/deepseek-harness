@@ -82,6 +82,14 @@ it('appends the final action after other providers and inserts the captured file
   expect(b.failed).not.toHaveBeenCalled()
 })
 
+it('resolves the captured path against the directory the Session works in', async () => {
+  const b = await bench()
+  await b.runtime.sessions.setProjection(id, 'workingDirectory', '/workspace/elsewhere')
+  const menu = await b.menu()
+  menu.select(actionId)
+  expect(b.shell.snapshot.draft).toBe('@"/workspace/elsewhere/docs/a b.md" ')
+})
+
 it.each(['bad"name.txt', 'bad\nname.txt'])('disables paths outside the mention grammar: %j', async (path) => {
   const b = await bench()
   const menu = await b.menu({ path })

@@ -91,7 +91,7 @@
    starts squeezing labels; the container is the composer row (InputBar .row —
    anonymous query because CSS modules hash container-names per module). */
 @container (max-width: 460px) {
-  .trigger:has(.triggerIcon) .triggerLabel {
+  .triggerIcon ~ .triggerLabel {
     display: none;
   }
 }

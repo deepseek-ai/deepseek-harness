@@ -96,6 +96,8 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     } }]))
     scaffold = await launchWebScaffold({
       developerTools: true, profile: { packages: [{ dir: PACKAGE }] },
+      // The recorded program is an async function body.
+      ptcExecutionMode: 'per-call',
       extraOverlayPath: [fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), overlay],
       replayFixture: FIXTURE, compareReplaySession: true,
     })

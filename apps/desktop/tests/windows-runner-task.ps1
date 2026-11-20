@@ -7,7 +7,7 @@ $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../scripts'))
 $runner = Join-Path $root 'runner with spaces'
 $null = New-Item -ItemType Directory -Path $runner
 Set-Content -LiteralPath (Join-Path $runner '.runner') -Value '{}'
-foreach ($file in @('windows-runner-task.ps1','run-windows-runner-task.ps1','windows-runner-launcher.cs','windows-runner-network.ps1','run-windows-runner-network-process.ps1')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
+foreach ($file in @('windows-runner-task.ps1','windows-runner-scheduler.ps1','run-windows-runner-task.ps1','windows-runner-launcher.cs','windows-runner-processes.cs','windows-runner-network.ps1','run-windows-runner-network-process.ps1')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
 $manager = Join-Path $root 'windows-runner-task.ps1'
 @'
 param([string]$RunnerRoot, [string]$ConfigRoot, [switch]$CheckOnly)

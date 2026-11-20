@@ -23,9 +23,9 @@ function mount(fileCount = 2) {
   const openReview = vi.fn()
   const subscribe = diffs.state.subscribe.bind(diffs.state)
   const getSnapshot = diffs.state.getSnapshot.bind(diffs.state)
-  const changes = { seq: 5, files: files.slice(0, fileCount), total: fileCount, added: fileCount, deleted: fileCount }
+  const changes = { seq: 5, cwd: '/workspace', files: files.slice(0, fileCount), total: fileCount, added: fileCount, deleted: fileCount }
   const view = render(<ChangedFiles changes={changes}
-    cwd="/workspace" sessionId={sessionId} t={makeTranslate(en)} openReview={openReview}
+    sessionId={sessionId} t={makeTranslate(en)} openReview={openReview}
     loadChangesDiff={loadChangesDiff}
     useChangesDiff={select => select(useSyncExternalStore(subscribe, getSnapshot))} />)
   return { view, diffs, loadChangesDiff, openReview, row: screen.getByRole('button', { name: 'View changes to main.ts' }) }

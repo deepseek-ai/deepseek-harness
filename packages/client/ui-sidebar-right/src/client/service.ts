@@ -40,8 +40,8 @@ import type { FloatRect, LayoutState, PaneId, TabId, TabRecord } from '@deepseek
 import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor } from './contract/params.ts'
-import { pageAddress } from './contract/seed.ts'
+import type { SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightTabParamsFor, SidebarRightTabParamsMap } from './contract/params.ts'
+import { contentPrefix, pageAddress } from './contract/seed.ts'
 import type { SidebarRightDestination } from './contract/slots.ts'
 import type { SidebarRightTabClaim, SidebarRightTabRegistry } from './tab-registry.ts'
 import { canCloseTab, findHostContentTab, type SidebarRightState, type SurfaceState } from './stores.ts'
@@ -194,6 +194,14 @@ export interface SidebarRightOpenResourceOptions extends SidebarRightPlacement {
   readonly destination?: SidebarRightDestination
 }
 
+/** Placement and optional reuse of transient tab content. */
+export interface SidebarRightOpenContentOptions {
+  /** Reuse this content within its Session and tab kind. Omit to open a new instance. */
+  readonly key?: string
+  /** Host for this open. Defaults to the docked sidebar. */
+  readonly destination?: SidebarRightDestination
+}
+
 /** How a caller wants a page type opened. */
 export interface SidebarRightOpenTabOptions<K extends string = string> extends SidebarRightPlacement {
   /** That kind's navigation parameters, typed by kind; delivered as `navigation.params`. */
@@ -241,6 +249,15 @@ export interface ISidebarRight {
    * @param options - placement or an explicit host, the opening type, and navigation parameters.
    */
   openResource(address: string, options?: SidebarRightOpenResourceOptions): void
+  /**
+   * Open transient content with its registered tab kind. The visited body stays mounted across Session switches. Reload closes its tab.
+   * @param kind - tab kind declaring the content in SidebarRightTabParamsMap.
+   * @param content - input delivered to the tab body as navigation parameters.
+   * @param options - reuse key and destination host.
+   */
+  openContent<K extends Extract<keyof SidebarRightTabParamsMap, string>>(
+    kind: K, content: SidebarRightTabParamsMap[K], options?: SidebarRightOpenContentOptions,
+  ): void
   /**
    * Open a page type by kind: the type in force for it, at the address this
    * package records pages under. A kind nothing registered throws.
@@ -380,6 +397,14 @@ export class SidebarRightController implements ISidebarRight {
   openResource(address: string, options: SidebarRightOpenResourceOptions = {}): void {
     const { sessionId, actions } = this.require()
     this.placeResource(sessionId, actions, address, options)
+  }
+
+  openContent<K extends Extract<keyof SidebarRightTabParamsMap, string>>(
+    kind: K, content: SidebarRightTabParamsMap[K], options: SidebarRightOpenContentOptions = {},
+  ): void {
+    const { sessionId, actions } = this.require()
+    const address = `${contentPrefix(kind)}${encodeURIComponent(options.key ?? randomUUID())}`
+    this.placeIn(sessionId, actions, this.tabs.claim(address, kind), address, options.destination ?? 'sidebar', content)
   }
 
   /**

@@ -12,9 +12,9 @@ export const HISTORY_MS = 7 * 24 * 60 * MINUTE_MS
 export const MAX_ANNOTATIONS = 512
 /** Languages that Timeline can request from the model. */
 export const outputLanguages = ['en', 'zh-CN', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const
-/** Language options including the current app language. */
-export const languages = ['ui', ...outputLanguages] as const
-/** A fixed output language or the app preference. */
+/** Language options including the current app language and the agent's own choice. */
+export const languages = ['ui', 'chat', ...outputLanguages] as const
+/** A fixed output language, the app preference, or the language the agent chooses from the chat. */
 export type Language = (typeof languages)[number]
 /** One language supported for Timeline model output. */
 export type OutputLanguage = (typeof outputLanguages)[number]
@@ -78,33 +78,42 @@ export function appLanguage(locale: string): OutputLanguage {
 }
 
 /**
- * Resolve the configured language against the app preference.
+ * Resolve the language that Timeline requires of the model.
  * @param language - configured Timeline language.
  * @param uiLanguage - current app language when following the app.
- * @returns the resolved model output language.
+ * @returns the required output language, or `undefined` when following the chat sets no requirement.
  */
-export function outputLanguage(language: Language, uiLanguage: OutputLanguage): OutputLanguage {
+export function outputLanguage(language: Language, uiLanguage: OutputLanguage): OutputLanguage | undefined {
+  if (language === 'chat') return undefined
   return language === 'ui' ? uiLanguage : language
 }
 
 /**
- * Language applies only to saved task-tree content, not the agent's other work.
+ * Select the text that Timeline writes without the model; following the chat uses the app language.
  * @param language - configured Timeline language.
- * @param uiLanguage - current app language when following the app.
+ * @param uiLanguage - current app language.
+ * @returns the fixed text in the selected language.
+ */
+export function fixedText(language: Language, uiLanguage: OutputLanguage): (typeof languageText)[OutputLanguage] {
+  return languageText[outputLanguage(language, uiLanguage) ?? uiLanguage]
+}
+
+/**
+ * Language applies only to saved task-tree content, not the agent's other work.
+ * @param language - required output language.
  * @returns the language rule for task content only.
  */
-export function taskLanguageInstruction(language: Language, uiLanguage: OutputLanguage = 'en'): string {
-  return `For Timeline task-tree content only, write titles, descriptions, progress notes, results, and discussion replies in ${languageText[outputLanguage(language, uiLanguage)].label}. Follow the user's language instructions for all other work and conversation.`
+export function taskLanguageInstruction(language: OutputLanguage): string {
+  return `For Timeline task-tree content only, write titles, descriptions, progress notes, results, and discussion replies in ${languageText[language].label}. Follow the user's language instructions for all other work and conversation.`
 }
 
 /**
  * Fixed policy used only in independent report queries.
- * @param language - configured Timeline language.
- * @param uiLanguage - current app language when following the app.
+ * @param language - required output language.
  * @returns the language rule for report content.
  */
-export function languageInstruction(language: Language, uiLanguage: OutputLanguage = 'en'): string {
-  return `All titles, descriptions, user-facing texts must be written in ${languageText[outputLanguage(language, uiLanguage)].label}.`
+export function languageInstruction(language: OutputLanguage): string {
+  return `All titles, descriptions, user-facing texts must be written in ${languageText[language].label}.`
 }
 
 /**

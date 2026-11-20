@@ -22,7 +22,7 @@ Sidebar owns live-body retention, independently of Browser navigation and Worksp
 
 ### Session and tab lifetime
 
-`SidebarRightTabDefinition.keepMounted` enables lazy retention for a type. Desktop Browser enables it; other types keep visibility-based body mounting. A retained body is first created on display, then survives hiding until its occurrence or provider lifetime ends. The policy is not persisted and does not select a storage partition.
+`SidebarRightTabDefinition.keepMounted` enables lazy retention for a type. Desktop Browser enables it. Each tab opened through `openContent` also retains its visited body for the lifetime of the current window. A retained body is first created on display, then survives hiding until its occurrence or provider lifetime ends. The policy is not persisted and does not select a storage partition.
 
 `SidebarSessionView` acquires and releases one `SessionReference` using the independent `sidebarView` source, and owns its committed-mount count and retained-Body holds. `SidebarSessionViews` manages selection, retention policy and view indexes; it delegates lifetime operations to the view rather than mutating its counts or releasing its reference. `RightbarRoot` receives `SidebarSessionViewSnapshot` values and the existing injected callbacks, not resource-owner objects. It renders each through its own explicit `SessionProvider`, with a stable Session key; the renderer's general Session-remount semantics remain unchanged.
 
@@ -48,10 +48,12 @@ The [Desktop Browser decision](../feature/2026-09-20-desktop-browser-webview.md)
 | Collapse Sidebar | Hide docked cells; foreground floats remain visible. |
 | Session A → B → A | Hide and reshow A's original tree instead of loading its saved URL. |
 | Close, provider unload or actual generation termination | Release the body and guest; undo creates a new occurrence. |
-| Application restart or window reload | Show the saved title and URL; load only after an explicit restore or address submission. |
+| Application restart or window reload | Restore tabs whose content can be reconstructed. Browser shows its saved URL for explicit recovery. Close transient content tabs and their floats before presenting the layout. |
 | Guest crash | Retry through the provider; page memory and native history are not durable. |
 
 [Layout and provider recovery](../../../../packages/client/ui-sidebar-right/README.md) remains independent: persisted tab identity, placement and address support cold starts, not DOM serialization. A hidden page may continue scripts, media and networking.
+
+A tab opened through `openContent` receives its body in window-local navigation parameters. Its reuse key identifies an occurrence within a Session, but cannot recover the body. Restoring that tab would leave an empty viewer and could displace a file or other recoverable tab. Users can reopen the content from its source after reload.
 
 ## Alternatives considered
 

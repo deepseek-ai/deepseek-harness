@@ -81,6 +81,7 @@ interface SetupOptions {
 async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt, { ...options.toolOrder ? { toolOrder: options.toolOrder } : {} })
   await ctx.plugin(ToolRuntime)
   const executor = options.mode === 'native' ? new NativeToolExecutor(ctx) : new PtcExecutor(ctx, {
@@ -106,6 +107,17 @@ async function mintAgentScope(ctx: Context, name = 'scoped'): Promise<{ scope: S
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
     { inject: ['tools', 'systemPrompt'] }))
   return { scope, agent }
+}
+
+/** Commit the system messages prepared for one test Session. */
+async function commitPrompt(ctx: Context, session: Session, scope?: ScopeKey) {
+  const assembly = await ctx.systemPrompt.assemble({ session, ...scope === undefined ? {} : { scope } })
+  const updates = assembly.systemUpdates(false)
+  for (const { message, intent } of updates) {
+    session.append('system/message', { turn: 1, step: 1, message }, intent)
+  }
+  // Callers inspect the updates this commit wrote.
+  return { ...assembly, systemUpdates: () => updates }
 }
 
 /** Register a trivial echo tool; returns the calls it received. */
@@ -321,6 +333,7 @@ describe('mode-aware wire contribution', () => {
   it('waits for its runtime and follows runtime withdrawal and replacement', async () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     const executor = await ctx.plugin(PtcToolExecutor)
@@ -456,15 +469,18 @@ describe('mode-aware wire contribution', () => {
     expect(assembly.tools.some(tool => tool.name === RUN_CODE_NAME)).toBe(true)
   })
 
-  it('lets one scope shadow the default SDK section in mode ptc', async () => {
+  it('lets a scoped presentation transform customize the SDK text in mode ptc', async () => {
     const mode = 'ptc'
     const { ctx, systemPrompt } = await setup({ mode })
     registerEcho(ctx)
     const { scope, agent } = await mintAgentScope(ctx)
-    scope.ctx.systemPrompt.section({
-      name: 'tools:sdk',
-      order: scope.ctx.systemPrompt.getSectionOrder('TOOLS_SDK'),
-      text: 'SCOPED SDK',
+    scope.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+      const assembly = await next()
+      return {
+        ...assembly,
+        sections: assembly.sections.map(section => section.name === 'tools:sdk'
+          ? { ...section, text: 'SCOPED SDK' } : section),
+      }
     })
 
     const scoped = await systemPrompt.assemble({ scope: agent })
@@ -607,6 +623,7 @@ describe('mode-aware wire contribution', () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(FakeRuntime, { language })
@@ -710,15 +727,21 @@ describe('mode-aware wire contribution', () => {
   it('removes run_code and the SDK section when the registry fiber disposes (HMR safety)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(FakeRuntime, {})
     const fiber = await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
     expect(new PtcExecutor(ctx)['requirePtcTransport']()).toBeDefined()
+    const session = Session.create(brandString<SessionId>('ptc-registry-disposal'))
+    await commitPrompt(ctx, session)
     await fiber.dispose()
-    const assembly = await ctx.systemPrompt.assemble()
+    const assembly = await commitPrompt(ctx, session)
     expect(assembly.tools).toEqual([])
-    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
+    expect(admittedMessages(assembly).flatMap(message => message.source.sections ?? []))
+      .toContainEqual(expect.objectContaining({ name: 'tools:sdk', state: 'retired' }))
+    expect((await ctx.systemPrompt.assemble()).sections.some(section => section.name === 'tools:sdk')).toBe(false)
+    expect(admittedMessages((await ctx.systemPrompt.assemble({ session })))).toEqual([])
   })
 })
 
@@ -2118,6 +2141,7 @@ describe('the run_code dispatch bridge', () => {
   it('executing run_code under a missing runtime is a structured isError, not a crash', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     ctx.tools.setExecutor(new PtcExecutor(ctx))
@@ -2130,6 +2154,7 @@ describe('the run_code dispatch bridge', () => {
   it('refuses an agent-owned program before dispatch when its directory owner is missing', async () => {
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjections)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       ctx.tools.setExecutor(new PtcExecutor(ctx))
@@ -2559,6 +2584,7 @@ describe('the run_code dispatch bridge', () => {
   it('direct construction rejects a non-positive parallel subcall limit', async () => {
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjections)
       await ctx.plugin(SystemPrompt)
       expect(() => new PtcExecutor(ctx, { maxParallelSubCalls: 0 })).toThrow('maxParallelSubCalls')
     } finally { await ctx.fiber.dispose() }
@@ -2567,6 +2593,7 @@ describe('the run_code dispatch bridge', () => {
   it('direct construction exposes the PTC transport without configuration', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     const registry = new PtcExecutor(ctx)
@@ -2576,6 +2603,7 @@ describe('the run_code dispatch bridge', () => {
   it('defaults to native mode under direct construction with no config', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     const registry = new NativeToolExecutor(ctx)
@@ -2587,6 +2615,7 @@ describe('the run_code dispatch bridge', () => {
   it('denies a model-direct native-tool call under PTC mode as UNKNOWN_TOOL', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     const registry = new PtcExecutor(ctx)
@@ -2610,6 +2639,7 @@ describe('the run_code dispatch bridge', () => {
   it('routes a pre-aborted collapsed call through ABORTED_BEFORE_DISPATCH', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
     const registry = new PtcExecutor(ctx)
@@ -2714,6 +2744,40 @@ describe('per-agent presentation', () => {
     })
     expect(allowed).toMatchObject({ isError: false, value: 'echo:loner' })
     expect(calls).toEqual([{ value: 'loner' }])
+  })
+
+  it('does not retire another producer section when a scoped executor is replaced', async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'native' })
+    registerEcho(ctx)
+    const { scope, agent } = await mintAgentScope(ctx)
+    scope.ctx.systemPrompt.section({ name: 'tools:sdk', order: 0, text: 'Existing guidance.' })
+    await commitPrompt(ctx, agent.session, agent)
+    const dispose = scope.ctx.tools.setExecutor(new PtcExecutor(scope.ctx))
+    const overridden = await commitPrompt(ctx, agent.session, agent)
+    expect(overridden.sections.find(section => section.name === 'tools:sdk')?.text).toContain('echo')
+    dispose()
+    scope.ctx.tools.setExecutor(new NativeToolExecutor(scope.ctx))
+    const restored = await commitPrompt(ctx, agent.session, agent)
+    expect(restored.sections.find(section => section.name === 'tools:sdk')?.text).toBe('Existing guidance.')
+    expect(admittedMessages(restored).flatMap(message => message.source.sections ?? [])
+      .map(section => [section.name, section.state])).toEqual([['tools:sdk', 'active'], ['tools:ptc-only', 'retired']])
+    expect(admittedMessages((await systemPrompt.assemble({ scope: agent, session: agent.session })))).toEqual([])
+  })
+
+  it('retires the PTC instructions when a scoped executor is replaced with native execution', async () => {
+    const { ctx, systemPrompt } = await setup({ mode: 'native' })
+    registerEcho(ctx)
+    const { scope, agent } = await mintAgentScope(ctx)
+    const dispose = scope.ctx.tools.setExecutor(new PtcExecutor(scope.ctx))
+    const before = await commitPrompt(ctx, agent.session, agent)
+    expect(before.sections.find(section => section.name === 'tools:sdk')?.text).toContain('echo')
+    dispose()
+    scope.ctx.tools.setExecutor(new NativeToolExecutor(scope.ctx))
+    const after = await commitPrompt(ctx, agent.session, agent)
+    expect(after.tools.map(tool => tool.name)).toEqual(['echo'])
+    expect(admittedMessages(after).flatMap(message => message.source.sections ?? [])
+      .filter(section => section.state === 'retired').map(section => section.name)).toEqual(['tools:ptc-only', 'tools:sdk'])
+    expect(admittedMessages((await systemPrompt.assemble({ scope: agent, session: agent.session })))).toEqual([])
   })
 
   it('keeps run_code out of a native agent\'s dispatch table', async () => {
@@ -2898,7 +2962,6 @@ describe('PTC standing file policy and sandbox outcomes', () => {
   it('resolves deployment policy for an agentless program', async () => {
     const { ctx } = await setup({ runtime: false })
     try {
-      await ctx.plugin(SessionProjections)
       await ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
       await ctx.plugin(ConfinedFakeRuntime)
       const result = await runCode(ctx, 'return 1')
@@ -2950,7 +3013,6 @@ describe('per-program execution controls', () => {
   async function controlledSetup(approval = true) {
     const state = await setup()
     await state.ctx.plugin(SessionStore)
-    await state.ctx.plugin(SessionProjections)
     await state.ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
     if (approval) await state.ctx.plugin(ApprovalService, { policy: 'ask' })
     Object.defineProperties(state.runtime, {
@@ -3213,6 +3275,7 @@ it.each([
 ] as const)('settles nested calls after the PTC $unload fiber unloads (Agent: $owned)', async ({ owned, unload }) => {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   const runtimeProvider = await ctx.plugin(FakeRuntime)
@@ -3253,3 +3316,7 @@ it.each([
     await ctx.fiber.dispose()
   }
 })
+
+function admittedMessages(assembly: import('@deepseek-ai/dsh-system-prompt').PromptAssembly) {
+  return assembly.systemUpdates(false).map(update => update.message)
+}

@@ -46,6 +46,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`@joplin/turndown-plugin-gfm`](https://github.com/laurent22/joplin-turndown-plugin-gfm) | MIT |
 | [`@jridgewell/gen-mapping`](https://github.com/jridgewell/sourcemaps) | MIT |
 | [`@js-temporal/polyfill`](https://github.com/js-temporal/temporal-polyfill) | ISC |
+| [`@larksuite/cli`](https://github.com/larksuite/cli) | MIT |
 | [`@lexical/history`](https://github.com/facebook/lexical) | MIT |
 | [`@lexical/plain-text`](https://github.com/facebook/lexical) | MIT |
 | [`@lexical/text`](https://github.com/facebook/lexical) | MIT |
@@ -69,8 +70,10 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`@shikijs/langs`](https://github.com/shikijs/shiki) | MIT |
 | [`@standard-schema/spec`](https://github.com/standard-schema/standard-schema) | MIT |
 | [`@tanstack/react-virtual`](https://github.com/TanStack/virtual) | MIT |
+| [`@tencentcloud/tmeet`](https://github.com/TencentCloud/tencentmeeting-cli) | MIT |
 | [`@trycua/cua-driver`](https://github.com/trycua/cua) | MIT |
 | [`@vscode/ripgrep`](https://github.com/microsoft/vscode-ripgrep) | MIT |
+| [`@wecom/cli`](https://github.com/WecomTeam/wecom-cli) | MIT |
 | [`@xterm/addon-fit`](https://github.com/xtermjs/xterm.js/tree/master/addons/addon-fit) | MIT |
 | [`@xterm/addon-serialize`](https://github.com/xtermjs/xterm.js/tree/master/addons/addon-serialize) | MIT |
 | [`@xterm/headless`](https://github.com/xtermjs/xterm.js) | MIT |
@@ -134,6 +137,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`papaparse`](https://github.com/mholt/PapaParse) | MIT |
 | [`pdfjs-dist`](https://github.com/mozilla/pdf.js) | Apache-2.0 |
 | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
+| [`qrcode.react`](https://github.com/zpao/qrcode.react) | ISC |
 | [`react`](https://github.com/facebook/react) | MIT |
 | [`react-dom`](https://github.com/facebook/react) | MIT |
 | [`readable-stream`](https://github.com/nodejs/readable-stream) | MIT |
@@ -314,6 +318,7 @@ The [shared runtime lock](scripts/primary-runtime/lock.json) records each distri
 | [`openpyxl`](https://foss.heptapod.net/openpyxl/openpyxl) | 3.1.5 | MIT |
 | [`pandas`](https://github.com/pandas-dev/pandas) | 3.0.1 | BSD-3-Clause |
 | [`pillow`](https://github.com/python-pillow/Pillow) | 12.3.0 | MIT-CMU |
+| [`pypdf`](https://github.com/py-pdf/pypdf) | 6.21.4 | BSD-3-Clause |
 | [`python-dateutil`](https://github.com/dateutil/dateutil) | 2.9.0.post0 | Apache-2.0 OR BSD-3-Clause |
 | [`python-docx`](https://github.com/python-openxml/python-docx) | 1.2.0 | MIT |
 | [`python-pptx`](https://github.com/scanny/python-pptx) | 1.0.2 | MIT |

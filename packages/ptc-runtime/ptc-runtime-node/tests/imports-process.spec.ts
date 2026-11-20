@@ -52,7 +52,8 @@ it.each([
   { executionMode: 'vm-script', scriptPersistence: false },
   { executionMode: 'vm-script', scriptPersistence: true },
   { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: false },
-] as const)('runs imports inside the configured child in $executionMode with retention $scriptPersistence', async (mode) => {
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: true },
+] as const)('runs imports inside the configured child in $executionMode with retention $scriptPersistence and scoped REPL $replScoped', async (mode) => {
   const bootstrapPath = await customBootstrap()
   const { runtime } = await mountRuntime(new Context(), { ...mode, launch: { kind: 'node-script', executable: process.execPath, bootstrapPath } })
   const stateOwner = {}
