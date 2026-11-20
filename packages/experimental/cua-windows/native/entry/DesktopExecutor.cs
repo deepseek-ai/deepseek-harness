@@ -15,21 +15,9 @@ internal sealed class ClientState
     internal void Clear() { foreach (var app in Apps.Values) app.Dispose(); Apps.Clear(); }
 }
 
-internal sealed class DesktopExecutor : IAsyncDisposable
+internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IAsyncDisposable
 {
-    private readonly MtaDispatcher mta;
-    private readonly StaDispatcher sta;
-    private readonly HeldInputs inputs = new(control => (Win32.GetAsyncKeyState(control) & 0x8000) != 0,
-        input => Input.Send(input), DesktopSession.RequireInteractive);
-    private readonly HeldInputHooks hooks;
-
-    internal DesktopExecutor(MtaDispatcher mta, StaDispatcher sta)
-    {
-        this.mta = mta;
-        this.sta = sta;
-        hooks = new(inputs);
-    }
-
+    private readonly HeldInputs inputs = new(input => Input.Send(input), DesktopSession.RequireInteractive);
     private readonly WindowCapture capture = new();
     private readonly ClipboardPaste clipboard = new();
     private readonly SemaphoreSlim queue = new(1);
@@ -100,7 +88,7 @@ internal sealed class DesktopExecutor : IAsyncDisposable
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
             if (request.Method == "getHeldInputs") return inputs.Get(state.Connection, String(parameters, "taskId"));
             if (request.Method == "releaseHeldInputs")
-                return inputs.Release(state.Connection, String(parameters, "taskId"), cancellation, config.GraceMs);
+                return inputs.Release(state.Connection, String(parameters, "taskId"), cancellation);
 
             if (request.Method is "sendKeyEvent" or "toggleMouse" && String(parameters, "direction") == "up")
             {
@@ -108,10 +96,11 @@ internal sealed class DesktopExecutor : IAsyncDisposable
                 var task = String(parameters, "taskId");
                 var recipient = String(parameters, "appHandle");
                 var before = Win32.GetForegroundWindow();
-                var dispatched = request.Method == "sendKeyEvent"
-                    ? Input.ReleaseKey(state.Connection, task, recipient, window, String(parameters, "key"), context)
-                    : Input.ReleaseButton(state.Connection, task, recipient, window, String(parameters, "mouseButton"), context);
-                return ActionResult(before, dispatched);
+                if (request.Method == "sendKeyEvent")
+                    Input.ReleaseKey(state.Connection, task, recipient, window, String(parameters, "key"), context);
+                else
+                    Input.ReleaseButton(state.Connection, task, recipient, window, String(parameters, "mouseButton"), context);
+                return ActionResult(before);
             }
             DesktopSession.RequireInteractive();
             if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
@@ -174,7 +163,6 @@ internal sealed class DesktopExecutor : IAsyncDisposable
                 case "sendKeyEvent":
                 {
                     var target = Selected(app, parameters, context);
-                    await sta.Invoke(hooks.Start, cancellation);
                     var dispatched = Input.KeyDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "key"), context);
                     return ActionResult(foreground, dispatched);
                 }
@@ -206,7 +194,6 @@ internal sealed class DesktopExecutor : IAsyncDisposable
                 case "toggleMouse":
                 {
                     var target = Selected(app, parameters, context);
-                    await sta.Invoke(hooks.Start, cancellation);
                     var dispatched = Input.ButtonDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "mouseButton"), context);
                     return ActionResult(foreground, dispatched);
                 }
@@ -317,13 +304,13 @@ internal sealed class DesktopExecutor : IAsyncDisposable
         if (!inputs.HasConnection(state.Connection)) return;
         using var deadline = new CancellationTokenSource(graceMs);
         await queue.WaitAsync(deadline.Token);
-        try { inputs.Release(state.Connection, null, deadline.Token, graceMs); }
+        try { inputs.Release(state.Connection, null, deadline.Token); }
         finally { queue.Release(); }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await sta.Invoke(hooks.Dispose, CancellationToken.None);
         queue.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

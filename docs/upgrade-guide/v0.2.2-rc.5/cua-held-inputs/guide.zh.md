@@ -8,7 +8,7 @@ description: macOS 和 Windows 的 CUA 显式输入跨程序和回合保持，�
 
 ## 变更
 
-macOS 和 Windows 的显式 `sendKeyEvent('down')` 和 `toggleMouse('down')` 跨程序、跨回合保持，直到显式 `up`。正常结束不释放它们。成功结束的 `run_code` 或 `cua_run_code` 通过 system reminder 列出剩余键盘键和鼠标按钮、所属应用或窗口及实际输入方式。程序失败、用户停止、断连、环境重置和销毁按派发顺序的反序释放所属输入。完整的 `pressKey`、`typeText`、`click` 和 `drag` 保持操作内清理。DSH 和 MCP 都在程序成功后保持输入。客户端在两次 MCP 调用之间暂停时，服务端无法观察到，输入可能继续按住。Windows 失焦后松开会释放桌面输入，不重新激活原窗口。
+macOS 和 Windows 的显式 `sendKeyEvent('down')` 和 `toggleMouse('down')` 跨程序、跨回合保持，直到显式 `up`。正常结束不释放它们。成功结束的 `run_code` 或 `cua_run_code` 通过 system reminder 列出剩余键盘键和鼠标按钮、所属应用或窗口及实际输入方式。程序失败、用户停止、断连、环境重置和销毁按派发顺序的反序释放所属输入。完整的 `pressKey`、`typeText`、`click` 和 `drag` 保持操作内清理。DSH 和 MCP 都在程序成功后保持输入。客户端在两次 MCP 调用之间暂停时，服务端无法观察到，输入可能继续按住。Windows 清理时会为 helper 仍持有的输入发送 up。如果你也按住同一个键或按钮，这次 up 可能打断你的按压。焦点变化后，up 发往当前桌面，原窗口不会被重新激活。
 
 ## 迁移
 

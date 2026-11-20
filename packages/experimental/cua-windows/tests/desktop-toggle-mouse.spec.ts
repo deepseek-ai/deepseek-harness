@@ -15,7 +15,7 @@ const Counts = z.object({ left: z.number().int(), right: z.number().int(), middl
 const FixtureState = z.object({
   window: z.string(), foreground: z.string(),
   cursor: z.object({ x: z.number().int(), y: z.number().int() }),
-  inputEvents: z.array(z.string()), wDown: z.boolean(),
+  inputEvents: z.array(z.string()),
   under: z.string(), buttons: z.string(), clicks: z.number().int(), downs: Counts, ups: Counts,
 })
 const Initial = z.object({ pid: z.number().int(), state: FixtureState })
@@ -153,6 +153,8 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const offset = (await inspect()).inputEvents.length
     await key('shift', 'down')
     await toggle('left', 'down')
+    await expect(native.request('drag', { appHandle: app.appHandle, windowId, fromX: 20, fromY: 20, toX: 30, toY: 30,
+      mouseButton: 'left', durationMs: 100, steps: 2 }, signal)).rejects.toMatchObject({ code: 'INPUT_BUSY' })
     await key('w', 'down')
     expect(released.parse(await holds()).map(input => input.key ?? input.button)).toEqual(['shift', 'left', 'w'])
 
@@ -168,11 +170,15 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     await expect.poll(async () => (await inspect()).inputEvents.slice(offset)).toEqual(
       ['ShiftKey:down', 'Left:down', 'W:down', 'W:up', 'Left:up', 'ShiftKey:up'])
 
+    const beforeSwitch = (await inspect()).inputEvents.length
     await key('w', 'down')
-    await observed({ wDown: true })
+    await expect.poll(async () => (await inspect()).inputEvents.slice(beforeSwitch)).toEqual(['W:down'])
     const switched = await fixture.command('sibling', FixtureState)
     expect(switched.foreground).toBe(switched.window)
     await native.dispose()
-    await observed({ foreground: switched.window, wDown: false })
+    await expect.poll(async () => {
+      const sibling = await fixture.command('inspect-sibling', FixtureState)
+      return { foreground: sibling.foreground, events: sibling.inputEvents.slice(switched.inputEvents.length) }
+    }).toEqual({ foreground: switched.window, events: ['W:up'] })
 
   }, 120_000)

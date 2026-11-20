@@ -82,6 +82,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
 - Hover, click, scroll and drag use the system pointer. `requireSystemInputApproval` does not prompt separately for Windows pointer operations.
 - Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.
+- Held-input reminders and cleanup use the helper's own dispatches. If you press the same key or button while the helper holds it, its next up can also interrupt your press.
 - Windows routes input through the desktop. After focus changes or the original window closes, a confirmed release means the desktop accepted the up. The original window may not receive the event. If the desktop is unavailable or refuses to confirm release, further CUA input for the task is blocked. Inspect the desktop before starting another task.
 - Cleanup of temporary input inside complete actions does not check each key or button release. If an input remains held after a failure, release it manually before continuing.
 - Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.

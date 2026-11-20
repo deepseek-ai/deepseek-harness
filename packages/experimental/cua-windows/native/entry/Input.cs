@@ -104,8 +104,8 @@ internal static class Input
         var key => key,
     };
 
-    internal static bool ReleaseKey(Guid connection, string task, string app, nint window, string name, RequestContext context)
-        => context.HeldInputs.Up(connection, task, app, window, HoldKeyName(name), true, context.Config.GraceMs);
+    internal static void ReleaseKey(Guid connection, string task, string app, nint window, string name, RequestContext context)
+        => context.HeldInputs.Up(connection, task, app, window, HoldKeyName(name), true);
 
     internal static bool KeyDown(Guid connection, string task, AppState app, WindowState window, string name, RequestContext context)
     {
@@ -116,7 +116,7 @@ internal static class Input
             throw new NativeFailure("UNSUPPORTED", "This key requires modifiers in the target keyboard layout; send each modifier and the base key separately");
         var flags = key.Extended ? 1u : 0;
         return context.HeldInputs.Down(connection, task, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
-            key.Key, name, Keyboard(key.Key, flags: flags), Keyboard(key.Key, flags: flags | 2), context.Cancellation, context.Config.GraceMs);
+            key.Key, name, Keyboard(key.Key, flags: flags), Keyboard(key.Key, flags: flags | 2), context.Cancellation);
     }
 
     internal static void Press(AppState app, WindowState window, string key, string[] modifiers, RequestContext context)
@@ -187,8 +187,8 @@ internal static class Input
         return new { dispatched = true, hoverRoute = "system-pointer", systemPointerMoved = before.X != point.X || before.Y != point.Y };
     }
 
-    internal static bool ReleaseButton(Guid connection, string task, string app, nint window, string button, RequestContext context)
-        => context.HeldInputs.Up(connection, task, app, window, button, false, context.Config.GraceMs);
+    internal static void ReleaseButton(Guid connection, string task, string app, nint window, string button, RequestContext context)
+        => context.HeldInputs.Up(connection, task, app, window, button, false);
 
     internal static bool ButtonDown(Guid connection, string task, AppState app, WindowState window, string button, RequestContext context)
     {
@@ -196,7 +196,7 @@ internal static class Input
         if (!Win32.GetCursorPos(out var point)) throw new NativeFailure("INPUT_UNAVAILABLE", "The current pointer position is unavailable");
         Hit(app, window, point, context);
         return context.HeldInputs.Down(connection, task, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
-            flags.Control, button, Mouse(flags.Down), Mouse(flags.Up), context.Cancellation, context.Config.GraceMs);
+            flags.Control, button, Mouse(flags.Down), Mouse(flags.Up), context.Cancellation);
     }
 
     internal static void Click(AppState app, WindowState window, double x, double y, string button, int count, string[] modifiers, RequestContext context)
@@ -274,11 +274,12 @@ internal static class Input
     internal static async Task Drag(AppState app, WindowState window, double fromX, double fromY, double toX, double toY,
         string button, string[] modifiers, int durationMs, int steps, RequestContext context)
     {
+        var flags = Button(button);
+        context.HeldInputs.RequireAvailable(flags.Control);
         var geometry = window.RequireObservation(app, context);
         var from = WindowState.Point(geometry, fromX, fromY);
         _ = WindowState.Point(geometry, toX, toY);
         Hit(app, window, from, context);
-        var flags = Button(button);
         var keys = modifiers.Select(KeyChord.NormalizeModifier).Select(Modifier).Distinct().ToArray();
         var attempted = new List<ushort>();
         var buttonAttempted = false;

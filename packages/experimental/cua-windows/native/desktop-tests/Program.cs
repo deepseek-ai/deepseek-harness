@@ -12,6 +12,7 @@ internal sealed class FixtureForm : Form
     private readonly Button button = new() { Name = "submit", Text = "Record click", Bounds = new(20, 140, 180, 40) };
     private int clicks;
     private readonly List<string> inputEvents = [];
+    private MouseButtons receivedButtons;
     private int leftDowns, leftUps, rightDowns, rightUps, middleDowns, middleUps;
     private readonly ToolTip tooltip = new();
 
@@ -41,6 +42,7 @@ internal sealed class FixtureForm : Form
 
     private void Count(MouseButtons pressed, bool down)
     {
+        receivedButtons = down ? receivedButtons | pressed : receivedButtons & ~pressed;
         inputEvents.Add($"{pressed}:{(down ? "down" : "up")}");
         switch (pressed)
         {
@@ -84,8 +86,8 @@ internal sealed class FixtureForm : Form
         ups = new { left = leftUps, right = rightUps, middle = middleUps },
         button = new { x = button.Left + button.Width / 2, y = button.Top + button.Height / 2 },
         selection = new { start = Editor.SelectionStart, length = Editor.SelectionLength },
-        inputEvents = inputEvents.ToArray(), wDown = (GetAsyncKeyState(87) & 0x8000) != 0,
-        buttons = MouseButtons.ToString(), minimized = WindowState == FormWindowState.Minimized, visible = Visible,
+        inputEvents = inputEvents.ToArray(),
+        buttons = receivedButtons.ToString(), minimized = WindowState == FormWindowState.Minimized, visible = Visible,
     };
 
     protected override void Dispose(bool disposing)
@@ -94,7 +96,6 @@ internal sealed class FixtureForm : Form
         base.Dispose(disposing);
     }
 
-    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern nint WindowFromPoint(Point point);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint window, uint flags);
@@ -141,6 +142,7 @@ internal static class Program
                         {
                             case "sibling": sibling.Show(); sibling.Activate(); sibling.Editor.Focus(); Write(sibling.Inspect()); break;
                             case "inspect": Write(form.Inspect()); break;
+                            case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;
                             case "pointer": form.PointAtButton(); Write(form.Inspect()); break;
                             case "pointer-outside": form.PointOutside(); Write(form.Inspect()); break;
