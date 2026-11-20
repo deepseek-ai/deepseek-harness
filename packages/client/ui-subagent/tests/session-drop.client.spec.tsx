@@ -74,7 +74,7 @@ describe('Session drag tracking', () => {
     frame.append(column, overlay)
     document.body.append(frame)
     column.getBoundingClientRect = () => ({ right: 279.6 }) as DOMRect
-    // The on-screen Session's right Sidebar panel sets the highlighted card's width; another Session's is ignored.
+    // The on-screen Session's right Sidebar panel sets the target's width; another Session's is ignored.
     const panel = document.createElement('div')
     panel.setAttribute('data-sidebar-right-panel', 'push')
     panel.setAttribute('data-sidebar-right-session', MAIN)
@@ -136,9 +136,9 @@ describe('Session drop zone', () => {
     // The zone portals to the body so it stacks above the narrow-window drawer mask.
     const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
     expect(zone.parentElement).toBe(document.body)
-    expect(zone.style.left).toBe('280px')
-    // The highlighted card is as wide as the Sidebar would open, inside the 8px inset.
-    expect((zone.firstElementChild as HTMLElement).style.flex).toBe('0 1 500px')
+    // The target is as wide as the Sidebar would open, and never reaches left of the navigation column.
+    expect(zone.style.getPropertyValue('--session-drop-inset')).toBe('280px')
+    expect(zone.style.getPropertyValue('--session-drop-width')).toBe('516px')
     expect(view.container.innerHTML).toBe('')
     expect(zone.hasAttribute('data-active')).toBe(false)
 
@@ -163,9 +163,9 @@ describe('Session drop zone', () => {
     expect(view.openAside).toHaveBeenCalledExactlyOnceWith(OTHER)
     expect(zone.hasAttribute('data-active')).toBe(false)
 
-    // Without a known Sidebar width the card spans the whole target.
+    // Without a known Sidebar width the target spans the window right of the navigation column.
     view.set(MAIN)
-    expect((document.querySelector('[data-session-drop-zone]')!.firstElementChild as HTMLElement).style.flex).toBe('')
+    expect(document.querySelector<HTMLElement>('[data-session-drop-zone]')!.style.getPropertyValue('--session-drop-width')).toBe('')
 
     view.set(undefined)
     expect(document.querySelector('[data-session-drop-zone]')).toBeNull()

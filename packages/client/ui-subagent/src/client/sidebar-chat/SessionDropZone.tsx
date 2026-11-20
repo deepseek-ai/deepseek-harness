@@ -1,5 +1,5 @@
 /** Drop target that opens a Session dragged from the Session list in the right Sidebar. */
-import { useState, type DragEvent } from 'react'
+import { useState, type CSSProperties, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -16,7 +16,7 @@ export interface SessionDrag {
   readonly sessionId: SessionId
   /** Right edge of the navigation column the row left, in px; the target covers the window to its right. */
   readonly inset: number
-  /** Width of the on-screen Session's right Sidebar, in px, which the highlighted card takes; zero when unknown. */
+  /** Width of the on-screen Session's right Sidebar, in px, which the target takes; zero when unknown. */
   readonly width: number
 }
 
@@ -65,7 +65,7 @@ function DropTarget({ inset, width, label, onDrop }: {
   return createPortal(
     <div
       className={css.zone}
-      style={{ left: inset }}
+      style={{ '--session-drop-inset': `${String(inset)}px`, ...(width > 0 ? { '--session-drop-width': `${String(width)}px` } : {}) } as CSSProperties}
       data-session-drop-zone=""
       data-active={over || undefined}
       onDragEnter={accept}
@@ -80,7 +80,7 @@ function DropTarget({ inset, width, label, onDrop }: {
         onDrop()
       }}
     >
-      <div className={css.card} style={width > 0 ? { flex: `0 1 ${String(width - 16)}px` } : undefined}>
+      <div className={css.card}>
         <IconPanelLeftOutlineRegular className={css.icon} aria-hidden="true" />
         <span className={css.label}>{label}</span>
       </div>
