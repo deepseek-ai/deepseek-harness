@@ -416,6 +416,32 @@ describe('Conversation inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('offers request inspection independently of tool-call inspection', async () => {
+    const b = await bench()
+    const body = b.conversationApi(ROOT)
+    const source = body.injected.hooks.inspectRequest
+    expect(source.getSnapshot()).toBeUndefined()
+    const removeDefinition = b.runtime.ctx.uiConversation.views.register({
+      target: 'trajectory',
+      requestFocus: (turn, step) => `request:${turn}/${step}`,
+      create: () => ({ empty: null, replace: () => null, apply: () => null }),
+    })
+    expect(source.getSnapshot()).toBeUndefined()
+    const removeView = b.slots.register(
+      { name: 'conversation.view', id: 'trajectory' }, (() => null) as never,
+    )
+    await b.runtime.flush()
+    const inspect = source.getSnapshot()
+    expect(inspect).toBeTypeOf('function')
+    inspect?.(3, 2)
+    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'trajectory', focus: 'request:3/2' })
+    // A tool-call-only target does not answer request inspection.
+    expect(body.injected.hooks.inspectCall.getSnapshot()).toBeUndefined()
+    removeView()
+    removeDefinition()
+    await b.runtime.dispose()
+  })
+
   it('activates a target before committing an explicit View selection', async () => {
     const b = await bench()
     const binding = b.runtime.ctx.uiConversation.binding(ROOT)

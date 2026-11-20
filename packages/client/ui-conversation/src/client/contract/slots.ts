@@ -465,6 +465,8 @@ export interface InputZone {
 export interface ConvViewOwnerProps {
   /** Open a tool call's inspector when an inspection target is available. */
   inspectCall: ((callId: string) => void) | undefined
+  /** Open one model request's inspector record when an inspection target is available. */
+  inspectRequest: ((turn: number, step: number) => void) | undefined
   /** Focus request addressed to the selected View. */
   viewRequest: import('./views.ts').ConversationViewRequest | null
   /** Select a View and address one opaque focus identity to it. */
@@ -512,6 +514,7 @@ export interface ConversationSessionInjected {
   readonly hooks: {
     readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
     readonly inspectCall: ObservableSnapshot<ConvViewOwnerProps['inspectCall']>
+    readonly inspectRequest: ObservableSnapshot<ConvViewOwnerProps['inspectRequest']>
   }
   /** Bind input draft persistence to the Session-owned store instance. */
   bindDraftPersistence: (write: (draft: DraftSnapshot) => void) => () => void

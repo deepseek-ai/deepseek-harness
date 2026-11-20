@@ -1,5 +1,5 @@
 /** Question-owned summary action and transcript disclosure. */
-import { DisclosureRow, IconInspectOutlineRegular, IconQuestionOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconQuestionOutlineRegular, InspectButton, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolRowProps } from './ToolRow.tsx'
 import { formatToolBody } from '../models/tool-call-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
@@ -24,7 +24,7 @@ export function QuestionToolRow({
   const expandable = bodyRaw != null || output != null || askQuestion != null
   const open = expanded && expandable
   return (
-    <div className={css.root} data-variant="others" data-tool="ask_user_question" data-state={state}>
+    <div className={css.root} data-inspect-scope data-variant="others" data-tool="ask_user_question" data-state={state}>
       {state === 'running' && <span className={css.visuallyHidden}>{t('row.running')}</span>}
       <DisclosureRow
         rowClassName={css.row} leadingClassName={css.leading} titleClassName={css.title}
@@ -54,9 +54,7 @@ export function QuestionToolRow({
               <span className={css.ioLabel}>{t('row.output')}</span><span className={css.ioText}>{output}</span>
             </div>}
           </div>}
-          {inspect !== undefined && <button type="button" className={css.inspectButton} onClick={inspect}>
-            <IconInspectOutlineRegular />{t('row.inspect')}
-          </button>}
+          {inspect !== undefined && <InspectButton label={t('row.inspect')} onClick={inspect} />}
         </div>}
       </DisclosureRow>
     </div>

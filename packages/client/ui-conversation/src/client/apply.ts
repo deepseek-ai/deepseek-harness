@@ -408,24 +408,33 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
         activateView(sessionId, view)
         actions.openView(view, focus)
       }
-      const inspectionTarget = () => uiConversation.views.entries().find(definition =>
-        definition.toolCallFocus !== undefined
+      const inspectionTarget = (focus: 'toolCallFocus' | 'requestFocus') => uiConversation.views.entries().find(definition =>
+        definition[focus] !== undefined
         && conversationViews.getSnapshot().some(view => view.id === definition.target),
       )
       const inspectCall = (callId: string): void => {
-        const target = inspectionTarget()
+        const target = inspectionTarget('toolCallFocus')
         if (target?.toolCallFocus !== undefined) openView(target.target, target.toolCallFocus(callId))
+      }
+      const inspectRequest = (turn: number, step: number): void => {
+        const target = inspectionTarget('requestFocus')
+        if (target?.requestFocus !== undefined) openView(target.target, target.requestFocus(turn, step))
+      }
+      const subscribeInspection = (listener: () => void): () => void => {
+        const disposeViews = conversationViews.subscribe(listener)
+        const disposeDefinitions = uiConversation.views.subscribe(listener)
+        return () => { disposeViews(); disposeDefinitions() }
       }
       return {
         hooks: {
           conversationViews,
           inspectCall: {
-            getSnapshot: () => inspectionTarget() === undefined ? undefined : inspectCall,
-            subscribe: (listener) => {
-              const disposeViews = conversationViews.subscribe(listener)
-              const disposeDefinitions = uiConversation.views.subscribe(listener)
-              return () => { disposeViews(); disposeDefinitions() }
-            },
+            getSnapshot: () => inspectionTarget('toolCallFocus') === undefined ? undefined : inspectCall,
+            subscribe: subscribeInspection,
+          },
+          inspectRequest: {
+            getSnapshot: () => inspectionTarget('requestFocus') === undefined ? undefined : inspectRequest,
+            subscribe: subscribeInspection,
           },
         },
         bindDraftPersistence: write => inputHub.shell(sessionId).bindDraftPersistence(write),

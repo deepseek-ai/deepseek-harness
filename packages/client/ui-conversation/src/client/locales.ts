@@ -1539,7 +1539,7 @@ export const es = {
   'row.commandArguments': 'Argumentos de comando',
   'row.input': 'IN',
   'row.output': 'OUT',
-  'row.inspect': 'inspeccionar',
+  'row.inspect': 'Inspeccionar',
   'row.imageSize': '{width}x{height}px, {bytes} bytes',
   'row.imageSizeDownscaled': '{width}x{height}px (reducido de {originalWidth}x{originalHeight}px), {bytes} bytes',
   'tool.title.search': 'Buscar',

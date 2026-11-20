@@ -578,6 +578,7 @@ function makeHarness(
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
     inspectCall: (callId: string) => { openView('trajectory', callId) },
+    inspectRequest: (turn: number, step: number) => { openView('trajectory', `request\u0000${turn}\u0000${step}`) },
     viewRequest: null,
     openView,
     completeViewRequest: () => {},
@@ -2725,7 +2726,7 @@ describe('ChatView', () => {
     } as const satisfies ConversationNode
     const h = makeHarness({ nodes: [user(1, 'try'), retryNode] }, { running: true })
     const view = render(<h.ChatView {...h.props} />)
-    const disclosure = view.container.querySelector('details') as HTMLDetailsElement
+    const disclosure = view.container.querySelector('[data-retry-row]') as HTMLElement
     expect(disclosure.dataset.active).toBe('true')
     expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 1s')
 
@@ -2733,7 +2734,7 @@ describe('ChatView', () => {
       h.setChat({ nodes: [user(1, 'try'), nextRetry] })
     })
     expect(within(disclosure).getAllByRole('status')).toHaveLength(1)
-    expect(view.container.querySelector('details')).toBe(disclosure)
+    expect(view.container.querySelector('[data-retry-row]')).toBe(disclosure)
     expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（2/2） · 1s')
 
     act(() => {
@@ -2754,7 +2755,7 @@ describe('ChatView', () => {
       h.setChat({ nodes: [user(1, 'try'), { ...retry(6), retryState: 'cancelled' }] })
       h.setSession({ running: true })
     })
-    const cancelledDisclosure = view.container.querySelector('details') as HTMLDetailsElement
+    const cancelledDisclosure = view.container.querySelector('[data-retry-row]') as HTMLElement
     expect(cancelledDisclosure.dataset.active).toBeUndefined()
     expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('重试已取消')
   })
@@ -2796,6 +2797,24 @@ describe('ChatView', () => {
     expect(h.toolOwners.at(-1)?.inspectCall).toBeUndefined()
     view.rerender(<h.ChatView {...h.props} />)
     expect(h.toolOwners.at(-1)?.inspectCall).toBeTypeOf('function')
+  })
+
+  it('opens a retried request in the trajectory from the expanded retry row', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), { ...retry(2), retryState: 'started' }] })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.container.querySelector('[data-retry-row] [data-disclosure-row]') as HTMLElement
+    fireEvent.click(row)
+    expect(view.getByRole('button', { name: '查看' }).closest('[data-inspect-scope]')).not.toBeNull()
+    fireEvent.click(view.getByRole('button', { name: '查看' }))
+    const node = retry(2)
+    expect(h.openView).toHaveBeenCalledWith('trajectory', `request\u0000${String(node.turn)}\u0000${String(node.step)}`)
+  })
+
+  it('omits the retry row inspect action without an inspection target', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), { ...retry(2), retryState: 'started' }] })
+    const view = render(<h.ChatView {...h.props} inspectRequest={undefined} />)
+    fireEvent.click(view.container.querySelector('[data-retry-row] [data-disclosure-row]') as HTMLElement)
+    expect(view.queryByRole('button', { name: '查看' })).toBeNull()
   })
 
   it('hands the trajectory callback to the Tool seat', () => {

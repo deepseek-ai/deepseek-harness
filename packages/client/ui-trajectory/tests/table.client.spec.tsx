@@ -679,6 +679,49 @@ describe('TrajectoryTable', () => {
     expect(screen.getByText('Request #1')).toBeTruthy()
   })
 
+  it('opens a request addressed from another view and acknowledges it once', () => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 1,
+      groups: [{ title: 'Step 1', cells: [{ index: 1, kind: 'message', sourceSeq: 10, text: 'response', timeSeconds: 1 }] }],
+    }]
+    const requests = [{ turn: 1, step: 1, seq: 10, group: 'Step 1', number: 1 }] as const
+    const onInspectApplied = vi.fn()
+    const onToggleTurn = vi.fn()
+    const view = render(
+      <TrajectoryTable turns={turns} requestNumbers={requests} {...FOLD_PROPS} collapsedTurns={new Set([1])}
+        onToggleTurn={onToggleTurn} inspectRequest={{ turn: 1, step: 2 }} onInspectApplied={onInspectApplied} />,
+    )
+    // An unknown request stays pending without acknowledgement.
+    expect(onInspectApplied).not.toHaveBeenCalled()
+
+    const focus = { turn: 1, step: 1 }
+    view.rerender(
+      <TrajectoryTable turns={turns} requestNumbers={requests} {...FOLD_PROPS}
+        inspectRequest={focus} onInspectApplied={onInspectApplied} />,
+    )
+    expect(screen.getByRole('button', { name: 'Request #1' }).getAttribute('aria-pressed')).toBe('true')
+    expect(onInspectApplied).toHaveBeenCalledOnce()
+    view.rerender(
+      <TrajectoryTable turns={turns} requestNumbers={requests} {...FOLD_PROPS}
+        inspectRequest={focus} onInspectApplied={onInspectApplied} />,
+    )
+    expect(onInspectApplied).toHaveBeenCalledOnce()
+  })
+
+  it('expands a folded turn before opening its addressed request', () => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 1,
+      groups: [{ title: 'Step 1', cells: [{ index: 1, kind: 'message', sourceSeq: 10, text: 'response', timeSeconds: 1 }] }],
+    }]
+    const requests = [{ turn: 1, step: 1, seq: 10, group: 'Step 1', number: 1 }] as const
+    const onToggleTurn = vi.fn()
+    render(
+      <TrajectoryTable turns={turns} requestNumbers={requests} {...FOLD_PROPS} collapsedTurns={new Set([1])}
+        onToggleTurn={onToggleTurn} inspectRequest={{ turn: 1, step: 1 }} />,
+    )
+    expect(onToggleTurn).toHaveBeenCalledWith(1)
+  })
+
   it('places the request boundary after leading steering input', () => {
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,

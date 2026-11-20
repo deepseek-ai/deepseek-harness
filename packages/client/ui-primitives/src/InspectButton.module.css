@@ -1,0 +1,47 @@
+/* Hover-revealed jump to the inspector record: a small pill in real flow under
+   an expanded process row's body. It reserves its line, so revealing never
+   shifts layout. */
+.button {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 2px 4px;
+  padding: 2px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  corner-shape: round;
+  /* Base background, not bg-overlay: the overlay token is a raised dark
+     surface and reads too heavy for a quiet in-flow affordance. */
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.button:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  [data-inspect-scope]:hover .button {
+    opacity: 1;
+  }
+
+  /* Solid hover fill (a translucent token would let content bleed through). */
+  .button:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+@media (hover: none) {
+  .button { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}

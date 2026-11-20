@@ -322,6 +322,13 @@ export interface ConversationViewDefinition<Node extends ConversationViewNode = 
    * @returns the target's opaque focus identity.
    */
   toolCallFocus?(callId: string): string
+  /**
+   * Address one model request in this target's inspector; absent for views without request records.
+   * @param turn - owning turn number.
+   * @param step - step number of the request within its turn.
+   * @returns the target's opaque focus identity.
+   */
+  requestFocus?(turn: number, step: number): string
   /** @returns a new Session-owned incremental builder. */
   create(): ConversationViewBuilder<Node, Snapshot>
   /**

@@ -25,6 +25,7 @@ import {
   type TrajectoryTimelineMode,
   type TrajectoryTimeRange,
 } from './timeline.ts'
+import { parseRequestFocus } from './request-focus.ts'
 import { trajectoryRecordId } from './trajectory-record.ts'
 import { TrajectorySearchIndex } from './trajectory-search-index.ts'
 import type { TrajectorySnapshot } from './trajectory-contract.ts'
@@ -131,6 +132,19 @@ function addUsage(
   }
 }
 
+/**
+ * Find the first resident node of one model request. A request that failed
+ * before any output has no Assistant node, so its start event decides.
+ */
+function requestNodeIndex(snapshot: TrajectorySnapshot, focus: { readonly turn: number; readonly step: number }): number {
+  const assistant = snapshot.eventNodes.findIndex(node => node.kind === 'assistant'
+    && node.turn === focus.turn && node.step === focus.step)
+  if (assistant >= 0) return assistant
+  const request = snapshot.requests.find(candidate => candidate.purpose === 'assistant'
+    && candidate.turn === focus.turn && candidate.step === focus.step)
+  return request === undefined ? -1 : snapshot.eventNodes.findLastIndex(node => node.seq <= request.startSeq)
+}
+
 export function TrajectoryView({
   useSession, useTrajectory, useDuration, watchToolResult, loadOlder, loadImage, setActualDuration,
   viewRequest, completeViewRequest, renderSlot, t, jsonStringWrapping,
@@ -198,13 +212,17 @@ export function TrajectoryView({
   const runningCalls = inspection.runningCalls
   const requests = inspection.requests
   const callSchemas = inspection.callSchemas
-  const inspectCallId = viewRequest?.view === 'trajectory' ? viewRequest.focus : null
-  const inspectNodeIndex = useMemo(() => inspectCallId === null
-    ? -1
-    : completeInspection.eventNodes.findIndex(node => node.kind === 'assistant'
-      ? node.blocks.some(block => block.kind === 'tool-call' && block.callId === inspectCallId)
-      : node.kind === 'tool-result' && containsCall([node], inspectCallId)),
-  [completeInspection.eventNodes, inspectCallId])
+  const focus = viewRequest?.view === 'trajectory' ? viewRequest.focus : null
+  const inspectRequestFocus = useMemo(() => focus === null ? null : parseRequestFocus(focus), [focus])
+  const inspectCallId = focus !== null && inspectRequestFocus === null ? focus : null
+  const inspectNodeIndex = useMemo(() => inspectRequestFocus !== null
+    ? requestNodeIndex(completeInspection, inspectRequestFocus)
+    : inspectCallId === null
+      ? -1
+      : completeInspection.eventNodes.findIndex(node => node.kind === 'assistant'
+        ? node.blocks.some(block => block.kind === 'tool-call' && block.callId === inspectCallId)
+        : node.kind === 'tool-result' && containsCall([node], inspectCallId)),
+  [completeInspection, inspectCallId, inspectRequestFocus])
   useEffect(() => {
     if (inspectNodeIndex < 0 || inspectNodeIndex >= historyStartIndex) return
     setHistoryNodeLimit(limit => limit + historyStartIndex - inspectNodeIndex)
@@ -609,6 +627,7 @@ export function TrajectoryView({
           collapsedTools={collapsedTools}
           onToggleTool={toggleTool}
           inspectCallId={inspectCallId}
+          inspectRequest={inspectRequestFocus}
           onInspectApplied={completeViewRequest}
         />
       </div>

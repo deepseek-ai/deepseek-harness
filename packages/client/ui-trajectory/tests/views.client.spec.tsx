@@ -48,6 +48,7 @@ import { TrajectoryTimeline as LocalizedTrajectoryTimeline } from '../src/client
 import {
   TrajectoryView, type TrajectoryViewInjected,
 } from '../src/client/TrajectoryView.tsx'
+import { requestFocus } from '../src/client/request-focus.ts'
 import { createTrajectoryDurationStore } from '../src/client/duration-store.ts'
 import { EMPTY_TRAJECTORY_SNAPSHOT } from '../src/client/trajectory-snapshot-builder.ts'
 import type { TrajectorySnapshot } from '../src/client/trajectory-contract.ts'
@@ -244,6 +245,7 @@ function standaloneProps(
     inputActions,
     useProjection,
     inspectCall: undefined,
+    inspectRequest: undefined,
     viewRequest: null,
     openView: () => {},
     completeViewRequest: () => {},
@@ -326,10 +328,10 @@ function tabsOf(slots: SlotRegistry): ViewTab[] {
     .map(e => ({ id: e.options.id!, label: resolveSlotLabel(e.options.label) ?? e.options.id! }))
 }
 
-type ConvViewOwner = Pick<ConvViewProps, 'inspectCall' | 'viewRequest' | 'openView' | 'completeViewRequest'>
+type ConvViewOwner = Pick<ConvViewProps, 'inspectCall' | 'inspectRequest' | 'viewRequest' | 'openView' | 'completeViewRequest'>
 
 function isConvViewOwner(owner: object): owner is ConvViewOwner {
-  return 'inspectCall' in owner && 'viewRequest' in owner
+  return 'inspectCall' in owner && 'inspectRequest' in owner && 'viewRequest' in owner
     && 'openView' in owner && typeof owner.openView === 'function'
     && 'completeViewRequest' in owner && typeof owner.completeViewRequest === 'function'
 }
@@ -445,6 +447,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         bindDraftPersistence={() => () => {}}
         openView={conversation.actions.openView}
         useInspectCall={selector => selector(undefined)}
+        useInspectRequest={selector => selector(undefined)}
       />
     </>,
   )
@@ -1651,6 +1654,66 @@ describe('TrajectoryView state', () => {
     )
 
     expect(completeViewRequest).toHaveBeenCalledOnce()
+  })
+
+  it('opens a model request addressed from Chat, revealing it beyond the resident history page', () => {
+    const nodes: LegacyConversationSlice['nodes'] = [
+      { kind: 'user', seq: 1, time: 1, content: [{ type: 'text', text: 'first' }], source: null },
+      {
+        kind: 'assistant', seq: 2, time: 2, turn: 1, step: 1,
+        blocks: [{ kind: 'text', text: 'first answer' }],
+      },
+      ...Array.from({ length: 50 }, (_, index) => ({
+        kind: 'user' as const,
+        seq: index + 3,
+        time: index + 3,
+        content: [{ type: 'text' as const, text: `later ${String(index + 1)}` }],
+        source: null,
+      })),
+    ]
+    const completeViewRequest = vi.fn()
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot(nodes))}
+        {...standaloneDuration()}
+        viewRequest={{ view: 'trajectory', focus: requestFocus(1, 1) }}
+        completeViewRequest={completeViewRequest}
+      />,
+    )
+
+    expect(completeViewRequest).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['a request that failed before any output', 1, 1],
+    ['an unknown request', 9, 9],
+  ])('addresses %s without an Assistant node', (_label, turn, step) => {
+    const nodes: LegacyConversationSlice['nodes'] = [
+      { kind: 'user', seq: 1, time: 1, content: [{ type: 'text', text: 'first' }], source: null },
+      ...Array.from({ length: 50 }, (_, index) => ({
+        kind: 'user' as const,
+        seq: index + 3,
+        time: index + 3,
+        content: [{ type: 'text' as const, text: `later ${String(index + 1)}` }],
+        source: null,
+      })),
+    ]
+    const requests: RequestView[] = [{
+      purpose: 'assistant', startSeq: 2, turn: 1, step: 1,
+      startedAt: 2, completedAt: 2, status: 'error', error: 'upstream 503',
+    }]
+    const completeViewRequest = vi.fn()
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot(nodes, { requests }))}
+        {...standaloneDuration()}
+        viewRequest={{ view: 'trajectory', focus: requestFocus(turn, step) }}
+        completeViewRequest={completeViewRequest}
+      />,
+    )
+    expect(completeViewRequest).toHaveBeenCalledTimes(turn === 1 ? 1 : 0)
   })
 
   it('persists the duration preference through the runtime snapshot-store seam', () => {
