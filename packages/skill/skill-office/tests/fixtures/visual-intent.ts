@@ -23,7 +23,7 @@ const formats = [
     notesTask: 'set the speaker notes of slide 1 to Revenue grew 50%. without changing the slide',
     verifyNotes: "from pptx import Presentation\np=Presentation('result.pptx'); s=p.slides[0]; assert s.has_notes_slide and s.notes_slide.notes_text_frame.text.strip() == 'Revenue grew 50%.'; assert s.shapes[0].text == 'Quarterly revenue'",
     format: 'pptx', task: 'center the title on slide 1 and set its font color to #1F4E79',
-    seed: "from pptx import Presentation\nfrom pptx.util import Inches\np=Presentation(); s=p.slides.add_slide(p.slide_layouts[6]); s.shapes.add_textbox(Inches(1),Inches(1),Inches(6),Inches(1)).text='Quarterly revenue'; p.save('input.pptx')",
+    seed: "from pptx import Presentation\nfrom pptx.util import Inches\np=Presentation(); s=p.slides.add_slide(p.slide_layouts[6]); s.shapes.add_textbox(0,Inches(1),p.slide_width,Inches(1)).text='Quarterly revenue'; p.save('input.pptx')",
     verify: "from pptx import Presentation\nfrom pptx.enum.text import PP_ALIGN\np=Presentation('result.pptx'); title=p.slides[0].shapes[0]; r=title.text_frame.paragraphs[0]; assert r.alignment == PP_ALIGN.CENTER; assert abs(2*title.left+title.width-p.slide_width) <= 1; assert str(r.runs[0].font.color.rgb).upper() == '1F4E79'",
   },
   {
