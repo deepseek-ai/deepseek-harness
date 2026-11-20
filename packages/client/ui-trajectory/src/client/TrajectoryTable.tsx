@@ -985,16 +985,18 @@ function markdownSource(record: TableRecord): string | undefined {
   return undefined
 }
 
+/** Whether a SYSTEM record presents an update; the initial prompt and a rebuilt prompt do not. */
+function presentsPromptUpdate(cell: TrajectoryCellProps): boolean {
+  return cell.previousPromptDetail !== undefined || cell.promptMessageDetail !== undefined
+}
+
 function detailTabs(record: TableRecord): readonly DetailTabItem[] {
   if (record.cell.kind === 'system') {
-    const { promptDetail, previousPromptDetail, promptMessageDetail } = record.cell
-    // The initial prompt and a rebuilt prompt have no update to present.
-    const update = previousPromptDetail !== undefined || promptMessageDetail !== undefined
     return [
-      ...(update ? [SYSTEM_UPDATE_TAB] : []),
+      ...(presentsPromptUpdate(record.cell) ? [SYSTEM_UPDATE_TAB] : []),
       SYSTEM_PROMPT_TAB,
       // A standalone prompt without a loaded request header has no known tool catalog.
-      ...(promptDetail === undefined ? [] : [SYSTEM_TOOLS_TAB]),
+      ...(record.cell.promptDetail === undefined ? [] : [SYSTEM_TOOLS_TAB]),
     ]
   }
   if (record.cell.kind === 'compacted') {
@@ -1582,12 +1584,25 @@ function SystemPromptUpdate({
   )
 }
 
-/** Instructions in force per source, combined as if the prompt were rebuilt at this point. */
-function EffectiveSystemPrompt({ sections, t }: { sections: readonly EffectiveSystemSection[]; t: TrajectoryTranslate }) {
+/**
+ * Instructions in force per source, combined as if the prompt were rebuilt at this point. After an update the note
+ * explains that the model received them as incremental messages; the initial and a rebuilt prompt were sent as shown.
+ */
+function EffectiveSystemPrompt({
+  sections,
+  updated,
+  t,
+}: {
+  sections: readonly EffectiveSystemSection[]
+  updated: boolean
+  t: TrajectoryTranslate
+}) {
   return (
     <div className={css.promptView}>
       <div className={css.promptGroupBody}>
-        <p className={`${css.promptSourceCaption} ${css.promptSourceCaptionStatic}`}>{t('record.effectivePromptNote')}</p>
+        {updated && (
+          <p className={`${css.promptSourceCaption} ${css.promptSourceCaptionStatic}`}>{t('record.effectivePromptNote')}</p>
+        )}
         {sections.filter(section => section.text !== '').map(section => (
           <PromptSourceSection key={section.name} name={section.name} text={section.text} t={t} />
         ))}
@@ -3433,7 +3448,13 @@ export function TrajectoryTable({
                       <MarkdownText text={selectedSystemPrompt} labels={markdownLabels(t)} />
                     </div>
                   )
-                  : <EffectiveSystemPrompt sections={selectedSections} t={t} />
+                  : (
+                    <EffectiveSystemPrompt
+                      sections={selectedSections}
+                      updated={selected !== undefined && presentsPromptUpdate(selected.cell)}
+                      t={t}
+                    />
+                  )
             )}
             {selectedPrompt !== undefined && activeTab === 'tools' && (
               <ToolCatalog tools={selectedPrompt.tools} stringWrapping={stringWrapping} t={t} />

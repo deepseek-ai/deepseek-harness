@@ -251,9 +251,13 @@ describe('TrajectoryTable', () => {
     cleanup()
 
     // A rebuilt prompt presents no update; the instructions in force and the tools remain.
-    render(<TrajectoryTable turns={layout({ previous, rebuilt: true })} {...FOLD_PROPS} />)
+    const rebuilt = render(<TrajectoryTable turns={layout({ previous, rebuilt: true })} {...FOLD_PROPS} />)
     fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['System Prompt', 'Tools'])
+    // It was sent as shown, so it carries no note about incremental delivery.
+    expect(screen.queryByText(/Instructions in effect at this point/)).toBeNull()
+    expect([...rebuilt.container.querySelectorAll('[data-prompt-source]')].map(source => source.textContent))
+      .toEqual(['harness:identityIdentity.', 'plan:statusPlan mode is off.'])
     cleanup()
 
     // Without section metadata, the update diffs the retained prompt text and the System Prompt tab shows it whole.
