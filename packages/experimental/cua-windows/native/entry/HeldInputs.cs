@@ -71,9 +71,23 @@ internal sealed class HeldInputs(Action<Win32.Input> send)
             return pressed.Where(press => press.Connection == connection).Select(press => press.Describe()).ToArray();
     }
 
-    internal bool HasConnection(Guid connection)
+    internal async Task ReleaseOnDisconnect(Guid connection, SemaphoreSlim desktopQueue, int graceMs)
     {
-        lock (gate) return pressed.Exists(press => press.Connection == connection);
+        lock (gate)
+            if (!pressed.Exists(press => press.Connection == connection)) return;
+
+        using var deadline = new CancellationTokenSource(graceMs);
+        try
+        {
+            await desktopQueue.WaitAsync(deadline.Token);
+            try { Release(connection, deadline.Token); }
+            finally { desktopQueue.Release(); }
+        }
+        catch (Exception error)
+        {
+            _ = error; // The disconnected owner cannot retry or receive a cleanup result.
+            lock (gate) pressed.RemoveAll(press => press.Connection == connection);
+        }
     }
 
     internal object[] Release(Guid connection, CancellationToken cancellation)

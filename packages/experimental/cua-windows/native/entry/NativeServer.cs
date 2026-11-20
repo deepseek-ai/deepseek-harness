@@ -169,12 +169,7 @@ internal static class NativeServer
                 finally
                 {
                     cancellation?.Dispose();
-                    try { await executor.ReleaseConnection(state, cleanupTimeoutMs); }
-                    catch (Exception error)
-                    {
-                        Report("INPUT_CLEANUP_UNCONFIRMED", error);
-                        throw;
-                    }
+                    await executor.ReleaseConnection(state, cleanupTimeoutMs);
                 }
                 state.Clear();
                 if (closeRequested)

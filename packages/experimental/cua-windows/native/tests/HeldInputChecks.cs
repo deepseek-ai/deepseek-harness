@@ -78,8 +78,24 @@ internal static class HeldInputChecks
         check(described.GetArrayLength() == 1 && described[0].GetProperty("key").GetString() == "w",
             "The reminder still reports only the helper's W down");
         var count = events.Count;
-        check(inputs.Release(a, default).Length == 1 && events.Skip(count).SequenceEqual(["87:up"]),
+        using var desktopQueue = new SemaphoreSlim(1, 1);
+        inputs.ReleaseOnDisconnect(a, desktopQueue, 1000).GetAwaiter().GetResult();
+        check(inputs.Get(a).Length == 0 && events.Skip(count).SequenceEqual(["87:up"]),
             "Disconnect retries the helper's W release and leaves D alone");
-        check(!inputs.HasConnection(a), "Accepted release removes the connection's last hold");
+
+        Key(b, 68, "d");
+        foreach (var occupied in new[] { false, true })
+        {
+            Key(a, 87, "w");
+            if (occupied) desktopQueue.Wait();
+            blocked = !occupied;
+            inputs.ReleaseOnDisconnect(a, desktopQueue, occupied ? 0 : 1000).GetAwaiter().GetResult();
+            blocked = false;
+            check(inputs.Get(a).Length == 0 && inputs.Get(b).Length == 1,
+                "Refused or expired disconnect cleanup drops only the disconnected owner's records");
+            if (occupied) desktopQueue.Release();
+        }
+        check(Key(b, 87, "w"), "The remaining connection can use W after disconnect cleanup fails");
+        inputs.Release(b, default);
     }
 }

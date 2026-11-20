@@ -291,14 +291,8 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         finally { queue.Release(); }
     }
 
-    internal async Task ReleaseConnection(ClientState state, int graceMs)
-    {
-        if (!inputs.HasConnection(state.Connection)) return;
-        using var deadline = new CancellationTokenSource(graceMs);
-        await queue.WaitAsync(deadline.Token);
-        try { inputs.Release(state.Connection, deadline.Token); }
-        finally { queue.Release(); }
-    }
+    internal Task ReleaseConnection(ClientState state, int graceMs) =>
+        inputs.ReleaseOnDisconnect(state.Connection, queue, graceMs);
 
     public ValueTask DisposeAsync()
     {
