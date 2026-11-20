@@ -209,7 +209,7 @@ actor AXWorker {
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId"), useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
                 return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
@@ -351,14 +351,17 @@ actor AXWorker {
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
-            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
-                try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
+            let system = try params.optionalBoolean("useSystemInput") ?? false
+            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId"), useSystemInput: system) {
+                if system { return identity }
+                return try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
         case "typeText", "pressKey":
-            let recipient = try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
+            let system = try method == "pressKey" && (params.optionalBoolean("useSystemInput") ?? false)
+            let recipient = system ? identity : try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
-            else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
+            else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid, useSystemInput: system) }
         case "setValue": try ax().setAttribute(element(handle, params), "AXValue", params.values["value"])
         case "performAction":
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])
@@ -386,13 +389,13 @@ actor AXWorker {
                 window = try NativePlatform.ownedWindow(identity.pid, id)
             }
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
-            if try params.optionalBoolean("useSystemPointer") == true {
+            if try params.optionalBoolean("useSystemInput") == true {
                 return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
             }
             try await inputs().1.toggleMouse(in: route,
                                              button: params.string("mouseButton"), isDown: isDown)
         case "click", "mouseMove":
-            let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
+            let useSystemInput = try params.optionalBoolean("useSystemInput") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
@@ -412,7 +415,7 @@ actor AXWorker {
                 }
                 if method == "mouseMove" {
                     _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
-                    if !useSystemPointer { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
+                    if !useSystemInput { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
                 } else {
                     try ax().requireEnabled(selected)
                 }
@@ -429,7 +432,7 @@ actor AXWorker {
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
-                if !useSystemPointer {
+                if !useSystemInput {
                     var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
                     if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
                     return try moveUsingAX(hit, windowID: window.windowID, handle: handle)
@@ -447,7 +450,7 @@ actor AXWorker {
                 try NativePlatform.verify(panel.process)
                 clickRoute = WindowRoute(owner: panel.process, windowID: panel.windowID, bounds: serviceWindow.bounds)
             }
-            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
+            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs, useSystemInput: useSystemInput)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
@@ -461,7 +464,7 @@ actor AXWorker {
                 try await inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
                     durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240),
                     button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers(),
-                    useSystemPointer: params.optionalBoolean("useSystemPointer") ?? false)
+                    useSystemInput: params.optionalBoolean("useSystemInput") ?? false)
             }
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }

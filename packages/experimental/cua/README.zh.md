@@ -53,7 +53,7 @@ kind: "package-reference"
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-支持系统指针的提供方在 `mouseMove`、`drag` 和 `toggleMouse` 之间共用会话鼠标授权。每次操作系统鼠标都要显式传 `{ useSystemPointer: true }`。
+支持系统输入的提供方允许 `mouseMove`、`toggleMouse`、`click`、`drag`、`pressKey` 和 `sendKeyEvent` 传入 `useSystemInput`。`true` 请求系统键鼠输入，省略或传 `false` 保留提供方的默认方式。`pressKey(key, modifiers, options)` 和 `sendKeyEvent(key, direction, options)` 的选项是第三个参数。
 
 要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 
@@ -84,7 +84,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方声明 `systemPointer: true` 后，`mouseMove`、`drag` 和 `toggleMouse` 均支持显式传入 `useSystemPointer: true`，三者共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
+声明 `systemInput: true` 的提供方必须支持上述六个方法的显式系统输入，包括系统点击和拖动期间的键盘修饰键。共通层使用 `requireSystemInputApproval` 控制会话授权，校验参数并拒绝子任务请求系统输入，再调用提供方。未声明此能力的提供方拒绝该选项，不接收新增原生参数。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 

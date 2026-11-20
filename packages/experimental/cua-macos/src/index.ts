@@ -14,7 +14,7 @@ import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
 const CAPABILITIES: CuaStartupCapabilities = {
-  platform: 'macos', systemPointer: true,
+  platform: 'macos', systemInput: true,
   methods: [
     'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke',
     'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',

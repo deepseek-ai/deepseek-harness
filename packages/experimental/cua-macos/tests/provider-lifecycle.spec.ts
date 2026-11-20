@@ -87,7 +87,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, requireSystemPointerApproval: true,
+  permissionPollIntervalMs: 1000, requireSystemInputApproval: true,
   agentPreset: false,
   standaloneRunCode: CuaConfig({}).standaloneRunCode,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
@@ -98,7 +98,7 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
-  expect(NativeProvider.Config({}).requireSystemPointerApproval).toBe(true)
+  expect(NativeProvider.Config({}).requireSystemInputApproval).toBe(true)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
@@ -450,7 +450,7 @@ it('merges startup capabilities into runtime native fields', async () => {
   native.request.mockResolvedValueOnce(runtime)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ ...runtime, platform: 'macos', systemPointer: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
+  expect(result.value).toEqual({ ...runtime, platform: 'macos', systemInput: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
@@ -1215,16 +1215,16 @@ it('routes permission actions through the macOS provider with the Client languag
 })
 
 const hoverTarget = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
-const physicalHover = { ...hoverTarget, useSystemPointer: true }
+const physicalHover = { ...hoverTarget, useSystemInput: true }
 
 async function hoverFixture(requireApproval = true) {
   const f = await setup()
   if (!requireApproval) {
     await f.provider.dispose()
-    await f.ctx.plugin(NativeProvider, { ...config, requireSystemPointerApproval: false })
+    await f.ctx.plugin(NativeProvider, { ...config, requireSystemInputApproval: false })
   }
   const questions = await f.ctx.plugin(UserQuestions)
-  const questionId = 'cua-mouse-control'
+  const questionId = 'cua-system-input'
   const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
   const ask = vi.fn(async () => approved)
   f.ctx.on('user-questions/request', async ({ questions }) => questions[0]!.id === questionId ? ask()
@@ -1255,23 +1255,23 @@ it('requires an explicit system-pointer request on every move and asks only once
   const pending = f.execute('mouseMove', physicalHover)
   await entered.promise
   expect(native.request).toHaveBeenCalledTimes(1)
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_PENDING')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_PENDING')
   answer.resolve(f.approved)
   expect((await pending).isError).toBe(false)
   for (const [params, physical] of [
-    [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
+    [hoverTarget, false], [{ ...hoverTarget, useSystemInput: false }, false], [physicalHover, true],
   ] as const) {
     expect((await f.execute('mouseMove', params)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: physical }, expect.any(AbortSignal), expect.any(String))
   }
   expect(native.request.mock.calls[1]?.[1]).toEqual(physicalHover)
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
-it.each([true, false])('shares the mouse control decision for a system button with pointer movement (allow=%s)', async (allow) => {
+it.each([true, false])('shares the system input decision for a system button with pointer movement (allow=%s)', async (allow) => {
   const f = await hoverFixture()
   const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
-  for (const params of [target, { ...target, useSystemPointer: false }]) {
+  for (const params of [target, { ...target, useSystemInput: false }]) {
     expect((await f.execute('toggleMouse', params)).isError).toBe(false)
     expect(native.request.mock.lastCall?.[1]).toEqual(target)
   }
@@ -1279,23 +1279,23 @@ it.each([true, false])('shares the mouse control decision for a system button wi
   const answer = Promise.withResolvers<typeof f.approved>()
   f.ask.mockImplementationOnce(() => answer.promise)
   native.request.mockClear()
-  const pending = f.execute('toggleMouse', { ...target, useSystemPointer: true })
+  const pending = f.execute('toggleMouse', { ...target, useSystemInput: true })
   try {
     await vi.waitFor(() => { expect(f.ask).toHaveBeenCalledOnce() })
     expect(native.request).not.toHaveBeenCalled()
   } finally {
-    answer.resolve(allow ? f.approved : { answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+    answer.resolve(allow ? f.approved : { answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
   }
   const results = [await pending, await f.execute('mouseMove', physicalHover),
-    await f.execute('toggleMouse', { ...target, direction: 'up', useSystemPointer: true })]
+    await f.execute('toggleMouse', { ...target, direction: 'up', useSystemInput: true })]
   if (allow) {
     expect(results.every(result => !result.isError)).toBe(true)
-    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemPointer]))
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemInput]))
       .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', true]])
     f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
     expect(native.cleanup).toHaveBeenCalledWith('releaseSystemButton', {})
   } else {
-    for (const result of results) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    for (const result of results) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
     expect(native.request).not.toHaveBeenCalled()
   }
   expect(f.ask).toHaveBeenCalledOnce()
@@ -1308,11 +1308,11 @@ it('reports a failed turn-end button release once and forgets the hold', async (
   const warn = vi.spyOn(f.provider.ctx.logger, 'warn').mockImplementation(() => {})
   onTestFinished(() => { warn.mockRestore() })
   expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
-    direction: 'down', useSystemPointer: true })).isError).toBe(false)
+    direction: 'down', useSystemInput: true })).isError).toBe(false)
   const session = f.handle.agent.session
   session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
   await vi.waitFor(() => {
-    expect(warn).toHaveBeenCalledWith('Could not release system mouse input at turn end: %s', failure)
+    expect(warn).toHaveBeenCalledWith('Could not release system input at turn end: %s', failure)
   })
   session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
   expect(native.cleanup).toHaveBeenCalledExactlyOnceWith('releaseSystemButton', {})
@@ -1321,7 +1321,7 @@ it('reports a failed turn-end button release once and forgets the hold', async (
 it('leaves button release to disconnect when application access was revoked before turn end', async () => {
   const f = await hoverFixture()
   expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
-    direction: 'down', useSystemPointer: true })).isError).toBe(false)
+    direction: 'down', useSystemInput: true })).isError).toBe(false)
   await f.ctx.cuaAccess.revoke('a'.repeat(64) as Parameters<typeof f.ctx.cuaAccess.revoke>[0])
   expect(native.dispose).toHaveBeenCalled()
   f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
@@ -1334,22 +1334,22 @@ it.each([true, false])('asks before a system drag and shares the session decisio
   native.request.mockResolvedValueOnce({ appHandle: target.appHandle, windowId: null, snapshotId: 's', tree: '', truncated: false,
     windows: [{ windowId: '7', appName: 'Fixture', title: '', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: target.appHandle })
-  if (!allow) f.ask.mockResolvedValue({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  if (!allow) f.ask.mockResolvedValue({ answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
   native.request.mockClear()
-  const drag = await f.execute('drag', { ...target, useSystemPointer: true })
+  const drag = await f.execute('drag', { ...target, useSystemInput: true })
   const hover = await f.execute('mouseMove', physicalHover)
   expect(f.ask).toHaveBeenCalledTimes(1)
   if (allow) {
     expect(drag.isError).toBe(false)
     expect(hover.isError).toBe(false)
-    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemPointer])).toEqual([['drag', true], ['mouseMove', true]])
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemInput])).toEqual([['drag', true], ['mouseMove', true]])
   } else {
-    for (const result of [drag, hover]) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    for (const result of [drag, hover]) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
     expect(native.request).not.toHaveBeenCalled()
   }
-  for (const params of [target, { ...target, useSystemPointer: false }]) {
+  for (const params of [target, { ...target, useSystemInput: false }]) {
     expect((await f.execute('drag', params)).isError).toBe(false)
-    expect(native.request.mock.lastCall?.[1]).not.toHaveProperty('useSystemPointer')
+    expect(native.request.mock.lastCall?.[1]).not.toHaveProperty('useSystemInput')
   }
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
@@ -1360,12 +1360,12 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   const { agent } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('other-mouse-session') })
   expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('APP_ACCESS_REQUIRED')
   await f.select(agent)
-  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
   native.request.mockClear()
-  for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_DENIED')
+  for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_DENIED')
   expect(native.request).not.toHaveBeenCalled()
   expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   const sessionId = f.handle.agent.id
@@ -1373,7 +1373,7 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   const reopened = await f.ctx.agents.create({ sessionId })
   await f.select(reopened.agent)
   expect((await f.call(reopened.agent, 'mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.call(reopened.agent, 'mouseMove', physicalHover)).isError).toBe(false)
   expect(f.ask).toHaveBeenCalledTimes(3)
 })
@@ -1398,7 +1398,7 @@ it('revalidates window coordinates after the user answers', async () => {
     await f.execute('listWindows', { appHandle: 'app-one' })
     return f.approved
   })
-  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: '7', x: 500, y: 500, relative: true, useSystemPointer: true })
+  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: '7', x: 500, y: 500, relative: true, useSystemInput: true })
   expect(JSON.stringify(result.content)).toContain('STALE_SNAPSHOT')
   expect(native.request.mock.calls.map(([name]) => name)).toEqual(['listWindows', 'listWindows'])
 })
@@ -1406,7 +1406,7 @@ it('revalidates window coordinates after the user answers', async () => {
 it('drops dismissal, aborted answers and missing human answerers without allowing input', async () => {
   const f = await hoverFixture()
   f.ask.mockRejectedValueOnce(new UserQuestionError('dismissed', 'ASK_CANCELLED'))
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_CANCELLED')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_APPROVAL_CANCELLED')
   f.ask.mockRejectedValueOnce(new UserQuestionError('The answer channel disconnected', 'ASK_ABORTED'))
   expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('The answer channel disconnected')
   const controller = new AbortController()
@@ -1419,14 +1419,14 @@ it('drops dismissal, aborted answers and missing human answerers without allowin
   await f.ctx.plugin(NativeProvider, config)
   await f.select()
   await f.questions.dispose()
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_UNAVAILABLE')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_APPROVAL_UNAVAILABLE')
 })
 
 it('allows only the explicitly requested physical move when approval is disabled', async () => {
   const f = await hoverFixture(false)
   for (const [target, expected] of [[hoverTarget, false], [physicalHover, true], [hoverTarget, false]] as const) {
     expect((await f.execute('mouseMove', target)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: expected }, expect.any(AbortSignal), expect.any(String))
   }
   expect(f.ask).not.toHaveBeenCalled()
 })
@@ -1442,48 +1442,63 @@ it.each([true, false])('rejects a delegated pointer move before asking or dispat
   selectAnswer.mockClear()
   native.request.mockClear()
   const refused = await f.call(agent, 'mouseMove', physicalHover)
-  expect(JSON.stringify(refused.content)).toContain('MOUSE_CONTROL_UNAVAILABLE')
+  expect(JSON.stringify(refused.content)).toContain('SYSTEM_INPUT_UNAVAILABLE')
   expect(selectAnswer).not.toHaveBeenCalled()
   expect(f.ask).not.toHaveBeenCalled()
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it.each([true, false])('uses the declared systemPointer capability for a non-macOS provider (%s)', async (systemPointer) => {
+it.each([true, false])('uses the declared systemInput capability for a non-macOS provider (%s)', async (systemInput) => {
   const f = await setup()
   await f.provider.dispose()
   await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
     installCua(ctx, CuaConfig(config), {
       helperPath: config.helperPath, createChannel: native.connect, getGuidance: () => COMMON_GUIDANCE,
       permissionParameters: () => ({}),
-      capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemPointer,
+      capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemInput,
         appLevelAccessibility: true, keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
     })
   } })
-  native.request.mockResolvedValueOnce({ systemPointer: !systemPointer })
-  expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemPointer })
+  native.request.mockResolvedValueOnce({ systemInput: !systemInput })
+  expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemInput })
   const sections = (await f.ctx.systemPrompt.assemble({ scope: f.handle.agent })).sections
   const guidance = sections.find(section => section.name === 'computer-use:dsh-cua')!.text
-  expect(guidance.includes('relative?: boolean, useSystemPointer?: boolean')).toBe(systemPointer)
-  expect(guidance.includes('The question interrupts the user')).toBe(systemPointer)
-  expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemPointer')).toBe(systemPointer)
+  expect(guidance.includes('relative?: boolean, useSystemInput?: boolean')).toBe(systemInput)
+  expect(guidance.includes('When approval is enabled, the first explicit system input requests permission;')).toBe(systemInput)
+  expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemInput')).toBe(systemInput)
   await selectApplication(f)
   native.request.mockClear()
   const answer = vi.spyOn(f.ctx.userQuestions, 'ask').mockResolvedValue({
-    answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }],
+    answers: [{ id: 'cua-system-input', selected: ['Allow for this session'] }],
   })
-  if (!systemPointer) {
-    const denied = await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 1, toX: 2, toY: 2, useSystemPointer: true })
+  if (!systemInput) {
+    const denied = await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 1, toX: 2, toY: 2, useSystemInput: true })
     expect(denied.isError).toBe(true)
-    expect(JSON.stringify(denied.content)).toContain('useSystemPointer')
+    expect(JSON.stringify(denied.content)).toContain('useSystemInput')
     expect(native.request).not.toHaveBeenCalled()
     expect(answer).not.toHaveBeenCalled()
   }
   const physical = await f.execute('mouseMove', physicalHover)
-  expect(physical.isError).toBe(!systemPointer)
-  expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
-  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  expect(physical.isError).toBe(!systemInput)
+  expect(answer).toHaveBeenCalledTimes(systemInput ? 1 : 0)
+  if (systemInput) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   else expect(native.request).not.toHaveBeenCalled()
   expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemInput ? { ...hoverTarget, useSystemInput: false } : hoverTarget,
     expect.any(AbortSignal), expect.any(String))
+})
+
+it.each([true, false])('shares approval between system clicks and keyboard chords (allow=%s)', async (allow) => {
+  const f = await hoverFixture()
+  f.ask.mockResolvedValue(allow ? f.approved : { answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
+  const click = { ...hoverTarget, modifiers: ['shift'], useSystemInput: true }
+  const chord = { appHandle: 'app-one', key: 's', modifiers: ['command'], useSystemInput: true }
+  for (const [method, params] of [['click', click], ['pressKey', chord]] as const) {
+    const result = await f.execute(method, params)
+    expect(result.isError).toBe(!allow)
+    if (allow) expect(native.request).toHaveBeenLastCalledWith(method, params, expect.any(AbortSignal), expect.any(String))
+    else expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
+  }
+  expect(f.ask).toHaveBeenCalledTimes(1)
+  if (!allow) expect(native.request).not.toHaveBeenCalled()
 })
