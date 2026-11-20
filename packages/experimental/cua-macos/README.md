@@ -80,7 +80,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |
 
-After a window accessibility read or screenshot, the next scheduled model step checks for input on that window since the observation and within the configured lookback. The notice gives the window ID and time of the latest activity from each source: another Agent or external input. Each window can produce one notice until the Agent uses it again. Watches end with the turn or connection. The notice is recorded in the Session.
+After a window accessibility read or screenshot, the next scheduled model step checks for input on that window since the start of the last successfully delivered read and within the configured lookback, including input during capture. The notice gives the window ID and time of the latest activity from each source: another Agent or external input. Each window can produce one notice until the Agent uses it again. Watches end with the turn or connection. The notice is recorded in the Session.
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cua-macos) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. `getApp` returns the `appHandle` used by every app-targeted operation, and `app.getWindow(windowId)` returns the object that owns screenshots and pointer input.
 

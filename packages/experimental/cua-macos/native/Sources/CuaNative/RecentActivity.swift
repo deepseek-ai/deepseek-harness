@@ -40,7 +40,7 @@ struct ActivityTarget: Hashable, Sendable {
     var hasInterests: Bool { clients.values.contains { $0.windows.values.contains(where: \.armed) } }
     func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner) }
     func clear(_ owner: UUID) { clients[owner]?.windows.removeAll() }
-    /// Return the capture time. The Host sends it back only for an observation it delivered successfully.
+    /// Arm before sampling the window so input during a slow read can invalidate its result.
     @discardableResult func observe(_ target: ActivityTarget, handle: String, owner: UUID) -> UInt64 {
         let time = now()
         if var window = clients[owner]?.windows[target] {
@@ -50,6 +50,22 @@ struct ActivityTarget: Hashable, Sendable {
             clients[owner]?.windows[target] = Observation(handle: handle, since: time)
         }
         return time
+    }
+    /// Keep the previous delivered observation eligible when a refresh fails.
+    func withObservation(_ target: ActivityTarget, handle: String, owner: UUID,
+                         read: @MainActor () async throws -> JSONValue) async throws -> JSONValue {
+        let previous = clients[owner]?.windows[target]
+        let start = observe(target, handle: handle, owner: owner)
+        do {
+            guard var fields = try await read().object else {
+                throw NativeFailure(code: "NATIVE_PROTOCOL", message: "Expected a window observation")
+            }
+            fields["activityObservedAt"] = .string(String(start))
+            return .object(fields)
+        } catch {
+            if previous?.armed != true { clients[owner]?.windows[target] = previous }
+            throw error
+        }
     }
     func isTracked(_ process: ProcessIdentity) -> Bool {
         clients.values.contains { $0.windows.contains { $0.key.process == process && $0.value.armed } }

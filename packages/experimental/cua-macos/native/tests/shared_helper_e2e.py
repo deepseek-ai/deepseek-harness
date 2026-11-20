@@ -197,8 +197,8 @@ def main():
                 clients.append(off)
                 off_app = off.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
                 off_read = {"appHandle": off_app, "maxElements": 300, "maxDepth": 20}
-                off_state = off.call("getState", off_read)
-                assert "recentActivity" not in off_state and not has_listener()
+                off.call("getState", off_read)
+                assert not has_listener()
                 app_a = a.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
                 app_b = b.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
                 assert app_a != app_b
@@ -224,26 +224,32 @@ def main():
                 while json.loads(state.read_text())["count"] != before + 1:
                     assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"
                     time.sleep(0.025)
-                def take(client, handle, receipt=None):
-                    return client.call("takeWindowActivity", {"appHandle": handle, "observations": {window: (receipt or observed)["activityObservedAt"]}})
+                def take(client, handle, receipt):
+                    return client.call("takeWindowActivity", {"appHandle": handle, "observations": {window: receipt}})
 
-                events = take(a, app_a)
+                events = take(a, app_a, observed["activityObservedAt"])
                 assert len(events) == 1 and events[0]["source"] == "agent" and events[0]["windowId"] == window, events
-                assert 0 <= events[0]["ageSeconds"] <= 60 and take(a, app_a) == []
+                assert 0 <= events[0]["ageSeconds"] <= 60 and take(a, app_a, observed["activityObservedAt"]) == []
                 after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
                 off_read["windowId"] = window
                 off_state = off.call("getState", off_read)
-                assert "recentActivity" not in off_state
+                assert "activityObservedAt" not in off_state
                 off_button = next(element for element in off_state["elements"]
                                   if element["role"] == "AXButton" and element["title"] == "Increment primary")
-                off_action = off.call("invoke", {"appHandle": off_app, "snapshotId": off_state["snapshotId"], "elementId": off_button["elementId"]})
-                assert "recentActivity" not in off_action
+                off.call("invoke", {"appHandle": off_app, "snapshotId": off_state["snapshotId"], "elementId": off_button["elementId"]})
                 deadline = time.monotonic() + 5
                 while json.loads(state.read_text())["count"] != before + 2:
                     assert time.monotonic() < deadline, "Disabled activity tracking blocked ordinary input"
                     time.sleep(0.025)
-                assert not take(a, app_a) and not take(b, app_b) and not take(off, off_app)
+                assert not take(a, app_a, after["activityObservedAt"])
+                assert not take(b, app_b, own_observation["activityObservedAt"])
+                assert not take(off, off_app, "0")
+
+                # Exercise rearming even when the system does not allow external event injection.
+                b.call("invoke", {"appHandle": app_b, "snapshotId": own_observation["snapshotId"], "elementId": button["elementId"]})
+                events = take(a, app_a, after["activityObservedAt"])
+                assert any(event["source"] == "agent" and event["windowId"] == window for event in events), events
 
                 if has_listener():
                     can_post = subprocess.check_output([str(sender), "--can-post"], text=True, timeout=5).strip() == "yes"
@@ -255,13 +261,18 @@ def main():
                         button = next(element for element in focused["elements"]
                                       if element["role"] == "AXButton" and element["title"] == "Increment primary")
                         x, y, width, height = button["bounds"]
-                        before_count = json.loads(state.read_text())["count"]
+                        after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                        deadline = time.monotonic() + 5
+                        while json.loads(state.read_text())["count"] != before + 3:
+                            assert time.monotonic() < deadline, "Fixture did not receive the second enabled input"
+                            time.sleep(0.025)
+                        before_count = before + 3
                         with external_input(sender, fixture.pid, x + width / 2, y + height / 2, window):
                             deadline = time.monotonic() + 5
                             reported = False
                             while True:
                                 reported |= any(event["source"] == "external-input" and event["windowId"] == window
-                                                for event in take(a, app_a))
+                                                for event in take(a, app_a, after["activityObservedAt"]))
                                 if reported and json.loads(state.read_text())["count"] == before_count + 1:
                                     break
                                 assert time.monotonic() < deadline, ("External click was not received and reported", reported)
@@ -298,7 +309,7 @@ def main():
             b.close()
             clients.remove(b)
             if not args.without_desktop:
-                assert "recentActivity" not in off.call("getState", off_read)
+                assert "activityObservedAt" not in off.call("getState", off_read)
                 assert not has_listener(), "Off-only helper retained the external input listener"
                 off.close()
                 clients.remove(off)

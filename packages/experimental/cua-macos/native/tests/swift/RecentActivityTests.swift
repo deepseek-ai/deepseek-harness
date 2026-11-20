@@ -125,3 +125,40 @@ private let second: UInt64 = 1_000_000_000
     continuous += 3_600 * second
     #expect(history.take(owner: owner, handle: "app", observations: ["10": observed]).isEmpty)
 }
+
+@Test @MainActor func capturesInputDuringWindowReadsAndRollsBackFailedInterests() async throws {
+    var time = second
+    let history = RecentActivity(now: { time })
+    let owner = UUID()
+    history.connect(owner, lookbackMs: 60_000)
+    func read() async throws -> UInt64 {
+        let result = try await history.withObservation(target, handle: "app", owner: owner) {
+            time += second
+            history.record(target, owner: nil)
+            time += second
+            return .object([:])
+        }
+        let stamp = try #require(result["activityObservedAt"].string)
+        return try #require(UInt64(stamp))
+    }
+    func fail() async throws {
+        _ = try await history.withObservation(target, handle: "app", owner: owner) {
+            time += second
+            history.record(target, owner: nil)
+            throw CancellationError()
+        }
+    }
+    func take(_ receipt: UInt64) -> [JSONValue] {
+        history.take(owner: owner, handle: "app", observations: ["10": receipt])
+    }
+    await #expect(throws: CancellationError.self) { try await fail() }
+    #expect(!history.hasInterests)
+    let first = try await read()
+    #expect(take(first) == [.object(["windowId": .string("10"), "source": .string("external-input"), "ageSeconds": .number(1)])])
+    await #expect(throws: CancellationError.self) { try await fail() }
+    #expect(!history.hasInterests)
+    time += second
+    let next = try await read()
+    await #expect(throws: CancellationError.self) { try await fail() }
+    #expect(take(next) == [.object(["windowId": .string("10"), "source": .string("external-input"), "ageSeconds": .number(0)])])
+}

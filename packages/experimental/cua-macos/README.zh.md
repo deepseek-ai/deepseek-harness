@@ -80,7 +80,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
 
-模型读取窗口辅助功能树或截图后，插件在下一次模型请求前检查该窗口。只有上次观察之后且在回看时限内发生的活动才会触发提醒。提醒给出窗口 ID，并分别说明其他 Agent 和外部输入最近出现的时间。每个窗口最多提醒一次，直到 Agent 再次使用该窗口。本轮结束或连接断开时停止关注，已发送的提醒保存在 Session 中。
+模型读取窗口辅助功能树或截图后，插件在下一次模型请求前检查该窗口。回看从最近一次成功读取开始采样时算起，因此也能提示读取期间发生的输入。超过回看时限的活动会被排除。提醒给出窗口 ID，并分别说明其他 Agent 和外部输入最近出现的时间。每个窗口最多提醒一次，直到 Agent 再次使用该窗口。本轮结束或连接断开时停止关注，已发送的提醒保存在 Session 中。
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 

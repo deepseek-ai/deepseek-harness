@@ -236,6 +236,8 @@ it('delivers window activity at the next accepted step and clears it at turn end
   }] }] })
   expect(native.request).toHaveBeenLastCalledWith('takeWindowActivity', { appHandle: 'app-one', observations: { '7': '101' } }, expect.any(AbortSignal))
   expect(await step()).toMatchObject({ messages: [] })
+  native.request.mockRejectedValueOnce(new NativeError('NATIVE_BUSY', 'Another request is in flight'))
+  expect(await step()).toMatchObject({ messages: [] })
   native.request.mockResolvedValueOnce([{ windowId: '7', source: 'agent', ageSeconds: 5 }])
   expect(JSON.stringify(await step())).toContain('5 seconds ago')
   const controller = new AbortController()

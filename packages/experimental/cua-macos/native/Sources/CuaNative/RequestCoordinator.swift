@@ -197,6 +197,21 @@ import Darwin
         // A dispatched action can invalidate the snapshot that identifies its window.
         let target = configuration.recentActivityWindowMs != nil && params.contains("appHandle")
             ? await worker.activityTarget(params) : nil
+        if let target, request.method == "getState" || request.method == "screenshot" {
+            inputMonitor.start()
+            defer { if !activity.hasInterests { inputMonitor.stop() } }
+            return try await activity.withObservation(target, handle: params.string("appHandle"), owner: connectionID) {
+                try await self.dispatch(request, params: params, trace: trace)
+            }
+        }
+        let result = try await dispatch(request, params: params, trace: trace)
+        if let target, result["dispatched"] == .bool(true) {
+            activity.record(target, owner: connectionID)
+            if activity.hasInterests { inputMonitor.start() }
+        }
+        return result
+    }
+    private func dispatch(_ request: NativeRequest, params: RequestParameters, trace: ScreenshotTrace?) async throws -> JSONValue {
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
@@ -266,17 +281,6 @@ import Darwin
                 let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
                 result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
-        }
-        if let target {
-            if (request.method == "getState" || request.method == "screenshot"), var fields = result.object {
-                let time = activity.observe(target, handle: try params.string("appHandle"), owner: connectionID)
-                fields["activityObservedAt"] = .string(String(time))
-                inputMonitor.start()
-                return .object(fields)
-            } else if result["dispatched"] == .bool(true) {
-                activity.record(target, owner: connectionID)
-            }
-            if activity.hasInterests { inputMonitor.start() }
         }
         return result
     }

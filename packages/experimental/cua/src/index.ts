@@ -176,7 +176,7 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
 export interface CuaWindowRead {
   agent: Agent
   client: NativeClient
-  access: Pick<ReturnType<typeof installCuaAccess>, 'run'>
+  access: Pick<ReturnType<typeof installCuaAccess>, 'readCached'>
   appHandle: CuaAppHandle
   windowId: string
 }
@@ -429,7 +429,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           if (route?.prepare) owner.coordinates.parameters(request)
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            return callNative(request, scoped, route?.useSystemInput)
+            const result = await callNative(request, scoped, route?.useSystemInput)
+            signal.throwIfAborted()
+            return result
           }
           return 'appHandle' in request.params
             ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch, route?.prepare)

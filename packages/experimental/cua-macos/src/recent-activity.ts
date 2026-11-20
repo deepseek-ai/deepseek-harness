@@ -49,7 +49,7 @@ export function watchWindowActivity(ctx: Context): NonNullable<CuaBackend['windo
     for (const [handle, windows] of watch.apps) {
       const observations = Object.fromEntries(windows)
       try {
-        const result = await watch.access.run(watch.client, handle, signal, authorized =>
+        const result = await watch.access.readCached(watch.client, handle, signal, authorized =>
           watch.client.request('takeWindowActivity', { appHandle: handle, observations }, authorized))
         const rows = Rows.parse(result)
         if (rows.some(row => !windows.has(row.windowId))) throw new NativeError('NATIVE_PROTOCOL', 'Unrequested window activity')
@@ -60,7 +60,6 @@ export function watchWindowActivity(ctx: Context): NonNullable<CuaBackend['windo
         }
       } catch (error) {
         if (signal.aborted) return decision
-        watch.apps.delete(handle)
         ctx.logger.warn('Could not check recent window activity: %s', error)
       }
     }
