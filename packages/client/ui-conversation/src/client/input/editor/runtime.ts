@@ -11,6 +11,7 @@ import {
 } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
 import { createEmptyHistoryState, registerHistory } from '@lexical/history'
+import type { HistoryState } from '@lexical/history'
 import { mergeRegister } from '@lexical/utils'
 import type { DraftQuote, DraftReference, ReferenceInsert } from '../../contract/draft-editor.ts'
 import type { CommandClaim } from '../../contract/input.ts'
@@ -79,6 +80,8 @@ export class DraftEditorRuntime {
   /** Live lexicon subscription disposer; undefined until the controller resolves. */
   private lexiconOff: (() => void) | undefined
   private lexiconSource: ObservableSnapshot<Lexicon> | undefined
+  /** Undo and redo state owned by the registered history listener. */
+  private readonly history: HistoryState = createEmptyHistoryState()
 
   /** @param deps - model callbacks used by editor listeners and transforms. */
   constructor(private readonly deps: DraftEditorRuntimeDeps) {
@@ -117,7 +120,7 @@ export class DraftEditorRuntime {
       this.editor.registerNodeTransform(RootNode, preserveExternalSelection),
       registerReferenceActivation(this.editor, (source, reference) =>
         this.deps.openReference(source, reference)),
-      registerHistory(this.editor, createEmptyHistoryState(), HISTORY_MERGE_DELAY_MS),
+      registerHistory(this.editor, this.history, HISTORY_MERGE_DELAY_MS),
       this.editor.registerUpdateListener(() => { this.deps.onUpdate() }),
       registerCommandChipSeat(this.editor),
       registerCommandChipSelection(this.editor),
@@ -160,6 +163,19 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Run a top-level edit now, or in a microtask when called from inside an
+   * update of this editor (a key command handler). Nested edits and update
+   * callbacks both run while the editor still counts as updating, so the
+   * edit's revision would not be observable when it returns.
+   * @param fn - the edit, run outside any update.
+   */
+  afterUpdate(fn: () => void): void {
+    // Not an update onUpdate callback: it runs while the editor still commits, where a new update is unsafe.
+    if (this.editor._updating) queueMicrotask(fn)
+    else fn()
+  }
+
+  /**
    * Reconnect decorations when the optional trigger provider changes.
    * The rescan reads the current editor and does not replace its content.
    */
@@ -194,16 +210,19 @@ export class DraftEditorRuntime {
   /**
    * Replace the whole draft (persisted-draft seed and programmatic writes).
    * Placeholder-sanitized; newlines split paragraphs; the caret lands at the
-   * end. Merged into history so a seed is not an undoable step of its own.
+   * end. Merged into history so a seed is not an undoable step of its own,
+   * unless `undoable` makes the replacement its own undo step.
    * @param text - the full next draft.
+   * @param undoable - record the replacement as a separate undo step.
    */
-  setDraft(text: string): void {
+  setDraft(text: string, undoable = false): void {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0 && this.projection.quotes.length === 0) return
+    if (undoable) this.keepUndoBaseline()
     this.editor.update(() => {
       $getRoot().clear()
       $appendParagraphs(clean)
-    }, { discrete: true, tag: HISTORY_MERGE_TAG })
+    }, { discrete: true, tag: undoable ? HISTORY_PUSH_TAG : HISTORY_MERGE_TAG })
   }
 
   /**
@@ -470,6 +489,19 @@ export class DraftEditorRuntime {
       appendText(draft.slice(cursor))
       root.selectEnd()
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
+  }
+
+  /**
+   * Make the current document the undo target of the next pushed step. A cut
+   * history (after a submission) has no current entry to undo to, and Lexical
+   * refuses to restore a root without a paragraph, so an empty root gains one first.
+   */
+  private keepUndoBaseline(): void {
+    if (this.history.current !== null) return
+    if (this.editor.getEditorState().read(() => $getRoot().isEmpty())) {
+      this.editor.update(() => { $getRoot().append($createParagraphNode()) }, { discrete: true, tag: HISTORY_MERGE_TAG })
+    }
+    this.history.current = { editor: this.editor, editorState: this.editor.getEditorState() }
   }
 
   /** Cut the editor's undo history after a committed clear or restoration. */
