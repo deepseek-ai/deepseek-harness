@@ -83,9 +83,15 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Kind registry, Session projection, user actions and status notices.',
-    description: 'Kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, skill switch, Session projection, user actions and status notices.',
+    description: 'Kind registry, skill switch, Session projection, user actions and status notices.',
     methods: [
+      {
+        signature: 'skillProvider(candidate: SkillCandidate, get: SkillProvider[\'get\']): (control: SkillProviderControl) => SkillProvider',
+        description: 'Build a kind\'s skill provider. It lists the skill while recommendations are enabled.',
+        parameters: [{ name: 'candidate', description: 'the skill\'s catalog entry.' }, { name: 'get', description: 'loads the skill\'s definition.' }],
+        returns: 'the factory the kind passes to `ctx.skills.registerProvider`.',
+      },
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',

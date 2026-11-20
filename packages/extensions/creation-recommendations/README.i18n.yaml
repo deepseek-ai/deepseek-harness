@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/extensions/creation-recommendations/README.md
+/:
+  en: dca7dd27c5f2c369
+  zh: 00d34e3837bed75a
+/deepseek-ai-dsh-creation-recommendations:
+  en: 5a7fac00171d38fd
+  zh: 9be8c53667df8768
+/deepseek-ai-dsh-creation-recommendations/summary:
+  en: b5b132020dabe3d9
+  zh: 02bfe0e8a42d59e2
+/deepseek-ai-dsh-creation-recommendations/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b00dddf4c88f0a45
+/deepseek-ai-dsh-creation-recommendations/use-this-package:
+  en: 9c144059b66b1dbc
+  zh: 5fbc4a6d3c439dc4
+/deepseek-ai-dsh-creation-recommendations/use-this-package/outcomes-and-recovery:
+  en: b982d1f06cea0fb2
+  zh: e25904efe51bbbd5
+/deepseek-ai-dsh-creation-recommendations/understand-the-implementation:
+  en: 5262a1e4674e794e
+  zh: c1ebaee0e914385d
+/deepseek-ai-dsh-creation-recommendations/further-exploration:
+  en: 94495134dbbae6cd
+  zh: 0a17befacd6098cf
+/deepseek-ai-dsh-creation-recommendations/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-creation-recommendations/model-experience/creation-recommendations:
+  en: b950fbe9f29693d4
+  zh: 2dd7edb2d1c72941
+/deepseek-ai-dsh-creation-recommendations/model-experience/creation-recommendations/what-the-model-sees:
+  en: 371e7ca4d68b8f2b
+  zh: c02fcc564baff7bb
+/deepseek-ai-dsh-creation-recommendations/model-experience/creation-recommendations/token-effect:
+  en: 29d62a44d40d78ef
+  zh: e80d006824522398
+/deepseek-ai-dsh-creation-recommendations/model-experience/creation-recommendations/kv-cache-effect:
+  en: 45f881f1ef4cf7f4
+  zh: 51367a5d9c6b1858
+/deepseek-ai-dsh-creation-recommendations/known-limitations-and-deferred-work:
+  en: 9f4e3f7abf4afe99
+  zh: 57414177870752f2
+/deepseek-ai-dsh-creation-recommendations/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6
