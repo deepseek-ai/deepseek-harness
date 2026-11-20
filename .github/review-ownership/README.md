@@ -78,9 +78,9 @@ Ruleset `27532727` stays disabled while the pilot runs, so the pilot review is i
 
 After the pilot verifies comment updates, approval submission, dismissal, head binding, error behavior, latency, and stale-approval behavior, re-evaluate every open pull request the requirement will cover and inspect its published comment or approval. Then enable ruleset `27532727` with one required reviewer: a team whose only member is `deepseek-ai-harness`, covering all files. Add one `required_reviewers` entry with `minimum_approvals: 1` and `reviewer` of type `Team`, and configure its file patterns to match the files the requirement covers.
 
-Validate root files, dotfiles, and nested files on a disposable branch before enforcing; do not assume an unverified pattern matches them.
+On a disposable target branch, confirm that GitHub accepts the singleton team as a required reviewer with repository access. Use PRs changing root files, dotfiles, and nested files. An unrelated user's approval must leave the team requirement unsatisfied; a valid approval from the machine account must satisfy it. Also inspect the PR Checks view and commit status: a publisher that does not call the Checks API can still have GitHub Actions job entries. Do not remove the old requirement based only on a rule's JSON or a workflow run's conclusion.
 
-No enforcement is added before those checks pass. Do not add the team or retire the legacy status before that verification: a pilot failure would then block every pull request. After the team requirement is verified, the legacy status requirement and the legacy publisher can be retired.
+No enforcement is added before those checks pass. Do not add the team or retire the legacy status before that verification: a pilot failure would then block every pull request. After verifying the team requirement, remove the legacy required status before stopping its publisher. Preserve delegation reconciliation in the replacement before stopping the legacy job.
 
 <a id="delegating-points"></a>
 
