@@ -9,7 +9,7 @@ import type {
   MaybeSnapshotSelectorHook, ObservableSnapshot, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-store'
 import type {
-  FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
+  ChildrenDecl, FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
   InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -667,16 +667,29 @@ export interface InputActivityOwnerProps extends InputControlOwnerProps {
   onActiveChange: (active: boolean) => void
 }
 
-/** Props supplied to the built-in resident composer bar. */
-export type ComposerBarProps =
+/** Adding a key here changes the default render keys for plugins using ComposerBarProps. */
+const baseComposerChildren = {
+  'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
+  'conversation.input.overlay': { kind: 'list', scope: 'session' },
+  'conversation.input.permission': { kind: 'single', scope: 'session' },
+  'conversation.input.left': { kind: 'list', scope: 'session' },
+  'conversation.input.plan': { kind: 'single', scope: 'session' },
+  'conversation.input.right': { kind: 'list', scope: 'session' },
+  'conversation.input.model': { kind: 'single', scope: 'session' },
+  'conversation.input.activity': { kind: 'single', scope: 'session' },
+  'conversation.composer.dock': { kind: 'list', scope: 'session' },
+} as const satisfies ChildrenDecl
+
+/** Child slots owned by the built-in input bar. */
+export const inputBarChildren = {
+  ...baseComposerChildren,
+  'conversation.input.placeholder': { kind: 'chain', scope: 'session', inline: true },
+} as const satisfies ChildrenDecl
+
+/** Composer bar props for a registration's child keys. The default preserves the original child slots. */
+export type ComposerBarProps<K extends keyof ChildrenDecl = keyof typeof baseComposerChildren> =
   PropsRuntime<'conversation.composer.bar'>
-  & PropsRenderSlots<
-    | 'conversation.input.attachments' | 'conversation.input.placeholder' | 'conversation.input.overlay'
-    | 'conversation.input.permission'
-    | 'conversation.input.left' | 'conversation.input.plan'
-    | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
-    | 'conversation.composer.dock'
-  >
+  & PropsRenderSlots<K>
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>
 

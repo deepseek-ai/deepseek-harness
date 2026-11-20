@@ -132,6 +132,8 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 内置输入栏通过 `conversation.input.placeholder` 为可编辑会话的空输入框提供占位提示。插件通过 chain 的选择器匹配拥有者传入的 `sessionId`。匹配的组件可渲染本地化文字或不参与交互的行内 JSX，例如 `<kbd>/</kbd>`。提示可见时，其文字用作输入框的无障碍名称。所有选择器均返回 `null` 时，输入栏按当前状态显示首页、Plan 或默认提示。选择工作区、输入受阻、会话不可用或可将排队消息送入当前轮次时，输入栏显示相应的内置提示。
 
+替换 `conversation.composer.bar` 的插件可以直接使用 `ComposerBarProps`。它默认使用一组固定的子插槽，内置输入栏新增插槽时，现有插件的类型仍然兼容。替换组件也可以使用 `ComposerBarProps<keyof typeof children>`，从传给 `slots.register` 的 `children` 声明中推导自己可以渲染的键。
+
 常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——其余按键交给编辑器自身。 在 Apple 平台上，Home 与 End 把光标移到当前视觉行的行首或行末，而不是滚动对话，按住 Shift 时扩展选区；光标紧贴在 quote 左侧时，End 与 Cmd+Right 走同一路径移到该行末尾。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
 
 窄屏浏览器设置中，繁忙时 Enter 偏好的标签与控件间距缩小；Windows 和 macOS 桌面窗口保留标准间距。
