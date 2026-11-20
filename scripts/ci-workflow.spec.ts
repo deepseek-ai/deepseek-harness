@@ -1471,13 +1471,13 @@ describe('Python release workflows', () => {
 })
 
 describe('Weighted approval workflow', () => {
-  it('comments and approves from the trusted default branch after pull request and review updates', () => {
+  it('publishes from the trusted default branch after pull request and review updates', () => {
     const publisher = loadWorkflow('.github/workflows/weighted-approval.yml')
     const reviewEvent = loadWorkflow('.github/workflows/weighted-approval-review-event.yml')
     const pullRequest = workflowEvent(publisher, 'pull_request_target')
     const workflowRun = workflowEvent(publisher, 'workflow_run')
     const review = workflowEvent(reviewEvent, 'pull_request_review')
-    const job = workflowJob(publisher, 'evaluate')
+    const job = workflowJob(publisher, 'publish-status')
     const recordJob = workflowJob(reviewEvent, 'record-review-event')
     if (!isRecord(publisher.on)) throw new TypeError('weighted-approval workflow must define events')
     if (!isRecord(reviewEvent.on)) throw new TypeError('weighted-approval review event workflow must define events')
@@ -1485,6 +1485,7 @@ describe('Weighted approval workflow', () => {
     if (!Array.isArray(recordJob.steps)) throw new TypeError('weighted-approval review event job must define steps')
     const steps = job.steps.filter(isRecord)
     const checkout = steps.find(step => step.name === 'Check out trusted approval policy')
+    const publish = steps.find(step => step.name === 'Publish weighted approval status')
     const recordSteps = recordJob.steps.filter(isRecord)
     const record = recordSteps.find(step => step.name === 'Record review event')
 
@@ -1498,13 +1499,127 @@ describe('Weighted approval workflow', () => {
     expect(Object.keys(reviewEvent.on)).toEqual(['pull_request_review'])
     expect(review.types).toEqual(['submitted', 'edited', 'dismissed'])
     expect(reviewEvent.permissions).toEqual({})
-    expect(publisher.permissions).toEqual({ contents: 'read' })
+    expect(publisher.permissions).toEqual({
+      checks: 'write',
+      contents: 'read',
+      'pull-requests': 'write',
+      statuses: 'write',
+    })
     expect(publisher.concurrency).toEqual({
       group: "weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
       'cancel-in-progress': false,
     })
     expect(job).toMatchObject({
       if: "(github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') && "
+        + "(github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && "
+        + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
+        + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
+      name: 'weighted approval publisher',
+      'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 5,
+    })
+    expect(checkout).toMatchObject({
+      uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+      with: {
+        ref: '${{ github.event.repository.default_branch }}',
+        'persist-credentials': false,
+      },
+    })
+    const token = steps.find(step => step.id === 'decision-token')
+    expect(token).toMatchObject({
+      'continue-on-error': true,
+      uses: 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
+      with: {
+        'client-id': '${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}',
+        'private-key': '${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}',
+        owner: 'deepseek-harness',
+        repositories: 'deepseek-harness',
+        'permission-checks': 'write',
+      },
+    })
+    const tokenIndex = steps.indexOf(token!)
+    expect(tokenIndex).toBeGreaterThan(steps.indexOf(checkout!))
+    expect(tokenIndex).toBeLessThan(steps.findIndex(step => step.id === 'revoke'))
+    for (const step of steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/check-approval.mjs'))) {
+      expect(step.env).toMatchObject({
+        DECISION_TOKEN: '${{ steps.decision-token.outputs.token }}',
+        DECISION_APP_SLUG: '${{ vars.DSH_APPROVAL_APP_SLUG }}',
+      })
+    }
+    const setupIndex = steps.findIndex(step => typeof step.uses === 'string' && step.uses.startsWith('actions/setup-python@'))
+    expect(steps[setupIndex]?.if).toBe("steps.revoke.outputs.active == 'true'")
+    expect(steps[setupIndex]?.uses).toBe('actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
+    const revokeIndex = steps.findIndex(step => step.id === 'revoke')
+    expect(revokeIndex).toBeGreaterThan(steps.indexOf(checkout!))
+    expect(revokeIndex).toBeLessThan(setupIndex)
+    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs pending')
+    expect(steps.at(-1)).toMatchObject({
+      if: "failure() && steps.revoke.outputs.active == 'true'",
+      run: 'node .github/review-ownership/check-approval.mjs error',
+    })
+    const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci-python.yml'), 'python-sdk')
+    expect(pythonJob.steps).toContainEqual({
+      name: 'Test production blame scoring',
+      run: "uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'",
+    })
+    expect(steps.find(step => step.name === 'Install production lexer')).toMatchObject({
+      if: "steps.revoke.outputs.active == 'true'",
+      run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
+    })
+    expect(publish).toMatchObject({
+      if: "steps.revoke.outputs.active == 'true'",
+      env: {
+        GITHUB_TOKEN: '${{ github.token }}',
+        GITHUB_RUN_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+      },
+      run: 'node .github/review-ownership/check-approval.mjs',
+    })
+    expect(recordJob).toMatchObject({
+      if: "github.event.pull_request.state == 'open'",
+      name: 'record weighted approval review event',
+      'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 2,
+    })
+    expect(record).toBeDefined()
+    expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
+    expect(recordSteps).toHaveLength(1)
+    expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
+    expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
+    expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
+  })
+})
+
+describe('Weighted approval machine workflow', () => {
+  it('comments and approves from the trusted default branch after pull request and review updates', () => {
+    const publisher = loadWorkflow('.github/workflows/weighted-approval-machine.yml')
+    const pullRequest = workflowEvent(publisher, 'pull_request_target')
+    const workflowRun = workflowEvent(publisher, 'workflow_run')
+    const job = workflowJob(publisher, 'evaluate')
+    if (!isRecord(publisher.on)) throw new TypeError('weighted-approval workflow must define events')
+    if (!Array.isArray(job.steps)) throw new TypeError('weighted-approval job must define steps')
+    const steps = job.steps.filter(isRecord)
+    const checkout = steps.find(step => step.name === 'Check out trusted approval policy')
+
+    expect(publisher.name).toBe('weighted-approval-machine')
+    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'issue_comment', 'workflow_run', 'workflow_dispatch'])
+    expect(workflowEvent(publisher, 'workflow_dispatch').inputs).toEqual({
+      pull_number: { description: 'Open pull request to re-evaluate', type: 'string', required: true },
+    })
+    expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
+    expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
+    expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })
+    expect(publisher.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' })
+    expect(publisher.concurrency).toEqual({
+      group: "weighted-approval-machine-${{ (inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
+      'cancel-in-progress': false,
+    })
+    expect(job).toMatchObject({
+      if: "(vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&\n"
+        + "  (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||\n"
+        + "  vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number)))) &&\n"
+        + "(github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && "
+        + "(github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') && "
         + "(github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && "
         + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
         + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
@@ -1519,23 +1634,9 @@ describe('Weighted approval workflow', () => {
         'persist-credentials': false,
       },
     })
-    const token = steps.find(step => step.id === 'approval-token')
-    expect(token).toMatchObject({
-      uses: 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
-      with: {
-        'client-id': '${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}',
-        'private-key': '${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}',
-        owner: 'deepseek-harness',
-        repositories: 'deepseek-harness',
-        'permission-contents': 'write',
-        'permission-issues': 'write',
-        'permission-pull-requests': 'write',
-      },
-    })
-    const tokenIndex = steps.indexOf(token!)
-    expect(tokenIndex).toBeGreaterThan(steps.indexOf(checkout!))
+    expect(JSON.stringify(steps)).not.toContain('create-github-app-token')
     const setupIndex = steps.findIndex(step => typeof step.uses === 'string' && step.uses.startsWith('actions/setup-python@'))
-    expect(setupIndex).toBeGreaterThan(tokenIndex)
+    expect(setupIndex).toBeGreaterThan(steps.indexOf(checkout!))
     expect(steps[setupIndex]?.if).toBeUndefined()
     expect(steps[setupIndex]?.uses).toBe('actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
     expect(steps.find(step => step.name === 'Install production lexer')).toMatchObject({
@@ -1543,32 +1644,16 @@ describe('Weighted approval workflow', () => {
     })
     expect(steps.at(-1)).toMatchObject({
       name: 'Evaluate weighted approval',
-      env: { APPROVAL_TOKEN: '${{ steps.approval-token.outputs.token }}' },
-      run: 'node .github/review-ownership/check-approval.mjs',
+      env: { APPROVAL_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}', GITHUB_TOKEN: '${{ github.token }}' },
+      run: 'node .github/review-ownership/publish-approval.mjs',
     })
-    expect(steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/check-approval.mjs'))).toHaveLength(1)
+    expect(steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/publish-approval.mjs'))).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('GITHUB_RUN_URL')
-    expect(JSON.stringify(publisher)).not.toContain('GITHUB_TOKEN')
+    expect(JSON.stringify(steps.slice(0, -1))).not.toContain('DSH_APPROVAL_BOT_TOKEN')
     expect(JSON.stringify(publisher)).not.toContain('statuses')
     expect(JSON.stringify(publisher)).not.toContain('checks')
     expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
-    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
-    const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci-python.yml'), 'python-sdk')
-    expect(pythonJob.steps).toContainEqual({
-      name: 'Test production blame scoring',
-      run: "uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'",
-    })
-    expect(recordJob).toMatchObject({
-      if: "github.event.pull_request.state == 'open'",
-      name: 'record weighted approval review event',
-      'runs-on': 'ubuntu-latest',
-      'timeout-minutes': 2,
-    })
-    expect(record).toBeDefined()
-    expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
-    expect(recordSteps).toHaveLength(1)
-    expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
-    expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_BOT_TOKEN'])
   })
 })
 
