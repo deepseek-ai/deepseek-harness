@@ -14,6 +14,8 @@ const FIXED_COLUMN_PX = 720
 const FIXED_PANEL_START_PX = 1152
 const FIXED_STEP_PX = 2
 const FIXED_RESTYLE_BUDGET = 0.1
+/** One fixed-column style pass, independent of the cumulative page-ratio budget. */
+const FIXED_PEAK_ELEMENT_BUDGET = 512
 const STEPS = 40
 const STEP_PX = 8
 const STEP_GAP_MS = 8
@@ -40,6 +42,11 @@ interface TraceEvent {
 
 interface TraceSummary {
   styledElements: number
+  /** Element count → number of completed UpdateLayoutTree events reporting that count. */
+  restylePassesByElementCount: Record<number, number>
+  peakStyledElements: number
+  /** Duration of the pass with the highest element count; the longer pass wins ties. */
+  peakCountPassMs: number
   styleMs: number
   layoutMs: number
   layoutCount: number
@@ -49,12 +56,17 @@ interface TraceSummary {
 interface DragSample extends TraceSummary {
   restyleRatio: number
   frameP95Ms: number
+  maxFrameGapMs: number
   columnWidthBefore: number
   columnWidth: number
 }
 
 function expectRestylesWithinBudget(ratio: number, budget = RESTYLE_BUDGET): void {
   expect(ratio).toBeLessThanOrEqual(budget)
+}
+
+function expectFixedPeakWithinBudget(count: number): void {
+  expect(count, 'most elements restyled in one fixed-column UpdateLayoutTree event').toBeLessThanOrEqual(FIXED_PEAK_ELEMENT_BUDGET)
 }
 
 function median(values: number[]): number {
@@ -71,8 +83,25 @@ function summarizeTrace(buffer: Buffer): TraceSummary {
   expect(scripts.length, 'drag trace must contain script events').toBeGreaterThan(0)
   const end = (event: TraceEvent): number => event.ts + (event.dur ?? 0)
   const ms = (list: TraceEvent[]): number => list.reduce((total, event) => total + (event.dur ?? 0), 0) / 1000
+  const restylePassesByElementCount: Record<number, number> = {}
+  let styledElements = 0
+  let peakStyledElements = 0
+  let peakCountPassMs = 0
+  for (const event of styles) {
+    const count = event.args?.elementCount
+    if (count === undefined || !Number.isSafeInteger(count) || count < 0) {
+      throw new Error('Chromium UpdateLayoutTree is missing a valid elementCount')
+    }
+    const passMs = (event.dur ?? 0) / 1000
+    restylePassesByElementCount[count] = (restylePassesByElementCount[count] ?? 0) + 1
+    styledElements += count
+    if (count > peakStyledElements || (count === peakStyledElements && passMs > peakCountPassMs)) {
+      peakStyledElements = count
+      peakCountPassMs = passMs
+    }
+  }
   return {
-    styledElements: styles.reduce((total, event) => total + (event.args?.elementCount ?? 0), 0),
+    styledElements, restylePassesByElementCount, peakStyledElements, peakCountPassMs,
     styleMs: ms(styles),
     layoutMs: ms(layouts),
     layoutCount: layouts.length,
@@ -120,7 +149,8 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
   const y = box.y + box.height / 2
   const readColumnWidth = (): Promise<number> => page.locator('[data-chat-flow]').first().evaluate(element => element.getBoundingClientRect().width)
   const columnWidthBefore = await readColumnWidth()
-  await page.evaluate(() => {
+  await browser.startTracing(page, { categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline'] })
+  await page.evaluate(() => new Promise<void>((resolve) => {
     const probe = { frames: [] as number[], running: true }
     ;(window as FrameProbe).benchmarkFrames = probe
     const tick = (time: number): void => {
@@ -128,9 +158,8 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
       probe.frames.push(time)
       requestAnimationFrame(tick)
     }
-    requestAnimationFrame(tick)
-  })
-  await browser.startTracing(page, { categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline'] })
+    requestAnimationFrame((time) => { tick(time); resolve() })
+  }))
   await page.mouse.move(x, y)
   await page.mouse.down()
   for (let step = 1; step <= STEPS; step++) {
@@ -144,18 +173,20 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
   }
   await page.mouse.up()
   // Two animation frames let the release reach style and layout before the trace closes.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  const frames = await page.evaluate(() => new Promise<number[]>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const probe = (window as FrameProbe).benchmarkFrames!
+      probe.running = false
+      resolve(probe.frames)
+    }))
+  }))
   const trace = summarizeTrace(await browser.stopTracing())
-  const frames = await page.evaluate(() => {
-    const probe = (window as FrameProbe).benchmarkFrames!
-    probe.running = false
-    return probe.frames
-  })
   const gaps = frames.slice(1).map((time, index) => time - frames[index]!).sort((a, b) => a - b)
   return {
     ...trace,
     restyleRatio: trace.styledElements / elements,
     frameP95Ms: gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.95))] ?? 0,
+    maxFrameGapMs: gaps.at(-1) ?? 0,
     columnWidthBefore,
     columnWidth: await readColumnWidth(),
   }
@@ -203,13 +234,18 @@ async function measureFixedColumn(browser: Browser, url: string): Promise<void> 
         const { panel, column } = (window as FixedWidthProbe).benchmarkWidths
         return { panelWidth: panel, columnWidths: [...column] }
       })
-      console.log(JSON.stringify({ benchmark: 'rightbar-drag-browser/fixed-column', direction, elements, budget: FIXED_RESTYLE_BUDGET, panelStart, ...geometry, reserveBefore, reserveAfter, ...result }))
+      console.log(JSON.stringify({
+        benchmark: 'rightbar-drag-browser/fixed-column', direction, elements,
+        budget: FIXED_RESTYLE_BUDGET, peakElementBudget: FIXED_PEAK_ELEMENT_BUDGET,
+        panelStart, ...geometry, reserveBefore, reserveAfter, ...result,
+      }))
       panelStart += direction * STEPS * FIXED_STEP_PX
       expect(geometry.panelWidth).toBe(panelStart)
       expect(geometry.columnWidths).toEqual([FIXED_COLUMN_PX])
       expect([result.columnWidthBefore, result.columnWidth]).toEqual([FIXED_COLUMN_PX, FIXED_COLUMN_PX])
       expect([reserveBefore, reserveAfter]).toEqual(direction === 1 ? ['1px', '0px'] : ['0px', '1px'])
       expect(result.styledElements).toBeGreaterThan(0)
+      expectFixedPeakWithinBudget(result.peakStyledElements)
       expectRestylesWithinBudget(result.restyleRatio, FIXED_RESTYLE_BUDGET)
     }
     expect(consoleWatch.pageErrors).toEqual([])
@@ -231,6 +267,41 @@ it('rejects the fixed-column drag that restyled the transcript when reserve room
   const elements = 18_428
   expect(() => expectRestylesWithinBudget(18_239 / elements, FIXED_RESTYLE_BUDGET)).toThrow()
   for (const restyled of [380, 379]) expectRestylesWithinBudget(restyled / elements, FIXED_RESTYLE_BUDGET)
+})
+
+/** A Chromium trace fragment with completed style passes and a separate invalidation notification. */
+function restyleTrace(passes: readonly (readonly [number | undefined, number])[]): TraceSummary {
+  const span = { pid: 1, tid: 1, ph: 'X' }
+  const events = [
+    { ...span, ts: 0, name: 'FunctionCall', dur: 1 },
+    { ...span, ts: 0, ph: 'I', name: 'ScheduleStyleInvalidationTracking', args: { elementCount: 99_999 } },
+    ...passes.map(([elementCount, dur], index) => ({
+      ...span, ts: (index + 1) * 10_000, name: 'UpdateLayoutTree', dur, args: { elementCount },
+    })),
+  ]
+  return summarizeTrace(Buffer.from(JSON.stringify({ traceEvents: events })))
+}
+
+it('reports the breadth of each style pass and the duration of the broadest pass, not the slowest pass', () => {
+  expect(restyleTrace([[3, 9_000], [14_911, 1_200], [3, 500], [14_911, 2_300], [0, 100]])).toMatchObject({
+    styledElements: 29_828,
+    restylePassesByElementCount: { 0: 1, 3: 2, 14911: 2 },
+    peakStyledElements: 14_911,
+    peakCountPassMs: 2.3,
+  })
+  expect(() => restyleTrace([[undefined, 100]])).toThrow('elementCount')
+})
+
+it('distinguishes one oversized style pass from the same total work spread over small passes', () => {
+  const elements = 18_428
+  const distributed = restyleTrace(Array.from({ length: 200 }, () => [3, 100] as const))
+  const spike = restyleTrace([[600, 100]])
+  for (const result of [distributed, spike]) {
+    expect(result.styledElements).toBe(600)
+    expectRestylesWithinBudget(result.styledElements / elements, FIXED_RESTYLE_BUDGET)
+  }
+  expectFixedPeakWithinBudget(distributed.peakStyledElements)
+  expect(() => expectFixedPeakWithinBudget(spike.peakStyledElements)).toThrow()
 })
 
 it('counts each layout enclosed by script on the same thread once, including frame callbacks', () => {
@@ -267,6 +338,7 @@ it(`bounds restyles and script-nested layouts while the right Sidebar is dragged
           expect(Math.max(result.columnWidthBefore, result.columnWidth)).toBeLessThan(CONTENT_WIDTH_FLOOR_PX)
           if (key === 'widen') expect(result.columnWidth).toBeLessThan(result.columnWidthBefore)
           else expect(result.columnWidth).toBeGreaterThan(result.columnWidthBefore)
+          expect(result.styledElements).toBeGreaterThan(0)
           expect(result.layoutCount).toBeGreaterThan(0)
           expect(result.scriptNestedLayoutCount).toBeLessThanOrEqual(SCRIPT_NESTED_LAYOUT_BUDGET)
           samples[key].push(result)
