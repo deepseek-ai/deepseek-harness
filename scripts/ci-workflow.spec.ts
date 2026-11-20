@@ -1644,8 +1644,13 @@ describe('Weighted approval machine workflow', () => {
     })
     expect(steps.at(-1)).toMatchObject({
       name: 'Evaluate weighted approval',
-      env: { APPROVAL_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}', GITHUB_TOKEN: '${{ github.token }}' },
       run: 'node .github/review-ownership/publish-approval.mjs',
+    })
+    // The final step receives the configured scope verbatim; an unset variable stays unset.
+    expect(steps.at(-1)?.env).toEqual({
+      APPROVAL_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}',
+      GITHUB_TOKEN: '${{ github.token }}',
+      DSH_APPROVAL_REVIEW_SCOPE: '${{ vars.DSH_APPROVAL_REVIEW_SCOPE }}',
     })
     expect(steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/publish-approval.mjs'))).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('GITHUB_RUN_URL')

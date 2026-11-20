@@ -58,7 +58,7 @@ test('manual refresh verifies the token and reconciles a complete review lifecyc
   t.after(() => new Promise(resolve => server.close(resolve)))
   const run = () => exec(process.execPath, [cli], { env: {
     GITHUB_API_URL: `http://127.0.0.1:${server.address().port}`, GITHUB_EVENT_PATH: eventPath,
-    GITHUB_TOKEN: reader, APPROVAL_TOKEN: pat,
+    GITHUB_TOKEN: reader, APPROVAL_TOKEN: pat, DSH_APPROVAL_REVIEW_SCOPE: '7',
   } })
   await assert.rejects(run(), /not the @deepseek-ai-harness machine user/u)
   assert.deepEqual(mutations, [])
@@ -81,4 +81,76 @@ test('manual refresh verifies the token and reconciles a complete review lifecyc
     'POST /issues/7/comments', 'POST /pulls/7/reviews', 'DELETE /issues/comments/12',
     'PUT /pulls/7/reviews/13/dismissals', 'POST /issues/7/comments',
   ])
+})
+
+test('rejects a review scope that is unset, another pull request, or malformed before any write', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-approval-scope-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const eventPath = join(dir, 'event.json')
+  const repo = 'example/test'
+  await writeFile(eventPath, JSON.stringify({ repository: { full_name: repo }, inputs: { pull_number: '7' } }))
+  const pat = 'machine-test-token'
+  const reader = 'reader-test-token'
+  const machine = { id: 359032549, login: 'deepseek-ai-harness' }
+  const sha = '1'.repeat(40)
+  const pull = { number: 7, state: 'open', draft: false, head: { sha }, user: { login: 'turtle2099', node_id: 'author-node' } }
+
+  const startFixture = async () => {
+    let comment = null
+    const mutations = []
+    const server = createServer(async (req, res) => {
+      const path = req.url.split('?')[0].replace(`/repos/${repo}`, '')
+      const method = req.method
+      let result
+      if (method === 'GET') {
+        if (path === '/user' && req.headers.authorization === `Bearer ${pat}`) result = machine
+        if (path === '/pulls/7') result = pull
+        if (path === '/pulls/7/reviews') result = []
+        if (path === '/issues/7/comments') result = comment ? [comment] : []
+      } else if (req.headers.authorization === `Bearer ${pat}`) {
+        let raw = ''
+        for await (const chunk of req) raw += chunk
+        const data = raw ? JSON.parse(raw) : {}
+        mutations.push(`${method} ${path}`)
+        if (method === 'POST' && path === '/issues/7/comments') result = comment = { ...data, user: machine, id: 12 }
+      }
+      res.writeHead(result === undefined ? 400 : 200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(result ?? { message: `unexpected ${method} ${path}` }))
+    })
+    server.listen(0, '127.0.0.1')
+    await new Promise((resolve, reject) => server.once('listening', resolve).once('error', reject))
+    t.after(() => new Promise(resolve => server.close(resolve)))
+    const run = (scope) => {
+      const env = {
+        GITHUB_API_URL: `http://127.0.0.1:${server.address().port}`,
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_TOKEN: reader,
+        APPROVAL_TOKEN: pat,
+      }
+      if (scope !== undefined) env.DSH_APPROVAL_REVIEW_SCOPE = scope
+      return exec(process.execPath, [cli], { env })
+    }
+    return { mutations, run }
+  }
+
+  for (const [label, scope, message] of [
+    ['unset', undefined, /DSH_APPROVAL_REVIEW_SCOPE is not set/u],
+    ['empty', '', /DSH_APPROVAL_REVIEW_SCOPE is not set/u],
+    ['another pull request', '8', /selects pull request #8, not #7/u],
+    ['leading zero', '07', /must be 'all' or a canonical pull-request number/u],
+    ['suffix', '7x', /must be 'all' or a canonical pull-request number/u],
+    ['surrounding whitespace', ' 7', /must be 'all' or a canonical pull-request number/u],
+    ['uppercase all', 'ALL', /must be 'all' or a canonical pull-request number/u],
+    ['unsafe integer', '99999999999999999999', /must be 'all' or a canonical pull-request number/u],
+  ]) {
+    const { mutations, run } = await startFixture()
+    await assert.rejects(run(scope), message, label)
+    assert.deepEqual(mutations, [], label)
+  }
+
+  for (const scope of ['all', '7']) {
+    const { mutations, run } = await startFixture()
+    await run(scope)
+    assert.deepEqual(mutations, ['POST /issues/7/comments'], scope)
+  }
 })

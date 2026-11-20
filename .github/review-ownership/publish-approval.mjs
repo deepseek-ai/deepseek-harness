@@ -13,6 +13,7 @@ import {
 } from './check-approval.mjs'
 
 const STATUS_MARKER = '<!-- weighted-approval -->'
+const CANONICAL_PULL_NUMBER = /^[1-9][0-9]*$/u
 
 /**
  * Prove that the write token belongs to the expected machine user before any mutation.
@@ -240,6 +241,22 @@ function remainingPoints(points, required) {
   return Number((Math.ceil((required - points) * 1000) / 1000).toFixed(3))
 }
 
+// The workflow job filter is a separate layer; the entrypoint refuses to publish for any pull
+// request the configured scope does not select even if that filter stops applying.
+function requireReviewScope(scope, pullNumber) {
+  if (scope === undefined || scope === '') {
+    throw new Error('DSH_APPROVAL_REVIEW_SCOPE is not set; refusing to publish a machine review')
+  }
+  if (scope === 'all') return
+  const number = Number(scope)
+  if (!CANONICAL_PULL_NUMBER.test(scope) || !Number.isSafeInteger(number)) {
+    throw new Error(`DSH_APPROVAL_REVIEW_SCOPE must be 'all' or a canonical pull-request number, not ${JSON.stringify(scope)}`)
+  }
+  if (number !== pullNumber) {
+    throw new Error(`DSH_APPROVAL_REVIEW_SCOPE selects pull request #${number}, not #${pullNumber}`)
+  }
+}
+
 async function main() {
   const eventPath = process.env.GITHUB_EVENT_PATH
   if (!eventPath) throw new Error('GITHUB_EVENT_PATH is not set')
@@ -269,6 +286,7 @@ async function main() {
     process.stdout.write('Skipped an issue, closed pull request, or superseded pull-request head.\n')
     return
   }
+  requireReviewScope(process.env.DSH_APPROVAL_REVIEW_SCOPE, pullRequestFromEvent(event).number)
   await runApprovalCheck({
     event,
     policySource,
