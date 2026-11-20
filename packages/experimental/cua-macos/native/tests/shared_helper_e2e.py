@@ -224,8 +224,8 @@ def main():
                 while json.loads(state.read_text())["count"] != before + 1:
                     assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"
                     time.sleep(0.025)
-                def take(client, handle):
-                    return client.call("takeWindowActivity", {"appHandle": handle, "windowIds": [window]})
+                def take(client, handle, receipt=None):
+                    return client.call("takeWindowActivity", {"appHandle": handle, "observations": {window: (receipt or observed)["activityObservedAt"]}})
 
                 events = take(a, app_a)
                 assert len(events) == 1 and events[0]["source"] == "agent" and events[0]["windowId"] == window, events

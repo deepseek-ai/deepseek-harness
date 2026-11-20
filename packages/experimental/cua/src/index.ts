@@ -172,8 +172,8 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
-/** Successfully decoded window read on a session's authorized native connection. */
-export interface CuaWindowObservation {
+/** Window read on a session's authorized native connection. */
+export interface CuaWindowRead {
   agent: Agent
   client: NativeClient
   access: Pick<ReturnType<typeof installCuaAccess>, 'run'>
@@ -194,8 +194,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Receives each completed window observation while application access is valid. */
-  windowObserved?: (observation: CuaWindowObservation) => void
+  /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
+  windowRead?: (read: CuaWindowRead) => (reply: JsonValue) => void
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -306,9 +306,14 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
+      const confirmRead = (request.method === 'getState' || request.method === 'screenshot') && request.params.windowId
+        ? backend.windowRead?.({ agent, client, access, appHandle: request.params.appHandle as CuaAppHandle,
+          windowId: request.params.windowId })
+        : undefined
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
-        const screenshot = NativeScreenshotResult.parse(await requestNative())
+        const reply = await requestNative()
+        const screenshot = NativeScreenshotResult.parse(reply)
         if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
         const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
@@ -336,6 +341,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           signal.throwIfAborted()
         }
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
+        confirmRead?.(reply)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
           pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }
       }
@@ -374,7 +380,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       }
       if (request.method === 'getState' || request.method === 'listWindows') {
-        return observeNativeWindows(request, result, execution.coordinates)
+        const observation = observeNativeWindows(request, result, execution.coordinates)
+        confirmRead?.(result)
+        return observation
       }
       return result
     }
@@ -421,13 +429,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           if (route?.prepare) owner.coordinates.parameters(request)
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(request, scoped, route?.useSystemInput)
-            signal.throwIfAborted()
-            if ((request.method === 'getState' || request.method === 'screenshot') && request.params.windowId) {
-              backend.windowObserved?.({ agent, client: nativeClient, access, appHandle: request.params.appHandle as CuaAppHandle,
-                windowId: request.params.windowId })
-            }
-            return result
+            return callNative(request, scoped, route?.useSystemInput)
           }
           return 'appHandle' in request.params
             ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch, route?.prepare)

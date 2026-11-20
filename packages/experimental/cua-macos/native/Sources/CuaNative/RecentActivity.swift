@@ -10,7 +10,9 @@ struct ActivityTarget: Hashable, Sendable {
 @MainActor final class RecentActivity {
     private struct Observation {
         let handle: String
-        let since: UInt64
+        var since: UInt64
+        var lastReport: UInt64?
+        var lastOwnUse: UInt64?
         var armed = true
         var events: [String: UInt64] = [:]
     }
@@ -26,8 +28,16 @@ struct ActivityTarget: Hashable, Sendable {
     var hasInterests: Bool { clients.values.contains { $0.windows.values.contains(where: \.armed) } }
     func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner) }
     func clear(_ owner: UUID) { clients[owner]?.windows.removeAll() }
-    func observe(_ target: ActivityTarget, handle: String, owner: UUID) {
-        clients[owner]?.windows[target] = Observation(handle: handle, since: now())
+    /// Return the capture time. The Host sends it back only for an observation it delivered successfully.
+    @discardableResult func observe(_ target: ActivityTarget, handle: String, owner: UUID) -> UInt64 {
+        let time = now()
+        if var window = clients[owner]?.windows[target] {
+            if !window.armed { window.since = time; window.armed = true }
+            clients[owner]?.windows[target] = window
+        } else {
+            clients[owner]?.windows[target] = Observation(handle: handle, since: time)
+        }
+        return time
     }
     func isTracked(_ process: ProcessIdentity) -> Bool {
         clients.values.contains { $0.windows.contains { $0.key.process == process && $0.value.armed } }
@@ -38,24 +48,33 @@ struct ActivityTarget: Hashable, Sendable {
         for id in clients.keys {
             guard let window = clients[id]?.windows[target] else { continue }
             if id == owner {
-                if !window.armed { clients[id]?.windows[target] = Observation(handle: window.handle, since: time) }
+                clients[id]?.windows[target]?.lastOwnUse = time
+                if !window.armed {
+                    clients[id]?.windows[target]?.since = time
+                    clients[id]?.windows[target]?.armed = true
+                }
             } else if window.armed && time > window.since && time >= (window.events[source] ?? 0) {
                 clients[id]?.windows[target]?.events[source] = time
             }
         }
     }
     /// Poll only windows observed on this connection under the authorized application handle.
-    func take(owner: UUID, handle: String, windowIDs: [String]) -> [JSONValue] {
+    func take(owner: UUID, handle: String, observations: [String: UInt64]) -> [JSONValue] {
         guard let client = clients[owner] else { return [] }
-        let ids = Set(windowIDs)
         let time = now()
         var rows: [JSONValue] = []
         for (target, window) in client.windows.sorted(by: { $0.key.windowID < $1.key.windowID }) {
-            guard window.armed, window.handle == handle, ids.contains(String(target.windowID)) else { continue }
+            guard window.armed, window.handle == handle, let observedAt = observations[String(target.windowID)] else { continue }
+            if let reported = window.lastReport, max(observedAt, window.lastOwnUse ?? 0) <= reported {
+                clients[owner]?.windows[target]?.armed = false
+                clients[owner]?.windows[target]?.events.removeAll()
+                continue
+            }
             for source in ["agent", "external-input"] {
-                guard let input = window.events[source], time >= input, time - input <= client.lookback else { continue }
+                guard let input = window.events[source], input > observedAt, time >= input, time - input <= client.lookback else { continue }
                 rows.append(.object(["windowId": .string(String(target.windowID)), "source": .string(source),
                                      "ageSeconds": .number(Double((time - input) / 1_000_000_000))]))
+                clients[owner]?.windows[target]?.lastReport = time
                 clients[owner]?.windows[target]?.armed = false
             }
             clients[owner]?.windows[target]?.events.removeAll()

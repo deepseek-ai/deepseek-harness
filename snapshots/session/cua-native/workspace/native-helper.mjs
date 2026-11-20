@@ -300,10 +300,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return null
     }
     if (method === 'takeWindowActivity') {
-      const rows = [...pendingActivity].filter(row => observedWindows.has(row.windowId) && params.windowIds.includes(row.windowId))
+      const rows = [...pendingActivity].filter(row => observedWindows.has(row.windowId) && row.windowId in params.observations)
       for (const row of rows) pendingActivity.delete(row)
       return rows
     }
-    return call(requestId, method, params)
+    const result = call(requestId, method, params)
+    return result && params.windowId && (method === 'getState' || method === 'screenshot')
+      ? { ...result, activityObservedAt: '1' } : result
   }
 }

@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { CuaWindowObservation } from '@deepseek-ai/dsh-cua'
+import type { CuaBackend, CuaWindowRead } from '@deepseek-ai/dsh-cua'
 import { NativeError } from '@deepseek-ai/dsh-cua/native-client'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -13,9 +13,9 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 interface Watches {
-  client: CuaWindowObservation['client']
-  access: CuaWindowObservation['access']
-  apps: Map<CuaWindowObservation['appHandle'], Set<string>>
+  client: CuaWindowRead['client']
+  access: CuaWindowRead['access']
+  apps: Map<CuaWindowRead['appHandle'], Map<string, string>>
 }
 
 const Rows = z.array(z.object({
@@ -29,8 +29,8 @@ const Rows = z.array(z.object({
  * @param ctx - macOS provider owning the listeners.
  * @returns Callback for successful window reads on an authorized connection.
  */
-export function watchWindowActivity(ctx: Context): (observation: CuaWindowObservation) => void {
-  const watches = new WeakMap<CuaWindowObservation['agent']['session'], Watches>()
+export function watchWindowActivity(ctx: Context): NonNullable<CuaBackend['windowRead']> {
+  const watches = new WeakMap<CuaWindowRead['agent']['session'], Watches>()
   ctx.on('session/event', (session, event) => {
     if (event.type !== 'turn/end') return
     const watch = watches.get(session)
@@ -47,12 +47,12 @@ export function watchWindowActivity(ctx: Context): (observation: CuaWindowObserv
     if (decision.kind === 'reject' || signal.aborted || !watch || watch.client.disposed) return decision
     const lines: string[] = []
     for (const [handle, windows] of watch.apps) {
-      const windowIds = [...windows]
+      const observations = Object.fromEntries(windows)
       try {
         const result = await watch.access.run(watch.client, handle, signal, authorized =>
-          watch.client.request('takeWindowActivity', { appHandle: handle, windowIds }, authorized))
+          watch.client.request('takeWindowActivity', { appHandle: handle, observations }, authorized))
         const rows = Rows.parse(result)
-        if (rows.some(row => !windowIds.includes(row.windowId))) throw new NativeError('NATIVE_PROTOCOL', 'Unrequested window activity')
+        if (rows.some(row => !windows.has(row.windowId))) throw new NativeError('NATIVE_PROTOCOL', 'Unrequested window activity')
         for (const { windowId, ageSeconds, source } of rows) {
           const actor = source === 'agent' ? 'another agent' : 'a user or an automated program'
           const elapsed = ageSeconds === 0 ? 'less than a second' : `${ageSeconds} ${ageSeconds === 1 ? 'second' : 'seconds'}`
@@ -77,8 +77,15 @@ export function watchWindowActivity(ctx: Context): (observation: CuaWindowObserv
       watch = { client, access, apps: new Map() }
       watches.set(agent.session, watch)
     }
-    const windows = watch.apps.get(appHandle)
-    if (windows) windows.add(windowId)
-    else watch.apps.set(appHandle, new Set([windowId]))
+    return (reply) => {
+      const receipt = z.object({ activityObservedAt: z.string().regex(/^[0-9]{1,20}$/) }).safeParse(reply)
+      if (!receipt.success) return
+      const windows = watch.apps.get(appHandle)
+      const since = receipt.data.activityObservedAt
+      if (windows) {
+        const previous = windows.get(windowId)
+        if (!previous || BigInt(since) > BigInt(previous)) windows.set(windowId, since)
+      } else watch.apps.set(appHandle, new Map([[windowId, since]]))
+    }
   }
 }

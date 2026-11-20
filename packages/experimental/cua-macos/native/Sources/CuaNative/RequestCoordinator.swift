@@ -114,8 +114,12 @@ import Darwin
                     // This query reads in-memory history and must not wait for another client's desktop operation.
                     let params = try RequestParameters(request)
                     if request.method == "takeWindowActivity" {
-                        result = .array(activity.take(owner: connectionID, handle: try params.string("appHandle"),
-                                                      windowIDs: try params.strings("windowIds")))
+                        guard let values = params.values["observations"]?.object else { throw RequestParameters.invalid("Missing window observations") }
+                        let observations = try values.mapValues { value in
+                            guard let time = value.string.flatMap(UInt64.init) else { throw RequestParameters.invalid("Invalid observation time") }
+                            return time
+                        }
+                        result = .array(activity.take(owner: connectionID, handle: try params.string("appHandle"), observations: observations))
                     } else {
                         activity.clear(connectionID)
                         result = .null
@@ -264,8 +268,11 @@ import Darwin
             }
         }
         if let target {
-            if request.method == "getState" || request.method == "screenshot" {
-                activity.observe(target, handle: try params.string("appHandle"), owner: connectionID)
+            if (request.method == "getState" || request.method == "screenshot"), var fields = result.object {
+                let time = activity.observe(target, handle: try params.string("appHandle"), owner: connectionID)
+                fields["activityObservedAt"] = .string(String(time))
+                inputMonitor.start()
+                return .object(fields)
             } else if result["dispatched"] == .bool(true) {
                 activity.record(target, owner: connectionID)
             }

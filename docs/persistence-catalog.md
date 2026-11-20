@@ -6824,7 +6824,7 @@ Sources: [`packages/extensions/cordis-host-runner/src/index.ts:15`](../packages/
 
 SHA-256: `7f7cc4903d822e9a54ff3214cb5d0163b124955ecf677f8937c5585aa55f09c3`
 
-Sources: [`packages/experimental/cua-macos/src/recent-activity.ts:10`](../packages/experimental/cua-macos/src/recent-activity.ts)
+Sources: [`packages/experimental/cua-macos/src/recent-activity.ts:11`](../packages/experimental/cua-macos/src/recent-activity.ts)
 
 | Property | Presence | Type |
 |---|---|---|

@@ -215,18 +215,18 @@ it('delivers window activity at the next accepted step and clears it at turn end
   const f = await setup()
   await selectApplication(f)
   const agent = f.handle.agent
-  const step = () => f.ctx.waterfall('agent/pre-step', {
-    agent, messages: [], turn: 1, step: 2, modelSelection: { provider: 'test', model: 'test' },
-    signal: new AbortController().signal,
+  const step = (signal = new AbortController().signal) => f.ctx.waterfall('agent/pre-step', {
+    agent, messages: [], turn: 1, step: 2, modelSelection: { provider: 'test', model: 'test' }, signal,
   }, async () => ({ kind: 'enter' as const, messages: [] }))
-  const read = async (windowId: string | null) => {
-    native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId, snapshotId: 's', tree: '', windows: [], truncated: false })
+  const read = async (windowId: string | null, receipt = '100') => {
+    native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId, activityObservedAt: receipt, snapshotId: 's', tree: '', windows: [], truncated: false })
     return f.execute('getState', { appHandle: 'app-one', ...windowId && { windowId } })
   }
   await read(null)
   expect(await step()).toMatchObject({ messages: [] })
   await read('7')
-  expect((await read('7')).additionalContexts ?? []).toEqual([])
+  expect((await read('7', '101')).additionalContexts ?? []).toEqual([])
+  await read('7', '99')
   native.request.mockResolvedValueOnce([
     { windowId: '7', source: 'agent', ageSeconds: 1 },
     { windowId: '7', source: 'external-input', ageSeconds: 0 },
@@ -234,10 +234,16 @@ it('delivers window activity at the next accepted step and clears it at turn end
   expect(await step()).toMatchObject({ messages: [{ source: { kind: 'cua-activity' }, content: [{ type: 'text',
     text: '<system-reminder>\nActivity from another agent was last detected on window 7 1 second ago.\nActivity from a user or an automated program was last detected on window 7 less than a second ago.\nYour actions may have been influenced.\n</system-reminder>',
   }] }] })
-  expect(native.request).toHaveBeenLastCalledWith('takeWindowActivity', { appHandle: 'app-one', windowIds: ['7'] }, expect.any(AbortSignal))
+  expect(native.request).toHaveBeenLastCalledWith('takeWindowActivity', { appHandle: 'app-one', observations: { '7': '101' } }, expect.any(AbortSignal))
   expect(await step()).toMatchObject({ messages: [] })
+  native.request.mockResolvedValueOnce([{ windowId: '7', source: 'agent', ageSeconds: 5 }])
+  expect(JSON.stringify(await step())).toContain('5 seconds ago')
+  const controller = new AbortController()
+  native.request.mockImplementationOnce(() => { controller.abort(); return Promise.reject(controller.signal.reason) })
+  expect(await step(controller.signal)).toMatchObject({ messages: [] })
   native.request.mockResolvedValueOnce([{ windowId: '8', source: 'agent', ageSeconds: 5 }])
   expect(await step()).toMatchObject({ messages: [] })
+  native.cleanup.mockRejectedValueOnce(new Error('fixture connection lost'))
   agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   expect(native.cleanup).toHaveBeenCalledWith('clearWindowActivity', {})
   native.request.mockClear()

@@ -5,10 +5,14 @@ import Foundation
 
 @MainActor final class ExternalInputMonitor {
     private let activity: RecentActivity
+    private let ownerOfWindow: (UInt32) -> Int32?
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
 
-    init(activity: RecentActivity) { self.activity = activity }
+    init(activity: RecentActivity, ownerOfWindow: @escaping (UInt32) -> Int32? = ExternalInputMonitor.windowOwner) {
+        self.activity = activity
+        self.ownerOfWindow = ownerOfWindow
+    }
 
     func start() {
         if let tap {
@@ -52,7 +56,7 @@ import Foundation
               activity.isTracked(process) else { return }
         guard [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(type) else { return }
         let rawWindow = event.getIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent)
-        guard let id = UInt32(exactly: rawWindow), id > 0, Self.windowOwner(id) == pid else { return }
+        guard let id = UInt32(exactly: rawWindow), id > 0, ownerOfWindow(id) == pid else { return }
         activity.record(ActivityTarget(process: process, windowID: id), owner: nil, at: event.timestamp)
     }
 

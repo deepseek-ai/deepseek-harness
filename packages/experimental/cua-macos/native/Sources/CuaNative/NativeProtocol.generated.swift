@@ -33,7 +33,7 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "useSystemInput", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
-        "takeWindowActivity": ["appHandle", "windowIds"],
+        "takeWindowActivity": ["appHandle", "observations"],
         "toggleMouse": ["appHandle", "direction", "mouseButton", "useSystemInput", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]

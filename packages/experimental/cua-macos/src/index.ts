@@ -70,7 +70,7 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const createChannel: NativeChannelFactory = (owner, native) => createSharedNativeChannel(owner, native, config.recentActivityWindowMs)
-  const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowObserved: watchWindowActivity(ctx) },
+  const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowRead: watchWindowActivity(ctx) },
     sendKeyEvent: installHeldKeys(ctx),
     getGuidance: (kind: 'raw' | 'standalone') => macosGuidance(kind, config.recentActivityWindowMs !== 'off'), capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }

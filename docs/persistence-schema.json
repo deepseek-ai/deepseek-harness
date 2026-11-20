@@ -384,7 +384,7 @@
     {"digest":"7df62978a2b7de8540e714152297743e0a622209a46a5ac9513fc0fad73ca23b","names":[],"sources":[]},
     {"digest":"7eaef7a763ba5b949b8464bc8add8980a3a5ab566014b69787aeba71e5dfe07b","names":[],"sources":[]},
     {"digest":"7f13860ee89a2d35ce09f958e85a04566cd59cb1de1d73a9619a9b631961dc71","names":[],"sources":[]},
-    {"digest":"7f7cc4903d822e9a54ff3214cb5d0163b124955ecf677f8937c5585aa55f09c3","names":[],"sources":["packages/experimental/cua-macos/src/recent-activity.ts:10"]},
+    {"digest":"7f7cc4903d822e9a54ff3214cb5d0163b124955ecf677f8937c5585aa55f09c3","names":[],"sources":["packages/experimental/cua-macos/src/recent-activity.ts:11"]},
     {"digest":"7f7fd5a6b0064f597534b29ff62ef26e786dffccf5e14f654a7d4fcea2c35f04","names":[],"sources":[]},
     {"digest":"7f9365bae9fcb73e1e34061a1acfe0422c1a5fd351848cace9bebbe806f28462","names":["packages/workflow/tool-workflow/src/types.ts#ToolWorkflowRunEndData"],"sources":["packages/workflow/tool-workflow/src/types.ts:36"]},
     {"digest":"7f959241c24128b4983b559984811861dc59774b85905c8fa57c6cb0148a3dbc","names":["packages/goal/goal/src/domain.ts#GoalMessageSource"],"sources":["packages/goal/goal/src/domain.ts:47"]},

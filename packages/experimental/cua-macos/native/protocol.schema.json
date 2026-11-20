@@ -1597,16 +1597,20 @@
             "appHandle": {
               "type": "string"
             },
-            "windowIds": {
-              "type": "array",
-              "items": {
+            "observations": {
+              "type": "object",
+              "propertyNames": {
                 "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9]{1,20}$"
               }
             }
           },
           "required": [
             "appHandle",
-            "windowIds"
+            "observations"
           ],
           "additionalProperties": false
         }
