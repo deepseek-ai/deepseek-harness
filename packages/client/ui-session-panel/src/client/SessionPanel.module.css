@@ -36,6 +36,12 @@
   );
 }
 
+/* The dock probe lives in the aside, not the message flow. Crossing its
+   threshold must not change the inherited style of every message. */
+:global([data-slot='conversation.chat.flow']) {
+  --dsh-session-panel-reserve-room: initial;
+}
+
 /* While the docking preference is on, the dock probe carries a mark, and
    the panel asks the Conversation body to keep the gutter that docks it:
    the three metrics above, 348px. Where the gutter is narrower, the body

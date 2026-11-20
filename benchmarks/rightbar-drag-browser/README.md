@@ -10,10 +10,13 @@ The required Chromium case in [rightbar-drag.bench.ts](rightbar-drag.bench.ts) d
 
 ## Measurements
 
-Two fresh browser processes and scaffold worlds each widen the Sidebar by 40 trusted mouse steps of 8px and drag it back in a 1680×1000 viewport. A Chromium timeline trace covers each drag through two animation frames after release. Column widths measured before and after the trace must stay below the 680px content-width floor: widening the Sidebar must narrow the transcript column, and narrowing it must widen the column.
+Each Chromium trace spans one trusted drag through two animation frames after release. The benchmark uses two fresh browser processes and scaffold worlds, with the Session panel hidden.
 
-- **Restyles:** Sum the elements reported by each style recalculation and divide by the page's element count. The upper median per direction must not exceed 1 (one page's worth).
-- **Layouts:** Each drag must produce at least one `Layout` event. `layoutCount` includes them all; `scriptNestedLayoutCount` counts each layout fully enclosed by a script event on the same process and thread, including animation frame callbacks. This subset must not exceed 20 per drag (half the mouse steps). Nesting is a proxy for synchronous layout, not evidence that every nested layout is unnecessary; browser reflow outside script does not consume the budget.
+- **Changing column:** Each sample widens the right Sidebar by 40 steps of 8px and drags it back in a 1680×1000 viewport. The rendered transcript column must narrow as the Sidebar widens and widen on return; both endpoints must be below the 680px content-width floor.
+- **Fixed column:** The first sample also opens the same 120 turns in a separate page with fresh storage, a 2560×1000 viewport and a saved 720px content width. After the opening slide settles, the visible Sidebar must reach each of 40 steps of 2px, from 1152px to 1232px and back. Every delivered transcript column width must be 720px. The Session panel's reserve-room value at its dock probe must switch from 1px to 0px and back.
+
+- **Restyles:** Sum the elements reported by each style recalculation and divide by the page's element count. For the changing column, the upper median per direction must not exceed 1 (one page's worth). For the fixed column, each direction must not exceed 0.10.
+- **Layouts:** Each changing-column drag must produce at least one `Layout` event. `layoutCount` includes them all; `scriptNestedLayoutCount` counts each layout fully enclosed by a script event on the same process and thread, including animation frame callbacks. This subset must not exceed 20 per drag (half the mouse steps). Nesting is a proxy for synchronous layout, not evidence that every nested layout is unnecessary; browser reflow outside script does not consume the budget.
 
 Frame gaps and style and layout durations are diagnostics only. Neither budget scales with CPU speed.
 

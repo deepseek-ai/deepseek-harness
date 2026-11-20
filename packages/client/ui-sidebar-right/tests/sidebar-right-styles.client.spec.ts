@@ -8,6 +8,17 @@ const css = readFileSync(fileURLToPath(new URL('../src/client/shell/SidebarRight
 const host = String.raw`:global\(\[data-dockkit-host='dock'\]\)`
 
 describe('SidebarRight.module.css', () => {
+  it('keeps panel width local except for closed docks and items joining an animated opening', () => {
+    const distance = String.raw`--dsh-sidebar-width:\s*var\(--dsh-sidebar-right-panel-width\);`
+    expect(css).toMatch(/@property --dsh-sidebar-right-panel-width\s*\{\s*syntax: '<length>';\s*inherits: false;\s*initial-value: 0px;/)
+    expect(css).toMatch(/\.panel\s*\{[^{}]*\bwidth: var\(--dsh-sidebar-right-panel-width\);/)
+    expect(css).toMatch(new RegExp(String.raw`\.panel:not\(\[data-sidebar-right-open\]\)\s*\{\s*${distance}\s*}`))
+    // Reduced motion need not produce a transitionend to clear the opening marker.
+    expect(css).toMatch(new RegExp(String.raw`@media \(prefers-reduced-motion: no-preference\)\s*\{\s*`
+      + String.raw`\.panel\[data-sidebar-right-opening\]\s*\{\s*${distance}\s*}\s*}`))
+    expect(css.match(/--dsh-sidebar-width:/g)).toHaveLength(2)
+  })
+
   it('starts docked items mounted by an opening at the closed position', () => {
     expect(css).toMatch(new RegExp(String.raw`@starting-style\s*\{\s*\.panel\[data-sidebar-right-opening\] ${host},[^{}]*\{`
       + String.raw`\s*transform: translateX\(var\(--dsh-sidebar-width\)\);\s*}\s*}`))

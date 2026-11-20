@@ -9,6 +9,11 @@ const SAMPLES = 2
 /** Below the content width's 680px floor at this width, so the drag changes the column but not the resolved content width. */
 const VIEWPORT = { width: 1680, height: 1000 }
 const CONTENT_WIDTH_FLOOR_PX = 680
+const FIXED_VIEWPORT = { width: 2560, height: 1000 }
+const FIXED_COLUMN_PX = 720
+const FIXED_PANEL_START_PX = 1152
+const FIXED_STEP_PX = 2
+const FIXED_RESTYLE_BUDGET = 0.1
 const STEPS = 40
 const STEP_PX = 8
 const STEP_GAP_MS = 8
@@ -48,8 +53,8 @@ interface DragSample extends TraceSummary {
   columnWidth: number
 }
 
-function expectRestylesWithinBudget(ratio: number): void {
-  expect(ratio).toBeLessThanOrEqual(RESTYLE_BUDGET)
+function expectRestylesWithinBudget(ratio: number, budget = RESTYLE_BUDGET): void {
+  expect(ratio).toBeLessThanOrEqual(budget)
 }
 
 function median(values: number[]): number {
@@ -90,10 +95,25 @@ async function loadAll(page: Page): Promise<number> {
   return count
 }
 
+async function openLoadedSidebar(page: Page, url: string): Promise<number> {
+  page.setDefaultTimeout(60_000)
+  await page.goto(url, { waitUntil: 'load' })
+  await page.getByRole('treeitem').first().click()
+  await page.getByRole('treeitem').nth(1).click()
+  await page.locator(TAIL).last().waitFor()
+  expect(await loadAll(page)).toBe(HISTORY_TURNS)
+  await page.getByRole('button', { name: 'Open right sidebar' }).first().click()
+  await page.locator('[data-side="rightbar"]').waitFor()
+  // The Sidebar opens with a track transition; the drag starts from its settled width.
+  await page.waitForFunction(() => document.querySelector('[data-rightbar-collapsed], [data-animating]') === null)
+  return page.evaluate(() => document.querySelectorAll('*').length)
+}
+
 /** Frame timestamps the page collects during one drag. */
 type FrameProbe = Window & { benchmarkFrames?: { frames: number[]; running: boolean } }
+type FixedWidthProbe = typeof window & { benchmarkWidths: { column: Set<number>; panel: number } }
 
-async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: number): Promise<DragSample> {
+async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: number, fixedPanelStart?: number): Promise<DragSample> {
   const box = await page.locator('[data-side="rightbar"]').boundingBox()
   if (box === null) throw new Error('right Sidebar resize handle missing')
   const x = box.x + box.width / 2
@@ -114,8 +134,13 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
   await page.mouse.move(x, y)
   await page.mouse.down()
   for (let step = 1; step <= STEPS; step++) {
-    await page.mouse.move(x - direction * step * STEP_PX, y)
-    await page.waitForTimeout(STEP_GAP_MS)
+    const delta = direction * step * (fixedPanelStart === undefined ? STEP_PX : FIXED_STEP_PX)
+    await page.mouse.move(x - delta, y)
+    if (fixedPanelStart === undefined) await page.waitForTimeout(STEP_GAP_MS)
+    else {
+      // Observe the actual panel before sending the next move; a freeze or coalesced drag must not reduce the work count.
+      await page.waitForFunction(width => (window as FixedWidthProbe).benchmarkWidths.panel === width, fixedPanelStart + delta)
+    }
   }
   await page.mouse.up()
   // Two animation frames let the release reach style and layout before the trace closes.
@@ -136,6 +161,63 @@ async function drag(browser: Browser, page: Page, direction: 1 | -1, elements: n
   }
 }
 
+async function measureFixedColumn(browser: Browser, url: string): Promise<void> {
+  const page = await newEnglishPage(browser, FIXED_VIEWPORT.height)
+  try {
+    const consoleWatch = watchConsole(page)
+    await page.setViewportSize(FIXED_VIEWPORT)
+    await page.addInitScript(width => { localStorage.setItem('dsh.conversation.contentWidth', String(width)) }, FIXED_COLUMN_PX)
+    const elements = await openLoadedSidebar(page, url)
+    const panelSelector = '[data-sidebar-right-panel="push"][data-sidebar-right-open]'
+    const panel = page.locator(panelSelector)
+    // The sliding dock items animate inside the panel, independently of its grid track.
+    await panel.evaluate(async node => {
+      await Promise.all(node.getAnimations({ subtree: true }).filter(animation => animation instanceof CSSTransition && animation.transitionProperty === 'transform').map(animation => animation.finished))
+    })
+    await page.evaluate(selector => {
+      const panel = document.querySelector(selector)!
+      const column = document.querySelector('[data-chat-flow]')!
+      const widths = { column: new Set<number>(), panel: 0 }
+      ;(window as FixedWidthProbe).benchmarkWidths = widths
+      // Use delivered border boxes rather than forcing layout from a per-frame geometry read.
+      const observer = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const width = entry.borderBoxSize[0]!.inlineSize
+          if (entry.target === panel) widths.panel = width
+          else widths.column.add(width)
+        }
+      })
+      observer.observe(panel, { box: 'border-box' })
+      observer.observe(column, { box: 'border-box' })
+    }, panelSelector)
+    await page.waitForFunction(() => (window as FixedWidthProbe).benchmarkWidths.column.size > 0)
+    const reserveRoom = (): Promise<string> => page.locator('[data-session-panel-probe]').first().evaluate(node =>
+      getComputedStyle(node).getPropertyValue('--dsh-session-panel-reserve-room').trim())
+    let panelStart = FIXED_PANEL_START_PX
+    for (const direction of [1, -1] as const) {
+      expect(await page.evaluate(() => (window as FixedWidthProbe).benchmarkWidths.panel)).toBe(panelStart)
+      const reserveBefore = await reserveRoom()
+      const result = await drag(browser, page, direction, elements, panelStart)
+      const reserveAfter = await reserveRoom()
+      const geometry = await page.evaluate(() => {
+        const { panel, column } = (window as FixedWidthProbe).benchmarkWidths
+        return { panelWidth: panel, columnWidths: [...column] }
+      })
+      console.log(JSON.stringify({ benchmark: 'rightbar-drag-browser/fixed-column', direction, elements, budget: FIXED_RESTYLE_BUDGET, panelStart, ...geometry, reserveBefore, reserveAfter, ...result }))
+      panelStart += direction * STEPS * FIXED_STEP_PX
+      expect(geometry.panelWidth).toBe(panelStart)
+      expect(geometry.columnWidths).toEqual([FIXED_COLUMN_PX])
+      expect([result.columnWidthBefore, result.columnWidth]).toEqual([FIXED_COLUMN_PX, FIXED_COLUMN_PX])
+      expect([reserveBefore, reserveAfter]).toEqual(direction === 1 ? ['1px', '0px'] : ['0px', '1px'])
+      expect(result.styledElements).toBeGreaterThan(0)
+      expectRestylesWithinBudget(result.restyleRatio, FIXED_RESTYLE_BUDGET)
+    }
+    expect(consoleWatch.pageErrors).toEqual([])
+  } finally {
+    await page.close()
+  }
+}
+
 it('accepts recorded restyle ratios and rejects a drag that restyles the transcript every frame', () => {
   // 200-turn local samples: 1,479,947 and 1,909,568 elements restyled beside 28,895 before the width axis
   // kept resize inputs on the Conversation body; 2,622 and 3,368 after.
@@ -143,6 +225,12 @@ it('accepts recorded restyle ratios and rejects a drag that restyles the transcr
   for (const restyled of [2_622, 3_368]) expectRestylesWithinBudget(restyled / 28_895)
   expectRestylesWithinBudget(RESTYLE_BUDGET)
   expect(() => expectRestylesWithinBudget(RESTYLE_BUDGET + 0.01)).toThrow()
+})
+
+it('rejects the fixed-column drag that restyled the transcript when reserve room flipped', () => {
+  const elements = 18_428
+  expect(() => expectRestylesWithinBudget(18_239 / elements, FIXED_RESTYLE_BUDGET)).toThrow()
+  for (const restyled of [380, 379]) expectRestylesWithinBudget(restyled / elements, FIXED_RESTYLE_BUDGET)
 })
 
 it('counts each layout enclosed by script on the same thread once, including frame callbacks', () => {
@@ -167,20 +255,11 @@ it(`bounds restyles and script-nested layouts while the right Sidebar is dragged
       await seedSession(scaffold, syntheticHistory(), SESSION_ID)
       const browser = await chromium.launch({ headless: true })
       try {
+        if (sample === 0) await measureFixedColumn(browser, scaffold.authenticatedUrl)
         const page = await newEnglishPage(browser, VIEWPORT.height)
         await page.setViewportSize(VIEWPORT)
         const consoleWatch = watchConsole(page)
-        page.setDefaultTimeout(60_000)
-        await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-        await page.getByRole('treeitem').first().click()
-        await page.getByRole('treeitem').nth(1).click()
-        await page.locator(TAIL).last().waitFor()
-        expect(await loadAll(page)).toBe(HISTORY_TURNS)
-        await page.getByRole('button', { name: 'Open right sidebar' }).first().click()
-        await page.locator('[data-side="rightbar"]').waitFor()
-        // The Sidebar opens with a track transition; the drag starts from its settled width.
-        await page.waitForFunction(() => document.querySelector('[data-rightbar-collapsed], [data-animating]') === null)
-        const elements = await page.evaluate(() => document.querySelectorAll('*').length)
+        const elements = await openLoadedSidebar(page, scaffold.authenticatedUrl)
         for (const [direction, key] of [[1, 'widen'], [-1, 'narrow']] as const) {
           const result = await drag(browser, page, direction, elements)
           console.log(JSON.stringify({ benchmark: 'rightbar-drag-browser/sample', sample, direction: key, elements, ...result }))

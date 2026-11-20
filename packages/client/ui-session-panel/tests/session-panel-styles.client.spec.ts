@@ -59,7 +59,8 @@ describe('SessionPanel.module.css docking geometry', () => {
         + ' calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px),'
         + ' 1px)',
     })
-    // Registered as a length, the step computes to 0px or 1px on the body, so descendants see a change only when it flips.
+    expect(declarationsOf(":global([data-slot='conversation.chat.flow'])")['--dsh-session-panel-reserve-room']).toBe('initial')
+    // The aside inherits the computed step when it flips; the message rows keep the initial value.
     expect(css.replace(/\s+/g, ' ')).toContain(
       "@property --dsh-session-panel-reserve-room { syntax: '<length>'; inherits: true; initial-value: 0px; }",
     )
