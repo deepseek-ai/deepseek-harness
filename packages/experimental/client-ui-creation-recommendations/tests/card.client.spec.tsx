@@ -125,8 +125,8 @@ it('disables pending decisions, labels only a pending Create as starting, and su
   expect(screen.getByRole('button', { name: '创建' }).hasAttribute('disabled')).toBe(false)
 })
 
-it.each(['installing', 'dismissed', 'replaced'] as const)('restores %s without repeat actions', (phase) => {
-  render(<PageCardBody {...props(phase === 'replaced' ? { phase } : { phase, data: { slot: 'sidebar-left' } }, false, { slot: 'sidebar-left' })} />)
+it.each(['installing', 'dismissed'] as const)('restores %s without repeat actions', (phase) => {
+  render(<PageCardBody {...props({ phase, data: { slot: 'sidebar-left' } }, false, { slot: 'sidebar-left' })} />)
   expect(screen.getByRole('status').textContent).toBe(en[phase])
   expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: en.creationInfo })])
   expect(screen.getByText('Add to · Global page')).toBeTruthy()

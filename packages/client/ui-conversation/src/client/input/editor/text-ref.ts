@@ -69,6 +69,27 @@ export class TextRefNode extends TextNode {
   }
 }
 
+/** First reference range of a text, or null. */
+type TextRefMatch = (text: string) => { start: number; end: number } | null
+
+/**
+ * Extend a text-ref over the plain text directly after it when both together
+ * match one reference, such as `@src/a` followed by `.ts`. A selection point
+ * in the moved text stays beside the same character.
+ * @param node - plain text node the editor marked dirty.
+ * @param getMatch - the reference matcher.
+ */
+function $growTextRef(node: TextNode, getMatch: TextRefMatch): void {
+  const textRef = node.getPreviousSibling()
+  if (!(textRef instanceof TextRefNode)) return
+  const length = textRef.getTextContentSize()
+  const match = getMatch(textRef.getTextContent() + node.getTextContent())
+  if (match === null || match.end <= length) return
+  if (match.end - length < node.getTextContentSize()) node.splitText(match.end - length)
+  // A split keeps the leading text under this node's key, possibly in a new writable copy.
+  textRef.mergeWithSibling(node.getLatest())
+}
+
 /**
  * Register the plain-text reference entity transform.
  * @param editor - the shell-owned editor.
@@ -79,11 +100,16 @@ export function registerTextRefDecoration(
   editor: LexicalEditor,
   lexiconOf: () => ReadonlyMap<'/' | '@', readonly string[]>,
 ): () => void {
-  const getMatch = (text: string): { start: number; end: number } | null => {
+  const getMatch: TextRefMatch = (text) => {
     const range = scanTextRefs(text, lexiconOf())[0]
     return range === undefined ? null : { start: range.start, end: range.end }
   }
   return mergeRegister(
+    // The entity transforms below also extend a text-ref over following text, but collapse the
+    // selection to the text-ref's previous end first, so the next typed character lands before
+    // the moved text (https://github.com/facebook/lexical/issues/3054). Transforms of one node
+    // type run in registration order; this one leaves them nothing to extend.
+    editor.registerNodeTransform(TextNode, (node) => { $growTextRef(node, getMatch) }),
     ...registerLexicalTextEntity(
       editor,
       getMatch,

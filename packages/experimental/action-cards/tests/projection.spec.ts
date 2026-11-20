@@ -7,6 +7,7 @@ import {
 import type { PluginRecordMap } from '@deepseek-ai/dsh-session/types'
 import { actionCardProjection, type ActionCardState } from '../src/projection.ts'
 import type { ActionCardId } from '../src/types.ts'
+import { ACTION, fixture, proposal } from './fixture.ts'
 
 const projection = actionCardProjection
 const args = { action: 'test_action', title: 'Counter', brief: 'Keep count visible', details: { value: 'a' } }
@@ -50,9 +51,9 @@ const notice = (through: number): SessionEvent<'user/message'> => ({ type: 'user
   data: createUserMessage({ content: [{ type: 'text', text: 'status' }],
     source: { kind: 'action-cards', through: SessionSeq(through), form: 'notice', summary: 'status' } }) })
 
-it('admits the first valid action-card block of an answer as a card named by the answer message id', () => {
+it('admits only the first valid block across the answers of a turn, named by its message id', () => {
   const offered = answer(`Here is an option.\n\n${block()}\n`)
-  expect(fold([turn(1), offered]).view.proposals).toEqual({ [idOf(offered)]: { cardId: idOf(offered), turn: 1, ...args } })
+  expect(fold([offered, answer(block())]).view.proposals).toEqual({ [idOf(offered)]: { cardId: idOf(offered), turn: 1, ...args } })
   const second = answer(`${block('{broken')}\n${block({ ...args, title: ' ' })}\n${block({ ...args, title: '  Second  ' })}\n${block()}`)
   expect(fold([second]).view.proposals[idOf(second)]?.title).toBe('Second')
   const split = answer([{ type: 'text', text: 'No card yet.' }, { type: 'text', text: block({ ...args, title: 'Later block' }) }])
@@ -71,23 +72,35 @@ it('admits the first valid action-card block of an answer as a card named by the
   expect(fold([reasoning]).view.proposals).toEqual({})
 })
 
-it('keeps the first card of a turn across steps, and replaces only unstarted earlier cards', () => {
-  const firstAnswer = answer(block())
-  const first = fold([turn(1), firstAnswer])
-  const a = idOf(firstAnswer)
-  expect(fold([answer(block({ ...args, title: 'Late' }))], first)).toEqual(first)
-  const nextAnswer = answer(block(args), 2)
-  const next = fold([turn(2), nextAnswer], first)
-  expect(Object.keys(next.view.proposals)).toEqual([a, idOf(nextAnswer)])
-  expect(next.view.decisions).toEqual({ [a]: { cardId: a, action: 'test_action', phase: 'replaced' } })
-  const started = fold(records({ cardId: a, action: 'test_action', phase: 'creating' }), first)
-  const laterAnswer = answer(block(args), 2)
-  const afterStart = fold([turn(2), laterAnswer], started)
-  expect(afterStart.view.decisions[a]?.phase).toBe('creating')
-  expect(afterStart.view.decisions[idOf(laterAnswer)]).toBeUndefined()
-  // Replacement crosses kinds: a card of another action replaces the unstarted one too.
-  const otherAnswer = answer(block({ ...args, action: 'other_action' }), 2)
-  expect(fold([turn(2), otherAnswer], first).view.decisions).toEqual({ [a]: { cardId: a, action: 'test_action', phase: 'replaced' } })
+it('replays v3 replacements from the log and restores a current checkpoint with its suffix', async () => {
+  const f = await fixture()
+  const { session } = f.agent
+  const registry = f.ctx.sessionProjections
+  const open = f.offer()
+  const started = f.offer(proposal, f.agent, 2)
+  const creating = { cardId: started, action: ACTION, phase: 'creating' }
+  f.ctx.actionCards.record(f.agent, creating)
+  const dismissed = f.offer(proposal, f.agent, 3)
+  const dismissal = { cardId: dismissed, action: ACTION, phase: 'dismissed' }
+  f.ctx.actionCards.record(f.agent, dismissal)
+  const prefix = registry.checkpoint(session)
+  const row = prefix['actionCards']!
+  const legacy = projection.stateSchema.parse(row.val)
+  legacy.view.decisions[open] = { cardId: open, action: ACTION, phase: 'replaced' }
+  const stale = { ...prefix, actionCards: { ...row, ver: 3, val: legacy } }
+  const example = f.offer({ ...proposal, action: 'my_example' }, f.agent, 4)
+  const events = session.snapshotEvents()
+  const restore = (checkpoint: typeof prefix, offset: number) => registry.restore(
+    checkpoint, events.slice(offset), SessionLogOffset(offset), session.header, session.inheritedEventCount,
+  )
+  const full = restore({}, 0)
+  expect(registry.restoreFloor(stale)).toBe(0)
+  expect(restore(stale, 0)).toEqual(full)
+  expect(restore(prefix, row.seq + 1)).toEqual(full)
+  const recovered = projection.stateSchema.parse(full.checkpoint['actionCards']!.val)
+  expect(Object.keys(recovered.view.proposals)).toEqual([open, started, dismissed, example])
+  expect(recovered.view.decisions).toEqual({ [started]: creating, [dismissed]: dismissal })
+  expect(Object.keys(recovered.pendingStatus)).toEqual([started, dismissed])
 })
 
 it('creates no card from an interrupted answer or in a subagent Session', () => {

@@ -6,13 +6,40 @@
 
 /* The docked panel's inline metrics: 40px clear of the transcript column,
    past its width handle, 8px from the end edge, and at least 300px wide. The
-   panel's width and the dock probe both derive from them, so the gutter that
-   docks the panel is exactly the one that holds its minimum width. */
+   panel's width, the dock probe, and the reserve it asks the Conversation
+   body for all derive from them, so the gutter that docks the panel is
+   exactly the one that holds its minimum width. */
+:global([data-conversation-content]),
 .panel,
 .dockProbe {
   --panel-clear: 40px;
   --panel-edge: 8px;
   --panel-min-width: 300px;
+}
+
+/* Whether the Conversation body's largest end reserve covers the docked
+   panel's gutter: 1px when it does, otherwise 0. The body's maximum is not
+   inherited and changes on every resize, so this step derives on the body
+   itself, and as a registered length it reaches the dock probe only when the
+   decision flips. */
+@property --dsh-session-panel-reserve-room {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+:global([data-conversation-content]) {
+  --dsh-session-panel-reserve-room: clamp(
+    0px,
+    calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px),
+    1px
+  );
+}
+
+/* The dock probe lives in the aside, not the message flow. Crossing its
+   threshold must not change the inherited style of every message. */
+:global([data-slot='conversation.chat.flow']) {
+  --dsh-session-panel-reserve-room: initial;
 }
 
 /* While the docking preference is on, the dock probe carries a mark, and
@@ -22,7 +49,7 @@
    (ui-conversation's end reserve) and makes no room when the start gutter
    cannot give it. */
 :global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve]) {
-  --dsh-chat-end-reserve: calc(40px + 8px + 300px);
+  --dsh-chat-end-reserve: calc(var(--panel-clear) + var(--panel-edge) + var(--panel-min-width));
 }
 
 .panel {
@@ -104,7 +131,7 @@
   right: 0;
   width: max(
     calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),
-    calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px)
+    var(--dsh-session-panel-reserve-room)
   );
   max-width: 1px;
   height: 0;

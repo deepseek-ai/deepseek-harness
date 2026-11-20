@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 注册卡片正文
 
-种类的浏览器插件注入 `actionCards`，并在自己的 `ctx.effect` 中注册正文：`ctx.actionCards.register({ action, locale, Body })` 返回注销函数。框架为该动作的卡片渲染 `Body`，并传入：卡片、已记录或推导出的决定、会话 id、框架渲染的标题与折叠说明 `summary`、只提供“暂不需要”的后备内容 `fallback`、框架的折叠组件 `Folded`、绑定到该卡片的 `act(verb, payload?)`，以及正文自己语言命名空间的翻译函数 `t`。正文把 `summary` 放进自己的布局，卡片的 `details` 未通过自己的校验时改为渲染 `fallback`，并负责自己的标题栏、控件、状态和底部操作。为同一动作注册第二个正文属于注册错误。
+种类的浏览器插件注入 `actionCards`，并在自己的 `ctx.effect` 中注册正文：`ctx.actionCards.register({ action, locale, Body })` 返回注销函数。框架为该动作的卡片渲染 `Body`，并传入：卡片、最新的已记录决定、会话 id、框架渲染的标题与折叠说明 `summary`、只提供“暂不需要”的后备内容 `fallback`、框架的折叠组件 `Folded`、绑定到该卡片的 `act(verb, payload?)`，以及正文自己语言命名空间的翻译函数 `t`。正文把 `summary` 放进自己的布局，卡片的 `details` 未通过自己的校验时改为渲染 `fallback`，并负责自己的标题栏、控件、状态和底部操作。为同一动作注册第二个正文属于注册错误。
 
 -----
 

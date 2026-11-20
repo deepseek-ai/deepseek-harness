@@ -24,7 +24,7 @@ const dataSchema = z.object({
 
 /** Phases with their own status copy. */
 const PHASE_KEYS: readonly RecommendationKey[] = [
-  'dismissed', 'replaced', 'creating', 'installing', 'cancelled', 'installed', 'kept', 'removed', 'failed', 'interrupted', 'unconfirmed',
+  'dismissed', 'creating', 'installing', 'cancelled', 'installed', 'kept', 'removed', 'failed', 'interrupted', 'unconfirmed',
 ]
 /** Refusal reasons with their own copy; any other reason reads as unavailable. */
 const REASON_KEYS: readonly RecommendationKey[] = [

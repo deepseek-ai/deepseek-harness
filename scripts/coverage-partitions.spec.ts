@@ -9,8 +9,13 @@ import {
   COVERAGE_PARTITIONS_ENV,
   COVERAGE_TEST_TIMEOUT_ENV,
   CoveragePartitionCoordinator,
+  COVERAGE_SHARD_DIRECTORY,
   assignWeightedPartitions,
   collectPartitionDurations,
+  FailedTestCollector,
+  mergeCoverageShards,
+  parseCoverageShard,
+  selectCoverageShardFiles,
   coverageTestTimeoutOptions,
   forwardedCoverageArgs,
   parseCoveragePartitionCount,
@@ -773,5 +778,185 @@ describe('coverage partition coordinator', () => {
 
     await expect(coordinator.run()).resolves.toBe(0)
     await expect(access(marker)).resolves.toBeUndefined()
+  })
+})
+
+describe('coverage file shards', () => {
+  // An absolute checkout root on any platform, distinct from every temporary root.
+  const otherCheckout = join(tmpdir(), 'dsh-coverage-other-checkout')
+
+  it.each([
+    [undefined, undefined],
+    ['', undefined],
+    ['1/2', { index: 1, count: 2 }],
+    ['2/2', { index: 2, count: 2 }],
+  ])('parses %j', (raw, expected) => {
+    expect(parseCoverageShard(raw)).toEqual(expected)
+  })
+
+  it.each(['3/2', '0/2', '1/0', 'a/b', '1'])('rejects %j', (raw) => {
+    expect(() => parseCoverageShard(raw)).toThrow(/DSH_COVERAGE_SHARD must be <index>\/<count>/)
+  })
+
+  const sizes = new Map([['a.spec.ts', 90], ['b.spec.ts', 60], ['c.spec.ts', 50], ['d.spec.ts', 30], ['e.spec.ts', 20], ['f.spec.ts', 20]])
+  const sizeOf = (file: string): number => sizes.get(file) ?? 0
+  const inventory = [...sizes.keys()]
+
+  it('deals files largest first to the lighter shard, independent of input order', () => {
+    expect(selectCoverageShardFiles(inventory, { index: 1, count: 2 }, sizeOf)).toEqual(['a.spec.ts', 'd.spec.ts', 'f.spec.ts'])
+    expect(selectCoverageShardFiles(inventory, { index: 2, count: 2 }, sizeOf)).toEqual(['b.spec.ts', 'c.spec.ts', 'e.spec.ts'])
+    expect(selectCoverageShardFiles([...inventory].reverse(), { index: 1, count: 2 }, sizeOf))
+      .toEqual(selectCoverageShardFiles(inventory, { index: 1, count: 2 }, sizeOf))
+  })
+
+  it.each([2, 3])('assigns every file to exactly one of %i shards', (count) => {
+    const shards = Array.from({ length: count }, (_, index) => selectCoverageShardFiles(inventory, { index: index + 1, count }, sizeOf))
+    expect(shards.flat().sort()).toEqual([...inventory].sort())
+  })
+
+  it('collects Vitest failure lines across split chunks and color codes', () => {
+    const collector = new FailedTestCollector()
+    collector.add('stdout', ' ✓ passes\n \u001b[31m×\u001b[39m breaks the con')
+    collector.add('stdout', 'tract 12ms\n')
+    collector.add('stderr', ' FAIL  |thread-safe| a.spec.ts > suite > breaks the contract\nAssertionError: x\n FAIL  b.spec.ts')
+
+    expect(collector.lines()).toEqual([
+      '× breaks the contract 12ms',
+      'FAIL  |thread-safe| a.spec.ts > suite > breaks the contract',
+      'FAIL  b.spec.ts',
+    ])
+  })
+
+  it('writes the shard manifest, blobs, and durations instead of merging', async () => {
+    const root = await temporaryRoot()
+    // Byte sizes 40, 30, 20, 10 deal a and d to shard 1, b and c to shard 2.
+    for (const [file, size] of [['a.spec.ts', 40], ['b.spec.ts', 30], ['c.spec.ts', 20], ['d.spec.ts', 10]] as const) {
+      await writeFile(join(root, file), 'x'.repeat(size))
+    }
+    const commands: CoverageCommand[] = []
+    const coordinator = new CoveragePartitionCoordinator({
+      root,
+      partitions: 2,
+      pnpmEntrypoint: '/pnpm.cjs',
+      files: ['a.spec.ts', 'b.spec.ts', 'c.spec.ts', 'd.spec.ts'],
+      shard: { index: 2, count: 2 },
+      runCommand: successfulCommandRecorder(commands),
+    })
+
+    await expect(coordinator.run()).resolves.toBe(0)
+
+    expect(commands.map(command => command.label)).toEqual(['partition 1/2', 'partition 2/2'])
+    const directory = join(root, COVERAGE_SHARD_DIRECTORY)
+    const manifest = JSON.parse(await readFile(join(directory, 'shard.json'), 'utf8')) as { shard: string; files: string[]; blobs: string[] }
+    expect(manifest).toEqual({
+      shard: '2/2',
+      root,
+      files: ['b.spec.ts', 'c.spec.ts'],
+      blobs: ['shard-2-partition-1.json', 'shard-2-partition-2.json'],
+    })
+    for (const blob of manifest.blobs) await expect(access(join(directory, 'blobs', blob))).resolves.toBeUndefined()
+    const times = JSON.parse(await readFile(join(directory, 'times.json'), 'utf8')) as Array<{ file: string }>
+    expect(times.map(entry => entry.file).sort()).toEqual(['b.spec.ts', 'c.spec.ts'])
+  })
+
+  /** Write one shard output directory as the report job downloads it. */
+  async function writeShardOutput(
+    input: string,
+    index: number,
+    files: readonly string[],
+    root: string,
+    blobs = [`shard-${index}-partition-1.json`],
+  ): Promise<void> {
+    const directory = join(input, `coverage-blobs-${index}`)
+    await mkdir(join(directory, 'blobs'), { recursive: true })
+    for (const blob of blobs) await writeFile(join(directory, 'blobs', blob), JSON.stringify([join(root, 'packages', 'a', 'src', 'index.ts')]))
+    await writeFile(join(directory, 'shard.json'), JSON.stringify({ shard: `${index}/2`, root, files, blobs }))
+    await writeFile(join(directory, 'times.json'), JSON.stringify(files.map(file => ({ file, duration: 7 }))))
+  }
+
+  async function mergeFixture(first: readonly string[], second: readonly string[]) {
+    const root = await temporaryRoot()
+    const input = await temporaryRoot()
+    await writeShardOutput(input, 1, first, root)
+    await writeShardOutput(input, 2, second, otherCheckout)
+    const commands: CoverageCommand[] = []
+    const merge = () => mergeCoverageShards({
+      root,
+      pnpmEntrypoint: '/pnpm.cjs',
+      inputDirectory: input,
+      inventory: ['a.spec.ts', 'b.spec.ts', 'c.spec.ts'],
+      runCommand: vi.fn(async (command: CoverageCommand) => {
+        commands.push(command)
+        return passed
+      }),
+    })
+    return { root, input, commands, merge }
+  }
+
+  it('merges every shard blob once and records the shard durations', async () => {
+    const { root, commands, merge } = await mergeFixture(['a.spec.ts', 'c.spec.ts'], ['b.spec.ts'])
+
+    await expect(merge()).resolves.toBe(0)
+
+    expect(commands).toHaveLength(1)
+    expect(commands[0]!.label).toBe('merged coverage report')
+    expect(commands[0]!.args).toContain('--merge-reports=coverage/.merge/blobs')
+    expect([...readFileDurations(root).keys()].sort()).toEqual(['a.spec.ts', 'b.spec.ts', 'c.spec.ts'])
+  })
+
+  it('rewrites the blob paths of a shard that ran in another checkout to this checkout', async () => {
+    const root = await temporaryRoot()
+    const input = await temporaryRoot()
+    await writeShardOutput(input, 1, ['a.spec.ts', 'c.spec.ts'], root)
+    await writeShardOutput(input, 2, ['b.spec.ts'], otherCheckout)
+    const merged: string[] = []
+    await expect(mergeCoverageShards({
+      root,
+      pnpmEntrypoint: '/pnpm.cjs',
+      inputDirectory: input,
+      inventory: ['a.spec.ts', 'b.spec.ts', 'c.spec.ts'],
+      runCommand: vi.fn(async () => {
+        for (const blob of ['shard-1-partition-1.json', 'shard-2-partition-1.json']) {
+          merged.push(...JSON.parse(await readFile(join(root, 'coverage/.merge/blobs', blob), 'utf8')) as string[])
+        }
+        return passed
+      }),
+    })).resolves.toBe(0)
+
+    expect(merged).toEqual([join(root, 'packages', 'a', 'src', 'index.ts'), join(root, 'packages', 'a', 'src', 'index.ts')])
+  })
+
+  it.each([
+    ['overlapping', ['a.spec.ts', 'b.spec.ts'], ['b.spec.ts', 'c.spec.ts']],
+    ['incomplete', ['a.spec.ts'], ['b.spec.ts']],
+    ['unexpected', ['a.spec.ts', 'c.spec.ts'], ['b.spec.ts', 'z.spec.ts']],
+  ])('refuses %s shard file lists before merging', async (_case, first, second) => {
+    const { commands, merge } = await mergeFixture(first, second)
+
+    await expect(merge()).rejects.toThrow(/must partition the instrumented inventory/)
+    expect(commands).toEqual([])
+  })
+
+  it('refuses a listed blob that the shard did not upload', async () => {
+    const { input, commands, merge } = await mergeFixture(['a.spec.ts', 'c.spec.ts'], ['b.spec.ts'])
+    await rm(join(input, 'coverage-blobs-2', 'blobs', 'shard-2-partition-1.json'))
+
+    await expect(merge()).rejects.toThrow(/blob shard-2-partition-1.json is missing or empty/)
+    expect(commands).toEqual([])
+  })
+
+  it('refuses a missing shard', async () => {
+    const { input, commands, merge } = await mergeFixture(['a.spec.ts', 'c.spec.ts'], ['b.spec.ts'])
+    await rm(join(input, 'coverage-blobs-2'), { recursive: true })
+
+    await expect(merge()).rejects.toThrow(/expected shards 1..n of one count/)
+    expect(commands).toEqual([])
+  })
+
+  it('refuses shard input inside the coverage directory it replaces', async () => {
+    const root = await temporaryRoot()
+    await expect(mergeCoverageShards({
+      root, pnpmEntrypoint: '/pnpm.cjs', inputDirectory: join(root, 'coverage', 'shards'), inventory: [],
+    })).rejects.toThrow(/must lie outside/)
   })
 })

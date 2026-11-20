@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Reasoning levels of hand-declared pi-ai models: echo, level rows, API values, refusals, and placement. */
+/** Reasoning levels of pi-ai models: echo, level rows, API values, refusals, and placement. */
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -325,10 +325,22 @@ describe('reasoning levels in the model list', () => {
     expect(writes.at(-1)).toEqual([{ id: 'b', reasoningEfforts: DEFAULTS }])
   })
 
+  it('edits a catalog route row', () => {
+    const writes: DeepSeekModelDraft[][] = []
+    render(<ModelListEditor
+      models={[{ id: 'gpt-5' }]} onChange={(next) => { writes.push(next) }} catalogProvider="openai" reasoningLevels={LEVELS}
+      probe={{ settingsNs: 'llm-pi-ai', provider: 'openai' }}
+      operations={operations} disabled={false} t={t} onBusyChange={() => {}}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
+    fireEvent.click(toggle())
+    expect(writes.at(-1)).toEqual([{ id: 'gpt-5', reasoningEfforts: DEFAULTS }])
+  })
+
   it.each([
     ['without a level list', undefined],
     ['with an empty level list', []],
-  ])('shows no reasoning control %s, leaving catalog rows to the installed catalog', (_label, reasoningLevels) => {
+  ])('shows no reasoning control %s', (_label, reasoningLevels) => {
     render(<ModelListEditor
       models={[{ id: 'gpt-5' }]} onChange={vi.fn()} catalogProvider="openai" reasoningLevels={reasoningLevels}
       probe={{ settingsNs: 'llm-pi-ai', provider: 'openai' }}

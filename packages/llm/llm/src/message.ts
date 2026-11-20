@@ -346,3 +346,5 @@ export function extractTextContent(content: readonly ContentBlock[], options?: {
   if (options?.trim === true) texts = texts.map(text => text.trim()).filter(Boolean)
   return texts.join(options?.separator ?? '')
 }
+
+export { requestImageBudgetFailure, uniqueRequestImageRefs } from './request-images.ts'
