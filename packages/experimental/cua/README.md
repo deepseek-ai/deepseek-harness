@@ -53,7 +53,7 @@ Application consent precedes launch, observation, capture, and input. Session ac
 
 Actions return a `dispatched` boolean; `mouseMove` also reports `hoverRoute` and `systemPointerMoved`, and `show()` adds `windowId` and `foregroundChanged`. Read fresh state to verify the result. Screenshots and pointer actions are available only on explicit window objects. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 999 after a successful AX observation covering the window or a screenshot. Selecting a window alone does not establish this observation. Values are divided by 1000 and scaled to the window dimensions, then clamped inside the window. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to the provider’s native window coordinates. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
-On providers with system-pointer support, `mouseMove`, `drag`, and `toggleMouse` share session mouse approval. Pass `{ useSystemPointer: true }` on each system mouse operation.
+Providers with system-input support accept `useSystemInput` on `mouseMove`, `toggleMouse`, `click`, `drag`, `pressKey`, and `sendKeyEvent`. True requests system keyboard or mouse input; omission or false keeps the provider default. Keyboard options are the third argument of `pressKey(key, modifiers, options)` and `sendKeyEvent(key, direction, options)`.
 
 To hold a button across calls, use `win.toggleMouse('left', 'down')`, then explicitly call `win.toggleMouse('left', 'up')` on the same window. Left, right, and middle are supported. Each call sends one event at the current pointer position.
 
@@ -84,7 +84,7 @@ The Host marker has no configurable fields; platform providers own native config
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Providers declaring `systemPointer: true` must support explicit `useSystemPointer: true` on `mouseMove`, `drag`, and `toggleMouse`. The operations share one session decision. CUA validates the tool arguments, asks for consent, and enforces the delegated-task restriction before calling the provider. The provider documents its default input routes.
+Providers declaring `systemInput: true` implement explicit system input for all six methods, including keyboard modifiers around system clicks and drags. The shared executor uses `requireSystemInputApproval` for session consent, validates arguments, and rejects delegated system input before dispatch. Providers without this capability reject the option and receive no new native parameters.
 
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 

@@ -86,7 +86,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### 你可以做什么
 
-- **提取内容文本**——从 `@deepseek-ai/dsh-llm/message` 导入的 `extractTextContent(content, options?)` 按顺序仅拼接 `text` 块，保留空白与空文本块，忽略所有其他块类型且不生成占位符。可选的 `options.separator` 默认为 `''`。它接受只读内容，没有文本块时返回 `''`。
+- **提取内容文本**——从 `@deepseek-ai/dsh-llm/message` 导入的 `extractTextContent(content, options?)` 按顺序仅拼接 `text` 块，保留空白与空文本块，忽略所有其他块类型且不生成占位符。可选的 `options.separator` 默认为 `''`。`options.trim` 则会去除每个文本块的首尾空白，并忽略去除后为空的块，使其不产生分隔符。它接受只读内容，没有文本块时返回 `''`。
 - **流式发起一次模型调用**——`ctx.llm.stream(options)` 为任何已注册提供方与模型产出原始分片（token 级增量）；消费方用 `BlockAssembler` 组装。
 - **注册提供方适配器**——一个适配器拥有一个或多个提供方路由，其注册会捕获该路由的重试策略；重复注册同一路由会以 `DUPLICATE_ADAPTER` 失败。
 - **通过配置暴露并激活提供方**——适配器声明可配置提供方路由与 settings namespace，配置界面因此可以激活休眠提供方并编辑连接信息，无需重启。`LlmConfigurableProvider.error` 报告供修复的配置诊断；未受影响的模型仍可提供服务。条目还可携带 `defaultBaseURL`，即配置未设置端点时适配器使用的端点；以及 `nativeAuth`，即配置未指定凭据引用时适配器认证读取的环境变量与 OAuth 登录；`baseURLEnv` 列出配置端点所用的环境变量。配置界面直接从目录读取这些字段，无需调用适配器。

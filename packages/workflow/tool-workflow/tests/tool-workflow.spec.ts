@@ -104,6 +104,7 @@ class StubEngine extends WorkflowEngine {
 
 async function setup(config?: { toolName?: string; maxResultChars?: number }) {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -410,6 +411,7 @@ describe('dsh-tool-workflow', () => {
 
   it('registers under a configured toolName and unregisters on fiber dispose (HMR safety)', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -430,7 +432,7 @@ describe('dsh-tool-workflow', () => {
     await fiber.dispose()
     expect(ctx.tools.get('orchestrate')).toBeUndefined()
     // …and gone with the fiber — a reload must not leak a stale section.
-    expect((await ctx.systemPrompt.assemble()).sections.some(s => s.name === 'tool:orchestrate')).toBe(false)
+    expect((await ctx.systemPrompt.assemble()).sections.find(s => s.name === 'tool:orchestrate')).toBeUndefined()
   })
 
   it('presents a generic pending card titled by the meta name, with the script as rawInput', async () => {
@@ -466,9 +468,9 @@ describe('dsh-tool-workflow', () => {
     async function setupBackground(config?: { enableRunInBackground?: boolean }) {
       const ctx = new Context()
       onTestFinished(async () => { await ctx.fiber.dispose() })
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
@@ -655,10 +657,10 @@ describe('dsh-tool-workflow', () => {
     it('an abort releases the tool even when the script parks on a promise no hook owns', async () => {
       const ctx = new Context()
       onTestFinished(async () => { await ctx.fiber.dispose() })
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
-      await ctx.plugin(SessionProjectionRegistry)
       provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
       ctx.subagents.registerProvider({
@@ -689,9 +691,9 @@ describe('dsh-tool-workflow', () => {
     it('a background run over the sandboxed PTC engine settles its job with the rendered return value', async () => {
       const ctx = new Context()
       onTestFinished(async () => { await ctx.fiber.dispose() })
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)

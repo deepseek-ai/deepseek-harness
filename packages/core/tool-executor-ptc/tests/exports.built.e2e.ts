@@ -15,6 +15,7 @@ import * as ptc from '@deepseek-ai/dsh-tool-executor-ptc'
 import { createRunCodeTool, RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 assert.equal(Object.hasOwn(ptc, 'createRunCodeTool'), false)
 assert.equal(Object.hasOwn(ptc, 'jsonSchemaToPy'), false)
@@ -22,6 +23,7 @@ assert.equal(Object.hasOwn(ptc, 'renderToolsSdkPy'), false)
 assert.equal(RunCodeConfig, ptc.Config)
 const ctx = new Context()
 try {
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   const runtime = {

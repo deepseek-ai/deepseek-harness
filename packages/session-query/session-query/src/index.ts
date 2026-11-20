@@ -7,9 +7,10 @@
 import { currentSessionMessageProjections } from '@deepseek-ai/dsh-session-format-catalog/message-projections'
 import { Context, Service } from '@deepseek-ai/cordis'
 import {
-  Session,
+  type Session,
   SessionSeq,
   snapshotSessionEvent,
+  validateSessionLog,
   type SessionId,
   type SessionSeq as SessionSeqType,
 } from '@deepseek-ai/dsh-session'
@@ -201,11 +202,11 @@ export abstract class SessionQueryEngine extends Service {
    */
   async readSession(sessionId: SessionId): Promise<SessionLogSnapshot> {
     const loaded = await this._corpus.load(sessionId)
-    Session.create(
-      sessionId,
-      loaded.events,
+    validateSessionLog(
       loaded.header,
+      loaded.events,
       loaded.inheritedEventCount,
+      undefined,
       currentSessionMessageProjections,
     )
     return {

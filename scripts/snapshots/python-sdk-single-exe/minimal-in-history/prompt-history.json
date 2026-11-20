@@ -5,11 +5,11 @@
     ],
     [
       "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
-      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+      "The following replaces the earlier instructions from python-sdk:in-history.\n\nPython SDK prompt version 2."
     ],
     [
       "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
-      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+      "The following replaces the earlier instructions from python-sdk:in-history.\n\nPython SDK prompt version 2."
     ]
   ],
   "systemMessageOperations": [
@@ -18,7 +18,7 @@
   ],
   "subscribedSystemPrompts": [
     "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
-    "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+    "The following replaces the earlier instructions from python-sdk:in-history.\n\nPython SDK prompt version 2."
   ],
   "requestContexts": [
     {

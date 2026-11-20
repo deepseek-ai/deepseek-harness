@@ -15,7 +15,7 @@ const runnerPrivatePnpmDestination = /^\$\{\{ runner\.temp \}\}\/setup-pnpm-\$\{
 const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 
 describe('CI workflow', () => {
-  it('keeps at most eleven worker jobs active across PR workflows while Python runtime targets follow the SDK suite', () => {
+  it('keeps at most fifteen worker jobs active across PR workflows while Python runtime targets follow the SDK suite', () => {
     const ci = loadWorkflow('.github/workflows/ci.yml')
     const ciWindows = loadWorkflow('.github/workflows/ci-windows.yml')
     const ciPython = loadWorkflow('.github/workflows/ci-python.yml')
@@ -40,8 +40,26 @@ describe('CI workflow', () => {
       matrix: { include: [{ node: '24.9' }, { node: 26 }] },
     })
     expect(workflowJob(ci, 'all-checks-passed').needs).toContain('node-compat')
+    // The web snapshot shards are the only other matrix: one job, one runner per shard.
+    const webSnapshot = workflowJob(ci, 'node-24-web-snapshot')
+    expect(webSnapshot.strategy).toEqual({ 'fail-fast': false, matrix: { shard: [1, 2] } })
+    const webSnapshotShards = isRecord(webSnapshot.strategy) && isRecord(webSnapshot.strategy.matrix)
+      && Array.isArray(webSnapshot.strategy.matrix.shard) ? webSnapshot.strategy.matrix.shard.length : 0
+    // Coverage runs two instrumented file shards as one matrix; its report job
+    // starts only after both finish.
+    const coverage = workflowJob(ci, 'node-24-coverage')
+    expect(coverage.strategy).toEqual({ 'fail-fast': false, matrix: { shard: [1, 2] } })
+    expect(coverage.name).toBe('node 24 / coverage ${{ matrix.shard }}/2')
+    const coverageLanes = isRecord(coverage.strategy) && isRecord(coverage.strategy.matrix)
+      && Array.isArray(coverage.strategy.matrix.shard) ? coverage.strategy.matrix.shard.length : 0
+    expect(coverageLanes).toBe(2)
+    expect(workflowJob(ci, 'node-24-coverage-report').needs).toBe('node-24-coverage')
+    // The merge is CPU- and heap-bound; it runs on 8-vCPU pools.
+    const reportRunner = String(workflowJob(ci, 'node-24-coverage-report')['runs-on'])
+    expect(reportRunner).toContain("'blacksmith-8vcpu-ubuntu-2404'")
+    expect(reportRunner).toContain("'dsh-ubuntu-24-04-8core'")
     const ordinaryJobs = Object.entries(ci.jobs)
-      .filter(([name]) => !['node-compat', 'all-checks-passed', 'publisher-isolated'].includes(name))
+      .filter(([name]) => !['node-compat', 'all-checks-passed', 'publisher-isolated', 'node-24-web-snapshot', 'node-24-coverage', 'node-24-coverage-report'].includes(name))
     for (const [name, job] of ordinaryJobs) {
       if (!isRecord(job)) throw new TypeError(`${name} must define a job`)
       expect(job).not.toHaveProperty('strategy')
@@ -94,10 +112,14 @@ describe('CI workflow', () => {
     const windowsActive = windowsJobs.length
     // The lint lane owns its own runner, so it raises the ceiling by one; the
     // self-hosted failover pool is still admitted only up to its own limit.
-    const beforeSdk = ordinaryJobs.length + compatibilityLimit + windowsActive + 1
-    const afterSdk = ordinaryJobs.length + compatibilityLimit + windowsActive + Math.max(1, targets.split(',').length)
-    expect(beforeSdk).toBeLessThanOrEqual(11)
-    expect(afterSdk).toBeLessThanOrEqual(11)
+    // The build job finishes before its downstream jobs start, so the
+    // static count overstates the peak by one. Coverage counts its two
+    // shards; the coverage report starts after them and is not counted.
+    const linuxActive = ordinaryJobs.length + webSnapshotShards + coverageLanes
+    const beforeSdk = linuxActive + compatibilityLimit + windowsActive + 1
+    const afterSdk = linuxActive + compatibilityLimit + windowsActive + Math.max(1, targets.split(',').length)
+    expect(beforeSdk).toBeLessThanOrEqual(15)
+    expect(afterSdk).toBeLessThanOrEqual(15)
   })
 
   it('keeps required PR verdicts covering runtime and publisher jobs', () => {
@@ -117,13 +139,31 @@ describe('CI workflow', () => {
       expect(verdict.needs.every(id => typeof id === 'string' && id in jobs)).toBe(true)
       blocking.push(...(verdict.needs as string[]))
     }
+    // A job the verdict does not list must be needed by one it lists: a failed
+    // coverage shard skips its report job, and the verdict fails on a skip.
+    const ci = loadWorkflow('.github/workflows/ci.yml')
+    if (!isRecord(ci.jobs)) throw new TypeError('ci.yml must define jobs')
+    const covered = new Set<string>()
+    const visit = (id: string): void => {
+      if (covered.has(id)) return
+      covered.add(id)
+      const needs = workflowJob(ci, id).needs
+      for (const need of Array.isArray(needs) ? needs : typeof needs === 'string' ? [needs] : []) {
+        if (typeof need === 'string') visit(need)
+      }
+    }
+    for (const id of workflowJob(ci, 'all-checks-passed').needs as string[]) visit(id)
+    expect(Object.keys(ci.jobs).filter(id => id !== 'all-checks-passed' && !covered.has(id))).toEqual([])
+    expect(blocking).not.toContain('node-24-coverage')
     // Every blocking lane must contribute to a branch-protection verdict.
     expect(blocking.sort()).toEqual([
       'node-24',
       'node-24-bench',
+      'node-24-build',
       'node-24-consumers',
-      'node-24-coverage',
+      'node-24-coverage-report',
       'node-24-lint',
+      'node-24-web-snapshot',
       'node-compat',
       'publisher-isolated',
       'python-runtime',
@@ -136,7 +176,9 @@ describe('CI workflow', () => {
 
   it('retains aggregate diagnostics in required builds and protected publication', () => {
     for (const [file, name, command] of [
-      ['ci.yml', 'node-24-consumers', 'pnpm run check:ci:consumers'],
+      ['ci.yml', 'node-24-build', 'pnpm run check:ci:build'],
+      ['ci.yml', 'node-24-consumers', 'pnpm run check:ci:consumers-prebuilt'],
+      ['ci.yml', 'node-24-web-snapshot', 'pnpm run check:ci:web-snapshot-prebuilt'],
       ['ci-windows.yml', 'windows-build', 'pnpm run check:ci:windows-blocking'],
     ] as const) {
       const job = workflowJob(loadWorkflow('.github/workflows/' + file), name)
@@ -156,6 +198,41 @@ describe('CI workflow', () => {
     expect(hostSteps.at(-1)).toBe('pnpm --filter @deepseek-ai/dsh-desktop run bundle')
     expect(scripts.scripts['build:lib:client']).toContain('tsc -b tsconfig.client.json')
     expect(scripts.scripts.typecheck).toBe('tsx scripts/build.ts --scope typecheck')
+  })
+
+  it('node-24-web-snapshot installs browsers over HTTPS archives while the build output downloads', () => {
+    const jobName = 'node-24-web-snapshot'
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
+    if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
+    const names = job.steps.map(step => isRecord(step) ? step.name : undefined)
+    const order = ['Install dependencies and prepare bubblewrap', 'Use HTTPS for Ubuntu archives',
+      'Start Playwright browser install', 'Download build output', 'Unpack build output',
+      'Wait for Playwright browsers', 'Run web browser snapshot shard'].map(name => names.indexOf(name))
+    expect(order).not.toContain(-1)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    expect(isRecord(job.env) && 'DSH_CI_PLAYWRIGHT_INSTALL' in job.env).toBe(false)
+    const start: unknown = job.steps.find(step => isRecord(step) && step.name === 'Start Playwright browser install')
+    if (!isRecord(start) || !isRecord(start.env)) throw new TypeError('the Playwright install step must define env')
+    expect(String(start.env.PLAYWRIGHT_INSTALL_MODE)).toContain("&& 'browsers' || 'with-deps'")
+    expect(String(start.run)).toContain('exec playwright install "${deps[@]}" chromium webkit')
+  })
+
+  it('writes the web snapshot shard shares once for every shard', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-web-snapshot')
+    expect(job.name).toBe('node 24 / web snapshots ${{ matrix.shard }}/2')
+    expect(job.env).toMatchObject({ DSH_WEB_SNAPSHOT_SHARD: '${{ matrix.shard }}/2', DSH_WEB_SNAPSHOT_SHARD_SHARES: '0.54,0.46' })
+  })
+
+  it('builds the Linux Office runtime beside the consumer gates and fails on its status', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-consumers')
+    if (!Array.isArray(job.steps)) throw new TypeError('node-24-consumers must define steps')
+    const names = job.steps.map(step => isRecord(step) ? step.name : undefined)
+    expect(names.slice(-3)).toEqual(['Start the Linux Office runtime build', 'Run compatibility, snapshot, and artifact gates', 'Wait for the Linux Office runtime'])
+    expect(job.steps.at(-1)).toMatchObject({ if: "${{ !cancelled() && steps.office-runtime.outcome == 'success' }}" })
+    const start: unknown = job.steps.at(-3)
+    if (!isRecord(start)) throw new TypeError('the Office runtime step must be a mapping')
+    expect(start.id).toBe('office-runtime')
+    expect(String(start.run)).toContain('pnpm run prepare:primary-runtime --target linux-x64')
   })
 
   it('selects artifact builds only for PR release and API rehearsals', () => {
@@ -254,8 +331,39 @@ describe('CI workflow', () => {
     expect(wine.steps).toContainEqual(expect.objectContaining({ name: 'Shut down wineserver', if: 'always()' }))
   })
 
+  it('restores Linux coverage timings on the shards and saves the merged timings only from the report job', () => {
+    const ci = loadWorkflow('.github/workflows/ci.yml')
+    const prefix = "coverage-times-Linux-${{ runner.environment }}-${{ vars.DSH_CI_FAILOVER_LINUX || 'enterprise' }}-"
+    const key = prefix + '${{ github.run_id }}-${{ github.run_attempt }}'
+    const stepsOf = (jobName: string): Record<string, unknown>[] => {
+      const job = workflowJob(ci, jobName)
+      if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
+      return job.steps.filter(isRecord)
+    }
+    const lanes = stepsOf('node-24-coverage')
+    const restore = lanes.findIndex(step => step.name === 'Restore coverage duration history')
+    expect(restore).toBeGreaterThan(lanes.findIndex(step => step.uses === 'actions/checkout@v7.0.1'))
+    expect(lanes.findIndex(step => step.run === 'pnpm run check:ci:coverage-shard')).toBeGreaterThan(restore)
+    expect(lanes[restore]).toMatchObject({
+      uses: 'actions/cache/restore@v6.1.0',
+      with: { path: '.coverage-times.json', key, 'restore-keys': `${prefix}\n` },
+    })
+    expect(lanes.filter(step => isRecord(step.with) && step.with.path === '.coverage-times.json' && step.uses === 'actions/cache/save@v6.1.0')).toEqual([])
+    const report = stepsOf('node-24-coverage-report')
+    const merge = report.findIndex(step => step.run === 'pnpm run test:coverage:merge-shards "$RUNNER_TEMP/coverage-shards"')
+    expect(report[merge]).toMatchObject({ env: { NODE_OPTIONS: '--max-old-space-size=4096' } })
+    expect(lanes.find(step => step.name === 'Upload coverage shard blobs')).toMatchObject({ with: { overwrite: true } })
+    const save = report.findIndex(step => step.name === 'Save coverage duration history')
+    expect(merge).toBeGreaterThan(report.findIndex(step => step.uses === 'actions/download-artifact@v8.0.1'))
+    expect(save).toBeGreaterThan(merge)
+    expect(report[save]).toMatchObject({
+      uses: 'actions/cache/save@v6.1.0',
+      if: '${{ !cancelled() }}',
+      with: { path: '.coverage-times.json', key },
+    })
+  })
+
   it.each([
-    ['node-24-coverage', 'ci.yml', 'Linux', 'LINUX', 'pnpm run check:ci:coverage'],
     ['windows-coverage', 'ci-windows.yml', 'Windows', 'WINDOWS', 'pnpm run check:ci:coverage'],
   ])('reuses %s coverage timings only within its platform and runner pool', (jobName, file, platform, variable, command) => {
     const job = workflowJob(loadWorkflow('.github/workflows/' + file), jobName)
@@ -310,7 +418,7 @@ describe('CI workflow', () => {
     }
   })
 
-  it.each(['node-24', 'node-24-coverage', 'node-24-consumers'])(
+  it.each(['node-24', 'node-24-coverage', 'node-24-coverage-report', 'node-24-build', 'node-24-consumers', 'node-24-web-snapshot'])(
     '%s keeps tool and fixture temporary files under runner cleanup',
     (jobName) => {
       const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
@@ -319,13 +427,13 @@ describe('CI workflow', () => {
         name: 'Use runner-owned temporary storage',
         run: [
           'echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"',
-          ...(jobName === 'node-24-consumers'
+          ...(jobName === 'node-24-web-snapshot'
             ? ['echo "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP%/*}/ms-playwright" >> "$GITHUB_ENV"']
             : []),
           '',
         ].join('\n'),
       })
-      if (jobName === 'node-24-consumers') {
+      if (jobName === 'node-24-web-snapshot') {
         const browserCache: unknown = job.steps.find(step => isRecord(step) && isRecord(step.with)
           && step.with.path === '${{ env.PLAYWRIGHT_BROWSERS_PATH }}')
         expect(browserCache).toMatchObject({ uses: 'actions/cache/restore@v6.1.0' })
@@ -889,7 +997,10 @@ describe('CI workflow', () => {
     const redirectLanes = [
       [prWorkflow, 'node-24'],
       [prWorkflow, 'node-24-coverage'],
+      [prWorkflow, 'node-24-coverage-report'],
+      [prWorkflow, 'node-24-build'],
       [prWorkflow, 'node-24-consumers'],
+      [prWorkflow, 'node-24-web-snapshot'],
       [masterWorkflow, 'serial-linux-selfhosted'],
     ] as const
     for (const [workflow, jobKey] of redirectLanes) {
@@ -1136,6 +1247,7 @@ describe('bubblewrap preparation script', () => {
   const cachedJobs = new Map<string, string | undefined>([
     ['ci.yml:node-24-coverage', hostedOnly],
     ['ci.yml:node-24-consumers', hostedOnly],
+    ['ci.yml:node-24-web-snapshot', hostedOnly],
     ['ci.yml:node-compat', hostedOnly],
     ['e2e.yml:e2e', undefined],
   ])

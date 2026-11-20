@@ -471,6 +471,7 @@ const reference = [
   ...pairedPages(([
     ['adding-a-package.md', '新增 Package', 'Adding a package'],
     ['adding-a-tool.md', '新增 Tool', 'Adding a tool'],
+    ['contributing-system-messages.md', '贡献系统消息', 'Contributing system messages'],
     ['adding-an-llm-adapter.md', '新增 LLM Adapter', 'Adding an LLM adapter'],
     ['adding-a-settings-card.md', '新增设置页', 'Adding a settings page'],
     ['extension-cookbook.md', '扩展模式', 'Extension patterns'],

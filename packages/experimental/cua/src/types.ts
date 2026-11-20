@@ -3,7 +3,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -12,7 +12,7 @@ export type CuaSnapshotId = Branded<'CuaSnapshotId'>
 /** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
 export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export type CuaOperation = z.output<typeof SystemPointerRequest>
+export type CuaOperation = z.output<typeof SystemInputRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
@@ -35,7 +35,7 @@ export type CuaCapabilities = z.output<typeof CapabilitiesResult>
 export type CuaStartupCapabilities = Pick<
   CuaCapabilities,
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
-> & { systemPointer?: boolean }
+> & { systemInput?: boolean }
 /** App discovery result accepted by getApp, including the provider-reported running state. */
 export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'> & {
   /** Running process selector on macOS. */
@@ -70,7 +70,7 @@ export interface CuaCoordinateOptions {
 }
 /** Restoration dispatch; foregroundChanged compares the front app and top window before and after the request. */
 export type CuaShowResult = z.output<typeof ShowResult>
-/** Modifiers attached to a window-directed pointer gesture. */
+/** Modifiers attached to a pointer gesture; system input also presses and releases their keyboard keys. */
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
 /** Buttons supported by window-directed mouse input. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
@@ -79,11 +79,16 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
  * holdMs is a nonnegative integer in milliseconds, limited by maxClickHoldMs; zero releases immediately.
  * Explicit holds use pointer input; omission preserves ordinary clicks.
  */
-export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
+export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions & CuaSystemInputOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers' | 'useSystemPointer'> & CuaCoordinateOptions
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers' | 'useSystemInput'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
 export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
+/** System keyboard or mouse delivery for one supported input operation. */
+export interface CuaSystemInputOptions {
+  /** True requests system input, including keyboard modifiers, after approval; omitted or false uses the provider default. */
+  useSystemInput?: boolean
+}
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
 export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
@@ -170,18 +175,20 @@ export interface CuaSurface {
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Provider-defined key name to press and release; not a chord.
    * @param modifiers - Modifier names held for this keystroke. The provider validates the names; omitted means none.
+   * @param options - System input selection; omitted uses the provider default.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
+  pressKey(key: string, modifiers?: string[], options?: CuaSystemInputOptions): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
    * Does not send the opposite event.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
    * @param direction - Explicit event direction; the opposite event is never sent implicitly.
+   * @param options - Input selection, matching the corresponding down or up; omitted uses the provider default.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  sendKeyEvent(key: string, direction: 'down' | 'up'): Promise<CuaActionResult>
+  sendKeyEvent(key: string, direction: 'down' | 'up', options?: CuaSystemInputOptions): Promise<CuaActionResult>
 }
 /**
  * An explicit window with screenshot and pointer input operations.
@@ -202,21 +209,21 @@ export interface CuaWindow extends CuaSurface {
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt the interaction; observe before continuing.
    * @param target - current element id or screenshot-local [x,y].
-   * @param options - Coordinate mode for points. Only providers reporting systemPointer accept useSystemPointer.
+   * @param options - Coordinate mode for points. Only providers reporting systemInput accept useSystemInput.
    * True requests physical movement for this call only.
    * @returns dispatch evidence and the selected route; observe the resulting UI after any UI delay.
    */
   mouseMove(target: CuaElementId | readonly [number, number],
-    options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
+    options?: CuaCoordinateOptions & CuaSystemInputOptions): Promise<CuaHoverResult>
   /**
    * Send one mouse-button down or up event without moving the pointer.
    * Does not send the opposite event; callers explicitly release a pressed button.
    * @param mouseButton - Mouse button to press or release.
    * @param direction - Explicit event direction.
-   * @param options - Request a system button on a provider reporting systemPointer.
+   * @param options - Request a system button on a provider reporting systemInput.
    * @returns Whether the provider successfully executed the requested operation.
    */
-  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up', options?: { useSystemPointer?: boolean }): Promise<CuaActionResult>
+  toggleMouse(mouseButton: CuaMouseButton, direction: 'down' | 'up', options?: CuaSystemInputOptions): Promise<CuaActionResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
@@ -235,7 +242,7 @@ export interface CuaWindow extends CuaSurface {
    * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting screenshot-local point or integer ratio.
    * @param to - destination in the same coordinate mode.
-   * @param options - button, modifiers and coordinate mode. Only providers reporting systemPointer accept useSystemPointer.
+   * @param options - button, modifiers and coordinate mode. Only providers reporting systemInput accept useSystemInput.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>

@@ -1588,7 +1588,7 @@
   height: 14px;
 }
 
-.list:not(:has(.recommendations)) > .empty {
+.list:not(.listWithRecommendations) > .empty {
   flex: 1;
   justify-content: center;
   min-height: 280px;

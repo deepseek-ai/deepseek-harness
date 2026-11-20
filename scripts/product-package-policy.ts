@@ -42,6 +42,7 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/connector/notion': { category: 'optional', reason: 'Separately installed app plugin that requires the user to authorize a Notion account.' },
   'packages/connector/tencent-docs': { category: 'optional', reason: 'Separately installed app plugin that requires the user to authorize a Tencent Docs account.' },
   'packages/connector/wecom': { category: 'optional', reason: 'Separately installed app plugin that requires wecom-cli and a user-authorized WeCom bot.' },
+  'packages/connector/dingtalk': { category: 'optional', reason: 'Separately installed app plugin that downloads dws and requires a DingTalk account in an organization with CLI access.' },
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },
   'packages/fs/tool-str-replace-editor': { category: 'optional', reason: 'Explicit alternative to the default filesystem editing tools.' },
   'packages/connector/feishu': { category: 'optional', reason: 'Separately installed app plugin: the Feishu CLI, its skills, and the account operations of a user-authorized Feishu account.' },

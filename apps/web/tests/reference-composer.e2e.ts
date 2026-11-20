@@ -311,6 +311,23 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     expect(tripwire.warnings).toEqual([])
   })
 
+  it('keeps a file path typed by hand in typed order', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-reference-typed-path'))
+    const input = page.locator('[data-composer-input]').first()
+
+    // No menu pick: every character of the path arrives as its own key press.
+    await writeComposerDraft(page, input, '@folderx/nested/leaf.txt')
+    await expect.poll(() => input.textContent()).toBe('@folderx/nested/leaf.txt')
+    // The caret follows the last character, and the sentence's period stays outside the reference.
+    await page.keyboard.type('. Done')
+    await expect.poll(() => input.textContent()).toBe('@folderx/nested/leaf.txt. Done')
+    await expect.poll(() => input.locator('[data-composer-text-ref]').allTextContents())
+      .toEqual(['@folderx/nested/leaf.txt'])
+
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
   it('settles a folder as an atomic chip; Tab and the chevron drill instead', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-reference-folder'))
     const input = page.locator('[data-composer-input]').first()

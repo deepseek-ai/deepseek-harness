@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { registerSilentClientTransport } from '../cordis-inspect-timeout/client-fixture.mjs'
 
 export const name = 'client-inspect-liveness-fixture'
-export const inject = ['cordisInspect', 'agents', 'llm', 'typertGateway']
+export const inject = ['cordisInspect', 'llm', 'typertGateway']
 
 /**
  * Leave a disconnected query pending until timeout, then answer after reconnection.
@@ -88,9 +88,7 @@ export function apply(ctx) {
     }
     assert.equal(queries.length, 2)
     assert.notEqual(queries[0], request.requestId)
-    const agent = ctx.agents.get(request.agentId)
-    assert.ok(agent, 'Client inspect request has an owning Agent')
-    assert.deepEqual(ctx.cordisInspect.resolveClientQuery(agent, request.requestId, {
+    assert.deepEqual(ctx.cordisInspect.resolveClientQuery(request.agentId, request.requestId, {
       ok: true,
       data: { service: 'remote' },
     }), { accepted: true })

@@ -1,12 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
+import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Scope, ScopeKey } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { TOOL_ORDER_REST, renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import type { Config, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+import type { Config, PromptPresentation } from '@deepseek-ai/dsh-system-prompt'
+
+const contexts: Context[] = []
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+})
 
 async function mount(config: Config = {}): Promise<Context> {
   const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, config)
   return ctx
 }
@@ -30,17 +38,46 @@ function scopeKeyOf(scope: Scope): ScopeKey {
 }
 
 describe('scoped sections', () => {
-  it('a scoped persona shadows deployment:persona-prefix for that scope only (either order)', async () => {
-    const ctx = await mount({ personaPrefix: 'You are the deployment.' })
+  it.each([true, false])('prefers the scoped definition with global-first=%s', async (globalFirst) => {
+    const ctx = await mount()
     const scope = await mintScope(ctx, 'child')
-    scope.ctx.systemPrompt.section({ name: 'deployment:persona-prefix', order: 0, text: 'You run tests.' })
+    const registerGlobal = () => ctx.systemPrompt.section({ name: 'shared', order: 0, text: 'Global instructions.' })
+    const registerScoped = () => scope.ctx.systemPrompt.section({ name: 'shared', order: 1, text: 'Scoped instructions.' })
+    if (globalFirst) {
+      registerGlobal()
+      registerScoped()
+    } else {
+      registerScoped()
+      registerGlobal()
+    }
+    const assembly = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
+    expect(assembly.sections.filter(section => section.name === 'shared')).toEqual([
+      { name: 'shared', order: 1, text: 'Scoped instructions.' },
+    ])
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('Global instructions.')
+    await scope.dispose()
+    expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) }))).toContain('Global instructions.')
+  })
 
-    const scoped = renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) }))
-    const global = renderPrompt(await ctx.systemPrompt.assemble())
-    expect(scoped).toContain('You run tests.')
-    expect(scoped).not.toContain('You are the deployment.')
-    expect(global).toContain('You are the deployment.')
-    expect(global).not.toContain('You run tests.')
+  it.each([true, false])('prefers the descendant definition with ancestor-first=%s', async (ancestorFirst) => {
+    const ctx = await mount()
+    const parent = await mintScope(ctx, 'parent')
+    const child = createScope(parent.ctx, { name: 'child' }, { parent: scopeKeyOf(parent) })
+    const parentText = vi.fn(() => 'Parent instructions.')
+    const registerParent = () => parent.ctx.systemPrompt.section({ name: 'shared', order: 1, text: parentText })
+    const registerChild = () => child.ctx.systemPrompt.section({ name: 'shared', order: 1, text: 'Child instructions.' })
+    if (ancestorFirst) {
+      registerParent()
+      registerChild()
+    } else {
+      registerChild()
+      registerParent()
+    }
+    expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(child) }))).toContain('Child instructions.')
+    expect(parentText).not.toHaveBeenCalled()
+    await child.dispose()
+    expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(child) }))).toContain('Parent instructions.')
+    expect(parentText).toHaveBeenCalledOnce()
   })
 
   it('scoped-only sections join that scope alone; disposal removes them', async () => {
@@ -54,28 +91,68 @@ describe('scoped sections', () => {
     expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) }))).not.toContain('Extra guidance.')
   })
 
-  it('duplicate names throw per layer, naming agent.ctx for the global case', async () => {
+  it.each(['bind', 'rebind'] as const)('resolves the nearest definition after a delayed scope %s', async (operation) => {
     const ctx = await mount()
-    const scope = await mintScope(ctx, 'child')
-    ctx.systemPrompt.section({ name: 'x', order: 1, text: 'a' })
-    expect(() => ctx.systemPrompt.section({ name: 'x', order: 1, text: 'b' })).toThrow(/agent\.ctx/)
-    scope.ctx.systemPrompt.section({ name: 'y', order: 1, text: 'a' })
-    expect(() => scope.ctx.systemPrompt.section({ name: 'y', order: 1, text: 'b' })).toThrow(/already registered in this scope/)
+    try {
+      const parent = await mintScope(ctx, 'parent')
+      const child = await mintScope(ctx, 'child')
+      const childKey = scopeKeyOf(child)
+      const binding = operation === 'rebind' ? bindScopeParent(childKey, {}) : undefined
+      const parentText = vi.fn(() => 'Parent instructions.')
+      const childText = vi.fn(() => 'Child instructions.')
+      parent.ctx.systemPrompt.section({ name: 'shared', order: 1, text: parentText })
+      const disposeChild = child.ctx.systemPrompt.section({ name: 'shared', order: 1, text: childText })
+      if (binding === undefined) bindScopeParent(childKey, scopeKeyOf(parent))
+      else binding.rebind(scopeKeyOf(parent))
+
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: childKey }))).toContain('Child instructions.')
+      expect(parentText).not.toHaveBeenCalled()
+      expect(childText).toHaveBeenCalledOnce()
+      disposeChild()
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: childKey }))).toContain('Parent instructions.')
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
-  it('shadows a global section before evaluating either text provider', async () => {
+  it.each([false, true])('removes the exact registration within one scope, scoped=%s', async (scoped) => {
     const ctx = await mount()
     const scope = await mintScope(ctx, 'child')
-    const globalText = vi.fn(() => 'global text')
-    const scopedText = vi.fn(() => 'scoped text')
-    ctx.systemPrompt.section({ name: 'shared', order: 1, text: globalText })
-    scope.ctx.systemPrompt.section({ name: 'shared', order: 1, text: scopedText })
+    const registrationContext = scoped ? scope.ctx : ctx
+    const assemble = () => ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
+    const first = registrationContext.systemPrompt.section({ name: 'shared', order: 1, text: 'First.' })
+    const middle = registrationContext.systemPrompt.section({ name: 'shared', order: 1, text: 'Middle.' })
+    const last = registrationContext.systemPrompt.section({ name: 'shared', order: 1, text: 'Last.' })
+    expect(renderPrompt(await assemble())).toContain('Last.')
+    middle()
+    middle()
+    expect(renderPrompt(await assemble())).toContain('Last.')
+    last()
+    expect(renderPrompt(await assemble())).toContain('First.')
+    first()
+    expect((await assemble()).sections.some(section => section.name === 'shared')).toBe(false)
+    registrationContext.systemPrompt.section({ name: 'shared', order: 1, text: 'New generation.' })
+    expect(renderPrompt(await assemble())).toContain('New generation.')
+  })
 
-    const assembly = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(scope) })
+  it('isolates same-named sibling sections and evaluates only the selected provider', async () => {
+    const ctx = await mount()
+    const first = await mintScope(ctx, 'first')
+    const second = await mintScope(ctx, 'second')
+    const firstText = vi.fn(() => 'first text')
+    const secondText = vi.fn(() => 'second text')
+    const dispose = first.ctx.systemPrompt.section({ name: 'shared', order: 1, text: firstText })
+    second.ctx.systemPrompt.section({ name: 'shared', order: 1, text: secondText })
 
-    expect(assembly.sections.find(section => section.name === 'shared')?.text).toBe('scoped text')
-    expect(globalText).not.toHaveBeenCalled()
-    expect(scopedText).toHaveBeenCalledOnce()
+    const assembly = await ctx.systemPrompt.assemble({ scope: scopeKeyOf(first) })
+    expect(assembly.sections.find(section => section.name === 'shared')?.text).toBe('first text')
+    expect(firstText).toHaveBeenCalledOnce()
+    expect(secondText).not.toHaveBeenCalled()
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('first text')
+    dispose()
+    expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(first) }))).not.toContain('first text')
+    expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: scopeKeyOf(second) }))).toContain('second text')
+    expect(secondText).toHaveBeenCalledOnce()
   })
 
 })
@@ -230,10 +307,10 @@ describe('scoped assemble dispatch', () => {
     const ctx = await mount()
     const scope = await mintScope(ctx, 'child')
     const shaped: (ScopeKey | undefined)[] = []
-    scope.ctx.on('system-prompt/assemble', async (_assembly: PromptAssembly, context, next: () => Promise<PromptAssembly>) => {
+    scope.ctx.on('system-prompt/assemble', async (_assembly: PromptPresentation, context, next: () => Promise<PromptPresentation>) => {
       shaped.push(context.scope)
       const result = await next()
-      result.sections.push({ name: 'listener:extra', text: 'listener text' })
+      result.sections.push({ name: 'listener:extra', order: ctx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX') + 10, text: 'listener text' })
       return result
     })
 

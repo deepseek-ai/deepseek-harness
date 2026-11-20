@@ -27,13 +27,33 @@ describe('Conversation body end reserve', () => {
   it('derives the largest reserve and the inset from the scrollport width, the content width, and the side inset', () => {
     expect(body['--dsh-composer-side-clearance']).toBe('16px')
     expect(body['--dsh-chat-end-reserve-max']).toBe(
-      'calc(var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width) - var(--dsh-composer-side-clearance) - 16px)',
+      'calc(var(--dsh-conversation-viewport-width) - var(--dsh-chat-content-width-resolved) - var(--dsh-composer-side-clearance) - 16px)',
     )
-    expect(body['--dsh-chat-end-inset']).toBe(
+    expect(body['--dsh-chat-end-inset-resolved']).toBe(
       'min(max(0px, calc((var(--dsh-chat-end-reserve-max) - var(--dsh-chat-end-reserve, 0px)) * 10000000 + 1000px)),'
       + ' calc(2 * max(0px, var(--dsh-chat-end-reserve, 0px)'
-      + ' - (var(--dsh-conversation-viewport-width, 0px) - var(--dsh-chat-content-width)) / 2)))',
+      + ' - (var(--dsh-conversation-viewport-width) - var(--dsh-chat-content-width-resolved)) / 2)))',
     )
+    expect(body['--dsh-chat-end-inset']).toBe('var(--dsh-chat-end-inset-resolved)')
+  })
+
+  it('keeps the continuously varying lengths on the body and publishes resolved lengths to its descendants', () => {
+    // Registered without inheritance: a resize that changes them every frame does not restyle the transcript.
+    const registered = Object.fromEntries([...css.matchAll(/@property\s+(--[\w-]+)\s*\{([^{}]*)\}/g)]
+      .map((match): [string, string] => [match[1] ?? '', (match[2] ?? '').replace(/\s+/g, ' ').trim()]))
+    expect(registered).toEqual({
+      '--dsh-conversation-column-width': "syntax: '<length>'; inherits: false; initial-value: 0px;",
+      '--dsh-conversation-viewport-width': "syntax: '<length>'; inherits: false; initial-value: 0px;",
+      '--dsh-chat-user-width': "syntax: '*'; inherits: false;",
+      '--dsh-chat-content-width-resolved': "syntax: '<length>'; inherits: false; initial-value: 0px;",
+      '--dsh-chat-end-reserve-max': "syntax: '<length>'; inherits: false; initial-value: 0px;",
+      '--dsh-chat-end-inset-resolved': "syntax: '<length>'; inherits: false; initial-value: 0px;",
+    })
+    // The inherited public names repeat a computed length, whose text changes only with the resolved width.
+    expect(body['--dsh-chat-content-width-resolved']).toBe(
+      'var(--dsh-chat-user-width, clamp(680px, calc(var(--dsh-conversation-column-width) * 0.64), 880px))',
+    )
+    expect(body['--dsh-chat-content-width']).toBe('var(--dsh-chat-content-width-resolved)')
   })
 
   it('moves the column aside by twice the missing gutter at its own width, and makes no room once the start gutter is at the side inset', () => {

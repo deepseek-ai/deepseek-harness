@@ -24,6 +24,8 @@ describe('web snapshot: standalone string editor through PTC', () => {
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
       developerTools: true,
+      // The recorded program is an async function body.
+      ptcExecutionMode: 'per-call',
       extraOverlayPath: [
         fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
         fileURLToPath(new URL('./standalone-string-editor.overlay.yml', import.meta.url)),
