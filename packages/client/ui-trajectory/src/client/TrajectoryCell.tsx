@@ -50,6 +50,7 @@ export function TrajectoryCell({
   promptDetail: _promptDetail,
   previousPromptDetail: _previousPromptDetail,
   promptMessageDetail: _promptMessageDetail,
+  systemSectionsDetail: _systemSectionsDetail,
   outputDetail: _outputDetail,
   resultSeq: _resultSeq,
   thinkingDetail: _thinkingDetail,

@@ -125,7 +125,7 @@ describe('loaded system surface interpretation', () => {
 
   it('classifies each source of an update against the instructions in force before it', () => {
     const head = fold([sectioned(1, [['identity', 'I'], ['plan', 'on'], ['tool', 'T'], ['memo', 'M']], { order: { identity: 1 } })])
-    expect(head?.introduced?.message?.changes.map(item => item.change)).toEqual(['added', 'added', 'added', 'added'])
+    expect(head?.introduced?.message).toBeUndefined()
     expect(head?.sections?.map(item => item.name)).toEqual(['identity', 'memo', 'plan', 'tool'])
     const update = inspectSystemPrompt(head, sectioned(4, [
       ['plan', 'off', 'plan changed'], ['tool', null, 'tool retired'], ['memo', ''], ['identity', 'I'], ['late', 'L'],
@@ -162,15 +162,19 @@ describe('loaded system surface interpretation', () => {
     expect(complete.sections?.map(item => item.name)).toEqual(['persona', 'plan'])
   })
 
-  it('classifies a rebuilt head against the instructions in force before its replacements', () => {
+  it('marks a prompt established by replacements as rebuilt and reads no update from it', () => {
     const before = fold([sectioned(1, [['identity', 'I'], ['plan', 'on']]), sectioned(4, [['plan', 'off']])])
+    expect(before?.effective).not.toHaveProperty('rebuilt')
     const cleared = inspectSystemPrompt(before, system(6, '', 4))
     expect(cleared.sections?.find(item => item.name === 'plan')?.text).toBe('on')
-    expect(cleared.settled).toBe(before?.sections)
+    expect(cleared.effective).toMatchObject({ rebuilt: true, update: false })
     const rebuilt = inspectSystemPrompt(cleared, sectioned(7, [['identity', 'I'], ['plan', 'off']], { replaces: 1, reset: true }))
-    expect(rebuilt.introduced?.message?.changes.map(item => item.change)).toEqual(['unchanged', 'unchanged'])
-    expect(rebuilt.sections).toEqual(before?.sections)
-    expect(rebuilt.settled).toBe(rebuilt.sections)
+    expect(rebuilt.introduced?.message).toBeUndefined()
+    expect(rebuilt.effective).toMatchObject({ rebuilt: true, sections: before?.sections })
+    expect(rebuilt.effective).not.toHaveProperty('message')
+    const next = inspectSystemPrompt(rebuilt, sectioned(9, [['plan', 'on']]))
+    expect(next.effective).not.toHaveProperty('rebuilt')
+    expect(next.effective?.message?.changes).toEqual([{ name: 'plan', change: 'updated', text: 'on', notices: [] }])
   })
 
   it('withholds per-source instructions while a nonempty message without section metadata applies', () => {

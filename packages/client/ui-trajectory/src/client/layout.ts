@@ -3,14 +3,8 @@
  * own-duration times, in-flight partial/runningCalls, and group descriptions.
  */
 import type {
-  AssistantBlock,
-  AssistantMessageNode,
-  ConversationLocation,
-  RequestInspectionSnapshot,
-  RequestPromptChange,
-  RequestView,
-  ToolCallBlock,
-  ToolResultNode,
+  AssistantBlock, AssistantMessageNode, ConversationLocation, EffectiveSystemSection, RequestInspectionSnapshot,
+  RequestPromptChange, RequestView, ToolCallBlock, ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
@@ -97,6 +91,7 @@ type OrderedLayoutEntry =
     seq: number
     request?: AssistantRequestView
     systemPrompt?: string
+    systemSections?: readonly EffectiveSystemSection[]
     change: RequestPromptChange
   }
   | {
@@ -261,6 +256,7 @@ export function deriveTrajectoryLayout(
   const entries: OrderedLayoutEntry[] = [
     ...(input.systemPrompts ?? []).map(prompt => ({
       kind: 'system' as const, seq: prompt.seq, systemPrompt: prompt.text,
+      ...(prompt.sections === undefined ? {} : { systemSections: prompt.sections }),
       change: {
         seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const,
         ...(prompt.message === undefined ? {} : { message: prompt.message }),
@@ -337,13 +333,12 @@ export function deriveTrajectoryLayout(
           sourceSeq: change.seq,
           ...(request?.prompt === undefined ? {} : { promptDetail: request.prompt }),
           ...(entry.systemPrompt === undefined ? {} : { systemPromptDetail: entry.systemPrompt }),
-          ...(change.previous === undefined
+          ...(entry.systemSections === undefined ? {} : { systemSectionsDetail: entry.systemSections }),
+          // A rebuilt prompt replaces the history the model reads, so it presents no update against the previous state.
+          ...(change.previous === undefined || change.rebuilt === true
             ? {}
             : { previousPromptDetail: change.previous }),
-          // The initial prompt introduces every source, so only later changes present their message by source.
-          ...(change.kind === 'initial' || change.message === undefined
-            ? {}
-            : { promptMessageDetail: change.message }),
+          ...(change.message === undefined ? {} : { promptMessageDetail: change.message }),
           timeSeconds: 0,
           startedAt: finiteTime(change.time),
         },

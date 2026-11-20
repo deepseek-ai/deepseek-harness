@@ -895,6 +895,7 @@ describe('Trajectory conversation Definitions', () => {
         time: 1_700_000_000_010,
         kind: 'system',
         previous: { config: { provider: 'test', model: 'test' }, system: 'first prompt', tools: [] },
+        rebuilt: true,
       }],
     ])
   })
@@ -1144,7 +1145,38 @@ describe('Trajectory conversation Definitions', () => {
     // Without a loaded header the update keeps its reading on the standalone prompt node.
     const headerless = snapshot(assembler(events.filter(event => event.event.type !== 'request/header')))
     expect(headerless.systemPrompts?.map(prompt => prompt.message?.changes.map(change => change.change)))
-      .toEqual([['added'], ['updated']])
+      .toEqual([undefined, ['updated']])
+  })
+
+  it('merges an in-history update and a tool change of one step into a single change', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const config = { provider: 'test', model: 'test' }
+    const probe = { name: 'probe', description: 'Probe', parameters: { type: 'object' } }
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'request/header', { reason: 'change', header: { config, tools: [probe] } }),
+      at(10, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ])).requests
+
+    expect(requests.at(-1)).toMatchObject({
+      prompt: { system: 'plan on\n\nplan off', tools: [probe] },
+      promptChange: {
+        seq: 8,
+        kind: 'system-and-tools',
+        previous: { system: 'plan on', tools: [] },
+        message: { changes: [{ name: 'plan:status', change: 'updated', text: 'plan off' }] },
+      },
+    })
   })
 
   it('retains an in-history update without a loaded header as a plain system node', () => {

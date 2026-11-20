@@ -39,11 +39,6 @@ export interface SystemPromptState {
    * Undefined while unavailable: a retained nonempty message lacks section metadata, or the prompt is uncertain.
    */
   readonly sections: readonly EffectiveSystemSection[] | undefined
-  /**
-   * `sections` as of the latest appended or section-attributed system message. A replacing message is
-   * classified against it, because the replacements that precede a rebuilt head already shadowed later nodes.
-   */
-  readonly settled: readonly EffectiveSystemSection[] | undefined
 }
 
 /** Pure interpretation supplied to target-owned Definitions through uiConversation. */
@@ -136,7 +131,8 @@ function effectiveSections(nodes: readonly PositionedSystem[]): readonly Effecti
  * Apply a system event or positional replacement without retaining ordinary messages.
  * Replacement positions inherit their start endpoint, not their chronological seq.
  * Unknown older endpoint order withholds the prompt until prepend replay resolves it.
- * Messages carrying section metadata also yield the instructions in force per source and a per-source reading.
+ * Messages carrying section metadata also yield the instructions in force per source; an in-history update
+ * additionally yields its per-source reading against the instructions in force before it.
  * @param previous - Interpretation at the preceding relevant event in the loaded window.
  * @param event - System message or surface replacement already admitted by Session.
  * @returns Immutable surviving system facts and the effective nonempty prompt.
@@ -152,7 +148,7 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
   if (uncertain) {
     return {
       firstSeq, uncertain, nodes: [], replacements: new Map(), effective: undefined, introduced: undefined,
-      sections: undefined, settled: undefined,
+      sections: undefined,
     }
   }
   let position: number = event.seq
@@ -167,7 +163,8 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
   let introduced: SystemPromptNode | undefined
   let records: SectionRecords | undefined
   if (event.type === 'system/message') {
-    const read = readSections(event, op === 'append' ? previous?.sections : previous?.settled)
+    const read = readSections(event, previous?.sections)
+    const update = op === 'append' && previous?.nodes.some(item => item.node.text !== '') === true
     records = read?.records
     introduced = {
       seq: event.seq,
@@ -175,8 +172,8 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
       turn: event.data.turn,
       step: event.data.step,
       text: extractTextContent(event.data.message.content, { separator: '\n\n', trim: true }),
-      update: op === 'append' && previous?.nodes.some(item => item.node.text !== '') === true,
-      ...(read === undefined ? {} : { message: read.message }),
+      update,
+      ...(update && read !== undefined ? { message: read.message } : {}),
     }
   }
   if (introduced !== undefined) {
@@ -184,7 +181,6 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
       .sort((a, b) => a.position - b.position)
   }
   const sections = effectiveSections(nodes)
-  const settled = op === 'append' || records !== undefined ? sections : previous?.settled
   const nonEmpty = nodes.filter(item => item.node.text !== '')
   const surviving = nonEmpty.at(-1)?.node
   const text = nonEmpty.map(item => item.node.text).join('\n\n')
@@ -197,9 +193,10 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
       step: surviving?.step ?? 0,
       text,
       update: introduced?.update === true,
+      ...(op !== undefined && op !== 'append' ? { rebuilt: true as const } : {}),
       ...(sections === undefined ? {} : { sections }),
       ...(introduced?.message === undefined ? {} : { message: introduced.message }),
     }
   }
-  return { firstSeq, uncertain, nodes, replacements, effective, introduced, sections, settled }
+  return { firstSeq, uncertain, nodes, replacements, effective, introduced, sections }
 }

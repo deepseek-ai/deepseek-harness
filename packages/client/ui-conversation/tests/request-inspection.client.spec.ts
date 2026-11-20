@@ -40,22 +40,21 @@ describe('inspectRequestPrompt', () => {
     })
   })
 
-  it('carries the per-source instructions and the section reading of the system node that changed the prompt', () => {
+  it('carries per-source instructions and marks a change established by a rebuilt system node', () => {
     const sections = [{ name: 'plan:status', order: 1, text: 'off' }]
-    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated' as const, text: 'off', notices: [] }] }
     const previous = { config: CONFIG, system: 'on', tools: [], sections: [{ name: 'plan:status', order: 1, text: 'on' }] }
-    const changed = inspectRequestPrompt(previous, header(SessionSeq(9), 'change', { config: CONFIG }), {
-      ...systemNode(7, 'off'), sections, message,
+    const rebuilt = inspectRequestPrompt(previous, header(SessionSeq(9), 'series', { config: CONFIG }), {
+      ...systemNode(7, 'off'), sections, rebuilt: true,
     })
-    expect(changed.prompt.sections).toBe(sections)
-    expect(changed.change).toMatchObject({ seq: 7, kind: 'system', previous, message })
+    expect(rebuilt.prompt.sections).toBe(sections)
+    expect(rebuilt.change).toEqual({ seq: 7, time: 1_700_000_000_007, kind: 'system', previous, rebuilt: true })
 
-    // A tools-only change is anchored at the header, so it presents no system message.
-    const tools = inspectRequestPrompt(changed.prompt, header(SessionSeq(12), 'change', { config: CONFIG, tools: [READ_TOOL] }), {
-      ...systemNode(7, 'off'), sections, message,
+    // A tools-only change is anchored at the header, so the rebuilt system node does not mark it.
+    const tools = inspectRequestPrompt(rebuilt.prompt, header(SessionSeq(12), 'change', { config: CONFIG, tools: [READ_TOOL] }), {
+      ...systemNode(7, 'off'), sections, rebuilt: true,
     })
     expect(tools.change).toMatchObject({ seq: 12, kind: 'tools' })
-    expect(tools.change).not.toHaveProperty('message')
+    expect(tools.change).not.toHaveProperty('rebuilt')
   })
 
   it('anchors an initial header without a system node at the header itself', () => {

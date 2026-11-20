@@ -81,9 +81,14 @@ export interface SystemPromptNode {
    * was committed rather than by the next request header.
    */
   update: boolean
+  /**
+   * True when a positional replacement, such as compaction or a rebuilt system head, established this
+   * effective prompt; the model reads the rebuilt history instead of an appended update.
+   */
+  rebuilt?: true
   /** Instructions in force per source at this prompt; absent when a retained message lacks section metadata. */
   sections?: readonly EffectiveSystemSection[]
-  /** Section-attributed reading of the system message that established this prompt, when it carries section metadata. */
+  /** Per-source reading of an in-history update that carries section metadata, against the instructions in force before it. */
   message?: SystemMessageSections
 }
 
@@ -101,7 +106,9 @@ export interface RequestPromptChange {
   kind: 'initial' | 'system' | 'tools' | 'system-and-tools'
   /** State immediately before this change; absent for the initial header. */
   previous?: ConversationPromptSnapshot
-  /** Section-attributed reading of the system message that introduced this change, when one did. */
+  /** True when the system part of this change was rebuilt by a positional replacement rather than appended. */
+  rebuilt?: true
+  /** Per-source reading of the in-history update that introduced this change, when it carries section metadata. */
   message?: SystemMessageSections
 }
 
@@ -163,7 +170,7 @@ export function inspectRequestPrompt(
           ? 'system-and-tools'
           : systemChanged ? 'system' : 'tools',
       ...(previous === undefined ? {} : { previous }),
-      ...(system !== undefined && origin === system && system.message !== undefined ? { message: system.message } : {}),
+      ...(origin === system && system.rebuilt === true ? { rebuilt: true } : {}),
     },
   }
 }

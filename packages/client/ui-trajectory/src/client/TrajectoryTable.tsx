@@ -188,9 +188,7 @@ type DetailTab =
   | 'options'
   | 'usage'
   | 'timing'
-  | 'diff'
   | 'update'
-  | 'as-sent'
 type RecordState = 'complete' | 'running' | 'error'
 
 interface DetailTabItem {
@@ -230,13 +228,9 @@ const TOOL_REQUEST_MIN_WIDTH = 180
 const TOOL_REQUEST_MAX_WIDTH = 480
 const DEFAULT_TOOL_REQUEST_SHARE = 0.36
 const DEFAULT_TOOL_REQUEST_OFFSET = 56
-const SYSTEM_PROMPT_TABS: readonly DetailTabItem[] = [
-  { id: 'system-prompt', labelKey: 'tab.systemPrompt' },
-  { id: 'tools', labelKey: 'tab.tools' },
-]
 const SYSTEM_UPDATE_TAB: DetailTabItem = { id: 'update', labelKey: 'tab.update' }
-const SYSTEM_DIFF_TAB: DetailTabItem = { id: 'diff', labelKey: 'tab.diff' }
-const SYSTEM_AS_SENT_TAB: DetailTabItem = { id: 'as-sent', labelKey: 'tab.asSent' }
+const SYSTEM_PROMPT_TAB: DetailTabItem = { id: 'system-prompt', labelKey: 'tab.systemPrompt' }
+const SYSTEM_TOOLS_TAB: DetailTabItem = { id: 'tools', labelKey: 'tab.tools' }
 const REQUEST_TABS: readonly DetailTabItem[] = [
   { id: 'overview', labelKey: 'tab.summary' },
   { id: 'options', labelKey: 'tab.options' },
@@ -993,17 +987,14 @@ function markdownSource(record: TableRecord): string | undefined {
 
 function detailTabs(record: TableRecord): readonly DetailTabItem[] {
   if (record.cell.kind === 'system') {
-    const { promptDetail, previousPromptDetail, promptMessageDetail, systemPromptDetail } = record.cell
-    const update = promptMessageDetail === undefined ? [] : [SYSTEM_UPDATE_TAB]
-    if (promptDetail === undefined && systemPromptDetail !== undefined) {
-      return [...update, ...SYSTEM_PROMPT_TABS.filter(tab => tab.id === 'system-prompt')]
-    }
+    const { promptDetail, previousPromptDetail, promptMessageDetail } = record.cell
+    // The initial prompt and a rebuilt prompt have no update to present.
+    const update = previousPromptDetail !== undefined || promptMessageDetail !== undefined
     return [
-      ...update,
-      ...(previousPromptDetail === undefined ? [] : [SYSTEM_DIFF_TAB]),
-      ...SYSTEM_PROMPT_TABS.flatMap(tab => tab.id === 'system-prompt' && promptDetail?.sections !== undefined
-        ? [tab, SYSTEM_AS_SENT_TAB]
-        : [tab]),
+      ...(update ? [SYSTEM_UPDATE_TAB] : []),
+      SYSTEM_PROMPT_TAB,
+      // A standalone prompt without a loaded request header has no known tool catalog.
+      ...(promptDetail === undefined ? [] : [SYSTEM_TOOLS_TAB]),
     ]
   }
   if (record.cell.kind === 'compacted') {
@@ -1394,6 +1385,23 @@ function ToolCatalog({
   if (tools.length === 0) return <p className={css.noPayload}>{t('record.toolsMissing')}</p>
   return (
     <div className={css.toolCatalog}>
+      <ToolCatalogItems tools={tools} stringWrapping={stringWrapping} t={t} />
+    </div>
+  )
+}
+
+/** One collapsible row per tool: name and description, expanding to its full description and parameters. */
+function ToolCatalogItems({
+  tools,
+  stringWrapping,
+  t,
+}: {
+  tools: ConversationPromptSnapshot['tools']
+  stringWrapping: JsonTreeProps['stringWrapping']
+  t: TrajectoryTranslate
+}) {
+  return (
+    <>
       {tools.map((tool, index) => (
         <details className={css.toolCatalogItem} key={`${tool.name}:${index}`}>
           <summary className={css.toolCatalogSummary}>
@@ -1416,7 +1424,7 @@ function ToolCatalog({
           </div>
         </details>
       ))}
-    </div>
+    </>
   )
 }
 
@@ -1442,79 +1450,36 @@ function promptDiffLines(before: string, after: string): readonly PromptDiffLine
   ])
 }
 
-function PromptDiffSection({
-  title,
-  before,
-  after,
-}: {
-  title: string
-  before: string
-  after: string
-}) {
+/** Line diff of two texts, or nothing when they are equal. */
+function PromptDiff({ before, after }: { before: string; after: string }) {
   const lines = promptDiffLines(before, after)
   if (lines.length === 0) return null
   return (
-    <section className={css.promptDiffSection}>
-      <h3 className={css.promptDiffTitle}>{title}</h3>
-      <pre className={css.promptDiff}>
-        {lines.map((line, index) => (
-          <span className={css[`promptDiffLine${line.kind}`]} key={index}>
-            {line.text || ' '}
-            {'\n'}
-          </span>
-        ))}
-      </pre>
+    <pre className={css.promptDiff}>
+      {lines.map((line, index) => (
+        <span className={css[`promptDiffLine${line.kind}`]} key={index}>
+          {line.text || ' '}
+          {'\n'}
+        </span>
+      ))}
+    </pre>
+  )
+}
+
+/** One titled group of the Update view. */
+function PromptUpdateGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={css.promptGroup}>
+      <h3 className={css.promptGroupTitle}>{title}</h3>
+      {children}
     </section>
   )
 }
 
-function SystemPromptDiff({
-  before,
-  after,
-  t,
-}: {
-  before: ConversationPromptSnapshot
-  after: ConversationPromptSnapshot
-  t: TrajectoryTranslate
-}) {
-  const toolsBefore = JSON.stringify(before.tools, null, 2)
-  const toolsAfter = JSON.stringify(after.tools, null, 2)
-  // Per-source texts need both sides; otherwise the retained messages are compared as one text.
-  const sources = before.sections === undefined || after.sections === undefined
-    ? undefined
-    : {
-      before: new Map(before.sections.map(section => [section.name, section.text])),
-      after: new Map(after.sections.map(section => [section.name, section.text])),
-    }
-  return (
-    <div className={css.promptDiffSections}>
-      {sources !== undefined && [...new Set([...sources.after.keys(), ...sources.before.keys()])].map(name => (
-        <PromptDiffSection
-          key={name}
-          title={name}
-          before={sources.before.get(name) ?? ''}
-          after={sources.after.get(name) ?? ''}
-        />
-      ))}
-      {sources === undefined && before.system !== after.system && (
-        <PromptDiffSection
-          title={t('record.systemPrompt')}
-          before={before.system}
-          after={after.system}
-        />
-      )}
-      {toolsBefore !== toolsAfter && (
-        <PromptDiffSection
-          title={t('record.tools')}
-          before={toolsBefore}
-          after={toolsAfter}
-        />
-      )}
-    </div>
-  )
-}
-
-/** One source of a per-source prompt view: its name and state label, the notices attached to it, then its text. */
+/**
+ * One source of a per-source prompt view. The name and state label are presentation only: they are
+ * excluded from selection so a copied prompt contains just the text the model read.
+ */
 function PromptSourceSection({
   name,
   label,
@@ -1530,10 +1495,10 @@ function PromptSourceSection({
 }) {
   return (
     <section className={css.promptSource} data-prompt-source={name}>
-      <h3 className={css.promptSourceTitle}>
+      <h4 className={css.promptSourceTitle}>
         <code className={css.promptSourceName}>{name}</code>
         {label !== undefined && <span className={css.promptSourceLabel}>{label}</span>}
-      </h3>
+      </h4>
       {notices.map((notice, index) => (
         <p className={css.promptSourceNotice} key={index}>{notice}</p>
       ))}
@@ -1546,51 +1511,87 @@ function PromptSourceSection({
   )
 }
 
-/** One system message as sent, split by the sources it names. */
-function SystemUpdateMessage({ message, t }: { message: SystemMessageSections; t: TrajectoryTranslate }) {
+/** Stable identity of one tool definition, so a changed definition reads as a removal plus an addition. */
+function toolKey(tool: ConversationPromptSnapshot['tools'][number]): string {
+  return JSON.stringify(tool)
+}
+
+/**
+ * What one SYSTEM record changed, independent of whether the model's route accepts in-history deltas:
+ * the system message by source (or a text diff when it lacks section metadata), then added and removed tools.
+ */
+function SystemPromptUpdate({
+  message,
+  before,
+  after,
+  stringWrapping,
+  t,
+}: {
+  message: SystemMessageSections | undefined
+  before: ConversationPromptSnapshot | undefined
+  after: ConversationPromptSnapshot | undefined
+  stringWrapping: JsonTreeProps['stringWrapping']
+  t: TrajectoryTranslate
+}) {
+  const beforeTools = new Set(before?.tools.map(toolKey))
+  const afterTools = new Set(after?.tools.map(toolKey))
+  // Tools are compared only when both catalogs are known.
+  const added = before === undefined ? [] : after?.tools.filter(tool => !beforeTools.has(toolKey(tool))) ?? []
+  const removed = after === undefined ? [] : before?.tools.filter(tool => !afterTools.has(toolKey(tool))) ?? []
+  const systemDiff = message === undefined && before !== undefined && after !== undefined && before.system !== after.system
   return (
-    <div className={css.promptDiffSections}>
-      {message.reset && <p className={css.promptSourceCaption}>{t('record.systemUpdateReset')}</p>}
-      {message.notices.map((notice, index) => (
-        <p className={css.promptSourceNotice} key={index}>{notice}</p>
-      ))}
-      {message.changes.map(change => (
-        <PromptSourceSection
-          key={change.name}
-          name={change.name}
-          label={t(`record.systemSection.${change.change}`)}
-          notices={change.notices}
-          text={change.text}
-          t={t}
-        />
-      ))}
+    <div className={css.promptView}>
+      {message !== undefined && (
+        <PromptUpdateGroup title={t('record.systemUpdates')}>
+          <div className={css.promptGroupBody}>
+            {message.reset && <p className={css.promptSourceCaption}>{t('record.systemUpdateReset')}</p>}
+            {message.notices.map((notice, index) => (
+              <p className={css.promptSourceNotice} key={index}>{notice}</p>
+            ))}
+            {message.changes.map(change => (
+              <PromptSourceSection
+                key={change.name}
+                name={change.name}
+                label={t(`record.systemSection.${change.change}`)}
+                notices={change.notices}
+                text={change.text}
+                t={t}
+              />
+            ))}
+          </div>
+        </PromptUpdateGroup>
+      )}
+      {systemDiff && (
+        <PromptUpdateGroup title={t('record.systemUpdates')}>
+          <div className={css.promptGroupBody}>
+            <PromptDiff before={before.system} after={after.system} />
+          </div>
+        </PromptUpdateGroup>
+      )}
+      {added.length > 0 && (
+        <PromptUpdateGroup title={t('record.toolsAdded')}>
+          <div><ToolCatalogItems tools={added} stringWrapping={stringWrapping} t={t} /></div>
+        </PromptUpdateGroup>
+      )}
+      {removed.length > 0 && (
+        <PromptUpdateGroup title={t('record.toolsRemoved')}>
+          <div><ToolCatalogItems tools={removed} stringWrapping={stringWrapping} t={t} /></div>
+        </PromptUpdateGroup>
+      )}
     </div>
   )
 }
 
-/** Instructions in force per source, marking the sources the selected record's message changed. */
-function EffectiveSystemPrompt({
-  sections,
-  message,
-  t,
-}: {
-  sections: readonly EffectiveSystemSection[]
-  message: SystemMessageSections | undefined
-  t: TrajectoryTranslate
-}) {
-  const changed = new Set(message?.changes.flatMap(change => change.change === 'unchanged' ? [] : [change.name]))
+/** Instructions in force per source, combined as if the prompt were rebuilt at this point. */
+function EffectiveSystemPrompt({ sections, t }: { sections: readonly EffectiveSystemSection[]; t: TrajectoryTranslate }) {
   return (
-    <div className={css.promptDiffSections}>
-      <p className={css.promptSourceCaption}>{t('record.effectivePromptNote')}</p>
-      {sections.filter(section => section.text !== '').map(section => (
-        <PromptSourceSection
-          key={section.name}
-          name={section.name}
-          label={changed.has(section.name) ? t('record.systemSectionChangedHere') : undefined}
-          text={section.text}
-          t={t}
-        />
-      ))}
+    <div className={css.promptView}>
+      <div className={css.promptGroupBody}>
+        <p className={`${css.promptSourceCaption} ${css.promptSourceCaptionStatic}`}>{t('record.effectivePromptNote')}</p>
+        {sections.filter(section => section.text !== '').map(section => (
+          <PromptSourceSection key={section.name} name={section.name} text={section.text} t={t} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -2395,6 +2396,7 @@ export function TrajectoryTable({
     ? selected.cell.promptMessageDetail
     : undefined
   const selectedSections = selectedPrompt?.sections
+    ?? (selected?.cell.kind === 'system' ? selected.cell.systemSectionsDetail : undefined)
   const promptSelected = selectedSystemPrompt !== undefined
   const selectedState = selected === undefined ? undefined : stateOf(selected)
   const selectedRequestInfo = selectedRequest === null
@@ -3413,36 +3415,25 @@ export function TrajectoryTable({
                 t={t}
               />
             )}
-            {selectedPrompt !== undefined
-              && selectedPreviousPrompt !== undefined
-              && activeTab === 'diff' && (
-              <SystemPromptDiff
+            {promptSelected && activeTab === 'update' && (
+              <SystemPromptUpdate
+                message={selectedPromptMessage}
                 before={selectedPreviousPrompt}
                 after={selectedPrompt}
+                stringWrapping={stringWrapping}
                 t={t}
               />
             )}
-            {selectedPromptMessage !== undefined && activeTab === 'update' && (
-              <SystemUpdateMessage message={selectedPromptMessage} t={t} />
-            )}
-            {promptSelected && selectedSections !== undefined && activeTab === 'system-prompt' && (
+            {promptSelected && activeTab === 'system-prompt' && (
               selectedSystemPrompt === ''
                 ? <p className={css.noPayload}>{t('record.systemPromptMissing')}</p>
-                : <EffectiveSystemPrompt sections={selectedSections} message={selectedPromptMessage} t={t} />
-            )}
-            {promptSelected && activeTab === (selectedSections === undefined ? 'system-prompt' : 'as-sent') && (
-              selectedSystemPrompt === ''
-                ? <p className={css.noPayload}>{t('record.systemPromptMissing')}</p>
-                : (
-                  <>
-                    {selectedSections !== undefined && (
-                      <p className={`${css.promptSourceCaption} ${css.promptSourceCaptionInset}`}>{t('record.asSentNote')}</p>
-                    )}
+                : selectedSections === undefined
+                  ? (
                     <div className={`${css.markdownPayload} ${css.systemPrompt}`}>
                       <MarkdownText text={selectedSystemPrompt} labels={markdownLabels(t)} />
                     </div>
-                  </>
-                )
+                  )
+                  : <EffectiveSystemPrompt sections={selectedSections} t={t} />
             )}
             {selectedPrompt !== undefined && activeTab === 'tools' && (
               <ToolCatalog tools={selectedPrompt.tools} stringWrapping={stringWrapping} t={t} />

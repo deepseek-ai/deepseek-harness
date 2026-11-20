@@ -76,6 +76,7 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
           },
           change: {
             seq: node.seq, time: node.time, kind: 'system', previous: previous.prompt,
+            ...(node.rebuilt === true ? { rebuilt: true } : {}),
             ...(node.message === undefined ? {} : { message: node.message }),
           },
           location: match.location,
@@ -117,15 +118,21 @@ function trajectoryRequestHeaderDefinition(inspect: RequestPromptInspector): Con
       }
       const header = reader.previous<TrajectoryRequestHeaderState>('trajectory-request-header')?.state
       const state = reader.previous<TrajectorySystemMessageState>('trajectory-system-message')?.state
-      const systemHeader = state?.header
-      const previous = systemHeader !== undefined && (header === undefined || systemHeader.seq > header.seq)
-        ? systemHeader.prompt
-        : header?.prompt
+      // An in-history update logged since the last request header that this header has not yet presented.
+      const pending = state?.header !== undefined && (header === undefined || state.header.seq > header.seq)
+        ? state.header
+        : undefined
+      const previous = pending?.prompt ?? header?.prompt
       const system = state?.effective
       const inspection = inspect(previous, match.event, system)
       const { prompt } = inspection
-      const change = inspection.change ?? (systemHeader !== undefined
-        && (header === undefined || systemHeader.seq > header.seq) ? systemHeader.change : undefined)
+      let change = inspection.change
+      if (change === undefined) {
+        change = pending?.change
+      } else if (change.kind === 'tools' && pending?.change !== undefined) {
+        // One step changed both: present the update from the state before it, so neither part is lost.
+        change = { ...pending.change, kind: 'system-and-tools' }
+      }
       return {
         seq: match.event.seq,
         time: match.event.time,

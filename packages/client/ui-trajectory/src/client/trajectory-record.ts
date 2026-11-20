@@ -2,7 +2,9 @@
 
 import type { HTMLAttributes } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { ConversationPromptSnapshot, SystemMessageSections } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {
+  ConversationPromptSnapshot, EffectiveSystemSection, SystemMessageSections,
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectoryTranslate } from './locales.ts'
 
 /** Closed set of trajectory record kinds. */
@@ -62,9 +64,11 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   promptDetail?: ConversationPromptSnapshot
   /** Known prompt text without a loaded request config or tool catalog. */
   systemPromptDetail?: string
-  /** System-prompt/tool-catalog state replaced by a SYSTEM update. */
+  /** Instructions in force per source for {@link systemPromptDetail}, when every retained message carries section metadata. */
+  systemSectionsDetail?: readonly EffectiveSystemSection[]
+  /** System-prompt/tool-catalog state a SYSTEM update changed; absent for the initial prompt and for a rebuilt prompt. */
   previousPromptDetail?: ConversationPromptSnapshot
-  /** Per-source reading of the system message a SYSTEM update record presents. */
+  /** Per-source reading of the in-history system message a SYSTEM update record presents. */
   promptMessageDetail?: SystemMessageSections
   /** Full assistant/tool result content for the details panel. */
   outputDetail?: string
