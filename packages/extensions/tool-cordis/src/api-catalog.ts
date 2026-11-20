@@ -9428,7 +9428,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteConnectionStatus',
-    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly loginUrlAllowed: boolean;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
   },
   {
     name: 'RemoteConnectionUnavailable',

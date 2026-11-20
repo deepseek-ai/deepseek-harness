@@ -17,7 +17,7 @@ import { PairingApproval } from '../src/client/pairing-approval.ts'
 afterEach(cleanup)
 
 const ready: RemoteConnectionState = {
-  deployment: { url: 'https://host.example/app/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+  deployment: { url: 'https://host.example/app/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
   phase: 'ready', ticket: null, error: null, remainingSeconds: 120, retainDetails: false,
 }
 const ticket = { id: 'code-a' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private', lifetimeMs: 120_000 }
@@ -114,12 +114,14 @@ describe('Remote connection section', () => {
   ] as const)('shows %s guidance for %s before the address and keeps pairing available', (language, availability) => {
     const copy = language === 'en' ? en : zh
     const url = availability === 'unreachable-host' ? 'http://127.0.0.1:5432/' : 'https://untrusted.example/app/'
-    const { copyLink } = panel({ deployment: { ...ready.deployment!, url, availability } }, language, { copied: true }, true)
+    const deployment = { ...ready.deployment!, url, availability, loginUrlAllowed: false }
+    const { copyLink } = panel({ deployment }, language, { copied: true }, true)
     const section = screen.getByRole('region', { name: copy.title })
-    const notice = within(section).getByText(copy[availability])
+    const message = copy[availability].split('\n')[0]!
+    const notice = within(section).getByText(message)
     expect(notice.closest('[role="status"]')).not.toBeNull()
     for (const card of within(section).getAllByRole('region')) {
-      expect(within(card).queryByText(copy[availability])).toBeNull()
+      expect(within(card).queryByText(message)).toBeNull()
       expect(notice.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
     const address = within(section).getByRole('region', { name: copy.addressTitle })
@@ -249,7 +251,7 @@ describe('Remote connection section', () => {
     { language: 'en', cached: true }, { language: 'zh', cached: true },
   ] as const)('keeps a failed address read recoverable in $language (cached address: $cached)', ({ language, cached }) => {
     const copy = language === 'en' ? en : zh
-    const deployment = cached ? { ...ready.deployment!, availability: 'untrusted-host' as const } : null
+    const deployment = cached ? { ...ready.deployment!, availability: 'untrusted-host' as const, loginUrlAllowed: false } : null
     const { reload } = panel({ phase: 'error', deployment, error: 'loadFailed' }, language)
     const address = screen.getByRole('region', { name: copy.addressTitle })
     expect(within(address).getByRole('alert').textContent).toBe(copy.loadFailed)
