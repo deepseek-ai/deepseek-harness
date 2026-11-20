@@ -91,6 +91,8 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
+Recent activity notices are advisory history, not reservations or instructions to stop. They arrive after a tool or program completes, even without inspect. Use the current UI and task to decide whether to continue. agent denotes a past action attempt; reconnecting may expose your own earlier activity. external-input may come from a person or other automation. Repeated events are suppressed, but later identical actions can produce new notices. Missing notices do not establish inactivity; external monitoring may be unavailable or limited.
+
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 
 AX read defaults: maxElements=5000, maxDepth=50.
