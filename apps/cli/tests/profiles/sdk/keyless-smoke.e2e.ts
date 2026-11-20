@@ -201,9 +201,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
         expect(toolNames).toEqual(['run_code'])
         for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
         expect(requestText.includes('apply_patch:')).toBe(false)
-        expect(requestText.includes('workflow:')).toBe(false)
       } else {
-        expect(toolNames).toContain('workflow')
         expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
         expect(toolNames.includes('apply_patch')).toBe(patchEnabled)
         expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)

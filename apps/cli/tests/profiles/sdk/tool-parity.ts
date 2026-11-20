@@ -18,6 +18,8 @@ export const toolParityExceptions: Record<ToolMode, readonly Exception[]> = {
   ptc: [
     { tool: 'list_subagent_models', side: 'desktop',
       reason: 'Desktop enables subagent model discovery; SDK delegation inherits the caller model by default.' },
+    { tool: 'workflow', side: 'sdk',
+      reason: 'The SDK PTC overlay changes only the executor so existing base workflow callers keep working; Desktop PTC uses run_code orchestration and omits the separate workflow surface.' },
   ],
 }
 

@@ -8,11 +8,3 @@
 - id: tool-fs
   config:
     applyPatch: false
-
-# run_code already orchestrates tool calls in code, so PTC mode omits the
-# separate workflow tool and its engine, as the Web ptc preset does.
-- id: workflow-ptc
-  disabled: true
-
-- id: tool-workflow
-  disabled: true
