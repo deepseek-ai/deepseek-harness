@@ -14,7 +14,7 @@ private func options(_ overrides: [String: JSONValue] = [:]) throws -> AXTreeRea
 private func tree(_ titles: [String], order: [Int]? = nil, maxElements: Int = 100, missing: Int? = nil) throws -> AXProjection {
     let nodes = (0...titles.count).map { AXUIElementCreateApplication(Int32($0 + 100)) }
     return try AXTreeProjection.project(roots: AXObservedChildren(entries: [nodes[0]]), focusedWindowID: nil, windowScoped: true,
-        maxElements: maxElements, maxDepth: 20, includeMenus: false, details: false, checkCancellation: {}) { element in
+        maxElements: maxElements, maxDepth: 20, includeMenus: false, details: false, numbered: true, checkCancellation: {}) { element in
         let index = try #require(nodes.firstIndex(of: element))
         if index == missing { throw NativeFailure(code: "NATIVE_ERROR", message: "unavailable", accessibilityError: AXError.invalidUIElement.rawValue) }
         let root = index == 0
@@ -27,69 +27,63 @@ private func tree(_ titles: [String], order: [Int]? = nil, maxElements: Int = 10
 
 private let titles = (1...30).map { "Control \($0)" }
 
-private func difference(_ before: AXProjection?, _ after: AXProjection, showDiff: Bool = true,
-                        beforeOptions: AXTreeReadOptions? = nil, afterOptions: AXTreeReadOptions? = nil) throws -> String {
-    let oldOptions = try beforeOptions ?? options()
-    let newOptions = try afterOptions ?? options()
-    return try AXTreeDifference.render(projection: after, current: AXTreeBaseline(projection: after, options: newOptions),
-        previous: before.flatMap { AXTreeBaseline(projection: $0, options: oldOptions) }, showDiff: showDiff, checkCancellation: {})
+private struct Reader {
+    var baseline: AXTreeBaseline?
+    mutating func read(_ input: AXProjection, options custom: AXTreeReadOptions? = nil) throws -> AXProjection {
+        var out = input
+        let resolved = try custom ?? options()
+        baseline = try AXTreeBaseline.observe(&out, options: resolved, previous: baseline, checkCancellation: {})
+        return out
+    }
 }
 
-@Test func axDifferenceStartsFullAndExplicitFullReadsRemainFull() throws {
-    let full = try tree(titles)
-    #expect(try difference(nil, full) == full.tree)
-    #expect(try difference(full, full, showDiff: false) == full.tree)
-    #expect(try difference(full, full) == "AX tree unchanged.")
+@Test func changesUseOnlyTheNumberedRowsThatChanged() throws {
+    var r = Reader(), updated = titles
+    let first = try r.read(tree(titles))
+    #expect(first.tree.contains("0 AXWindow"))
+    #expect(first.indexed[0] == nil)
+    updated[4] = "Renamed"
+    let delta = try r.read(tree(updated))
+    #expect(delta.tree.split(separator: "\n").dropFirst() == ["~\t5 AXButton \"Renamed\""])
+    #expect(delta.indexed[5] == AXUIElementCreateApplication(105))
+    #expect(try r.read(tree(updated)).tree == "There has been no change in the accessibility tree.")
 }
 
-@Test func axDifferenceReportsChangedNativeElementsWithCurrentIDsAndParentContext() throws {
-    let before = try tree(titles)
-    var updated = titles
-    updated[4] = "Updated 中文 🧪"
-    let after = try tree(updated)
-    #expect(try difference(before, after) == """
-    AX diff: + added, - removed, ~ changed.
-    Current (current IDs):
-      - AXWindow "Fixture"
-    ~   - [4] AXButton "Updated 中文 🧪"
-    """)
-    #expect(after.indexed[4] == AXUIElementCreateApplication(105))
+@Test func insertsAndRemovalsUseTheIDsTheCallerReceived() throws {
+    var r = Reader()
+    let initial = Array(1...25)
+    _ = try r.read(tree(titles, order: initial))
+    let plus = try r.read(tree(titles, order: [26] + initial))
+    #expect(plus.tree.split(separator: "\n").dropFirst() == ["+\t26 AXButton \"Control 26\""])
+    #expect(plus.indexed[26] == AXUIElementCreateApplication(126))
+    #expect(plus.elements[0]["elementId"] == .string("26"))
+    let minus = try r.read(tree(titles, order: initial.filter { ![2, 3, 7].contains($0) }))
+    #expect(minus.tree.contains("Removed element IDs: 2-3, 7, 26"))
+    #expect(minus.indexed[2] == nil && minus.indexed[26] == nil)
+    #expect(minus.indexed[4] == AXUIElementCreateApplication(104))
 }
 
-@Test func axDifferenceUsesNativeIdentityWhenIDsShiftAndLabelsRepeat() throws {
-    let sameLabels = Array(repeating: "Same", count: 30)
-    let before = try tree(sameLabels, order: Array(1...29))
-    let after = try tree(sameLabels, order: Array(1...28) + [30, 29])
-    let diff = try difference(before, after)
-    #expect(diff.contains("+   - [28] AXButton \"Same\""))
-    #expect(diff.contains("~   - [29] AXButton \"Same\""))
-    #expect(after.indexed[28] == AXUIElementCreateApplication(130))
-    #expect(after.indexed[29] == before.indexed[28])
-    let removed = try difference(after, before)
-    #expect(removed.contains("Removed (previous IDs):\n  - AXWindow \"Fixture\"\n-   - [28] AXButton \"Same\""))
-    #expect(removed.contains("Current (current IDs):"))
+@Test func movingTwoSameLabelledButtonsChangesTheirIDs() throws {
+    var r = Reader()
+    let labels = Array(repeating: "Duplicate", count: 30)
+    var order = Array(1...30)
+    _ = try r.read(tree(labels, order: order))
+    order.swapAt(2, 8)
+    let delta = try r.read(tree(labels, order: order))
+    #expect(delta.tree.contains("Removed element IDs: 3, 9"))
+    #expect(delta.tree.contains("+\t31 AXButton \"Duplicate\"\n+\t32 AXButton \"Duplicate\""))
+    #expect(delta.indexed[31] == AXUIElementCreateApplication(109))
+    #expect(delta.indexed[32] == AXUIElementCreateApplication(103))
 }
 
-@Test func axDifferenceReportsReorderedElements() throws {
-    let before = try tree(titles)
-    let after = try tree(titles, order: Array(1...28) + [30, 29])
-    let diff = try difference(before, after)
-    #expect(diff.contains("~   - [28] AXButton \"Control 30\""))
-    #expect(diff.contains("~   - [29] AXButton \"Control 29\""))
-}
-
-@Test func axDifferenceFallsBackWhenFullOutputIsSmaller() throws {
-    let before = try tree(["Before"])
-    let after = try tree(["After"])
-    #expect(try difference(before, after) == after.tree)
-}
-
-@Test func axDifferenceDoesNotInferRemovalsFromPartialObservations() throws {
+@Test func cutoffAndUnreadableReadsCannotImplyRemovals() throws {
     let full = try tree(titles)
     for partial in [try tree(titles, maxElements: 4), try tree(titles, missing: 5)] {
-        #expect(AXTreeBaseline(projection: partial, options: try options()) == nil)
-        #expect(try difference(full, partial) == partial.tree)
-        #expect(try difference(partial, full) == full.tree)
+        var r = Reader()
+        _ = try r.read(full)
+        #expect(try r.read(partial).tree == partial.tree)
+        #expect(r.baseline == nil)
+        #expect(try r.read(full).tree == full.tree)
     }
 }
 
@@ -97,16 +91,18 @@ private func difference(_ before: AXProjection?, _ after: AXProjection, showDiff
     ["includeMenus": JSONValue.bool(true)], ["details": .bool(true)],
     ["maxElements": .number(99)], ["maxDepth": .number(19)],
 ])
-func axDifferenceRequiresMatchingReadOptions(_ changed: [String: JSONValue]) throws {
+func changingReadOptionsStartsANewNumberedTree(_ changed: [String: JSONValue]) throws {
+    var r = Reader()
     let full = try tree(titles)
-    #expect(try difference(full, full, afterOptions: options(changed)) == full.tree)
+    _ = try r.read(full)
+    #expect(try r.read(full, options: options(changed)).tree == full.tree)
 }
 
 @Test func axDifferenceStopsOnCancellation() throws {
-    let full = try tree(titles)
-    let baseline = AXTreeBaseline(projection: full, options: try options())
+    var r = Reader(), full = try tree(titles)
+    _ = try r.read(full)
     #expect(throws: NativeFailure.self) {
-        try AXTreeDifference.render(projection: full, current: baseline, previous: baseline, showDiff: true) {
+        try AXTreeBaseline.observe(&full, options: options(), previous: r.baseline) {
             throw NativeFailure(code: "CANCELLED", message: "Cancelled")
         }
     }
@@ -120,13 +116,15 @@ func cancelledReadDiscardsThePublishedWindowBeforeAnotherRequest(code: String) t
     control.startOperation()
     defer { control.finish() }
     let full = try tree(titles)
-    var published = [delivery.scope: AXTreeBaseline(projection: full, options: try options())!]
+    var reader = Reader()
+    _ = try reader.read(full)
+    var published = [delivery.scope: try #require(reader.baseline)]
     #expect(delivery.scopeToDiscard == nil)
     control.cancel(NativeFailure(code: code, message: "Read interrupted"), grace: 1, axTimeout: 1,
                    unresponsive: {}, blockedReply: {})
     let scope = try #require(delivery.scopeToDiscard)
     #expect(scope == SnapshotScope(appHandle: "fixture", windowID: 7))
     published.removeValue(forKey: scope)
-    let current = AXTreeBaseline(projection: full, options: try options())
-    #expect(try AXTreeDifference.render(projection: full, current: current, previous: published[scope], showDiff: true, checkCancellation: {}) == full.tree)
+    reader.baseline = published[scope]
+    #expect(try reader.read(full).tree == full.tree)
 }

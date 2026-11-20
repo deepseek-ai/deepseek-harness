@@ -9,7 +9,7 @@ struct AXReadNode {
 
 enum AXTreeProjection {
     static func project(roots: AXObservedChildren, focusedWindowID: UInt32?, windowScoped: Bool,
-                        maxElements: Int, maxDepth: Int, includeMenus: Bool, details: Bool,
+                        maxElements: Int, maxDepth: Int, includeMenus: Bool, details: Bool, numbered: Bool = false,
                         checkCancellation: () throws -> Void, read: (AXUIElement) throws -> AXReadNode) throws -> AXProjection {
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
@@ -22,7 +22,6 @@ enum AXTreeProjection {
             lines.append(windowScoped ? AXTextFormatter.incompleteDiscovery : AXTextFormatter.unreadableChildLine(level: 0, positioned: false))
         }
         var treeLines: [AXTreeLine] = []
-        var previousSiblings: [AXUIElement?: AXUIElement] = [:]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
         var pending = roots.entries.reversed().map { (element: $0, level: 0, depth: 0, parent: Optional<AXUIElement>.none) }
@@ -49,11 +48,16 @@ enum AXTreeProjection {
             var node = observation.text
             let transparent = node.omitted
             if !transparent {
-                node.index = node.addressable ? indexed.count : nil
-                let text = AXTextFormatter.line(node, level: level, details: details)
-                lines.append(text)
-                treeLines.append(AXTreeLine(element: element, parent: parent, previousSibling: previousSiblings[parent], text: text))
-                previousSiblings[parent] = element
+                node.index = node.addressable ? (numbered ? treeLines.count : indexed.count) : nil
+                if numbered {
+                    let id = treeLines.count
+                    let line = AXTreeLine(element: element, parent: parent, depth: level, id: id,
+                                          body: AXTextFormatter.body(node, details: details), focused: node.focused == true)
+                    treeLines.append(line)
+                    lines.append(line.rendered)
+                } else {
+                    lines.append(AXTextFormatter.line(node, level: level, details: details))
+                }
                 if let index = node.index {
                     indexed[index] = element
                     let frame: JSONValue = node.bounds.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null

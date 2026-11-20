@@ -316,11 +316,12 @@ actor AXWorker {
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
             let options = try AXTreeReadOptions(params)
-            let projection: AXProjection
+            let showDiff = try params.optionalBoolean("showDiff") ?? false
+            var projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
                     maxElements: options.maxElements, maxDepth: options.maxDepth,
-                    includeMenus: options.includeMenus, details: options.details)
+                    includeMenus: options.includeMenus, details: options.details, numbered: showDiff)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -332,9 +333,8 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            let tree = AXTreeBaseline(projection: projection, options: options)
-            let output = try AXTreeDifference.render(projection: projection, current: tree, previous: previousTree,
-                showDiff: params.optionalBoolean("showDiff") ?? false, checkCancellation: { try self.cancellation.check() })
+            let tree = showDiff ? try AXTreeBaseline.observe(&projection, options: options, previous: previousTree,
+                checkCancellation: { try self.cancellation.check() }) : nil
             try cancellation.check()
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed, tree: tree)
             for observed in observedWindows where window == nil || observed.windowID == window {
@@ -343,7 +343,7 @@ actor AXWorker {
             var state: [String: JSONValue] = ["appHandle": .string(handle),
                 "windowId": window.map { .string(String($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
-                "snapshotId": .string(id), "tree": .string(output), "elements": .array(projection.elements),
+                "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]
             if projection.hasUnreadableElements { state["hasUnreadableElements"] = .bool(true) }
             return .result(.object(state))

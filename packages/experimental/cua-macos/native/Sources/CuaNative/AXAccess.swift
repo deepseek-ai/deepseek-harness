@@ -6,10 +6,10 @@ import Darwin
 private typealias AXWindowFunction = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
 
 struct AXProjection {
-    let tree: String
+    var tree: String
     let lines: [AXTreeLine]
-    let elements: [JSONValue]
-    let indexed: [Int: AXUIElement]
+    var elements: [JSONValue]
+    var indexed: [Int: AXUIElement]
     let focusedWindowID: UInt32?
     let truncated: Bool
     let hasUnreadableElements: Bool
@@ -683,7 +683,7 @@ final class AXAccess {
         if error == .success { enabledProcesses.insert(key) }
     }
 
-    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false) throws -> AXProjection {
+    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false, numbered: Bool = false) throws -> AXProjection {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
         var budget = AXChildRecoveryBudget(maxElements: maxElements, timeout: timeout)
@@ -765,7 +765,7 @@ final class AXAccess {
             parentIncomplete: requested == nil ? appChildren.parentIncomplete : appChildren.hasUnreadableElements,
             elementLimitReached: appChildren.elementLimitReached)
         return try AXTreeProjection.project(roots: rootObservation, focusedWindowID: focusedID, windowScoped: requested != nil,
-            maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details,
+            maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details, numbered: numbered,
             checkCancellation: { try self.cancellation.check() }, read: { element in
                 if let failure = rootDiscovery.invalidRoots[element] { throw failure }
                 return try self.readNode(element, includeMenus: includeMenus, readChildren: { observation in

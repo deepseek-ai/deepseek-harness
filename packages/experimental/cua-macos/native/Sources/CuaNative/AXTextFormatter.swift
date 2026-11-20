@@ -67,9 +67,12 @@ enum AXTextFormatter {
     }
 
     static func line(_ node: AXTextNode, level: Int, details: Bool = false) -> String {
-        var line = String(repeating: "  ", count: level) + "- "
-        if let index = node.index { line += "[\(index)] " }
-        line += node.role
+        let id = node.index.map { "[\($0)] " } ?? ""
+        return String(repeating: "  ", count: level) + "- " + id + body(node, details: details)
+    }
+
+    static func body(_ node: AXTextNode, details: Bool) -> String {
+        var line = node.role
         if let subrole = node.subrole, !subrole.isEmpty, subrole != "AXUnknown", subrole != node.role,
            details || !["AXStandardWindow", "AXHostingView"].contains(subrole) { line += " subrole=\(subrole)" }
         if node.enabled == false { line += " disabled" }
