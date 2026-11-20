@@ -126,8 +126,10 @@ it('serves token exchanges through WebServer and keeps token-owned Peers outside
 
 it('answers a sign-in that carries 17 other ports\' Cookies by expiring the earliest one', async () => {
   const { ctx, origin, auth } = await composed()
+  // Counted down from the OS-assigned listener port, so none of them is the listener's own authority.
+  const listenerPort = Number(new URL(origin).port)
   const others = Array.from({ length: 17 }, (_, index) => {
-    const name = `dsh-auth-${createHash('sha256').update(`127.0.0.1:${String(40_000 + index)}`).digest('base64url')}`
+    const name = `dsh-auth-${createHash('sha256').update(`127.0.0.1:${String(listenerPort - 1 - index)}`).digest('base64url')}`
     const claim = Buffer.from(JSON.stringify({ issuedAt: 1_795_000_000_000 + index }), 'utf8').toString('base64url')
     return { name, pair: `${name}=v1.${claim}.unverified` }
   })
