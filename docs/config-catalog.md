@@ -1753,7 +1753,11 @@ export interface Config {
   maxReviewThreads?: number
   /** Most commits one merge request commit listing returns, the oldest ones when there are more. */
   maxCommits?: number
-  /** Most merge requests one status query reads; GitLab refuses a query over its complexity limit, which halves the batch. */
+  /**
+   * Most merge requests one status query reads, 1 by default: in a query that reads several, GitLab 19.5 reports a
+   * mergeable merge request after the first as conflicting. GitLab refuses a query over its complexity limit, which
+   * halves the batch.
+   */
   statusBatchSize?: number
   /** Most `glab` processes one status fetch runs at once. */
   maxConcurrentRequests?: number

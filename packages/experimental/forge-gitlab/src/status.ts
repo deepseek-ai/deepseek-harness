@@ -51,7 +51,9 @@ export const JOBS_QUERY = `query($path: ID!, $iid: String!, $cursor: String!) {
 
 /**
  * Build one query that reads the signed-in user's username and the status of several merge requests, each under the
- * alias `m<index>` with the variables `p<index>` (project path) and `i<index>` (number as a string).
+ * alias `m<index>` with the variables `p<index>` (project path) and `i<index>` (number as a string). GitLab 19.5 answers
+ * `CONFLICT` for every merge request it found mergeable after the first one of a query, since each selects
+ * `diffStatsSummary`.
  * @param count - number of merge requests.
  * @returns the GraphQL document.
  */

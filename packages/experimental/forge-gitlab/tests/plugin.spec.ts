@@ -1,3 +1,6 @@
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import type { ForgeCommandRule } from '@deepseek-ai/dsh-experimental-forge-session'
@@ -5,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GLAB_COMMANDS } from '../src/commands.ts'
 import * as ForgeGitLab from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
+import { HOST, merge } from './fixtures.ts'
+import { mergeRequestNode } from './status.spec.ts'
 
 let ctx: Context | undefined
 
@@ -150,3 +155,58 @@ function otherProvider(): Parameters<Context['forge']['register']>[0] {
     findByHead: never, readiness: never, markReady: never, merge: never, diff: never, fileText: never, fileUrl: never,
   }
 }
+
+// The recording `glab` starts through a POSIX shell script.
+describe.skipIf(process.platform === 'win32')('forge-gitlab plugin status queries', () => {
+  const cleanups: (() => Promise<void>)[] = []
+
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
+  })
+
+  /**
+   * A `glab` that appends the merge request numbers of each status query to a log and answers a mergeable merge request
+   * for each; every other request answers an empty list.
+   */
+  async function recordingGlab(): Promise<{ readonly command: string; readonly queries: () => Promise<string[][]> }> {
+    const root = await mkdtemp(join(tmpdir(), 'forge-gitlab-status-'))
+    cleanups.push(async () => { await rm(root, { recursive: true, force: true }) })
+    const log = join(root, 'queries.log')
+    const script = join(root, 'glab.mjs')
+    await writeFile(script, [
+      'import { appendFileSync, readFileSync } from \'node:fs\'',
+      'if (!process.argv.includes(\'graphql\')) { process.stdout.write(\'[]\'); process.exit(0) }',
+      'const { variables } = JSON.parse(readFileSync(0, \'utf8\'))',
+      'const numbers = Object.keys(variables).filter(name => /^i\\d+$/.test(name)).map(name => variables[name])',
+      `appendFileSync(${JSON.stringify(log)}, numbers.join(' ') + '\\n')`,
+      `const project = ${JSON.stringify({ mergeRequestsFfOnlyEnabled: false, mergeRequest: mergeRequestNode() })}`,
+      'process.stdout.write(JSON.stringify({ data: Object.fromEntries(numbers.map((_number, index) => [\'m\' + index, project])) }))',
+      '',
+    ].join('\n'))
+    const command = join(root, 'glab')
+    await writeFile(command, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(script)} "$@"\n`)
+    await chmod(command, 0o755)
+    return { command, queries: async () => (await readFile(log, 'utf8')).trim().split('\n').map(line => line.split(' ')) }
+  }
+
+  it.each([
+    ['one merge request each by default', {}, [['1'], ['2'], ['3']]],
+    ['the configured number of merge requests', { statusBatchSize: 2 }, [['1', '2'], ['3']]],
+  ])('polls the watches of the forge service in status queries of %s', async (_label, config, batches) => {
+    const glab = await recordingGlab()
+    const context = new Context()
+    cleanups.push(async () => { await context.fiber.dispose() })
+    await context.plugin(ForgeService)
+    await context.plugin(ForgeGitLab, { glabCommand: glab.command, hosts: [HOST], ...config })
+    const mergeable = new Map<number, boolean>()
+
+    for (const number of [1, 2, 3]) {
+      context.forge.watch(merge(number), (update) => { if ('snapshot' in update) mergeable.set(number, update.snapshot.mergeReady) })
+    }
+
+    await vi.waitFor(() => { expect(mergeable.size).toBe(3) }, { timeout: 10_000 })
+    expect([...mergeable.values()]).toEqual([true, true, true])
+    // The queries of one poll run side by side, so their order in the log varies.
+    expect((await glab.queries()).sort((left, right) => left[0]!.localeCompare(right[0]!))).toEqual(batches)
+  })
+})
