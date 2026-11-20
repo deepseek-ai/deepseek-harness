@@ -304,7 +304,7 @@
                     "type": "boolean"
                   },
                   "showDiff": {
-                    "description": "On macOS, return changes from the previous comparable tree, or the full tree when comparison is unavailable or larger. Omitted or false returns the full tree. Windows does not implement true.",
+                    "description": "On macOS, start a numbered tree and return changes on subsequent comparable reads. Omitted or false returns the full tree. Windows does not implement true.",
                     "type": "boolean"
                   },
                   "maxElements": {

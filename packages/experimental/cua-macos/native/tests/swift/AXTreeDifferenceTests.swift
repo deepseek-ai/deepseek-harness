@@ -128,3 +128,52 @@ func cancelledReadDiscardsThePublishedWindowBeforeAnotherRequest(code: String) t
     reader.baseline = published[scope]
     #expect(try reader.read(full).tree == full.tree)
 }
+
+private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused: Int? = nil) throws -> AXProjection {
+    let refs = (0...50).map { AXUIElementCreateApplication(Int32($0 + 500)) }
+    return try AXTreeProjection.project(roots: AXObservedChildren(entries: [refs[0]]), focusedWindowID: 7, windowScoped: true,
+        maxElements: 100, maxDepth: 10, includeMenus: false, details: false, numbered: true, checkCancellation: {}) { element in
+        let key = try #require(refs.firstIndex(of: element))
+        let group = key == 1 || key == 2
+        let role = key == 0 ? "AXWindow" : group ? "AXToolbar" : "AXButton"
+        let title = key == 0 ? "Document" : group ? "Actions" : labels[key] ?? "Save"
+        let nodes = key == 0 ? [1, 2] : group ? children[key - 1] : []
+        return AXReadNode(text: AXTextNode(index: nil, role: role, title: title, value: nil, description: nil,
+            actions: role == "AXButton" ? ["AXPress"] : [], enabled: true, valueWritable: nil, selectionWritable: nil,
+            selected: nil, selectedRange: nil, selectedText: nil, focused: focused == key),
+            children: AXObservedChildren(entries: nodes.map { refs[$0] }))
+    }
+}
+
+@Test func duplicateToolbarsIdentifyTheRenamedLeafWithoutRepeatingEitherAncestor() throws {
+    let children = [[3, 4], [5, 6]]
+    var r = Reader()
+    let first = try r.read(toolbars(children))
+    #expect(first.tree.contains("\t4 AXToolbar \"Actions\"\n\t\t5 AXButton \"Save\""))
+    let changed = try r.read(toolbars(children, labels: [5: "Save Copy"]))
+    #expect(changed.tree.components(separatedBy: "\n").dropFirst() == ["~\t\t5 AXButton \"Save Copy\""])
+    #expect(changed.indexed[5] == AXUIElementCreateApplication(505))
+}
+
+@Test func reparentAndSameLabelReplacementRemoveOldActionIDs() throws {
+    var r = Reader()
+    _ = try r.read(toolbars([[3, 4], [5, 6]]))
+    let moved = try r.read(toolbars([[3, 4, 5], [6]]))
+    #expect(moved.tree.contains("Removed element IDs: 5\n+\t\t7 AXButton \"Save\""))
+    #expect(moved.indexed[5] == nil && moved.indexed[7] == AXUIElementCreateApplication(505))
+    let replaced = try r.read(toolbars([[3, 4, 8], [6]]))
+    #expect(replaced.tree.contains("Removed element IDs: 7\n+\t\t8 AXButton \"Save\""))
+    #expect(replaced.indexed[7] == nil && replaced.indexed[8] == AXUIElementCreateApplication(508))
+}
+
+@Test func focusIsReportedSeparatelyEvenWhenNoTreeRowsChange() throws {
+    var r = Reader()
+    let children = [[3], [4]]
+    _ = try r.read(toolbars(children, focused: 3))
+    let changed = try r.read(toolbars(children, focused: 4))
+    #expect(changed.tree.contains("~\t\t2 AXButton \"Save\""))
+    #expect(changed.tree.contains("~\t\t4 AXButton focused \"Save\""))
+    #expect(changed.tree.hasSuffix("The focused UI element is 4 AXButton focused \"Save\""))
+    let same = try r.read(toolbars(children, focused: 4))
+    #expect(same.tree == "There has been no change in the accessibility tree.\nThe focused UI element is 4 AXButton focused \"Save\"")
+}
