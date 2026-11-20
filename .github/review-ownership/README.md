@@ -68,7 +68,7 @@ The `DSH_APPROVAL_REVIEW_SCOPE` repository variable controls the pilot publisher
 
 A maintainer can re-evaluate one open pull request with the `workflow_dispatch` input `pull_number`. A dispatch is accepted only from the default branch and only when the scope is `all` or that pull-request number.
 
-The variable does not affect the legacy status publisher. The variable’s current value is the authority for whether a pilot is active; this document does not assert one.
+The variable does not change how the legacy publisher calculates or publishes the required status. When that publisher confirms a delegated human review was dismissed, it calls the machine workflow for the selected PR. A dismissal made with `GITHUB_TOKEN` does not itself start a review workflow. The called and standalone machine jobs share one concurrency group per PR and read the current review state before writing.
 
 Ruleset `27532727` stays disabled while the pilot runs and adds no separate requirement. The active ruleset `20925054` requires one approving review and the `weighted approval` status: the machine review counts toward the one-approval requirement, but a pull request below the weighted threshold stays blocked by the status. No additional enforcement is added before the pilot’s error behavior, latency, and stale-approval behavior are verified. The legacy status requirement is not retired before the required review team below is verified.
 

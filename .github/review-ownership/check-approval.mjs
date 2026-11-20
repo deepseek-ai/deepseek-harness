@@ -328,6 +328,7 @@ export async function runApprovalCheck({ event, policySource, api, checkApi = ap
   const pull = pullRequestFromEvent(event)
   await publishStatus(api, pull, 'pending', 'Evaluating approval points.', runUrl)
   let result
+  let dismissedDelegation = false
   try {
     result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
     for (const delegation of result.delegations) {
@@ -338,6 +339,12 @@ export async function runApprovalCheck({ event, policySource, api, checkApi = ap
         })
         if (!isRecord(dismissed) || dismissed.id !== reviewId || dismissed.state !== 'DISMISSED') {
           throw new Error('delegated review dismissal was not confirmed')
+        }
+        // Signal on the first confirmed dismissal; a later dismissal or re-evaluation failure
+        // must not suppress the machine pilot's refresh.
+        if (!dismissedDelegation) {
+          dismissedDelegation = true
+          if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'dismissed=true\n')
         }
         write(`Dismissed @${delegation.login}'s review ${reviewId} for delegation to @${delegation.delegatedTo}.`)
       }

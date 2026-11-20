@@ -14,17 +14,21 @@ on:
         description: Open pull request to re-evaluate
         type: string
         required: true
+  workflow_call:
+    secrets:
+      DSH_APPROVAL_BOT_TOKEN:
+        description: Machine-user token that writes the approval review and status comment
+        required: true
 
 permissions:
   contents: read
   pull-requests: read
 
-concurrency:
-  group: weighted-approval-machine-${{ (inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
-  cancel-in-progress: false
-
 jobs:
   evaluate:
+    concurrency:
+      group: weighted-approval-machine-${{ (inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
+      cancel-in-progress: false
     if: >-
       (vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&
         (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||

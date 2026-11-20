@@ -1478,6 +1478,7 @@ describe('Weighted approval workflow', () => {
     const workflowRun = workflowEvent(publisher, 'workflow_run')
     const review = workflowEvent(reviewEvent, 'pull_request_review')
     const job = workflowJob(publisher, 'publish-status')
+    const machineJob = workflowJob(publisher, 'evaluate-machine')
     const recordJob = workflowJob(reviewEvent, 'record-review-event')
     if (!isRecord(publisher.on)) throw new TypeError('weighted-approval workflow must define events')
     if (!isRecord(reviewEvent.on)) throw new TypeError('weighted-approval review event workflow must define events')
@@ -1515,6 +1516,7 @@ describe('Weighted approval workflow', () => {
         + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
         + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
       name: 'weighted approval publisher',
+      outputs: { dismissed: '${{ steps.publish.outputs.dismissed }}' },
       'runs-on': 'ubuntu-latest',
       'timeout-minutes': 5,
     })
@@ -1567,12 +1569,22 @@ describe('Weighted approval workflow', () => {
       run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
     })
     expect(publish).toMatchObject({
+      id: 'publish',
       if: "steps.revoke.outputs.active == 'true'",
       env: {
         GITHUB_TOKEN: '${{ github.token }}',
         GITHUB_RUN_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
       },
       run: 'node .github/review-ownership/check-approval.mjs',
+    })
+    expect(machineJob).toMatchObject({
+      needs: 'publish-status',
+      if: "always() && needs.publish-status.outputs.dismissed == 'true' && (vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&\n"
+        + "  (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||\n"
+        + "  vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', github.event.pull_request.number || github.event.issue.number))))",
+      permissions: { contents: 'read', 'pull-requests': 'read' },
+      secrets: { DSH_APPROVAL_BOT_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}' },
+      uses: './.github/workflows/weighted-approval-machine.yml',
     })
     expect(recordJob).toMatchObject({
       if: "github.event.pull_request.state == 'open'",
@@ -1584,7 +1596,7 @@ describe('Weighted approval workflow', () => {
     expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
     expect(recordSteps).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
-    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY', 'secrets.DSH_APPROVAL_BOT_TOKEN'])
     expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
     expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
   })
@@ -1602,15 +1614,24 @@ describe('Weighted approval machine workflow', () => {
     const checkout = steps.find(step => step.name === 'Check out trusted approval policy')
 
     expect(publisher.name).toBe('weighted-approval-machine')
-    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'issue_comment', 'workflow_run', 'workflow_dispatch'])
+    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'issue_comment', 'workflow_run', 'workflow_dispatch', 'workflow_call'])
     expect(workflowEvent(publisher, 'workflow_dispatch').inputs).toEqual({
       pull_number: { description: 'Open pull request to re-evaluate', type: 'string', required: true },
+    })
+    expect(publisher.on.workflow_call).toEqual({
+      secrets: {
+        DSH_APPROVAL_BOT_TOKEN: {
+          description: 'Machine-user token that writes the approval review and status comment',
+          required: true,
+        },
+      },
     })
     expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
     expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
     expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })
     expect(publisher.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' })
-    expect(publisher.concurrency).toEqual({
+    expect(publisher.concurrency).toBeUndefined()
+    expect(job.concurrency).toEqual({
       group: "weighted-approval-machine-${{ (inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
       'cancel-in-progress': false,
     })
