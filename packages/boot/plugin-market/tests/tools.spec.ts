@@ -1,4 +1,5 @@
 /** The read-only market listing tool over the same service the Discover page uses. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -33,6 +34,7 @@ async function fixture(indexes: readonly string[] = [URL_A]) {
   }
   await ctx.plugin(Manager)
   await ctx.plugin(PluginMarket, { indexes: [...indexes], detailCacheDir: UNUSED_CACHE })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -220,6 +222,7 @@ it('registers the tool only while the pluginMarket service is mounted', async ()
     listVersionExemptions() { return { exemptions: {}, warnings: [] } }
   }
   await ctx.plugin(Manager)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

@@ -68,6 +68,7 @@ export function applyWriteTool(ctx: Context, sandbox: FsSandboxController): void
       : 'Read an existing file before overwriting it with write'
         + (ctx.tools.get('edit', scope) === undefined ? '' : ' and prefer edit for targeted changes')
         + '.',
+    retirement: 'The write tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

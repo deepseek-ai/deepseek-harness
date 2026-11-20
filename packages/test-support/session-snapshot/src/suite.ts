@@ -401,8 +401,8 @@ function pinningHeaderPayloads(rawLog: string, ctx: NormalizeContext): unknown[]
 }
 
 /**
- * The rendered prompt text of one parsed `system/message` record: its single
- * text block, or `''` when the empty `content` records "no system prompt".
+ * Render one parsed `system/message` with blank lines between its text blocks.
+ * Empty content records no system prompt.
  * Any other record yields `undefined`.
  */
 function systemPromptOf(record: Record<string, unknown>): string | undefined {
@@ -410,8 +410,9 @@ function systemPromptOf(record: Record<string, unknown>): string | undefined {
   const data = record.data as { message?: { content?: unknown } } | undefined
   const content = data?.message?.content
   if (!Array.isArray(content)) return undefined
-  const block = content[0] as { text?: unknown } | undefined
-  return content.length === 0 ? '' : typeof block?.text === 'string' ? block.text : undefined
+  const texts = content.map((block: { text?: unknown }) => block.text)
+  if (!texts.every((text): text is string => typeof text === 'string')) return undefined
+  return texts.map(text => text.trim()).filter(Boolean).join('\n\n')
 }
 
 /** Extract every array-valued tool catalog from a normalized header sequence. */

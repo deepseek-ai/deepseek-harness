@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-deferred-system-compaction.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-deferred-system-compaction.md
+/agent-note-deferred-system-rebuilding-after-compaction:
+  en: c6fa528f2e9eb1ac
+  zh: 0879b09557393083
+/agent-note-deferred-system-rebuilding-after-compaction/problem:
+  en: 6ccd4f8c4f9dc1ef
+  zh: 97dd37097903237c
+/agent-note-deferred-system-rebuilding-after-compaction/decision:
+  en: 03a93853db317ab6
+  zh: 6fc52e8e4f8fa489
+/agent-note-deferred-system-rebuilding-after-compaction/alternatives-considered:
+  en: 7d78cd0b84929ad3
+  zh: ca604e60bd9c7a4c
+/agent-note-deferred-system-rebuilding-after-compaction/consequences:
+  en: 70cb12c32fe892d4
+  zh: 1d30e5f6f25a8c8b

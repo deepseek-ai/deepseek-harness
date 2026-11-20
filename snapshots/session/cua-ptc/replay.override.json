@@ -170,6 +170,39 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-system-input",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst win = await app.getWindow('8');\\nawait win.getAccessibilityTree();\\nconst clicked = await win.click([100, 100], { relative: true, modifiers: ['shift'], useSystemInput: true });\\nconst chord = await app.pressKey('s', ['shift'], { useSystemInput: true });\\nawait app.sendKeyEvent('shift', 'down', { useSystemInput: true });\\nconst released = await app.sendKeyEvent('shift', 'up', { useSystemInput: true });\\ninspect({ systemClick: clicked.dispatched, systemChord: chord.dispatched, systemKeyReleased: released.dispatched });\",\"description\":\"Use explicit system clicks and keyboard input\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {

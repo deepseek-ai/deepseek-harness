@@ -1,0 +1,18 @@
+{
+  "patches": [
+    {
+      "at": 0,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          { "type": "block-start", "index": 0, "blockType": "reasoning" },
+          { "type": "block-end", "index": 0, "block": { "type": "reasoning", "text": "Check the sign-in through dws." } },
+          { "type": "block-start", "index": 1, "blockType": "tool-call" },
+          { "type": "block-end", "index": 1, "block": { "type": "tool-call", "id": "call_dws_status", "name": "bash", "arguments": "{\"command\":\"\\\"{{fromRequest:DingTalk CLI: run .dws. by its absolute path .(/[^;]+?).; the bare name}}\\\" auth status --readonly --format json\",\"description\":\"Check the DingTalk sign-in\"}" } },
+          { "type": "usage", "usage": { "inputTokens": 200, "outputTokens": 20, "cacheReadTokens": 0, "reasoningTokens": 5 } },
+          { "type": "finish", "reason": { "kind": "tool-calls" } }
+        ]
+      }
+    }
+  ]
+}

@@ -88,7 +88,7 @@ describe('toPiContext', () => {
     expect(context).toEqual({
       systemPrompt: 'be helpful',
       tools: [{ name: 'f', description: 'F', parameters: { type: 'object', properties: {} } }],
-      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 }],
     })
   })
 
@@ -297,7 +297,7 @@ describe('toPiContext', () => {
       role: 'toolResult',
       toolCallId: 'c1',
       toolName: 'get_weather',
-      content: [{ type: 'text', text: 'Sunny!' }],
+      content: [{ type: 'text', text: 'Sunny' }, { type: 'text', text: '!' }],
       isError: false,
       timestamp: 0,
     })

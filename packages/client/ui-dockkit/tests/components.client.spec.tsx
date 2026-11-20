@@ -19,6 +19,7 @@ import { applyOp } from '../src/engine/operations.ts'
 import { FLOAT_DEFAULT_SIZE, FLOAT_MIN_SIZE } from '../src/engine/constraints.ts'
 import { floatRectAt } from '../src/engine/geometry.ts'
 import { DockSurface, type DockSurfaceProps } from '../src/components/DockSurface.tsx'
+import { TabTitle } from '../src/components/TabTitle.tsx'
 import type { TabMenuExtras } from '../src/contract/adapter.ts'
 import { FloatLayer, type FloatLayerProps } from '../src/components/FloatLayer.tsx'
 import { dockPaneIds, getPane } from '../src/engine/tree.ts'
@@ -574,51 +575,14 @@ describe('DockSurface', () => {
     }
   })
 
-  it('marks a chip title clipped while its text is wider than its box, re-reading on resize', () => {
-    class FakeResizeObserver implements ResizeObserver {
-      static readonly all: FakeResizeObserver[] = []
-      readonly observe = vi.fn()
-      readonly unobserve = vi.fn()
-      readonly disconnect = vi.fn()
-      constructor(private readonly callback: ResizeObserverCallback) {
-        FakeResizeObserver.all.push(this)
-      }
-
-      fire(): void {
-        this.callback([], this)
-      }
-    }
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
-    let clientWidth = 200
-    const descriptors = ['scrollWidth', 'clientWidth'].map(name =>
-      [name, Object.getOwnPropertyDescriptor(Element.prototype, name)] as const)
-    const title = (element: Element): boolean => element.hasAttribute('data-dockkit-tab-title')
-    Object.defineProperty(Element.prototype, 'scrollWidth', { configurable: true, get(this: Element) { return title(this) ? 120 : 0 } })
-    Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get(this: Element) { return title(this) ? clientWidth : 0 } })
-    try {
-      const controller = seededController()
-      const { unmount } = renderSurface(controller, spyIntents())
-      const span = document.querySelector<HTMLElement>('[data-dockkit-tab-title]')
-      if (span === null) throw new Error('expected a chip title')
-      const observer = FakeResizeObserver.all.find(candidate => candidate.observe.mock.calls.some(([target]) => target === span))
-      if (observer === undefined) throw new Error('expected the title to observe its own size')
-      expect(span.hasAttribute('data-dockkit-tab-clipped')).toBe(false)
-      // The chip narrowed under the text.
-      clientWidth = 80
-      act(() => { observer.fire() })
-      expect(span.hasAttribute('data-dockkit-tab-clipped')).toBe(true)
-      clientWidth = 200
-      act(() => { observer.fire() })
-      expect(span.hasAttribute('data-dockkit-tab-clipped')).toBe(false)
-      unmount()
-      expect(observer.disconnect).toHaveBeenCalledTimes(1)
-    } finally {
-      for (const [name, descriptor] of descriptors) {
-        if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)
-        else Object.defineProperty(Element.prototype, name, descriptor)
-      }
-      vi.unstubAllGlobals()
-    }
+  it('renders and renames a chip title without querying its width', () => {
+    const scrollWidth = vi.spyOn(Element.prototype, 'scrollWidth', 'get')
+    const clientWidth = vi.spyOn(Element.prototype, 'clientWidth', 'get')
+    const view = render(<TabTitle>Files</TabTitle>)
+    view.rerender(<TabTitle>A long renamed file.ts</TabTitle>)
+    expect(view.getByText('A long renamed file.ts').hasAttribute('data-dockkit-tab-title')).toBe(true)
+    expect(scrollWidth).not.toHaveBeenCalled()
+    expect(clientWidth).not.toHaveBeenCalled()
   })
 
   it('asks for the seeded tab from the strip\'s add control, naming the pane and nothing else', () => {

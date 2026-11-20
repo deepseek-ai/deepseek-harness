@@ -1,0 +1,3 @@
+- insert:
+    - id: fixture-remote-connection-extension
+      name: '@fixture/remote-connection-extension'

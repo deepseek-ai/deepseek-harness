@@ -506,6 +506,47 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
+  it('reports why a claim is blocked without changing the task revision', async () => {
+    const { ctx, lead } = await setup([])
+    const blocker = await ctx.agentTeams.createTask(lead, { subject: 'blocker', description: 'blocker' })
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'dependent', description: 'dependent', blockedBy: [blocker.id] })
+    const blocked = await execute(ctx, lead, 'team_task_update', { task_id: task.id, expected_revision: task.revision, action: 'claim' })
+    expect(blocked.isError).toBe(true)
+    expect(blocked.error?.info).toEqual({ name: 'TeamError', code: 'TEAM_TASK_BLOCKED' })
+    expect(text(blocked)).toContain('has unfinished dependencies; complete them before claiming')
+    expect(ctx.agentTeams.getTask(lead, task.id).revision).toBe(task.revision)
+
+    for (const action of ['claim', 'complete'] as const) {
+      const current = ctx.agentTeams.getTask(lead, blocker.id)
+      const updated = await ctx.agentTeams.updateTask(lead, { taskId: blocker.id, expectedRevision: current.revision, action })
+      const rejected = await execute(ctx, lead, 'team_task_update', { task_id: blocker.id, expected_revision: updated.revision, action: 'claim' })
+      expect(rejected.isError).toBe(true)
+      expect(rejected.error?.info).toEqual({ name: 'TeamError', code: 'TEAM_TASK_BLOCKED' })
+      expect(text(rejected)).toContain(`is ${updated.status}; claim requires pending`)
+      expect(ctx.agentTeams.getTask(lead, blocker.id).revision).toBe(updated.revision)
+    }
+  })
+
+  it('keeps omitted write scopes and clears explicit empty scopes on edit', async () => {
+    const { ctx, lead } = await setup([])
+    const task = await ctx.agentTeams.createTask(lead, {
+      subject: 'Draft', description: 'Task to edit', writeScopes: ['src/team'],
+    })
+
+    const edited = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
+    })
+    expect(edited.isError, text(edited)).toBe(false)
+    const editedTask = JSON.parse(text(edited)) as { revision: number }
+    expect(editedTask).toMatchObject({ subject: 'Edited', writeScopes: ['src/team'] })
+
+    const cleared = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: editedTask.revision, action: 'edit', write_scopes: [],
+    })
+    expect(cleared.isError, text(cleared)).toBe(false)
+    expect(JSON.parse(text(cleared))).toHaveProperty('writeScopes', [])
+  })
+
   it('adapts optional task filters, mutations, pagination, and default waiting', async () => {
     const { ctx, lead } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'fork-worker', 'stay active', 'fork')
@@ -862,15 +903,17 @@ describe('dsh-tool-team', () => {
     await other.dispose()
   })
 
-  it('updates model requests when Team is switched on and off within a turn', async () => {
-    const { ctx, lead, adapter } = await setup([
+  it.each(['disabled', 'unloaded'])('updates model requests when Team is enabled then %s within a turn', async (ending) => {
+    const { ctx, lead, adapter, fiber } = await setup([
       toolCallResponse('before-team', 'list_agents', {}),
       toolCallResponse('with-team', 'list_agents', {}),
       textResponse('ordinary work continues'),
     ], false)
     ctx.on('tools/execute', async (exec, next) => {
       const result = await next()
-      await ctx.agentTeams.setEnabled(lead, exec.callId === 'before-team')
+      if (exec.callId === 'before-team') await ctx.agentTeams.setEnabled(lead, true)
+      else if (ending === 'disabled') await ctx.agentTeams.setEnabled(lead, false)
+      else await fiber.dispose()
       return result
     })
 
@@ -884,10 +927,23 @@ describe('dsh-tool-team', () => {
       expect(tools.filter(tool => TEAM_TOOLS.includes(tool.name)).map(tool => tool.name).sort())
         .toEqual(enabled ? TEAM_TOOLS : [])
       expect(tools.filter(tool => !TEAM_TOOLS.includes(tool.name))).toEqual(ordinaryTools)
-      const system = request.messages.find(message => message.role === 'system')
-      const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      expect(prompt?.includes('Agent Teams is available')).toBe(enabled)
-      expect(prompt?.includes('record expected write scopes on shared tasks')).toBe(enabled)
+      const system = request.messages.findLast(message => message.source?.kind === 'system-prompt'
+        && message.source.sections?.some(section => section.name === 'team:policy'))
+      const source = system?.source
+      const section = source?.kind === 'system-prompt' ? source.sections?.find(section => section.name === 'team:policy') : undefined
+      if (index === 0) expect(section).toBeUndefined()
+      else if (index === 2 && ending === 'unloaded') expect(section?.state).toBe('retired')
+      else expect(section?.state).toBe('active')
+      const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n') ?? ''
+      expect(prompt.includes('Agent Teams is available')).toBe(enabled)
+      expect(prompt.includes('record expected write scopes on shared tasks')).toBe(enabled)
+      if (index === 2) {
+        if (ending === 'unloaded') expect(prompt).toBe('The shared task board is no longer available. Its instructions no longer apply.')
+        else {
+          expect(prompt.trim()).toBe('The earlier instructions from team:policy no longer apply.')
+          expect(system?.content[section!.contentIndex!]).toEqual({ type: 'text', text: '' })
+        }
+      }
       expect(runtimeContextText(request)).toContain(leadIdentity(lead))
       const contexts = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
       const initial = adapter.requests[0]!.messages.findLast(message => message.source?.kind === 'runtime-context')?.source

@@ -19,7 +19,6 @@ const FAILED: RemoteResult<ForgeBaseBranches> = { ok: false, error: new RemoteEr
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 
 function ok(value: ForgeBaseBranches): RemoteResult<ForgeBaseBranches> {
@@ -38,7 +37,7 @@ function mount(props: Partial<BaseMenuProps> = {}) {
   const view = render(<BaseMenu {...all} />)
   const trigger = (): HTMLElement => view.getByRole('button', { name: `Base branch: ${all.label}` })
   const rows = (): string[] => view.queryAllByRole('menuitem').map(row => row.textContent ?? '')
-  const search = (): HTMLElement => view.getByRole('textbox', { name: en['diff.base.search'] })
+  const search = (): HTMLElement => view.getByRole('searchbox', { name: en['diff.base.search'] })
   const rerender = (next: Partial<BaseMenuProps>): void => { view.rerender(<BaseMenu {...all} {...next} />) }
   return { view, list, choose, trigger, rows, search, rerender }
 }
@@ -166,49 +165,16 @@ describe('BaseMenu trigger', () => {
     expect(m.rows()).toHaveLength(3)
   })
 
-  it('gives the search field the keyboard one frame after opening, except on a touch screen', async () => {
-    let frames = new Map<number, FrameRequestCallback>()
-    let next = 0
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.set(++next, callback)
-      return next
-    })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => { frames.delete(id) })
-    /** Run the frames queued so far; ones they queue wait for the next call. */
-    const frame = (): void => {
-      const queued = frames
-      frames = new Map()
-      act(() => { for (const callback of queued.values()) callback(0) })
-    }
+  it('gives the search field the keyboard on opening, except when touch opens the menu', async () => {
     const m = mount()
     fireEvent.click(m.trigger())
-    expect(document.activeElement).not.toBe(m.search())
-    frame()
+    await settle()
     expect(document.activeElement).toBe(m.search())
     fireEvent.click(m.trigger())
 
-    const matchMedia = vi.fn((_query: string) => ({ matches: true }))
-    vi.stubGlobal('matchMedia', matchMedia)
-    m.trigger().focus()
+    fireEvent.pointerDown(m.trigger(), { pointerType: 'touch' })
     fireEvent.click(m.trigger())
-    frame()
-    expect(matchMedia).toHaveBeenCalledWith('(pointer: coarse)')
+    await settle()
     expect(document.activeElement).not.toBe(m.search())
-    fireEvent.click(m.trigger())
-
-    matchMedia.mockReturnValue({ matches: false })
-    fireEvent.click(m.trigger())
-    frame()
-    expect(document.activeElement).toBe(m.search())
-  })
-
-  it('cancels the pending focus when the menu closes before its frame', async () => {
-    const cancelled = vi.spyOn(window, 'cancelAnimationFrame')
-    const m = mount()
-    fireEvent.click(m.trigger())
-    fireEvent.click(m.trigger())
-    expect(cancelled).toHaveBeenCalled()
-    await settle(50)
-    expect(m.view.queryByRole('textbox')).toBeNull()
   })
 })

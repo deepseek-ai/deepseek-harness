@@ -26,7 +26,7 @@ const ROOT_LEVEL: DirLevel = {
   truncated: false,
 }
 const SRC_LEVEL: DirLevel = { entries: [{ name: 'a.ts', type: 'file', size: 1 }, { name: 'b.ts', type: 'file', size: 1 }], truncated: false }
-const A = sessionFileAddress(SESSION, 'src/a.ts')
+const A = sessionFileAddress(SESSION, `${ROOT}/src/a.ts`)
 const t = makeTranslate(zh)
 
 beforeEach(() => {

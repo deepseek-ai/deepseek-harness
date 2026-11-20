@@ -13,3 +13,8 @@
             name: DeepSeek
             models:
               - id: deepseek-v4-flash
+
+# Recorded programs are async function bodies, so replay keeps the per-call runtime.
+- id: ptc-runtime
+  config:
+    executionMode: per-call

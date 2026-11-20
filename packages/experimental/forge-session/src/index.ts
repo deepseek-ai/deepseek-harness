@@ -3,7 +3,7 @@
 import { Context, FiberState, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import type { ChangeRequestKey, ChangeRequestRef, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestKey, ChangeRequestRef, ChangeRequestWatchOptions, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -33,6 +33,8 @@ declare module '@deepseek-ai/cordis' {
 interface SessionWatch {
   readonly session: Session
   readonly listeners: Set<SessionChangeRequestsListener>
+  /** How fresh a status the Session's first watcher asked for, which every forge watch of the Session asks for. */
+  readonly options: ChangeRequestWatchOptions
   /** Projection bindings that `forgeWatches` and the last notification reflect. */
   bindings: readonly BindingState[]
   readonly forgeWatches: Map<ChangeRequestKey, () => void>
@@ -61,6 +63,8 @@ export class ForgeSessionService extends Service {
   private readonly watches = new Map<Session, SessionWatch>()
   private readonly discoveries = new Set<Promise<void>>()
   private readonly sessionLifetimes = new WeakMap<Session, AbortController>()
+  /** Epoch milliseconds of the latest tool result of each Session's current turn. */
+  private readonly toolResults = new WeakMap<Session, number>()
   private readonly lifetime = new AbortController()
   /** Rules whose registration is live. */
   private readonly rules = new Map<string, ForgeCommandRule>()
@@ -184,19 +188,21 @@ export class ForgeSessionService extends Service {
   /**
    * Watch a Session's visible change requests as an effect on the calling
    * fiber. Every visible change request that a provider recognizes is polled
-   * through `ctx.forge` while the Session has a watcher. Listeners receive the
+   * for its snapshot through `ctx.forge` while the Session has a watcher. Listeners receive the
    * complete list after each later binding or provider change, or polling result; read the
    * current list with {@link changeRequests}. Listeners must not throw; a
    * thrown error is logged and skipped.
    * @param session - Session to watch.
    * @param listener - receives the complete visible list.
+   * @param options - when the Session's first watcher needs a status newer than the latest one; a later watcher's
+   * options change nothing.
    * @returns the disposer that stops this watch.
    */
-  watch(session: Session, listener: SessionChangeRequestsListener): () => void {
+  watch(session: Session, listener: SessionChangeRequestsListener, options: ChangeRequestWatchOptions = {}): () => void {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(session)
       if (watch === undefined) {
-        watch = { session, listeners: new Set(), bindings: this.state(session).bindings, forgeWatches: new Map() }
+        watch = { session, listeners: new Set(), options, bindings: this.state(session).bindings, forgeWatches: new Map() }
         this.watches.set(session, watch)
         this.sync(watch)
       }
@@ -310,18 +316,52 @@ export class ForgeSessionService extends Service {
     return entries
   }
 
-  /** Discover change requests for this result's pushes and refresh watchers after binding changes. */
+  /**
+   * Discover change requests for this result's pushes, refresh watchers after binding changes, and poll a Session's
+   * change requests once a turn that ran a tool ends.
+   */
   private react(session: Session, event: SessionEvent): void {
+    if (event.type === 'turn/end') {
+      this.turnEnded(session)
+      return
+    }
     if (event.type !== 'tool/result' && event.type !== 'tool/ptc-dispatch' && pluginRecordOf(event)?.type !== BINDING_RECORD) return
+    if (event.type === 'tool/result' || event.type === 'tool/ptc-dispatch') this.toolResults.set(session, Date.now())
     const state = this.state(session)
     for (const push of state.pushes) {
-      if (push.seq === event.seq) void this.discover(session, push.remote, push.branch)
+      if (push.seq !== event.seq) continue
+      this.expectChanges(state.bindings, push.remote)
+      void this.discover(session, push.remote, push.branch)
     }
     const watch = this.watches.get(session)
     if (watch === undefined || watch.bindings === state.bindings) return
     watch.bindings = state.bindings
     this.sync(watch)
     this.notify(watch)
+  }
+
+  /**
+   * Poll the watched change requests a Session shows once a turn of it that ran a tool ended, unless a poll of them
+   * started after the turn's last tool result: a command of the turn may have merged, closed, or updated one.
+   */
+  private turnEnded(session: Session): void {
+    const since = this.toolResults.get(session)
+    if (since === undefined) return
+    this.toolResults.delete(session)
+    const maxAgeMs = Date.now() - since
+    for (const { ref } of this.entries(this.state(session).bindings)) {
+      if (ref !== null) this.home.forge.refresh(ref, { maxAgeMs })
+    }
+  }
+
+  /** Announce to the registry that the visible change requests in the repository of a pushed remote are about to change. */
+  private expectChanges(bindings: readonly BindingState[], remote: string): void {
+    const repository = this.home.forge.repositoryFromRemote(remote)
+    if (repository === undefined) return
+    for (const { ref } of this.entries(bindings)) {
+      // Keys compare repositories without case.
+      if (ref !== null && changeRequestKey(ref) === changeRequestKey({ repository, number: ref.number })) this.home.forge.expectChange(ref)
+    }
   }
 
   /** Poll exactly the visible change requests that a provider recognizes. */
@@ -336,7 +376,7 @@ export class ForgeSessionService extends Service {
       watch.forgeWatches.delete(key)
     }
     for (const [key, ref] of wanted) {
-      if (!watch.forgeWatches.has(key)) watch.forgeWatches.set(key, this.home.forge.watch(ref, () => { this.notify(watch) }))
+      if (!watch.forgeWatches.has(key)) watch.forgeWatches.set(key, this.home.forge.watch(ref, () => { this.notify(watch) }, watch.options))
     }
   }
 

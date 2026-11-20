@@ -48,10 +48,10 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
     await runtimeContext.fiber.dispose()
   })
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjections)
   ctx.tools.setExecutor(new NativeToolExecutor(ctx))
   await runtimeContext.plugin(ControlledRuntime)
   const runtime = runtimeContext.ptcRuntime as ControlledRuntime

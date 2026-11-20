@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for general.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines/general.md
+/g-general:
+  en: eeded9c200e31c82
+  zh: 488049fad75b1944
+/g-general/g-1-write-every-rule-in-the-standard-format:
+  en: 812e982277f154f9
+  zh: 85d293456add404e
+/g-general/g-1-write-every-rule-in-the-standard-format/reason:
+  en: 58a1a93bb1664942
+  zh: 83055bf39becba0a
+/g-general/g-1-write-every-rule-in-the-standard-format/example-bad:
+  en: 0fafa3d89d20b56c
+  zh: f99acb925b2ca7f1
+/g-general/g-1-write-every-rule-in-the-standard-format/example:
+  en: b9b5449b4e5cc2bf
+  zh: fa9be57f4cf4a267
+/g-general/g-1-write-every-rule-in-the-standard-format/note:
+  en: bd7d2c77aac162e2
+  zh: 6187fa099e222e66
+/g-general/g-1-write-every-rule-in-the-standard-format/enforcement:
+  en: 696490996bd95844
+  zh: b8ded650efa9883b
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters:
+  en: b13d4402873fda38
+  zh: a3fb45bd1563258f
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/reason:
+  en: e8a0c671e66da673
+  zh: 86352f61cfd97ac8
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/example-bad:
+  en: 6591f36eead7f5e1
+  zh: e79e6a3200e5e889
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/example:
+  en: 55c0bd9d10b26852
+  zh: 1b908e550a18e2da
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/alternative:
+  en: f0dabc1cf7cd8b19
+  zh: b00ed9e4f57c9111
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/exception:
+  en: 8533ab3ff7b2c4b6
+  zh: a05d8df7545508c8
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/note:
+  en: 7b73640586b3aeba
+  zh: 577477b5215ee03a
+/g-general/g-2-avoid-callbacks-in-public-interface-parameters/enforcement:
+  en: 90b1409e10d2a31f
+  zh: c54325d63795657e

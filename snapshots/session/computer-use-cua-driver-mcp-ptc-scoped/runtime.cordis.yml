@@ -1,0 +1,4 @@
+# Replays the computer-use-cua-driver-mcp-ptc Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

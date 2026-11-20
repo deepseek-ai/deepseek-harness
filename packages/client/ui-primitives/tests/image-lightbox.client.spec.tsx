@@ -2,7 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
+import { useState } from 'react'
 import { ImageLightbox } from '../src/ImageLightbox.tsx'
+import { Menu } from '../src/Menu.tsx'
 
 afterEach(cleanup)
 
@@ -68,5 +70,40 @@ it('leaves Escape to an open context menu before closing the image', () => {
     expect(onClose).not.toHaveBeenCalled()
   } finally { menu.remove() }
   fireEvent.keyDown(view.getByRole('button'), { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledOnce()
+})
+
+it('leaves Tab and Escape to the search controls in a portaled image menu', () => {
+  const onClose = vi.fn()
+  function Preview() {
+    const [point, setPoint] = useState<{ x: number; y: number }>()
+    return <>
+      <ImageLightbox src="blob:original" alt="Image" labels={labels} onClose={onClose}
+        contextMenuProps={{ tabIndex: 0, onContextMenu: (event) => {
+          event.preventDefault()
+          setPoint({ x: event.clientX, y: event.clientY })
+        } }} />
+      <Menu open={point !== undefined} anchor={null} anchorPoint={point} portal contextual
+        search={{ label: 'Search actions', clearLabel: 'Clear search', value: '', onChange: () => {} }}
+        items={[{ id: 'copy', label: 'Copy image' }]} onClose={() => { setPoint(undefined) }} />
+    </>
+  }
+  const view = render(<Preview />)
+  const image = view.getByRole('img')
+  image.focus()
+  fireEvent.contextMenu(image)
+  const search = view.getByRole('searchbox', { name: 'Search actions' })
+  const clear = view.getByRole('button', { name: 'Clear search' })
+  expect(document.activeElement).toBe(search)
+  expect(fireEvent.keyDown(search, { key: 'Tab' })).toBe(true)
+  clear.focus()
+  fireEvent.keyDown(clear, { key: 'Tab' })
+  expect(document.activeElement).toBe(view.getByRole('menuitem', { name: 'Copy image' }))
+  clear.focus()
+  fireEvent.keyDown(clear, { key: 'Escape' })
+  expect(view.queryByRole('searchbox')).toBeNull()
+  expect(document.activeElement).toBe(image)
+  expect(onClose).not.toHaveBeenCalled()
+  fireEvent.keyDown(image, { key: 'Escape' })
   expect(onClose).toHaveBeenCalledOnce()
 })

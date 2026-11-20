@@ -18,6 +18,7 @@ import { TEXTPREVIEW_ID, TEXTPREVIEW_KIND } from '../src/client/definition.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { OfficeFontAction } from '../src/client/office/OfficeFontAction.tsx'
 import { OfficeBody } from '../src/client/office/OfficeBody.tsx'
+import { SummaryPreview, SummaryTitle } from '../src/client/SummaryPreview.tsx'
 import { TextPreview } from '../src/client/TextPreview.tsx'
 import { TextTitle } from '../src/client/TextTitle.tsx'
 import { TextBody } from '../src/client/text/TextBody.tsx'
@@ -91,6 +92,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')
     expect(tabs.get(TEXTPREVIEW_KIND)?.id).toBe(TEXTPREVIEW_ID)
+    expect(tabs.get('compaction-summary')?.title('')).toBe('summary.title')
     expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     // The seat key is the implementation's id, not the kind: an extension may
     // take the kind over, and the seat must still find this body.
@@ -107,6 +109,8 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
+      ['sidebar.right.pane.tab', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryPreview],
+      ['sidebar.right.pane.tab.title', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction', 'documentMarkdown', SummaryTitle],
     ])
     expect(Object.keys(registered[0]!.children!)).toEqual([
       'sidebar.right.tab.document', 'sidebar.right.tab.document.actions',
@@ -132,6 +136,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     const { tabs, registered, dictionaries, fiber } = await boot()
     await fiber.dispose()
     expect(tabs.get(TEXTPREVIEW_KIND)).toBeUndefined()
+    expect(tabs.get('compaction-summary')).toBeUndefined()
     expect(registered).toEqual([])
     expect(dictionaries.size).toBe(0)
   })

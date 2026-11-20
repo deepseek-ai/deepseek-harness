@@ -2,6 +2,7 @@
 
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -15,6 +16,7 @@ it.skipIf(process.platform !== 'win32')('preserves unrelated PATH entries and re
     const result = await promisify(execFile)(join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
       join(import.meta.dirname, 'fixtures', 'command-path.ps1'),
+      '-Electron', createRequire(import.meta.url)('electron') as string,
       '-Worker', join(import.meta.dirname, '..', 'scripts', 'command-path.ps1'), '-Root', root,
     ], { timeout: 60000, windowsHide: true })
     expect(result.stdout).toContain('WINDOWS_COMMAND_PATH_OK')

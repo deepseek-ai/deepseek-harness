@@ -24,7 +24,7 @@ const LSP_TITLE_KEYS = {
 } as const
 
 /** Agent delegation, discovery, and coordination share the two-person icon. */
-const AGENT_TOOLS = new Set(['subagent', 'subagent_fork', 'list_subagent_models', 'spawn_teammate', 'list_agents', 'send_message', 'interrupt_agent', 'wait_agent'])
+const AGENT_TOOLS = new Set(['subagent', 'subagent_fork', 'list_subagent_models', 'spawn_teammate', 'list_agents', 'send_message', 'session_send_message', 'interrupt_agent', 'wait_agent'])
 
 function detailIcon(toolName: string) {
   if (AGENT_TOOLS.has(toolName)) return <IconUsersOutlineRegular size={14} />
@@ -119,6 +119,7 @@ export const detailsToolview = {
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'subagent_fork', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'list_agents', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'send_message', locale: NS }, DetailsRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'session_send_message', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'interrupt_agent', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'job_list', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'job_output', locale: NS }, DetailsRow)

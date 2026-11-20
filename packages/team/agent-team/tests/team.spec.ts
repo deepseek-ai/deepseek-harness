@@ -609,6 +609,26 @@ describe('Team shared task DAG', () => {
     await Promise.all([waitNoAgent(ctx, alpha.id), waitNoAgent(ctx, beta.id)])
   })
 
+  it.each(['complete', 'delete'] as const)('removes overlap warnings after %s', async (action) => {
+    const { ctx, lead } = await setup([])
+    const active = await ctx.agentTeams.createTask(lead, { subject: 'active', description: 'active', writeScopes: ['src'] })
+    await ctx.agentTeams.updateTask(lead, { taskId: active.id, expectedRevision: 1, action: 'claim' })
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'overlap', description: 'overlap', writeScopes: ['src/feature'] })
+    const warnings = [`write scopes overlap with ${active.id}`]
+    expect(task.writeScopeWarnings).toEqual(warnings)
+    const claimed = await ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: task.revision, action: 'claim' })
+    expect(claimed.writeScopeWarnings).toEqual(warnings)
+    const finished = await ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: claimed.revision, action })
+    expect(finished.writeScopeWarnings).toEqual([])
+    expect(ctx.agentTeams.getTask(lead, task.id).writeScopeWarnings).toEqual([])
+    expect(ctx.agentTeams.listTasks(lead).find(item => item.id === task.id)?.writeScopeWarnings).toEqual(action === 'delete' ? undefined : [])
+    expect(ctx.agentTeams.getTask(lead, active.id).writeScopeWarnings).toEqual([])
+    if (action === 'complete') {
+      const reopened = await ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: finished.revision, action: 'reopen' })
+      expect(reopened.writeScopeWarnings).toEqual(warnings)
+    }
+  })
+
   it('rejects malformed scopes and every invalid dependency relation', async () => {
     const { ctx, lead } = await setup([])
     const first = await ctx.agentTeams.createTask(lead, { subject: 'one', description: 'one' })

@@ -1,0 +1,8 @@
+version: 1
+scenario: ptc-round-scoped
+profile: web
+composition: web-ptc
+recording: authored
+header:
+  class: web-ptc-scoped
+  pin: true

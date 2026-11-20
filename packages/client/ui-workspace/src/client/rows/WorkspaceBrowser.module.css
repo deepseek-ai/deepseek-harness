@@ -193,7 +193,7 @@
   gap: 0;
 }
 
-.sectionHeader:has(.searchExpanded) .sectionLabelHidden {
+.sectionHeader .wide.sectionLabelHidden {
   margin-right: 0;
 }
 

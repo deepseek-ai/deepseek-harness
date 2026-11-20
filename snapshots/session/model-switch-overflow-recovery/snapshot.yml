@@ -7,6 +7,5 @@ platform: posix
 header:
   class: model-switch-overflow-recovery
   pin: true
-  systemPromptSource: model-switch-compaction
   changes: 2
-  promptChanges: 1
+  promptChanges: 2

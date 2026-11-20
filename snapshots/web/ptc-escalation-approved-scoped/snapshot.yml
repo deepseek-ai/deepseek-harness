@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-escalation-approved-scoped
+profile: web
+composition: web-ptc
+recording: authored
+header:
+  class: web-ptc-scoped
+workspace:
+  final: true

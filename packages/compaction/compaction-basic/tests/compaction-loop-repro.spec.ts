@@ -181,11 +181,16 @@ function overflowHistorySeed(): readonly SessionEvent[] {
     session.append('turn/start', {
       turn,
     })
+    session.append('step/start', { turn, step: 1 })
+    if (turn === 1) {
+      session.append('system/message', {
+        turn, step: 1, message: createMessage({ role: 'system', content: [], source: { kind: 'system-prompt', sections: [] } }),
+      }, { surfaceOp: 'append' })
+    }
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: `${sentinel} ${'old context '.repeat(200)}` }],
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    session.append('step/start', { turn, step: 1 })
     session.append('assistant/message', {
       stream: [],
       turn,
@@ -294,7 +299,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
 })
 
 describe('token pressure after loop-admitted system prompts', () => {
-  it.each([false, true])('counts initial and replaced prompts once with retry=%s', async (retry) => {
+  it.each([false, true])('counts accumulated prompt updates once with retry=%s', async (retry) => {
     const ctx = new Context()
     const requests: GenerateOptions[] = []
     const usage = { inputTokens: 1000, cacheReadTokens: 100, outputTokens: 10 }
@@ -324,7 +329,8 @@ describe('token pressure after loop-admitted system prompts', () => {
         agent.session.append('system/message', {
           turn,
           step,
-          message: createSystemMessage('retry guidance'),
+          // Attributed without sections: a message without `source.sections` would request a rebuild.
+          message: { ...createSystemMessage('retry guidance'), source: { kind: 'system-prompt', sections: [] } },
         }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] })
         return { kind: 'retry' }
       })
@@ -350,7 +356,8 @@ describe('token pressure after loop-admitted system prompts', () => {
       const events = agent.session.snapshotEvents()
       const prompts = events.filter(event => event.type === 'system/message')
       expect(prompts[0]?.surfaceOp).toBe('append')
-      expect(prompts.slice(1).every(event => typeof event.surfaceOp === 'object')).toBe(true)
+      expect(prompts.filter(event => typeof event.surfaceOp === 'object')).toHaveLength(retry ? 1 : 0)
+      expect(prompts.filter(event => event.surfaceOp === 'append')).toHaveLength(4)
       for (const event of prompts) {
         expect(events.find(start => start.type === 'step/start'
           && start.data.turn === event.data.turn && start.data.step === event.data.step)?.seq)
@@ -360,9 +367,15 @@ describe('token pressure after loop-admitted system prompts', () => {
       expect(requests.every(request => request.temperature === 0.5)).toBe(true)
       expect(events.filter(event => event.type === 'assistant/attempt')).toHaveLength(retry ? 1 : 0)
       expect(events.filter(event => event.type === 'step/start')).toHaveLength(4)
-      expect(requests[0]?.messages[0]?.content).toEqual([{ type: 'text', text: 'initial guidance '.repeat(8) }])
-      if (retry) expect(requests[1]?.messages[0]?.content).toEqual(requests[0]?.messages[0]?.content)
-      expect(requests.at(-1)?.messages.some(message => message.role === 'system')).toBe(false)
+      expect(requests[0]?.messages[0]?.content.at(-1)).toEqual({ type: 'text', text: 'initial guidance '.repeat(8).trim() })
+      if (retry) {
+        expect(requests[1]?.messages[0]?.content).toEqual([{ type: 'text', text: 'retry guidance' }])
+        expect(requests[1]?.messages.filter(message => message.role === 'system')).toHaveLength(1)
+      }
+      const finalPrompts = requests.at(-1)?.messages.filter(message => message.role === 'system')
+      expect(finalPrompts).toHaveLength(4)
+      expect(finalPrompts?.at(-1)?.content.map(block => block.type === 'text' ? block.text : '').join(''))
+        .toBe('From this point onward, none of the earlier system-prompt sections apply.')
     } finally {
       await ctx.fiber.dispose()
     }

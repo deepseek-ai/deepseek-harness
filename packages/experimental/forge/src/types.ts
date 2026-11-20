@@ -179,6 +179,14 @@ export interface ChangeRequestSnapshot {
   readonly closedAt: string | null
 }
 
+/**
+ * The fields of a {@link ChangeRequestSnapshot} that name a change request and its state in a list. A provider can
+ * read them for many change requests in one request, without the checks, reviewers, and merge rules of a snapshot.
+ */
+export type ChangeRequestBrief = Pick<
+  ChangeRequestSnapshot, 'ref' | 'url' | 'title' | 'state' | 'draft' | 'mergeability' | 'reviewDecision' | 'checksRollup'
+>
+
 /** Why a provider could not read a change request. */
 export interface ForgeFailure {
   /**
@@ -205,6 +213,20 @@ export type ChangeRequestUpdate = {
   readonly snapshot: ChangeRequestSnapshot
 } | {
   /** Reason the status could not be read. */
+  readonly failure: ForgeFailure
+})
+
+/** Latest brief delivered to brief watchers of one change request, from a brief read or from a snapshot read. */
+export type ChangeRequestBriefUpdate = {
+  /** Canonical identity of the watched change request. */
+  readonly key: ChangeRequestKey
+  /** Epoch milliseconds when the result settled. */
+  readonly fetchedAt: number
+} & ({
+  /** Brief read from the host. */
+  readonly brief: ChangeRequestBrief
+} | {
+  /** Reason the brief could not be read. */
   readonly failure: ForgeFailure
 })
 
@@ -684,6 +706,23 @@ export interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /**
+   * Read the briefs of several change requests, returning one result per requested key. Omission declares that the
+   * provider reads briefs as snapshots through {@link ForgeProvider.fetch}.
+   */
+  fetchBriefs?(
+    refs: readonly ChangeRequestRef[],
+    signal: AbortSignal,
+  ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>
+  /**
+   * Most change requests of one host that one polling call of {@link ForgeProvider.fetch} reads, a positive safe
+   * integer. The registry then calls `fetch` once for every that many due change requests of a host, one call after
+   * another, each within its own fetch deadline, and publishes the results of a call when it returns. Omission
+   * declares that one call reads every due change request of the forge.
+   */
+  readonly snapshotBatchSize?: number
+  /** The same bound for one polling call of {@link ForgeProvider.fetchBriefs}. */
+  readonly briefBatchSize?: number
   /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
   fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
@@ -763,14 +802,41 @@ export interface ForgeProvider {
  */
 export type ChangeRequestListener = (update: ChangeRequestUpdate) => void
 
+/**
+ * Receives every polling result for one change request watched for its brief.
+ * @param update - the settled result.
+ */
+export type ChangeRequestBriefListener = (update: ChangeRequestBriefUpdate) => void
+
+/** When a watcher that joins a watched change request, or a refresh of one, needs a status newer than the latest one. */
+export interface ChangeRequestWatchOptions {
+  /**
+   * Age in milliseconds past which the latest status is too old. A watcher that joins a change request whose
+   * snapshot was already read polls at once when the latest snapshot or failure is older and no snapshot poll is in
+   * flight; without it, the watcher waits for the regular poll. A refresh polls at once unless the change request is
+   * merged or its latest poll at either level, in flight or settled, started within it; without it, a refresh always
+   * polls.
+   */
+  readonly maxAgeMs?: number
+}
+
+/**
+ * The state a brief watcher last saw for a change request it starts to watch, which times the first poll as a brief
+ * read at `fetchedAt` would: a merged change request is not polled, and any other one once its interval has passed.
+ */
+export interface ChangeRequestKnownState extends Pick<ChangeRequestBrief, 'state' | 'mergeability' | 'checksRollup'> {
+  /** Epoch milliseconds when the state was read. */
+  readonly fetchedAt: number
+}
+
 /** Poll cadence and fetch deadline for watched change requests. */
 export interface Config {
-  /** Poll interval in milliseconds while checks run or mergeability is unknown. */
+  /** Poll interval in milliseconds while checks run, and for one poll after a status first reports an unknown mergeability. */
   activeIntervalMs?: number
   /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
-  /** Deadline in milliseconds for one provider fetch. */
+  /** Deadline in milliseconds for one provider fetch: one polling call, or one read of complete checks. */
   fetchTimeoutMs?: number
 }

@@ -29,6 +29,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import { createNativeFixture, png } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import { CuaConfig, installCua } from '../src/index.ts'
+import { COMMON_GUIDANCE } from '../src/guidance.ts'
 import { Request } from '../src/protocol.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -102,7 +103,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
-          getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
+          getGuidance: () => COMMON_GUIDANCE,
           acceptsPidSelector: selectorPid !== undefined,
           capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
@@ -148,7 +149,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
   }
 }
 
-it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, and releases the optional provider', async () => {
+it('presents the object API, retains raw bindings and CUA objects, and preserves guarded calls and screenshots', async () => {
   const { ctx, native, guarded, model, agent, provider, run } = await setup(programs)
   expect(ctx.ptcRuntime.retainsState).toBe(false)
   expect(ctx.tools.get('cua', agent)).toBeUndefined()
@@ -157,6 +158,16 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
 
   expect(model.requests).toHaveLength(4)
   expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
+  const description = model.requests[0]?.tools?.find(tool => tool.name === 'cua_run_code')?.description
+  expect(description).toContain('The global cua object is ready to use')
+  expect(description).toContain('Call other session tools directly outside cua_run_code.')
+  expect(description).toContain('Use inspect(...values) to display selected text and images.')
+  expect(description).not.toContain('tools.cua')
+  const guidance = model.requests[0]!.messages.filter(message => message.role === 'system')
+    .flatMap(message => message.content.filter(block => block.type === 'text').map(block => block.text)).join('\n')
+  expect(guidance).toContain('cua.getApp(selector: string)')
+  expect(guidance).not.toContain('Raw tools use { method, params }')
+  expect(guidance).not.toContain('getAccessibilityTree maps to getState')
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
   expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false, true])
   const first = z.object({ visits: z.number(), bindings: z.array(z.string()), app: z.string(), window: z.string(), pid: z.number() })

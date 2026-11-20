@@ -50,7 +50,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Choosing the zone
 
-When the open turn contains exactly one Host-validated browser zone, the timestamp is formatted in that request-local zone. With missing or mixed browser-zone records, the configured `timeZone` formats the display; omitting it resolves the Node process zone once at plugin load, and every explicit fallback is validated through `Intl.DateTimeFormat`. The resolved instruction tells the model to interpret unqualified dates and times in the chosen zone, and to ask the user to clarify when those records are mixed or unavailable.
+A request-local zone is the canonical `clientTimeZone` that a writer records on a user message: the Web Host records the validated browser zone, and the SDK runtime records the prompt's explicit zone or its sampled process zone. Request preparation still refuses a noncanonical value. When the open turn contains exactly one such zone, the timestamp is formatted in that request-local zone. With missing or mixed browser-zone records, the configured `timeZone` formats the display; omitting it resolves the Node process zone once at plugin load, and every explicit fallback is validated through `Intl.DateTimeFormat`. The resolved instruction tells the model to interpret unqualified dates and times in the chosen zone, and to ask the user to clarify when those records are mixed or unavailable.
 
 -----
 
@@ -71,7 +71,7 @@ The plugin prepends an `agent/pre-step` listener that delegates first and append
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: pre-step listener, due scheduling, reading composition |
-| [`src/request-zone.ts`](src/request-zone.ts) | Browser-zone policy derivation from open-turn `user-rpc` sources |
+| [`src/request-zone.ts`](src/request-zone.ts) | Browser-zone policy derivation from open-turn user sources that carry `clientTimeZone` |
 | [`src/timestamp.ts`](src/timestamp.ts) | `Intl.DateTimeFormat` creation and timestamp formatting |
 
 ### Main flow

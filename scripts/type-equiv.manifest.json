@@ -541,6 +541,11 @@
     },
     {
       "doc": "docs/subsystems/session.md",
+      "symbol": "SystemSurfaceNode",
+      "source": "packages/core/session/src/surface.ts"
+    },
+    {
+      "doc": "docs/subsystems/session.md",
       "symbol": "SessionSurface",
       "source": "packages/core/session/src/surface.ts"
     },
@@ -578,6 +583,11 @@
     {
       "doc": "docs/subsystems/persistence.md",
       "symbol": "CreateSessionOptions",
+      "source": "packages/core/session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/persistence.md",
+      "symbol": "SessionHeaderMeta",
       "source": "packages/core/session/src/types.ts"
     },
     {
@@ -2396,6 +2406,11 @@
     },
     {
       "doc": "docs/subsystems/subagent.md",
+      "symbol": "SubagentCapacity",
+      "source": "packages/subagent/subagent/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/subagent.md",
       "symbol": "SubagentActivationSpec",
       "source": "packages/subagent/subagent/src/types.ts"
     },
@@ -2532,6 +2547,31 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ChangeRequestListener",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestBrief",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestBriefUpdate",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestBriefListener",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestWatchOptions",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestKnownState",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {

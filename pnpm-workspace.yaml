@@ -53,6 +53,13 @@ allowBuilds:
   electron-winstaller: false
   # Store-index rewriting only needs msgpackr's portable JavaScript codec.
   msgpackr-extract: false
+  # The Feishu plugin's CLI downloads its native binary from GitHub Releases or npmmirror.
+  # Repository installs skip it; profiles that install the plugin approve it separately.
+  # Update the version here together with packages/connector/feishu/package.json.
+  '@larksuite/cli@1.0.97': false
+  # The Tencent Meeting plugin's CLI ships executable binaries; its install script only
+  # restores their mode and runs `tmeet auth logout`, so repository installs skip it.
+  '@tencentcloud/tmeet@1.0.18': false
 
 minimumReleaseAgeExclude:
   # Native Codex and Claude tests qualify this exact release with its local patches.

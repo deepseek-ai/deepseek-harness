@@ -34,7 +34,8 @@ it('sends the Creator customization intent without taking actions for an ordinar
       expect(agent.session.header.agentPreset).toBe('cordis')
       const system = agent.session.deriveMessages().find(message => message.role === 'system')
       if (system === undefined) throw new Error('Creator request has no system prompt')
-      const prompt = system.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+      // Each section is its own text block; adapters join them with blank lines.
+      const prompt = system.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n\n')
       expect(prompt).toMatch(/^You are a coding agent powered by the .+ model\. You help the user customize DeepSeek Harness itself\.$/mu)
       expect(prompt.split(CUSTOMIZATION_INTENT)).toHaveLength(2)
       const sharedPrompt = prompt.replace(` ${CUSTOMIZATION_INTENT}`, '')

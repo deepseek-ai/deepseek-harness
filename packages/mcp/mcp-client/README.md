@@ -246,21 +246,21 @@ Until an agent loads a tool, the server costs the loader definition and one cata
 
 #### KV Cache effect
 
-A load changes the agent's tool list. Routes that declare tool updates append the addition and keep the prefix; other routes start a new request series. A changed server tool list rewrites the catalog section, as changed server instructions do.
+A load changes the agent's tool list. Routes that declare tool updates append the addition and keep the prefix; other routes start a new request series. A changed server tool list appends the updated catalog section, as changed server instructions do.
 
 ### Server instructions
 
 #### What the model sees
 
-One server-labeled section contains the nonblank instructions returned by each successful connection. Absent or blank instructions add no prompt text. Braces remain literal. A replacement connection publishes its instructions only after discovery succeeds; disposal or exhausted recovery removes the section.
+One server-labeled section contains the nonblank instructions returned by each successful connection. Absent or blank instructions add no prompt text. Braces remain literal. A replacement connection publishes its instructions only after discovery succeeds; disposal, lost authorization, or exhausted recovery withdraws them. In a Session that already received a server's instructions, a change or withdrawal appends a system message with the notice `The earlier instructions supplied by MCP server "<name>" no longer apply.`, followed by the new instructions when there are any. The earlier text stays in history until compaction.
 
 #### Token effect
 
-Server instructions contribute text to model requests while their scoped section is active. Resource documents enter history only through explicit resource reads.
+Server instructions contribute text to model requests while their scoped section is active. A change or withdrawal adds one short notice, and the superseded text remains until compaction. Resource documents enter history only through explicit resource reads.
 
 #### KV Cache effect
 
-Unchanged instructions retain identical prompt text. Updated or removed instructions change the next assembled system message and its reusable prefix.
+Unchanged instructions retain identical prompt text. Changed or withdrawn instructions append a system message after the existing conversation prefix instead of rewriting the earlier prompt. Provider cache reuse depends on the adapter's representation.
 
 ## Known Limitations and Deferred Work
 

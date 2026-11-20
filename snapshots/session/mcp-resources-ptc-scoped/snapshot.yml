@@ -1,0 +1,9 @@
+version: 1
+scenario: mcp-resources-ptc-scoped
+profile: headless
+composition: mcp-resources-ptc
+recording: authored
+header:
+  class: mcp-resources-ptc-scoped
+  pin: true
+  toolSchemasSource: ptc-scoped-repl

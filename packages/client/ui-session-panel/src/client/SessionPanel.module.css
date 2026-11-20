@@ -6,13 +6,50 @@
 
 /* The docked panel's inline metrics: 40px clear of the transcript column,
    past its width handle, 8px from the end edge, and at least 300px wide. The
-   panel's width and the dock probe both derive from them, so the gutter that
-   docks the panel is exactly the one that holds its minimum width. */
+   panel's width, the dock probe, and the reserve it asks the Conversation
+   body for all derive from them, so the gutter that docks the panel is
+   exactly the one that holds its minimum width. */
+:global([data-conversation-content]),
 .panel,
 .dockProbe {
   --panel-clear: 40px;
   --panel-edge: 8px;
   --panel-min-width: 300px;
+}
+
+/* Whether the Conversation body's largest end reserve covers the docked
+   panel's gutter: 1px when it does, otherwise 0. The body's maximum is not
+   inherited and changes on every resize, so this step derives on the body
+   itself, and as a registered length it reaches the dock probe only when the
+   decision flips. */
+@property --dsh-session-panel-reserve-room {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+:global([data-conversation-content]) {
+  --dsh-session-panel-reserve-room: clamp(
+    0px,
+    calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px),
+    1px
+  );
+}
+
+/* The dock probe lives in the aside, not the message flow. Crossing its
+   threshold must not change the inherited style of every message. */
+:global([data-slot='conversation.chat.flow']) {
+  --dsh-session-panel-reserve-room: initial;
+}
+
+/* While the docking preference is on, the dock probe carries a mark, and
+   the panel asks the Conversation body to keep the gutter that docks it:
+   the three metrics above, 348px. Where the gutter is narrower, the body
+   moves the transcript and the composer into the start gutter for it
+   (ui-conversation's end reserve) and makes no room when the start gutter
+   cannot give it. */
+:global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve]) {
+  --dsh-chat-end-reserve: calc(var(--panel-clear) + var(--panel-edge) + var(--panel-min-width));
 }
 
 .panel {
@@ -46,7 +83,28 @@
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-panel);
   pointer-events: auto;
-  animation: dsh-session-panel-enter 120ms ease-out;
+}
+
+/* A press that shows or hides the panel plays its entrance or exit: it
+   slides from or to the scrollport's end edge, across its own edge inset,
+   and fades. A longer slide would put the panel past that edge and give the
+   Conversation body a sideways scroll range, whose bar lifts the composer
+   while it shows. A panel that shows or hides for its room, as on a switch
+   to another Session or a resized window, carries no mark and does so at
+   once. A leaving panel takes no presses. */
+.panel[data-session-panel-motion='enter'] {
+  animation: dsh-session-panel-enter 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel[data-session-panel-motion='exit'] {
+  animation: dsh-session-panel-exit 160ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+/* While the entrance or exit plays, the Conversation body moves the
+   transcript into or out of the panel's room over the same time and curve. */
+:global([data-conversation-content]):has(.dockProbe[data-session-panel-moving]) {
+  --dsh-chat-end-reserve-transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Over the transcript the panel is narrower than docked, so it covers less of
@@ -56,17 +114,25 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* The dock probe tells the plugin whether the gutter holds the docked panel
-   without a pixel measurement: it is 1px wide from the gutter that fits the
-   panel's minimum width and 0 below it, a width under 0 being used as 0. A
-   size observer on it therefore reports only when the docking decision
-   flips, not while the window resizes on one side of it or the transcript
-   grows. It has no height and takes no pointer events. */
+/* The dock probe tells the plugin whether the docked panel has room without
+   a pixel measurement: it is 1px wide while the gutter holds the panel's
+   minimum width, or while the Conversation body's largest end reserve covers
+   that gutter, and 0 otherwise, a width under 0 being used as 0. A size
+   observer on it therefore reports only when the docking decision flips,
+   not while the window resizes on one side of it or the transcript grows.
+   The second term does not depend on whether the body is making room, so
+   the room the transcript makes never changes the decision that asked for
+   it; it is the step the body takes its end inset from, so the probe has
+   room exactly where the body makes it. It has no height and takes no
+   pointer events. */
 .dockProbe {
   position: absolute;
   top: 0;
   right: 0;
-  width: calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px);
+  width: max(
+    calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),
+    var(--dsh-session-panel-reserve-room)
+  );
   max-width: 1px;
   height: 0;
   visibility: hidden;
@@ -74,7 +140,44 @@
 }
 
 .section {
+  position: relative;
   padding: 4px 0 6px;
+  /* What its title row offers: nothing, unless the reader can move the section (see the rule before `.head`). */
+  --section-head-cursor: auto;
+  --section-grip-opacity: 0;
+  --section-trailing-visibility: visible;
+}
+
+/* Reordering. The dragged section dims, and the section the pointer is over
+   shows a 2px line on the edge the dragged one would land at: on the
+   hairline between two sections, or 1px outside the first and last. */
+.section[data-dragging] {
+  opacity: 0.5;
+}
+
+.section[data-drop-target]::after {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-state-business-primary);
+  content: '';
+  pointer-events: none;
+}
+
+.section[data-drop-target='before']::after {
+  top: -1px;
+}
+
+.section[data-drop-target='after']::after {
+  bottom: -2px;
+}
+
+/* The copy of a title row that follows the pointer during a drag. */
+.dragPreview {
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 /* An empty body hides its section: a plain section renders into one outlet
@@ -91,12 +194,32 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+/* The box a title row's drag handle is placed in; the row of a section the reader can move shows the grab cursor. */
 .head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 24px;
   padding: 0 6px;
+  cursor: var(--section-head-cursor);
+}
+
+/* A section the reader can move: one with a drag handle that shows, beside
+   at least one other. A lone one stays where it is, since a section always
+   lands after Environment, so its title row offers no drag: no grab cursor
+   and no handle. "Shows" is the negation of the empty-body rule above, and
+   the two selectors match a section with such a section before it and one
+   with such a section after it. */
+.section:nth-child(
+  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+),
+.section:nth-last-child(
+  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
+) {
+  --section-head-cursor: grab;
+  --section-grip-opacity: 1;
+  --section-trailing-visibility: hidden;
 }
 
 /* Secondary ink at medium weight: apart from the primary rows below and the tertiary counts beside it. */
@@ -127,15 +250,55 @@
   display: none;
 }
 
-@keyframes dsh-session-panel-enter {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* The drag handle lies over the end of a draggable title row, in the column
+   of the rows' More buttons: a 24px box whose center is 14px from the row's
+   end. It is a mark, not a control: the whole title row is the drag source,
+   and the mark passes pointer events through to it and, at rest, to the
+   trailing content under it. It takes no room in the row, so the title's
+   trailing content runs to the row's end as it does without the handle. The
+   row's end shows one of the two: the trailing content at rest, and the
+   handle in its place while the pointer is over the title row and during a
+   drag. The hidden content keeps its box, so the title does not move. */
+.grip {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  pointer-events: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .panel {
-    animation: none;
+.section[data-dragging] .grip {
+  opacity: 1;
+}
+
+.section[data-dragging] > .head > .actions {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .head:hover > .grip {
+    opacity: var(--section-grip-opacity);
   }
+
+  .head:hover:has(> .grip) > .actions {
+    visibility: var(--section-trailing-visibility);
+  }
+}
+
+@keyframes dsh-session-panel-enter {
+  from { opacity: 0; transform: translateX(var(--panel-edge)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes dsh-session-panel-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(var(--panel-edge)); }
 }
 
 /* Rows. The rows of every section share one look without sharing a

@@ -9,13 +9,12 @@ import { inspectSignaturesBatched } from './windows-signature-batch.mjs'
 import { packagingStep } from './packaging-step.mjs'
 
 /**
- * Read Windows trust, timestamp and signer identity using the engine's bundled modules, without accessing the private key.
+ * Read Windows trust, timestamp and signer identity using PowerShell 7's bundled modules, without accessing the private key.
  * @param {string} path File to inspect.
  * @returns {Promise<{status: string, timestamped: boolean, thumbprint: string | null}>} Authenticode verification result.
  */
 export async function inspectWindowsRuntimeSignature(path) {
-  // Node can inherit PowerShell 7's module search path while launching Windows PowerShell 5.
-  const { stdout, stderr } = await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  const { stdout, stderr } = await promisify(execFile)('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
     '$ErrorActionPreference="Stop"; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); Import-Module "$PSHOME/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1" -ErrorAction Stop; Import-Module "$PSHOME/Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1" -ErrorAction Stop; $s=Get-AuthenticodeSignature -LiteralPath $env:DSH_RUNTIME_VERIFY_FILE; [pscustomobject]@{status=[string]$s.Status;timestamped=($null -ne $s.TimeStamperCertificate);thumbprint=$s.SignerCertificate.Thumbprint}|ConvertTo-Json -Compress'], {
     env: { ...scrubWindowsSigningEnvironment(process.env), DSH_RUNTIME_VERIFY_FILE: path },
     encoding: 'utf8', windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024,

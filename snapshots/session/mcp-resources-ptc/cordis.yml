@@ -15,3 +15,8 @@
 
 - id: tool-executor-ptc
   disabled: false
+
+# Recorded programs are async function bodies, so replay keeps the per-call runtime.
+- id: ptc-runtime
+  config:
+    executionMode: per-call

@@ -102,9 +102,9 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 窗口隐藏本身不会使 AX 快照失效。刷新清单时，只有同一窗口 ID 仍存在且观察到的尺寸未变，才能继续使用此前截图的像素坐标。观察到尺寸变化后需要重新截图；窗口销毁后不能继续操作。清单中省略窗口不会阻止按已知 ID 发起输入。窗口归属、尺寸和输入检查仍然生效，成功分派不代表应用已接收。
 
-窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemPointer` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。Host 在回合结束时请求清理，连接关闭也会松开按键。
+窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。Host 在回合结束时请求清理，连接关闭也会松开按键。
 
-点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemPointer: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
+点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemInput: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
 
 `click.holdMs` 是可选的每次按住时长，单位为毫秒，接受非负整数；0 表示不额外等待。每个连接通过 `maxClickHoldMs` 限制显式按住时长。诊断 helper 的 `--max-click-hold-ms` 选项默认 5000。省略时保留普通点击时长。整个手势占用请求调度槽位；取消、超时和断开连接会中断等待，在释放槽位前发送对应的松开事件。已接收的事件仍然生效，进程被强制终止时无法保证清理。
 
@@ -132,7 +132,9 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 
 `paste` 提供一种纯文本或 HTML 剪贴板格式，调用应用已启用的标准 Paste 菜单命令，并等待剪贴板数据请求。随后仅在所有权标记和修改计数仍匹配时恢复原有格式。Host 通过文件锁串行化不同 helper 的粘贴。maxClipboardBytes 同时限制输入和保留内容，不支持的菜单和过大的数据在分派前失败。后续复制会被保留。取消会尽可能恢复仍持有的剪贴板数据，强制结束不保证恢复，数据请求也不证明目标已完成编辑。 分派完成后，`pasteReadTimeoutMs` 限制等待剪贴板读取的时间。到期返回 `PASTE_NOT_CONSUMED`，关闭延迟数据提供方，并仅在仍持有剪贴板时恢复原内容。该失败不能证明应用以后不会处理已排队的 Paste 命令；决定是否重试前先检查目标内容。
 
-默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据本会话的授权或免询问配置决定本次悬停的路径，再向 helper 传入 `useSystemPointer`。
+`useSystemInput: true` 将 `pressKey`、`sendKeyEvent` 和支持的鼠标操作派发到系统输入队列。系统键盘按下检查前台应用；释放使用按下时保存的输入方式，即使目标失焦或退出也释放系统键。`click` 和 `drag` 复用已有鼠标配对释放逻辑，在手势外层按下并反序释放系统修饰键。系统模式拒绝再次按下已经持有的键，防止释放其他输入的按键。
+
+默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据本会话的授权或免询问配置决定本次悬停的路径，再向 helper 传入 `useSystemInput`。
 
 开启后，系统指针路线会检查前台应用和坐标命中的窗口，不满足条件时返回 `FOREGROUND_REQUIRED`。返回值 `hoverRoute` 和 `systemPointerMoved` 说明走了哪条路线以及是否移动了可见光标。悬停不会按下鼠标，也不会在读取后还原光标。后续输入可能中断悬停。点击只在目标点发送按键事件，不先在窗口外点击。
 
@@ -170,7 +172,7 @@ Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests
 
 隔离的 Electron/Chromium 检查使用 `python3 packages/experimental/cua-macos/native/tests/electron_e2e.py --electron /absolute/path/to/Electron.app/Contents/MacOS/Electron`。省略 `--electron` 时使用桌面工作区已安装的运行时，检查不下载 Electron。渲染器禁用 Node 集成，启用上下文隔离和 Chromium 沙箱，使用独立 userData/sessionData/log 目录及本地 fixture 页面。渲染器的点击/输入事件通过主进程写出独立观察，测试动作仍通过原生 helper 执行。AX 轮询等待 Chromium 辅助功能启用后的真实控件。原生和 Electron 子进程组由测试持有，在删除临时文件前停止。可选产物包含仅有 fixture 的截图和私有请求记录。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。 使用 `--drag-only` 可验证后台目标在按下前被拒绝，以及前台拖动的事件顺序、按键状态和两轴位移。测试在第一次移动后取消，核对只在最后投递的位置释放一次。 使用 `--toggle-only` 可检查三种按键各自的按下和松开、指针移出后的松开，以及调用前后的光标位置。
+运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--system-input-only` 可验证系统点击、快捷键、前台接收窗口观察到的独立按键状态，以及取消后的鼠标和修饰键释放。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。 使用 `--drag-only` 可验证后台目标在按下前被拒绝，以及前台拖动的事件顺序、按键状态和两轴位移。测试在第一次移动后取消，核对只在最后投递的位置释放一次。 使用 `--toggle-only` 可检查三种按键各自的按下和松开、指针移出后的松开，以及调用前后的光标位置。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/paste_e2e.py --artifacts /private/evidence`，验证自有 AppKit 应用在后台接收 Paste 动作但不读取数据时返回 `PASTE_NOT_CONSUMED`，以及前台读取同一次粘贴后成功。测试要求 Mac 已解锁并已授予辅助功能权限，只激活自有的两个应用，并独立记录收到的动作和文本以核对 helper 回复。
 
