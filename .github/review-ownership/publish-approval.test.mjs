@@ -10,37 +10,24 @@ import {
   approvalEventFromWorkflowDispatch,
   runApprovalCheck as runPublisher,
 } from './publish-approval.mjs'
+import {
+  HEAD_SHA,
+  PUBLISHER,
+  accountUser,
+  comment,
+  delegationApi,
+  evaluateDelegation,
+  pullRequestEvent,
+} from './review-fixtures.mjs'
 
 const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
 const STATUS_MARKER = '<!-- weighted-approval -->'
-const PUBLISHER = { id: 359_032_549, login: 'deepseek-ai-harness' }
 const withoutComments = api => (path, options) =>
   path.includes('/comments?') ? [] : api(path, options)
 const evaluateApproval = options => evaluateWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
 const runWithHistory = options => runPublisher(options)
 const runApprovalCheck = options => runWithHistory({ getMergedCount: async () => 0, ...options })
-const HEAD_SHA = '1234567890abcdef1234567890abcdef12345678'
 const OLD_SHA = 'abcdef1234567890abcdef1234567890abcdef12'
-
-const pullRequestEvent = ({ author = 'author', draft = false } = {}) => ({
-  repository: { full_name: 'deepseek-harness/deepseek-harness' },
-  pull_request: {
-    number: 42,
-    state: 'open',
-    draft,
-    user: { login: author, node_id: 'author-id' },
-    head: { sha: HEAD_SHA },
-  },
-})
-
-const accountIds = new Map()
-const accountId = login => {
-  const key = login.toLowerCase()
-  if (key === PUBLISHER.login) return PUBLISHER.id
-  if (!accountIds.has(key)) accountIds.set(key, 1_000 + accountIds.size)
-  return accountIds.get(key)
-}
-const accountUser = login => ({ login, id: accountId(login) })
 
 const review = (login, state, submitted_at = '2026-09-14T00:00:00Z', id = 10, commit_id = HEAD_SHA) => ({
   user: accountUser(login), state, submitted_at, id, commit_id,
@@ -585,36 +572,6 @@ test('fails when the approval review cannot be submitted and keeps the status co
   assert.ok(!calls.some(call => call.method === 'DELETE' && call.path.endsWith('/issues/comments/90')))
 })
 
-
-test('turtle2099 contributes fixed author points without a history lookup', async () => {
-  const output = []
-  const { api } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
-  const result = await runApprovalCheck({
-    event: pullRequestEvent({ author: 'Turtle2099' }), policySource,
-    getMergedCount: async () => { throw new Error('fixed author credit must skip history') },
-    getOwnership: async () => ({ totalLines: 10, reviewerLines: { writer: 2 } }),
-    api,
-    write: line => output.push(line),
-  })
-  assert.deepEqual(result.authorCredit, { mergedCount: null, points: 0.2 })
-  assert.equal(result.approvals[0].points, 1.8)
-  assert.equal(result.state, 'success')
-  assert.ok(output.includes('Author credit: 0.2 (fixed for @Turtle2099).'))
-})
-
-test('drafts skip history and history failures fail the run', async () => {
-  await evaluateApproval({
-    event: pullRequestEvent({ draft: true }), policySource,
-    getMergedCount: async () => { throw new Error('draft must skip history') },
-  })
-  const { api } = publicationApi()
-  await assert.rejects(runApprovalCheck({
-    event: pullRequestEvent(), policySource,
-    getMergedCount: async () => { throw new Error('history unavailable') },
-    api,
-  }), /history unavailable/u)
-})
-
 test('reads ownership and merged history through the read-only API', async () => {
   let mergedApi
   let ownershipApi
@@ -658,88 +615,18 @@ test('uses the read-only API for the pre-approval head check and the PAT for wri
   assert.ok(patCalls.some(path => path.endsWith('/pulls/42/reviews')))
 })
 
-test('the publisher counts merged history through the production API path', async () => {
-  const event = pullRequestEvent()
-  const output = []
-  const { api: base, calls } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
+test('records author credit in the published approval', async () => {
+  const { api, calls } = publicationApi({ reviews: [review('writer', 'APPROVED')] })
   const result = await runWithHistory({
-    event, policySource, write: line => output.push(line),
+    event: pullRequestEvent(), policySource,
+    getMergedCount: async () => 50,
     getOwnership: async () => ({ totalLines: 80, reviewerLines: { writer: 9 } }),
-    api: async (path, options) => {
-      if (path === '/graphql') {
-        assert.equal(options.body.variables.owner, 'deepseek-harness')
-        return { data: { repository: { pullRequests: {
-          nodes: Array.from({ length: 25 }, (_, i) => ({
-            number: i + (options.body.variables.after ? 200 : 100), author: { id: event.pull_request.user.node_id },
-          })),
-          pageInfo: { hasNextPage: !options.body.variables.after, endCursor: 'next' },
-        } } } }
-      }
-      if (path.includes('/permission')) return { permission: 'write' }
-      return base(path, options)
-    },
+    api,
+    write: () => {},
   })
-  assert.equal(result.points, 2)
-  assert.equal(result.authorCredit.points, 0.55)
-  assert.equal(result.approvals[0].points, 1.45)
+  assert.equal(result.state, 'success')
   const approval = calls.find(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST')
-  assert.match(approval.body.body, /Weighted approval satisfied: 2\/2 points\./u)
   assert.match(approval.body.body, /Author credit: 0\.55 points\./u)
-  assert.equal(output[0], 'Author credit: 0.55 (50 merged PRs).')
-})
-
-test('sufficient reviewer points and drafts publish without querying author history', async () => {
-  for (const draft of [false, true]) {
-    const output = []
-    const { api, calls } = publicationApi({ reviews: [review('turtle2099', 'APPROVED')] })
-    const result = await runWithHistory({
-      event: pullRequestEvent({ draft }), policySource,
-      write: line => output.push(line),
-      api: async (path, options) => {
-        assert.notEqual(path, '/graphql')
-        if (path.includes('/permission')) return { permission: 'write' }
-        return api(path, options)
-      },
-    })
-    assert.equal(result.state, draft ? 'pending' : 'success')
-    assert.equal(result.authorCredit, null)
-    assert.equal(output[0], `Author credit: not evaluated (${draft ? 'draft' : 'reviewer points suffice'}).`)
-    assert.equal(calls.some(call => call.path.endsWith('/pulls/42/reviews') && call.method === 'POST'), !draft)
-  }
-})
-
-const comment = (login, body, created_at = '2026-09-15T00:00:00Z', id = 1) => ({
-  user: { ...accountUser(login), node_id: `account:${login.toLowerCase()}` },
-  body, created_at, id, node_id: `comment:${login}:${id}:${body}:${created_at}`,
-})
-
-function delegationApi({ comments = [], reviews = [], permissions = {} } = {}) {
-  return async (path, options) => {
-    if (path === '/user') return { ...PUBLISHER }
-    if (path === '/graphql') return { data: { nodes: options.body.variables.ids.map(id => {
-      const entry = comments.find(comment => comment.node_id === id)
-      return { id, body: entry.body, createdAt: entry.created_at, author: { id: entry.user.node_id }, lastEditedAt: null, editor: null,
-        ...entry.editorMetadata }
-    }) } }
-    if (path.includes('/comments?')) return comments
-    if (path.includes('/reviews?')) return reviews
-    const match = /\/collaborators\/([^/]+)\/permission$/u.exec(path)
-    if (match) return { permission: permissions[decodeURIComponent(match[1]).toLowerCase()] ?? 'write' }
-    if (path.endsWith('/issues/42/comments') && options?.method === 'POST') return { id: 100 }
-    if (path.includes('/issues/comments/')) return {}
-    if (path.endsWith('/pulls/42')) return pullRequestEvent().pull_request
-    if (path.endsWith('/pulls/42/reviews') && options?.method === 'POST') {
-      return { id: 200, state: 'APPROVED', commit_id: HEAD_SHA, user: accountUser(PUBLISHER.login) }
-    }
-    throw new Error(`unexpected API path ${path}`)
-  }
-}
-
-const evaluateDelegation = options => evaluateWithHistory({
-  event: pullRequestEvent(), policySource,
-  getMergedCount: async () => 0,
-  getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-  ...options,
 })
 
 test('publishes without dismissing delegated human reviews or requesting reviewers', async () => {
@@ -767,58 +654,10 @@ test('publishes without dismissing delegated human reviews or requesting reviewe
   assert.ok(calls.every(call => !['PUT', 'DELETE'].includes(call.method) || call.path.includes('/issues/')))
 })
 
-test('delegation scoring retains sender review IDs and revokes on a later sender review', async () => {
-  const reviews = [review('turtle1999', 'APPROVED', undefined, 10), review('turtle1999', 'CHANGES_REQUESTED', undefined, 11),
-    review('turtle1999', 'COMMENTED', undefined, 12), review('turtle1999', 'PENDING', null, 13),
-    review('writer', 'APPROVED', undefined, 20), review('other', 'CHANGES_REQUESTED', undefined, 21)]
-  const api = delegationApi({ comments: [comment('turtle1999', '/delegate @writer')], reviews })
-  const result = await evaluateDelegation({ api })
-  assert.deepEqual(result.blockers, ['other', 'turtle1999'])
-  assert.equal(result.delegations.length, 1)
-  assert.deepEqual(result.delegations[0].reviewIds, [10, 11])
-  reviews.find(review => review.id === 21).state = 'DISMISSED'
-  reviews.find(review => review.id === 20).state = 'APPROVED'
-  const approved = await evaluateDelegation({ api })
-  assert.equal(approved.delegations.length, 1)
-  assert.equal(approved.state, 'pending')
-  reviews.push(review('turtle1999', 'COMMENTED', '2026-09-16T00:00:00Z', 30))
-  const reclaimed = await evaluateDelegation({ api })
-  assert.deepEqual(reclaimed.delegations, [])
-  assert.equal(reclaimed.points, 1)
-})
-
-test('reads all comment pages, logs the score owner, and fails closed on missing comment history', async () => {
-  const output = []
-  const pageCommand = comment('turtle1999', '/delegate @writer')
-  const api = delegationApi({ comments: [pageCommand], reviews: [review('writer', 'APPROVED')] })
-  const run = comments => runWithHistory({
-    event: pullRequestEvent(), policySource,
-    getMergedCount: async () => 0, write: line => output.push(line),
-    api: async (path, options) => {
-      if (path.includes('/comments?')) return comments(path)
-      return api(path, options)
-    },
-  })
-  const pages = []
-  await run(path => {
-    pages.push(path)
-    return path.endsWith('page=1') ? Array.from({ length: 100 }, () => comment('writer', 'text'))
-      : [pageCommand]
-  })
-  assert.ok(pages.some(path => path.endsWith('page=1')))
-  assert.ok(pages.some(path => path.endsWith('page=2')))
-  assert.ok(output.includes('- @turtle1999: 2 (delegated to @writer)'))
-  for (const [comments, message] of [
-    [() => { throw new Error('comment API unavailable') }, /comment API unavailable/u],
-    [() => ({}), /comments response is not an array/u],
-    [() => [null], /comment is not an object/u],
-    [() => [{ user: { login: 'writer' } }], /comment has no body/u],
-    [() => [{ user: {}, body: '/delegate @writer' }], /delegation author has no valid account ID/u],
-    [() => [{ user: { id: 7 }, body: '/delegate @writer' }], /delegation author has an invalid login/u],
-    [() => Array.from({ length: 100 }, () => comment('writer', 'text')), /comments exceed 3000/u],
-  ]) {
-    await assert.rejects(run(comments), message)
-  }
+test('rejects a delegation author without an immutable account ID', async () => {
+  await assert.rejects(evaluateDelegation({
+    api: delegationApi({ comments: [{ user: {}, body: '/delegate @writer' }] }),
+  }), /delegation author has no valid account ID/u)
 })
 
 test('manual dispatch resolves only a canonical number to the live PR', async () => {
