@@ -7,7 +7,7 @@
         api: anthropic-messages
         baseURL: https://image-override.invalid
         requestImageMaxDimension: 3000
-        maxImageBytes: 4096
+        requestImageMaxBytes: 4096
         models:
           - id: vision
             input: [text, image]

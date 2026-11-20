@@ -47,7 +47,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
         reasoning: high
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
         requestImageMaxDimension: 3000  # override catalog width and height limits
-        maxImageBytes: 1048576          # hard per-image cap before allocation
+        requestImageMaxBytes: 1048576   # hard per-image cap before allocation
         requestImageBudgetCount: 20     # fixed number of equal budget shares
         maxRequestImageBytes: 20971520   # accumulated base64 payload
         maxRequestImages: 50             # retained image occurrences
@@ -89,14 +89,14 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 | `defaultMaxTokens` | `128,000` | Output-cap fallback for undescribed models |
 | `requestImagePixelBudget` | `4,194,304` | Total-pixel budget for each deterministic request image |
 | `requestImageMaxDimension` | catalog width/height limits | Maximum width and height for each request image; an explicit value overrides both catalog limits |
-| `maxImageBytes` | catalog base64 cap converted to raw bytes; otherwise `1 MiB` | Hard per-image cap before allocation; an explicit value overrides the catalog cap |
+| `requestImageMaxBytes` | catalog base64 cap converted to raw bytes; otherwise `1 MiB` | Hard per-image cap before allocation; an explicit value overrides the catalog cap |
 | `requestImageBudgetCount` | `20` | Fixed divisor of the aggregate image budget; independent of retained image count |
 | `maxRequestImageBytes` | `20 MiB` | Aggregate base64 image-payload bound; a request whose retained images exceed it fails with `IMAGE_OFFLOAD_REQUIRED` |
 | `maxRequestImages` | `50` | Retained request-image count bound; a request whose retained images exceed it fails with `IMAGE_OFFLOAD_REQUIRED`. The default follows Azure OpenAI's 50-image limit; raise it on routes whose provider accepts more images |
 | `imageOffloadCountQuantum` | `10`, capped at `maxRequestImages` | Oldest images offloaded per count overflow |
 | `retryPolicy` | normal, 5 retries | Provider-owned retry policy executed by `dsh-llm-retry` |
 
-Request images inherit the selected pi-ai model's `inputLimits.images.resize` width, height, and base64-byte cap. `requestImageMaxDimension` overrides both dimensions with one value; it cannot express unequal width and height overrides. `maxImageBytes` overrides the per-image cap in raw encoded bytes. The effective hard limit is `min(3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount)), maxImageBytes or catalog cap or 1 MiB)`, with the catalog cap converted using `3 × floor(catalogBytes / 4)`. Configuration must allow at least four aggregate base64 bytes per budget share. Defaults allocate 0.75 MiB per image, so 20 images at that limit use at most 20 MiB of base64 payload. Budget shares stay fixed as history grows; `maxRequestImages` separately controls retained occurrences. Missing catalog dimensions leave that axis uncapped, while total pixels remain governed by `requestImagePixelBudget`.
+Request images inherit the selected pi-ai model's `inputLimits.images.resize` width, height, and base64-byte cap. `requestImageMaxDimension` overrides both dimensions with one value; it cannot express unequal width and height overrides. `requestImageMaxBytes` overrides the per-image cap in raw encoded bytes. The effective hard limit is `min(3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount)), requestImageMaxBytes or catalog cap or 1 MiB)`, with the catalog cap converted using `3 × floor(catalogBytes / 4)`. Configuration must allow at least four aggregate base64 bytes per budget share. Defaults allocate 0.75 MiB per image, so 20 images at that limit use at most 20 MiB of base64 payload. Budget shares stay fixed as history grows; `maxRequestImages` separately controls retained occurrences. Missing catalog dimensions leave that axis uncapped, while total pixels remain governed by `requestImagePixelBudget`.
 
 pi exposes no separate soft-byte target: the shared encoder's `imageTargetBytes` equals its effective `maxImageBytes`. After the quality ladder, images that still exceed the limit are resized and re-encoded until they fit; an impossible limit fails explicitly. Stored attachments stay unchanged. Image descriptors and screenshot coordinates use the final encoded dimensions. Increase `requestImageBudgetCount` for smaller per-image allocations, or decrease it for larger ones; the aggregate cap still applies to actual payloads.
 

@@ -92,13 +92,13 @@ describe('request image policy bounds', () => {
     expect(profile.requestImageMaxDimension).toBeUndefined()
     expect(profile.maxImageBytes).toBeUndefined()
     expect(profile.requestImageBudgetCount).toBe(20)
-    const explicit = routeWith({ requestImageMaxDimension: 3000, maxImageBytes: 2000000 })() as Options
+    const explicit = routeWith({ requestImageMaxDimension: 3000, requestImageMaxBytes: 2000000 })() as Options
     expect(resolveProfiles(explicit.providers).get('acme-gateway')).toMatchObject({
       requestImageMaxDimension: 3000, maxImageBytes: 2000000,
     })
   })
 
-  it.each(['requestImageMaxDimension', 'maxImageBytes', 'requestImageBudgetCount'])(
+  it.each(['requestImageMaxDimension', 'requestImageMaxBytes', 'requestImageBudgetCount'])(
     'rejects invalid %s at the configuration parser', (field) => {
       for (const value of [0, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
         expect(routeWith({ [field]: value })).toThrow()
@@ -114,8 +114,8 @@ describe('request image policy bounds', () => {
     ['requestImageMaxDimension', 0, /requestImageMaxDimension must be a positive safe integer/],
     ['requestImageMaxDimension', 1.5, /requestImageMaxDimension must be a positive safe integer/],
     ['requestImageMaxDimension', Number.MAX_SAFE_INTEGER + 1, /requestImageMaxDimension must be a positive safe integer/],
-    ['maxImageBytes', 0, /maxImageBytes must be a positive safe integer/],
-    ['maxImageBytes', 1.5, /maxImageBytes must be a positive safe integer/],
+    ['requestImageMaxBytes', 0, /requestImageMaxBytes must be a positive safe integer/],
+    ['requestImageMaxBytes', 1.5, /requestImageMaxBytes must be a positive safe integer/],
   ] as const)('rejects %s=%s at service resolution', (field, value, message) => {
     const programmatic = {
       providers: {
@@ -143,10 +143,12 @@ it('rejects an aggregate budget without room for one base64 group per allocated 
     .toThrow(/maxRequestImageBytes/)
 })
 
-it('rejects the retired soft-byte configuration key instead of ignoring it', () => {
-  expect(() => { assertServiceable(routeWith({ requestImageMaxBytes: 1024 })() as Options) })
-    .toThrow(/replace requestImageMaxBytes with maxImageBytes/)
-})
+it.each([{ maxImageBytes: 1024 }, { requestImageMaxBytes: 1024, maxImageBytes: 1024 }])(
+  'rejects the internal byte-cap name in a provider profile: %j', (fields) => {
+    expect(() => { assertServiceable(routeWith(fields)() as Options) })
+      .toThrow(/provider "acme-gateway" must use requestImageMaxBytes.*maxImageBytes is internal/)
+  },
+)
 
 
 it('refuses a separate pi soft target at the configuration boundary', () => {

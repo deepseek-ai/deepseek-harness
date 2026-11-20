@@ -206,14 +206,14 @@ export interface PiAiProviderProfile {
    * The effective cap is the smaller of this value and the route's equal share of maxRequestImageBytes.
    * Omission uses the catalog budget converted to raw bytes, or 1 MiB without catalog metadata.
    */
-  maxImageBytes?: number
+  requestImageMaxBytes?: number
   /** Provider-owned model-request retry policy; omission uses normal mode with five retries. */
   retryPolicy?: RetryPolicyConfig
 }
 
 /** Validated profile with its route stamped and every adapter-owned default resolved. */
 export interface ResolvedPiAiProviderProfile
-  extends Omit<PiAiProviderProfile, 'apiKeyEnv' | 'retryPolicy' | 'models' | 'displayName'> {
+  extends Omit<PiAiProviderProfile, 'apiKeyEnv' | 'retryPolicy' | 'models' | 'displayName' | 'requestImageMaxBytes'> {
   /** Harness route key and the `Models` collection key (the configuration dict key). */
   provider: string
   /** Resolved display name for selectors and configuration surfaces. */
@@ -232,6 +232,8 @@ export interface ResolvedPiAiProviderProfile
   requestImageBudgetCount: number
   /** Positive total-pixel request-version budget after defaulting. */
   requestImagePixelBudget: number
+  /** Configured hard per-image cap in raw encoded bytes, before the request budget is shared. */
+  maxImageBytes?: number
   /** Immutable retry policy captured with this provider route. */
   retryPolicy: ResolvedRetryPolicy
   /**
@@ -381,7 +383,7 @@ const profile = z.object({
   requestImageBudgetCount: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_REQUEST_IMAGE_BUDGET_COUNT),
   requestImagePixelBudget: z.number().step(1).min(1).default(DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET),
   requestImageMaxDimension: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
-  maxImageBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
+  requestImageMaxBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   retryPolicy: RetryPolicySchema,
 })
 
@@ -456,10 +458,10 @@ export function resolveProfiles(
   for (const [provider, source] of entries) {
     rejectRemovedFields(provider, source)
     if ('imageTargetBytes' in source) {
-      throw new Error('llm-pi-ai: imageTargetBytes is not configurable; pi uses its effective maxImageBytes as the target')
+      throw new Error('llm-pi-ai: imageTargetBytes is not configurable; pi uses the effective per-image cap as the target')
     }
-    if ('requestImageMaxBytes' in source) {
-      throw new Error('llm-pi-ai: replace requestImageMaxBytes with maxImageBytes; the new value is a hard per-image cap')
+    if ('maxImageBytes' in source) {
+      throw new Error(`llm-pi-ai: provider "${provider}" must use requestImageMaxBytes to set the per-image cap; maxImageBytes is internal`)
     }
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
     if (source.baseURL !== undefined && source.baseURL.length === 0) {
@@ -500,7 +502,7 @@ export function resolveProfiles(
     if (!Number.isSafeInteger(requestImagePixelBudget) || requestImagePixelBudget <= 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" requestImagePixelBudget must be a positive safe integer`)
     }
-    for (const field of ['requestImageMaxDimension', 'maxImageBytes'] as const) {
+    for (const field of ['requestImageMaxDimension', 'requestImageMaxBytes'] as const) {
       const value = source[field]
       if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
         throw new Error(`llm-pi-ai: provider "${provider}" ${field} must be a positive safe integer`)
@@ -547,9 +549,10 @@ export function resolveProfiles(
       if (validation === 'strict' || !(error instanceof PiAiCatalogError)) throw error
       catalogError ??= error.message
     }
-    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
+    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, requestImageMaxBytes, ...rest } = source
     resolved.set(provider, {
       ...rest,
+      ...requestImageMaxBytes === undefined ? {} : { maxImageBytes: requestImageMaxBytes },
       provider,
       displayName,
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },

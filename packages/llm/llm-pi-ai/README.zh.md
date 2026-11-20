@@ -47,7 +47,7 @@ kind: "package-reference"
         reasoning: high
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
         requestImageMaxDimension: 3000  # override catalog width and height limits
-        maxImageBytes: 1048576          # hard per-image cap before allocation
+        requestImageMaxBytes: 1048576   # hard per-image cap before allocation
         requestImageBudgetCount: 20     # fixed number of equal budget shares
         maxRequestImageBytes: 20971520   # accumulated base64 payload
         maxRequestImages: 50             # retained image occurrences
@@ -89,14 +89,14 @@ kind: "package-reference"
 | `defaultMaxTokens` | `128,000` | 未描述模型的输出上限回退 |
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
 | `requestImageMaxDimension` | 目录中的宽高限制 | 每张请求图片的最大宽度和高度；显式配置会覆盖目录中的两个限制 |
-| `maxImageBytes` | 目录的 base64 上限换算为原始字节；否则为 `1 MiB` | 分摊前的单图硬上限；显式配置会覆盖目录上限 |
+| `requestImageMaxBytes` | 目录的 base64 上限换算为原始字节；否则为 `1 MiB` | 分摊前的单图硬上限；显式配置会覆盖目录上限 |
 | `requestImageBudgetCount` | `20` | 图片总预算的固定分摊张数，与当前保留图片数量无关 |
 | `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
 | `maxRequestImages` | `50` | 保留请求图片数量上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败。默认值取 Azure OpenAI 的 50 张上限；提供方接受更多图片的路由应调高 |
 | `imageOffloadCountQuantum` | `10`，不超过 `maxRequestImages` | 每次数量超限时省略的最老图片数 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
 
-请求图片继承所选 pi-ai 模型的 `inputLimits.images.resize` 宽度、高度和 base64 字节上限。`requestImageMaxDimension` 用同一个值覆盖宽高，不能分别配置不同的宽度和高度上限。`maxImageBytes` 按原始编码字节覆盖单图上限。最终硬上限为 `min(3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount)), maxImageBytes 或目录上限或 1 MiB)`，其中目录上限通过 `3 × floor(catalogBytes / 4)` 换算。总预算须为每份预算至少提供 4 个 base64 字节。默认每张图分得 0.75 MiB，20 张达到该上限的图片最多占用 20 MiB base64 载荷。历史增长不会改变分摊张数；`maxRequestImages` 单独控制保留图片数量。目录缺少某个尺寸时，路由不限制该轴，总像素仍由 `requestImagePixelBudget` 控制。
+请求图片继承所选 pi-ai 模型的 `inputLimits.images.resize` 宽度、高度和 base64 字节上限。`requestImageMaxDimension` 用同一个值覆盖宽高，不能分别配置不同的宽度和高度上限。`requestImageMaxBytes` 按原始编码字节覆盖单图上限。最终硬上限为 `min(3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount)), requestImageMaxBytes 或目录上限或 1 MiB)`，其中目录上限通过 `3 × floor(catalogBytes / 4)` 换算。总预算须为每份预算至少提供 4 个 base64 字节。默认每张图分得 0.75 MiB，20 张达到该上限的图片最多占用 20 MiB base64 载荷。历史增长不会改变分摊张数；`maxRequestImages` 单独控制保留图片数量。目录缺少某个尺寸时，路由不限制该轴，总像素仍由 `requestImagePixelBudget` 控制。
 
 pi 不暴露单独的软字节目标，共享编码器的 `imageTargetBytes` 等于最终 `maxImageBytes`。质量阶梯结束后仍超限的图片会继续缩小尺寸并重新编码，直到满足上限；无法满足的极小上限会明确报错。存储附件保持不变。图片描述和截图坐标使用最终编码尺寸。调大 `requestImageBudgetCount` 会减小每张图的分配额度，调小则增加额度；总预算仍按实际载荷执行。
 
