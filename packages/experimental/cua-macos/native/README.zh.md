@@ -61,6 +61,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="request-protocol"></a>
 ## 请求协议
 
+每条连接通过握手字段 `recentActivityWindowMs` 或参数 `--recent-activity-window-ms` 设置回看时长，默认 60000 毫秒，填 `"off"` 可关闭。为判断先前观察到的窗口是否可能发生变化，启用的连接在内存中按窗口和来源保留最近一次活动的时间。外部输入监听器通过进程和窗口 ID 判断点击或滚动属于哪个窗口，处理后即丢弃事件。Host 在每个已授权的应用句柄下调用 `takeWindowActivity` 查询观察过的窗口，并在本轮结束时调用 `clearWindowActivity`。所有窗口都停止等待提醒时，helper 卸载共享监听器。
+
 操作帧为 `{ "id": "opaque request id", "method": "method name", "params": {} }`。对应回复只包含 `result` 或 `error: {code, message}` 中的一项；无效信封返回 `INVALID_REQUEST`，ID 为 null。每条连接同时最多发送一个操作。`{ "type": "cancel", "id": "request id" }` 取消该请求，迟到的取消不会产生额外回复。`protocol.schema.json` 定义操作字段。
 
 截图诊断通过原始连接发送 `type: "diagnostic"` 帧。记录包含 requestId、stage、从接收开始计算的 elapsedMs 和可选的 errorCode，不含窗口标题、AX 文本或图片字节。stdin/stdout 代理在 stderr 上以 `[cua-screenshot]` 前缀转发诊断，操作回复仍写入 stdout。Host 保留有上限的诊断缓冲区，并将其附在截图失败中。

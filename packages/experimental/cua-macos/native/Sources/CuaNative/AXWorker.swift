@@ -142,6 +142,17 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
+    /// Advisory lookup leaves target validation and error ordering to the requested operation.
+    func activityTarget(_ params: RequestParameters) -> ActivityTarget? {
+        guard !closed, let handle = params.values["appHandle"]?.string,
+              case .running(let identity)? = targets[handle] else { return nil }
+        let window = params.values["windowId"]?.string.flatMap(UInt32.init)
+        let scope = snapshots.values.first {
+            $0.scope.appHandle == handle && $0.id == params.values["snapshotId"]?.string
+        }
+        guard let id = window ?? scope?.scope.windowID else { return nil }
+        return ActivityTarget(process: identity, windowID: id)
+    }
     private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }

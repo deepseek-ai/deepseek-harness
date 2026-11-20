@@ -66,6 +66,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `sourceSigning` | `ad-hoc` | Source signing: `ad-hoc`, or `{ identity, keychain }` for an existing certificate and keychain path. Ignored for installed packages and `helperPath`. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
+| `recentActivityWindowMs` | `60000` | Lookback in milliseconds. Set `recentActivityWindowMs: "off"` to disable activity tracking and notices for this connection. |
 | `connectTimeoutMs` | `5000` | Deadline for connecting to or starting the shared helper. |
 | `permissionPollIntervalMs` | `1000` | Interval in milliseconds between permission and position checks while the native guide is open. |
 | `screenshotTimeoutMs` | `5000` | Screenshot deadline including queue time, capped by `timeoutMs`. |
@@ -78,6 +79,10 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `maxClickHoldMs` | `5000` | Maximum explicit click hold in milliseconds; accepts nonnegative integers. Zero only permits immediate release. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |
+
+After a window accessibility read or screenshot, the plugin warns the Agent when other input may have changed the window. Before the next scheduled model step, it checks for activity since the start of the last successfully delivered read, within the configured lookback. Each window can produce one notice until the Agent uses it again. Watches end with the turn or connection.
+
+The external input listener subscribes only to mouse button presses and scrolling. For a watched window, the helper keeps the latest timestamp per source (another Agent or external input) in memory. The activity notice sent to the model and recorded in the Session contains only the window ID, source and elapsed time. The listener does not record keystrokes, typed text, pointer coordinates or scroll distances.
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cua-macos) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. `getApp` returns the `appHandle` used by every app-targeted operation, and `app.getWindow(windowId)` returns the object that owns screenshots and pointer input.
 
@@ -247,6 +252,8 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
+Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.
+
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```
 
@@ -259,6 +266,8 @@ Enabling the plugin adds a fixed schema and guidance. Native `cua` calls send re
 Tool results append to Session history. Changing plugin configuration or tool presentation can change the request prefix; retaining an app object does not change existing history.
 
 ## Known Limitations and Deferred Work
+
+External monitoring covers session-stream input; PID-directed background input and AX-only automation may bypass it. macOS Input Monitoring or Accessibility access is required. Unavailable monitoring does not block application operations, and missing notices do not prove inactivity.
 
 The native operation deadline (`timeoutMs`), per-AX-call timeout (`axTimeoutMs`), and response size limit (`maxResponseBytes`) still apply to larger tree reads.
 

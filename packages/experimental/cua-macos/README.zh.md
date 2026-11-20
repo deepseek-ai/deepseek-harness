@@ -66,6 +66,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
+| `recentActivityWindowMs` | `60000` | 近期活动的回看时长，单位为毫秒。设置 `recentActivityWindowMs: "off"` 可关闭此连接的活动检测和提醒。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
 | `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
@@ -78,6 +79,10 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
+
+模型读取窗口辅助功能树或截图后，其他输入可能已改变窗口。插件在下一次模型请求前提醒 Agent。检查范围从最近一次成功读取开始采样时算起，且限于配置的回看时长。每个窗口最多提醒一次，直到 Agent 再次使用该窗口。本轮结束或连接断开时停止关注。
+
+外部输入监听器只订阅鼠标按下和滚动事件。对于关注的窗口，helper 在内存中分别保留其他 Agent 和外部输入最近一次活动的时间。发给模型并写入 Session 日志的活动提醒只包含窗口 ID、来源和距今时间。监听器不记录按键、输入文本、鼠标坐标或滚动距离。
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
@@ -247,6 +252,8 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
+Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.
+
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```
 
@@ -259,6 +266,8 @@ Pass useSystemInput: true only when the task requires system keyboard or mouse i
 工具结果追加到 Session 历史。修改插件配置或工具呈现方式可能改变请求前缀；保留应用对象不会改变已有历史。
 
 ## 已知限制与后续工作
+
+外部输入监听只覆盖 session 事件流；PID 定向后台输入和仅通过 AX 执行的自动化可能不可见。监听依赖 macOS 输入监控或辅助功能权限，监听不可用不阻止应用操作。缺少活动提示不能证明无人操作。
 
 读取较大的树仍受原生操作超时（`timeoutMs`）、单次 AX 调用超时（`axTimeoutMs`）和响应大小限制（`maxResponseBytes`）约束。
 

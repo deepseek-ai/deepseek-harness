@@ -138,7 +138,6 @@ interface CuaExecution extends ToolExecution {
   coordinates: CuaCoordinates
 }
 
-
 const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
 
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
@@ -173,6 +172,15 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
+/** Window read on a session's authorized native connection. */
+export interface CuaWindowRead {
+  agent: Agent
+  client: NativeClient
+  access: Pick<ReturnType<typeof installCuaAccess>, 'readCached'>
+  appHandle: CuaAppHandle
+  windowId: string
+}
+
 /** Prepared platform executable, transport, platform-specific instructions and startup capabilities. */
 export interface CuaBackend {
   helperPath: string
@@ -186,6 +194,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
+  /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
+  windowRead?: (read: CuaWindowRead) => (reply: JsonValue) => void
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -296,9 +306,14 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
+      const confirmRead = (request.method === 'getState' || request.method === 'screenshot') && request.params.windowId
+        ? backend.windowRead?.({ agent, client, access, appHandle: request.params.appHandle as CuaAppHandle,
+          windowId: request.params.windowId })
+        : undefined
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
-        const screenshot = NativeScreenshotResult.parse(await requestNative())
+        const reply = await requestNative()
+        const screenshot = NativeScreenshotResult.parse(reply)
         if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
         const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
@@ -326,6 +341,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           signal.throwIfAborted()
         }
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
+        confirmRead?.(reply)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
           pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }
       }
@@ -364,7 +380,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       }
       if (request.method === 'getState' || request.method === 'listWindows') {
-        return observeNativeWindows(request, result, execution.coordinates)
+        const observation = observeNativeWindows(request, result, execution.coordinates)
+        confirmRead?.(result)
+        return observation
       }
       return result
     }

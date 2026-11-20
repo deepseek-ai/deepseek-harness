@@ -119,6 +119,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
     [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
+  const activityFile = new URL('./fixture-activity.json', import.meta.url)
+  const activity = existsSync(activityFile) ? JSON.parse(readFileSync(activityFile, 'utf8')) : undefined
+  const pendingActivity = new Set(activity ?? [])
   const snapshots = new Map()
   const heldKeys = new Map()
   const observedWindows = new Set()
@@ -291,5 +294,18 @@ function createApplicationState(socket, record, application, captureBroker, conn
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
     return { dispatched: true }
   }
-  return call
+  return (requestId, method, params) => {
+    if (method === 'clearWindowActivity') {
+      pendingActivity.clear()
+      return null
+    }
+    if (method === 'takeWindowActivity') {
+      const rows = [...pendingActivity].filter(row => observedWindows.has(row.windowId) && row.windowId in params.observations)
+      for (const row of rows) pendingActivity.delete(row)
+      return rows
+    }
+    const result = call(requestId, method, params)
+    return result && params.windowId && (method === 'getState' || method === 'screenshot')
+      ? { ...result, activityObservedAt: '1' } : result
+  }
 }

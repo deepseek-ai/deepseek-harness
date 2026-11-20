@@ -26,8 +26,24 @@ ${catalog.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
 })}`
 }
 
-/** Native PTC operation instructions with registered file tools for large observations. */
-export const GUIDANCE = operationGuidance('In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need.')
+const instructions = {
+  raw: operationGuidance('In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need.'),
+  standalone: operationGuidance('Capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory and use inspect to display the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it.'),
+}
+const activityGuidance = 'Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.'
 
-/** CUA-only program instructions; other session tools remain outside the program. */
-export const PROGRAM_GUIDANCE = operationGuidance('Capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory and use inspect to display the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it.')
+/**
+ * Select operation guidance for the current macOS configuration.
+ * @param kind - Program environment receiving the instructions.
+ * @param activityEnabled - Whether this connection reports recent activity.
+ * @returns Model-facing instructions for the configured operations.
+ */
+export function macosGuidance(kind: 'raw' | 'standalone', activityEnabled: boolean): string {
+  return activityEnabled ? `${instructions[kind]}\n\n${activityGuidance}` : instructions[kind]
+}
+
+/** Native PTC operation instructions for the default configuration. */
+export const GUIDANCE = macosGuidance('raw', true)
+
+/** Standalone program instructions for the default configuration. */
+export const PROGRAM_GUIDANCE = macosGuidance('standalone', true)

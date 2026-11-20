@@ -61,6 +61,8 @@ AppKit runs on the main event loop. Blocking socket accepts and handshakes use b
 <a id="request-protocol"></a>
 ## Request protocol
 
+The shared service accepts an integer `recentActivityWindowMs` (default 60000) or `"off"` per connection through the handshake or `--recent-activity-window-ms`. To flag potentially stale window observations, enabled connections keep one timestamp per source and window in memory. The external input tap uses process and window IDs to attribute clicks and scrolling, then discards the event. The Host calls `takeWindowActivity` for the windows observed under each authorized app handle and `clearWindowActivity` at turn end. The shared listener stops when no window has an outstanding interest.
+
 Operation frames remain `{ "id": "opaque request id", "method": "method name", "params": {} }`. The matching reply contains exactly one of `result` or `error: {code, message}`; malformed envelopes return `INVALID_REQUEST` with a null ID. A connection sends at most one operation at a time. `{ "type": "cancel", "id": "request id" }` cancels that request; a late cancel produces no extra reply. `protocol.schema.json` defines operation fields.
 
 Screenshot diagnostics use `type: "diagnostic"` frames on the originating connection. Records contain requestId, stage, elapsedMs since receipt and optional errorCode, without window titles, AX text or image bytes. The stdin/stdout proxy forwards them to stderr with `[cua-screenshot]`; operation replies remain on stdout. The Host retains a bounded diagnostic buffer and includes it in screenshot failures.

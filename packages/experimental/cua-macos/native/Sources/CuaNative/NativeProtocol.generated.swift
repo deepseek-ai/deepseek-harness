@@ -5,6 +5,7 @@ enum NativeProtocol {
     static let fields: [String: Set<String>] = [
         "activate": ["appHandle"],
         "applicationIcons": ["paths"],
+        "clearWindowActivity": [],
         "click": ["appHandle", "clickCount", "elementId", "holdMs", "modifiers", "mouseButton", "snapshotId", "useSystemInput", "windowId", "x", "y"],
         "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "useSystemInput", "windowId"],
         "findApps": ["maxAppMatches", "query"],
@@ -32,6 +33,7 @@ enum NativeProtocol {
         "sendKeyEvent": ["appHandle", "direction", "key", "runId", "useSystemInput", "windowId"],
         "setValue": ["appHandle", "elementId", "snapshotId", "value", "windowId"],
         "show": ["appHandle", "windowId"],
+        "takeWindowActivity": ["appHandle", "observations"],
         "toggleMouse": ["appHandle", "direction", "mouseButton", "useSystemInput", "windowId"],
         "typeText": ["appHandle", "text", "windowId"],
     ]

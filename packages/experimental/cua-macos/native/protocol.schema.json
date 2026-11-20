@@ -1589,6 +1589,70 @@
         },
         "method": {
           "type": "string",
+          "const": "takeWindowActivity"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string"
+            },
+            "observations": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9]{1,20}$"
+              }
+            }
+          },
+          "required": [
+            "appHandle",
+            "observations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "clearWindowActivity"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
           "const": "releaseSystemButton"
         },
         "params": {

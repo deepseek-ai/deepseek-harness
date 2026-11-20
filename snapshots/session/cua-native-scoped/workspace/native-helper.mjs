@@ -130,6 +130,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let incompleteInputTargets = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
+    if (method === 'takeWindowActivity') return []
+    if (method === 'clearWindowActivity') return null
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
