@@ -261,7 +261,10 @@ export function deriveTrajectoryLayout(
   const entries: OrderedLayoutEntry[] = [
     ...(input.systemPrompts ?? []).map(prompt => ({
       kind: 'system' as const, seq: prompt.seq, systemPrompt: prompt.text,
-      change: { seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const },
+      change: {
+        seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const,
+        ...(prompt.message === undefined ? {} : { message: prompt.message }),
+      },
     })),
     ...nodes.map((node, nodeIndex) => ({
       kind: 'node' as const,
@@ -337,6 +340,10 @@ export function deriveTrajectoryLayout(
           ...(change.previous === undefined
             ? {}
             : { previousPromptDetail: change.previous }),
+          // The initial prompt introduces every source, so only later changes present their message by source.
+          ...(change.kind === 'initial' || change.message === undefined
+            ? {}
+            : { promptMessageDetail: change.message }),
           timeSeconds: 0,
           startedAt: finiteTime(change.time),
         },

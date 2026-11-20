@@ -1947,6 +1947,54 @@
   box-sizing: border-box;
 }
 
+/* Per-source prompt views: one titled block per registered source. */
+.promptSource {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.promptSourceTitle {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: 0;
+  gap: 2px 8px;
+  font: var(--dsw-font-xs-13);
+}
+
+.promptSourceName {
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: 500 12px/18px var(--ds-font-family-code);
+  overflow-wrap: anywhere;
+}
+
+.promptSourceLabel {
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+.promptSourceCaption,
+.promptSourceNotice {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.promptSourceCaptionInset {
+  padding: 10px 14px 0;
+}
+
+.promptSourceText {
+  min-height: 0;
+  padding: 0;
+}
+
 .toolCatalog {
   min-height: 100%;
   padding: 8px 0 16px;

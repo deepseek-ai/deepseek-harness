@@ -1,15 +1,18 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, RequestPromptInspector,
-  SystemPromptState, SystemPromptInspector,
+  SystemMessageSections, SystemPromptState, SystemPromptInspector,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import { chatNode } from './common.ts'
 
 declare module '../contract/chat-nodes.ts' {
   interface ChatNodeDataMap {
-    /** Complete system prompt rendered for one model request, or an in-history prompt update at its own position. */
-    'system-prompt': { readonly text: string; readonly update?: true }
+    /**
+     * Complete system prompt rendered for one model request, or an in-history prompt update at its own position.
+     * `message` splits an update by the sources it names when the event carries section metadata.
+     */
+    'system-prompt': { readonly text: string; readonly update?: true; readonly message?: SystemMessageSections }
   }
 }
 
@@ -53,7 +56,8 @@ function stableRequestPromptAnchor(
  * `system/message` event on the Chat target so the unknown-surface fallback
  * never renders the prompt as a transcript row. Each nonempty append owns a
  * prompt card, even without a loaded request header. Initial cards precede
- * their step's input; in-history updates stay at their own positions. The
+ * their step's input; in-history updates stay at their own positions, and one
+ * carrying section metadata is the only prompt card Chat shows. The
  * request-prompt Definition owns replacement and later-series cards. Positional
  * replacements advance the effective prompt without changing historical cards.
  * A published node becomes `hidden` under the same key while a prepended replacement
@@ -76,14 +80,20 @@ export function systemMessageDefinition(inspect: SystemPromptInspector): Convers
     update: context => context.state,
     buildViewNode: (context) => {
       const state = context.state?.introduced
-      if (state === undefined || state.text === ''
+      // An update that only retires or clears sources has no text but still presents its section reading.
+      const sectioned = state?.update === true && state.message !== undefined
+      if (state === undefined || (state.text === '' && !sectioned)
         || context.start?.event.type !== 'system/message' || context.start.event.surfaceOp !== 'append') {
         const current = context.current.get('chat') as ChatNode | null | undefined
         if (current?.kind !== 'system-prompt') return null
         return chatNode(context, 'system-prompt', current.anchorSeq, current.data, { visibility: 'hidden' })
       }
       const anchor = state.update ? state.seq : requestPromptAnchor(context.start, undefined, true)
-      return chatNode(context, 'system-prompt', anchor, { text: state.text, ...state.update ? { update: true } : {} })
+      return chatNode(context, 'system-prompt', anchor, {
+        text: state.text,
+        ...state.update ? { update: true } : {},
+        ...state.update && state.message !== undefined ? { message: state.message } : {},
+      })
     },
   }
 }

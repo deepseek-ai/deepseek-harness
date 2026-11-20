@@ -1111,6 +1111,42 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: '' } })
   })
 
+  it('presents a section-attributed update with its per-source reading and instructions in force', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const events = [
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', {
+        reason: 'initial',
+        header: { config: { provider: 'test', model: 'test' }, tools: [] },
+      }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ]
+    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated', text: 'plan off', notices: [] }] }
+
+    const requests = snapshot(assembler(events)).requests
+    expect(requests.map(request => request.purpose === 'assistant' ? request.prompt?.sections : undefined)).toEqual([
+      [{ name: 'plan:status', order: 1, text: 'plan on' }],
+      [{ name: 'plan:status', order: 1, text: 'plan off' }],
+    ])
+    expect(requests.at(-1)).toMatchObject({ promptChange: {
+      seq: 8, kind: 'system', message, previous: { sections: [{ name: 'plan:status', order: 1, text: 'plan on' }] },
+    } })
+
+    // Without a loaded header the update keeps its reading on the standalone prompt node.
+    const headerless = snapshot(assembler(events.filter(event => event.event.type !== 'request/header')))
+    expect(headerless.systemPrompts?.map(prompt => prompt.message?.changes.map(change => change.change)))
+      .toEqual([['added'], ['updated']])
+  })
+
   it('retains an in-history update without a loaded header as a plain system node', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

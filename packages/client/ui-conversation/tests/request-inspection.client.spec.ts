@@ -40,6 +40,24 @@ describe('inspectRequestPrompt', () => {
     })
   })
 
+  it('carries the per-source instructions and the section reading of the system node that changed the prompt', () => {
+    const sections = [{ name: 'plan:status', order: 1, text: 'off' }]
+    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated' as const, text: 'off', notices: [] }] }
+    const previous = { config: CONFIG, system: 'on', tools: [], sections: [{ name: 'plan:status', order: 1, text: 'on' }] }
+    const changed = inspectRequestPrompt(previous, header(SessionSeq(9), 'change', { config: CONFIG }), {
+      ...systemNode(7, 'off'), sections, message,
+    })
+    expect(changed.prompt.sections).toBe(sections)
+    expect(changed.change).toMatchObject({ seq: 7, kind: 'system', previous, message })
+
+    // A tools-only change is anchored at the header, so it presents no system message.
+    const tools = inspectRequestPrompt(changed.prompt, header(SessionSeq(12), 'change', { config: CONFIG, tools: [READ_TOOL] }), {
+      ...systemNode(7, 'off'), sections, message,
+    })
+    expect(tools.change).toMatchObject({ seq: 12, kind: 'tools' })
+    expect(tools.change).not.toHaveProperty('message')
+  })
+
   it('anchors an initial header without a system node at the header itself', () => {
     expect(inspectRequestPrompt(undefined, header(SessionSeq(2), 'initial', {
       config: CONFIG,

@@ -49,7 +49,7 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
           ...state,
           header: {
             seq: match.event.seq, time: match.event.time, location: match.location,
-            prompt: { ...header.prompt, system: '' },
+            prompt: { config: header.prompt.config, system: '', tools: header.prompt.tools },
           },
         }
       }
@@ -68,8 +68,16 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
         header: {
           seq: node.seq,
           time: node.time,
-          prompt: { ...previous.prompt, system: node.text },
-          change: { seq: node.seq, time: node.time, kind: 'system', previous: previous.prompt },
+          prompt: {
+            config: previous.prompt.config,
+            system: node.text,
+            tools: previous.prompt.tools,
+            ...(node.sections === undefined ? {} : { sections: node.sections }),
+          },
+          change: {
+            seq: node.seq, time: node.time, kind: 'system', previous: previous.prompt,
+            ...(node.message === undefined ? {} : { message: node.message }),
+          },
           location: match.location,
         },
       }

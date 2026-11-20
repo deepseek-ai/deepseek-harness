@@ -180,6 +180,100 @@ describe('TrajectoryTable', () => {
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['System Prompt'])
   })
 
+  it('presents a section-attributed system update by source, as a per-source diff, and as instructions in force', () => {
+    const config = { provider: 'test', model: 'test' }
+    const previous = {
+      config, system: 'Identity.\n\nPlan mode is on.', tools: [],
+      sections: [
+        { name: 'harness:identity', order: 0, text: 'Identity.' },
+        { name: 'plan:status', order: 5, text: 'Plan mode is on.' },
+        { name: 'tool:bash', order: 9, text: 'Use bash.' },
+      ],
+    }
+    const prompt = {
+      config, system: 'Identity.\n\nPlan mode is on.\n\nThe plan status changed.\n\nPlan mode is off.', tools: [],
+      sections: [
+        { name: 'harness:identity', order: 0, text: 'Identity.' },
+        { name: 'memo', order: 3, text: '' },
+        { name: 'plan:status', order: 5, text: 'Plan mode is off.' },
+      ],
+    }
+    const message = {
+      reset: true,
+      notices: ['Earlier guidance is superseded.'],
+      changes: [
+        { name: 'plan:status', change: 'updated' as const, text: 'Plan mode is off.', notices: ['The plan status changed.'] },
+        { name: 'harness:identity', change: 'unchanged' as const, text: 'Identity.', notices: [] },
+        { name: 'tool:bash', change: 'removed' as const, text: '', notices: [] },
+      ],
+    }
+    const request = {
+      purpose: 'assistant' as const, turn: 1, step: 2, startSeq: 7, startedAt: 7, completedAt: 9, status: 'complete' as const,
+      prompt,
+    }
+    const turns = deriveTrajectoryLayout({
+      nodes: [], partial: null, runningCalls: [],
+      requests: [{ ...request, promptChange: { seq: 8, time: 8, kind: 'system', previous, message } }],
+    }, t)
+    expect(turns.flatMap(turn => turn.groups.flatMap(group => group.cells)).find(cell => cell.kind === 'system'))
+      .toMatchObject({ promptMessageDetail: message })
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Update', 'Diff', 'System Prompt', 'As sent', 'Tools'])
+    const sources = () => [...view.container.querySelectorAll('[data-prompt-source]')].map(source => source.textContent)
+
+    expect(sources()).toEqual([
+      'plan:statusUpdatedThe plan status changed.Plan mode is off.',
+      'harness:identityUnchangedIdentity.',
+      'tool:bashRemoved',
+    ])
+    expect(screen.getByText('Replaces all earlier instructions')).toBeTruthy()
+    expect(screen.getByText('Earlier guidance is superseded.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Diff' }))
+    expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)).toEqual(['plan:status', 'tool:bash'])
+    expect(view.container.textContent).toContain('-Plan mode is on.')
+    expect(view.container.textContent).toContain('+Plan mode is off.')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'System Prompt' }))
+    expect(sources()).toEqual(['harness:identityIdentity.', 'plan:statusChanged herePlan mode is off.'])
+    expect(screen.getByText(/Instructions in force at this point/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'As sent' }))
+    expect(sources()).toEqual([])
+    expect(screen.getByText(/All retained system messages/)).toBeTruthy()
+    expect(view.container.textContent).toContain('Plan mode is on.')
+    cleanup()
+
+    // Without per-source instructions on both sides the diff compares the retained messages as one text.
+    const { sections: _sections, ...legacy } = previous
+    render(<TrajectoryTable
+      turns={deriveTrajectoryLayout({
+        nodes: [], partial: null, runningCalls: [],
+        requests: [{ ...request, prompt: { ...prompt, system: '' }, promptChange: { seq: 8, time: 8, kind: 'system', previous: legacy } }],
+      }, t)}
+      {...FOLD_PROPS}
+    />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Diff', 'System Prompt', 'As sent', 'Tools'])
+    expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)).toEqual(['System Prompt'])
+    fireEvent.click(screen.getByRole('tab', { name: 'System Prompt' }))
+    expect(screen.getByText('No system prompt in this request')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'As sent' }))
+    expect(screen.getByText('No system prompt in this request')).toBeTruthy()
+  })
+
+  it('offers the update reading of a standalone prompt node whose request header is not loaded', () => {
+    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated' as const, text: 'off', notices: [] }] }
+    const turns = deriveTrajectoryLayout({
+      nodes: [], partial: null, runningCalls: [],
+      systemPrompts: [{ seq: 10, time: 10, turn: 2, step: 1, text: 'off', update: true, message }],
+    }, t)
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Update', 'System Prompt'])
+  })
+
   it('shows a muted placeholder for an assistant response containing only tool calls', () => {
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,
