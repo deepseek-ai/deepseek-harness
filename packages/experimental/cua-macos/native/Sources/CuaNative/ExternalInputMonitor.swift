@@ -60,7 +60,7 @@ import Foundation
         activity.record(ActivityTarget(process: process, windowID: id), owner: nil, at: event.timestamp)
     }
 
-    static func windowOwner(_ id: UInt32) -> Int32? {
+    nonisolated static func windowOwner(_ id: UInt32) -> Int32? {
         // WindowServer expects unboxed window IDs, not CFNumber objects.
         var identifier = UnsafeRawPointer(bitPattern: UInt(id))
         let identifiers = CFArrayCreate(kCFAllocatorDefault, &identifier, 1, nil)
