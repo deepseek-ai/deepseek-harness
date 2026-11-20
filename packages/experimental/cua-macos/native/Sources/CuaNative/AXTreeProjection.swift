@@ -51,8 +51,13 @@ enum AXTreeProjection {
                 node.index = node.addressable ? (numbered ? treeLines.count : indexed.count) : nil
                 if numbered {
                     let id = treeLines.count
+                    var row = node
+                    row.focused = nil
+                    row.selectedText = nil
+                    row.selectedRange = nil
                     let line = AXTreeLine(element: element, parent: parent, depth: level, id: id,
-                                          body: AXTextFormatter.body(node, details: details), focused: node.focused == true)
+                                          body: AXTextFormatter.body(row, details: details), focused: node.focused == true,
+                                          selectedText: node.selectedText)
                     treeLines.append(line)
                     lines.append(line.rendered)
                 } else {

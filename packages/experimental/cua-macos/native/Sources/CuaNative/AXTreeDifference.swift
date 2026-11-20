@@ -9,6 +9,7 @@ struct AXTreeLine {
     var id: Int
     let body: String
     let focused: Bool
+    let selectedText: String?
 
     var rendered: String { String(repeating: "\t", count: depth) + "\(id) " + body }
 }
@@ -41,6 +42,7 @@ struct AXTreeBaseline {
         func focusSummary(_ rows: [AXTreeLine]) -> String {
             guard let focus else { return "" }
             let line = rows[focus]
+            if let text = line.selectedText, !text.isEmpty { return "\nSelected text: " + String(reflecting: text) }
             return "\nThe focused UI element is \(line.id) \(line.body)"
         }
         projection.tree += focusSummary(lines)
@@ -71,7 +73,6 @@ struct AXTreeBaseline {
             var output = ["The following is a diff from the previous accessibility tree" + target + " with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range."]
             if !deleted.isEmpty { output.append("Removed element IDs: " + ranges(deleted)) }
             output += changes
-            guard output.count <= lines.count else { return full }
             delta = output.joined(separator: "\n")
         }
 
@@ -99,9 +100,12 @@ struct AXTreeBaseline {
             // in the previous order is a longest common subsequence, without a quadratic diff table.
             var tails: [(position: Int, sibling: Int)] = []
             var predecessor = Array(repeating: -1, count: siblings.count)
-            for (i, line) in siblings.enumerated() {
+            // Traversing backwards keeps the first node in the new order when an adjacent swap has two equal matches.
+            for i in siblings.indices.reversed() {
+                let line = siblings[i]
                 try checkCancellation()
-                guard let (position, parent) = old[line.element], parent == line.parent else { continue }
+                guard let (offset, parent) = old[line.element], parent == line.parent else { continue }
+                let position = -offset
                 var lo = 0, hi = tails.count
                 while lo < hi {
                     let mid = (lo + hi) / 2
