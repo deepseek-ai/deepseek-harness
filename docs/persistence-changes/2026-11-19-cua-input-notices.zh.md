@@ -27,20 +27,20 @@ id: 2026-11-19-cua-input-notices
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-10-21-system-section-admissions"
-    after: "a11e08189f96d25e03ccd0653567670f61acf64906c1c63c90ee9b893738bab7"
+    previous: "2026-11-18-cua-activity-context"
+    after: "41b562e6d6c59ac22c023d14fa1ae878bfb4573fe1b1dcb021e58ac2ee6bf049"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-10-21-system-section-admissions"
-    after: "a73ee1696868d73a95bc7b611037794a4e0b5abe2151ddd18164303fe72fb9f4"
+    previous: "2026-11-18-cua-activity-context"
+    after: "8ecc75abd481f9eadd4bbe834120662d870e07d0ecc889e8631b03be5089e710"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-10-21-system-section-admissions"
-    after: "a56439237396867aceecf24eea7328260ea78aa97487dda14cb40db6b0126ec4"
+    previous: "2026-11-18-cua-activity-context"
+    after: "64b6ec45d21f5aed32624819c44ba5c918bbe11ca9c464496d9dbe0606dcb829"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-10-21-system-section-admissions"
-    after: "6c2bcfd03238f2325c071320efaf8e78a25d430dfaeeba309d0a362f4e92b3a1"
+    previous: "2026-11-18-cua-activity-context"
+    after: "b9bcecf9562bc66102dad311fff56c8c0e694d39afa17b39f87a7b88992011c8"
     decision: same-version
 ```
 
