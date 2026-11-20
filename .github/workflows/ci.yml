@@ -57,8 +57,10 @@ jobs:
 
 
   # Enterprise jobs isolate coverage, static analysis, and the build-backed
-  # tail. The build job owns the only Linux artifact build; the consumer job
-  # and the two web snapshot shards restore its output instead of rebuilding.
+  # tail. Coverage runs two file shards on separate runners and merges them on
+  # one small report runner. The build job
+  # owns the only Linux artifact build; the consumer job and the two web
+  # snapshot shards restore its output instead of rebuilding.
   #
   # FAILOVER (Linux): each Linux enterprise job resolves its pool through the
   # DSH_CI_FAILOVER_LINUX repository variable. Unset (normal), the expressions
@@ -149,8 +151,16 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'dsh-ubuntu-24-04-16core' }}
-    name: node 24 / coverage
+    # Two instrumented file shards run on separate runners; the first also
+    # runs the uninstrumented heavy suites. node-24-coverage-report merges the
+    # shard blobs and owns the thresholds and the duration history.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    name: node 24 / coverage ${{ matrix.shard }}/2
     env:
+      DSH_COVERAGE_SHARD: ${{ matrix.shard }}/2
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_COVERAGE_MAX_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
       DSH_COVERAGE_PARTITIONS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}
@@ -248,8 +258,92 @@ jobs:
           path: ~/.cache/dsh-ci/bubblewrap
           key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
-      - name: Run exhaustive coverage
-        run: pnpm run check:ci:coverage
+      - name: Run coverage shard
+        run: pnpm run check:ci:coverage-shard
+
+      - name: Upload coverage shard blobs
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-blobs-${{ matrix.shard }}
+          path: coverage/shard/
+          # A re-run of this shard replaces the previous attempt's output.
+          overwrite: true
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+  # Merging blobs and checking thresholds runs after both coverage shards
+  # succeed. The merge converts every shard's V8 coverage to per-file reports
+  # and needs several GB of heap: a 2-vCPU runner took 154s against ~30s on the
+  # former 16-vCPU lane (run 44667701311), so this job uses an 8-vCPU runner.
+  # A failed shard skips this job, and the skipped result fails all-checks-passed.
+  node-24-coverage-report:
+    needs: node-24-coverage
+    if: github.event_name == 'pull_request'
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-8vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'dsh-ubuntu-24-04-8core' }}
+    name: node 24 / coverage report
+    steps:
+      # Runner cleanup owns tool caches and fixtures, including cancelled runs.
+      - name: Use runner-owned temporary storage
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      # Self-hosted runners reuse the shared persistent pnpm store.
+      # Hosted runners restore the remote cache into their ephemeral store.
+      - uses: actions/cache/restore@v6.1.0
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download coverage shard blobs
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: coverage-blobs-*
+          path: ${{ runner.temp }}/coverage-shards
+
+      # Node sizes its default heap from host memory; merging the whole
+      # inventory exceeded the ~2 GB default of a 2-vCPU runner (run
+      # 44664262449), so the merge states its heap instead of inheriting one.
+      - name: Merge coverage shards and check thresholds
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm run test:coverage:merge-shards "$RUNNER_TEMP/coverage-shards"
 
       - name: Save coverage duration history
         if: ${{ !cancelled() }}
@@ -402,10 +496,7 @@ jobs:
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
-      DSH_OXLINT_THREADS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
       DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
-      DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '' }}
-      DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
       # A failing gate aborts its running siblings.
       DSH_GATE_FAIL_FAST: '1'
     steps:
@@ -512,9 +603,6 @@ jobs:
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
-      DSH_OXLINT_THREADS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
-      DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
-      DSH_WEB_SNAPSHOT_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
       DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '' }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
       # A failing gate aborts its running siblings.
@@ -925,7 +1013,9 @@ jobs:
   # Single stable required check for branch protection: require "all checks
   # passed" instead of enumerating matrix legs whose names change as lanes and
   # node versions evolve. Every blocking job in THIS workflow must be listed in
-  # `needs`. `needs` cannot cross workflow files: native Windows jobs report
+  # `needs` or be needed by a listed job: a failed node-24-coverage shard skips
+  # node-24-coverage-report, and a skipped need fails this verdict. `needs`
+  # cannot cross workflow files: native Windows jobs report
   # the separate "windows checks passed" verdict from ci-windows.yml, Python
   # jobs report "python checks passed" from ci-python.yml, and Wine plus the
   # master-only runtime targets live in ci-master.yml.
@@ -948,7 +1038,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [publisher-isolated, node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-build, node-24-consumers, node-24-web-snapshot, node-compat]
+    needs: [publisher-isolated, node-24, node-24-coverage-report, node-24-lint, node-24-bench, node-24-build, node-24-consumers, node-24-web-snapshot, node-compat]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed
