@@ -1130,6 +1130,23 @@ describe('user-explicit invocation injection', () => {
     return { ctx, agent: agentForCwd(home) }
   }
 
+  it('omits excluded names from user invocations and the session catalog', async () => {
+    const home = await tempDir('excluded-skills')
+    const ctx = await setup(home, { excludedSkills: ['hidden'] })
+    for (const name of ['visible', 'hidden']) {
+      ctx.skills.register({ name, description: name, source: 'runtime', content: name })
+    }
+    const decision = await proposeStep(ctx, agentForCwd(home), [gesture('/hidden /visible')])
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    expect(decision.messages.flatMap(({ source }) => source.kind === 'skill-invocation' ? [source.name] : [])).toEqual(['visible'])
+    expect(decision.messages.flatMap(({ source }) => source.kind === 'skill-catalog' ? source.entries.map(entry => entry.name) : [])).toEqual(['visible'])
+  })
+
+  it('rejects invalid excluded skill names at startup', async () => {
+    await expect(setup(await tempDir('invalid-exclusion'), { excludedSkills: ['bad/name'] }))
+      .rejects.toThrow('invalid excluded skill name "bad/name"')
+  })
+
   it('injects a user-invocable skill named by a leading /token, after every other injection', async () => {
     const { ctx, agent } = await invokeHarness()
     const first = gesture('/hidden-demo what does this do')

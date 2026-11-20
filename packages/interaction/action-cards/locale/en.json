@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Action cards",
+    "description": "Show optional action cards below answers, and report the user's choices back to the conversation."
+  }
+}

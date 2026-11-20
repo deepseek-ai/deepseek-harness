@@ -22,6 +22,10 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
+    "./catalog": {
+      "types": "./lib/types/catalog.d.ts",
+      "default": "./lib/types/catalog.js"
+    },
     "./grammar": {
       "types": "./lib/types/grammar.d.ts",
       "default": "./lib/types/grammar.js"

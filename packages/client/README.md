@@ -88,6 +88,9 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-entry-customization/`](ui-entry-customization/README.md) | Adds region-local More menus that pin or unpin plugin launchers and start a plugin draft | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.md) | Contributes the Discover tab to the Plugins page: browse market indexes and install their bundles | — |
 | [`ui-deliverables/`](ui-deliverables/README.md) | Produces the changed-files card with its comparison tabs, delivery cards, and clickable final-response file references | — |
+| [`ui-action-cards/`](ui-action-cards/README.md) | Shows the card frame below completed answers, kind bodies and the layer that hides card blocks | — |
+| [`ui-creation-recommendations/`](ui-creation-recommendations/README.md) | Shows the personalized page card body with location selection and undo | — |
+| [`ui-plugin-recommendations/`](ui-plugin-recommendations/README.md) | Shows the official plugin card body with catalog text and enabling | — |
 | [`ui-message-feedback/`](ui-message-feedback/README.md) | Provides message ratings and feedback dialogs opened from ratings, `/feedback`, or the Session Header menu | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.md) | In-app directory browsing surface for the workspace directory flow | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.md) | Native directory-picker surface driving the local Desktop or Host OS chooser | — |

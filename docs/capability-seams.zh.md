@@ -709,8 +709,8 @@ flowchart LR
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.remoteConnection` | `service` | [`client-remote-connection`](../packages/client/remote-connection) | - | - | - | 管理二维码邀请、获批的配对申请、Remote 浏览器凭据和匿名登录文档；Client 提供审批控件及独立的 Token 链接入口。 |
-| `ctx.actionCards` | `service` | [`action-cards`](../packages/experimental/action-cards) | - | [`creation-recommendations`](../packages/experimental/creation-recommendations), [`client-ui-action-cards`](../packages/experimental/client-ui-action-cards) | - | 负责卡片状态、用户操作和状态通知；各卡片种类注册自己的动作和处理器。 |
-| `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | - | 读取官方插件卡片的当前目录文本，并在用户点击后通过配置插件管理器启用该插件。 |
+| `ctx.actionCards` | `service` | [`action-cards`](../packages/interaction/action-cards) | - | [`creation-recommendations`](../packages/extensions/creation-recommendations), [`client-ui-action-cards`](../packages/client/ui-action-cards) | - | 负责卡片状态、用户操作和状态通知；各卡片种类注册自己的动作和处理器。 |
+| `ctx.pluginRecommendations` | `service` | [`plugin-recommendations`](../packages/extensions/plugin-recommendations) | - | [`client-ui-plugin-recommendations`](../packages/client/ui-plugin-recommendations) | - | 读取官方插件卡片的当前目录文本，并在用户点击后通过配置插件管理器启用该插件。 |
 | `ctx.deepseekChatImport` | `service` | [`deepseek-chat-import`](../packages/experimental/deepseek-chat-import) | - | - | - | 提供仅 owner 可用的上传路由，把 DeepSeek 会话导出的每个对话导入为一个会话，并提供浏览器先行检查的上传上限。 |
 | `ctx.headlessStartup` | `core` | [`headless`](../packages/bundle/headless) | - | [`headless`](../packages/bundle/headless) | - | 将解析后的任务和运行选项提供给无界面运行器及其 sandbox-policy 配置。 |
 | `ctx.cotTranslation` | `service` | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | - | - | - | 为展开的思考内容提供有界的 Session 翻译请求，不改变模型可见历史。 |

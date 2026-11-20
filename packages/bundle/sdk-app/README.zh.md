@@ -39,6 +39,8 @@ SDK 使用 base 默认提供的 `read`、`write` 和 `edit`。要添加 `str_rep
 
 Python 运行时向本 profile 提供显式下载的创作资源和 Office sidecar。`DSH_PRIMARY_RUNTIME` 覆盖创作载荷；空值禁用其查询。Office skills、Office 套件和 [Office 工具](../../document/tool-office/README.zh.md)总是加载。skills 使用包内 assets；有创作载荷时指引模型使用其内置 Python 环境，没有时指引模型使用用户已有的 Python。下载或选择 Office sidecar 之前，工具报告 LibreOffice Kit 不可用。Profile patch 可独立于 `workspace-dependencies` 禁用 `skill-office` 或替换其 `assetRoot`；同名文件系统 skills 优先。下载与配置见[运行时包](../../../python/sdk-runtime/README.zh.md)。
 
+标准 SDK profile 默认列出 `official-plugins` 和 `personalized-pages`。调用方在最终回答中收到 `action-card` 围栏代码块。训练时可传入含有 `- {id: action-cards, config: {enabled: false}}` 的 YAML patch，同时从目录移除这两个 Skill 并关闭按名加载。
+
 -----
 
 <a id="model-experience"></a>
