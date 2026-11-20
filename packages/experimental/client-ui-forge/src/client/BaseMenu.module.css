@@ -72,20 +72,6 @@
   font-size: 12px;
 }
 
-.search {
-  padding: 8px;
-}
-
-.searchInput {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-}
-
-.searchInput input::placeholder {
-  color: var(--dsw-alias-label-secondary);
-}
-
 .rows {
   max-height: 320px;
   overflow: auto;
@@ -144,10 +130,4 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 16px;
-}
-
-@media (pointer: coarse) {
-  .search input {
-    font-size: 16px;
-  }
 }
