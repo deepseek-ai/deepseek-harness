@@ -16,6 +16,8 @@ export interface SessionDrag {
   readonly sessionId: SessionId
   /** Right edge of the navigation column the row left, in px; the target covers the window to its right. */
   readonly inset: number
+  /** Width of the on-screen Session's right Sidebar, in px, which the highlighted card takes; zero when unknown. */
+  readonly width: number
 }
 
 /** Session drag tracking and the open operation supplied by the plugin. */
@@ -40,12 +42,13 @@ export type SessionDropZoneProps =
 export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZoneProps) {
   const drag = useSessionDrag(value => value)
   if (drag === undefined) return null
-  const { sessionId, inset } = drag
-  return <DropTarget key={sessionId} inset={inset} label={t('open.sidebar')} onDrop={() => { openAside(sessionId) }} />
+  const { sessionId, inset, width } = drag
+  return <DropTarget key={sessionId} inset={inset} width={width} label={t('open.sidebar')} onDrop={() => { openAside(sessionId) }} />
 }
 
-function DropTarget({ inset, label, onDrop }: {
+function DropTarget({ inset, width, label, onDrop }: {
   readonly inset: number
+  readonly width: number
   readonly label: string
   readonly onDrop: () => void
 }) {
@@ -77,7 +80,7 @@ function DropTarget({ inset, label, onDrop }: {
         onDrop()
       }}
     >
-      <div className={css.card}>
+      <div className={css.card} style={width > 0 ? { flex: `0 1 ${String(width - 16)}px` } : undefined}>
         <IconPanelLeftOutlineRegular className={css.icon} aria-hidden="true" />
         <span className={css.label}>{label}</span>
       </div>

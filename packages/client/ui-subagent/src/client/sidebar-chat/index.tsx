@@ -142,7 +142,8 @@ function frameColumnOf(node: Element): Element | undefined {
  * Track Session rows dragged from the Session list while another Session is on screen.
  * @param doc - document whose drag events carry the rows' data.
  * @param mounted - reads the on-screen Session.
- * @returns the dragged Session with the right edge of the column it left, in px, and the listener disposer.
+ * @returns the dragged Session with the right edge of the column it left and the on-screen Sidebar's width, in px,
+ * and the listener disposer.
  */
 export function trackSessionDrags(doc: Document, mounted: () => SessionId | undefined): {
   readonly source: HostObservable<SessionDrag | undefined>
@@ -164,7 +165,14 @@ export function trackSessionDrags(doc: Document, mounted: () => SessionId | unde
       return
     }
     const column = event.target instanceof Element ? frameColumnOf(event.target) : undefined
-    publish({ sessionId: id, inset: Math.round(column?.getBoundingClientRect().right ?? 0) })
+    // The panel keeps its resolved width while collapsed; zero means it cannot fit beside the conversation.
+    const panel = [...doc.querySelectorAll('[data-sidebar-right-panel]')]
+      .find(element => element.getAttribute('data-sidebar-right-session') === onScreen)
+    publish({
+      sessionId: id,
+      inset: Math.round(column?.getBoundingClientRect().right ?? 0),
+      width: Math.round(panel?.getBoundingClientRect().width ?? 0),
+    })
   }
   const end = (): void => { publish(undefined) }
   // A source row unmounted mid-drag fires dragend on a detached node; the first

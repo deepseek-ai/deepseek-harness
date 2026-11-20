@@ -20,7 +20,7 @@ function dispatchDrag(type: string, data: Record<string, string> = {}, target: E
   target.dispatchEvent(event)
 }
 
-const outside = { sessionId: OTHER, inset: 0 }
+const outside = { sessionId: OTHER, inset: 0, width: 0 }
 
 describe('Session drag tracking', () => {
   it('publishes a dragged list Session that another on-screen Session can open', () => {
@@ -74,13 +74,23 @@ describe('Session drag tracking', () => {
     frame.append(column, overlay)
     document.body.append(frame)
     column.getBoundingClientRect = () => ({ right: 279.6 }) as DOMRect
+    // The on-screen Session's right Sidebar panel sets the highlighted card's width; another Session's is ignored.
+    const panel = document.createElement('div')
+    panel.setAttribute('data-sidebar-right-panel', 'push')
+    panel.setAttribute('data-sidebar-right-session', MAIN)
+    panel.getBoundingClientRect = () => ({ width: 520.2 }) as DOMRect
+    const otherPanel = document.createElement('div')
+    otherPanel.setAttribute('data-sidebar-right-panel', 'push')
+    otherPanel.setAttribute('data-sidebar-right-session', OTHER)
+    otherPanel.getBoundingClientRect = () => ({ width: 900 }) as DOMRect
+    frame.append(otherPanel, panel)
     const drags = trackSessionDrags(document, () => MAIN)
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
-    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, inset: 280 })
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, inset: 280, width: 520 })
     // A drag whose target is not an element starts at the window edge.
     dispatchDrag('dragend')
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, document)
-    expect(drags.source.getSnapshot()).toEqual(outside)
+    expect(drags.source.getSnapshot()).toEqual({ ...outside, width: 520 })
     drags.dispose()
     frame.remove()
   })
@@ -91,7 +101,7 @@ describe('Session drop zone', () => {
     let current = initial
     const openAside = vi.fn()
     const source: HostObservable<SessionDrag | undefined> = {
-      getSnapshot: () => current === undefined ? undefined : { sessionId: current, inset: 280 },
+      getSnapshot: () => current === undefined ? undefined : { sessionId: current, inset: 280, width: current === OTHER ? 516 : 0 },
       subscribe: () => () => {},
     }
     const props = {
@@ -127,6 +137,8 @@ describe('Session drop zone', () => {
     const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
     expect(zone.parentElement).toBe(document.body)
     expect(zone.style.left).toBe('280px')
+    // The highlighted card is as wide as the Sidebar would open, inside the 8px inset.
+    expect((zone.firstElementChild as HTMLElement).style.flex).toBe('0 1 500px')
     expect(view.container.innerHTML).toBe('')
     expect(zone.hasAttribute('data-active')).toBe(false)
 
@@ -150,6 +162,10 @@ describe('Session drop zone', () => {
     expect(documentDrop).not.toHaveBeenCalled()
     expect(view.openAside).toHaveBeenCalledExactlyOnceWith(OTHER)
     expect(zone.hasAttribute('data-active')).toBe(false)
+
+    // Without a known Sidebar width the card spans the whole target.
+    view.set(MAIN)
+    expect((document.querySelector('[data-session-drop-zone]')!.firstElementChild as HTMLElement).style.flex).toBe('')
 
     view.set(undefined)
     expect(document.querySelector('[data-session-drop-zone]')).toBeNull()

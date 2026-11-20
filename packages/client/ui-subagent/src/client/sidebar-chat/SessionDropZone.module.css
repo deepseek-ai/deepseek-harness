@@ -1,8 +1,11 @@
 /* The drop target covers the window right of the navigation column the row
-   left (its left edge is set inline), with an 8px inset on every side, and
-   draws the dock kit's drop hint: a blurred ground under a dashed card that
-   takes the accent while the pointer is over it. It stacks above the
-   narrow-window drawer (71) and its mask (70), below menus and toasts. */
+   left (its left edge is set inline) with the dock kit's blurred drop-hint
+   ground, and accepts the drop anywhere on it. The dashed card that takes the
+   accent while the pointer is over the target sits at the right edge with an
+   8px inset on every side, as wide as the right Sidebar would open (set
+   inline), or across the whole target when that width is unknown. It stacks
+   above the narrow-window drawer (71) and its mask (70), below menus and
+   toasts. */
 .zone {
   position: fixed;
   z-index: 72;
@@ -11,6 +14,7 @@
   bottom: 0;
   box-sizing: border-box;
   display: flex;
+  justify-content: flex-end;
   padding: 8px;
   pointer-events: auto;
   background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
@@ -21,6 +25,8 @@
 .card {
   display: flex;
   flex: 1 1 auto;
+  max-width: 100%;
+  box-sizing: border-box;
   flex-direction: column;
   gap: 8px;
   align-items: center;
