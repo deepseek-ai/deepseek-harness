@@ -1,6 +1,7 @@
 // Record synthesized events and desktop state queries without posting input to the user's desktop.
 import CoreGraphics
 import Darwin
+import Foundation
 import Testing
 @testable import CuaNative
 

@@ -19,7 +19,7 @@ function renderInputs(inputs: z.infer<typeof heldInputs>, state: 'held' | 'relea
   const title = state === 'held' ? 'CUA inputs are still held:' : 'CUA inputs were released during cleanup:'
   return ['<system-reminder>', title, ...rows,
     state === 'held'
-      ? "They remain pressed across programs and turns. Release them explicitly with sendKeyEvent(key, 'up') or toggleMouse(button, 'up') on the same target when no longer needed."
+      ? "They remain pressed across programs and turns. To release them, call sendKeyEvent or toggleMouse on the same target with direction 'up' and the same input options as the down."
       : 'These inputs are no longer held.',
     '</system-reminder>'].join('\n')
 }
