@@ -232,7 +232,7 @@ it('delivers window activity at the next accepted step and clears it at turn end
     { windowId: '7', source: 'external-input', ageSeconds: 0 },
   ])
   expect(await step()).toMatchObject({ messages: [{ source: { kind: 'cua-activity' }, content: [{ type: 'text',
-    text: '<system-reminder>\nActivity from another agent was last detected on window 7 1 second ago.\nActivity from a user or an automated program was last detected on window 7 less than a second ago.\nYour actions may have been influenced.\n</system-reminder>',
+    text: '<system-reminder>\nActivity from another agent was last detected on window 7, 1 second ago.\nActivity from a user or an automated program was last detected on window 7, less than a second ago.\nYour actions may have been influenced.\n</system-reminder>',
   }] }] })
   expect(native.request).toHaveBeenLastCalledWith('takeWindowActivity', { appHandle: 'app-one', observations: { '7': '101' } }, expect.any(AbortSignal))
   expect(await step()).toMatchObject({ messages: [] })

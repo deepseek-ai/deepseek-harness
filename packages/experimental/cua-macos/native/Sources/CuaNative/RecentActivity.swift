@@ -14,6 +14,7 @@ struct ActivityTarget: Hashable, Sendable {
         var lastReport: UInt64?
         var lastOwnUse: UInt64?
         var armed = true
+        // Keep only the latest timestamp per source for the window activity notice.
         var events: [String: UInt64] = [:]
     }
     private struct Client {

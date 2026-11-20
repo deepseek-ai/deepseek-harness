@@ -56,7 +56,7 @@ export function watchWindowActivity(ctx: Context): NonNullable<CuaBackend['windo
         for (const { windowId, ageSeconds, source } of rows) {
           const actor = source === 'agent' ? 'another agent' : 'a user or an automated program'
           const elapsed = ageSeconds === 0 ? 'less than a second' : `${ageSeconds} ${ageSeconds === 1 ? 'second' : 'seconds'}`
-          lines.push(`Activity from ${actor} was last detected on window ${windowId} ${elapsed} ago.`)
+          lines.push(`Activity from ${actor} was last detected on window ${windowId}, ${elapsed} ago.`)
         }
       } catch (error) {
         if (signal.aborted) return decision

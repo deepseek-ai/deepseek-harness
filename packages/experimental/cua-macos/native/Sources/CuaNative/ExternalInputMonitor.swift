@@ -19,6 +19,8 @@ import Foundation
             if !CGEvent.tapIsEnabled(tap: tap) { CGEvent.tapEnable(tap: tap, enable: true) }
             return
         }
+        // A click or scroll may make an observed window stale. The tap forwards only the target and time.
+        // It does not subscribe to keyboard input or retain pointer coordinates or scroll deltas.
         let types: [CGEventType] = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
         guard let created = CGEvent.tapCreate(tap: .cgAnnotatedSessionEventTap, place: .tailAppendEventTap,
