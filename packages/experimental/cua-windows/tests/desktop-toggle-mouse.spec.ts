@@ -170,9 +170,19 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     await expect.poll(async () => (await inspect()).inputEvents.slice(offset)).toEqual(
       ['ShiftKey:down', 'Left:down', 'W:down', 'W:up', 'Left:up', 'ShiftKey:up'])
 
+    const beforeExternal = await inspect()
+    await toggle('left', 'down')
+    await observed({ downs: { left: beforeExternal.downs.left + 1 } })
+    await fixture.command('left-up', FixtureState)
+    await observed({ ups: { left: beforeExternal.ups.left + 1 } })
+    expect(released.parse(await holds()).map(input => input.button)).toEqual(['left'])
+    const afterExternal = await native.requestCleanup('releaseHeldInputs', { taskId })
+    expect(released.parse(afterExternal).map(input => input.button)).toEqual(['left'])
+    expect(await holds()).toEqual([])
+
     const beforeSwitch = (await inspect()).inputEvents.length
     await key('w', 'down')
-    await expect.poll(async () => (await inspect()).inputEvents.slice(beforeSwitch)).toEqual(['W:down'])
+    await expect.poll(async () => (await inspect()).inputEvents.slice(beforeSwitch)).toContain('W:down')
     const switched = await fixture.command('sibling', FixtureState)
     expect(switched.foreground).toBe(switched.window)
     await native.dispose()

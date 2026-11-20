@@ -105,13 +105,12 @@ internal static class Program
 {
     private static void Write(object value) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); }
 
-    private static void ReleaseButtons()
+    private static void SendMouse(params uint[] flags)
     {
-        var inputs = new[] { 0x0004u, 0x0010u, 0x0040u }
-            .Select(flags => new Input { Type = 0, Data = new MouseInput { Flags = flags } }).ToArray();
+        var inputs = flags.Select(flag => new Input { Type = 0, Data = new MouseInput { Flags = flag } }).ToArray();
         if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>()) != inputs.Length)
         {
-            Console.Error.WriteLine("Fixture could not release every mouse button");
+            Console.Error.WriteLine("Fixture could not dispatch all requested mouse events");
             Environment.ExitCode = 1;
         }
     }
@@ -148,7 +147,8 @@ internal static class Program
                             case "pointer-outside": form.PointOutside(); Write(form.Inspect()); break;
                             case "cover": form.Cover(sibling); Write(new { form = form.Inspect(), sibling = sibling.Inspect() }); break;
                             case "uncover": form.Uncover(sibling); Write(form.Inspect()); break;
-                            case "release-input": ReleaseButtons(); Write(form.Inspect()); break;
+                            case "left-up": SendMouse(0x0004); Write(form.Inspect()); break;
+                            case "release-input": SendMouse(0x0004, 0x0010, 0x0040); Write(form.Inspect()); break;
                             case "minimize": form.WindowState = FormWindowState.Minimized; Write(form.Inspect()); break;
                             case "hide": form.Hide(); Write(form.Inspect()); break;
                             case "resize": form.Width += 50; Write(form.Inspect()); break;
