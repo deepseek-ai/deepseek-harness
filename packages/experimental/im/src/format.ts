@@ -34,6 +34,8 @@ interface ImQuoteRef {
 const LINE_LIMIT = 240
 /** Upper bound of a quoted or forwarded preview inside a line (code points). */
 const PREVIEW_LIMIT = 60
+/** Upper bound of a quoted preview inside an XML `quote-text` attribute (code points). */
+const QUOTE_XML_LIMIT = 500
 
 /** Display name of a sender: its platform name, or its id when the platform names nobody. */
 function senderName(user: UserRef): string {
@@ -107,7 +109,14 @@ function bodyOf(message: ImMessage): string {
 function xmlText(message: ImMessage, body: string, quote: ImQuoteRef | undefined): string {
   const attributes = [`seq="${message.seq}"`, `from="${escapeAttribute(senderName(message.sender))}"`, `time="${clock(message.time)}"`]
   if (message.sender.self) attributes.push('self="true"')
-  if (quote) attributes.push(`quote="${escapeAttribute(quote.id)}"`)
+  if (quote) {
+    attributes.push(`quote="${escapeAttribute(quote.id)}"`)
+    if (quote.sender) attributes.push(`quote-from="${escapeAttribute(oneLine(senderName(quote.sender)))}"`)
+    if (quote.text) {
+      const preview = oneLine(quote.text, QUOTE_XML_LIMIT)
+      if (preview) attributes.push(`quote-text="${escapeAttribute(preview)}"`)
+    }
+  }
   return `<im-message ${attributes.join(' ')}>${escapeText(body)}</im-message>`
 }
 
