@@ -5,9 +5,13 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 export const inject = ['tools', 'agents', 'loader']
 
-/** Replace each fixture-owned directory, and its resolved form, with a side-independent placeholder. */
+/**
+ * Replace each fixture-owned directory, its resolved form, and their JSON string escapes (runtime context quotes paths
+ * with JSON.stringify, which doubles Windows backslashes) with a side-independent placeholder.
+ */
 function placeholders(directories) {
-  const pairs = Object.entries(directories).flatMap(([placeholder, path]) => [[path, placeholder], [realpathSync(path), placeholder]])
+  const pairs = Object.entries(directories).flatMap(([placeholder, path]) => [path, realpathSync(path)]
+    .flatMap(form => [[form, placeholder], [JSON.stringify(form).slice(1, -1), placeholder]]))
   pairs.sort(([left], [right]) => right.length - left.length)
   const replace = value => {
     if (typeof value === 'string') return pairs.reduce((text, [path, placeholder]) => text.replaceAll(path, placeholder), value)
@@ -26,7 +30,8 @@ export function apply(ctx, config) {
     const assembly = await next()
     if (context.toolSet !== undefined) {
       observed = normalize({
-        tools: ctx.tools.schemas(context.scope, context.toolSet).sort((left, right) => left.name.localeCompare(right.name)),
+        // Code unit order, the order the test sorts request tool names in.
+        tools: ctx.tools.schemas(context.scope, context.toolSet).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0),
         sections: assembly.sections.map(({ name, text }) => ({ name, text })),
         contexts: assembly.contexts.map(({ name, text }) => ({ name, text })),
         hmr: ctx.get('hmr') !== undefined,
