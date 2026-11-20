@@ -1,4 +1,4 @@
-/** Model request contents for the Office skill and the format files the model reads beside it. */
+/** Model request contents before and after the model loads the Office skill. */
 import { sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -26,10 +26,9 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 interface ToolCall { tool: string; args: Record<string, unknown> }
 
 const contexts: Context[] = []
-/** The `office` skill's advertised resource directory; format reads resolve their relative paths against it. */
+/** The `office` skill's advertised resource directory. */
 const resourceBase = fileURLToPath(new URL('../assets/office/', import.meta.url)).replace(/[\\/]$/u, '').split(sep).join('/')
 const office: ToolCall = { tool: 'skill', args: { name: 'office' } }
-const readFormat = (format: string): ToolCall => ({ tool: 'read', args: { file_path: `${resourceBase}/${format}.md` } })
 afterEach(async () => { for (const ctx of contexts.splice(0)) await ctx.fiber.dispose() })
 
 class SkillProgram extends PtcRuntime {
@@ -78,70 +77,59 @@ async function send(agent: Agent, text = 'Continue the task'): Promise<void> {
   await agent.whenIdle()
 }
 
-it.each(['native', 'ptc'] as const)('loads the office skill and reads one format file in %s; resume and fork retain both', async (mode) => {
-  const { ctx, agent, adapter } = await setup(mode, [office, readFormat('docx')])
+it.each(['native', 'ptc'] as const)('loads the office skill in %s; resume and fork retain its instructions', async (mode) => {
+  const { ctx, agent, adapter } = await setup(mode, [office])
   await send(agent, 'Edit the Word document text.')
-  expect(adapter.requests).toHaveLength(3)
+  expect(adapter.requests).toHaveLength(2)
   const requests = adapter.requests.map(request => JSON.stringify(request))
   expect(requests[0]).toContain('Create, read, edit, and validate Word, PowerPoint, and Excel files;')
-  expect(requests[0]).not.toMatch(/office-(?:docx|pptx|xlsx)/u)
+  expect(requests[0]).not.toMatch(/office-(?:docx|pptx|xlsx)|# Office tasks|python-docx/u)
   expect(requests[1]).toContain('# Office tasks')
   expect(requests[1]).toContain(resourceBase)
   if (mode === 'native') expect(requests[1]).toContain('Base directory for this skill:')
-  expect(requests[1]).toContain('`docx.md` for Word')
-  expect(requests[1]).not.toContain('python-docx')
-  expect(requests[2]).toContain('python-docx')
-  expect(requests[2]).toContain('Python environment section of the `office` skill')
+  expect(requests[1]).toContain('python-docx')
+  expect(requests[1]).toContain('`office_render`')
   if (mode === 'ptc') {
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toEqual([])
   }
-  expect(requests[2]).toContain('`office_render`')
-  expect(requests[2]).not.toContain('dsoffice')
-  expect(requests[0]).not.toContain('dsoffice')
-  expect(requests[1]).not.toContain('dsoffice')
-  for (const request of requests) {
-    expect(request).not.toMatch(/fragment rectangles/)
-  }
+  for (const request of requests) expect(request).not.toMatch(/dsoffice|fragment rectangles/u)
   const seed = agent.session.snapshotEvents()
   const { agent: resumed } = await ctx.agents.create({ sessionId: brandString<SessionId>('resumed-office'), agentOptions: { provider: 'mock', model: 'model' }, seed })
   await send(resumed)
   const { agent: forked } = await ctx.agents.create({ sessionId: brandString<SessionId>('forked-office'), agentOptions: { provider: 'mock', model: 'model' }, seed, meta: { parentSession: agent.id } })
   await send(forked)
-  for (const request of adapter.requests.slice(3)) {
+  for (const request of adapter.requests.slice(2)) {
     const text = JSON.stringify(request)
     expect(text).toContain('python-docx')
     expect(text).toContain('`office_render`')
-    expect(text).not.toContain('dsoffice')
-    expect(text).not.toMatch(/fragment rectangles/)
+    expect(text).not.toMatch(/dsoffice|fragment rectangles/u)
   }
   expect(agent.session.snapshotEvents()).toEqual(seed)
 })
 
-it('routes standalone operations to dedicated Office tools without format files', async () => {
+it('routes standalone operations to dedicated Office tools', async () => {
   const { agent, adapter } = await setup('native', [office])
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
   expect(loaded).toContain('# Office tasks')
   for (const name of ['office_render', 'office_recalculate', 'office_convert']) expect(loaded).toContain(`\`${name}\``)
   expect(loaded).not.toContain('operation:')
-  expect(loaded).not.toMatch(/# Word documents|# Excel workbooks|python-docx/)
 })
 
-it('injects an explicitly invoked office skill, which then directs the model to the format file', async () => {
-  const { agent, adapter } = await setup('native', [readFormat('xlsx')])
+it('injects an explicitly invoked office skill into the first request', async () => {
+  const { agent, adapter } = await setup('native', [])
   await send(agent, '/office Change A1 to 42.')
-  expect(adapter.requests).toHaveLength(2)
+  expect(adapter.requests).toHaveLength(1)
   const invoked = JSON.stringify(adapter.requests[0])
   expect(invoked).toContain('# Office tasks')
-  expect(invoked).toContain('`xlsx.md` for Excel')
-  expect(invoked).not.toMatch(/# Excel workbooks|dsoffice/)
-  expect(JSON.stringify(adapter.requests[1])).toContain('# Excel workbooks')
+  expect(invoked).toContain('openpyxl writes formulas without calculated values')
+  expect(invoked).not.toContain('dsoffice')
 })
 
-it.each(['native', 'ptc'] as const)('accepts read format files without a render call as a non-rendering context in %s', async (mode) => {
-  const { agent } = await setup(mode, [office, readFormat('docx'), readFormat('pptx'), readFormat('xlsx')])
+it.each(['native', 'ptc'] as const)('accepts loaded instructions without a render call as a non-rendering context in %s', async (mode) => {
+  const { agent } = await setup(mode, [office])
   await send(agent, 'Edit the Office files without visual inspection.')
   const events = agent.session.snapshotEvents()
-  expect(JSON.stringify(events)).toContain('uniformly blank')
+  expect(JSON.stringify(events)).toContain('# Office tasks')
   expectNoRenderContext(events)
 })

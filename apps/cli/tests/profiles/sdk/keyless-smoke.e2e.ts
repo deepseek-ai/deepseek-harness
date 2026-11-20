@@ -699,7 +699,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office'))
   const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office').split(sep).join('/')
   expect(skill).toContain(JSON.stringify(`Base directory for this skill: ${skillDirectory}`).slice(1, -1))
-  expect(skill).toContain('`docx.md` for Word')
+  expect(skill).toContain('# Office tasks')
   expect(skill).toContain('## Python environment')
   expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
   expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)

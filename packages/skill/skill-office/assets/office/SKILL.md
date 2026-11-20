@@ -5,14 +5,11 @@ description: Create, read, edit, and validate Word, PowerPoint, and Excel files;
 
 # Office tasks
 
-To create, read, or edit a file, first use the `read` tool, not shell commands, to read its format file: `docx.md` for Word, `pptx.md` for PowerPoint, or `xlsx.md` for Excel. Rendering, conversion, or recalculation alone needs no format file.
+`office_render`, `office_convert`, and `office_recalculate` become available on the next step; if one is missing later, load `office` again. Bundled Python includes `pypdf` for existing PDFs.
 
-Bundled Python includes `pypdf` for existing PDFs.
+- python-docx, python-pptx, and openpyxl cannot open legacy `.doc`, `.ppt`, or `.xls` files; convert them with `office_convert` first.
+- Word: change text inside runs; assigning `paragraph.text` drops the paragraph's run formatting. Chinese, Japanese, and Korean text needs a `w:eastAsia` font in addition to `run.font.name`.
+- PowerPoint: python-pptx cannot measure whether text fits its box; render changed slides to check overflow and overlap.
+- Excel: openpyxl writes formulas without calculated values; use `office_recalculate` when results must show. Writing a pandas DataFrame over an existing workbook drops its other sheets, formulas, and formatting.
 
-If an Office tool below is missing, reload `office` with `skill`; it appears next step.
-
-- `office_render`: Office or PDF images, visual checks, and appearance or slide checks required by the format file; skip it when asked.
-- `office_recalculate`: formulas, with `format: "xlsx"` or `"ods"`.
-- `office_convert` with `format`; Office inputs only, not PDFs. For PDF export alone, check the copy is nonempty and starts with `%PDF-`, then deliver it without rendering.
-
-Copy outputs to the destination; keep existing files unless asked to replace them. Reuse loaded skills and files already read.
+Keep the original file unless the user asks to replace it.

@@ -205,11 +205,11 @@ None; the plugin contributes no system-prompt text.
 
 #### What the model sees
 
-The skill catalog lists the `office` skill in every profile; it directs the model to read a Word, PowerPoint, or Excel format file beside it for authoring. The loaded skill ends with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+The skill catalog lists the `office` skill in every profile; it gives concise inline guidance for Word, PowerPoint, and Excel pitfalls and for the Office tools. The loaded skill ends with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
 
 #### Token effect
 
-One catalog summary in each initial catalog; the skill body and format files only when the model loads or reads them.
+One catalog summary in each initial catalog; the skill body only when the model loads it.
 
 #### KV Cache effect
 

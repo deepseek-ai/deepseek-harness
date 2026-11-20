@@ -1,6 +1,6 @@
 /** Bundled Office workflows and filesystem resources for document authoring and operations. */
 
-import { readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -9,8 +9,6 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import { parse as parseYaml } from 'yaml'
 
 const SKILL_NAMES = ['office'] as const
-/** Format files that the `office` instructions direct the model to read from the skill directory. */
-const FORMAT_FILES = ['docx.md', 'pptx.md', 'xlsx.md'] as const
 
 /**
  * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries
@@ -70,11 +68,10 @@ function persistentReadFailure(error: unknown): boolean {
 }
 
 /**
- * Register the `office` skill whose `SKILL.md` the Host reads from `assetRoot`; the model reads the `docx.md`,
- * `pptx.md`, and `xlsx.md` format files beside it. Catalog discovery and loading read the skill file and require each
- * format file to be a regular file, and each distinct failure is reported once. A missing or invalid skill or format
- * file omits the skill from a complete catalog, and its failed load returns `undefined` and invalidates the catalog.
- * Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
+ * Register the `office` skill whose `office/SKILL.md` the provider reads from `assetRoot` during catalog discovery and
+ * loading; each distinct failure is reported once as a warning. A missing or invalid skill file omits the skill from a
+ * complete catalog, and its failed load returns `undefined` and invalidates the catalog. Any other read error leaves
+ * discovery incomplete, so the registry retries it, and rejects a load.
  * @param ctx - Context carrying the skill registry.
  * @param config - Resolved configuration; `assetRoot` falls back to the packaged assets.
  * @throws When `assetRoot` is not absolute.
@@ -98,16 +95,6 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
     } catch (error) {
       // Invalid metadata, including YAML errors that carry their own codes, persists until the file changes.
       return failed(skillName, error, true)
-    }
-    for (const file of FORMAT_FILES) {
-      const formatPath = join(assetRoot, skillName, file)
-      let isFile: boolean
-      try {
-        isFile = (await stat(formatPath)).isFile()
-      } catch (error) {
-        return failed(skillName, error, persistentReadFailure(error))
-      }
-      if (!isFile) return failed(skillName, new Error(`skill-office: ${formatPath} is not a regular file`), true)
     }
     reportedFailures.delete(skillName)
     return { kind: 'loaded', ...skill }

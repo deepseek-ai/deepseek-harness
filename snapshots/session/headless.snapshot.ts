@@ -1582,10 +1582,9 @@ describe('headless recorded-session snapshots', () => {
                   type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
                 }])
               }
-              expect(results).toHaveLength(2)
+              expect(results).toHaveLength(1)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office tasks')
-              expect(log).toContain('# Word documents')
             }
             if (scenario.name === 'complete-prompt-in-history') {
               const events = parseSessionLog(actualLogs[0]!.content)

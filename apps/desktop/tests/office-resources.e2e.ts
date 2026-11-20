@@ -21,7 +21,7 @@ function installSkillProbe(profile: string): void {
     name: SKILL_PROBE, version: '1.0.0', type: 'module', exports: './index.js', dsh: { bundle: { patch: './bundle.yml' } },
   }))
   writeFileSync(join(plugin, 'index.js'), `
-import { readFile } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 
 export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/${SKILL_PROBE}', async handler(_request, response) {
@@ -34,8 +34,8 @@ export function apply(ctx) {
       }))
       const office = await ctx.skills.get('office')
       const content = { office: office?.content ?? null }
-      const docx = office?.resourceBase?.kind === 'directory' ? await readFile(office.resourceBase.path + '/docx.md', 'utf8') : null
-      response.end(JSON.stringify({ names, content, docx, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
+      const resources = office?.resourceBase?.kind === 'directory' ? await readdir(office.resourceBase.path) : null
+      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -80,7 +80,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       const skills = JSON.parse(body) as {
         names: string[]
         content: Record<string, string | null>
-        docx: string | null
+        resources: string[] | null
         loaded: { name: string; bytes: number }[]
         officeKit: boolean
         tools: string[]
@@ -91,8 +91,9 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       expect(skills.tools).toEqual([])
       // skill-office reads the skills from its packaged assets, independent of the primary runtime directory.
       expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
-      // The model reads format files beside the skill through its advertised resource directory.
-      expect(skills.docx).toMatch(/^# Word documents\n/u)
+      // The advertised resource directory holds only the skill file.
+      expect(skills.resources).toEqual(['SKILL.md'])
+      expect(skills.content.office).toContain('# Office tasks')
       expect(skills.content.office).toContain('`office_render`')
       expect(failures).toEqual([])
     } finally {

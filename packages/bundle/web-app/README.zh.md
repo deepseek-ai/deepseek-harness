@@ -205,11 +205,11 @@ preset 提供一条目录项。没有其他 skill 的会话还会收到目录的
 
 #### 模型看到什么
 
-所有 profile 的技能目录都列出 `office` 技能；创作时，它指引模型读取技能旁的 Word、PowerPoint 或 Excel 格式文件。加载的技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
+所有 profile 的技能目录都列出 `office` 技能；它内联了 Word、PowerPoint 和 Excel 的易错点以及 Office 工具的精简说明。加载的技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
 
 #### Token 影响
 
-每个初始目录包含一条目录摘要；仅在模型加载或读取时才载入技能正文和格式文件。
+每个初始目录包含一条目录摘要；仅在模型加载时才载入技能正文。
 
 #### KV Cache 影响
 
