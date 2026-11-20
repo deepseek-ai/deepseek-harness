@@ -1,7 +1,7 @@
 /**
- * Static comparison of the agent-plane plugin rows of the shipped SDK profile and each Desktop agent preset, read from
+ * Static comparison of the agent-plane plugin rows of the shipped SDK profile and the Desktop standard agent preset, read from
  * `dsh --dump-config` without booting. It covers rows whose model effect a default turn does not show, such as the
- * plan mode section. Only rows a Desktop preset declares are compared; the remaining rows are the Desktop host plane.
+ * plan mode section. Only rows the preset declares are compared; the remaining rows are the Desktop host plane.
  * Record differences in parity-exceptions.ts.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -12,10 +12,9 @@ import { execa } from 'execa'
 import { expect, it, type TestContext } from 'vitest'
 import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { profileEnvironment } from './fixtures/profile-environment.ts'
-import { assertParity, compareEntries, type ParityDifference, type ParityMode } from './parity.ts'
+import { assertParity, compareEntries, type ParityDifference } from './parity.ts'
 
 const repo = fileURLToPath(new URL('../../../../../', import.meta.url))
-const ptcOverlay = join(repo, 'apps/cli/config/examples/ptc.yml')
 const PRESET = '@deepseek-ai/dsh-agent-preset'
 const GROUP = 'cordis:group'
 
@@ -30,9 +29,9 @@ function leaves(rows: readonly Row[], into = new Map<string, unknown>()): Map<st
   return into
 }
 
-function presetRows(rows: readonly Row[], mode: ParityMode): Map<string, unknown> {
-  const preset = rows.find(row => row.name === PRESET && (row.config as { id?: string } | undefined)?.id === mode)
-  if (preset === undefined) throw new Error(`Desktop profile has no ${mode} agent preset`)
+function presetRows(rows: readonly Row[]): Map<string, unknown> {
+  const preset = rows.find(row => row.name === PRESET && (row.config as { id?: string } | undefined)?.id === 'standard')
+  if (preset === undefined) throw new Error('Desktop profile has no standard agent preset')
   return leaves((preset.config as { plugins: Row[] }).plugins)
 }
 
@@ -52,30 +51,30 @@ async function fixture(test: TestContext) {
   test.onTestFinished(() => rm(root, { recursive: true, force: true }))
   const env = profileEnvironment(root, 'http://127.0.0.1:9')
   /** Desktop composes the Web template's bundles, and the dump leaves `!!js` unevaluated, so `web` dumps Desktop's rows. */
-  async function dump(profile: 'sdk' | 'web', patches: object[] = [], overlays: string[] = []): Promise<Row[]> {
+  async function dump(profile: 'sdk' | 'web', patches: object[] = []): Promise<Row[]> {
     const home = await mkdtemp(join(root, `${profile}-`))
     const patch = join(home, 'mutation.patch.yml')
     await writeFile(patch, JSON.stringify(patches))
     const result = await execa(process.execPath, [join(repo, 'apps/cli/lib/bin.js'), '--profile', profile, '--dump-config',
-      ...[...overlays, patch].flatMap(file => ['--patch', file])], {
+      '--patch', patch], {
       cwd: home, env: { ...env, DSH_HOME: home }, extendEnv: false, cancelSignal: test.signal,
     })
     return parseEntryYaml(result.stdout) as Row[]
   }
-  return async (mode: ParityMode, sdkPatches: object[] = []): Promise<ParityDifference[]> => {
-    const desktop = presetRows(await dump('web'), mode)
-    const sdk = sdkRows(await dump('sdk', sdkPatches, mode === 'ptc' ? [ptcOverlay] : []), desktop.keys())
+  return async (sdkPatches: object[] = []): Promise<ParityDifference[]> => {
+    const desktop = presetRows(await dump('web'))
+    const sdk = sdkRows(await dump('sdk', sdkPatches), desktop.keys())
     return compareEntries('config', 'config', sdk, desktop)
   }
 }
 
-it.for(['standard', 'ptc'] as const)('compares the SDK agent rows with the Desktop %s preset', async (mode, test) => {
+it('compares the SDK agent rows with the Desktop standard preset', async (test) => {
   const differences = await fixture(test)
-  assertParity(mode, ['config'], await differences(mode))
+  assertParity(['config'], await differences())
 })
 
-it.for(['standard', 'ptc'] as const)('detects a one-sided agent row change in %s', async (mode, test) => {
+it('detects a one-sided agent row change', async (test) => {
   const differences = await fixture(test)
-  const changed = await differences(mode, [{ id: 'tool-todo', config: { allowParallelInProgress: false } }])
-  expect(() => { assertParity(mode, ['config'], changed) }).toThrow('config tool-todo:/config/allowParallelInProgress (differs)')
+  const changed = await differences([{ id: 'tool-todo', config: { allowParallelInProgress: false } }])
+  expect(() => { assertParity(['config'], changed) }).toThrow('config tool-todo:/config/allowParallelInProgress (differs)')
 })

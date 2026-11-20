@@ -28,7 +28,7 @@ export function apply(ctx, config) {
       observed = normalize({
         tools: ctx.tools.schemas(context.scope, context.toolSet).sort((left, right) => left.name.localeCompare(right.name)),
         sections: assembly.sections.map(({ name, text }) => ({ name, text })),
-        contexts: assembly.contexts.map(({ name }) => name),
+        contexts: assembly.contexts.map(({ name, text }) => ({ name, text })),
         hmr: ctx.get('hmr') !== undefined,
       })
       await writeFile(config.output, JSON.stringify(observed))
@@ -62,7 +62,7 @@ export function apply(ctx, config) {
       setup: scope => presets.mount(scope, config.preset).then(() => undefined),
     })
     try {
-      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect tools' }], source: { kind: 'user' } }))
+      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Inspect tools' }], source: { kind: 'user', ...config.clientTimeZone === undefined ? {} : { clientTimeZone: config.clientTimeZone } } }))
       await handle.agent.whenIdle()
       if (observed === undefined) throw new Error('Desktop did not assemble a model step')
       return observed

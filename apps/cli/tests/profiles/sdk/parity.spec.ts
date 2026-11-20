@@ -4,7 +4,7 @@ import { parityExceptions } from './parity-exceptions.ts'
 import { assertParity, compareEntries, jsonDifferences, type ParityException } from './parity.ts'
 
 const toolOnly: ParityException = {
-  kind: 'tool', key: 'desktop_only', side: 'desktop', modes: ['standard'], reason: 'Requires a graphical client.',
+  kind: 'tool', key: 'desktop_only', side: 'desktop', reason: 'Requires a graphical client.',
 }
 
 it('reports the deepest differing JSON pointers', () => {
@@ -28,41 +28,39 @@ it('separates one-sided entries from differing shared entries', () => {
 
 it('accepts an exact exception and rejects it after the profiles converge', () => {
   const difference = { kind: 'tool' as const, key: 'desktop_only', side: 'desktop' as const }
-  expect(() => { assertParity('standard', ['tool'], [difference], [toolOnly]) }).not.toThrow()
-  expect(() => { assertParity('standard', ['tool'], [], [toolOnly]) })
+  expect(() => { assertParity(['tool'], [difference], [toolOnly]) }).not.toThrow()
+  expect(() => { assertParity(['tool'], [], [toolOnly]) })
     .toThrow('Stale exceptions: tool desktop_only (desktop only)')
-  expect(() => { assertParity('standard', ['tool'], [{ ...difference, side: 'sdk' }], [toolOnly]) })
+  expect(() => { assertParity(['tool'], [{ ...difference, side: 'sdk' }], [toolOnly]) })
     .toThrow('tool desktop_only (sdk only)')
 })
 
-it('consults only exceptions of the compared layers and mode', () => {
-  expect(() => { assertParity('ptc', ['tool'], [], [toolOnly]) }).not.toThrow()
-  expect(() => { assertParity('standard', ['config'], [], [toolOnly]) }).not.toThrow()
+it('consults only exceptions of the compared layers', () => {
+  expect(() => { assertParity(['config'], [], [toolOnly]) }).not.toThrow()
 })
 
 it('reports every unrecorded difference with the remedy', () => {
   expect(() => {
-    assertParity('ptc', ['schema', 'section'], [{ kind: 'schema', key: 'read:/description' }, { kind: 'section', key: 'plan' }], [])
+    assertParity(['schema', 'section'], [{ kind: 'schema', key: 'read:/description' }, { kind: 'section', key: 'plan' }], [])
   }).toThrow(/schema read:\/description \(differs\)\n {2}section plan \(differs\)\nStale exceptions: \(none\)\nAlign both profiles/)
 })
 
 it('rejects undocumented, untracked and duplicate exceptions', () => {
   const difference = { kind: 'section' as const, key: 'plan' }
-  expect(() => { assertParity('standard', ['section'], [difference], [{ ...difference, modes: ['standard'], reason: ' ' }]) })
+  expect(() => { assertParity(['section'], [difference], [{ ...difference, reason: ' ' }]) })
     .toThrow('requires a reason')
   expect(() => {
-    assertParity('standard', ['section'], [difference], [{ ...difference, modes: ['standard'], reason: 'Old text.', debt: { issue: '' } }])
+    assertParity(['section'], [difference], [{ ...difference, reason: 'Old text.', debt: { issue: '' } }])
   }).toThrow('requires an issue')
-  const exception = { ...difference, modes: ['standard'] as const, reason: 'Intentional.' }
-  expect(() => { assertParity('standard', ['section'], [difference], [exception, exception]) })
+  const exception = { ...difference, reason: 'Intentional.' }
+  expect(() => { assertParity(['section'], [difference], [exception, exception]) })
     .toThrow('Stale exceptions: section plan (differs)')
 })
 
-it('records each shipped exception once per mode with a reason', () => {
-  const keys = parityExceptions.flatMap(exception => exception.modes.map(mode => `${mode} ${exception.kind} ${exception.key} ${exception.side ?? ''}`))
+it('records each shipped exception once with a reason', () => {
+  const keys = parityExceptions.map(exception => `${exception.kind} ${exception.key} ${exception.side ?? ''}`)
   expect(new Set(keys).size).toBe(keys.length)
   for (const exception of parityExceptions) {
     expect(exception.reason.trim()).not.toBe('')
-    expect(exception.modes.length).toBeGreaterThan(0)
   }
 })

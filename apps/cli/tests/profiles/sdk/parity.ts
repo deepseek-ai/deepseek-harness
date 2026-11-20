@@ -1,15 +1,15 @@
-/** Comparison of the model context the shipped SDK and Desktop profiles assemble, with exact recorded exceptions. */
+/**
+ * Comparison of the model context that the shipped SDK profile with native tool execution and the Desktop standard
+ * agent preset assemble, with exact recorded exceptions.
+ */
 import { parityExceptions } from './parity-exceptions.ts'
-
-/** Matching SDK executor and Desktop preset. */
-export type ParityMode = 'standard' | 'ptc'
 
 /**
  * Compared layer: `tool` is one-sided tool presence, `schema` a model-facing tool schema field, `section` a system
- * prompt section or runtime context name, `skill` a session skill catalog entry, and `config` an agent-plane plugin
- * row of the profile composition.
+ * prompt section or runtime context entry, `skill` a session skill catalog entry, `message` another message injected
+ * into the first request, keyed by its first line up to a colon, and `config` an agent-plane plugin row of the profile composition.
  */
-export type ParityKind = 'tool' | 'schema' | 'section' | 'skill' | 'config'
+export type ParityKind = 'tool' | 'schema' | 'section' | 'skill' | 'message' | 'config'
 
 /** One observed difference between the SDK and Desktop sides. */
 export interface ParityDifference {
@@ -22,8 +22,6 @@ export interface ParityDifference {
 
 /** A recorded difference that the comparison accepts. */
 export interface ParityException extends ParityDifference {
-  /** Modes where the difference exists; the exception is stale in a listed mode that no longer shows it. */
-  modes: readonly ParityMode[]
   /** Why the difference exists. */
   reason: string
   /** Present for an inconsistency that should be fixed; names the tracking issue. Absent for an intended difference. */
@@ -92,19 +90,18 @@ function matches(exception: ParityException, difference: ParityDifference): bool
 /**
  * Accept exactly the recorded differences of the compared kinds, rejecting both unrecorded differences and
  * exceptions that no longer match one.
- * @param mode - matching SDK executor and Desktop preset.
  * @param kinds - layers the caller compared; exceptions of other layers are not consulted.
  * @param differences - observed differences of those layers.
  * @param exceptions - recorded differences with their reasons.
  */
 export function assertParity(
-  mode: ParityMode, kinds: readonly ParityKind[], differences: readonly ParityDifference[],
+  kinds: readonly ParityKind[], differences: readonly ParityDifference[],
   exceptions: readonly ParityException[] = parityExceptions,
 ): void {
   const unexpected = [...differences]
   const stale: string[] = []
   for (const exception of exceptions) {
-    if (!kinds.includes(exception.kind) || !exception.modes.includes(mode)) continue
+    if (!kinds.includes(exception.kind)) continue
     if (!exception.reason.trim()) throw new Error(`Parity exception requires a reason: ${label(exception)}`)
     if (exception.debt !== undefined && !exception.debt.issue.trim()) {
       throw new Error(`Parity debt requires an issue: ${label(exception)}`)
@@ -115,7 +112,7 @@ export function assertParity(
   }
   if (unexpected.length === 0 && stale.length === 0) return
   throw new Error([
-    `SDK/Desktop model context mismatch: ${mode}`,
+    'SDK/Desktop model context mismatch',
     ...unexpected.map(difference => `  ${label(difference)}`),
     `Stale exceptions: ${stale.join(', ') || '(none)'}`,
     `Align both profiles, or record the difference in ${EXCEPTIONS_FILE} with a reason; an inconsistency left unfixed also needs debt.issue. Remove an exception once its difference is gone.`,
