@@ -25,14 +25,21 @@ export interface CuaPrograms {
    * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
    * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
    * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
-   * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+   * connection, and the desktop applications themselves are unaffected. Held input is released. The runtime rejects that Agent's
    * programs until the release settles, so the caller holds them back; after a failed release it rejects them
    * until a later release succeeds. Resolves when no environment exists.
    * @param agent - Agent whose `cua_run_code` state owner is released.
-   * @returns Completion after the process has exited and its output has drained.
-   * @throws When the process cleanup fails.
+   * @returns Completion after the process has exited, its output has drained, and held-input cleanup has settled.
+   * @throws When environment or input cleanup fails, reporting both causes if both fail.
    */
   release(agent: Agent): Promise<void>
+  /**
+   * Release the Agent's tracked input while retaining its program variables and application grants.
+   * Providers without held-input state support retain their existing cancellation behavior.
+   * @param agent - Owner of the input to release.
+   * @returns Completion after native acknowledgement, or rejection when cleanup is unconfirmed.
+   */
+  releaseInputs(agent: Agent): Promise<void>
   /**
    * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
    * A host that forwards screenshots outside a model request reads the same request version with it, so the
@@ -71,10 +78,12 @@ export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, ima
  * @param tool Internal native tool; Agents off the configured preset can reach it only through the program.
  * @param guidance Raw-tool operation instructions for the configured preset.
  * @param programGuidance Operation instructions available inside cua_run_code.
+ * @param releaseInputs Release tracked input on cancellation or environment reset.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
 export function installCuaTools(
   ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string, programGuidance: string,
+  releaseInputs: (agent: Agent) => Promise<void>,
 ): () => void | Promise<void> {
   // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
   const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
@@ -158,7 +167,18 @@ var cua = connectCua(() => tools.cua);
                 })
                 // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
                 consumer.provide('cuaPrograms', {
-                  release: (agent: Agent) => consumer.ptcRuntime.release(agent),
+                  release: async (agent: Agent) => {
+                    try { await consumer.ptcRuntime.release(agent) }
+                    catch (error) {
+                      try { await releaseInputs(agent) }
+                      catch (cleanup) {
+                        throw new AggregateError([error, cleanup], `Environment release failed: ${String(error)}. Held-input cleanup failed: ${String(cleanup)}`)
+                      }
+                      throw error
+                    }
+                    await releaseInputs(agent)
+                  },
+                  releaseInputs,
                   screenshotRequestTarget: image => config.screenshotTarget === undefined
                     ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
                 } satisfies CuaPrograms)

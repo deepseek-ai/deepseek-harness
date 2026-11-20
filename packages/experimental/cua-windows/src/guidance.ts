@@ -2,7 +2,7 @@
 import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
 
 /** Windows operation levels, application selectors, and input availability. */
-export const PLATFORM_GUIDANCE = 'Windows: accessibility tree operations are available only at window level. Simulated mouse and keyboard input are available at window level. Supported modifiers: ctrl, alt, shift, win. control is an alias for ctrl.'
+export const PLATFORM_GUIDANCE = 'Windows: accessibility tree operations are available only at window level. Simulated mouse and keyboard input are available at window level. Supported modifiers: ctrl, alt, shift, win. control is an alias for ctrl. Key and mouse holds use desktop input. Keep the target in front while holding inputs. Release through the same window. After focus changes, an up releases desktop input without restoring focus; the original window may not receive that event.'
 
 const methodDetails = new Map<string, string>([
   ['cua.getApp', 'Windows accepts an exact AUMID returned by listApps or an existing absolute .exe path, including an executable absent from listApps. Display names and PIDs are not alternative selectors. Selection uses the existing application consent flow and starts the application only when it is not running.'],

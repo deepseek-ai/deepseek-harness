@@ -1,4 +1,5 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
+import { randomUUID } from 'node:crypto'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -27,7 +28,7 @@ import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-
 import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
@@ -163,7 +164,7 @@ async function setup(
   model?: { provider: string; model: string }, ptc?: PtcMode, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
 ) {
   native.connect.mockClear()
-  native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
+  native.cleanup.mockReset().mockResolvedValue([])
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
@@ -188,6 +189,26 @@ async function setup(
   return { ctx, provider, handle, execute }
 }
 
+async function thinkingTurn(f: Awaited<ReturnType<typeof setup>>) {
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  class WaitingModel extends LlmAdapter {
+    async * stream(options: import('@deepseek-ai/dsh-llm').GenerateOptions): AsyncIterable<StreamChunk> {
+      entered.resolve()
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) resolve()
+        else options.signal?.addEventListener('abort', () => { resolve() }, { once: true })
+      })
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Fixture cancelled' } } }
+    }
+  }
+  const provider = `thinking-${randomUUID()}`
+  f.ctx.llm.registerAdapter([provider], new WaitingModel())
+  Object.assign(f.handle.agent.options, { provider, model: 'fixture' })
+  f.handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Wait for input' }], source: { kind: 'user' } }))
+  onTestFinished(async () => { f.handle.agent.cancel({ kind: 'user' }); await f.handle.agent.whenIdle() })
+  await entered.promise
+}
+
 async function executeProgram(
   f: Awaited<ReturnType<typeof setup>>, name: 'run_code' | 'cua_run_code',
   code: string, description: string, signal = new AbortController().signal,
@@ -199,7 +220,7 @@ async function executeProgram(
     }))
   }
   const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
-  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>('keyboard-run'), name,
+  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>(`keyboard-${name}`), name,
     arguments: { code, description }, signal })
 }
 
@@ -253,175 +274,40 @@ it('delivers window activity at the next accepted step and clears it at turn end
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('requires an enclosing run_code before sending a directional key', async () => {
+it('accepts directional input on the Agent connection outside a turn', async () => {
   const f = await setup()
   await selectApplication(f)
-  native.request.mockClear()
+  native.request.mockResolvedValueOnce({ dispatched: true })
   const result = await f.execute('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' })
-  expect(result.isError).toBe(true)
-  expect(JSON.stringify(result.content)).toContain('active run_code')
-  expect(native.request).not.toHaveBeenCalled()
-})
-
-const PROGRAM_TOOLS = PTC_MODES.flatMap(mode => (['run_code', 'cua_run_code'] as const).map(name => ({ mode, name })))
-
-it.each(PROGRAM_TOOLS)('finishes a shortcut-only $name in $mode.mode without requesting held-key cleanup', async ({ mode, name }) => {
-  const f = await setup(undefined, mode)
-  await selectApplication(f)
-  native.request.mockClear().mockResolvedValue({ dispatched: true })
-  const result = await executeProgram(f, name,
-    mode.complete("await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } })"),
-    'Press Command+A')
   expect(result.isError).toBe(false)
-  expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
-  expect(native.cleanup).not.toHaveBeenCalled()
+  expect(native.request).toHaveBeenLastCalledWith('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' }, expect.any(AbortSignal), expect.any(String))
 })
 
-it.each(PROGRAM_TOOLS.flatMap(tool =>
-  ['return', 'throw', 'pause', 'pause with cleanup error'].map(ending => ({ ...tool, ending })),
-))('cleans up only the held W when $name in $mode.mode ends by $ending', async ({ mode, name, ending }) => {
+it.each(PTC_MODES)('holds a key across $mode programs in the same turn', async (mode) => {
   const f = await setup(undefined, mode)
+  await thinkingTurn(f)
   await selectApplication(f)
   const held = new Set<string>()
-  const events: string[] = []
-  const controller = new AbortController()
-  const runIds = new Set<unknown>()
-  native.request.mockImplementation(async (method, params) => {
+  native.request.mockClear().mockImplementation(async (method, params) => {
+    if (method === 'getHeldInputs') return [...held].map(key => ({ kind: 'key', key, appHandle: 'app-one', mode: 'application' }))
     expect(method).toBe('sendKeyEvent')
-    runIds.add(params.runId)
-    const { key, direction } = params
-    if (typeof key !== 'string' || (direction !== 'down' && direction !== 'up')) throw new Error('Invalid directional event')
-    if (direction === 'down') held.add(key)
-    else held.delete(key)
-    events.push(`${key}:${direction}`)
+    const key = params.key
+    if (typeof key !== 'string') throw new Error('The native fixture requires a key name')
+    if (params.direction === 'down') held.add(key)
+    else { expect(held.has(key)).toBe(true); held.delete(key) }
     return { dispatched: true }
   })
-  native.cleanup.mockImplementation(async (method, params) => {
-    expect(method).toBe('releaseHeldKeys')
-    expect(runIds).toEqual(new Set([params.runId]))
-    if (ending === 'pause with cleanup error') throw new Error('release acknowledgement failed')
-    for (const key of held) events.push(`${key}:up`)
-    held.clear()
-    return { dispatched: true }
-  })
-  f.ctx.tools.register({
-    name: 'check_held_keys', description: 'Observe the keys held by the test receiver.',
-    parameters: { type: 'object', properties: {} },
-    output: { schema: {}, render: () => [] },
-    async execute() {
-      const keys = [...held]
-      if (ending.startsWith('pause') && keys.length === 1) {
-        controller.abort()
-        await setImmediate()
-        expect(held.size).toBe(ending === 'pause' ? 0 : 1)
-      }
-      return keys
-    },
-  })
-  const code = [
-    "const key = (key, direction) => tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key, direction } });",
-    "await key('w', 'down'); await key('d', 'down');",
-    "if ((await tools.check_held_keys({})).join(',') !== 'w,d') throw Error('lost held keys');",
-    "await key('d', 'up');",
-    "if ((await tools.check_held_keys({})).join(',') !== 'w') throw Error('lost W');",
-    ending === 'throw' ? "throw Error('program failed');" : mode.complete("'done'"),
-  ].join('\n')
-  const result = await executeProgram(f, name, code, 'Exercise held keys', controller.signal)
-  expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', ...ending === 'pause with cleanup error' ? [] : ['w:up']])
-  expect(native.cleanup).toHaveBeenCalledTimes(1)
-  expect(result.isError).toBe(ending !== 'return')
-  if (ending === 'throw') expect(JSON.stringify(result.content)).toContain('program failed')
-})
-
-const UNLOAD_PHASES = PTC_MODES.flatMap(mode => (['running', 'settling'] as const).map(phase => ({ mode, phase })))
-
-it.each(UNLOAD_PHASES)('awaits held-key cleanup before unloading native resources while the raw $mode.mode program is $phase', async ({ mode, phase }) => {
-  const f = await setup(undefined, mode)
-  await selectApplication(f)
-  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  const cleanupEntered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const cleanupRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  const events: string[] = []
-  native.request.mockClear().mockImplementation(async () => { events.push('key down'); return { dispatched: true } })
-  native.cleanup.mockImplementation(async () => {
-    events.push('release entered')
-    cleanupEntered.resolve()
-    await cleanupRelease.promise
-    expect(native.dispose).not.toHaveBeenCalled()
-    events.push('release finished')
-    return { dispatched: true }
-  })
-  native.dispose.mockImplementation(async () => { events.push('native closed') })
-  f.ctx.tools.register({ name: 'hold_program', description: 'Wait for the test program release.',
-    parameters: { type: 'object', properties: {} }, output: { schema: {}, render: () => [] },
-    async execute() { entered.resolve(); await programRelease.promise; return null },
-  })
-  const controller = new AbortController()
-  let settled = false
-  const running = executeProgram(f, 'run_code',
-    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({}); " + mode.complete("'finished'"),
-    'Hold a key during provider unload', controller.signal).then((result) => { settled = true; return result })
-  let closing: Promise<void> | undefined
-  try {
-    await entered.promise
-    if (phase === 'settling') {
-      programRelease.resolve()
-      await cleanupEntered.promise
-    }
-    closing = f.provider.dispose()
-    expect(await Promise.race([cleanupEntered.promise.then(() => 'cleanup'), closing.then(() => 'closed')])).toBe('cleanup')
-    expect(native.dispose).not.toHaveBeenCalled()
-    expect(events).toEqual(['key down', 'release entered'])
-    cleanupRelease.resolve()
-    await closing
-    expect(events).toEqual(['key down', 'release entered', 'release finished', 'native closed'])
-    if (phase === 'running') expect(settled).toBe(false)
-    programRelease.resolve()
-    expect((await running).isError).toBe(false)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-    expect(native.dispose).toHaveBeenCalledTimes(1)
-  } finally {
-    controller.abort()
-    programRelease.resolve()
-    cleanupRelease.resolve()
-    await running
-    await closing
-  }
-})
-
-it.each(PTC_MODES)('closes the native connection after a $mode program held-key cleanup failure and reuses that failure at program settlement', async (mode) => {
-  const f = await setup(undefined, mode)
-  await selectApplication(f)
-  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  native.request.mockClear().mockResolvedValue({ dispatched: true })
-  const failure = new Error('Held-key release was not acknowledged')
-  native.cleanup.mockRejectedValue(failure)
-  const reported: unknown[] = []
-  const log = vi.spyOn(f.provider.ctx.logger, 'error').mockImplementation((error) => { reported.push(error) })
-  onTestFinished(() => { log.mockRestore() })
-  f.ctx.tools.register({ name: 'hold_program', description: 'Wait for the test program release.',
-    parameters: { type: 'object', properties: {} }, output: { schema: {}, render: () => [] },
-    async execute() { entered.resolve(); await programRelease.promise; return null },
-  })
-  const controller = new AbortController()
-  const running = executeProgram(f, 'run_code',
-    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({});",
-    'Hold a key before cleanup fails', controller.signal)
-  try {
-    await entered.promise
-    await f.provider.dispose()
-    expect(native.dispose).toHaveBeenCalledTimes(1)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-    const aggregate = reported.find(error => error instanceof AggregateError)
-    expect(aggregate?.errors).toContain(failure)
-    programRelease.resolve()
-    const result = await running
-    expect(result.isError).toBe(true)
-    expect(JSON.stringify(result.content)).toContain(failure.message)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-  } finally { controller.abort(); programRelease.resolve(); await running }
+  expect((await executeProgram(f, 'run_code',
+    mode.complete("await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } })"), 'Hold W')).isError).toBe(false)
+  expect(held).toEqual(new Set(['w']))
+  expect(native.cleanup).not.toHaveBeenCalled()
+  expect((await executeProgram(f, 'cua_run_code',
+    mode.complete("await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'up' } })"), 'Release W')).isError).toBe(false)
+  expect(held.size).toBe(0)
+  expect(native.cleanup).not.toHaveBeenCalled()
+  f.handle.agent.cancel({ kind: 'user' })
+  await f.handle.agent.whenIdle()
+  expect(native.cleanup).not.toHaveBeenCalled()
 })
 
 it('rejects a relative helper path before publishing computer-use operations', async () => {
@@ -495,7 +381,7 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
 
-it('merges startup capabilities into runtime native fields', async () => {
+it('reports declared methods outside a turn while merging runtime native fields', async () => {
   const f = await setup()
   const runtime = { permissions: { accessibility: true, screenRecording: false }, sessionLocked: false }
   native.request.mockResolvedValueOnce(runtime)
@@ -673,6 +559,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
     expect(native.dispose).toHaveBeenCalledTimes(2)
     const aggregate = reported.find(error => error instanceof AggregateError)
     expect(aggregate?.errors).toContain(failure)
+    expect(f.ctx.computerUse.providerName).toBeUndefined()
     const errorsBeforeAgentDisposal = errors.mock.calls.length
     await Promise.all([f.handle.dispose(), other.dispose()])
     expect(native.dispose).toHaveBeenCalledTimes(2)
@@ -1286,6 +1173,7 @@ async function hoverFixture(requireApproval = true) {
     await f.provider.dispose()
     await f.ctx.plugin(NativeProvider, { ...config, requireSystemInputApproval: false })
   }
+  await thinkingTurn(f)
   const questions = await f.ctx.plugin(UserQuestions)
   const questionId = 'cua-system-input'
   const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
@@ -1354,41 +1242,16 @@ it.each([true, false])('shares the system input decision for a system button wit
   if (allow) {
     expect(results.every(result => !result.isError)).toBe(true)
     expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemInput]))
-      .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', true]])
-    f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
-    expect(native.cleanup).toHaveBeenCalledWith('releaseSystemButton', {})
+      .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', undefined]])
+    f.handle.agent.cancel({ kind: 'user' })
+    await f.handle.agent.whenIdle()
+    expect(native.cleanup).toHaveBeenCalledWith('releaseHeldInputs', {})
   } else {
-    for (const result of results) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
-    expect(native.request).not.toHaveBeenCalled()
+    for (const result of results.slice(0, 2)) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
+    expect(results[2]?.isError).toBe(false)
+    expect(native.request.mock.calls.map(([method]) => method)).toEqual(['toggleMouse'])
   }
   expect(f.ask).toHaveBeenCalledOnce()
-})
-
-it('reports a failed turn-end button release once and forgets the hold', async () => {
-  const f = await hoverFixture()
-  const failure = new Error('The release was not acknowledged')
-  native.cleanup.mockRejectedValueOnce(failure)
-  const warn = vi.spyOn(f.provider.ctx.logger, 'warn').mockImplementation(() => {})
-  onTestFinished(() => { warn.mockRestore() })
-  expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
-    direction: 'down', useSystemInput: true })).isError).toBe(false)
-  const session = f.handle.agent.session
-  session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
-  await vi.waitFor(() => {
-    expect(warn).toHaveBeenCalledWith('Could not release system input at turn end: %s', failure)
-  })
-  session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
-  expect(native.cleanup).toHaveBeenCalledExactlyOnceWith('releaseSystemButton', {})
-})
-
-it('leaves button release to disconnect when application access was revoked before turn end', async () => {
-  const f = await hoverFixture()
-  expect((await f.execute('toggleMouse', { appHandle: 'app-one', windowId: '7', mouseButton: 'left',
-    direction: 'down', useSystemInput: true })).isError).toBe(false)
-  await f.ctx.cuaAccess.revoke('a'.repeat(64) as Parameters<typeof f.ctx.cuaAccess.revoke>[0])
-  expect(native.dispose).toHaveBeenCalled()
-  f.handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-  expect(native.cleanup).not.toHaveBeenCalled()
 })
 
 it.each([true, false])('asks before a system drag and shares the session decision with hover (allow=%s)', async (allow) => {
@@ -1434,6 +1297,7 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   const sessionId = f.handle.agent.id
   await f.handle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId })
+  await thinkingTurn({ ...f, handle: reopened })
   await f.select(reopened.agent)
   expect((await f.call(reopened.agent, 'mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: false }, expect.any(AbortSignal), expect.any(String))
@@ -1551,6 +1415,16 @@ it.each([true, false])('uses the declared systemInput capability for a non-macOS
   expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemInput ? { ...hoverTarget, useSystemInput: false } : hoverTarget,
     expect.any(AbortSignal), expect.any(String))
+})
+
+it('keeps complete system moves available outside a turn without registering a persistent hold', async () => {
+  const f = await setup(undefined, undefined, { requireSystemInputApproval: false })
+  await selectApplication(f)
+  native.request.mockClear()
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  await f.handle.dispose()
+  expect(native.cleanup).not.toHaveBeenCalled()
 })
 
 it.each([true, false])('shares approval between system clicks and keyboard chords (allow=%s)', async (allow) => {

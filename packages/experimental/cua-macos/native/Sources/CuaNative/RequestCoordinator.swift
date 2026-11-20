@@ -49,7 +49,7 @@ import Darwin
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
                           textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs,
-                          heldKeys: scheduler.heldKeys)
+                          heldInputs: scheduler.heldInputs, connectionID: connectionID)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation, channel: channel)
         self.writer = writer
     }
@@ -189,9 +189,11 @@ import Darwin
     private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         try cancellation.check()
-        if request.method == "releaseSystemButton" {
-            scheduler.systemPointer.release(connection: connectionID)
-            return AXWorker.actionResult
+        if request.method == "getHeldInputs" {
+            return try scheduler.heldInputs.held(connection: connectionID)
+        }
+        if request.method == "releaseHeldInputs" {
+            return .array(try scheduler.heldInputs.release(connection: connectionID))
         }
         if request.method == "screenshot" { try capture.requireAvailable() }
         // A dispatched action can invalidate the snapshot that identifies its window.
@@ -215,12 +217,12 @@ import Darwin
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
-        if request.method == "toggleMouse", try params.optionalBoolean("useSystemInput") == true,
-           try params.string("direction") == "up" {
-            try scheduler.systemPointer.up(connection: connectionID, app: params.string("appHandle"), window: params.windowID(),
-                                          button: WindowPointerInput.button(params.string("mouseButton")))
-            result = AXWorker.actionResult
-        } else if request.method == "permissionStatus" {
+        if request.method == "toggleMouse", try params.string("direction") == "up" {
+            let dispatched = try scheduler.heldInputs.pointerUp(owner: .init(connection: connectionID,
+                app: params.string("appHandle")), window: params.windowID(), button: WindowPointerInput.button(params.string("mouseButton")))
+            return .object(["dispatched": .bool(dispatched)])
+        }
+        if request.method == "permissionStatus" {
             result = permissions.status()
         } else if request.method == "applicationIcons" {
             var icons: [String: JSONValue] = [:]
@@ -265,10 +267,11 @@ import Darwin
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
             case .mouseMove(let route, let point):
                 let latch = cancellation
-                try scheduler.systemPointer.move(connection: connectionID, in: route, at: point, checkCancellation: { try latch.check() })
+                let owner = HeldInputs.Owner(connection: connectionID, app: try params.string("appHandle"))
+                try scheduler.systemPointer.move(owner: owner, in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
             case .systemButtonDown(let route, let button):
-                try scheduler.systemPointer.down(connection: connectionID, app: params.string("appHandle"), in: route, button: button,
+                try scheduler.systemPointer.down(owner: .init(connection: connectionID, app: params.string("appHandle")), in: route, button: button,
                                                  checkCancellation: { try cancellation.check() })
                 result = AXWorker.actionResult
             case .paste(let plan):
@@ -311,7 +314,6 @@ import Darwin
         stopping = true
         permissions.closeGuide(owner: connectionID)
         cancellation.cancel()
-        scheduler.systemPointer.release(connection: connectionID)
         deadline?.cancel()
         deadline = nil
         cancelRequest(NativeFailure(code: "NATIVE_CANCELLED", message: "Native client disconnected"))
@@ -326,6 +328,8 @@ import Darwin
             await pending?.value
             deadline?.cancel()
             deadline = nil
+            do { try scheduler.heldInputs.release(connection: connectionID) }
+            catch { fputs("Could not confirm input release on disconnect: \(error)\n", stderr) }
             await worker.shutdown()
             onClose()
         }

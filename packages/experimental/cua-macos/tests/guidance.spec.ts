@@ -1,7 +1,7 @@
 /** Model-facing guidance lists the object API with platform availability and input constraints. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE, withSystemInputGuidance } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, withHeldInputGuidance, withSystemInputGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
@@ -41,7 +41,7 @@ it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a s
   expect(instructions).toContain('When approval is enabled, the first explicit system input requests permission;')
   expect(instructions).toContain('Omitting the option or passing false uses the provider default.')
   expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemInput?: boolean }")
-  expect(instructions).toContain('pass useSystemInput: true on both down and up')
+  expect(instructions).toContain('pass useSystemInput: true on down')
   const drag = instructions.split('\n').find(line => line.startsWith('- drag('))
   expect(drag).toContain('useSystemInput?: boolean')
   expect(drag).toContain('Omitting useSystemInput or passing false directs the drag to the window without asking for mouse control.')
@@ -54,7 +54,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
-  expect(GUIDANCE).toContain('returns, throws, or the user pauses')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('a system reminder lists any remaining keys and mouse buttons')
   const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
   expect(sharedKeyEvent).toBeDefined()
   expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)
@@ -75,7 +77,7 @@ it('documents explicit mouse-button events immediately after mouseMove', () => {
   const lines = COMMON_GUIDANCE.split('\n')
   const index = lines.findIndex(line => line.startsWith('- toggleMouse('))
   expect(lines[index - 1]).toMatch(/^- mouseMove\(/)
-  expect(lines[index]).toBe("- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; the opposite event is not sent automatically.")
+  expect(lines[index]).toBe("- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Send 'up' to release a held button immediately.")
   expect(index).toBeGreaterThan(lines.indexOf('## Simulated mouse'))
   expect(index).toBeLessThan(lines.indexOf('## Simulated keyboard'))
 })
@@ -83,7 +85,7 @@ it('documents explicit mouse-button events immediately after mouseMove', () => {
 it.each([GUIDANCE, PROGRAM_GUIDANCE])('documents the default window release and the optional system hold', (catalog) => {
   const entry = catalog.split('\n').find(line => line.startsWith('- toggleMouse('))
   expect(entry).toContain('By default the window receives the events, even a release outside it, and the system button stays up.')
-  expect(entry).toContain('pass useSystemInput: true on both down and up')
+  expect(entry).toContain('pass useSystemInput: true on down')
 })
 
 it('enumerates every public method once in its catalog entry', () => {

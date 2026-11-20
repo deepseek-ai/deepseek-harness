@@ -277,6 +277,14 @@ jobs:
           } else {
             pnpm install --frozen-lockfile
           }
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and test the Windows CUA helper
+        shell: pwsh
+        run: |
+          dotnet build packages/experimental/cua-windows/native/cua-windows.slnx --configuration Release -p:RestoreLockedMode=true
+          dotnet run --project packages/experimental/cua-windows/native/tests/Protocol.Tests.csproj --configuration Release --no-build
       - name: Run Windows-specific native tests
         shell: pwsh
         run: >-
@@ -284,6 +292,7 @@ jobs:
           --no-file-parallelism
           --testTimeout 90000
           packages/shell/tool-pwsh/tests/loader.spec.ts
+          packages/experimental/cua-windows/tests/loader-composition.spec.ts
           packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts
           packages/experimental/tool-ralph/tests/integration.spec.ts
           packages/subprocess/subprocess-local/tests/process-exit.spec.ts

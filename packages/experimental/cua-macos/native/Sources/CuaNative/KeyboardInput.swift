@@ -9,14 +9,15 @@ final class KeyboardInput {
         let flag: CGEventFlags
     }
 
-    private let connection = UUID()
-    private let held: HeldKeys
+    private let connection: UUID
+    private let held: HeldInputs
     private let postProcess: (CGEvent, Int32) -> Void
     private let system: SystemKeyboardInput
     private let textEventInterval: Double
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldKeys = HeldKeys(), system: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldInputs = HeldInputs(), connection: UUID = UUID(), system: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+        self.connection = connection
         self.held = held
         self.postProcess = post
         self.system = system
@@ -29,30 +30,28 @@ final class KeyboardInput {
         else { postProcess(event, pid) }
     }
 
-    func keyDown(_ name: String, app: String, run: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
-        let owner = HeldKeys.Owner(connection: connection, run: run, app: app)
+    func keyDown(_ name: String, app: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
+        let owner = HeldInputs.Owner(connection: connection, app: app)
         let code = try Self.keyCode(name)
         let source = try Self.source(system: useSystemInput)
         let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
         try checkCancellation()
         if useSystemInput { try system.validateTarget(recipient().pid) }
-        if try held.repeatIfHeld(owner: owner, name: name, code: code, down: down, system: useSystemInput, post: post) { return }
+        if try held.repeatIfHeld(owner: owner, name: name, code: code, down: down, system: useSystemInput) { return }
         if useSystemInput { try system.requireReleased([code]) }
         let target = try recipient()
         let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
         try checkCancellation()
         try NativePlatform.verify(target)
-        try held.down(owner: owner, recipient: target, name: name, code: code, flag: Self.namedModifier(name)?.flag ?? [],
-                      down: down, up: up, system: useSystemInput, post: post)
+        try held.keyDown(owner: owner, recipient: target, name: name, code: code, flag: Self.namedModifier(name)?.flag ?? [],
+                      down: down, up: up, system: useSystemInput, post: { [postProcess, system] event in
+                          if useSystemInput { system.post(event) } else { postProcess(event, target.pid) }
+                      })
     }
 
-    func keyUp(_ name: String, app: String, run: String, useSystemInput: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
-        try held.up(owner: .init(connection: connection, run: run, app: app), name: name, code: Self.keyCode(name), system: useSystemInput,
-                    recipientIfUnheld: recipientIfUnheld, post: post)
-    }
-
-    func releaseHeldKeys(run: String? = nil) throws {
-        try held.release(connection: connection, run: run, post: post)
+    func keyUp(_ name: String, app: String, useSystemInput: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+        try held.keyUp(owner: .init(connection: connection, app: app), name: name, code: Self.keyCode(name), system: useSystemInput,
+                    recipientIfUnheld: recipientIfUnheld)
     }
 
     /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
@@ -65,7 +64,7 @@ final class KeyboardInput {
         chord.append(Key(keyCode: code, flag: Self.namedModifier(name)?.flag ?? []))
         let alreadyHeld = held.snapshot(pid: pid, system: useSystemInput)
         guard alreadyHeld[code] == nil else {
-            throw RequestParameters.invalid("Key '\(name)' is already held for this target. Use pressKey after the run_code that holds it releases it.")
+            throw RequestParameters.invalid("Key '\(name)' is already held for this target. Use pressKey after the holder releases it.")
         }
         var selected = Set(alreadyHeld.keys)
         var flags = alreadyHeld.values.reduce(useSystemInput ? system.currentFlags() : CGEventFlags()) { $0.union($1) }

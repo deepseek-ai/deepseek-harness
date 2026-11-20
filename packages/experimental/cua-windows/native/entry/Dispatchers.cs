@@ -157,12 +157,13 @@ internal sealed class StaDispatcher : IAsyncDisposable
 }
 
 internal sealed class RequestContext(NativeConfig config, CancellationToken cancellation, MtaDispatcher mta, StaDispatcher sta,
-    Action<NativeFailure> reportFailure)
+    Action<NativeFailure> reportFailure, HeldInputs heldInputs)
 {
     internal NativeConfig Config { get; } = config;
     internal CancellationToken Cancellation { get; } = cancellation;
     internal MtaDispatcher Mta { get; } = mta;
     internal StaDispatcher Sta { get; } = sta;
+    internal HeldInputs HeldInputs { get; } = heldInputs;
     internal void Check() => Cancellation.ThrowIfCancellationRequested();
 
     internal T Ax<T>(Func<T> call)

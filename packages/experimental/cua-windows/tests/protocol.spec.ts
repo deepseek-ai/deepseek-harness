@@ -1,12 +1,14 @@
 /** Both native languages admit the same generated model and Host operation fields. */
-import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
-import { nativeProtocol } from '@deepseek-ai/dsh-cua/native-schema'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { ActionResult, NativeScreenshotResult } from '@deepseek-ai/dsh-cua/protocol'
 import { Config } from '../src/index.ts'
 
-it('keeps the C# admission schema identical to the shared generated schema', async () => {
-  expect(await readFile(new URL('../native/protocol.schema.json', import.meta.url), 'utf8')).toBe(nativeProtocol().json)
+it('keeps the C# admission schema current with the Windows generator', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('../native/generate-protocol.ts', import.meta.url)), '--check'],
+    { encoding: 'utf8' })
+  expect(result.status, result.stderr).toBe(0)
 })
 
 it('preserves Windows physical capture units and observed foreground changes', () => {

@@ -123,7 +123,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const activity = existsSync(activityFile) ? JSON.parse(readFileSync(activityFile, 'utf8')) : undefined
   const pendingActivity = new Set(activity ?? [])
   const snapshots = new Map()
-  const heldKeys = new Map()
+  const heldInputs = new Map()
   const observedWindows = new Set()
   let acquired = false
   let generation = 0
@@ -135,7 +135,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
-    if (method === 'releaseHeldKeys') { heldKeys.delete(params.runId); return { dispatched: true } }
+    if (method === 'getHeldInputs') return [...heldInputs.values()]
+    if (method === 'releaseHeldInputs') {
+      const released = [...heldInputs.values()].reverse()
+      heldInputs.clear()
+      return released
+    }
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
@@ -283,11 +288,13 @@ function createApplicationState(socket, record, application, captureBroker, conn
       application.value += params.text
       return { dispatched: true }
     }
-    if (method === 'sendKeyEvent') {
-      const keys = heldKeys.get(params.runId) ?? new Set()
-      if (params.direction === 'down') keys.add(params.key)
-      else if (!keys.delete(params.key)) refuse('INVALID_ARGUMENT', 'Key was not held by this program')
-      heldKeys.set(params.runId, keys)
+    if (method === 'sendKeyEvent' || method === 'toggleMouse') {
+      const input = method === 'sendKeyEvent'
+        ? { kind: 'key', key: params.key, appHandle: params.appHandle, mode: params.useSystemInput ? 'system' : 'application' }
+        : { kind: 'mouse', button: params.mouseButton, appHandle: params.appHandle, windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' }
+      const id = JSON.stringify([params.appHandle, params.windowId, method, params.key ?? params.mouseButton])
+      if (params.direction === 'down') heldInputs.set(id, input)
+      else if (!heldInputs.delete(id)) refuse('INVALID_ARGUMENT', 'Input was not held by this connection')
       return { dispatched: true }
     }
     if (method === 'typeText') application.value += params.text

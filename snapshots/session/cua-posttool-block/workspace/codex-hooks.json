@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^run_code$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'tool output rejected by codex policy: summarize instead' >&2; exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
