@@ -6,7 +6,7 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { backoffDelay, nextPollDelay } from './schedule.ts'
 import type {
-  BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestBriefUpdate,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestBriefUpdate,
   ChangeRequestDescription, ChangeRequestKey,
   ChangeRequestKnownState, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ChangeRequestWatchOptions,
   Config,
@@ -388,6 +388,22 @@ export class ForgeService extends Service {
    */
   async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
     return await this.act(ref, signal, provider => provider.updateBranch?.bind(provider), 'updates no branches',
+      (action, operation) => action(ref, request, operation))
+  }
+
+  /**
+   * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+   * then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - on with the merge method and the head commit the user confirmed, or off.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async setAutoMerge(
+    ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined> {
+    return await this.act(ref, signal, provider => provider.setAutoMerge?.bind(provider), 'sets no automatic merge',
       (action, operation) => action(ref, request, operation))
   }
 
