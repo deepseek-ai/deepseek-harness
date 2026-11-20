@@ -28,7 +28,7 @@ describe('tool result projection', () => {
   it('delivers the request version the program observed when the provider fixes a target', async () => {
     const { attachments, readImageRequest, readImage } = store()
     const signal = new AbortController().signal
-    const target = { width: 40, height: 20, maxBytes: 1024 }
+    const target = { width: 40, height: 20, maxImageBytes: 1024, imageTargetBytes: 1024 }
     const result = await projectToolResult(success, deferred, { attachments, target: () => target }, signal)
     expect(result).toEqual({ content: [
       { type: 'text', text: '{"visits":1}' },

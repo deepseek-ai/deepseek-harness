@@ -759,12 +759,12 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('maps the actual model-request image pixels back to native points without storing the screenshot twice', async () => {
+it.each([100_000, 300])('maps final request-image pixels to native points under a %s-byte hard limit', async (maxImageBytes) => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
   class ResizingAdapter extends ImageAdapter {
     override imageRequestTarget(_provider: string, _model: string, _image: ImageAttachmentRef) {
-      return { width: 10, height: 5, maxBytes: 100_000 }
+      return { width: 20, height: 10, maxImageBytes, imageTargetBytes: maxImageBytes }
     }
   }
   f.ctx.llm.registerAdapter(['image-fixture'], new ResizingAdapter())
@@ -772,17 +772,29 @@ it('maps the actual model-request image pixels back to native points without sto
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   const save = vi.spyOn(f.ctx.attachments, 'saveImages')
-  const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#4488cc' } }).png().toBuffer()
+  const pixels = Buffer.alloc(40 * 20 * 3)
+  let state = 0x2545f491
+  for (let index = 0; index < pixels.length; index++) {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    pixels[index] = state & 255
+  }
+  const image = await sharp(pixels, { raw: { width: 40, height: 20, channels: 3 } }).png().toBuffer()
   native.request.mockResolvedValue({ ...imageMetadata, bounds: { x: 10, y: 20, width: 400, height: 200 },
     pixelWidth: 40, pixelHeight: 20, mimeType: 'image/png', data: image.toString('base64') })
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError, JSON.stringify(result.content)).toBe(false)
-  expect(result.value).toMatchObject({ pixelWidth: 10, pixelHeight: 5, coordinateSpace: 'screenshot-pixels' })
-  const value = result.value as { data: string }
-  expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
+  expect(result.value).toMatchObject({ coordinateSpace: 'screenshot-pixels' })
+  const value = result.value as { data: string; pixelWidth: number; pixelHeight: number }
+  const encoded = Buffer.from(value.data, 'base64')
+  expect(encoded.byteLength).toBeLessThanOrEqual(maxImageBytes)
+  expect(await sharp(encoded).metadata()).toMatchObject({ width: value.pixelWidth, height: value.pixelHeight })
+  if (maxImageBytes === 300) expect(value.pixelWidth).toBeLessThan(20)
+  else expect(value).toMatchObject({ pixelWidth: 20, pixelHeight: 10 })
   expect(save).toHaveBeenCalledTimes(1)
   native.request.mockResolvedValue({ dispatched: true })
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 5, y: 2.5 })).isError).toBe(false)
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: value.pixelWidth / 2, y: value.pixelHeight / 2 })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 999, y: 999, relative: true })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))

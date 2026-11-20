@@ -336,6 +336,33 @@ describe('pi-ai request context conversion', () => {
     ])
     expect(readImageRequest).toHaveBeenCalledTimes(1)
   })
+  it('starts distinct reads together and keeps repeated images in wire order', async () => {
+    const second = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`) }
+    const firstStarted = Promise.withResolvers<undefined>()
+    const releaseFirst = Promise.withResolvers<undefined>()
+    const read = vi.fn(async (attachment: ImageAttachmentRef) => {
+      if (attachment.attachmentId === ref.attachmentId) {
+        firstStarted.resolve(undefined)
+        await releaseFirst.promise
+      }
+      return requestImage(attachment, Uint8Array.of(attachment.attachmentId === ref.attachmentId ? 1 : 2))
+    })
+    const pending = toPiContext(request([user([
+      { type: 'image', attachment: { ...ref, name: 'first.png' } }, { type: 'image', attachment: second },
+      { type: 'image', attachment: { ...ref, name: 'again.png' } },
+    ])]), imageContext(projectionStore(read)))
+    await firstStarted.promise
+    const started = read.mock.calls.map(([attachment]) => attachment.attachmentId)
+    releaseFirst.resolve(undefined)
+    const context = await pending
+    expect(started).toEqual([ref.attachmentId, second.attachmentId])
+    expect(context.messages[0]).toMatchObject({ content: [
+      { type: 'text', text: expect.stringContaining('first.png') as string }, { type: 'image', data: 'AQ==' },
+      { type: 'text' }, { type: 'image', data: 'Ag==' },
+      { type: 'text', text: expect.stringContaining('again.png') as string }, { type: 'image', data: 'AQ==' },
+    ] })
+  })
+
   it('does not prepare a surface-offloaded image', async () => {
     const old = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`), bytes: 3 }
     const recent = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'d'.repeat(64)}`), bytes: 3 }

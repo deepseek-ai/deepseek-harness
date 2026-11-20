@@ -389,7 +389,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(readImageRequest).toHaveBeenCalledWith(ref, {
       width: 1,
       height: 1,
-      maxBytes: 1024 * 1024,
+      maxImageBytes: 786_432, imageTargetBytes: 786_432,
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
@@ -1257,6 +1257,49 @@ it.each([
 it('resolves the exact pi-ai image budget for screenshot coordinates', () => {
   const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, requestImageMaxBytes: 50_000 } })
   expect(adapter.imageRequestTarget('deepseek', 'deepseek-flash', { ...IMAGE_REF, width: 1000, height: 1000 }))
-    .toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+    .toEqual({ width: 100, height: 100, maxImageBytes: 50_000, imageTargetBytes: 50_000 })
   expect(() => adapter.imageRequestTarget('missing', 'deepseek-flash', IMAGE_REF)).toThrow('does not own provider')
+})
+
+
+it.each([
+  [{}, { width: 627, height: 2000, maxImageBytes: 786_432, imageTargetBytes: 786_432 }],
+  [{
+    requestImageMaxDimension: 3000, requestImageMaxBytes: 500_000,
+  }, {
+    width: 940, height: 3000, maxImageBytes: 500_000, imageTargetBytes: 500_000,
+  }],
+])('uses the same catalog and override image target for coordinates and the wire request: %j', async (overrides, expected) => {
+  const server = await mockServer([{ events: anthropicTextEvents }])
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(RequestImageStore)
+  const store = ctx.attachments
+  const read = vi.spyOn(store, 'readImageRequest').mockImplementation(async (ref, target) => ({
+    variantId: brandString<ImageVariantId>(`sha256:${'c'.repeat(64)}`), attachment: ref,
+    data: Uint8Array.of(1), mediaType: ref.mediaType, bytes: 1,
+    width: target.width, height: target.height, depth: 'uchar', space: 'srgb', hasAlpha: false,
+  }))
+  let providers: Record<string, LlmPiAi.PiAiProviderProfile> = {
+    anthropic: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url, ...overrides },
+  }
+  const adapter = new PiAiAdapter({
+    profiles: () => resolveProfiles(providers),
+    resolveApiKey: () => Promise.resolve('test-key'), resolveAttachments: () => store, auth: memoryAuth(),
+  })
+  const ref = { ...IMAGE_REF, width: 1146, height: 3657 }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toEqual(expected)
+  const prepared = await adapter.prepareCall('anthropic', 'claude-sonnet-4-5')
+  providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, requestImageMaxBytes: 333 } }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({
+    height: 777, maxImageBytes: 333, imageTargetBytes: 333,
+  })
+  const messages = Array.from({ length: 22 }, () => createUserMessage({ content: [{ type: 'image', attachment: ref }], source: { kind: 'user' } }))
+  const chunks: unknown[] = []
+  for await (const chunk of prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages })) chunks.push(chunk)
+  expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(read.mock.calls[0]?.[1]).toEqual(expected)
+  expect(JSON.stringify(server.requests[0])).toContain(`${expected.width}x${expected.height}`)
+  expect(ref).toMatchObject({ width: 1146, height: 3657 })
 })
