@@ -1,128 +1,97 @@
-// A controlled clock distinguishes new activity, repeated observations, and expired history.
+// Window activity uses the monotonic event time shared by the helper and Quartz.
 import CoreGraphics
 import Foundation
 import Testing
 @testable import CuaNative
 
 private let process = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
+private let target = ActivityTarget(process: process, windowID: 10)
+private let second: UInt64 = 1_000_000_000
 
-@Test @MainActor func reportsOtherActorsOnceWithoutSuppressingLaterIdenticalInput() throws {
-    var time = 100.0
+@Test @MainActor func reportsLatestTimePerSourceOnceBetweenWindowUses() throws {
+    var time = second
     let history = RecentActivity(now: { time })
     let a = UUID(), b = UUID()
-    let target = ActivityTarget(process: process, windowID: 10)
     let lookback = try #require(HelperConfiguration(arguments: []).recentActivityWindowMs)
-    #expect(lookback == 10_000)
+    #expect(lookback == 60_000)
     history.connect(a, lookbackMs: lookback)
-    history.connect(b, lookbackMs: lookback)
-    history.watch(target, owner: a)
-    history.watch(target, owner: b)
-    history.record(target, owner: b, operation: "invoke")
-    #expect(history.report(target, owner: b, monitoring: "listening") == nil)
-    #expect(history.report(target, owner: a, monitoring: "listening")?["events"] == .array([
-        .object(["source": .string("agent"), "windowId": .string("10"), "ageMs": .number(0), "operation": .string("invoke")]),
-    ]))
-    #expect(history.report(target, owner: a, monitoring: "listening") == nil)
-    // Identical operations at the same clock reading are distinct records.
-    history.record(target, owner: b, operation: "invoke")
-    #expect(history.report(target, owner: a, monitoring: "listening") != nil)
+    history.observe(target, handle: "app", owner: a)
+    func take() -> [JSONValue] { history.take(owner: a, handle: "app", windowIDs: ["10"]) }
+    history.record(target, owner: b, at: time)
+    time += second
+    history.record(target, owner: a)
+    #expect(take().isEmpty)
+    history.record(target, owner: b)
+    time += second
+    history.record(target, owner: b)
+    history.record(target, owner: b, at: time - second)
+    time += second
+    history.record(target, owner: nil)
+    time += second
+    #expect(history.take(owner: a, handle: "other", windowIDs: ["10"]).isEmpty)
+    #expect(history.take(owner: a, handle: "app", windowIDs: ["11"]).isEmpty)
+    #expect(take() == [
+        .object(["source": .string("agent"), "windowId": .string("10"), "ageSeconds": .number(2)]),
+        .object(["source": .string("external-input"), "windowId": .string("10"), "ageSeconds": .number(1)]),
+    ])
+    #expect(!history.hasInterests)
+    history.record(target, owner: b)
+    #expect(take().isEmpty)
+    history.record(target, owner: a)
+    #expect(history.hasInterests)
     time += 1
-    history.record(target, owner: b, operation: "invoke")
-    time += 10.001
-    #expect(history.report(target, owner: a, monitoring: "listening") == nil)
+    history.record(target, owner: b)
+    #expect(take().count == 1)
 }
 
-@Test @MainActor func scopesReportsToWindowsAndUsesEachClientsLookback() {
-    var time = 10.0
+@Test @MainActor func filtersByLatestObservationLookbackAndProcessLifetime() {
+    var time = second
     let history = RecentActivity(now: { time })
-    let a = UUID(), b = UUID(), source = UUID()
-    let first = ActivityTarget(process: process, windowID: 10)
-    let second = ActivityTarget(process: process, windowID: 11)
-    history.connect(a, lookbackMs: 60000)
-    history.connect(b, lookbackMs: 1001)
-    history.watch(first, owner: a)
-    history.watch(first, owner: b)
-    history.record(first, owner: source, operation: "click")
-    #expect(history.report(second, owner: a, monitoring: "listening") == nil)
-    time += 2
-    #expect(history.report(first, owner: b, monitoring: "listening") == nil)
-    #expect(history.report(first, owner: a, monitoring: "listening")?["lookbackMs"] == .number(60000))
-    history.record(ActivityTarget(process: process, windowID: nil), owner: nil, operation: "keyboard")
-    #expect(history.report(second, owner: b, monitoring: "listening")?["lookbackMs"] == .number(1001))
-}
-
-@Test @MainActor func keepsRecentHistoryAfterDisconnectAndClearsUnwatchedApps() {
-    let history = RecentActivity(now: { 1 })
-    let a = UUID(), b = UUID()
-    let target = ActivityTarget(process: process, windowID: nil)
-    history.connect(a, lookbackMs: 60000)
-    history.connect(b, lookbackMs: 60000)
-    history.watch(target, owner: a)
-    history.watch(target, owner: b)
-    history.record(target, owner: b, operation: "typeText")
-    history.disconnect(b)
-    #expect(history.report(target, owner: a, monitoring: "listening") != nil)
-    history.disconnect(a)
+    let owner = UUID(), other = UUID()
+    history.connect(owner, lookbackMs: 1_000)
+    func observe() { history.observe(target, handle: "app", owner: owner) }
+    func take() -> [JSONValue] { history.take(owner: owner, handle: "app", windowIDs: ["10"]) }
+    observe()
+    time += 1
+    history.record(target, owner: other)
+    observe()
+    history.record(target, owner: nil, at: time - 1)
+    #expect(take().isEmpty)
+    history.record(ActivityTarget(process: ProcessIdentity(pid: 42, startedSeconds: 2, startedMicroseconds: 0), windowID: 10), owner: other)
+    history.record(ActivityTarget(process: process, windowID: 11), owner: other)
+    #expect(take().isEmpty)
+    time += 1
+    history.record(target, owner: nil)
+    time += second + 1
+    #expect(take().isEmpty)
+    history.record(target, owner: other)
+    time += second
+    #expect(take().count == 1)
+    observe()
+    history.clear(owner)
     #expect(!history.isTracked(process))
-    history.connect(a, lookbackMs: 60000)
-    history.watch(target, owner: a)
-    #expect(history.report(target, owner: a, monitoring: "listening") == nil)
+    history.record(target, owner: other)
+    #expect(take().isEmpty)
+    observe()
+    history.disconnect(owner)
+    #expect(!history.hasInterests)
+    #expect(take().isEmpty)
 }
 
-@Test @MainActor func reportsMonitoringLossAndRecoveryWithoutInventingInput() {
-    let history = RecentActivity(now: { 1 })
+@Test @MainActor func externalInputNeedsAWindowAndANonHelperSource() throws {
     let owner = UUID()
-    let target = ActivityTarget(process: process, windowID: nil)
-    history.connect(owner, lookbackMs: 60000)
-    history.watch(target, owner: owner)
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
-    #expect(history.report(target, owner: owner, monitoring: "unavailable")?["events"] == .array([]))
-    #expect(history.report(target, owner: owner, monitoring: "unavailable") == nil)
-    #expect(history.report(target, owner: owner, monitoring: "secure-input")?["externalInputMonitoring"] == .string("secure-input"))
-    #expect(history.report(target, owner: owner, monitoring: "listening")?["externalInputMonitoring"] == .string("listening"))
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
-}
-
-@Test @MainActor func doesNotReplayOlderSourcesOrCrossProcessLifetimes() {
-    let history = RecentActivity(now: { 1 })
-    let owner = UUID()
-    let target = ActivityTarget(process: process, windowID: nil)
-    history.connect(owner, lookbackMs: 60000)
-    history.record(target, owner: UUID(), operation: "untracked")
-    history.watch(target, owner: owner)
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
-    history.record(target, owner: UUID(), operation: "older")
-    history.record(target, owner: UUID(), operation: "newer")
-    history.record(target, owner: nil, operation: "keyboard")
-    #expect(history.report(target, owner: owner, monitoring: "listening")?["events"] == .array([
-        .object(["source": .string("agent"), "windowId": .null, "ageMs": .number(0), "operation": .string("newer")]),
-        .object(["source": .string("external-input"), "windowId": .null, "ageMs": .number(0), "operation": .string("keyboard")]),
-    ]))
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
-    let restarted = ActivityTarget(process: ProcessIdentity(pid: 42, startedSeconds: 2, startedMicroseconds: 0), windowID: nil)
-    #expect(history.report(restarted, owner: owner, monitoring: "listening") == nil)
-}
-
-@Test @MainActor func externalInputFiltersHelperEventsAndKeepsNewKeystrokes() throws {
-    let history = RecentActivity(now: { 1 })
-    let owner = UUID()
-    let target = ActivityTarget(process: try NativePlatform.identity(getpid()), windowID: nil)
-    history.connect(owner, lookbackMs: 60000)
-    history.watch(target, owner: owner)
+    let history = RecentActivity()
+    let target = ActivityTarget(process: try NativePlatform.identity(getpid()), windowID: 10)
+    history.connect(owner, lookbackMs: 60_000)
+    history.observe(target, handle: "app", owner: owner)
     let monitor = ExternalInputMonitor(activity: history)
     let event = try #require(CGEvent(source: nil))
     event.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(getpid()))
     event.setIntegerValueField(.eventSourceUnixProcessID, value: Int64(getpid()))
-    monitor.receive(.keyDown, event: event)
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
+    monitor.receive(.leftMouseDown, event: event)
     event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
-    monitor.receive(.mouseMoved, event: event)
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
     monitor.receive(.keyDown, event: event)
-    #expect(history.report(target, owner: owner, monitoring: "listening")?["events"] == .array([
-        .object(["source": .string("external-input"), "windowId": .null, "ageMs": .number(0), "operation": .string("keyboard")]),
-    ]))
-    #expect(history.report(target, owner: owner, monitoring: "listening") == nil)
-    monitor.receive(.keyDown, event: event)
-    #expect(history.report(target, owner: owner, monitoring: "listening") != nil)
+    event.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: 0)
+    monitor.receive(.scrollWheel, event: event)
+    #expect(history.take(owner: owner, handle: "app", windowIDs: ["10"]).isEmpty)
 }

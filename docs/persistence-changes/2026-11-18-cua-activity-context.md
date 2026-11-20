@@ -9,7 +9,7 @@ English | [中文](2026-11-18-cua-activity-context.zh.md)
 
 ## Summary
 
-Records macOS computer-use activity as producer-owned tool context.
+Records a macOS window activity notice in the next model request.
 
 ## Table of Contents
 
@@ -52,7 +52,7 @@ The cua-activity source adds a discriminator variant without changing existing m
 <a id="verification"></a>
 ## Verification
 
-The recent-activity tool-pipeline tests pass. The released V4 attribution tests pass for user and developer messages; cua-native and cua-ptc snapshot refreshes pass, including a program that never calls inspect.
+Released V4 attribution tests cover user and developer messages. The cua-native and cua-ptc replays cover window activity notices recorded before model requests.
 
 <a id="dev-note"></a>
 ## Dev Note

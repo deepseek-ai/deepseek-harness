@@ -215,7 +215,7 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
     private func disconnected(_ id: UUID) {
         connections.removeValue(forKey: id)
         activity.disconnect(id)
-        if !activity.hasEnabledClients { inputMonitor.stop() }
+        if !activity.hasInterests { inputMonitor.stop() }
         lifetime.remove(id)
         exitIfEmpty()
     }

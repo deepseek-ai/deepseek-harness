@@ -61,7 +61,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="request-protocol"></a>
 ## 请求协议
 
-共享服务使用整数毫秒字段 `recentActivityWindowMs` 配置每条连接的近期活动回看时长，默认 10000，也可传字符串 `"off"` 关闭此连接的活动检测和提醒。最后一个启用检测的连接断开时，共享服务卸载输入监听器。stdio 代理通过 `--recent-activity-window-ms` 接收该值。对象回复中的私有 `recentActivity` 字段只携带尚未向该连接报告的最新 Agent 活动、外部输入或监听状态变化。Host 提取该字段并作为工具后续上下文提交，不将其添加到对象 API 的返回值。活动记录与投递状态由共享服务持有，在清理连接后注销；应用无人关注或历史过期后清除记录。
+每条连接通过握手字段 `recentActivityWindowMs` 或参数 `--recent-activity-window-ms` 设置回看时长，默认 60000 毫秒，填 `"off"` 可关闭。启用的连接分别记录其他 Agent 和可定位到窗口的外部点击、滚动的最近时间。Host 在每个已授权的应用句柄下调用 `takeWindowActivity` 查询观察过的窗口，并在本轮结束时调用 `clearWindowActivity`。所有窗口都停止等待提醒时，helper 卸载共享监听器。
 
 操作帧为 `{ "id": "opaque request id", "method": "method name", "params": {} }`。对应回复只包含 `result` 或 `error: {code, message}` 中的一项；无效信封返回 `INVALID_REQUEST`，ID 为 null。每条连接同时最多发送一个操作。`{ "type": "cancel", "id": "request id" }` 取消该请求，迟到的取消不会产生额外回复。`protocol.schema.json` 定义操作字段。
 

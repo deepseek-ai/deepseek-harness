@@ -99,7 +99,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入从 Node 提供方的 `resolvePersistentExecution` 辅助函数获取执行设置，再用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。CUA 将 Node 提供方声明为 peer 依赖，使这些设置与已安装的提供方版本一致。此设置独立于系统权限和应用授权。
 
-提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。 平台提供方可通过 `handleNativeResult` 消费私有回复字段，并用本次执行的 `deferContext` 提交后续上下文；原始调用及 PTC 嵌套调用都保留该上下文，公共返回值由原有解码器处理。
+提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。 提供方可通过 `windowObserved` 获知已成功读取的窗口及对应的应用授权。
 
 提供方实现 `CuaBackend.getGuidance(kind)`，其中 `kind: 'raw' | 'standalone'`，分别返回原始 `cua` 调用和 `cua_run_code` 程序的操作指引；两种形态可以返回相同文本。共享 CUA 为两份结果统一补充对应能力的权限指引、配置的 AX 读取默认值和最大点击按住时长。
 

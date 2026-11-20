@@ -109,9 +109,23 @@ import Darwin
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
                 if request.method == "screenshot" { try self.capture.requireAvailable() }
-                let result = try await self.scheduler.perform(cancellation: self.cancellation) {
-                    control.startOperation()
-                    return try await self.execute(request, trace: trace)
+                let result: JSONValue
+                if request.method == "takeWindowActivity" || request.method == "clearWindowActivity" {
+                    // This query reads in-memory history and must not wait for another client's desktop operation.
+                    let params = try RequestParameters(request)
+                    if request.method == "takeWindowActivity" {
+                        result = .array(activity.take(owner: connectionID, handle: try params.string("appHandle"),
+                                                      windowIDs: try params.strings("windowIds")))
+                    } else {
+                        activity.clear(connectionID)
+                        result = .null
+                    }
+                    if !activity.hasInterests { inputMonitor.stop() }
+                } else {
+                    result = try await self.scheduler.perform(cancellation: self.cancellation) {
+                        control.startOperation()
+                        return try await self.execute(request, trace: trace)
+                    }
                 }
                 if let failure = control.failure { throw failure }
                 response = .object(["id": requestID, "result": result])
@@ -176,11 +190,9 @@ import Darwin
             return AXWorker.actionResult
         }
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let target = configuration.recentActivityWindowMs == nil ? nil : await worker.activityTarget(params)
-        if let target { activity.watch(target, owner: connectionID); inputMonitor.start() }
-        let observes = ["getState", "screenshot", "listWindows", "listActions"].contains(request.method)
-        // A completed attempt can have partial effects even after a failure or cancellation.
-        defer { if let target, !observes { activity.record(target, owner: connectionID, operation: request.method) } }
+        // A dispatched action can invalidate the snapshot that identifies its window.
+        let target = configuration.recentActivityWindowMs != nil && params.contains("appHandle")
+            ? await worker.activityTarget(params) : nil
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
@@ -251,10 +263,13 @@ import Darwin
                 result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
         }
-        if let target, var fields = result.object,
-           let report = activity.report(target, owner: connectionID, monitoring: inputMonitor.status) {
-            fields["recentActivity"] = report
-            return .object(fields)
+        if let target {
+            if request.method == "getState" || request.method == "screenshot" {
+                activity.observe(target, handle: try params.string("appHandle"), owner: connectionID)
+            } else if result["dispatched"] == .bool(true) {
+                activity.record(target, owner: connectionID)
+            }
+            if activity.hasInterests { inputMonitor.start() }
         }
         return result
     }

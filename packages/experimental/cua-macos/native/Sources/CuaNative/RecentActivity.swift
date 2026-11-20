@@ -1,81 +1,65 @@
-// Shared input history with per-connection delivery cursors; operations never acquire a reservation.
+// Window interests and input metadata belong to the observing helper connection for one turn.
 import Foundation
 import Dispatch
 
 struct ActivityTarget: Hashable, Sendable {
     let process: ProcessIdentity
-    let windowID: UInt32?
+    let windowID: UInt32
 }
 
 @MainActor final class RecentActivity {
-    private struct Record {
-        let sequence: UInt64
-        let target: ActivityTarget
-        let owner: UUID?
-        let operation: String
-        let time: Double
+    private struct Observation {
+        let handle: String
+        let since: UInt64
+        var armed = true
+        var events: [String: UInt64] = [:]
     }
     private struct Client {
-        let lookbackMs: Int
-        var processes: Set<ProcessIdentity> = []
-        var delivered: Set<UInt64> = []
-        var monitoring: String?
+        let lookback: UInt64
+        var windows: [ActivityTarget: Observation] = [:]
     }
     private var clients: [UUID: Client] = [:]
-    private var records: [Record] = []
-    private var sequence: UInt64 = 0
-    private let now: () -> Double
+    private let now: () -> UInt64
 
-    init(now: @escaping () -> Double = { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 }) {
-        self.now = now
+    init(now: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) { self.now = now }
+    func connect(_ owner: UUID, lookbackMs: Int) { clients[owner] = Client(lookback: UInt64(lookbackMs) * 1_000_000) }
+    var hasInterests: Bool { clients.values.contains { $0.windows.values.contains(where: \.armed) } }
+    func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner) }
+    func clear(_ owner: UUID) { clients[owner]?.windows.removeAll() }
+    func observe(_ target: ActivityTarget, handle: String, owner: UUID) {
+        clients[owner]?.windows[target] = Observation(handle: handle, since: now())
     }
-    func connect(_ owner: UUID, lookbackMs: Int) { clients[owner] = Client(lookbackMs: lookbackMs) }
-    var hasEnabledClients: Bool { !clients.isEmpty }
-    func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner); prune() }
-    func watch(_ target: ActivityTarget, owner: UUID) { clients[owner]?.processes.insert(target.process) }
     func isTracked(_ process: ProcessIdentity) -> Bool {
-        clients.values.contains { $0.processes.contains(process) }
+        clients.values.contains { $0.windows.contains { $0.key.process == process && $0.value.armed } }
     }
-    func record(_ target: ActivityTarget, owner: UUID?, operation: String) {
-        prune()
-        guard isTracked(target.process) else { return }
-        sequence += 1
-        records.removeAll { $0.target == target && $0.owner == owner }
-        records.append(Record(sequence: sequence, target: target, owner: owner, operation: operation, time: now()))
-    }
-    /// Nil means this connection has no new activity or monitoring transition to report.
-    func report(_ target: ActivityTarget, owner: UUID, monitoring: String) -> JSONValue? {
-        prune()
-        guard let client = clients[owner] else { preconditionFailure("Activity reports require a connected client") }
-        let timestamp = now()
-        let matching = records.filter {
-            $0.owner != owner && $0.target.process == target.process &&
-                (target.windowID == nil || $0.target.windowID == nil || $0.target.windowID == target.windowID) &&
-                timestamp - $0.time <= Double(client.lookbackMs) / 1000
+    func record(_ target: ActivityTarget, owner: UUID?, at time: UInt64? = nil) {
+        let time = time ?? now()
+        let source = owner == nil ? "external-input" : "agent"
+        for id in clients.keys {
+            guard let window = clients[id]?.windows[target] else { continue }
+            if id == owner {
+                if !window.armed { clients[id]?.windows[target] = Observation(handle: window.handle, since: time) }
+            } else if window.armed && time > window.since && time >= (window.events[source] ?? 0) {
+                clients[id]?.windows[target]?.events[source] = time
+            }
         }
-        // Pick the latest matching event before filtering delivery, so old events do not trickle out on repeated reads.
-        let recent = [matching.last { $0.owner != nil }, matching.last { $0.owner == nil }]
-            .compactMap { $0 }.filter { !client.delivered.contains($0.sequence) }
-        let changed = client.monitoring != monitoring && (client.monitoring != nil || monitoring != "listening")
-        clients[owner]?.monitoring = monitoring
-        clients[owner]?.delivered.formUnion(recent.map(\.sequence))
-        guard !recent.isEmpty || changed else { return nil }
-        return .object([
-            "lookbackMs": .number(Double(client.lookbackMs)),
-            "externalInputMonitoring": .string(monitoring),
-            "events": .array(recent.map { record in .object([
-                "source": .string(record.owner == nil ? "external-input" : "agent"),
-                "windowId": record.target.windowID.map { .string(String($0)) } ?? .null,
-                "ageMs": .number(max(0, (timestamp - record.time) * 1000).rounded(.down)),
-                "operation": .string(record.operation),
-            ]) }),
-        ])
     }
-    private func prune() {
-        let cutoff = now() - Double(clients.values.map(\.lookbackMs).max() ?? 0) / 1000
-        let processes = Set(clients.values.flatMap(\.processes))
-        records.removeAll { $0.time < cutoff || !processes.contains($0.target.process) }
-        let retained = Set(records.map(\.sequence))
-        for owner in clients.keys { clients[owner]?.delivered.formIntersection(retained) }
+    /// Poll only windows observed on this connection under the authorized application handle.
+    func take(owner: UUID, handle: String, windowIDs: [String]) -> [JSONValue] {
+        guard let client = clients[owner] else { return [] }
+        let ids = Set(windowIDs)
+        let time = now()
+        var rows: [JSONValue] = []
+        for (target, window) in client.windows.sorted(by: { $0.key.windowID < $1.key.windowID }) {
+            guard window.armed, window.handle == handle, ids.contains(String(target.windowID)) else { continue }
+            for source in ["agent", "external-input"] {
+                guard let input = window.events[source], time >= input, time - input <= client.lookback else { continue }
+                rows.append(.object(["windowId": .string(String(target.windowID)), "source": .string(source),
+                                     "ageSeconds": .number(Double((time - input) / 1_000_000_000))]))
+                clients[owner]?.windows[target]?.armed = false
+            }
+            clients[owner]?.windows[target]?.events.removeAll()
+        }
+        return rows
     }
 }

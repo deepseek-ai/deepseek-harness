@@ -23,7 +23,7 @@ from native_test_support import copy_helper, default_binary, ROOT, line, stop, u
 
 
 CONFIG = {"maxRequestBytes": 1024 * 1024, "maxResponseBytes": 32 * 1024 * 1024,
-          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "maxClickHoldMs": 5000, "recentActivityWindowMs": 10000, "screenshotTimeoutMs": 5000,
+          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "maxClickHoldMs": 5000, "recentActivityWindowMs": 60000, "screenshotTimeoutMs": 5000,
           "timeoutMs": 30000, "graceMs": 3000}
 
 
@@ -224,11 +224,14 @@ def main():
                 while json.loads(state.read_text())["count"] != before + 1:
                     assert time.monotonic() < changed_until, "B input did not update the fixture exactly once"
                     time.sleep(0.025)
+                def take(client, handle):
+                    return client.call("takeWindowActivity", {"appHandle": handle, "windowIds": [window]})
+
+                events = take(a, app_a)
+                assert len(events) == 1 and events[0]["source"] == "agent" and events[0]["windowId"] == window, events
+                assert 0 <= events[0]["ageSeconds"] <= 60 and take(a, app_a) == []
                 after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
-                events = after["recentActivity"]["events"]
-                assert any(event["source"] == "agent" and event["windowId"] == window
-                           and event["operation"] == "invoke" for event in events), events
                 off_read["windowId"] = window
                 off_state = off.call("getState", off_read)
                 assert "recentActivity" not in off_state
@@ -240,32 +243,15 @@ def main():
                 while json.loads(state.read_text())["count"] != before + 2:
                     assert time.monotonic() < deadline, "Disabled activity tracking blocked ordinary input"
                     time.sleep(0.025)
-                repeated = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                assert not any(event["source"] == "agent" for event in repeated.get("recentActivity", {}).get("events", [])), repeated
-                own = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                assert not any(event["source"] == "agent" for event in own.get("recentActivity", {}).get("events", [])), own
+                assert not take(a, app_a) and not take(b, app_b) and not take(off, off_app)
 
-
-                if after["recentActivity"]["externalInputMonitoring"] == "listening":
-                    assert has_listener(), "Off connection removed a listener used by an enabled connection"
+                if has_listener():
                     can_post = subprocess.check_output([str(sender), "--can-post"], text=True, timeout=5).strip() == "yes"
                     if not can_post:
                         print("SKIP external input delivery: sender lacks macOS event-posting access")
                     else:
                         b.call("activate", {"appHandle": app_b})
                         focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20, "details": True})
-                        before_keys = json.loads(state.read_text())["keyEventCount"]
-                        with external_input(sender, fixture.pid):
-                            deadline = time.monotonic() + 5
-                            reported = False
-                            while True:
-                                update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                                events = update.get("recentActivity", {}).get("events", [])
-                                reported |= any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)
-                                if reported and json.loads(state.read_text())["keyEventCount"] > before_keys:
-                                    break
-                                assert time.monotonic() < deadline, ("External keyboard input was not received and reported", reported)
-                                time.sleep(0.025)
                         button = next(element for element in focused["elements"]
                                       if element["role"] == "AXButton" and element["title"] == "Increment primary")
                         x, y, width, height = button["bounds"]
@@ -274,17 +260,15 @@ def main():
                             deadline = time.monotonic() + 5
                             reported = False
                             while True:
-                                update = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                                events = update.get("recentActivity", {}).get("events", [])
-                                reported |= any(event["source"] == "external-input" and event["operation"] == "click"
-                                                and event["windowId"] == window for event in events)
+                                reported |= any(event["source"] == "external-input" and event["windowId"] == window
+                                                for event in take(a, app_a))
                                 if reported and json.loads(state.read_text())["count"] == before_count + 1:
                                     break
                                 assert time.monotonic() < deadline, ("External click was not received and reported", reported)
                                 time.sleep(0.025)
-                        print("PASS: external keyboard and window input notices")
+                        print("PASS: external window input notice")
                 else:
-                    print("SKIP external input delivery:", after["recentActivity"]["externalInputMonitoring"])
+                    print("SKIP external input delivery: window event listener unavailable")
 
                 def capture(pair):
                     client, handle = pair

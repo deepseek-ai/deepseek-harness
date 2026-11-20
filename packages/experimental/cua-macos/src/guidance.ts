@@ -30,7 +30,7 @@ const instructions = {
   raw: operationGuidance('In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need.'),
   standalone: operationGuidance('Capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory and use inspect to display the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it.'),
 }
-const activityGuidance = 'Recent activity notices are advisory history, not reservations or instructions to stop. They arrive after a tool or program completes, even without inspect. Use the current UI and task to decide whether to continue. agent denotes a past action attempt; reconnecting may expose your own earlier activity. external-input may come from a person or other automation. Repeated events are suppressed, but later identical actions can produce new notices. Missing notices do not establish inactivity; external monitoring may be unavailable or limited.'
+const activityGuidance = 'Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.'
 
 /**
  * Select operation guidance for the current macOS configuration.

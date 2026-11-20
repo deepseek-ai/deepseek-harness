@@ -121,7 +121,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const activityFile = new URL('./fixture-activity.json', import.meta.url)
   const activity = existsSync(activityFile) ? JSON.parse(readFileSync(activityFile, 'utf8')) : undefined
-  let activityDelivered = false
+  const pendingActivity = new Set(activity ?? [])
   const snapshots = new Map()
   const heldKeys = new Map()
   const observedWindows = new Set()
@@ -295,11 +295,15 @@ function createApplicationState(socket, record, application, captureBroker, conn
     return { dispatched: true }
   }
   return (requestId, method, params) => {
-    const result = call(requestId, method, params)
-    if (activity && !activityDelivered && method === 'getState' && result) {
-      activityDelivered = true
-      return { ...result, recentActivity: activity }
+    if (method === 'clearWindowActivity') {
+      pendingActivity.clear()
+      return null
     }
-    return result
+    if (method === 'takeWindowActivity') {
+      const rows = [...pendingActivity].filter(row => observedWindows.has(row.windowId) && params.windowIds.includes(row.windowId))
+      for (const row of rows) pendingActivity.delete(row)
+      return rows
+    }
+    return call(requestId, method, params)
   }
 }

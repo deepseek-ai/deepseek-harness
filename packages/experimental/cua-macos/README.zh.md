@@ -66,7 +66,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
-| `recentActivityWindowMs` | `10000` | 近期活动的回看时长，单位为毫秒。设置 `recentActivityWindowMs: "off"` 可关闭此连接的活动检测和提醒。 |
+| `recentActivityWindowMs` | `60000` | 近期活动的回看时长，单位为毫秒。设置 `recentActivityWindowMs: "off"` 可关闭此连接的活动检测和提醒。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
 | `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
@@ -80,7 +80,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
 
-macOS 会在工具或程序返回后，向模型附加近期活动提示，无须调用 `inspect`。提示包含应用句柄、可确认的窗口、来源、操作类型和距今时间；它不限制后续操作，也不表示对方仍在使用应用。回看时长由 `recentActivityWindowMs` 配置。读取 AX、截图和成功的动作调用可带出新提示；选择应用、选择窗口、发现应用及枚举窗口不输出提示。一次操作结束时记录其尝试，失败或取消也可能留下记录，因为输入可能已经部分发生。同一连接自己的操作被排除，同一事件在该连接中最多报告一次；后来发生的同类操作仍会报告。断连后的历史可保留至过期，因此重连后可能看到自己的旧记录。提示通过正常工具上下文写入 Session 日志，程序返回值及显式 `inspect` 行为保持不变。
+模型读取窗口辅助功能树或截图后，插件在下一次模型请求前检查该窗口。只有上次观察之后且在回看时限内发生的活动才会触发提醒。提醒给出窗口 ID，并分别说明其他 Agent 和外部输入最近出现的时间。每个窗口最多提醒一次，直到 Agent 再次使用该窗口。本轮结束或连接断开时停止关注，已发送的提醒保存在 Session 中。
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
@@ -250,7 +250,7 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
-Recent activity notices are advisory history, not reservations or instructions to stop. They arrive after a tool or program completes, even without inspect. Use the current UI and task to decide whether to continue. agent denotes a past action attempt; reconnecting may expose your own earlier activity. external-input may come from a person or other automation. Repeated events are suppressed, but later identical actions can produce new notices. Missing notices do not establish inactivity; external monitoring may be unavailable or limited.
+Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.
 
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```

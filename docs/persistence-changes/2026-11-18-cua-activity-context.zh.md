@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-将 macOS 计算机操作活动记录为带来源的工具后续上下文。
+记录模型请求前收到的 macOS 窗口活动提醒。
 
 ## 目录
 
@@ -52,7 +52,7 @@ cua-activity 增加来源判别值，不修改已有消息载荷。已发布的 
 <a id="verification"></a>
 ## 验证
 
-近期活动的工具执行链测试通过。已发布 V4 的来源测试覆盖 user 和 developer 消息并通过；cua-native 和 cua-ptc 快照刷新通过，包含未调用 inspect 的程序。
+已发布的 V4 来源测试覆盖 user 和 developer 消息。cua-native 和 cua-ptc 回放覆盖模型请求前记录的活动提醒。
 
 <a id="dev-note"></a>
 ## 开发备注

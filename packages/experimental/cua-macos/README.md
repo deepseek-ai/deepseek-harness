@@ -66,7 +66,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `sourceSigning` | `ad-hoc` | Source signing: `ad-hoc`, or `{ identity, keychain }` for an existing certificate and keychain path. Ignored for installed packages and `helperPath`. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
-| `recentActivityWindowMs` | `10000` | Lookback in milliseconds. Set `recentActivityWindowMs: "off"` to disable activity tracking and notices for this connection. |
+| `recentActivityWindowMs` | `60000` | Lookback in milliseconds. Set `recentActivityWindowMs: "off"` to disable activity tracking and notices for this connection. |
 | `connectTimeoutMs` | `5000` | Deadline for connecting to or starting the shared helper. |
 | `permissionPollIntervalMs` | `1000` | Interval in milliseconds between permission and position checks while the native guide is open. |
 | `screenshotTimeoutMs` | `5000` | Screenshot deadline including queue time, capped by `timeoutMs`. |
@@ -80,7 +80,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |
 
-macOS adds recent activity context after the tool or program returns, without requiring inspect. It identifies the application handle, known window, source, operation and age; it does not restrict further input or establish continued use. recentActivityWindowMs sets the lookback. AX reads, screenshots and successful actions can deliver updates; selection, discovery and window enumeration do not. Each completed action attempt is recorded, including failures and cancellation that may have partial effects. The current connection excludes its own actions and receives each event at most once; later identical operations remain reportable. History can survive disconnect until expiry, so reconnecting can expose earlier actions from the same Agent. Normal tool context records the notice in the Session log while program values and explicit inspect behavior stay unchanged.
+After a window accessibility read or screenshot, the next scheduled model step checks for input on that window since the observation and within the configured lookback. The notice gives the window ID and time of the latest activity from each source: another Agent or external input. Each window can produce one notice until the Agent uses it again. Watches end with the turn or connection. The notice is recorded in the Session.
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cua-macos) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. `getApp` returns the `appHandle` used by every app-targeted operation, and `app.getWindow(windowId)` returns the object that owns screenshots and pointer input.
 
@@ -250,7 +250,7 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
-Recent activity notices are advisory history, not reservations or instructions to stop. They arrive after a tool or program completes, even without inspect. Use the current UI and task to decide whether to continue. agent denotes a past action attempt; reconnecting may expose your own earlier activity. external-input may come from a person or other automation. Repeated events are suppressed, but later identical actions can produce new notices. Missing notices do not establish inactivity; external monitoring may be unavailable or limited.
+Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.
 
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```

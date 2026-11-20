@@ -10,7 +10,7 @@ import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } f
 import { createSharedNativeChannel } from './shared-native.ts'
 import { installHeldKeys } from './held-keys.ts'
 import type { NativeChannelFactory } from '@deepseek-ai/dsh-cua/native-client'
-import { handleActivityResult } from './recent-activity.ts'
+import { watchWindowActivity } from './recent-activity.ts'
 import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
 import { macosGuidance } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
@@ -48,7 +48,7 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
-  recentActivityWindowMs: Schema.union([Schema.const('off'), Schema.number().step(1).min(1).max(2 ** 31 - 1)]).default(10_000),
+  recentActivityWindowMs: Schema.union([Schema.const('off'), Schema.number().step(1).min(1).max(2 ** 31 - 1)]).default(60_000),
   maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
   maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
@@ -70,7 +70,8 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const createChannel: NativeChannelFactory = (owner, native) => createSharedNativeChannel(owner, native, config.recentActivityWindowMs)
-  const backend = { createChannel, handleNativeResult: handleActivityResult, sendKeyEvent: installHeldKeys(ctx),
+  const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowObserved: watchWindowActivity(ctx) },
+    sendKeyEvent: installHeldKeys(ctx),
     getGuidance: (kind: 'raw' | 'standalone') => macosGuidance(kind, config.recentActivityWindowMs !== 'off'), capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {

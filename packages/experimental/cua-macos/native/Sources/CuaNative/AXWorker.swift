@@ -150,7 +150,8 @@ actor AXWorker {
         let scope = snapshots.values.first {
             $0.scope.appHandle == handle && $0.id == params.values["snapshotId"]?.string
         }
-        return ActivityTarget(process: identity, windowID: window ?? scope?.scope.windowID)
+        guard let id = window ?? scope?.scope.windowID else { return nil }
+        return ActivityTarget(process: identity, windowID: id)
     }
     private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {

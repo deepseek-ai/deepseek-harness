@@ -24,7 +24,7 @@ import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunC
 import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { observeNativeWindows } from './native-observation.ts'
-import { ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
@@ -132,12 +132,11 @@ function callerCancelled(error: NativeError): Error {
   return cancelled
 }
 
-interface CuaExecution extends ToolRunContext {
+interface CuaExecution extends ToolExecution {
   agent: Agent
   nativeClient: NativeClient
   coordinates: CuaCoordinates
 }
-
 
 const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
 
@@ -173,6 +172,15 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
+/** Successfully decoded window read on a session's authorized native connection. */
+export interface CuaWindowObservation {
+  agent: Agent
+  client: NativeClient
+  access: Pick<ReturnType<typeof installCuaAccess>, 'run'>
+  appHandle: CuaAppHandle
+  windowId: string
+}
+
 /** Prepared platform executable, transport, platform-specific instructions and startup capabilities. */
 export interface CuaBackend {
   helperPath: string
@@ -186,14 +194,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /**
-   * Consume platform-owned reply metadata and defer context through the current tool execution.
-   * @param request - Authorized operation whose native reply is being handled.
-   * @param value - Native JSON before common result decoding.
-   * @param execution - Current call and its context deferral, including nested program calls.
-   * @returns Operation result with private provider metadata removed.
-   */
-  handleNativeResult?: (request: CuaOperation, value: JsonValue, execution: Readonly<ToolRunContext>) => JsonValue
+  /** Receives each completed window observation while application access is valid. */
+  windowObserved?: (observation: CuaWindowObservation) => void
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -292,11 +294,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const client = execution.nativeClient
       if (method !== 'mouseMove' && !useSystemInput) delete params.useSystemInput
       else if (useSystemInput !== undefined) params.useSystemInput = useSystemInput
-      const handleResult = (value: JsonValue) => backend.handleNativeResult
-        ? backend.handleNativeResult(request, value, execution) : value
-      if (method === 'sendKeyEvent' && backend.sendKeyEvent) {
-        return handleResult(await backend.sendKeyEvent(client, params, execution))
-      }
+      if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       if (method === 'toggleMouse' && useSystemInput && params.direction === 'down') systemInputControl?.trackPress(agent, client)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -307,7 +305,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
-      const requestNative = async () => handleResult(await client.request(method, nativeParams, signal, execution.callId))
+      const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
@@ -425,6 +423,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
             const result = await callNative(request, scoped, route?.useSystemInput)
             signal.throwIfAborted()
+            if ((request.method === 'getState' || request.method === 'screenshot') && request.params.windowId) {
+              backend.windowObserved?.({ agent, client: nativeClient, access, appHandle: request.params.appHandle as CuaAppHandle,
+                windowId: request.params.windowId })
+            }
             return result
           }
           return 'appHandle' in request.params
