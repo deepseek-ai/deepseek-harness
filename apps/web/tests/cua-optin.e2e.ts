@@ -178,7 +178,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
     await card.getByRole('button', { name: '查看 自动电脑操作', exact: true }).click()
     const detail = plugins.locator('[data-detail-document]')
-    await detail.getByRole('img', { name: '将会议要点填入备忘录的指令和输入结果' }).waitFor()
+    await detail.getByRole('img', { name: '在多窗口桌面中自动操作选定任务看板窗口的示意图' }).waitFor()
     const guidance = plugins.locator('[data-cua-guidance]')
     await guidance.getByText(/请谨慎在生产环境中使用/).waitFor()
     expect(await guidance.textContent()).not.toContain('helperPath')
