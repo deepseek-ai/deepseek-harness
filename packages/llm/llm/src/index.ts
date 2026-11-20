@@ -15,6 +15,7 @@ import type {
   LlmConfigurableProvider,
   LlmDiscoveredModel,
   LlmFailure,
+  LlmImageRequestBudget,
   LlmImageRequestPricing,
   LlmModelContext,
   LlmModelDiscoveryRequest,
@@ -33,13 +34,13 @@ import type { ResolvedRetryPolicy } from './retry-policy.ts'
 import type { ProviderRequestId } from './brand.ts'
 import { callConfigEquals } from './call-config.ts'
 import type { ConfigureCall, LlmCallConfig, LlmCallConfigAdapterDefaults } from './call-config.ts'
-import { HarnessError } from './error.ts'
+import { HarnessError, IMAGE_OFFLOAD_REQUIRED_CODE } from './error.ts'
 import type { BuiltinLlmFailureCode } from './error.ts'
 import { normalizeLlmFailure } from './adapter-failure.ts'
 import {
-  contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates,
+  contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates, requiredImageOffload,
 } from './content.ts'
-import type { FileAttachmentRef, ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef, ImageRequestTarget, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 
 export * from './attribution.ts'
 export * from './brand.ts'
@@ -144,6 +145,28 @@ export class LlmError extends HarnessError {
   static fromFailure(failure: LlmFailure, options?: ErrorOptions): LlmError {
     // The constructor validates the code at runtime; the built-in type constrains only codes raised here.
     return new LlmError(failure.message, failure.code as BuiltinLlmFailureCode, { ...failure, ...options })
+  }
+}
+
+/**
+ * Check every retained occurrence against the budget of the selected wire representation.
+ * @param messages - request history, including any repeated or offloaded images.
+ * @param versions - encoded request version for each retained attachment id.
+ * @param budget - route limits for this transport attempt.
+ * @param overflowMessage - adapter diagnostic identifying the exceeded budget.
+ * @throws {LlmError} `IMAGE_OFFLOAD_REQUIRED` with the number of oldest occurrences to offload.
+ */
+export function assertRequestImagesFit(
+  messages: readonly RequestMessage[],
+  versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>,
+  budget: LlmImageRequestBudget,
+  overflowMessage: string,
+): void {
+  const offloadImages = requiredImageOffload(messages, budget,
+    block => (versions.get(block.attachment.attachmentId) as RequestImageAttachment).bytes)
+  if (offloadImages > 0) {
+    throw new LlmError(`${overflowMessage}; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+      IMAGE_OFFLOAD_REQUIRED_CODE, { offloadImages })
   }
 }
 

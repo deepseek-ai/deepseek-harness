@@ -133,6 +133,8 @@ A request is validated against its exact model's capability — context window, 
 
 File detection reads current content, including tool-role result content, on every request without caching message identities or freeze state. The [archived file-scan decision](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
 
+`uniqueRequestImageRefs()` gives adapters one read per retained attachment. Each adapter supplies its model's dimensions and byte limits to `AttachmentStore.readImageRequest()`. Once the wire representation is selected, `assertRequestImagesFit()` counts the actual encoded size of every retained occurrence, including repeats.
+
 ### Invariants
 
 - **Model-visible ⟺ logged** — callers must keep every provider request's model-visible input reconstructable from the session log; loop-built requests arrive deep-frozen and cannot be rewritten.

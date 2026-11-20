@@ -213,15 +213,26 @@ function base64Length(bytes: number): number {
   return Math.ceil(bytes / 3) * 4
 }
 
-/**
- * Visit every image occurrence of typed content in message order.
- * @param content - typed model content blocks.
- * @param visit - called once per occurrence.
- */
-function visitImageBlocks(content: readonly ContentBlock[], visit: (block: ImageBlock) => void): void {
-  for (const block of content) {
-    if (block.type === 'image') visit(block)
+/** Retained image occurrences in wire order, including repeated references. */
+function* retainedImageBlocks(messages: readonly RequestMessage[]): Generator<ImageBlock> {
+  for (const message of messages) {
+    for (const block of message.content) {
+      if (block.type === 'image' && block.offloaded !== true) yield block
+    }
   }
+}
+
+/**
+ * Collect one reference per retained attachment for request encoding.
+ * @param messages - request history with its logged offload decisions.
+ * @returns the first retained reference for each attachment id, in message order.
+ */
+export function uniqueRequestImageRefs(messages: readonly RequestMessage[]): ImageAttachmentRef[] {
+  const refs = new Map<ImageAttachmentRef['attachmentId'], ImageAttachmentRef>()
+  for (const { attachment } of retainedImageBlocks(messages)) {
+    if (!refs.has(attachment.attachmentId)) refs.set(attachment.attachmentId, attachment)
+  }
+  return [...refs.values()]
 }
 
 /** Replace every offloaded occurrence with its placeholder. */
@@ -322,12 +333,9 @@ export function requiredImageOffload(
   versionBytes: (block: ImageBlock) => number,
 ): number {
   const lengths: number[] = []
-  for (const message of messages) {
-    visitImageBlocks(message.content, (block) => {
-      if (block.offloaded === true) return
-      const bytes = versionBytes(block)
-      lengths.push(budget.representation === 'base64' ? base64Length(bytes) : bytes)
-    })
+  for (const block of retainedImageBlocks(messages)) {
+    const bytes = versionBytes(block)
+    lengths.push(budget.representation === 'base64' ? base64Length(bytes) : bytes)
   }
   return offloadedImagePrefixCount(lengths, budget)
 }

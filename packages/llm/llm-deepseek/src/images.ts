@@ -1,7 +1,7 @@
 /** Deterministic Messages image preparation for Files references and bounded inline fallback. */
 
 import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, projectOffloadedImages, requiredImageOffload } from '@deepseek-ai/dsh-llm'
+import { assertRequestImagesFit, contentHasImage, LlmError, offloadedImageText, projectOffloadedImages, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ImageAttachmentAccessResolver, RequestMessage } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekConnectionOptions as Connection } from './types.ts'
 import { resolveRequestImageTarget } from './request-pricing.ts'
@@ -41,7 +41,8 @@ export async function prepareImages(
 ): Promise<{ messages: readonly RequestMessage[]; versions: Map<ImageAttachmentRef['attachmentId'], RequestImageAttachment> }> {
   const versions = new Map<ImageAttachmentRef['attachmentId'], RequestImageAttachment>()
   const messages = projectOffloadedImages(history, ref => offloadedImageText(ref, access(ref)))
-  if (!messages.some(message => contentHasImage(message.content))) return { messages, versions }
+  const refs = uniqueRequestImageRefs(messages)
+  if (refs.length === 0) return { messages, versions }
   const model = connection.models.find(entry => entry.id === modelId)
   if (model?.inputModalities?.includes('image') !== true || attachments === undefined) {
     throw new LlmError('DeepSeek Messages image input requires a vision model and attachment service', 'UNSUPPORTED_CONTENT')
@@ -49,14 +50,10 @@ export async function prepareImages(
   if (messages.some(message => message.role !== 'user' && message.role !== 'tool' && contentHasImage(message.content))) {
     throw new LlmError('DeepSeek Messages supports images only in user messages and tool results', 'UNSUPPORTED_CONTENT')
   }
-  for (const message of messages) {
-    for (const ref of imageRefs(message.content)) {
-      if (!versions.has(ref.attachmentId)) {
-        versions.set(ref.attachmentId, await attachments.readImageRequest(ref, resolveRequestImageTarget(model, ref), signal))
-      }
-    }
+  for (const ref of refs) {
+    versions.set(ref.attachmentId, await attachments.readImageRequest(ref, resolveRequestImageTarget(model, ref), signal))
   }
-  assertImagesFit(messages, versions, connection, 'raw')
+  assertRequestImagesFit(messages, versions, bounds(connection, 'raw'), 'DeepSeek Messages raw request images exceed the route budget')
   return { messages, versions }
 }
 
@@ -70,24 +67,8 @@ export function inlineImages(
   messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>,
   connection: Connection,
 ): readonly RequestMessage[] {
-  assertImagesFit(messages, versions, connection, 'base64')
+  assertRequestImagesFit(messages, versions, bounds(connection, 'base64'), 'DeepSeek Messages base64 request images exceed the route budget')
   return messages
-}
-
-/** Count additional oldest occurrences requiring durable offload at their exact represented bytes. */
-function assertImagesFit(
-  messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>,
-  connection: Connection, representation: 'raw' | 'base64',
-): void {
-  const offloadImages = requiredImageOffload(messages, bounds(connection, representation),
-    block => (versions.get(block.attachment.attachmentId) as RequestImageAttachment).bytes)
-  if (offloadImages > 0) {
-    throw new LlmError(
-      `DeepSeek Messages ${representation} request images exceed the route budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
-      IMAGE_OFFLOAD_REQUIRED_CODE,
-      { offloadImages },
-    )
-  }
 }
 
 /** Resolve retained images to Files ids, recording every occurrence for failure diagnostics.

@@ -133,6 +133,8 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 文件检测在每次请求时读取当前内容，包括 tool-role 结果内容，不缓存消息身份或冻结状态。[已归档的文件扫描决策](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md)记录了实测遍历成本。
 
+适配器通过 `uniqueRequestImageRefs()` 取得保留的附件，每个附件只读一次。适配器将模型要求的宽高和字节限制传给 `AttachmentStore.readImageRequest()`。确定发送方式后，`assertRequestImagesFit()` 按实际编码大小检查每次出现的图片，重复引用也分别计入预算。
+
 ### 不变式
 
 - **模型可见 ⟺ 已记录**——调用方必须确保每个提供方请求中的模型可见输入都可以从会话日志重建；loop 构建的请求以深度冻结状态到达，不可改写。

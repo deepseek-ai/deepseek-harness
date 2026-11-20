@@ -6,7 +6,7 @@
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
-import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText, requiredImageOffload } from '@deepseek-ai/dsh-llm'
+import { assertRequestImagesFit, contentHasImage, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, RequestMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import type {
@@ -94,36 +94,6 @@ function userContent(
     }
   }
   return content
-}
-
-function collectImageRefs(
-  blocks: readonly ContentBlock[],
-  refs: Map<AttachmentId, ImageAttachmentRef>,
-): void {
-  for (const block of blocks) {
-    if (block.type === 'image') {
-      if (block.offloaded !== true) refs.set(block.attachment.attachmentId, block.attachment)
-    }
-  }
-}
-
-async function prepareRequestImages(
-  messages: readonly RequestMessage[],
-  attachments: AttachmentStore,
-  budget: PiImageRequestBudget,
-  signal?: AbortSignal,
-): Promise<Map<AttachmentId, RequestImageAttachment>> {
-  const refs = new Map<AttachmentId, ImageAttachmentRef>()
-  for (const message of messages) collectImageRefs(message.content, refs)
-  const orderedRefs = [...refs.values()]
-  const prepared = await Promise.all(orderedRefs.map(
-    ref => attachments.readImageRequest(ref, requestImageTarget(ref, budget), signal),
-  ))
-  const versions = new Map<AttachmentId, RequestImageAttachment>()
-  for (const [index, ref] of orderedRefs.entries()) {
-    versions.set(ref.attachmentId, prepared[index] as RequestImageAttachment)
-  }
-  return versions
 }
 
 /** Convert a projected declaration without its harness-owned activation marker. */
@@ -377,24 +347,17 @@ async function toPiContextWithImages(
   }
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
-  const requestImages = await prepareRequestImages(split.messages, attachments, requestImagePolicy, options.signal)
-  const offloadImages = requiredImageOffload(
-    split.messages,
-    {
-      representation: 'base64',
-      ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
-      ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
-      ...imageOffloadCountQuantum === undefined ? {} : { countQuantum: imageOffloadCountQuantum },
-    },
-    block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
-  )
-  if (offloadImages > 0) {
-    throw new LlmError(
-      `pi-ai request images exceed the route image budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
-      IMAGE_OFFLOAD_REQUIRED_CODE,
-      { offloadImages },
-    )
-  }
+  const refs = uniqueRequestImageRefs(split.messages)
+  const requestImages = new Map(await Promise.all(refs.map(async (ref) => {
+    const version = await attachments.readImageRequest(ref, requestImageTarget(ref, requestImagePolicy), options.signal)
+    return [ref.attachmentId, version] as const
+  })))
+  assertRequestImagesFit(split.messages, requestImages, {
+    representation: 'base64',
+    ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
+    ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
+    ...imageOffloadCountQuantum === undefined ? {} : { countQuantum: imageOffloadCountQuantum },
+  }, 'pi-ai request images exceed the route image budget')
   const exactMessages = projectOffloadedImages(
     split.messages,
     ref => offloadedImageText(ref, resolveImageAccess(ref)),
