@@ -30,8 +30,8 @@ final class KeyboardInput {
         else { postProcess(event, pid) }
     }
 
-    func keyDown(_ name: String, app: String, task: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
-        let owner = HeldInputs.Owner(connection: connection, task: task, app: app)
+    func keyDown(_ name: String, app: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
+        let owner = HeldInputs.Owner(connection: connection, app: app)
         let code = try Self.keyCode(name)
         let source = try Self.source(system: useSystemInput)
         let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
@@ -49,8 +49,8 @@ final class KeyboardInput {
                       })
     }
 
-    func keyUp(_ name: String, app: String, task: String, useSystemInput: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
-        try held.keyUp(owner: .init(connection: connection, task: task, app: app), name: name, code: Self.keyCode(name), system: useSystemInput,
+    func keyUp(_ name: String, app: String, useSystemInput: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+        try held.keyUp(owner: .init(connection: connection, app: app), name: name, code: Self.keyCode(name), system: useSystemInput,
                     recipientIfUnheld: recipientIfUnheld)
     }
 

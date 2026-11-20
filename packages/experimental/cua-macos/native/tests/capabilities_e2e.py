@@ -392,7 +392,7 @@ def check_system_input(helper, owner, state_file, executable):
     events = wait_for_state(state_file, lambda value: any(event["type"] == 11 for event in value["events"][count:]))["events"][count:]
     assert [(event["type"], event.get("keyCode")) for event in events] == [(10, 2), (11, 2)], events
     assert all(event["shift"] for event in events) and not any(keys().values()), events
-    held = {**owner, "key": "w", "taskId": "system-input-e2e", "useSystemInput": True}
+    held = {**owner, "key": "w", "useSystemInput": True}
     for cleanup in (False, True):
         count = len(json.loads(state_file.read_text())["events"])
         call("sendKeyEvent", {**held, "direction": "down"})
@@ -403,7 +403,7 @@ def check_system_input(helper, owner, state_file, executable):
             assert down["systemW"], down
         finally:
             if cleanup:
-                call("releaseHeldInputs", {"taskId": held["taskId"]})
+                call("releaseHeldInputs", {})
             else:
                 call("sendKeyEvent", {**held, "direction": "up"})
         state = wait_for_state(state_file, lambda value: any(

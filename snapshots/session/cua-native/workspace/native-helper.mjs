@@ -135,10 +135,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
-    if (method === 'getHeldInputs') return [...heldInputs.get(params.taskId)?.values() ?? []]
+    if (method === 'getHeldInputs') return [...heldInputs.values()]
     if (method === 'releaseHeldInputs') {
-      const released = [...heldInputs.get(params.taskId)?.values() ?? []].reverse()
-      heldInputs.delete(params.taskId)
+      const released = [...heldInputs.values()].reverse()
+      heldInputs.clear()
       return released
     }
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
@@ -289,14 +289,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { dispatched: true }
     }
     if (method === 'sendKeyEvent' || method === 'toggleMouse') {
-      const held = heldInputs.get(params.taskId) ?? new Map()
       const input = method === 'sendKeyEvent'
         ? { kind: 'key', key: params.key, appHandle: params.appHandle, mode: params.useSystemInput ? 'system' : 'application' }
         : { kind: 'mouse', button: params.mouseButton, appHandle: params.appHandle, windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' }
       const id = JSON.stringify([params.appHandle, params.windowId, method, params.key ?? params.mouseButton])
-      if (params.direction === 'down') held.set(id, input)
-      else if (!held.delete(id)) refuse('INVALID_ARGUMENT', 'Input was not held by this task')
-      heldInputs.set(params.taskId, held)
+      if (params.direction === 'down') heldInputs.set(id, input)
+      else if (!heldInputs.delete(id)) refuse('INVALID_ARGUMENT', 'Input was not held by this connection')
       return { dispatched: true }
     }
     if (method === 'typeText') application.value += params.text

@@ -55,8 +55,6 @@ class Connection:
                 return value
 
     def call(self, method, params, error=None):
-        if method in ("sendKeyEvent", "toggleMouse", "getHeldInputs", "releaseHeldInputs") or (method == "mouseMove" and params.get("useSystemInput")):
-            params = {**params, "taskId": "native-fixture"}
         self.sequence += 1
         identifier = str(self.sequence)
         self.send({"id": identifier, "method": method, "params": params})
@@ -301,6 +299,12 @@ def main():
                 assert b.call("listWindows", {"appHandle": app_b})
                 timed.close()
                 clients.remove(timed)
+                a.call("sendKeyEvent", {"appHandle": app_a, "key": "w", "direction": "down"})
+                assert b.call("getHeldInputs", {}) == []
+                b.call("sendKeyEvent", {"appHandle": app_b, "key": "w", "direction": "up"}, error="INVALID_ARGUMENT")
+                assert b.call("releaseHeldInputs", {}) == []
+                assert [entry["key"] for entry in a.call("getHeldInputs", {})] == ["w"]
+                b.call("sendKeyEvent", {"appHandle": app_b, "key": "d", "direction": "down"})
             a.close()
             clients.remove(a)
             b.call("protocol-still-open", {}, error="UNSUPPORTED")
@@ -308,6 +312,9 @@ def main():
             if not args.without_desktop:
                 assert b.call("listWindows", {"appHandle": app_b})
                 capture((b, app_b))
+                assert [entry["key"] for entry in b.call("getHeldInputs", {})] == ["d"]
+                b.call("sendKeyEvent", {"appHandle": app_b, "key": "w", "direction": "down"})
+                assert [entry["key"] for entry in b.call("releaseHeldInputs", {})] == ["w", "d"]
             b.close()
             clients.remove(b)
             if not args.without_desktop:

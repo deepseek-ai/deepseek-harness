@@ -38,7 +38,7 @@ import Foundation
         try held.pointerDown(owner: owner, route: route, button: button, system: true, down: down, up: up, post: Self.post)
     }
 
-    func move(owner: HeldInputs.Owner?, in route: WindowRoute, at point: WindowPoint, checkCancellation: () throws -> Void) throws {
+    func move(owner: HeldInputs.Owner, in route: WindowRoute, at point: WindowPoint, checkCancellation: () throws -> Void) throws {
         try WindowPointerInput.validate(point, in: route)
         try WindowPointerInput.validateWindow(route)
         let screen = WindowPointerInput.screenPoint(point, in: route)

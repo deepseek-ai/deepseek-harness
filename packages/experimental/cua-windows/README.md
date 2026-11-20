@@ -65,7 +65,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 #### What the model sees
 
-The program receives application and window identifiers, observations, and action results. Selection alone does not provide an accessibility tree. After a successful program, a reminder lists any held keys and buttons with their window and desktop input mode. Program failure, cancellation, reset and disconnect release owned input in reverse order.
+The program receives application and window identifiers, observations, and action results. Selection alone does not provide an accessibility tree. After a successful program, a reminder lists any held keys and buttons with their window and desktop input mode. Program failure, cancellation, reset and disconnect release the input held by that connection in reverse dispatch order.
 
 #### Token effect
 

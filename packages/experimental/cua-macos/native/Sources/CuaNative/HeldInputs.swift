@@ -6,7 +6,6 @@ import Foundation
 final class HeldInputs: @unchecked Sendable {
     struct Owner: Equatable {
         let connection: UUID
-        let task: String
         let app: String
     }
     enum Mode: Equatable {
@@ -42,10 +41,7 @@ final class HeldInputs: @unchecked Sendable {
     }
 
     private func conflict(_ name: String, holder: Owner, caller: Owner) -> NativeFailure {
-        let source: String
-        if holder.connection != caller.connection { source = "another session" }
-        else if holder.task != caller.task { source = "another task" }
-        else { source = "a different application handle" }
+        let source = holder.connection != caller.connection ? "another session" : "a different application handle"
         return RequestParameters.invalid("Key '\(name)' is held for this target by \(source). No event was sent. Wait for the holder to release it before using it.")
     }
 
@@ -152,14 +148,14 @@ final class HeldInputs: @unchecked Sendable {
     func pointerUp(owner: Owner, window: UInt32, button: CGMouseButton) throws -> Bool {
         try lock.withLock {
             guard let index = pressed.firstIndex(where: { $0.owner == owner && $0.mode.pointer == button && $0.mode.window == window }) else {
-                throw RequestParameters.invalid("Release the mouse button through the same task, application and window that pressed it")
+                throw RequestParameters.invalid("Release the mouse button through the same connection, application and window that pressed it")
             }
             return try release(at: index)
         }
     }
 
     /// Create and post movement under the same lock as ownership and the saved release point.
-    func moveSystem(owner: Owner?, route: WindowRoute, screen: CGPoint, checkCancellation: () throws -> Void) throws {
+    func moveSystem(owner: Owner, route: WindowRoute, screen: CGPoint, checkCancellation: () throws -> Void) throws {
         try lock.withLock {
             let press = pressed.first { if case .systemPointer = $0.mode { return true }; return false }
             let event: CGEvent
@@ -198,32 +194,31 @@ final class HeldInputs: @unchecked Sendable {
     }
 
     /// Only the caller's registered input is disclosed; physical user input is never inferred.
-    func held(connection: UUID, task: String) throws -> JSONValue {
+    func held(connection: UUID) throws -> JSONValue {
         try lock.withLock {
             for index in pressed.indices.reversed() {
                 let press = pressed[index]
-                guard press.owner.connection == connection, press.owner.task == task else { continue }
+                guard press.owner.connection == connection else { continue }
                 if press.mode.isSystem { continue }
                 do { try NativePlatform.verify(press.recipient) }
                 catch let error as NativeFailure where error.code == "STALE_APP" || error.code == "APP_UNAVAILABLE" {
                     pressed.remove(at: index)
                 }
             }
-            return .array(pressed.filter { $0.owner.connection == connection && $0.owner.task == task }.map { press in
+            return .array(pressed.filter { $0.owner.connection == connection }.map { press in
                 record(press)
             })
         }
     }
 
     @discardableResult
-    func release(connection: UUID, task: String? = nil) throws -> [JSONValue] {
+    func release(connection: UUID) throws -> [JSONValue] {
         try lock.withLock {
             var failures: [String] = []
             var released: [JSONValue] = []
             for index in pressed.indices.reversed() {
                 let press = pressed[index]
-                let owner = press.owner
-                guard owner.connection == connection, task == nil || owner.task == task else { continue }
+                guard press.owner.connection == connection else { continue }
                 do { if try release(at: index) { released.append(record(press)) } }
                 catch { failures.append(String(describing: error)) }
             }

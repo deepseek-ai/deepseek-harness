@@ -66,7 +66,7 @@ foreach (var direction in new[] { "down", "up" })
 {
     var toggle = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
     {
-        id = "mouse", method = "toggleMouse", @params = new { appHandle = "app", windowId = "1", taskId = "task", mouseButton, direction },
+        id = "mouse", method = "toggleMouse", @params = new { appHandle = "app", windowId = "1", mouseButton, direction },
     })));
     Check(toggle.Params.GetProperty("mouseButton").GetString() == mouseButton
         && toggle.Params.GetProperty("direction").GetString() == direction,
@@ -75,22 +75,20 @@ foreach (var direction in new[] { "down", "up" })
 foreach (var invalid in new[]
 {
     """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down"}""",
-    """{"appHandle":"app","taskId":"task","windowId":"1","mouseButton":"left"}""",
-    """{"appHandle":"app","taskId":"task","windowId":"1","direction":"down"}""",
-    """{"appHandle":"app","taskId":"task","mouseButton":"left","direction":"down"}""",
-    """{"appHandle":"app","taskId":"task","windowId":"1","mouseButton":"back","direction":"down"}""",
-    """{"appHandle":"app","taskId":"task","windowId":"1","mouseButton":"left","direction":"press"}""",
-    """{"appHandle":"app","taskId":"task","windowId":"1","mouseButton":"left","direction":"down","x":1,"y":2}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left"}""",
+    """{"appHandle":"app","windowId":"1","direction":"down"}""",
+    """{"appHandle":"app","mouseButton":"left","direction":"down"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"back","direction":"down"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"press"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","x":1,"y":2}""",
 })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"mouse\",\"method\":\"toggleMouse\",\"params\":" + invalid + "}")), "INVALID_ARGUMENT");
 
 foreach (var method in new[] { "getHeldInputs", "releaseHeldInputs" })
 {
-    var query = $$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"a"}}""";
-    Check(NativeRequest.Parse(WireJson.Parse(query)).Params.GetProperty("taskId").GetString() == "a",
-        "Private held-input operations accept only the task owner");
-    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{}}""")), "INVALID_ARGUMENT");
-    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"a","appHandle":"app"}}""")), "INVALID_ARGUMENT");
+    var query = $$$"""{"id":"holds","method":"{{{method}}}","params":{}}""";
+    Check(NativeRequest.Parse(WireJson.Parse(query)).Method == method, "Held-input operations use the requesting connection");
+    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"other"}}""")), "INVALID_ARGUMENT");
 }
 HeldInputChecks.Run(Check, Refuses);
 

@@ -109,8 +109,6 @@ class NativeHelper:
         self.transcript = transcript
 
     def call(self, method, params, error_code=None):
-        if method in ("sendKeyEvent", "toggleMouse", "getHeldInputs", "releaseHeldInputs") or (method == "mouseMove" and params.get("useSystemInput")):
-            params = {**params, "taskId": "native-fixture"}
         self.sequence += 1
         request = {"id": str(self.sequence), "method": method, "params": params}
         self.process.stdin.write(json.dumps(request) + "\n")

@@ -13,5 +13,5 @@ macOS 和 Windows 的显式 `sendKeyEvent('down')` 和 `toggleMouse('down')` 跨
 ## 迁移
 
 1. 输入不再需要保持时，将显式 down 与 up 配对。继续操作前阅读提醒；没有持有输入时不添加提醒。
-2. 同步升级平台包和 helper。自定义 `helperPath` 必须实现按任务区分的 `getHeldInputs` 和 `releaseHeldInputs` 私有操作。
+2. 同步升级平台包和 helper。自定义 `helperPath` 必须在派发输入的同一条连接上接受 `getHeldInputs({})` 和 `releaseHeldInputs({})`。
 3. 验证成功结束的程序能持有按键、收到提醒，并在后续程序中释放。程序执行中失败或取消时，会等待自身的清理。如果程序执行成功，但后置策略拒绝结果，工具返回策略错误，CUA 单独等待原生释放确认。模型思考期间停止或报错，Agent 可以先结束，原生释放随后确认。后续 CUA 调用会等待清理结果。清理无法确认时，CUA 禁用该任务后续操作；请手动检查桌面后再创建其他任务。

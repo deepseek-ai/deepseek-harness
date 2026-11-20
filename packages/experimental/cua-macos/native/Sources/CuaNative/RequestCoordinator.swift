@@ -190,10 +190,10 @@ import Darwin
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "getHeldInputs" {
-            return try scheduler.heldInputs.held(connection: connectionID, task: params.string("taskId"))
+            return try scheduler.heldInputs.held(connection: connectionID)
         }
         if request.method == "releaseHeldInputs" {
-            return .array(try scheduler.heldInputs.release(connection: connectionID, task: params.string("taskId")))
+            return .array(try scheduler.heldInputs.release(connection: connectionID))
         }
         if request.method == "screenshot" { try capture.requireAvailable() }
         // A dispatched action can invalidate the snapshot that identifies its window.
@@ -218,7 +218,7 @@ import Darwin
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
         if request.method == "toggleMouse", try params.string("direction") == "up" {
-            let dispatched = try scheduler.heldInputs.pointerUp(owner: .init(connection: connectionID, task: params.string("taskId"),
+            let dispatched = try scheduler.heldInputs.pointerUp(owner: .init(connection: connectionID,
                 app: params.string("appHandle")), window: params.windowID(), button: WindowPointerInput.button(params.string("mouseButton")))
             return .object(["dispatched": .bool(dispatched)])
         }
@@ -267,12 +267,11 @@ import Darwin
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
             case .mouseMove(let route, let point):
                 let latch = cancellation
-                let owner: HeldInputs.Owner? = try params.contains("taskId")
-                    ? .init(connection: connectionID, task: params.string("taskId"), app: params.string("appHandle")) : nil
+                let owner = HeldInputs.Owner(connection: connectionID, app: try params.string("appHandle"))
                 try scheduler.systemPointer.move(owner: owner, in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
             case .systemButtonDown(let route, let button):
-                try scheduler.systemPointer.down(owner: .init(connection: connectionID, task: params.string("taskId"), app: params.string("appHandle")), in: route, button: button,
+                try scheduler.systemPointer.down(owner: .init(connection: connectionID, app: params.string("appHandle")), in: route, button: button,
                                                  checkCancellation: { try cancellation.check() })
                 result = AXWorker.actionResult
             case .paste(let plan):

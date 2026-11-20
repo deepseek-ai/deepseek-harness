@@ -495,6 +495,7 @@ it('a late policy refusal closes only the owner captured by that execution', asy
   })
   const running = f.run()
   await entered.promise
+  const openedChannels = f.native.state.openedChannels
   const execute = (id: string, code: string) => f.ctx.agents.withInitiator(f.agent, () => f.ctx.tools.execute({
     agent: f.agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: brandString<ToolCallId>(id), name: 'cua_run_code', arguments: JSON.stringify({ code, description: id }) }],
@@ -508,6 +509,7 @@ it('a late policy refusal closes only the owner captured by that execution', asy
   } finally { finish.resolve(); await running }
   expect((await execute('release-d', 'await app.sendKeyEvent("d", "up")')).results[0]?.result.isError).toBe(false)
   expect(f.native.events).toEqual(['w:down', 'w:up', 'd:down', 'd:up'])
+  expect(f.native.state.openedChannels).toBe(openedChannels)
   expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
 })
 

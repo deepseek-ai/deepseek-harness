@@ -517,18 +517,13 @@
                 "down",
                 "up"
               ]
-            },
-            "taskId": {
-              "type": "string",
-              "minLength": 1
             }
           },
           "required": [
             "appHandle",
             "windowId",
             "mouseButton",
-            "direction",
-            "taskId"
+            "direction"
           ],
           "additionalProperties": false
         }
@@ -1123,17 +1118,12 @@
                 "down",
                 "up"
               ]
-            },
-            "taskId": {
-              "type": "string",
-              "minLength": 1
             }
           },
           "required": [
             "appHandle",
             "key",
-            "direction",
-            "taskId"
+            "direction"
           ],
           "additionalProperties": false
         }
@@ -1507,15 +1497,7 @@
         },
         "params": {
           "type": "object",
-          "properties": {
-            "taskId": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "taskId"
-          ],
+          "properties": {},
           "additionalProperties": false
         }
       },
@@ -1538,15 +1520,7 @@
         },
         "params": {
           "type": "object",
-          "properties": {
-            "taskId": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "taskId"
-          ],
+          "properties": {},
           "additionalProperties": false
         }
       },

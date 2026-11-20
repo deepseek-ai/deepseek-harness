@@ -104,7 +104,7 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const windowId = initial.state.window
     expect(windows.some(window => window.windowId === windowId)).toBe(true)
     const toggle = async (mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') =>
-      ToggleResult.parse(await native.request('toggleMouse', { appHandle: app.appHandle, windowId, taskId: 'desktop-test', mouseButton, direction }, signal))
+      ToggleResult.parse(await native.request('toggleMouse', { appHandle: app.appHandle, windowId, mouseButton, direction }, signal))
 
     const { cursor } = await fixture.command('pointer', FixtureState)
     for (const mouseButton of ['left', 'right', 'middle'] as const) {
@@ -144,10 +144,9 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     expect((await toggle('left', 'up')).dispatched).toBe(true)
     await observed({ buttons: 'None', cursor: outside.cursor, ups: { left: pressed.ups.left + 1 }, clicks: pressed.clicks })
 
-    const taskId = 'desktop-test'
-    const target = { appHandle: app.appHandle, windowId, taskId }
+    const target = { appHandle: app.appHandle, windowId }
     const key = (key: string, direction: 'down' | 'up') => native.request('sendKeyEvent', { ...target, key, direction }, signal)
-    const holds = () => native.request('getHeldInputs', { taskId }, signal)
+    const holds = () => native.request('getHeldInputs', {}, signal)
     const released = z.array(z.object({ kind: z.string(), key: z.string().nullable(), button: z.string().nullable(), mode: z.literal('system') }))
     await fixture.command('pointer', FixtureState)
     const offset = (await inspect()).inputEvents.length
@@ -162,10 +161,11 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
       (_owner, config) => nativeRuntime.connect(config))
     cleanups.push(() => other.dispose())
     const otherApp = App.parse(await other.request('getApp', { selector: fixturePath! }, signal))
-    expect(await other.request('getHeldInputs', { taskId }, signal)).toEqual([])
+    expect(await other.request('getHeldInputs', {}, signal)).toEqual([])
+    expect(await other.requestCleanup('releaseHeldInputs', {})).toEqual([])
     await expect(other.request('sendKeyEvent', { ...target, appHandle: otherApp.appHandle, key: 'w', direction: 'up' }, signal))
       .rejects.toMatchObject({ code: 'INPUT_NOT_HELD' })
-    const release = await native.requestCleanup('releaseHeldInputs', { taskId })
+    const release = await native.requestCleanup('releaseHeldInputs', {})
     expect(released.parse(release).map(input => input.key ?? input.button)).toEqual(['w', 'left', 'shift'])
     await expect.poll(async () => (await inspect()).inputEvents.slice(offset)).toEqual(
       ['ShiftKey:down', 'Left:down', 'W:down', 'W:up', 'Left:up', 'ShiftKey:up'])
@@ -176,7 +176,7 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     await fixture.command('left-up', FixtureState)
     await observed({ ups: { left: beforeExternal.ups.left + 1 } })
     expect(released.parse(await holds()).map(input => input.button)).toEqual(['left'])
-    const afterExternal = await native.requestCleanup('releaseHeldInputs', { taskId })
+    const afterExternal = await native.requestCleanup('releaseHeldInputs', {})
     expect(released.parse(afterExternal).map(input => input.button)).toEqual(['left'])
     expect(await holds()).toEqual([])
 

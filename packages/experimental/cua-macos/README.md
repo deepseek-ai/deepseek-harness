@@ -155,7 +155,7 @@ Element clicks use opaque element IDs from the current snapshot. Left clicks sup
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-The shared helper's `HeldInputs` records task, connection, process generation, application/window and actual input route before dispatch. One lock orders posts, state queries and releases. Program middleware queries native state after successful execution and defers a logged reminder to the outer tool result. Failure and cancellation close input admission and await `releaseHeldInputs` using an independent bounded request. Native connection shutdown cancels and joins in-flight work before fallback release. A killed host relies on that disconnect path; host callbacks cannot be guaranteed.
+The shared helper's `HeldInputs` records connection, process generation, application/window and actual input route before dispatch. One lock orders posts, state queries and releases. Program middleware queries native state after successful execution and defers a logged reminder to the outer tool result. Failure and cancellation close input admission and await `releaseHeldInputs` using an independent bounded request. Native connection shutdown cancels and joins in-flight work before fallback release. A killed host relies on that disconnect path; host callbacks cannot be guaranteed.
 
 <details>
 <summary>Dispatch and resource ownership</summary>

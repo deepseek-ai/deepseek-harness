@@ -104,10 +104,10 @@ internal static class Input
         var key => key,
     };
 
-    internal static void ReleaseKey(Guid connection, string task, string app, nint window, string name, RequestContext context)
-        => context.HeldInputs.Up(connection, task, app, window, HoldKeyName(name), true);
+    internal static void ReleaseKey(Guid connection, string app, nint window, string name, RequestContext context)
+        => context.HeldInputs.Up(connection, app, window, HoldKeyName(name), true);
 
-    internal static bool KeyDown(Guid connection, string task, AppState app, WindowState window, string name, RequestContext context)
+    internal static bool KeyDown(Guid connection, AppState app, WindowState window, string name, RequestContext context)
     {
         Windows.RequireForeground(app, window, context);
         name = HoldKeyName(name);
@@ -115,7 +115,7 @@ internal static class Input
         if (key.Modifiers.Length != 0)
             throw new NativeFailure("UNSUPPORTED", "This key requires modifiers in the target keyboard layout; send each modifier and the base key separately");
         var flags = key.Extended ? 1u : 0;
-        return context.HeldInputs.Down(connection, task, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
+        return context.HeldInputs.Down(connection, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
             key.Key, name, Keyboard(key.Key, flags: flags), Keyboard(key.Key, flags: flags | 2), context.Cancellation);
     }
 
@@ -187,15 +187,15 @@ internal static class Input
         return new { dispatched = true, hoverRoute = "system-pointer", systemPointerMoved = before.X != point.X || before.Y != point.Y };
     }
 
-    internal static void ReleaseButton(Guid connection, string task, string app, nint window, string button, RequestContext context)
-        => context.HeldInputs.Up(connection, task, app, window, button, false);
+    internal static void ReleaseButton(Guid connection, string app, nint window, string button, RequestContext context)
+        => context.HeldInputs.Up(connection, app, window, button, false);
 
-    internal static bool ButtonDown(Guid connection, string task, AppState app, WindowState window, string button, RequestContext context)
+    internal static bool ButtonDown(Guid connection, AppState app, WindowState window, string button, RequestContext context)
     {
         var flags = Button(button);
         if (!Win32.GetCursorPos(out var point)) throw new NativeFailure("INPUT_UNAVAILABLE", "The current pointer position is unavailable");
         Hit(app, window, point, context);
-        return context.HeldInputs.Down(connection, task, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
+        return context.HeldInputs.Down(connection, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
             flags.Control, button, Mouse(flags.Down), Mouse(flags.Up), context.Cancellation);
     }
 

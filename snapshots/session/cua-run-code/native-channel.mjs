@@ -27,7 +27,7 @@ export function createNativeFixture(selectorPid) {
     let blocked
     let heldCallId
     function dispatch(method, params) {
-      if (method === 'getHeldInputs') return held.filter(press => press.connection === connection && press.taskId === params.taskId).map(press => press.kind === 'key'
+      if (method === 'getHeldInputs') return held.filter(press => press.connection === connection).map(press => press.kind === 'key'
         ? { kind: 'key', key: press.key, appHandle: press.appHandle, ...press.windowId === undefined
           ? { mode: 'application' } : { windowId: press.windowId, mode: 'system' } }
         : { kind: 'mouse', button: press.key, appHandle: press.appHandle, windowId: press.windowId, mode: press.mode })
@@ -35,7 +35,7 @@ export function createNativeFixture(selectorPid) {
         const released = dispatch('getHeldInputs', params).reverse()
         for (let index = held.length - 1; index >= 0; index--) {
           const press = held[index]
-          if (press.connection === connection && press.taskId === params.taskId) {
+          if (press.connection === connection) {
             events.push(`${press.key}:up`)
             held.splice(index, 1)
           }
@@ -55,11 +55,11 @@ export function createNativeFixture(selectorPid) {
       if (!acquired || params.appHandle !== 'fixture-app') throw new Error('Acquire the application before using its handle')
       if (method === 'sendKeyEvent' || method === 'toggleMouse') {
         const key = params.key ?? params.mouseButton
-        const index = held.findIndex(press => press.connection === connection && press.taskId === params.taskId && press.key === key)
-        if (params.direction === 'down' && index < 0) held.push({ connection, taskId: params.taskId, key, appHandle: params.appHandle,
+        const index = held.findIndex(press => press.connection === connection && press.key === key)
+        if (params.direction === 'down' && index < 0) held.push({ connection, key, appHandle: params.appHandle,
             kind: method === 'sendKeyEvent' ? 'key' : 'mouse', windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' })
         if (params.direction === 'up') {
-          if (index < 0) throw new Error('Input was not held by this task')
+          if (index < 0) throw new Error('Input was not held by this connection')
           held.splice(index, 1)
         }
         events.push(`${key}:${params.direction}`)

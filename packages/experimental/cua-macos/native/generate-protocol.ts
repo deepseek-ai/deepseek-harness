@@ -15,22 +15,18 @@ export function renderNativeProtocol(): { json: string; swift: string } {
     maxElements: z.number().int().min(1).max(AX_TRAVERSAL_MAX.maxElements),
     maxDepth: z.number().int().min(1).max(AX_TRAVERSAL_MAX.maxDepth),
   }
-  const owner = { taskId: z.string().min(1) }
   const systemInput = { useSystemInput: z.boolean().optional() }
   const { fields, enums, json } = nativeProtocol({
     getState: NativeResourceParameters.getState.extend(traversal),
     paste: NativeResourceParameters.paste.extend(traversal),
-    sendKeyEvent: z.object({ ...owner, ...systemInput }),
+    sendKeyEvent: z.object(systemInput),
     pressKey: z.object(systemInput),
     click: z.object(systemInput),
-    mouseMove: z.object({ ...systemInput, taskId: owner.taskId.optional() }),
-    toggleMouse: z.object({ ...systemInput, ...owner }),
+    mouseMove: z.object(systemInput),
+    toggleMouse: z.object(systemInput),
     drag: NativeResourceParameters.drag.extend(systemInput),
     requestPermission: PermissionGuideParameters, openPermissionSettings: PermissionSettingsParameters,
   }, [
-    ...['getHeldInputs', 'releaseHeldInputs'].map(method => z.object({
-      method: z.literal(method), params: z.object(owner).strict(),
-    }).strict()),
     z.object({ method: z.literal('takeWindowActivity'), params: z.object({ appHandle: z.string(),
       observations: z.record(z.string(), z.string().regex(/^[0-9]{1,20}$/)) }).strict() }).strict(),
     z.object({ method: z.literal('clearWindowActivity'), params: z.object({}).strict() }).strict(),

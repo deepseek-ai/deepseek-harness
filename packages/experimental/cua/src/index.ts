@@ -200,7 +200,7 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Opt in to task-owned getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
+  /** Opt in to connection-scoped getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
   heldInputState?: boolean
   /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
   windowRead?: (read: CuaWindowRead) => (reply: JsonValue) => void
@@ -304,12 +304,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       // Earlier helpers accept an explicit false only for mouseMove.
       if (method !== 'mouseMove' && !useSystemInput) delete params.useSystemInput
       else if (useSystemInput !== undefined) params.useSystemInput = useSystemInput
-      if (heldInputs && (method === 'sendKeyEvent' || method === 'toggleMouse' || (method === 'mouseMove' && useSystemInput))) {
+      if (heldInputs && (method === 'sendKeyEvent' || method === 'toggleMouse') && params.direction === 'down') {
         const owner = await heldInputs.ready(agent)
-        if (method !== 'mouseMove' && params.direction === 'down') {
-          owner.track(client, ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null)
-        }
-        params.taskId = agent.id
+        owner.track(client, ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null)
       }
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }

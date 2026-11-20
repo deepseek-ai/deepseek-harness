@@ -218,7 +218,7 @@ actor AXWorker {
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, task: params.string("taskId"), useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
                 return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
@@ -361,7 +361,7 @@ actor AXWorker {
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
             let system = try params.optionalBoolean("useSystemInput") ?? false
-            try inputs().0.keyDown(params.string("key"), app: handle, task: params.string("taskId"), useSystemInput: system) {
+            try inputs().0.keyDown(params.string("key"), app: handle, useSystemInput: system) {
                 if system { return identity }
                 return try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
@@ -395,7 +395,7 @@ actor AXWorker {
             if try params.optionalBoolean("useSystemInput") == true {
                 return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
             }
-            try await inputs().1.mouseDown(owner: .init(connection: connectionID, task: params.string("taskId"), app: handle),
+            try await inputs().1.mouseDown(owner: .init(connection: connectionID, app: handle),
                                           in: route, button: params.string("mouseButton"))
         case "click", "mouseMove":
             let useSystemInput = try params.optionalBoolean("useSystemInput") ?? false

@@ -31,7 +31,7 @@ class InputOwner {
   private notifySessionOnRelease = false
   closing: Promise<z.infer<typeof heldInputs>> | undefined
 
-  constructor(readonly agent: Agent, private readonly failed: (error: unknown) => void,
+  constructor(private readonly failed: (error: unknown) => void,
     private readonly released: (inputs: z.infer<typeof heldInputs>) => void) {}
 
   track(client: NativeClient, inTurn: boolean): void {
@@ -44,7 +44,7 @@ class InputOwner {
 
   async reminder(inTurn: boolean): Promise<string | undefined> {
     if (this.closing || !this.client) return
-    const inputs = heldInputs.parse(await this.client.request('getHeldInputs', { taskId: this.agent.id }, this.controller.signal))
+    const inputs = heldInputs.parse(await this.client.request('getHeldInputs', {}, this.controller.signal))
     if (inputs.length === 0) {
       this.removeCleanup?.()
       this.removeCleanup = undefined
@@ -61,7 +61,7 @@ class InputOwner {
       try {
         if (!this.client) return []
         if (!canRequest) throw new NativeError('INPUT_CLEANUP_UNCONFIRMED', 'Native connection closed before held-input cleanup was confirmed. Inspect the desktop manually before starting a new task')
-        const released = heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', { taskId: this.agent.id }))
+        const released = heldInputs.parse(await this.client.requestCleanup('releaseHeldInputs', {}))
         if (this.notifySessionOnRelease) this.released(released)
         return released
       } catch (error) {
@@ -103,7 +103,7 @@ export class CuaHeldInputs {
       'CUA cleanup was not confirmed. All CUA operations are disabled for this task; inspect the desktop manually before starting a new task', { cause: this.failures.get(agent) })
     const current = this.owners.get(agent)
     if (current && !current.closing) return current
-    const owner = new InputOwner(agent, (error) => {
+    const owner = new InputOwner((error) => {
       this.failures.set(agent, error)
       this.ctx.logger.error('CUA cleanup was not confirmed; all CUA operations are disabled for task %s: %s', agent.id, error)
       emitAgentEvent(this.ctx, agent, 'agent/error', { turn: this.ctx.agents.turnBoundaryOf(agent.session).lastTurn, step: 0, error })

@@ -26,61 +26,61 @@ internal static class HeldInputChecks
             if (!interactive) throw new NativeFailure("SESSION_LOCKED", "The interactive desktop is unavailable");
         });
 
-        bool Key(Guid connection, string task, ushort key, string name, CancellationToken cancellation = default)
-            => inputs.Down(connection, task, target, key, name,
+        bool Key(Guid connection, ushort key, string name, CancellationToken cancellation = default)
+            => inputs.Down(connection, target, key, name,
                 new() { Type = 1, Data = new() { Keyboard = new() { Key = key } } },
                 new() { Type = 1, Data = new() { Keyboard = new() { Key = key, Flags = 2 } } },
                 cancellation);
 
-        refuses(() => inputs.Up(a, "task", "app", 72, "shift", true), "INPUT_NOT_HELD");
+        refuses(() => inputs.Up(a, "app", 72, "shift", true), "INPUT_NOT_HELD");
         check(events.Count == 0, "No up is sent for a key the helper never pressed");
         blocked = true;
-        refuses(() => Key(a, "task", 16, "shift"), "INPUT_BLOCKED");
-        check(inputs.Get(a, "task").Length == 0, "A refused down does not cause an up");
+        refuses(() => Key(a, 16, "shift"), "INPUT_BLOCKED");
+        check(inputs.Get(a).Length == 0, "A refused down does not cause an up");
         blocked = false;
-        check(Key(a, "task", 16, "shift"), "Record the accepted keyboard down");
-        check(inputs.Down(a, "task", target, 1, "left",
+        check(Key(a, 16, "shift"), "Record the accepted keyboard down");
+        check(inputs.Down(a, target, 1, "left",
             new() { Data = new() { Mouse = new() { Flags = 2 } } },
             new() { Data = new() { Mouse = new() { Flags = 4 } } }, default), "Record the accepted mouse down");
-        check(Key(a, "task", 87, "w") && !Key(a, "task", 87, "w"), "A repeated key does not duplicate a hold");
-        refuses(() => inputs.RequireOwner(b, "task", "app", 72), "INPUT_BUSY");
-        refuses(() => inputs.RequireOwner(a, "other", "app", 72), "INPUT_BUSY");
+        check(Key(a, 87, "w") && !Key(a, 87, "w"), "A repeated key does not duplicate a hold");
+        refuses(() => inputs.RequireOwner(b, "app", 72), "INPUT_BUSY");
+        refuses(() => inputs.RequireOwner(a, "app", 73), "INPUT_BUSY");
         refuses(() => inputs.RequireAvailable(1), "INPUT_BUSY");
-        refuses(() => inputs.Up(a, "other", "app", 72, "w", true), "INPUT_NOT_HELD");
-        refuses(() => inputs.Up(a, "task", "app", 73, "w", true), "INPUT_NOT_HELD");
-        check(inputs.Release(b, null, default).Length == 0, "Another connection releases nothing");
-        check(inputs.Get(a, "other").Length == 0 && inputs.Get(a, "task").Length == 3, "State query is task-scoped");
-        var described = JsonSerializer.SerializeToElement(inputs.Get(a, "task"), WireJson.Options);
+        refuses(() => inputs.Up(b, "app", 72, "w", true), "INPUT_NOT_HELD");
+        refuses(() => inputs.Up(a, "app", 73, "w", true), "INPUT_NOT_HELD");
+        check(inputs.Release(b, default).Length == 0, "Another connection releases nothing");
+        check(inputs.Get(b).Length == 0 && inputs.Get(a).Length == 3, "State query is connection-scoped");
+        var described = JsonSerializer.SerializeToElement(inputs.Get(a), WireJson.Options);
         check(described[0].GetProperty("windowId").GetString() == "72" && described[0].GetProperty("mode").GetString() == "system",
             "Keyboard reminders identify the window and actual desktop mode");
-        inputs.Up(a, "task", "app", 72, "shift", true);
-        check(Key(a, "task", 16, "shift"), "Explicit up and repress update the dispatch order");
-        check(inputs.Release(a, "task", default).Length == 3
+        inputs.Up(a, "app", 72, "shift", true);
+        check(Key(a, 16, "shift"), "Explicit up and repress update the dispatch order");
+        check(inputs.Release(a, default).Length == 3
             && events.TakeLast(3).SequenceEqual(["16:up", "87:up", "1:up"]), "Release in mixed reverse order, including repress");
-        check(inputs.Release(a, null, default).Length == 0, "Duplicate connection cleanup sends no up");
+        check(inputs.Release(a, default).Length == 0, "Duplicate connection cleanup sends no up");
         using (var cancelled = new CancellationTokenSource())
         {
             cancelled.Cancel();
-            try { Key(a, "task", 87, "w", cancelled.Token); throw new Exception("Expected cancelled down"); }
-            catch (OperationCanceledException) { check(inputs.Get(a, "task").Length == 0, "Cancelled down never dispatches"); }
+            try { Key(a, 87, "w", cancelled.Token); throw new Exception("Expected cancelled down"); }
+            catch (OperationCanceledException) { check(inputs.Get(a).Length == 0, "Cancelled down never dispatches"); }
         }
-        Key(a, "task", 87, "w");
+        Key(a, 87, "w");
         interactive = false;
-        refuses(() => inputs.Release(a, null, default), "INPUT_CLEANUP_FAILED");
-        check(inputs.Get(a, "task").Length == 1, "A locked desktop leaves the failed release recorded");
+        refuses(() => inputs.Release(a, default), "INPUT_CLEANUP_FAILED");
+        check(inputs.Get(a).Length == 1, "A locked desktop leaves the failed release recorded");
         interactive = true;
         blocked = true;
-        refuses(() => inputs.Release(a, null, default), "INPUT_CLEANUP_FAILED");
-        check(inputs.Get(a, "task").Length == 1, "A refused release stays recorded for disconnect fallback");
+        refuses(() => inputs.Release(a, default), "INPUT_CLEANUP_FAILED");
+        check(inputs.Get(a).Length == 1, "A refused release stays recorded for disconnect fallback");
         blocked = false;
         // Another source releases W and presses D at the same receiver.
         Receive(new() { Type = 1, Data = new() { Keyboard = new() { Key = 87, Flags = 2 } } });
         Receive(new() { Type = 1, Data = new() { Keyboard = new() { Key = 68 } } });
-        described = JsonSerializer.SerializeToElement(inputs.Get(a, "task"), WireJson.Options);
+        described = JsonSerializer.SerializeToElement(inputs.Get(a), WireJson.Options);
         check(described.GetArrayLength() == 1 && described[0].GetProperty("key").GetString() == "w",
             "The reminder still reports only the helper's W down");
         var count = events.Count;
-        check(inputs.Release(a, null, default).Length == 1 && events.Skip(count).SequenceEqual(["87:up"]),
+        check(inputs.Release(a, default).Length == 1 && events.Skip(count).SequenceEqual(["87:up"]),
             "Disconnect retries the helper's W release and leaves D alone");
         check(!inputs.HasConnection(a), "Accepted release removes the connection's last hold");
     }

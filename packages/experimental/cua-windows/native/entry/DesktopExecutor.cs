@@ -86,20 +86,19 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             if (request.Method == "getActionSchema") return PatternActions.Schema(String(parameters, "action"));
             if (request.Method is "requestPermission" or "openPermissionSettings")
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
-            if (request.Method == "getHeldInputs") return inputs.Get(state.Connection, String(parameters, "taskId"));
+            if (request.Method == "getHeldInputs") return inputs.Get(state.Connection);
             if (request.Method == "releaseHeldInputs")
-                return inputs.Release(state.Connection, String(parameters, "taskId"), cancellation);
+                return inputs.Release(state.Connection, cancellation);
 
             if (request.Method is "sendKeyEvent" or "toggleMouse" && String(parameters, "direction") == "up")
             {
                 var window = WindowId(parameters) ?? throw new NativeFailure("INVALID_ARGUMENT", "Release through the original window");
-                var task = String(parameters, "taskId");
                 var recipient = String(parameters, "appHandle");
                 var before = Win32.GetForegroundWindow();
                 if (request.Method == "sendKeyEvent")
-                    Input.ReleaseKey(state.Connection, task, recipient, window, String(parameters, "key"), context);
+                    Input.ReleaseKey(state.Connection, recipient, window, String(parameters, "key"), context);
                 else
-                    Input.ReleaseButton(state.Connection, task, recipient, window, String(parameters, "mouseButton"), context);
+                    Input.ReleaseButton(state.Connection, recipient, window, String(parameters, "mouseButton"), context);
                 return ActionResult(before);
             }
             DesktopSession.RequireInteractive();
@@ -116,7 +115,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             var app = state.App(String(parameters, "appHandle"));
             var foreground = Win32.GetForegroundWindow();
             if (request.Method is "sendKeyEvent" or "toggleMouse" or "pressKey" or "typeText" or "paste" or "mouseMove" or "scroll" or "drag" or "click")
-                inputs.RequireOwner(state.Connection, OptionalString(parameters, "taskId"), app.Handle, WindowId(parameters) ?? 0);
+                inputs.RequireOwner(state.Connection, app.Handle, WindowId(parameters) ?? 0);
             switch (request.Method)
             {
                 case "launchApp":
@@ -163,7 +162,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "sendKeyEvent":
                 {
                     var target = Selected(app, parameters, context);
-                    var dispatched = Input.KeyDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "key"), context);
+                    var dispatched = Input.KeyDown(state.Connection, app, target, String(parameters, "key"), context);
                     return ActionResult(foreground, dispatched);
                 }
                 case "paste":
@@ -194,7 +193,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "toggleMouse":
                 {
                     var target = Selected(app, parameters, context);
-                    var dispatched = Input.ButtonDown(state.Connection, String(parameters, "taskId"), app, target, String(parameters, "mouseButton"), context);
+                    var dispatched = Input.ButtonDown(state.Connection, app, target, String(parameters, "mouseButton"), context);
                     return ActionResult(foreground, dispatched);
                 }
                 case "scroll":
@@ -304,7 +303,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         if (!inputs.HasConnection(state.Connection)) return;
         using var deadline = new CancellationTokenSource(graceMs);
         await queue.WaitAsync(deadline.Token);
-        try { inputs.Release(state.Connection, null, deadline.Token); }
+        try { inputs.Release(state.Connection, deadline.Token); }
         finally { queue.Release(); }
     }
 

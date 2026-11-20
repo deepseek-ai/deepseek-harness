@@ -71,14 +71,14 @@ import Testing
     let held = HeldInputs()
     let connection = UUID()
     let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, connection: connection, system: system)
-    try keyboard.keyDown("shift", app: "app", task: "task", useSystemInput: true, recipient: { target })
-    #expect(throws: NativeFailure.self) { try keyboard.keyUp("shift", app: "app", task: "task", recipientIfUnheld: { target }) }
+    try keyboard.keyDown("shift", app: "app", useSystemInput: true, recipient: { target })
+    #expect(throws: NativeFailure.self) { try keyboard.keyUp("shift", app: "app", recipientIfUnheld: { target }) }
     foreground = 99
-    #expect(try keyboard.keyUp("shift", app: "app", task: "task", useSystemInput: true, recipientIfUnheld: { target }))
+    #expect(try keyboard.keyUp("shift", app: "app", useSystemInput: true, recipientIfUnheld: { target }))
     foreground = target.pid
-    try keyboard.keyDown("w", app: "app", task: "task", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
     foreground = 99
-    try held.release(connection: connection, task: "task")
+    try held.release(connection: connection)
     #expect(events.map { $0.getIntegerValueField(.keyboardEventKeycode) } == [56, 56, 13, 13])
 }
 
@@ -97,12 +97,12 @@ import Testing
     var events: [CGEvent] = []
     let system = SystemKeyboardInput(post: { events.append($0) }, keyState: { _ in false }, currentFlags: { ambient }, foreground: { target.pid })
     let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, connection: connection, system: system)
-    try keyboard.keyDown("w", app: "app", task: "task", useSystemInput: true, recipient: { target })
-    try keyboard.keyDown("w", app: "app", task: "task", useSystemInput: true, recipient: { target })
-    #expect(try keyboard.keyUp("w", app: "app", task: "task", useSystemInput: true, recipientIfUnheld: { target }))
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
+    #expect(try keyboard.keyUp("w", app: "app", useSystemInput: true, recipientIfUnheld: { target }))
     #expect(events.allSatisfy { $0.flags.contains(.maskAlternate) })
-    try keyboard.keyDown("command", app: "app", task: "task", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("command", app: "app", useSystemInput: true, recipient: { target })
     ambient.formUnion(.maskCommand)
-    try held.release(connection: connection, task: "task")
+    try held.release(connection: connection)
     #expect(events.last?.flags == .maskAlternate)
 }

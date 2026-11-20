@@ -13,5 +13,5 @@ On macOS and Windows, explicit `sendKeyEvent('down')` and `toggleMouse('down')` 
 ## Migration
 
 1. Pair explicit downs with ups when input should stop. Read the reminder before continuing; no reminder is added when no input remains held.
-2. Upgrade the platform package and helper together. A custom `helperPath` must implement the task-owned `getHeldInputs` and `releaseHeldInputs` private operations.
+2. Upgrade the platform package and helper together. A custom `helperPath` must accept `getHeldInputs({})` and `releaseHeldInputs({})` on the same connection that dispatched the input.
 3. Verify that one successful program can hold a key, receive its reminder, and release it in a later program. When a program fails or is cancelled during execution, it waits for cleanup. If the program succeeds but a post-execute policy rejects the output, the tool returns the policy error and CUA finishes cleanup independently. If the model is thinking when DSH stops or fails, the Agent can finish before native release is confirmed. Subsequent CUA calls wait for the outcome. If cleanup cannot be confirmed, CUA disables further operations for that task; inspect the desktop manually before starting another task.
