@@ -30,6 +30,8 @@ In the 120-turn Chromium trace, 40 `Layout` events per direction ran inside scri
 
 At 2560px with 120 turns and a 720px rendered column, the required benchmark traces the full drag against built Web artifacts, including the press and release. Before the fix, widening restyled 18,239 / 18,428 = 0.98974, failing the 0.10 budget. A diagnostic trace attributed 14,911 restyled elements to a single reserve-room flip. After the fix, widening restyled 380 / 18,428 = 0.02062 and narrowing restyled 379 / 18,428 = 0.02057. The Sidebar moved 80px each way, the column stayed at 720px, and the probe switched in both directions. The budget allows 1,842 restyles: nearly five times either passing count, but less than 40 updates of 82 elements even without the single large recalculation.
 
+The fixed-column peak has an absolute budget of 512 elements in any one completed `UpdateLayoutTree` event. In a 120-turn local widening trace, 40 passes visited one element each, 40 visited three each, two visited four each, and one visited 212 (380 total). Restoring only inheritance of the dock probe's room value into the message flow in the same browser workload left the small buckets unchanged but replaced the 212-element peak with 14,911. The budget leaves more than twice the healthy peak without growing with the size of unrelated page content. A separate control with 600 total visits passes the cumulative budget either way: 200 passes of three pass the peak budget, one pass of 600 fails it.
+
 ## Alternatives considered
 
 - Budget frame gaps or style milliseconds. Rejected for the gate: they need browser-runner calibration that does not exist yet, and they also include the transcript reflow at each new column width, which a resize legitimately pays. They remain diagnostics.
