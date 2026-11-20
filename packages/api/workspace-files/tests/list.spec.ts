@@ -125,6 +125,13 @@ describe('workspaceFiles.list — gates', () => {
     }
   })
 
+  it('rejects the home directory, which the backend expands from `~` without any link in the workspace', async () => {
+    for (const path of ['~', '~/']) {
+      const failure = await failureOf(endpoint().list(harness.scope, path, signal()))
+      expect(failure).toEqual({ code: 'workspace-file/outside-workspace', details: { path } })
+    }
+  })
+
   it('rejects a directory link whose target is gone', async () => {
     await mkdir(join(workspace, 'vanishing'))
     await directoryLink(join(workspace, 'vanishing'), join(workspace, 'dangling'))

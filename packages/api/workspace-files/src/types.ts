@@ -113,7 +113,7 @@ export interface WorkspaceDirectoryListing {
   /**
    * The listed directory as a workspace path, relative to the workspace root
    * and empty for the root itself: the resolved directory when it is inside the
-   * root, and the requested path when a link on it resolves outside. A child's
+   * root, and its child names below the root when a link on its path resolves outside. A child's
    * path is this value joined with {@link WorkspaceDirectoryEntry.name} by `/`.
    */
   readonly path: string
@@ -214,7 +214,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'workspace-file/not-found': { readonly path: string }
     /**
      * The directory listing or watch path resolves outside the Session's
-     * workspace root and is not written as a descent from that root.
+     * workspace root, and the path the backend resolved does not descend from that root.
      */
     'workspace-file/outside-workspace': { readonly path: string }
     /** The requested page exceeds the configured byte cap; nothing is returned. */

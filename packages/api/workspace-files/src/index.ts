@@ -8,8 +8,9 @@
  * base for relative paths, with the header directory and then the sandbox
  * policy root as fallbacks, not a read-containment restriction. Directory
  * listings and directory watches are rooted at the workspace: the directory
- * resolves inside the root, or its path descends from the root by child names,
- * which admits a link in the workspace that resolves outside it. Searches stay
+ * resolves inside the root, or the path the filesystem backend resolved descends
+ * from the root by child names, which admits a link in the workspace that
+ * resolves outside it. Searches stay
  * inside the root and report workspace-relative paths. File-kind checks and
  * configured read caps apply to every preview; this service exposes no mutations.
  *
@@ -337,8 +338,9 @@ export class WorkspaceFiles extends TypertRemoteService {
 
   /**
    * List the direct children of one directory of the Session's workspace: one
-   * that resolves inside the workspace root, or one whose path descends from
-   * the root by child names through a link that resolves outside it.
+   * that resolves inside the workspace root, or one whose path, as the backend
+   * spells it before following links, descends from the root by child names
+   * through a link that resolves outside it.
    * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
    * @param path - workspace path, absolute or relative to the workspace root.
    * @param signal - caller cancellation.
@@ -493,8 +495,9 @@ export class WorkspaceFiles extends TypertRemoteService {
   /**
    * Resolve an inspected directory path and name it as a workspace path. A
    * target inside the workspace root is named by its resolved position; a
-   * target outside it is accepted only for a path written as a descent from the
-   * root, and is named as written.
+   * target outside it is accepted only when the backend's unresolved spelling
+   * of the path descends from its spelling of the root, and is named by that
+   * descent.
    */
   private async confine(
     root: FsTarget, workspaceRoot: string, path: string, signal: AbortSignal,
@@ -503,7 +506,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     if (this.ctx.fs.contains(root, target)) {
       return { target, workspacePath: workspacePathOf(this.ctx.fs.fileUrl(root), this.ctx.fs.fileUrl(target)) }
     }
-    const workspacePath = workspaceDescent(workspaceRoot, path)
+    const workspacePath = workspaceDescent(root.displayPath, target.displayPath)
     if (workspacePath === undefined) {
       throw new RemoteError('workspace-file/outside-workspace', `"${path}" is outside the workspace`, { path })
     }

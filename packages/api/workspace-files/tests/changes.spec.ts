@@ -436,6 +436,14 @@ describe('workspaceFiles.changes — backends and access', () => {
     expect(watch).not.toHaveBeenCalled()
   })
 
+  it('rejects the home directory, which the backend expands from `~` without any link in the workspace', async () => {
+    const stream = open(harness.endpoint(), '~')
+    await expect(failureOf(stream.next())).resolves.toEqual({
+      code: 'workspace-file/outside-workspace', details: { path: '~' },
+    })
+    expect(watch).not.toHaveBeenCalled()
+  })
+
   it('allows an outside file under the same read authority', async () => {
     const path = join(harness.outside, 'allowed.txt')
     await writeFile(path, 'outside contents')

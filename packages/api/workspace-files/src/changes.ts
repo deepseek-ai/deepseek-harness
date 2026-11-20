@@ -32,7 +32,7 @@ export class WorkspaceChangeFeed {
 
   /**
    * Open one target watch. A directory target resolves inside `workspaceRoot`,
-   * or its path descends from that root by child names.
+   * or the backend's unresolved spelling of its path descends from that root by child names.
    * @param workspaceRoot - the session's workspace root path.
    * @param path - target path, resolved relative to the workspace root; Host metadata determines its type.
    * @param signal - generation cancellation.
@@ -70,7 +70,7 @@ export class WorkspaceChangeFeed {
           if (aborted()) return undefined
           throw error
         })
-        if (info?.type === 'directory' && !this.ctx.fs.contains(root, target) && workspaceDescent(workspaceRoot, path) === undefined) {
+        if (info?.type === 'directory' && !this.ctx.fs.contains(root, target) && workspaceDescent(root.displayPath, target.displayPath) === undefined) {
           throw new RemoteError('workspace-file/outside-workspace', 'Directory is outside the workspace', { path })
         }
         return info

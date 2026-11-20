@@ -493,8 +493,9 @@ scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope 
 
 /**
  * List the direct children of one directory of the Session's workspace: one
- * that resolves inside the workspace root, or one whose path descends from
- * the root by child names through a link that resolves outside it.
+ * that resolves inside the workspace root, or one whose path, as the backend
+ * spells it before following links, descends from the root by child names
+ * through a link that resolves outside it.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
  * @param path - workspace path, absolute or relative to the workspace root.
  * @param signal - caller cancellation.

@@ -52,7 +52,7 @@ kind: "package-reference"
 
 ### 文件读取与目录检查
 
-每个带路径的操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为目录，因此被链接的目录与其目标一样可列举。该目录随后以两种方式之一通过工作区检查：它解析到工作区根内，或其路径由工作区根逐级经子项名称向下写出。第二种方式接受工作区内解析到工作区外的链接及其下的目录；路径按其写法判定，含 `..` 段的路径不符合，因为链接之后的 `..` 段指向链接目标的父目录。工作区根外的绝对路径和解析到工作区根外的 `..` 路径是 `workspace-file/outside-workspace`。列举结果以解析后的位置命名工作区根内的目录，以请求路径命名工作区根外的目录。`changes` 对被监听的目录执行同一检查。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。配置的分页、窗口、完整文件和目录列举上限仍然适用。文本页还拒绝无效 UTF-8 与 NUL 字节；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
+每个带路径的操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为目录，因此被链接的目录与其目标一样可列举。该目录随后以两种方式之一通过工作区检查：它解析到工作区根内，或文件系统后端所解析的路径由工作区根逐级经子项名称向下写出。第二种方式接受工作区内解析到工作区外的链接及其下的目录。它比较后端对根的写法与对目录的写法，两者都是绝对路径，已展开主目录前缀且未跟随链接，因此从不解析请求字符串本身。含 `..` 段的写法不符合，因为链接之后的 `..` 段指向链接目标的父目录。工作区根外的绝对路径、`~`，以及解析到工作区根外的 `..` 路径是 `workspace-file/outside-workspace`。列举结果以解析后的位置命名工作区根内的目录，以其在根下的子项名称命名工作区根外的目录。`changes` 对被监听的目录执行同一检查。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。配置的分页、窗口、完整文件和目录列举上限仍然适用。文本页还拒绝无效 UTF-8 与 NUL 字节；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
 
 <a id="search"></a>
 ### 搜索
@@ -118,7 +118,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | `WorkspaceFiles`：`workspaceFiles` 服务与 Remote 命名空间、`Config`、四道关、切页器、`read`、`readBytes`、`stat`、`list`、`search` |
 | [`src/search.ts`](src/search.ts) | rg 参数、文件祖先推导、排序与有界搜索 |
 | [`src/changes.ts`](src/changes.ts) | `WorkspaceChangeFeed`：目标监听、匹配的 `fs/observed` 通知与每代流各自的队列 |
-| [`src/descent.ts`](src/descent.ts) | `workspaceDescent`：目录路径是否由工作区根逐级经子项名称向下写出 |
+| [`src/descent.ts`](src/descent.ts) | `workspaceDescent`：后端对目录的写法是否等于根的写法后接子项名称 |
 | [`src/types.ts`](src/types.ts) | 线路类型与 `RemoteErrorDetailsMap` 错误码，以 `./types` 发布给 Client 包 |
 | [`src/client/index.ts`](src/client/index.ts)、[`provider.ts`](src/client/provider.ts)、[`change-feed.ts`](src/client/change-feed.ts) | 浏览器插件、文件元数据与按目标建立的变更流 |
 | [`src/client/types.ts`](src/client/types.ts)、[`remote.ts`](src/client/remote.ts) | 资源值、参数、Client 错误码与生成的 Remote 类型 |

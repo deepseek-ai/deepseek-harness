@@ -5376,7 +5376,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async list(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>',
-        description: 'List the direct children of one directory of the Session\'s workspace: one that resolves inside the workspace root, or one whose path descends from the root by child names through a link that resolves outside it.',
+        description: 'List the direct children of one directory of the Session\'s workspace: one that resolves inside the workspace root, or one whose path, as the backend spells it before following links, descends from the root by child names through a link that resolves outside it.',
         parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'path', description: 'workspace path, absolute or relative to the workspace root.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'the directory\'s children in the backend\'s stable name order, bounded by the entry cap.',
       },

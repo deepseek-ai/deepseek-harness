@@ -12,7 +12,7 @@ Status: implemented
 
 Document Preview 将资源观察与内容读取分开。[资源模型](2026-09-05-client-resource-model.zh.md)只按地址共享观察：`source(address)`、`pin(address, signal)` 和提供方的 `open(address, { signal })` 均不携带消费 Session。提供方返回 `AsyncIterable<RemoteResult<ResourceProtocolMap[P]>>`；`useResource` 只暴露 `{ status, value, failure }`。持有只控制观察的启停，不控制底层文件或 Session 的生灭。内容通过普通注入的 Preview 回调读取。
 
-[Workspace Files](../../../../packages/api/workspace-files/README.zh.md) 保留 Host 的行读取、字节窗口、有上限的全文读取和相对另一文件目录的有界读取。Client `file` 提供方只观察 `stat` 与 `changes`，`ResourceProtocolMap.file` 直接为 `WorkspaceFileStat`。Host 通过 Session 文件系统解析每条路径；文件读取继承该后端的读取权限，目录列举与变更观察仍限定于工作区。
+[Workspace Files](../../../../packages/api/workspace-files/README.zh.md) 保留 Host 的行读取、字节窗口、有上限的全文读取和相对另一文件目录的有界读取。Client `file` 提供方只观察 `stat` 与 `changes`，`ResourceProtocolMap.file` 直接为 `WorkspaceFileStat`。Host 通过 Session 文件系统解析每条路径；文件读取继承该后端的读取权限，目录列举与目录监听执行 Workspace Files README 所述的工作区检查。
 
 可读取的文件使用 `dsh-resource://file/session/<sessionId>/<path>`。路径可以相对工作区，也可以是绝对路径；编码后的绝对路径保留前导斜杠。`fileAddressFor` 始终生成这种 Session 地址。提供方与 Preview RPC 只从该地址取 Session，不取当前选择、首个持有者或 tab 所属 Session。不带 Session 的 `absolute` URI 无法读取；提供方报告 `workspace-file/unknown-workspace`。Session 授权是文件协议规则，不是额外的 Resource 身份。
 

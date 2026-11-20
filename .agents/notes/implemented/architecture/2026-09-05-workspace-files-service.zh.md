@@ -41,7 +41,7 @@ Web 客户端需要从一个未必在 Host 机器上的浏览器查看会话工�
 - **`read`** 返回一个行窗口 `WorkspaceFileText = WorkspaceFileStat & { offset, text, lines, eof }`；`lines` 计页内行数，使只含一个空行的页（`text: ''`、`lines: 1`）与越过文件末尾的页（`lines: 0`）可区分。`range.offset` 是 1 起算的首行，缺省 1；`range.limit` 是最多行数，缺省 `maxLines` 且不得超过。行以 `\n` 结束，末尾的 `\n` 终止最后一行而不是开启一空行；`text` 以 `\n` 连接本页各行且不带终止符；页含最后一行时 `eof` 为 true，越过末尾的 offset 返回 `eof` 为 true 的空页。切页器沿 `streamText` 前进，数过窗口前的行而不保留，把每个窗内片段先按 `maxBytes` 核准再缓冲，并在越过窗口的第一个字符处返回，因此任意大小的文件只花一页内存。页上的 `version` 与 `bytes` 来自流之前的那次 stat。
 - **`readBytes`** 返回原生字节、文件元数据、偏移量和 EOF。必填选项对象未传 `range` 时，在 `maxFileBytes` 上限内完整读取；传入时，在 `maxBytes` 上限内读取有界窗口。`range: {}` 使用零偏移和配置的窗口上限；窗口可读取超过完整文件上限的文件。[二进制传输决议](2026-09-17-workspace-file-binary-transfer.zh.md)负责 Remote 响应编码。
 - **`baseFile`** 独立于 `range` 选择目标解析方式：目标 `path` 必须为相对路径，从基准文件所在目录解析。Host 对两个文件执行普通文件检查，并保留后端读取权限。[Document Preview](2026-09-08-document-preview-operations.zh.md)负责内容加载与地址语义。
-- **`list`** 返回 `WorkspaceDirectoryListing { path, entries, truncated }`：被列目录相对根的工作区路径（根为空串）、其直接子项按后端的稳定名序以 `{ name, type, size? }` 给出，以及 `maxEntries` 是否截断了列表。`type` 为 `file`、`directory` 或 `other`；符号链接子项报告其指向目标的类型，悬空者为 `other`。列表报告为目录的子项经其解析目标打开，Windows 目录联接亦然，此时列表在该目标位于根内时以它命名，位于根外时以请求路径命名；[目录链接列举](../../../../packages/api/workspace-files/README.zh.md)拥有该规则。dotfile 照常列出，不做任何过滤。
+- **`list`** 返回 `WorkspaceDirectoryListing { path, entries, truncated }`：被列目录相对根的工作区路径（根为空串）、其直接子项按后端的稳定名序以 `{ name, type, size? }` 给出，以及 `maxEntries` 是否截断了列表。`type` 为 `file`、`directory` 或 `other`；符号链接子项报告其指向目标的类型，悬空者为 `other`。列表报告为目录的子项经其解析目标打开，Windows 目录联接亦然，此时列表在该目标位于根内时以它命名，位于根外时以其在根下的子项名称命名；[目录链接列举](../../../../packages/api/workspace-files/README.zh.md)拥有该规则。dotfile 照常列出，不做任何过滤。
 - **`changes`** 产出 `WorkspaceFileWatchFrame`：在观察队列注册且工作区根解析完成后先发 `{ kind: 'ready' }`，随后为 `{ kind: 'change', change }`。载荷 `WorkspaceFileChange` 对存在的文件为 `{ absolutePath, version }`，对消失的文件为 `{ absolutePath, absent: true }`。来源是工作区根内的 `fs/observed`，不监视操作系统。首次拉取后的观察都会排队，包括根解析期间的观察；取消或插件释放会结束该代流。
 
 ### 线路上的路径
@@ -55,7 +55,7 @@ Web 客户端需要从一个未必在 Host 机器上的浏览器查看会话工�
 `read`、`readBytes` 与 `stat` 共享普通文件检查，之后依赖文件系统后端的读取权限。`list` 共享路径检查，但还会执行工作区检查；`changes` 则对被监听的目录执行该检查。服务执行以下检查：
 
 1. **路径本身。** `lstat` 在跟随任何东西之前检查路径：缺失路径为 `not-found`；符号链接——不论指向哪里，包括指回工作区内——对文件方法为 `not-regular-file`（kind 为 `symlink`）。`list` 改为跟随末端链接并判定解析后的目标：目标经 stat 必须为目录，指向文件的链接或目标已消失的链接为 `not-directory`（kind 为 `symlink`）。空路径是 `gateway/bad-request`。
-2. **`list` 的工作区检查。** 目录解析为目标，在 `ctx.fs.contains(root, target)` 成立时通过，其中 `root` 是从所选 Session header 解析出的 `WorkspaceFileScope.workspaceRoot`；请求路径由该根逐级经子项名称向下写出且不含 `..` 段时也通过。根外绝对目录，或解析到根外的 `..` 路径，为 `outside-workspace`。`changes` 对被监听的目录执行同一检查。
+2. **`list` 的工作区检查。** 目录解析为目标，在 `ctx.fs.contains(root, target)` 成立时通过，其中 `root` 是从所选 Session header 解析出的 `WorkspaceFileScope.workspaceRoot`；后端所解析路径的未解析写法由该根逐级经子项名称向下写出且不含 `..` 段时也通过。根外绝对目录，或解析到根外的 `..` 路径，为 `outside-workspace`。`changes` 对被监听的目录执行同一检查。
 3. **上限。** 超过 `maxBytes` 的页或窗口，或 `read` 索要超过 `maxLines` 的行数，一律拒绝、绝不截短，因为悄悄截短的页读起来就像整页；超过 `maxEntries` 的列表被截断并如实报告。全文及关联文件读取超过 `maxFileBytes` 时被拒绝。
 4. **文本。** 仅限 `read`：到页末为止不是 UTF-8 的内容、后端 8 KiB 开头样本里的 NUL 字节，或页内任何位置的 NUL 字节，都是 `not-text`；页之后的字节不检查。
 
@@ -125,7 +125,7 @@ Client 导出向 `ctx.resources` 注册一个 `ResourceProvider<'file'>`，存�
 
 **在 `FileSystem` 基类里给 `readByteRange` 一个默认实现。** 基于 `readBytes` 的非抽象默认能免去测试替身一个方法，但只能靠把文件从头读到窗口末端来实现——正是上文否决的行为——或者传一个无界上限。改为抽象方法，由每个提供者与替身实现。
 
-**工作区操作使用字符串前缀包含判定。** 把解析后的路径字符串与根比较比 `fs.contains` 简单，但 `resolve` 会取 realpath，离开根的符号链接解析到根外路径，而对未解析拼法的前缀测试会放行；对已解析拼法的前缀测试也仍需后端对"同一文件"的定义。`list` 与 `changes` 由文件系统判定包含关系；按[工作区根外的目录链接](2026-11-20-workspace-directory-links-outside-root.zh.md)，由根向下写出的路径也可通过。
+**工作区操作使用字符串前缀包含判定。** 把解析后的路径字符串与根比较比 `fs.contains` 简单，但 `resolve` 会取 realpath，离开根的符号链接解析到根外路径，而对未解析拼法的前缀测试会放行；对已解析拼法的前缀测试也仍需后端对"同一文件"的定义。`list` 与 `changes` 由文件系统判定包含关系；按[工作区根外的目录链接](2026-11-20-workspace-directory-links-outside-root.zh.md)，后端未解析写法由根向下写出的路径也可通过。
 
 ## Consequences
 
