@@ -5,8 +5,6 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type { ContentBlock, MessageId, ToolCallId } from './types.ts'
 
-export { requestImageBudgetFailure, uniqueRequestImageRefs } from './request-images.ts'
-
 /** Provider/model identity and adapter-private replay data for an assistant message. */
 export interface AssistantProviderMetadata {
   /** Provider route that produced the message. */
@@ -348,3 +346,5 @@ export function extractTextContent(content: readonly ContentBlock[], options?: {
   if (options?.trim === true) texts = texts.map(text => text.trim()).filter(Boolean)
   return texts.join(options?.separator ?? '')
 }
+
+export { requestImageBudgetFailure, uniqueRequestImageRefs } from './request-images.ts'
