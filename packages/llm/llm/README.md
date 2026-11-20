@@ -124,7 +124,7 @@ The service is built on one separation: **the logical contract is provider-neutr
 | [`src/call-config.ts`](src/call-config.ts) | Call-config validation, adapter-default materialization, and request freezing |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | Provider-owned retry policy resolution (normal and always modes) |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` taxonomy and provider-neutral failure codes |
-| [`src/content.ts`](src/content.ts) | Shared file and image helpers: content walks, file projection, image offload accounting, and offloaded-image projection |
+| [`src/content.ts`](src/content.ts) | File and image handle text and request-history projections |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | Failure normalization into terminal finish chunks |
 
 ### Main flow
@@ -133,7 +133,7 @@ A request is validated against its exact model's capability — context window, 
 
 File detection reads current content, including tool-role result content, on every request without caching message identities or freeze state. The [archived file-scan decision](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
 
-`uniqueRequestImageRefs()` gives adapters one read per retained attachment. Each adapter supplies its model's dimensions and byte limits to `AttachmentStore.readImageRequest()`. Once the wire representation is selected, `assertRequestImagesFit()` counts the actual encoded size of every retained occurrence, including repeats.
+`uniqueRequestImageRefs()` from `@deepseek-ai/dsh-llm/message` returns one reference per retained attachment. Each adapter supplies its model's dimensions and byte limits to `AttachmentStore.readImageRequest()`. Once the wire representation is selected, `requestImageBudgetFailure()` counts the actual encoded size of every retained occurrence, including repeats.
 
 ### Invariants
 

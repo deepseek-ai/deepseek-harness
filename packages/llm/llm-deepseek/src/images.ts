@@ -1,7 +1,8 @@
 /** Deterministic Messages image preparation for Files references and bounded inline fallback. */
 
 import type { AttachmentStore, ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { assertRequestImagesFit, contentHasImage, LlmError, offloadedImageText, projectOffloadedImages, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, LlmError, offloadedImageText, projectOffloadedImages } from '@deepseek-ai/dsh-llm'
+import { requestImageBudgetFailure, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm/message'
 import type { ContentBlock, ImageAttachmentAccessResolver, RequestMessage } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekConnectionOptions as Connection } from './types.ts'
 import { resolveRequestImageTarget } from './request-pricing.ts'
@@ -10,14 +11,19 @@ import type { RequestFiles } from './request-files.ts'
 
 export { deepSeekImageRequestPricing as imagePricing } from './request-pricing.ts'
 
-function bounds(connection: Connection, representation: 'raw' | 'base64') {
-  return {
+/** Require durable offload under the budget of this Messages transport attempt. */
+function assertImagesFit(
+  messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>,
+  connection: Connection, representation: 'raw' | 'base64',
+): void {
+  const failure = requestImageBudgetFailure(messages, versions, {
     representation,
     maxBytes: representation === 'raw' ? connection.maxRequestFilesBytes : connection.maxInlineRequestImageBytes,
     maxImages: connection.maxImagesPerRequest,
     byteQuantum: representation === 'raw' ? connection.imageOffloadByteQuantum : connection.inlineImageOffloadByteQuantum,
     countQuantum: connection.imageOffloadCountQuantum,
-  }
+  }, `DeepSeek Messages ${representation} request images exceed the route budget`)
+  if (failure !== undefined) throw LlmError.fromFailure(failure)
 }
 
 function* imageRefs(blocks: readonly ContentBlock[]): Generator<ImageAttachmentRef> {
@@ -53,7 +59,7 @@ export async function prepareImages(
   for (const ref of refs) {
     versions.set(ref.attachmentId, await attachments.readImageRequest(ref, resolveRequestImageTarget(model, ref), signal))
   }
-  assertRequestImagesFit(messages, versions, bounds(connection, 'raw'), 'DeepSeek Messages raw request images exceed the route budget')
+  assertImagesFit(messages, versions, connection, 'raw')
   return { messages, versions }
 }
 
@@ -67,7 +73,7 @@ export function inlineImages(
   messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>,
   connection: Connection,
 ): readonly RequestMessage[] {
-  assertRequestImagesFit(messages, versions, bounds(connection, 'base64'), 'DeepSeek Messages base64 request images exceed the route budget')
+  assertImagesFit(messages, versions, connection, 'base64')
   return messages
 }
 

@@ -5,8 +5,8 @@
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
-import { assertRequestImagesFit, contentHasImage, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm'
+import { extractTextContent, requestImageBudgetFailure, uniqueRequestImageRefs } from '@deepseek-ai/dsh-llm/message'
+import { contentHasImage, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, RequestMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import type {
@@ -352,12 +352,13 @@ async function toPiContextWithImages(
     const version = await attachments.readImageRequest(ref, requestImageTarget(ref, requestImagePolicy), options.signal)
     return [ref.attachmentId, version] as const
   })))
-  assertRequestImagesFit(split.messages, requestImages, {
+  const failure = requestImageBudgetFailure(split.messages, requestImages, {
     representation: 'base64',
     ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
     ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
     ...imageOffloadCountQuantum === undefined ? {} : { countQuantum: imageOffloadCountQuantum },
   }, 'pi-ai request images exceed the route image budget')
+  if (failure !== undefined) throw LlmError.fromFailure(failure)
   const exactMessages = projectOffloadedImages(
     split.messages,
     ref => offloadedImageText(ref, resolveImageAccess(ref)),

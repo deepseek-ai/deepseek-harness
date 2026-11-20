@@ -124,7 +124,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 | [`src/call-config.ts`](src/call-config.ts) | 调用配置校验、适配器默认值填入与请求冻结 |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | 提供方自有重试策略解析（normal 与 always 模式） |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` 分类体系与提供方无关失败 code |
-| [`src/content.ts`](src/content.ts) | 共享文件与图片辅助函数：内容遍历、文件投影、图片卸载计数与已卸载图片投影 |
+| [`src/content.ts`](src/content.ts) | 生成文件和图片的句柄文本，并转换请求历史 |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | 把失败归一化为终止 finish 分片 |
 
 ### 主流程
@@ -133,7 +133,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 文件检测在每次请求时读取当前内容，包括 tool-role 结果内容，不缓存消息身份或冻结状态。[已归档的文件扫描决策](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md)记录了实测遍历成本。
 
-适配器通过 `uniqueRequestImageRefs()` 取得保留的附件，每个附件只读一次。适配器将模型要求的宽高和字节限制传给 `AttachmentStore.readImageRequest()`。确定发送方式后，`assertRequestImagesFit()` 按实际编码大小检查每次出现的图片，重复引用也分别计入预算。
+适配器通过 `@deepseek-ai/dsh-llm/message` 的 `uniqueRequestImageRefs()` 取得保留的附件，每个附件只读一次。适配器将模型要求的宽高和字节限制传给 `AttachmentStore.readImageRequest()`。确定发送方式后，`requestImageBudgetFailure()` 按实际编码大小检查每次出现的图片，重复引用也分别计入预算。
 
 ### 不变式
 
