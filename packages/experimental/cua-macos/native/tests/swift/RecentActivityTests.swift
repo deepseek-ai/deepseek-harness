@@ -88,7 +88,7 @@ private let second: UInt64 = 1_000_000_000
 @Test @MainActor func externalInputNeedsAWindowAndANonHelperSource() throws {
     let owner = UUID()
     var time = second
-    let history = RecentActivity(now: { time })
+    let history = RecentActivity(now: { time }, uptime: { time })
     let target = ActivityTarget(process: try NativePlatform.identity(getpid()), windowID: 10)
     history.connect(owner, lookbackMs: 60_000)
     let observed = history.observe(target, handle: "app", owner: owner)
@@ -110,4 +110,18 @@ private let second: UInt64 = 1_000_000_000
     #expect(history.take(owner: owner, handle: "app", observations: ["10": observed]) == [
         .object(["source": .string("external-input"), "windowId": .string("10"), "ageSeconds": .number(0)]),
     ])
+}
+
+@Test @MainActor func elapsedTimeIncludesSleepAfterExternalInput() {
+    var awake = second
+    var continuous = 5 * second
+    let history = RecentActivity(now: { continuous }, uptime: { awake })
+    let owner = UUID()
+    history.connect(owner, lookbackMs: 60_000)
+    let observed = history.observe(target, handle: "app", owner: owner)
+    awake += second
+    continuous += second
+    history.recordExternal(target, eventUptime: awake)
+    continuous += 3_600 * second
+    #expect(history.take(owner: owner, handle: "app", observations: ["10": observed]).isEmpty)
 }

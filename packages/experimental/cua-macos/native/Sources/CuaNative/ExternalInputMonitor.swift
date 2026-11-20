@@ -46,8 +46,7 @@ import Foundation
 
     func receive(_ type: CGEventType, event: CGEvent) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            // A later window use retries registration.
-            stop()
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return
         }
         guard event.getIntegerValueField(.eventSourceUnixProcessID) != Int64(getpid()) else { return }
@@ -57,7 +56,7 @@ import Foundation
         guard [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel].contains(type) else { return }
         let rawWindow = event.getIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent)
         guard let id = UInt32(exactly: rawWindow), id > 0, ownerOfWindow(id) == pid else { return }
-        activity.record(ActivityTarget(process: process, windowID: id), owner: nil, at: event.timestamp)
+        activity.recordExternal(ActivityTarget(process: process, windowID: id), eventUptime: event.timestamp)
     }
 
     nonisolated static func windowOwner(_ id: UInt32) -> Int32? {

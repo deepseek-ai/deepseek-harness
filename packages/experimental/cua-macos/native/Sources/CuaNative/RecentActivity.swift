@@ -1,6 +1,6 @@
 // Window interests and input metadata belong to the observing helper connection for one turn.
 import Foundation
-import Dispatch
+import Darwin
 
 struct ActivityTarget: Hashable, Sendable {
     let process: ProcessIdentity
@@ -22,8 +22,20 @@ struct ActivityTarget: Hashable, Sendable {
     }
     private var clients: [UUID: Client] = [:]
     private let now: () -> UInt64
+    private let uptime: () -> UInt64
 
-    init(now: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) { self.now = now }
+    init(now: @escaping () -> UInt64 = { clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW) },
+         uptime: @escaping () -> UInt64 = { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) }) {
+        self.now = now
+        self.uptime = uptime
+    }
+    /// Quartz timestamps exclude sleep. Preserve their delivery delay on the clock used for expiry.
+    func recordExternal(_ target: ActivityTarget, eventUptime: UInt64) {
+        let awake = uptime()
+        let current = now()
+        guard awake >= eventUptime, current >= awake - eventUptime else { return }
+        record(target, owner: nil, at: current - (awake - eventUptime))
+    }
     func connect(_ owner: UUID, lookbackMs: Int) { clients[owner] = Client(lookback: UInt64(lookbackMs) * 1_000_000) }
     var hasInterests: Bool { clients.values.contains { $0.windows.values.contains(where: \.armed) } }
     func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner) }
