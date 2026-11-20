@@ -143,7 +143,7 @@ describe('Sidebar chat registration', () => {
     ])
     // A dropped root Session opens in the on-screen Session's Sidebar column.
     const drop = registrations[2]?.options.inject as () => {
-      hooks: { sessionDrag: { getSnapshot: () => SessionId | undefined } }
+      hooks: { sessionDrag: { getSnapshot: () => { sessionId: SessionId; inset: number } | undefined } }
       openAside: (sessionId: SessionId) => void
     }
     drop().openAside(CHILD)
@@ -159,7 +159,7 @@ describe('Sidebar chat registration', () => {
       document.body.dispatchEvent(event)
     }
     dragStart()
-    expect(drop().hooks.sessionDrag.getSnapshot()).toBe(CHILD)
+    expect(drop().hooks.sessionDrag.getSnapshot()).toEqual({ sessionId: CHILD, inset: 0 })
     document.body.dispatchEvent(new Event('dragend', { bubbles: true }))
     for (const dispose of disposers) dispose()
     dragStart()

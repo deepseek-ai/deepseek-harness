@@ -11,11 +11,18 @@ import css from './SessionDropZone.module.css'
 /** Drag data type the Session list sets to a dragged row's Session id. */
 export const SESSION_DRAG_TYPE: SessionDragType = 'application/x-dsh-session'
 
+/** A Session row in flight and where the drop target starts. */
+export interface SessionDrag {
+  readonly sessionId: SessionId
+  /** Right edge of the navigation column the row left, in px; the target covers the window to its right. */
+  readonly inset: number
+}
+
 /** Session drag tracking and the open operation supplied by the plugin. */
 export interface SessionDropZoneInjected {
   readonly hooks: {
     /** Session dragged from the list that the on-screen Session's Sidebar can open; undefined otherwise. */
-    readonly sessionDrag: HostObservable<SessionId | undefined>
+    readonly sessionDrag: HostObservable<SessionDrag | undefined>
   }
   /** Open the Session's Conversation in the on-screen Session's right Sidebar. */
   readonly openAside: (sessionId: SessionId) => void
@@ -31,13 +38,17 @@ export type SessionDropZoneProps =
  * @returns the drop target, or nothing outside a Session drag.
  */
 export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZoneProps) {
-  const sessionId = useSessionDrag(value => value)
-  return sessionId === undefined
-    ? null
-    : <DropTarget key={sessionId} label={t('open.sidebar')} onDrop={() => { openAside(sessionId) }} />
+  const drag = useSessionDrag(value => value)
+  if (drag === undefined) return null
+  const { sessionId, inset } = drag
+  return <DropTarget key={sessionId} inset={inset} label={t('open.sidebar')} onDrop={() => { openAside(sessionId) }} />
 }
 
-function DropTarget({ label, onDrop }: { readonly label: string; readonly onDrop: () => void }) {
+function DropTarget({ inset, label, onDrop }: {
+  readonly inset: number
+  readonly label: string
+  readonly onDrop: () => void
+}) {
   const [over, setOver] = useState(false)
   // Stop propagation so document-level handlers of the list's reorder drag
   // keep neither the drop nor their `move` effect.
@@ -51,6 +62,7 @@ function DropTarget({ label, onDrop }: { readonly label: string; readonly onDrop
   return createPortal(
     <div
       className={css.zone}
+      style={{ left: inset }}
       data-session-drop-zone=""
       data-active={over || undefined}
       onDragEnter={accept}

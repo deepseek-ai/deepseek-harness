@@ -13,7 +13,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { NS } from '../locales.ts'
 import css from './SidebarChat.module.css'
-import { SESSION_DRAG_TYPE, SessionDropZone, type SessionDropZoneInjected } from './SessionDropZone.tsx'
+import { SESSION_DRAG_TYPE, SessionDropZone, type SessionDrag, type SessionDropZoneInjected } from './SessionDropZone.tsx'
 
 /** Stable implementation identity for the Sidebar tab body. */
 export const SUBAGENT_CHAT_ID = '@deepseek-ai/dsh-client-ui-subagent'
@@ -127,18 +127,30 @@ function subagentChatResourceProvider(sessions: ISessions): ResourceProvider<'su
 }
 
 /**
+ * Find the frame column holding a dragged row: the frame's child that is a sibling of its overlay layer.
+ * @param node - drag source.
+ * @returns the left navigation column, or undefined outside the frame.
+ */
+function frameColumnOf(node: Element): Element | undefined {
+  for (let element = node, parent = node.parentElement; parent !== null; element = parent, parent = parent.parentElement) {
+    if (parent.querySelector(':scope > [data-shell-overlay]') !== null) return element
+  }
+  return undefined
+}
+
+/**
  * Track Session rows dragged from the Session list while another Session is on screen.
  * @param doc - document whose drag events carry the rows' data.
  * @param mounted - reads the on-screen Session.
- * @returns the dragged Session observable and its listener disposer.
+ * @returns the dragged Session with the right edge of the column it left, in px, and the listener disposer.
  */
 export function trackSessionDrags(doc: Document, mounted: () => SessionId | undefined): {
-  readonly source: HostObservable<SessionId | undefined>
+  readonly source: HostObservable<SessionDrag | undefined>
   readonly dispose: () => void
 } {
-  let current: SessionId | undefined
+  let current: SessionDrag | undefined
   const listeners = new Set<() => void>()
-  const publish = (next: SessionId | undefined): void => {
+  const publish = (next: SessionDrag | undefined): void => {
     if (next === current) return
     current = next
     for (const listener of listeners) listener()
@@ -147,7 +159,12 @@ export function trackSessionDrags(doc: Document, mounted: () => SessionId | unde
   const start = (event: DragEvent): void => {
     const id = event.dataTransfer?.getData(SESSION_DRAG_TYPE) as SessionId | undefined
     const onScreen = mounted()
-    publish(id !== undefined && id !== '' && onScreen !== undefined && onScreen !== id ? id : undefined)
+    if (id === undefined || id === '' || onScreen === undefined || onScreen === id) {
+      publish(undefined)
+      return
+    }
+    const column = event.target instanceof Element ? frameColumnOf(event.target) : undefined
+    publish({ sessionId: id, inset: Math.round(column?.getBoundingClientRect().right ?? 0) })
   }
   const end = (): void => { publish(undefined) }
   // A source row unmounted mid-drag fires dragend on a detached node; the first

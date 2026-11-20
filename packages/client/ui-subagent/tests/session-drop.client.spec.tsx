@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { trackSessionDrags } from '../src/client/sidebar-chat/index.tsx'
-import { SessionDropZone, type SessionDropZoneProps } from '../src/client/sidebar-chat/SessionDropZone.tsx'
+import { SessionDropZone, type SessionDrag, type SessionDropZoneProps } from '../src/client/sidebar-chat/SessionDropZone.tsx'
 
 const MAIN = 'main' as SessionId
 const OTHER = 'other' as SessionId
@@ -14,11 +14,13 @@ afterEach(() => {
 })
 
 /** jsdom lacks DragEvent; attach the transfer a browser would supply. */
-function dispatchDrag(type: string, data: Record<string, string> = {}): void {
+function dispatchDrag(type: string, data: Record<string, string> = {}, target: EventTarget = document.body): void {
   const event = new Event(type, { bubbles: true })
   Object.defineProperty(event, 'dataTransfer', { value: { getData: (format: string) => data[format] ?? '' } })
-  document.body.dispatchEvent(event)
+  target.dispatchEvent(event)
 }
+
+const outside = { sessionId: OTHER, inset: 0 }
 
 describe('Session drag tracking', () => {
   it('publishes a dragged list Session that another on-screen Session can open', () => {
@@ -29,7 +31,7 @@ describe('Session drag tracking', () => {
     expect(drags.source.getSnapshot()).toBeUndefined()
 
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER })
-    expect(drags.source.getSnapshot()).toBe(OTHER)
+    expect(drags.source.getSnapshot()).toEqual(outside)
     dispatchDrag('dragend')
     expect(drags.source.getSnapshot()).toBeUndefined()
     expect(listener).toHaveBeenCalledTimes(2)
@@ -41,7 +43,7 @@ describe('Session drag tracking', () => {
     // A row unmounted mid-drag never delivers dragend; the next button-free mouse move clears the drag.
     dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER })
     document.body.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, buttons: 1 }))
-    expect(drags.source.getSnapshot()).toBe(OTHER)
+    expect(drags.source.getSnapshot()).toEqual(outside)
     document.body.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, buttons: 0 }))
     expect(drags.source.getSnapshot()).toBeUndefined()
 
@@ -59,7 +61,28 @@ describe('Session drag tracking', () => {
     expect(listener).toHaveBeenCalledTimes(6)
     drags.dispose()
     dispatchDrag('dragend')
-    expect(drags.source.getSnapshot()).toBe(OTHER)
+    expect(drags.source.getSnapshot()).toEqual(outside)
+  })
+
+  it('starts the target at the right edge of the frame column the row left', () => {
+    const frame = document.createElement('div')
+    const column = document.createElement('nav')
+    const row = document.createElement('div')
+    const overlay = document.createElement('div')
+    overlay.setAttribute('data-shell-overlay', '')
+    column.append(row)
+    frame.append(column, overlay)
+    document.body.append(frame)
+    column.getBoundingClientRect = () => ({ right: 279.6 }) as DOMRect
+    const drags = trackSessionDrags(document, () => MAIN)
+    dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, row)
+    expect(drags.source.getSnapshot()).toEqual({ sessionId: OTHER, inset: 280 })
+    // A drag whose target is not an element starts at the window edge.
+    dispatchDrag('dragend')
+    dispatchDrag('dragstart', { 'application/x-dsh-session': OTHER }, document)
+    expect(drags.source.getSnapshot()).toEqual(outside)
+    drags.dispose()
+    frame.remove()
   })
 })
 
@@ -67,9 +90,12 @@ describe('Session drop zone', () => {
   function mount(initial: SessionId | undefined) {
     let current = initial
     const openAside = vi.fn()
-    const source: HostObservable<SessionId | undefined> = { getSnapshot: () => current, subscribe: () => () => {} }
+    const source: HostObservable<SessionDrag | undefined> = {
+      getSnapshot: () => current === undefined ? undefined : { sessionId: current, inset: 280 },
+      subscribe: () => () => {},
+    }
     const props = {
-      useSessionDrag: <T,>(select: (value: SessionId | undefined) => T) => select(source.getSnapshot()),
+      useSessionDrag: <T,>(select: (value: SessionDrag | undefined) => T) => select(source.getSnapshot()),
       openAside,
       t: (key: string) => key === 'open.sidebar' ? 'Open in sidebar' : key,
     } as Partial<SessionDropZoneProps> as SessionDropZoneProps
@@ -100,6 +126,7 @@ describe('Session drop zone', () => {
     // The zone portals to the body so it stacks above the narrow-window drawer mask.
     const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
     expect(zone.parentElement).toBe(document.body)
+    expect(zone.style.left).toBe('280px')
     expect(view.container.innerHTML).toBe('')
     expect(zone.hasAttribute('data-active')).toBe(false)
 
