@@ -171,7 +171,7 @@ private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused:
     let children = [[3], [4]]
     _ = try r.read(toolbars(children, focused: 3, field: 4))
     let changed = try r.read(toolbars(children, focused: 4, field: 4))
-    #expect(changed.tree == "There has been no change in the accessibility tree.\nThe focused UI element is 4 AXTextField valueWritable=unknown \"Save\"")
+    #expect(changed.tree == "There has been no change in the accessibility tree.\nThe focused UI element is 4 AXTextField valueWritable=unknown \"Save\" value=unavailable")
     let selected = try r.read(toolbars(children, focused: 4, selectedText: "Selection", field: 4))
     #expect(selected.tree == "There has been no change in the accessibility tree.\nSelected text: \"Selection\"")
 }
