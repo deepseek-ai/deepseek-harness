@@ -5,6 +5,7 @@
     - id: cua-run-code-fixture
       name: '../cua-run-code/provider.mjs'
       config:
+        confirmReleaseAtTurnEnd: true
         allowedApps:
           - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             name: Fixture

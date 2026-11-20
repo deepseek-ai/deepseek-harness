@@ -408,37 +408,107 @@ it('reports the Windows keyboard window and desktop input mode and supports a la
 
 it.each([
   ['run_code', 'confirmed'], ['cua_run_code', 'confirmed'], ['cua_run_code', 'refused'],
-] as const)('settles %s post-policy failure after native cleanup (%s)', async (tool, cleanup) => {
-  const code = tool === 'run_code'
-    ? `await tools.cua_run_code({ code: ${JSON.stringify(holdProgram)}, description: "Hold W" })` : holdProgram
-  const f = await setup([code], 'macos', undefined, true, true)
+] as const)('publishes the %s policy error while subsequent CUA waits for cleanup (%s)', async (tool, cleanup) => {
+  const program = (code: string) => tool === 'run_code'
+    ? `await tools.cua_run_code({ code: ${JSON.stringify(code)}, description: "Use the fixture" })` : code
+  const f = await setup([program(holdProgram)], 'macos', undefined, true, true)
   if (tool === 'run_code') await f.agent.ctx.plugin(PtcToolExecutor)
   f.model.toolName = tool
-  f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === tool
+  const removePolicy = f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === tool
     ? { kind: 'block', feedback: [{ type: 'text', text: 'Policy rejected output' }], info: { name: 'HookError', code: 'HOOK_BLOCKED' } }
     : next(), { prepend: true })
+  const calls = vi.spyOn(NativeClient.prototype, 'request')
+  onTestFinished(() => { calls.mockRestore() })
+  let stoppedAtResult: boolean | undefined
+  f.ctx.on('tools/result', (exec, result) => {
+    if (exec.name === tool && result.isError) {
+      stoppedAtResult = calls.mock.calls.find(([name]) => name === 'sendKeyEvent')?.[2].aborted
+    }
+  })
+  const reported: unknown[] = []
+  f.ctx.on('agent/error', ({ error }) => { reported.push(error) })
+  const notice = nextReleaseNotice(f)
   const release = f.native.controlNext('releaseHeldInputs')
   const running = f.run()
   await release.entered
+  let following: Promise<void>
+  const before = f.native.calls.length
   try {
+    await running
+    expect(stoppedAtResult).toBe(true)
     expect(f.native.held.map(input => input.key)).toEqual(['w'])
-    expect(f.agent.session.snapshotEvents().some(event => event.type === 'tool/result')).toBe(false)
+    const result = f.agent.session.snapshotEvents().find(event => event.type === 'tool/result')
+    expect(result?.data).toMatchObject({ error: { code: 'HOOK_BLOCKED' }, message: {
+      isError: true, content: [{ type: 'text', text: 'Policy rejected output' }],
+    } })
+    expect(JSON.stringify(f.model.requests[1]?.messages)).not.toContain('CUA inputs were released')
+    expect(reminders(f.agent)).toEqual([])
+    removePolicy()
+    const admitted: PromiseWithResolvers<void> = Promise.withResolvers()
+    f.ctx.on('tools/execute', (exec, next) => {
+      const result = next()
+      if (exec.name === 'cua') admitted.resolve()
+      return result
+    })
+    f.model.restart([program('await app.sendKeyEvent("d", "down")')])
+    following = f.run()
+    await admitted.promise
+    expect(f.native.calls.length).toBe(before)
   } finally {
     release.reply(cleanup === 'refused' ? { code: 'INPUT_CLEANUP_FAILED', message: 'Fixture refused release' } : undefined)
-    await running
   }
-  const result = f.agent.session.snapshotEvents().find(event => event.type === 'tool/result')
-  expect(result?.data).toMatchObject({ error: { code: 'HOOK_BLOCKED' }, message: { isError: true } })
-  const shown = JSON.stringify(f.model.requests[1]?.messages)
-  expect(shown).toContain('Policy rejected output')
-  expect(shown).not.toContain('CUA inputs are still held:')
+  await following
   if (cleanup === 'confirmed') {
-    expect(f.native.events).toEqual(['w:down', 'w:up'])
-    expect(shown).toContain('CUA inputs were released during cleanup')
+    await notice
+    expect(f.native.events).toEqual(['w:down', 'w:up', 'd:down'])
+    expect(JSON.stringify(f.model.requests.at(-1)?.messages)).toContain('CUA inputs were released during cleanup')
   } else {
-    expect(shown).toContain('Fixture refused release')
-    expect(shown).not.toContain('CUA inputs were released during cleanup')
+    expect(reported).toEqual([expect.objectContaining({ code: 'INPUT_CLEANUP_FAILED' })])
+    expect(f.native.calls.length).toBe(before)
+    expect(JSON.stringify(f.agent.session.deriveMessages())).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    expect(f.agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+      && event.data.inserted.some(message => message.source.kind === 'cua-inputs-released'))).toBe(false)
   }
+})
+
+it('cleans up a rejected nested program even when its enclosing run_code handles the failure', async () => {
+  const f = await setup([`try { await tools.cua_run_code({ code: ${JSON.stringify(holdProgram)}, description: "Hold W" }) } catch { inspect("handled") }`],
+    'macos', undefined, true, true)
+  await f.agent.ctx.plugin(PtcToolExecutor)
+  f.model.toolName = 'run_code'
+  f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === 'cua_run_code' && exec.parent
+    ? { kind: 'block', feedback: [{ type: 'text', text: 'Nested policy refusal' }] } : next())
+  await f.run()
+  expect(f.native.events).toEqual(['w:down', 'w:up'])
+  expect(f.agent.session.snapshotEvents().find(event => event.type === 'tool/result')?.data.message.isError).toBe(false)
+})
+
+it('a late policy refusal closes only the owner captured by that execution', async () => {
+  const f = await setup([holdProgram], 'macos', undefined, true, true)
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+  f.ctx.on('tools/post-execute', async (exec, _result, next) => {
+    if (exec.callId !== 'cua-program-1') return next()
+    entered.resolve()
+    await finish.promise
+    return { kind: 'block', feedback: [{ type: 'text', text: 'Late refusal' }] }
+  })
+  const running = f.run()
+  await entered.promise
+  const execute = (id: string, code: string) => f.ctx.agents.withInitiator(f.agent, () => f.ctx.tools.execute({
+    agent: f.agent, signal: new AbortController().signal,
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>(id), name: 'cua_run_code', arguments: JSON.stringify({ code, description: id }) }],
+  }))
+  try {
+    await f.ctx.cuaPrograms.releaseInputs(f.agent)
+    expect((await execute('hold-d', 'await app.sendKeyEvent("d", "down")')).results[0]?.result.isError).toBe(false)
+    f.ctx.on('tools/pre-execute', async (exec, next) => exec.callId === 'denied'
+      ? { kind: 'deny', reason: 'Not admitted' } : next())
+    expect((await execute('denied', 'inspect("unused")')).results[0]?.result.isError).toBe(true)
+  } finally { finish.resolve(); await running }
+  expect((await execute('release-d', 'await app.sendKeyEvent("d", "up")')).results[0]?.result.isError).toBe(false)
+  expect(f.native.events).toEqual(['w:down', 'w:up', 'd:down', 'd:up'])
+  expect(f.native.calls.filter(call => call.method === 'releaseHeldInputs')).toHaveLength(1)
 })
 
 it('releases keyboard and mouse in mixed reverse order on program failure', async () => {
@@ -621,9 +691,13 @@ it.each(['closes', 'fails to close'] as const)('waits for Agent release before t
   else expect(report).not.toHaveBeenCalled()
 })
 
-it.each(['confirmed', 'refused'] as const)('joins background cleanup on concurrent provider disposal (%s)', async (outcome) => {
+it.each([
+  ['model error', 'confirmed'], ['model error', 'refused'], ['post-policy error', 'confirmed'], ['post-policy error', 'refused'],
+] as const)('joins background cleanup on concurrent provider disposal (%s, %s)', async (ending, outcome) => {
   const f = await setup([holdProgram], 'macos', undefined, true, true)
-  f.model.beforeStream = async (index) => { if (index === 1) throw new Error('Model failed') }
+  if (ending === 'model error') f.model.beforeStream = async (index) => { if (index === 1) throw new Error('Model failed') }
+  else f.ctx.on('tools/post-execute', async (exec, _result, next) => exec.name === 'cua_run_code'
+    ? { kind: 'block', feedback: [{ type: 'text', text: 'Policy rejected output' }] } : next())
   const errors: unknown[] = []
   f.ctx.on('agent/error', ({ error }) => { errors.push(error) })
   const registered = vi.spyOn(NativeClient.prototype, 'registerCleanup')

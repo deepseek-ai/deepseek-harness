@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { RUN_CODE_NAME, type ToolDispatchExecution } from '@deepseek-ai/dsh-tools'
+import { RUN_CODE_NAME, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
 import { NativeError, type NativeClient } from './native-client.ts'
 
@@ -55,10 +55,6 @@ class InputOwner {
     return renderInputs(inputs, 'held')
   }
 
-  registerFailureCleanup(execution: ToolDispatchExecution): void {
-    if (this.client) execution.onFailure(async () => { await this.close() })
-  }
-
   close(canRequest = true): Promise<z.infer<typeof heldInputs>> {
     this.controller.abort()
     return this.closing ??= Promise.resolve().then(async () => {
@@ -87,6 +83,8 @@ class InputOwner {
 /** One provider's held input owners; the helper remains the authority for which inputs are pressed. */
 export class CuaHeldInputs {
   private readonly owners = new WeakMap<Agent, InputOwner>()
+  // Post-execute policy may fail after a newer owner has acquired input for the same Agent.
+  private readonly programOwners = new WeakMap<ToolExecution, InputOwner>()
   private readonly failures = new WeakMap<Agent, unknown>()
   private readonly turnSignals = new Map<Agent, { signal: AbortSignal; remove: () => void }>()
 
@@ -136,8 +134,7 @@ export class CuaHeldInputs {
    */
   async release(agent: Agent): Promise<void> { await this.owners.get(agent)?.close() }
 
-  private stop(agent: Agent): void {
-    const owner = this.owners.get(agent)
+  private stop(owner: InputOwner | undefined): void {
     if (!owner) return
     void owner.close().catch(() => undefined) // close records and reports the failure; waiters join the same promise.
   }
@@ -152,7 +149,7 @@ export class CuaHeldInputs {
       if (!execution.agent || (execution.name !== RUN_CODE_NAME && execution.name !== 'cua_run_code')) return next()
       const agent = execution.agent
       const signal = execution.signal
-      const abort = (): void => { this.stop(agent) }
+      const abort = (): void => { this.stop(this.owners.get(agent)) }
       signal.addEventListener('abort', abort, { once: true })
       const releaseAfter = async (message: string): Promise<void> => {
         signal.removeEventListener('abort', abort)
@@ -181,7 +178,7 @@ export class CuaHeldInputs {
             // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can arrive while the native state query awaits.
             if (signal.aborted) { await releaseAfter('Program cancelled'); return result }
           }
-          owner?.registerFailureCleanup(execution)
+          if (owner) this.programOwners.set(execution, owner)
           if (text && !owner?.closing) return { ...result, additionalContexts: [...result.additionalContexts ?? [],
             createUserMessage({ content: [{ type: 'text', text }],
               source: { kind: 'cua-held-inputs', form: 'notice', summary: 'CUA inputs remain held' } }),
@@ -193,11 +190,16 @@ export class CuaHeldInputs {
         await this.owners.get(agent)?.settled()
       }
     })
+    yield ctx.on('tools/result', (execution, result) => {
+      const owner = this.programOwners.get(execution)
+      this.programOwners.delete(execution)
+      if (result.isError) this.stop(owner)
+    })
     yield ctx.on('agent/pre-step', (event, next) => {
       const previous = this.turnSignals.get(event.agent)
       if (previous?.signal !== event.signal) {
         previous?.remove()
-        const abort = (): void => { this.stop(event.agent) }
+        const abort = (): void => { this.stop(this.owners.get(event.agent)) }
         event.signal.addEventListener('abort', abort, { once: true })
         this.turnSignals.set(event.agent, { signal: event.signal, remove: () => { event.signal.removeEventListener('abort', abort) } })
       }
@@ -213,7 +215,7 @@ export class CuaHeldInputs {
       if (agent?.session !== session) return
       this.turnSignals.get(agent)?.remove()
       this.turnSignals.delete(agent)
-      if (event.data.reason.kind === 'aborted' || event.data.reason.kind === 'error') this.stop(agent)
+      if (event.data.reason.kind === 'aborted' || event.data.reason.kind === 'error') this.stop(this.owners.get(agent))
     })
     yield () => { for (const value of this.turnSignals.values()) value.remove(); this.turnSignals.clear() }
   }

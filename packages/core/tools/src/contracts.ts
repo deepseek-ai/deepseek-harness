@@ -232,13 +232,6 @@ export interface ToolExecution extends ToolExecutionInput {
 export interface ToolDispatchExecution extends Omit<ToolExecution, 'signal'> {
   /** Cancellation signal visible to the next wrapper or tool body. */
   signal: AbortSignal
-  /**
-   * Register cleanup during dispatch for this invocation. If the final result is an error, the executor
-   * awaits every registered cleanup in order before publishing it, including failures from post-execute policy.
-   * Cleanup failures add feedback to the original error. Successful calls discard the registrations.
-   * @param cleanup - Release this call's resources using the resource owner's cleanup deadline.
-   */
-  onFailure(cleanup: () => void | Promise<void>): void
 }
 
 /**

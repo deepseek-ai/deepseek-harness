@@ -11202,7 +11202,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolDispatchExecution',
-    declaration: 'export interface ToolDispatchExecution extends Omit<ToolExecution, \'signal\'> {\n    signal: AbortSignal;\n    onFailure(cleanup: () => void | Promise<void>): void;\n}',
+    declaration: 'export interface ToolDispatchExecution extends Omit<ToolExecution, \'signal\'> {\n    signal: AbortSignal;\n}',
   },
   {
     name: 'ToolErrorInfo',

@@ -573,39 +573,6 @@ describe('ToolRuntime', () => {
     expect(result.error?.message).toBe(message)
   })
 
-  it('settles registered cleanups only on final failure, before reporting the policy result', async () => {
-    const ctx = await setup()
-    const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    const events: string[] = []
-    try {
-      ctx.tools.register(echoTool)
-      let registerLate: (() => void) | undefined
-      ctx.on('tools/execute', (exec, next) => {
-        registerLate = () => { exec.onFailure(() => {}) }
-        exec.onFailure(() => { events.push('first'); throw new Error('first cleanup failed') })
-        exec.onFailure(async () => { entered.resolve(undefined); await release.promise; events.push('second') })
-        return next()
-      })
-      ctx.on('tools/result', (_exec, result) => { events.push(result.isError ? 'failed' : 'succeeded') })
-      const call = (id: string) => executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(id), name: 'echo', arguments: {} })
-      expect((await call('ok')).isError).toBe(false)
-      expect(events).toEqual(['succeeded'])
-      expect(() => { registerLate!() }).toThrow('during dispatch')
-      ctx.on('tools/post-execute', async (): Promise<PostToolDecision> => ({
-        kind: 'block', feedback: [{ type: 'text', text: 'rejected' }], info: { name: 'PolicyError', code: 'BLOCKED' },
-      }), { prepend: true })
-      const blocked = call('block')
-      await entered.promise
-      expect(events).toEqual(['succeeded', 'first'])
-      release.resolve(undefined)
-      expect(await blocked).toMatchObject({ isError: true, error: { info: { code: 'BLOCKED' },
-        message: 'rejected\nTool cleanup failed: first cleanup failed' },
-      content: [{ text: 'rejected' }, { text: 'Tool cleanup failed: first cleanup failed' }] })
-      expect(events).toEqual(['succeeded', 'first', 'second', 'failed'])
-    } finally { release.resolve(undefined); await ctx.fiber.dispose() }
-  })
-
   it('records the structured identity of a post-execute block', async () => {
     const ctx = await setup()
     ctx.tools.register(echoTool)
