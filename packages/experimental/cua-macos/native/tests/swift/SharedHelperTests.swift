@@ -34,6 +34,13 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     }
 }
 
+@Test func disablesRecentActivityOnlyForExplicitOff() throws {
+    let arguments = ["--recent-activity-window-ms", "off"]
+    let disabled = try hello(overrides: ["recentActivityWindowMs": .string("off")])
+    #expect(try HelperConfiguration(arguments: arguments).recentActivityWindowMs == nil)
+    #expect(try HelperConfiguration(hello: disabled, runtimeKey: runtimeKey).recentActivityWindowMs == nil)
+}
+
 @Test func resolvesClickHoldLimitFromHelperArguments() throws {
     #expect(try HelperConfiguration(arguments: []).maxClickHoldMs == 5000)
     for limit in [0, 7000] {
@@ -48,6 +55,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     ("maxRequestBytes", JSONValue.number(1023)), ("maxResponseBytes", .number(1.5)),
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
+    ("recentActivityWindowMs", .number(0)), ("recentActivityWindowMs", .bool(false)), ("recentActivityWindowMs", .string("disabled")),
     ("maxClickHoldMs", .number(-1)), ("maxClickHoldMs", .number(0.5)),
     ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)), ("systemPointerHover", .bool(true)),
 ])

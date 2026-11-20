@@ -11,7 +11,7 @@ private let process = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicrose
     let history = RecentActivity(now: { time })
     let a = UUID(), b = UUID()
     let target = ActivityTarget(process: process, windowID: 10)
-    let lookback = try HelperConfiguration(arguments: []).recentActivityWindowMs
+    let lookback = try #require(HelperConfiguration(arguments: []).recentActivityWindowMs)
     #expect(lookback == 10_000)
     history.connect(a, lookbackMs: lookback)
     history.connect(b, lookbackMs: lookback)

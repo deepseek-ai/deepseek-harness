@@ -18,7 +18,7 @@ import Darwin
             "maxClickHoldMs": .number(Double(configuration.maxClickHoldMs)),
             "screenshotTimeoutMs": .number(configuration.screenshotTimeoutSeconds * 1000), "timeoutMs": .number(configuration.timeoutSeconds * 1000),
             "graceMs": .number(configuration.shutdownGraceSeconds * 1000),
-            "recentActivityWindowMs": .number(Double(configuration.recentActivityWindowMs)),
+            "recentActivityWindowMs": configuration.recentActivityWindowMs.map { .number(Double($0)) } ?? .string("off"),
         ])])
         try channel.write(JSONEncoder().encode(hello) + Data([10]), timeout: configuration.timeoutSeconds)
         let frames = Frames(channel: channel, limit: configuration.maxResponseBytes)

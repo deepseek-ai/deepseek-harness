@@ -8,6 +8,16 @@ if arguments.count == 2 && arguments[1] == "--can-post" {
     print(CGPreflightPostEventAccess() ? "yes" : "no")
     exit(0)
 }
+if arguments.count == 3 && arguments[1] == "--has-listener", let pid = Int32(arguments[2]) {
+    var count: UInt32 = 0
+    guard CGGetEventTapList(0, nil, &count) == .success else { exit(4) }
+    var taps = Array(repeating: CGEventTapInformation(), count: Int(count) + 1)
+    guard CGGetEventTapList(UInt32(taps.count), &taps, &count) == .success else { exit(4) }
+    print(taps.prefix(Int(count)).contains {
+        $0.tappingProcess == pid && $0.tapPoint == .cgAnnotatedSessionEventTap && $0.options == .listenOnly
+    } ? "yes" : "no")
+    exit(0)
+}
 guard [2, 5].contains(arguments.count), let pid = Int32(arguments[1]) else { exit(1) }
 guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { exit(2) }
 let down: CGEvent

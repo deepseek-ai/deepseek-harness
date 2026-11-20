@@ -41,7 +41,7 @@ import Darwin
         self.connectionID = connectionID
         self.activity = activity
         self.inputMonitor = inputMonitor
-        activity.connect(connectionID, lookbackMs: configuration.recentActivityWindowMs)
+        if let lookback = configuration.recentActivityWindowMs { activity.connect(connectionID, lookbackMs: lookback) }
         self.cancellation = cancellation
         self.channel = channel
         self.scheduler = scheduler
@@ -176,7 +176,7 @@ import Darwin
             return AXWorker.actionResult
         }
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let target = await worker.activityTarget(params)
+        let target = configuration.recentActivityWindowMs == nil ? nil : await worker.activityTarget(params)
         if let target { activity.watch(target, owner: connectionID); inputMonitor.start() }
         let observes = ["getState", "screenshot", "listWindows", "listActions"].contains(request.method)
         // A completed attempt can have partial effects even after a failure or cancellation.

@@ -30,6 +30,7 @@ struct ActivityTarget: Hashable, Sendable {
         self.now = now
     }
     func connect(_ owner: UUID, lookbackMs: Int) { clients[owner] = Client(lookbackMs: lookbackMs) }
+    var hasEnabledClients: Bool { !clients.isEmpty }
     func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner); prune() }
     func watch(_ target: ActivityTarget, owner: UUID) { clients[owner]?.processes.insert(target.process) }
     func isTracked(_ process: ProcessIdentity) -> Bool {

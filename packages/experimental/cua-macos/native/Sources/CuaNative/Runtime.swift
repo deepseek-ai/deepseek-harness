@@ -21,7 +21,7 @@ struct HelperConfiguration: Sendable {
     var shutdownGraceSeconds: Double = 3
     var textEventIntervalSeconds: Double = 0.00025
     var maxClickHoldMs = 5000
-    var recentActivityWindowMs = 10_000
+    var recentActivityWindowMs: Int? = 10_000
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
     init(arguments: [String]) throws {
@@ -32,8 +32,9 @@ struct HelperConfiguration: Sendable {
             let text = arguments[index + 1]
             switch key {
             case "--recent-activity-window-ms":
+                if text == "off" { recentActivityWindowMs = nil; break }
                 guard let value = Int(text), (1...2147483647).contains(value) else {
-                    throw RequestParameters.invalid("Recent activity window must be an integer from 1 to 2147483647 milliseconds")
+                    throw RequestParameters.invalid("Recent activity window must be off or an integer from 1 to 2147483647 milliseconds")
                 }
                 recentActivityWindowMs = value
             case "--max-click-hold-ms":
@@ -86,7 +87,7 @@ struct HelperConfiguration: Sendable {
             "--ax-timeout-ms", number("axTimeoutMs"), "--text-event-interval-ms", number("textEventIntervalMs"),
             "--max-click-hold-ms", number("maxClickHoldMs"),
             "--screenshot-timeout-ms", number("screenshotTimeoutMs"), "--timeout-ms", number("timeoutMs"),
-            "--shutdown-grace-ms", number("graceMs"), "--recent-activity-window-ms", number("recentActivityWindowMs"),
+            "--shutdown-grace-ms", number("graceMs"), "--recent-activity-window-ms", config["recentActivityWindowMs"] == .string("off") ? "off" : number("recentActivityWindowMs"),
         ])
     }
 }

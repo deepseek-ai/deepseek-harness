@@ -187,6 +187,18 @@ def main():
                 assert line(fixture).strip() == "READY"
                 capabilities = a.call("getCapabilities", {})
                 assert capabilities["permissions"] == {"accessibility": True, "screenRecording": True}, capabilities
+                sender = root / "activity-input"
+                subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
+
+                def has_listener():
+                    return subprocess.check_output([str(sender), "--has-listener", str(owner_pid)], text=True, timeout=5).strip() == "yes"
+
+                off = Connection(socket_path, key, recentActivityWindowMs="off")
+                clients.append(off)
+                off_app = off.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
+                off_read = {"appHandle": off_app, "maxElements": 300, "maxDepth": 20}
+                off_state = off.call("getState", off_read)
+                assert "recentActivity" not in off_state and not has_listener()
                 app_a = a.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
                 app_b = b.call("getApp", {"selector": str(fixture.pid)})["appHandle"]
                 assert app_a != app_b
@@ -217,6 +229,17 @@ def main():
                 events = after["recentActivity"]["events"]
                 assert any(event["source"] == "agent" and event["windowId"] == window
                            and event["operation"] == "invoke" for event in events), events
+                off_read["windowId"] = window
+                off_state = off.call("getState", off_read)
+                assert "recentActivity" not in off_state
+                off_button = next(element for element in off_state["elements"]
+                                  if element["role"] == "AXButton" and element["title"] == "Increment primary")
+                off_action = off.call("invoke", {"appHandle": off_app, "snapshotId": off_state["snapshotId"], "elementId": off_button["elementId"]})
+                assert "recentActivity" not in off_action
+                deadline = time.monotonic() + 5
+                while json.loads(state.read_text())["count"] != before + 2:
+                    assert time.monotonic() < deadline, "Disabled activity tracking blocked ordinary input"
+                    time.sleep(0.025)
                 repeated = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 assert not any(event["source"] == "agent" for event in repeated.get("recentActivity", {}).get("events", [])), repeated
                 own = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
@@ -224,8 +247,7 @@ def main():
 
 
                 if after["recentActivity"]["externalInputMonitoring"] == "listening":
-                    sender = root / "activity-input"
-                    subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
+                    assert has_listener(), "Off connection removed a listener used by an enabled connection"
                     can_post = subprocess.check_output([str(sender), "--can-post"], text=True, timeout=5).strip() == "yes"
                     if not can_post:
                         print("SKIP external input delivery: sender lacks macOS event-posting access")
@@ -291,6 +313,12 @@ def main():
                 capture((b, app_b))
             b.close()
             clients.remove(b)
+            if not args.without_desktop:
+                assert "recentActivity" not in off.call("getState", off_read)
+                assert not has_listener(), "Off-only helper retained the external input listener"
+                off.close()
+                clients.remove(off)
+                print("PASS: off-only and mixed connections, normal input, listener teardown")
             wait_released(lock_path, owner_pid)
             owner_pid = None
 

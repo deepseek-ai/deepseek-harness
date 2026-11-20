@@ -66,7 +66,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `sourceSigning` | `ad-hoc` | Source signing: `ad-hoc`, or `{ identity, keychain }` for an existing certificate and keychain path. Ignored for installed packages and `helperPath`. |
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
-| `recentActivityWindowMs` | `10000` | Lookback for recent activity notices, in milliseconds. |
+| `recentActivityWindowMs` | `10000` | Lookback in milliseconds. Set `recentActivityWindowMs: "off"` to disable activity tracking and notices for this connection. |
 | `connectTimeoutMs` | `5000` | Deadline for connecting to or starting the shared helper. |
 | `permissionPollIntervalMs` | `1000` | Interval in milliseconds between permission and position checks while the native guide is open. |
 | `screenshotTimeoutMs` | `5000` | Screenshot deadline including queue time, capped by `timeoutMs`. |

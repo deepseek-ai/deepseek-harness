@@ -983,8 +983,8 @@ export interface Config {
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
-  /** Lookback for advisory activity reports in milliseconds; operations do not reserve an app. */
-  recentActivityWindowMs: number
+  /** Activity lookback in milliseconds. The literal "off" disables tracking and notices for this connection. */
+  recentActivityWindowMs: number | 'off'
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
   /**
