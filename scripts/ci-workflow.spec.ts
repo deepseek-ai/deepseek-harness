@@ -866,7 +866,12 @@ describe('CI workflow', () => {
     expect(steps[index('Download build output')]).toMatchObject({ uses: 'actions/download-artifact@v8.0.1', with: { name: 'build-output' } })
     expect(index('Download build output')).toBeGreaterThan(index('Install (immutable)'))
     expect(index('Unpack build output')).toBeGreaterThan(index('Download build output'))
-    expect(index('Run performance benchmarks')).toBeGreaterThan(index('Unpack build output'))
+    // A restored addon from another runner pool that does not load is rebuilt here.
+    const addon = index('Rebuild the native addon if the restored one does not load')
+    expect(addon).toBeGreaterThan(index('Unpack build output'))
+    expect(index('Run performance benchmarks')).toBeGreaterThan(addon)
+    expect(String(steps[addon]?.run)).toContain('process.dlopen({ exports: {} }, process.argv[1])')
+    expect(String(steps[addon]?.run)).toContain('pnpm run build:native-system')
     expect(String(steps[index('Unpack build output')]?.run)).toContain('tar -xmf -')
   })
 

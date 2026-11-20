@@ -1,17 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { mergeReportDirectories, renderMergedReport } from '../benchmarks/support/scaling-report.ts'
 
-const roots: string[] = []
-afterEach(async () => {
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
-})
-
+/** A private directory removed when the current test finishes. */
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-benchmark-report-'))
-  roots.push(root)
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
   return root
 }
 

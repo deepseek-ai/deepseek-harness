@@ -490,6 +490,20 @@ jobs:
           zstd -dc -T0 "$archive" | tar -xmf -
           test -f apps/cli/lib/bin.js && test -f apps/web/dist/index.html && test -f .dsh-build/client-build-environment.json
 
+      # node-24-build can run on another pool (vm-backup under self-hosted
+      # failover) while the benchmarks stay on hosted Linux, so the restored
+      # Node-API addon is loaded here and rebuilt on this runner if it fails.
+      - name: Rebuild the native addon if the restored one does not load
+        run: |
+          addon=native/system/packages/linux-x64/bin/glibc/system.node
+          if node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"; then
+            echo "Restored native addon loads on this runner."
+          else
+            echo "::notice::Restored native addon does not load on this runner; rebuilding it."
+            pnpm run build:native-system
+            node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"
+          fi
+
       - name: Install benchmark browser and hosted dependencies
         run: pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium
 
