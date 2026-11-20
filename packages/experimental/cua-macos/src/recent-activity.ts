@@ -44,7 +44,7 @@ export function watchWindowActivity(ctx: Context): NonNullable<CuaBackend['windo
   ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
     const decision = await next()
     const watch = watches.get(agent.session)
-    if (decision.kind === 'reject' || signal.aborted || !watch || watch.client.disposed) return decision
+    if (decision.kind === 'reject' || !watch || watch.client.disposed) return decision
     const lines: string[] = []
     for (const [handle, windows] of watch.apps) {
       const observations = Object.fromEntries(windows)

@@ -239,7 +239,7 @@ it('delivers window activity at the next accepted step and clears it at turn end
   native.request.mockResolvedValueOnce([{ windowId: '7', source: 'agent', ageSeconds: 5 }])
   expect(JSON.stringify(await step())).toContain('5 seconds ago')
   const controller = new AbortController()
-  native.request.mockImplementationOnce(() => { controller.abort(); return Promise.reject(controller.signal.reason) })
+  native.request.mockImplementationOnce(() => { controller.abort(); return Promise.reject(new Error('cancelled')) })
   expect(await step(controller.signal)).toMatchObject({ messages: [] })
   native.request.mockResolvedValueOnce([{ windowId: '8', source: 'agent', ageSeconds: 5 }])
   expect(await step()).toMatchObject({ messages: [] })
