@@ -66,8 +66,10 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   systemPromptDetail?: string
   /** Instructions in force per source for {@link systemPromptDetail}, when every retained message carries section metadata. */
   systemSectionsDetail?: readonly EffectiveSystemSection[]
-  /** System-prompt/tool-catalog state a SYSTEM update changed; absent for the initial prompt and for a rebuilt prompt. */
+  /** System-prompt/tool-catalog state a SYSTEM record changed; absent for the initial prompt. */
   previousPromptDetail?: ConversationPromptSnapshot
+  /** True when a positional replacement rebuilt the system prompt, so the model read it whole rather than as an update. */
+  promptRebuilt?: true
   /** Per-source reading of the in-history system message a SYSTEM update record presents. */
   promptMessageDetail?: SystemMessageSections
   /** Full assistant/tool result content for the details panel. */

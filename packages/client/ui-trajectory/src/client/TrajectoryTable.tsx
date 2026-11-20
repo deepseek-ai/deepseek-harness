@@ -985,15 +985,71 @@ function markdownSource(record: TableRecord): string | undefined {
   return undefined
 }
 
-/** Whether a SYSTEM record presents an update; the initial prompt and a rebuilt prompt do not. */
-function presentsPromptUpdate(cell: TrajectoryCellProps): boolean {
-  return cell.previousPromptDetail !== undefined || cell.promptMessageDetail !== undefined
+/** Stable identity of one tool definition, so a changed definition reads as a removal plus an addition. */
+function toolKey(tool: ConversationPromptSnapshot['tools'][number]): string {
+  return JSON.stringify(tool)
+}
+
+/** What a SYSTEM record changed, in the order the Update tab lists it. */
+interface PromptUpdate {
+  /** Per-source reading of the appended system message. */
+  message?: SystemMessageSections
+  /** Retained system text before and after, for a change without section metadata. */
+  systemText?: { before: string; after: string }
+  added: ConversationPromptSnapshot['tools']
+  removed: ConversationPromptSnapshot['tools']
+  /** The catalog changed only in order. */
+  toolOrderOnly: boolean
+}
+
+/**
+ * Derive what a SYSTEM record changed. The initial prompt has nothing to compare against; a rebuilt prompt presents
+ * only its tool changes, because the model read the rebuilt history rather than a system update.
+ * @param cell - SYSTEM record.
+ * @returns The record's changes, or undefined when it presents none.
+ */
+function promptUpdate(cell: TrajectoryCellProps): PromptUpdate | undefined {
+  const before = cell.previousPromptDetail
+  const after = cell.promptDetail
+  const rebuilt = cell.promptRebuilt === true
+  const message = rebuilt ? undefined : cell.promptMessageDetail
+  const systemText = !rebuilt && message === undefined && before !== undefined && after !== undefined
+    && before.system !== after.system
+    ? { before: before.system, after: after.system }
+    : undefined
+  // Tools are compared only when both catalogs are known.
+  let added: ConversationPromptSnapshot['tools'] = []
+  let removed: ConversationPromptSnapshot['tools'] = []
+  let toolOrderOnly = false
+  if (before !== undefined && after !== undefined) {
+    const beforeTools = new Set(before.tools.map(toolKey))
+    const afterTools = new Set(after.tools.map(toolKey))
+    added = after.tools.filter(tool => !beforeTools.has(toolKey(tool)))
+    removed = before.tools.filter(tool => !afterTools.has(toolKey(tool)))
+    toolOrderOnly = added.length === 0 && removed.length === 0
+      && JSON.stringify(before.tools) !== JSON.stringify(after.tools)
+  }
+  if (message === undefined && systemText === undefined && added.length === 0 && removed.length === 0 && !toolOrderOnly) {
+    return undefined
+  }
+  return {
+    ...(message === undefined ? {} : { message }),
+    ...(systemText === undefined ? {} : { systemText }),
+    added,
+    removed,
+    toolOrderOnly,
+  }
+}
+
+/** Whether the model received this record's system prompt as updates; the initial and a rebuilt prompt were sent whole. */
+function deliveredIncrementally(cell: TrajectoryCellProps): boolean {
+  return cell.promptRebuilt !== true && (cell.previousPromptDetail !== undefined || cell.promptMessageDetail !== undefined)
 }
 
 function detailTabs(record: TableRecord): readonly DetailTabItem[] {
   if (record.cell.kind === 'system') {
     return [
-      ...(presentsPromptUpdate(record.cell) ? [SYSTEM_UPDATE_TAB] : []),
+      ...(promptUpdate(record.cell) === undefined ? [] : [SYSTEM_UPDATE_TAB]),
       SYSTEM_PROMPT_TAB,
       // A standalone prompt without a loaded request header has no known tool catalog.
       ...(record.cell.promptDetail === undefined ? [] : [SYSTEM_TOOLS_TAB]),
@@ -1513,34 +1569,20 @@ function PromptSourceSection({
   )
 }
 
-/** Stable identity of one tool definition, so a changed definition reads as a removal plus an addition. */
-function toolKey(tool: ConversationPromptSnapshot['tools'][number]): string {
-  return JSON.stringify(tool)
-}
-
 /**
  * What one SYSTEM record changed, independent of whether the model's route accepts in-history deltas:
  * the system message by source (or a text diff when it lacks section metadata), then added and removed tools.
  */
 function SystemPromptUpdate({
-  message,
-  before,
-  after,
+  update,
   stringWrapping,
   t,
 }: {
-  message: SystemMessageSections | undefined
-  before: ConversationPromptSnapshot | undefined
-  after: ConversationPromptSnapshot | undefined
+  update: PromptUpdate
   stringWrapping: JsonTreeProps['stringWrapping']
   t: TrajectoryTranslate
 }) {
-  const beforeTools = new Set(before?.tools.map(toolKey))
-  const afterTools = new Set(after?.tools.map(toolKey))
-  // Tools are compared only when both catalogs are known.
-  const added = before === undefined ? [] : after?.tools.filter(tool => !beforeTools.has(toolKey(tool))) ?? []
-  const removed = after === undefined ? [] : before?.tools.filter(tool => !afterTools.has(toolKey(tool))) ?? []
-  const systemDiff = message === undefined && before !== undefined && after !== undefined && before.system !== after.system
+  const { message, systemText, added, removed, toolOrderOnly } = update
   return (
     <div className={css.promptView}>
       {message !== undefined && (
@@ -1563,10 +1605,10 @@ function SystemPromptUpdate({
           </div>
         </PromptUpdateGroup>
       )}
-      {systemDiff && (
+      {systemText !== undefined && (
         <PromptUpdateGroup title={t('record.systemUpdates')}>
           <div className={css.promptGroupBody}>
-            <PromptDiff before={before.system} after={after.system} />
+            <PromptDiff before={systemText.before} after={systemText.after} />
           </div>
         </PromptUpdateGroup>
       )}
@@ -1579,6 +1621,11 @@ function SystemPromptUpdate({
         <PromptUpdateGroup title={t('record.toolsRemoved')}>
           <div><ToolCatalogItems tools={removed} stringWrapping={stringWrapping} t={t} /></div>
         </PromptUpdateGroup>
+      )}
+      {toolOrderOnly && (
+        <div className={css.promptGroupBody}>
+          <p className={css.promptSourceCaption}>{t('record.toolOrderChanged')}</p>
+        </div>
       )}
     </div>
   )
@@ -2403,12 +2450,9 @@ export function TrajectoryTable({
   const selectedPrompt = selected?.cell.kind === 'system'
     ? selected.cell.promptDetail
     : undefined
-  const selectedPreviousPrompt = selected?.cell.kind === 'system'
-    ? selected.cell.previousPromptDetail
-    : undefined
   const selectedSystemPrompt = selectedPrompt?.system ?? selected?.cell.systemPromptDetail
-  const selectedPromptMessage = selected?.cell.kind === 'system'
-    ? selected.cell.promptMessageDetail
+  const selectedPromptUpdate = selected?.cell.kind === 'system'
+    ? promptUpdate(selected.cell)
     : undefined
   const selectedSections = selectedPrompt?.sections
     ?? (selected?.cell.kind === 'system' ? selected.cell.systemSectionsDetail : undefined)
@@ -3430,17 +3474,12 @@ export function TrajectoryTable({
                 t={t}
               />
             )}
-            {promptSelected && activeTab === 'update' && (
-              <SystemPromptUpdate
-                message={selectedPromptMessage}
-                before={selectedPreviousPrompt}
-                after={selectedPrompt}
-                stringWrapping={stringWrapping}
-                t={t}
-              />
+            {selectedPromptUpdate !== undefined && activeTab === 'update' && (
+              <SystemPromptUpdate update={selectedPromptUpdate} stringWrapping={stringWrapping} t={t} />
             )}
             {promptSelected && activeTab === 'system-prompt' && (
-              selectedSystemPrompt === ''
+              // Per-source instructions decide emptiness when known: a text-less update can leave sources in force.
+              (selectedSections === undefined ? selectedSystemPrompt === '' : selectedSections.every(section => section.text === ''))
                 ? <p className={css.noPayload}>{t('record.systemPromptMissing')}</p>
                 : selectedSections === undefined
                   ? (
@@ -3451,7 +3490,7 @@ export function TrajectoryTable({
                   : (
                     <EffectiveSystemPrompt
                       sections={selectedSections}
-                      updated={selected !== undefined && presentsPromptUpdate(selected.cell)}
+                      updated={selected !== undefined && deliveredIncrementally(selected.cell)}
                       t={t}
                     />
                   )

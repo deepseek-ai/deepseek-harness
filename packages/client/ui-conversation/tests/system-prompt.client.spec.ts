@@ -162,6 +162,21 @@ describe('loaded system surface interpretation', () => {
     expect(complete.sections?.map(item => item.name)).toEqual(['persona', 'plan'])
   })
 
+  it('changes the effective prompt when an update without text clears a source', () => {
+    const head = fold([sectioned(1, [['rules', 'R'], ['memo', 'M']])])
+    expect(head?.introduced?.sections).toEqual(head?.sections)
+    const cleared = inspectSystemPrompt(head, sectioned(3, [['memo', '']]))
+    expect(cleared.effective?.text).toBe(head?.effective?.text)
+    expect(cleared.effective).not.toBe(head?.effective)
+    expect(cleared.effective).toMatchObject({
+      seq: 3, update: true, sections: [{ name: 'memo', text: '' }, { name: 'rules', text: 'R' }],
+      message: { changes: [{ name: 'memo', change: 'cleared' }] },
+    })
+    expect(cleared.introduced?.sections).toBe(cleared.sections)
+    // Restating the same instructions changes nothing.
+    expect(inspectSystemPrompt(cleared, sectioned(5, [['memo', '']])).effective).toBe(cleared.effective)
+  })
+
   it('marks a prompt established by replacements as rebuilt and reads no update from it', () => {
     const before = fold([sectioned(1, [['identity', 'I'], ['plan', 'on']]), sectioned(4, [['plan', 'off']])])
     expect(before?.effective).not.toHaveProperty('rebuilt')

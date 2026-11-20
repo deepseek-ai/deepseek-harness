@@ -1142,10 +1142,67 @@ describe('Trajectory conversation Definitions', () => {
       seq: 8, kind: 'system', message, previous: { sections: [{ name: 'plan:status', order: 1, text: 'plan on' }] },
     } })
 
-    // Without a loaded header the update keeps its reading on the standalone prompt node.
+    // Without a loaded header each standalone prompt node keeps its reading and the instructions in force after it.
     const headerless = snapshot(assembler(events.filter(event => event.event.type !== 'request/header')))
     expect(headerless.systemPrompts?.map(prompt => prompt.message?.changes.map(change => change.change)))
       .toEqual([undefined, ['updated']])
+    expect(headerless.systemPrompts?.map(prompt => prompt.sections?.map(section => section.text)))
+      .toEqual([['plan on'], ['plan off']])
+  })
+
+  it('keeps a later step\'s tool change separate from an update its own earlier step presented', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const config = { provider: 'test', model: 'test' }
+    const probe = { name: 'probe', description: 'Probe', parameters: { type: 'object' } }
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+      at(10, 'step/end', { turn: 1, step: 2 }),
+      at(11, 'step/start', { turn: 1, step: 3 }),
+      at(12, 'request/header', { reason: 'change', header: { config, tools: [probe] } }),
+      at(13, 'assistant/message', { turn: 1, step: 3, message: assistantMessage('assistant-3', 'third') }),
+    ])).requests
+
+    expect(requests.map(request => request.purpose === 'assistant' ? request.promptChange?.kind : undefined))
+      .toEqual(['initial', 'system', 'tools'])
+    expect(requests.at(-1)).toMatchObject({ promptChange: { seq: 12, previous: { tools: [] } } })
+  })
+
+  it('presents an update that only clears a source as its own change with the instructions in force', () => {
+    const config = { provider: 'test', model: 'test' }
+    const message = (seq: number, content: readonly string[], sections: readonly object[]) => at(seq, 'system/message', {
+      turn: 1, step: seq < 6 ? 1 : 2,
+      message: { ...systemMessage(''), content: content.map(text => ({ type: 'text', text })), source: { kind: 'system-prompt', sections } },
+    }, { surfaceOp: 'append' })
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      message(3, ['rules', 'memo'], [
+        { name: 'rules', state: 'active', order: 1, contentIndex: 0 },
+        { name: 'memo', state: 'active', order: 2, contentIndex: 1 },
+      ]),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/start', { turn: 1, step: 2 }),
+      // The source withdraws its text and suppresses its notice, so the message carries only an empty block.
+      message(7, [''], [{ name: 'memo', state: 'active', order: 2, contentIndex: 0 }]),
+      at(8, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ])).requests
+
+    expect(requests.at(-1)).toMatchObject({
+      prompt: { system: 'rules\n\nmemo', sections: [{ name: 'rules', text: 'rules' }, { name: 'memo', text: '' }] },
+      promptChange: { seq: 7, kind: 'system', message: { changes: [{ name: 'memo', change: 'cleared' }] } },
+    })
   })
 
   it('merges an in-history update and a tool change of one step into a single change', () => {

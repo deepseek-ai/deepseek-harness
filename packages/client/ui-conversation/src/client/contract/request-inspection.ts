@@ -86,7 +86,10 @@ export interface SystemPromptNode {
    * effective prompt; the model reads the rebuilt history instead of an appended update.
    */
   rebuilt?: true
-  /** Instructions in force per source at this prompt; absent when a retained message lacks section metadata. */
+  /**
+   * Instructions in force per source at this prompt, or after the message for a node a message introduces;
+   * absent when a retained nonempty message lacks section metadata.
+   */
   sections?: readonly EffectiveSystemSection[]
   /** Per-source reading of an in-history update that carries section metadata, against the instructions in force before it. */
   message?: SystemMessageSections

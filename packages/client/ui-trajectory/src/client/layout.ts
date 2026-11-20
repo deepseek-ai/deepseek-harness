@@ -3,8 +3,15 @@
  * own-duration times, in-flight partial/runningCalls, and group descriptions.
  */
 import type {
-  AssistantBlock, AssistantMessageNode, ConversationLocation, EffectiveSystemSection, RequestInspectionSnapshot,
-  RequestPromptChange, RequestView, ToolCallBlock, ToolResultNode,
+  AssistantBlock,
+  AssistantMessageNode,
+  ConversationLocation,
+  EffectiveSystemSection,
+  RequestInspectionSnapshot,
+  RequestPromptChange,
+  RequestView,
+  ToolCallBlock,
+  ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
@@ -334,10 +341,8 @@ export function deriveTrajectoryLayout(
           ...(request?.prompt === undefined ? {} : { promptDetail: request.prompt }),
           ...(entry.systemPrompt === undefined ? {} : { systemPromptDetail: entry.systemPrompt }),
           ...(entry.systemSections === undefined ? {} : { systemSectionsDetail: entry.systemSections }),
-          // A rebuilt prompt replaces the history the model reads, so it presents no update against the previous state.
-          ...(change.previous === undefined || change.rebuilt === true
-            ? {}
-            : { previousPromptDetail: change.previous }),
+          ...(change.previous === undefined ? {} : { previousPromptDetail: change.previous }),
+          ...(change.rebuilt === true ? { promptRebuilt: true } : {}),
           ...(change.message === undefined ? {} : { promptMessageDetail: change.message }),
           timeSeconds: 0,
           startedAt: finiteTime(change.time),

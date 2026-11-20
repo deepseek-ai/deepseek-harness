@@ -250,14 +250,34 @@ describe('TrajectoryTable', () => {
       .toEqual(['readRead a file', 'writeWrite a file'])
     cleanup()
 
-    // A rebuilt prompt presents no update; the instructions in force and the tools remain.
-    const rebuilt = render(<TrajectoryTable turns={layout({ previous, rebuilt: true })} {...FOLD_PROPS} />)
+    // A rebuilt prompt presents only its tool changes, and none when the tools are unchanged.
+    const rebuilt = render(<TrajectoryTable turns={layout({ previous, rebuilt: true, message })} {...FOLD_PROPS} />)
     fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
-    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['System Prompt', 'Tools'])
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Update', 'System Prompt', 'Tools'])
+    expect(groups()).toEqual(['Added tools', 'Removed tools'])
+    fireEvent.click(screen.getByRole('tab', { name: 'System Prompt' }))
     // It was sent as shown, so it carries no note about incremental delivery.
     expect(screen.queryByText(/Instructions in effect at this point/)).toBeNull()
     expect([...rebuilt.container.querySelectorAll('[data-prompt-source]')].map(source => source.textContent))
       .toEqual(['harness:identityIdentity.', 'plan:statusPlan mode is off.'])
+    cleanup()
+    render(<TrajectoryTable turns={layout({ previous: { ...previous, tools: prompt.tools }, rebuilt: true })} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['System Prompt', 'Tools'])
+    cleanup()
+
+    // A catalog that only changed order says so instead of leaving the Update tab blank.
+    render(<TrajectoryTable turns={layout({ previous: { ...prompt, tools: [write, read] } })} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getByText('Only the order of the tools changed.')).toBeTruthy()
+    expect(screen.queryAllByRole('heading', { level: 3 })).toEqual([])
+    cleanup()
+
+    // Per-source instructions decide emptiness: sources that are all blank leave no prompt.
+    render(<TrajectoryTable turns={layout({ previous }, { ...prompt, sections: [{ name: 'memo', order: 3, text: '' }] })} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'System Prompt' }))
+    expect(screen.getByText('No system prompt in this request')).toBeTruthy()
     cleanup()
 
     // Without section metadata, the update diffs the retained prompt text and the System Prompt tab shows it whole.
@@ -273,8 +293,8 @@ describe('TrajectoryTable', () => {
     expect(legacy.container.querySelector('[data-prompt-source]')).toBeNull()
     cleanup()
 
-    // An empty prompt keeps its placeholder.
-    render(<TrajectoryTable turns={layout({ previous }, { ...prompt, system: '' })} {...FOLD_PROPS} />)
+    // An empty prompt without section metadata keeps its placeholder.
+    render(<TrajectoryTable turns={layout({ previous }, { ...legacyPrompt, system: '' })} {...FOLD_PROPS} />)
     fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'System Prompt' }))
     expect(screen.getByText('No system prompt in this request')).toBeTruthy()

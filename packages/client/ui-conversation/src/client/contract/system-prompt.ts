@@ -127,12 +127,31 @@ function effectiveSections(nodes: readonly PositionedSystem[]): readonly Effecti
   return [...sections.values()].sort((a, b) => a.order - b.order || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 }
 
+/** Whether two per-source lists name the same sources with the same order and text. */
+function sameSections(
+  left: readonly EffectiveSystemSection[] | undefined,
+  right: readonly EffectiveSystemSection[] | undefined,
+): boolean {
+  if (left === right) return true
+  if (left === undefined || right === undefined || left.length !== right.length) return false
+  return left.every((section, index) => {
+    const other = right[index]
+    return other !== undefined && other.name === section.name && other.order === section.order && other.text === section.text
+  })
+}
+
+/** Insert one system node at its surface position. */
+function withNode(nodes: readonly PositionedSystem[], entry: PositionedSystem): readonly PositionedSystem[] {
+  return [...nodes, entry].sort((a, b) => a.position - b.position)
+}
+
 /**
  * Apply a system event or positional replacement without retaining ordinary messages.
  * Replacement positions inherit their start endpoint, not their chronological seq.
  * Unknown older endpoint order withholds the prompt until prepend replay resolves it.
- * Messages carrying section metadata also yield the instructions in force per source; an in-history update
- * additionally yields its per-source reading against the instructions in force before it.
+ * Messages carrying section metadata also yield the instructions in force per source, also attached to the node the
+ * message introduces; an in-history update additionally yields its per-source reading against the instructions in
+ * force before it. The effective prompt changes when either its text or its per-source instructions change.
  * @param previous - Interpretation at the preceding relevant event in the loaded window.
  * @param event - System message or surface replacement already admitted by Session.
  * @returns Immutable surviving system facts and the effective nonempty prompt.
@@ -140,7 +159,7 @@ function effectiveSections(nodes: readonly PositionedSystem[]): readonly Effecti
 export function inspectSystemPrompt(previous: SystemPromptState | undefined, event: SessionEvent): SystemPromptState {
   const op = isSurfaceEvent(event) ? event.surfaceOp : undefined
   const firstSeq = previous?.firstSeq ?? event.seq
-  let nodes = previous?.nodes ?? []
+  let nodes: readonly PositionedSystem[] = previous?.nodes ?? []
   let replacements = previous?.replacements ?? new Map<number, number>()
   const unknownEndpoint = (seq: number): boolean => seq < firstSeq && !replacements.has(seq)
   const uncertain = previous?.uncertain === true || (op !== undefined && op !== 'append'
@@ -161,12 +180,12 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
     replacements = retained
   }
   let introduced: SystemPromptNode | undefined
-  let records: SectionRecords | undefined
+  let sections: readonly EffectiveSystemSection[] | undefined
   if (event.type === 'system/message') {
     const read = readSections(event, previous?.sections)
     const update = op === 'append' && previous?.nodes.some(item => item.node.text !== '') === true
-    records = read?.records
-    introduced = {
+    const records = read?.records
+    const node: SystemPromptNode = {
       seq: event.seq,
       time: event.time,
       turn: event.data.turn,
@@ -175,17 +194,26 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
       update,
       ...(update && read !== undefined ? { message: read.message } : {}),
     }
+    const entry = (value: SystemPromptNode): PositionedSystem => ({
+      position, node: value, ...(records === undefined ? {} : { records }),
+    })
+    // The fold reads only texts and records, so the instructions in force can be attached to the node it inserts.
+    sections = effectiveSections(withNode(nodes, entry(node)))
+    introduced = sections === undefined ? node : { ...node, sections }
+    nodes = withNode(nodes, entry(introduced))
+  } else {
+    sections = effectiveSections(nodes)
   }
-  if (introduced !== undefined) {
-    nodes = [...nodes, { position, node: introduced, ...(records === undefined ? {} : { records }) }]
-      .sort((a, b) => a.position - b.position)
-  }
-  const sections = effectiveSections(nodes)
   const nonEmpty = nodes.filter(item => item.node.text !== '')
   const surviving = nonEmpty.at(-1)?.node
   const text = nonEmpty.map(item => item.node.text).join('\n\n')
   let effective = previous?.effective
-  if (effective?.text !== text && (effective !== undefined || text !== '')) {
+  // An empty prompt never becomes the first effective prompt; afterwards, a text-less update that clears or
+  // reorders a source still changes the instructions in force.
+  const changed = effective === undefined
+    ? text !== ''
+    : effective.text !== text || !sameSections(effective.sections, sections)
+  if (changed) {
     effective = {
       seq: event.seq,
       time: event.time,
