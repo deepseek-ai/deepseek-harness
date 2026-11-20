@@ -74,7 +74,7 @@ foreach (var direction in new[] { "down", "up" })
 }
 foreach (var invalid in new[]
 {
-    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down"}""",
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","taskId":"other"}""",
     """{"appHandle":"app","windowId":"1","mouseButton":"left"}""",
     """{"appHandle":"app","windowId":"1","direction":"down"}""",
     """{"appHandle":"app","mouseButton":"left","direction":"down"}""",
