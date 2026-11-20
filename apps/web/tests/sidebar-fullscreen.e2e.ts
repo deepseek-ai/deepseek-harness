@@ -4,7 +4,7 @@ import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
 import { launchWebScaffold } from './scaffold.ts'
 
-it.each(['light', 'dark'] as const)('fades the macOS fullscreen backing without fading content in %s mode', async (colorScheme) => {
+it.each(['light', 'dark'] as const)('fades the macOS fullscreen fill without fading content in %s mode', async (colorScheme) => {
   const scaffold = await launchWebScaffold({
     extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
   })
@@ -23,32 +23,37 @@ it.each(['light', 'dark'] as const)('fades the macOS fullscreen backing without 
       // The preload marker is emulated here; native window animation is checked on macOS Desktop.
       for (const fullscreen of [true, false]) {
         const sample = await column.evaluate((el, fullscreen) => {
-          const before = getComputedStyle(el).backgroundImage
           const root = document.documentElement
           root.toggleAttribute('data-fullscreen', fullscreen)
-          getComputedStyle(el, '::before').getPropertyValue('opacity')
+          getComputedStyle(el).getPropertyValue('--dsh-sidebar-fullscreen-fill')
           const animations = el.getAnimations({ subtree: true })
           const backing = animations.find(animation =>
-            animation instanceof CSSTransition && animation.transitionProperty === 'opacity'
-            && animation.effect instanceof KeyframeEffect && animation.effect.pseudoElement === '::before')
+            animation instanceof CSSTransition && animation.transitionProperty === '--dsh-sidebar-fullscreen-fill'
+            && animation.effect instanceof KeyframeEffect && animation.effect.target === el)
           if (backing === undefined || !(backing.effect instanceof KeyframeEffect)) {
-            throw new Error('Fullscreen backing opacity transition is missing')
+            throw new Error('Fullscreen fill transition is missing')
+          }
+          /** Alpha of a computed CSS color, read through a canvas so every color syntax resolves. */
+          const alpha = (color: string): number => {
+            const canvas = document.createElement('canvas').getContext('2d')!
+            canvas.fillStyle = color
+            canvas.fillRect(0, 0, 1, 1)
+            return canvas.getImageData(0, 0, 1, 1).data[3]! / 255
           }
           try {
             for (const animation of animations) {
               animation.pause()
               animation.currentTime = Number(animation.effect!.getComputedTiming().duration) / 2
             }
-            const style = getComputedStyle(el, '::before')
+            const style = getComputedStyle(el)
             const button = el.querySelector('[data-slot="sidebar.session.action"] button')!
             return {
-              endpoints: backing.effect.getKeyframes().map(keyframe => Number(keyframe.opacity)),
+              endpoints: backing.effect.getKeyframes().map(keyframe => alpha(String(keyframe['--dsh-sidebar-fullscreen-fill']))),
               duration: backing.effect.getComputedTiming().duration,
-              opacity: Number(style.opacity),
-              pointerEvents: style.pointerEvents,
-              layer: style.zIndex,
+              alpha: alpha(style.getPropertyValue('--dsh-sidebar-fullscreen-fill')),
+              position: style.position,
+              isolation: style.isolation,
               contentOpacity: getComputedStyle(button).opacity,
-              backingUnchanged: before === getComputedStyle(el).backgroundImage,
               controlFade: button.getAnimations().some(animation =>
                 animation instanceof CSSTransition && animation.transitionProperty === 'background-color'),
             }
@@ -58,12 +63,12 @@ it.each(['light', 'dark'] as const)('fades the macOS fullscreen backing without 
         }, fullscreen)
         expect(sample.endpoints).toEqual(fullscreen ? [0, 1] : [1, 0])
         expect(sample.duration).toBe(200)
-        expect(sample.opacity).toBeGreaterThan(0)
-        expect(sample.opacity).toBeLessThan(1)
-        expect(sample.pointerEvents).toBe('none')
-        expect(sample.layer).toBe('-1')
+        expect(sample.alpha).toBeGreaterThan(0)
+        expect(sample.alpha).toBeLessThan(1)
+        // A positioned or isolated column would trap sidebar overlays below the centre column.
+        expect(sample.position).toBe('static')
+        expect(sample.isolation).toBe('auto')
         expect(sample.contentOpacity).toBe('1')
-        expect(sample.backingUnchanged).toBe(true)
         expect(sample.controlFade).toBe(true)
       }
 
@@ -71,13 +76,12 @@ it.each(['light', 'dark'] as const)('fades the macOS fullscreen backing without 
       for (const fullscreen of [true, false]) {
         const sample = await column.evaluate((el, fullscreen) => {
           document.documentElement.toggleAttribute('data-fullscreen', fullscreen)
-          const opacity = getComputedStyle(el, '::before').opacity
           return {
-            opacity,
+            fill: getComputedStyle(el).getPropertyValue('--dsh-sidebar-fullscreen-fill') !== 'rgba(0, 0, 0, 0)',
             transitions: el.getAnimations({ subtree: true }).filter(animation => animation instanceof CSSTransition).length,
           }
         }, fullscreen)
-        expect(sample).toEqual({ opacity: fullscreen ? '1' : '0', transitions: 0 })
+        expect(sample).toEqual({ fill: fullscreen, transitions: 0 })
       }
     } finally {
       await browser.close()
