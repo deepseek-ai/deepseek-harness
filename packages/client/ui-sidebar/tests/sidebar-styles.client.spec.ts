@@ -101,6 +101,15 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.root.collapsed')?.get('padding')).toBe('18px 10px 6px')
   })
 
+  it('keeps macOS glass control fills and the hidden scroll fade out of window fullscreen', () => {
+    const windowed = ":global([data-platform='darwin']:not([data-fullscreen]))"
+    const root = ":where(.root:not([role='dialog']))"
+    expect(declarations(`${windowed} ${root} .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-fill)')
+    expect(declarations(`${windowed} ${root}.collapsed .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-collapsed-fill)')
+    expect(declarations(`${windowed} .scrollFade`)?.get('display')).toBe('none')
+    expect(declaredSelectors().filter(selector => /\.newSession\b|\.scrollFade/u.test(selector) && selector.includes("[data-platform='darwin']") && !selector.startsWith(windowed))).toEqual([])
+  })
+
   it('moves the upper controls while the settings seat only fades', () => {
     const animation = 'rail-in 150ms var(--ds-ease-in-out) backwards'
     for (const selector of ['.railIn .iconButton', '.railIn .regionArea']) {
