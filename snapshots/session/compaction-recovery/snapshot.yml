@@ -6,4 +6,5 @@ recording: authored
 header:
   class: compaction-recovery
   pin: true
+  promptChanges: 1
   changes: 1

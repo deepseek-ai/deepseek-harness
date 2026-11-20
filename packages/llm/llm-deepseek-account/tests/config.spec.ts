@@ -17,7 +17,9 @@ it.each([
   [{ modelOverrides: { '': {} } }, /modelOverrides keys must be non-empty model ids/],
   [{ modelOverrides: { 'deepseek-flash': { id: 'other' } } }, /modelOverrides\.deepseek-flash sets "id"/],
   [{ modelOverrides: { 'deepseek-flash': { contextWindow: 0 } } }, /modelOverrides\.deepseek-flash is invalid: .*contextWindow must be a positive integer/],
-  [{ modelOverrides: { 'deepseek-flash': { inputModalities: ['text'], imageMaxBytes: 1 } } }, /modelOverrides\.deepseek-flash is invalid: .*cannot declare image request limits/],
+  [{ modelOverrides: { 'deepseek-flash': {
+    inputModalities: ['text'], imageTargetBytes: 1,
+  } } }, /modelOverrides\.deepseek-flash is invalid: .*cannot declare image request limits/],
 ])('rejects %j', (options, message) => {
   expect(() => { Reflect.apply(resolveAccountOptions, undefined, [options]) }).toThrow(message)
 })

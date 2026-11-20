@@ -56,7 +56,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: brandString<ToolCallId>('cua-app-approval'), name: 'run_code',
-      arguments: JSON.stringify({ code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
+      arguments: JSON.stringify({ code: 'await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
         description: 'Request application access' }) }] })
   const approval = page.locator('[data-approval-key]')
   await Promise.race([approval.waitFor(), grant.then((result) => {

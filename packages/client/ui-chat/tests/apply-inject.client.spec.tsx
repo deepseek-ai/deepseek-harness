@@ -317,21 +317,22 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     await injected.openFile('src/a.ts')
     // Files stay in the product: a relative path is handed to the Sidebar as an
-    // address under this session's scope, not to a desktop opener.
-    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    // address under this session's scope, not to a desktop opener. The address
+    // carries the path joined to the Session's directory.
+    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
     expect(b.openWorkspacePath).not.toHaveBeenCalled()
 
-    // An absolute path inside the session's workspace is the same session-relative address.
+    // The absolute spelling of the same file is the same address, so the Sidebar reuses its tab.
     await injected.openFile('/proj/src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
 
     // A name a URL would otherwise mangle survives the round trip.
     await injected.openFile('src/a b#c.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a%20b%23c.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a%20b%23c.ts')
 
     // A line travels as the `file` type's navigation parameter, not in the address.
     await injected.openFile('src/a.ts', { line: 7 })
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts', { params: { line: 7 } })
     await b.runtime.dispose()
   })
 
@@ -340,9 +341,9 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     vi.spyOn(b.runtime.ctx.contextMenus, 'open')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/proj/.agents/worktrees/w')
-    // The address is relative to the same directory the Host resolves it from.
+    // The address carries the path joined to the directory the Session works in at the click.
     await injected.openFile('src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
     expect(injected.resolveFilePath('src/a.ts')).toBe('/proj/.agents/worktrees/w/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', null)
     expect(injected.resolveFilePath('file.ts')).toBe('/proj/file.ts')
@@ -350,14 +351,17 @@ describe('Chat inject API', () => {
 
     // A leading `./` names the same file, so the Sidebar reuses its tab.
     await injected.openFile('./src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
 
-    // Outside the Session's directory, the address carries the absolute path after the Session id.
+    // An absolute path keeps naming its file, inside the Session's directory or outside it.
     await injected.openFile('/proj/src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/elsewhere')
+    await injected.openFile('/proj/.agents/worktrees/w/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
+    // A relative path follows the directory the Session works in at the click.
     await injected.openFile('src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//elsewhere/src/a.ts')
     await b.runtime.dispose()
   })
 

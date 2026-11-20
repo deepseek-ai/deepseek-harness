@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import TypertGateway from '@deepseek-ai/dsh-api-gateway'
+import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
+import { Peer } from '@deepseek-ai/dsh-client-connection'
 import type {
   ApprovalRequestId as ApprovalRequestIdType, CordisDynamicPluginId,
 } from '../src/types.ts'
@@ -24,6 +28,36 @@ const HOST_CODE = `
 `
 
 type Runner = Awaited<ReturnType<typeof setup>>['runner']
+
+it('routes source RPC inspect replies by agentId without resolving an Agent', async () => {
+  const { ctx } = await setup()
+  try {
+    await ctx.plugin(TypertRegistry)
+    await ctx.plugin(RemoteAccessService)
+    await ctx.plugin(TypertGateway)
+    const resolve = vi.fn(() => { throw new Error('Client replies must not resolve an Agent') })
+    ctx.typert.lookups.register('agent', {
+      parameter: 'agent', wire: 'agentId', resource: 'session',
+      hostTypeSymbol: '@deepseek-ai/dsh-agent#Agent',
+      wireTypeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
+      resolve,
+    })
+    const peer = new Peer(ctx, { principal: { kind: 'owner' } })
+    try {
+      // SRC infers lookup parameters from names; built descriptors infer them from types.
+      expect(ctx.typert.local.get('dynamicCordisRunner/resolveInspectQuery')).toBeUndefined()
+      await expect(ctx.typertGateway.invoke({
+        peer, namespace: 'dynamicCordisRunner', method: 'resolveInspectQuery',
+        args: { agentId: AGENT_A.id, requestId: 'no-pending-query', resolution: { ok: true, data: {} } },
+      })).resolves.toEqual({ accepted: false })
+      expect(resolve).not.toHaveBeenCalled()
+    } finally {
+      await peer.dispose()
+    }
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
 
 function define(
   runner: Runner,

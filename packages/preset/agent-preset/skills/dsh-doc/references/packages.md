@@ -72,6 +72,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-locale` | no | Locale plugin: Host-backed preference, extensible language catalog, browser fallback, and typed built-in dictionaries |
 | `@deepseek-ai/dsh-client-modules` | no | Client module system, dual-face: node half composes the __DSH_BOOT__ entry graph (incremental dsh.client scan, bundle route, index tap, webPlugins service); browser half is the lazy-CJS module table the vendored cordis Loader consumes as its internal seam |
 | `@deepseek-ai/dsh-client-product-analytics` | yes | Desktop product event collection and authenticated Host reporting |
+| `@deepseek-ai/dsh-client-remote-connection` | yes | QR login, private login links, and owner-approved browser pairing |
 | `@deepseek-ai/dsh-client-resources` | no | Unified client resource model: protocol-registered providers turn URL addresses into live values, consumed through the useResource global standard hook |
 | `@deepseek-ai/dsh-client-script-realm` | no | Direct-reference script environments and Cordis-owned provider registration |
 | `@deepseek-ai/dsh-client-script-realm-iframe` | no | Optional iframe ScriptRealm provider |
@@ -156,6 +157,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-cli-account` | yes | Host Service of CLI app plugins: each plugin registers its third-party CLI and account, and the Service gives the model the CLI's absolute path, runs one account operation at a time, and shows the account on the Plugins page |
+| `@deepseek-ai/dsh-dingtalk` | yes | DingTalk plugin: the official dws CLI with its skills, and sign-in from the Plugins page |
 | `@deepseek-ai/dsh-feishu` | yes | Feishu plugin: the official lark-cli with its embedded skills, and account connection from the Plugins page |
 | `@deepseek-ai/dsh-linear` | yes | Linear plugin: Linear's hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-notion` | yes | Notion plugin: Notion's hosted MCP server, authorized through the shared MCP manager |
@@ -425,6 +427,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-session-title` | yes | Log-backed session title service and provider registry for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-title-first-prompt-llm` | yes | First-message LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-session-turn-outline` | no | Whole-log turn outline projection (turnOutline) for the DeepSeek Harness |
+| `@deepseek-ai/dsh-tool-session-control` | no | Send model-authored messages to ordinary Web Sessions with acceptance receipts |
 | `@deepseek-ai/dsh-working-directory` | yes | Session working directories with durable changes and model context |
 
 ## session-query

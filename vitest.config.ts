@@ -5,6 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
+import { sourceRemotePlugin } from './scripts/vitest-source-remote.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './scripts/coverage-exempt.ts'
 import { COVERAGE_PARTITION_MODE_ENV, COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutOptions } from './scripts/coverage-partitions.ts'
 import { LOCAL_TEST_PARALLELISM_CAP, defaultParallelism } from './scripts/parallelism.ts'
@@ -207,9 +208,14 @@ const generatedRemoteAliases = {
   },
 }
 const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
+const testPlugins = () => [
+  pathsPlugin(),
+  standardDecoratorPlugin(),
+  sourceRemotePlugin(import.meta.dirname, '@deepseek-ai/dsh-client-remote-connection'),
+]
 
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  plugins: testPlugins(),
   resolve: { alias: testingAliases },
   test: {
     ...localWorkerBudget,
@@ -223,7 +229,7 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'thread-safe',
@@ -245,7 +251,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',

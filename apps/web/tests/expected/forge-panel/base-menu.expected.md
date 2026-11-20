@@ -1,4 +1,3 @@
-- textbox "搜索分支"
 - group "默认":
   - menuitem "origin/main 默认"
 - group "本地分支":

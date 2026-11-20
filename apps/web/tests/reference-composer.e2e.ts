@@ -49,6 +49,15 @@ async function settledSourceOption(menu: Locator): Promise<Locator> {
   return source
 }
 
+/** Copy the composer's selection through a page-local clipboard, which parallel browser workers cannot disturb. */
+function copiedText(input: Locator): Promise<string> {
+  return input.evaluate((node) => {
+    const clipboardData = new DataTransfer()
+    node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
+    return clipboardData.getData('text/plain')
+  })
+}
+
 // Clear retained suggestions and insert one complete query so an intermediate
 // prefix cannot satisfy the caller's wait for a ready result row.
 async function replaceReferenceQuery(page: Page, input: Locator, text: string): Promise<void> {
@@ -219,6 +228,9 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     await expect.poll(() => fileReference.textContent()).toBe('reference.txt')
     await expect.poll(() => fileReference.locator('svg').count()).toBe(1)
     await expect.poll(() => input.textContent()).toBe('reference.txt ')
+    // The serialized pick names the file by absolute path, so the sent text names it after the Session's directory moves.
+    await page.keyboard.press('ControlOrMeta+A')
+    expect(await copiedText(input)).toBe(`@${join(scaffold.workspaceCwd, 'workspace', 'reference.txt')} `)
 
     await writeComposerDraft(page, input, '@reference-source')
     await (await settledSourceOption(menu)).click()
@@ -294,6 +306,23 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     await page.keyboard.press('Backspace')
     await expect.poll(() => input.locator('[data-composer-chip]').count()).toBe(0)
     await expect.poll(() => input.textContent()).toBe('pr ')
+
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('keeps a file path typed by hand in typed order', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-reference-typed-path'))
+    const input = page.locator('[data-composer-input]').first()
+
+    // No menu pick: every character of the path arrives as its own key press.
+    await writeComposerDraft(page, input, '@folderx/nested/leaf.txt')
+    await expect.poll(() => input.textContent()).toBe('@folderx/nested/leaf.txt')
+    // The caret follows the last character, and the sentence's period stays outside the reference.
+    await page.keyboard.type('. Done')
+    await expect.poll(() => input.textContent()).toBe('@folderx/nested/leaf.txt. Done')
+    await expect.poll(() => input.locator('[data-composer-text-ref]').allTextContents())
+      .toEqual(['@folderx/nested/leaf.txt'])
 
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
@@ -460,12 +489,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
       icons: node.querySelectorAll('svg').length,
     }))
     await page.keyboard.press('ControlOrMeta+A')
-    // A page-local clipboard avoids interference with parallel browser workers.
-    const pickerClipboard = await input.evaluate((node) => {
-      const clipboardData = new DataTransfer()
-      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
-      return clipboardData.getData('text/plain')
-    })
+    const pickerClipboard = await copiedText(input)
     expect(pickerClipboard).toBe(`@"${file}" `)
     await writeComposerDraft(page, input, '')
 
@@ -495,11 +519,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     await page.mouse.dblclick(word.x, word.y)
     expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('selected')
     // Copy observes the editor's committed selection, not only the native range.
-    await expect.poll(() => input.evaluate((node) => {
-      const clipboardData = new DataTransfer()
-      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
-      return clipboardData.getData('text/plain')
-    })).toBe('selected')
+    await expect.poll(() => copiedText(input)).toBe('selected')
 
     await row.click({ button: 'right' })
     const menu = page.getByRole('menu')
@@ -517,11 +537,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
       icons: node.querySelectorAll('svg').length,
     }))).toEqual(pickerAppearance)
     await page.keyboard.press('ControlOrMeta+A')
-    const menuClipboard = await input.evaluate((node) => {
-      const clipboardData = new DataTransfer()
-      node.dispatchEvent(new ClipboardEvent('copy', { clipboardData, bubbles: true, cancelable: true }))
-      return clipboardData.getData('text/plain')
-    })
+    const menuClipboard = await copiedText(input)
     expect(menuClipboard).toBe(`Review selected ${pickerClipboard}, then finish.`)
 
     await page.keyboard.press('ControlOrMeta+Z')

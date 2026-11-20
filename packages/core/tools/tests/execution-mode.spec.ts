@@ -1,4 +1,5 @@
 /** Covers fail-closed per-call classification and model-schema isolation. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -14,6 +15,7 @@ const testToolSignal = new AbortController().signal
 
 async function setup() {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

@@ -42,7 +42,9 @@ dsh --profile web --no-open --port 8080
 
 After startup you see a `dsh web:` line whose root URL carries a fresh process token. Unless `--no-open` or an SSH session suppresses it, the default browser opens that URL, receives a signed cookie, and redirects to the same directory without the token. You know it worked when the page loads and you can chat with the agent. Two failures to expect: if the frontend is not built, startup stops with a build hint (`pnpm run build` in a checkout); if the browser cannot be opened, a credential-free diagnostic prints to stderr while the server keeps running — open the printed startup URL yourself.
 
-**Settings → Models** displays **DeepSeek**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
+The sign-in page presents token entry and pairing in separate cards. Paste either a login link or its token; copy the link from Settings → Remote connection on a signed-in device. Continue becomes available only for a well-formed login link or token; activating it while unavailable shows a validation prompt. Editing dismisses the prompt until another submission attempt. Rejected tokens appear in a full-width error banner, matching the pairing failure banners. Pairing instructions are visible before requesting access. Another browser can request access from that page. Approve the matching code in **Settings → Remote connection** on a signed-in browser; the applicant then enters the application automatically. [Browser pairing](../../client/remote-connection/README.md) owns the approval rules and request limits.
+
+**Settings → Models** displays **DeepSeek API**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
 
 Saved model selections override the composition default. The settings card accepts a Messages-compatible API address and a credential reference.
 

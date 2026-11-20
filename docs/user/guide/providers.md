@@ -6,7 +6,7 @@ This guide assumes you started the Web UI through the [root README](../../../REA
 
 ## Configure DeepSeek
 
-Open **Settings → Models**. The DeepSeek card exposes one API-key field; enter the key and save it.
+Open **Settings → Models**. The DeepSeek API card exposes one API-key field; enter the key and save it.
 
 ![The Models page: the DeepSeek card, with Add model provider below it](providers-models-page.png)
 
@@ -80,7 +80,7 @@ These examples show config fields inside a profile patch. A Cordis config overri
 
 Pi-ai's `input` accepts `text` and `image` and applies to that model alone. An explicit nonempty selection takes priority. An omitted or empty `input` inherits the installed catalog's input types, then the route's `defaultInput`, which defaults to `[text]`. The checkboxes display these inherited values without saving an override when you merely open the row.
 
-DeepSeek treats an omitted `inputModalities` as text-only and rejects an empty list. Clearing Image also removes that model's `imagePixelBudget` and `imageMaxBytes`, because DeepSeek rejects image limits on a text-only model. Set those limits again if you later enable images and need custom limits.
+DeepSeek treats an omitted `inputModalities` as text-only and rejects an empty list. Clearing Image also removes that model's `imagePixelBudget` and `imageTargetBytes`, because DeepSeek rejects image limits on a text-only model. Set those limits again if you later enable images and need custom limits.
 
 To restore inheritance after editing the checkboxes, remove the model's `input` or `inputModalities` field from `cordis.patch.yml`. **Restore defaults** removes the entire model-catalog override, including other model edits, so use it only when you want to restore the whole catalog.
 

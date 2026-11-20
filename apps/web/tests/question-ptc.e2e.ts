@@ -16,7 +16,7 @@ import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 const question = 'Which PTC answer should remain visible?'
 const args = JSON.stringify({
   description: 'Ask for a retained answer',
-  code: `return await tools.ask_user_question(${JSON.stringify({ questions: [{
+  code: `await tools.ask_user_question(${JSON.stringify({ questions: [{
     id: 'choice', question, options: [{ label: 'Blue' }, { label: 'Green' }],
   }] })});`,
 })

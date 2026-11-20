@@ -48,7 +48,7 @@ function Wait-RunnerNetwork($Config) {
     $info.Environment['DSH_NETWORK_PROBE_TIMEOUT'] = [string]($Config.timeoutSeconds * 1000)
     $info.ArgumentList.Add('--input-type=module')
     $info.ArgumentList.Add('-e')
-    $info.ArgumentList.Add('try { const r = await fetch(process.env.DSH_NETWORK_PROBE_URL, { method: "HEAD", redirect: "error", signal: AbortSignal.timeout(Number(process.env.DSH_NETWORK_PROBE_TIMEOUT)) }); await r.body?.cancel(); process.exit(r.ok ? 0 : 1); } catch { process.exit(1); }')
+    $info.ArgumentList.Add('try { const r = await fetch(process.env.DSH_NETWORK_PROBE_URL, { method: "HEAD", redirect: "error", signal: AbortSignal.timeout(Number(process.env.DSH_NETWORK_PROBE_TIMEOUT)) }); await r.body?.cancel(); process.exitCode = r.ok ? 0 : 1; } catch { process.exitCode = 1; }')
     for ($attempt = 1; $attempt -le $Config.attempts; $attempt++) {
         $ready = $true
         if ($Config.serviceName) {

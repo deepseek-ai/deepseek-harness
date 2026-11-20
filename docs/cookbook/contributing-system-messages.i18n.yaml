@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for contributing-system-messages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/cookbook/contributing-system-messages.md
+/cookbook-contributing-system-messages:
+  en: e24e1c78f974ceb4
+  zh: 82e8af97798040b9
+/cookbook-contributing-system-messages/summary:
+  en: deb81565ddddb5b8
+  zh: 156d072e5b093dca
+/cookbook-contributing-system-messages/table-of-contents:
+  en: 27d98da04e0f22eb
+  zh: e709b895f5d17e7e
+/cookbook-contributing-system-messages/1-register-instructions:
+  en: 3790dd96714c9175
+  zh: ed5b540ea8aa12d0
+/cookbook-contributing-system-messages/2-update-the-text:
+  en: 56c376c2ad789185
+  zh: 67fa94e9f156e34b
+/cookbook-contributing-system-messages/3-end-the-registration:
+  en: 16245f682af4bdb3
+  zh: c3140db50904760d
+/cookbook-contributing-system-messages/4-choose-scope-and-message-kind:
+  en: 9d9725254c118241
+  zh: 8fc8f6deba30fac5
+/cookbook-contributing-system-messages/5-verify-admission:
+  en: 0279908df24b4305
+  zh: 81015df1bd33ae93
+/cookbook-contributing-system-messages/further-exploration:
+  en: 30019bb44ef63557
+  zh: 27e1356291c26e54
+/cookbook-contributing-system-messages/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

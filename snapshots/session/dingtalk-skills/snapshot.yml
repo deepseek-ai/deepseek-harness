@@ -1,0 +1,12 @@
+version: 1
+scenario: dingtalk-skills
+profile: headless
+composition: dingtalk-skills
+recording: authored
+replay:
+  override: true
+platform: posix
+header:
+  class: skill
+  pin: true
+  toolSchemasSource: text-turn

@@ -95,7 +95,7 @@ One plugin registration provides a dynamic `team:policy` section and four condit
 
 ### Scoped registration and teardown
 
-Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
+Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly. After the policy has been admitted, disabling Team mode appends a notice withdrawing it; unloading this plugin appends its retirement notice on the next accepted assembly. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
 
 </details>
 

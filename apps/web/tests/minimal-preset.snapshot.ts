@@ -289,7 +289,12 @@ describe('minimal manual compaction', () => {
     const [initial, , continuation] = requests
     if (initial === undefined || continuation === undefined) throw new Error('minimal compaction did not continue')
     expect(continuation.messages.flatMap(message => message.content)).toEqual(expect.arrayContaining(summary.data.summary))
-    expect(continuation.messages[0]).toEqual(initial.messages[0])
+    expect(continuation.messages[0]).toEqual({
+      ...initial.messages[0],
+      id: expect.any(String) as string,
+      source: { ...initial.messages[0]?.source, reset: true },
+    })
+    expect(continuation.messages[0]?.id).not.toBe(initial.messages[0]?.id)
     expect(continuation.tools).toEqual(initial.tools)
     expect(continuation.messages.flatMap(message => message.content)
       .some(block => block.type === 'text' && block.text === 'MINIMAL_COMPACT_READY')).toBe(true)

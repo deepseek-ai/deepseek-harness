@@ -292,6 +292,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'tool:bash',
     order: ctx.systemPrompt.getSectionOrder('TOOL_BASH'),
     text: 'Check the [exit code: N] marker on every bash result; investigate failures before moving on.',
+    retirement: 'The bash tool is no longer available. Its guidance no longer applies.',
   })
 
   /**

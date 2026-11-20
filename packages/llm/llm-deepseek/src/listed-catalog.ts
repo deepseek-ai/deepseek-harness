@@ -50,7 +50,7 @@ function layered(model: DeepSeekCatalogModel, layer: ModelOverride): DeepSeekCat
   const merged: DeepSeekCatalogModel = { ...model, ...layer }
   if (merged.inputModalities?.includes('image') !== true) {
     if (layer.imagePixelBudget === undefined) delete merged.imagePixelBudget
-    if (layer.imageMaxBytes === undefined) delete merged.imageMaxBytes
+    if (layer.imageTargetBytes === undefined) delete merged.imageTargetBytes
   }
   return merged
 }

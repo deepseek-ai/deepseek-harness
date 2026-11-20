@@ -1061,7 +1061,7 @@ else process.exit(1);
     sections.push('## PDF drag selection\n\n- Table selection: forward and backward drags exclude later sections\n- Line-break highlight: transparent\n- Text selection: translucent blue in light and dark themes; canvas text remains visible\n- Mouse release preserves the selected text')
 
     const pngResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/workspaceFiles/readBytes'
-      && (response.request().postDataJSON() as { payload: { args: { path: string } } }).payload.args.path === 'tiny.png')
+      && (response.request().postDataJSON() as { payload: { args: { path: string } } }).payload.args.path.endsWith('/tiny.png'))
     await openFile('tiny.png')
     const transferred = await pngResponse
     expect(transferred.headers()['content-type']).toMatch(/^multipart\/form-data;/)
@@ -1214,7 +1214,7 @@ else process.exit(1);
     let waitingForRead = false
     const readPage = scaffold.ctx.workspaceFiles.read.bind(scaffold.ctx.workspaceFiles)
     const heldRead = vi.spyOn(scaffold.ctx.workspaceFiles, 'read').mockImplementation(async (agent, path, range, signal) => {
-      if (path === 'pages.ts' && (range.offset ?? 1) === 1) {
+      if (path.endsWith('/pages.ts') && (range.offset ?? 1) === 1) {
         waitingForRead = true
         await releaseRead.promise
       }

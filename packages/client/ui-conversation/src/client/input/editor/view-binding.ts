@@ -136,6 +136,10 @@ export function installDraftKeymap(
       return keyboard.space()
     },
     dismissPopup: () => { keyboard.dismissPopup() },
+    recallHistory: (direction) => {
+      if (gate.current.machineBusy || gate.current.locked) return false
+      return keyboard.recallHistory(direction)
+    },
     canSubmit: () => !gate.current.locked && !gate.current.machineBusy,
     submit: (accelerated) => {
       const g = gate.current

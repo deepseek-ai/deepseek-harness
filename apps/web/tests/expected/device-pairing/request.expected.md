@@ -1,0 +1,18 @@
+- main:
+  - region "连接到此 Host":
+    - heading "连接到此 Host" [level=1]
+    - paragraph: 请用以下任意方式验证登录
+    - form "输入登录令牌或链接":
+      - heading "输入登录令牌或链接" [level=2]
+      - paragraph: 在已登录设备的「设置 → 远程连接」中复制链接，粘贴到此处
+      - textbox "输入登录令牌或链接":
+        - /placeholder: {{application-url}}?token=xxx
+      - button "继续"
+    - region "配对此设备":
+      - heading "配对此设备" [level=2]
+      - paragraph: 申请后，在另一台已登录设备的“设置 → 远程连接”核对配对码并批准，此设备将自动登录。
+      - code: {{pairing-code}}
+      - button "重新申请"
+      - button "取消申请"
+      - status: 正在等待批准…
+      - timer: 剩余时间：{{remaining}}

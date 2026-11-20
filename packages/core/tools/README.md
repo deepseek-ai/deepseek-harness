@@ -81,7 +81,7 @@ Mount one executor in the deployment, preset, or Agent scope. The nearest scope 
 - name: '@deepseek-ai/dsh-tool-executor-native'
 ```
 
-Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.md). See the [native](../tool-executor-native/README.md) or [PTC](../tool-executor-ptc/README.md) package for executor settings. Custom providers implement only `describe(definitions)` and `execute(batch)`; the shared pipeline is optional. The registry selects the current scoped executor separately for prompt descriptions and each `ctx.tools.execute()` batch. An accepted batch settles through its selected provider even if that provider unloads; settlement may include cancellation errors according to the provider’s disposal policy. New batches reject until a replacement is registered.
+Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.md). See the [native](../tool-executor-native/README.md) or [PTC](../tool-executor-ptc/README.md) package for executor settings. Custom providers implement only `describe(definitions)` and `execute(batch)`; the shared pipeline is optional. The registry selects the current scoped executor separately for prompt descriptions and each `ctx.tools.execute()` batch. An accepted batch settles through its selected provider even if that provider unloads; settlement may include cancellation errors according to the provider’s disposal policy. New batches reject until a replacement is registered. Executor prompt sections follow ordinary [section lifecycle rules](../system-prompt/README.md): teardown removes registrations, and the next assembly compares any replacement registrations or prepares retirement notices.
 
 ### Restrict tools per agent
 

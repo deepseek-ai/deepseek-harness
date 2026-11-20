@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Remote connection",
+    "description": "Sign another browser in with a short-lived, single-use QR code."
+  }
+}

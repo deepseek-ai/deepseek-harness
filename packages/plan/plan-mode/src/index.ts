@@ -123,7 +123,6 @@ const planUnitStateSchema: ZodType<PlanUnitState> = zod.object({
     commandId: zod.string() as unknown as ZodType<CommandId>,
     wanted: zod.boolean(),
   }).strict().nullable(),
-  activeAtLastHeader: zod.boolean().nullable(),
   entered: zod.boolean(),
 }).strict()
 
@@ -136,9 +135,9 @@ const planProjectionSchema: ZodType<PlanProjection> = zod.object({
 /** Projection of logged plan selections and committed mode. */
 export const planProjectionDefinition = {
   key: 'plan',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema: planUnitStateSchema,
-  init: () => ({ active: false, wanted: null, running: null, activeAtLastHeader: null, entered: false }),
+  init: () => ({ active: false, wanted: null, running: null, entered: false }),
   apply: (state, event) => {
     if (event.type === 'command/run' && event.data.name === 'plan') {
       if (event.data.args === undefined) return state
@@ -153,9 +152,6 @@ export const planProjectionDefinition = {
     }
     if (event.type === 'plan/mode') {
       return { ...state, active: event.data.active, wanted: null, entered: state.entered || event.data.active }
-    }
-    if (event.type === 'request/header') {
-      return { ...state, activeAtLastHeader: state.active }
     }
     return state
   },
@@ -198,10 +194,30 @@ export class PlanModeController extends Service {
     const ctx = this.ctx
     ctx.systemPrompt.section({
       name: 'plan:policy',
+      retirement: 'Plan mode is no longer available. Its instructions no longer apply.',
       order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
       text: (context) => {
         if (context.agent === undefined) return ''
-        return this.selectedActive(context.agent.session) ? this.section : ''
+        const pending = this.pendingIntents.get(context.agent.session)
+        const state = this.planState(context.agent.session)
+        return state.entered || pending?.active === true
+          ? `The following instructions apply only while plan mode is active.\n\n${this.section}`
+          : ''
+      },
+    })
+    ctx.systemPrompt.section({
+      name: 'plan:status',
+      retirement: 'Plan mode is inactive.',
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY') + 1,
+      replacement: '',
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        const state = this.planState(context.agent.session)
+        const active = this.pendingIntents.get(context.agent.session)?.active ?? state.active
+        if (!state.entered && !active) return ''
+        return active
+          ? 'Plan mode is active. Follow the plan-mode instructions.'
+          : 'Plan mode is inactive. The plan-mode instructions no longer apply.'
       },
     })
     this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
@@ -215,16 +231,15 @@ export class PlanModeController extends Service {
       next,
     ): Promise<PreStepDecision> => {
       const decision = await next()
-      const pending = this.pendingIntents.get(agent.session)
-      if (decision.kind === 'reject' || signal.aborted || pending === undefined) return decision
-      const narration = this.narration(agent.session, pending.active)
+      if (decision.kind === 'reject' || signal.aborted) return decision
+      let narration: UserMessage | undefined
       try {
-        this.onBoundary(agent.session)
+        narration = this.onBoundary(agent.session)
       } catch (error) {
         ctx.logger.warn('dsh-plan-mode: failed to append selected plan mode at step start: %o', error)
         return decision
       }
-      return !pending.narrate || narration === undefined
+      return narration === undefined
         ? decision
         : { ...decision, messages: [...decision.messages, narration] }
     })
@@ -398,10 +413,6 @@ export class PlanModeController extends Service {
     return this.ctx.agents.turnBoundaryOf(session).openTurnStartSeq !== null
   }
 
-  private loggedActiveAtLastHeader(session: Session): boolean | undefined {
-    return this.planState(session).activeAtLastHeader ?? undefined
-  }
-
   private planState(session: Session): PlanUnitState {
     if (this.planProjectionHandle === undefined) {
       throw new PlanModeError('plan mode is not ready; await plugin activation before running an agent', 'PLAN_STATE_UNAVAILABLE')
@@ -430,6 +441,7 @@ export class PlanModeController extends Service {
    * further in-turn pre-step runs. During an open turn the selection remains
    * pending until the next accepted in-turn pre-step. Repeated selection of
    * the current or already-pending state is a no-op.
+   * Each committed user selection contributes a user-switch notice.
    *
    * @param agent The agent to switch.
    * @param active Whether plan mode should be active.
@@ -455,13 +467,12 @@ export class PlanModeController extends Service {
     }
     session.append('plan/mode', { active })
     this.pendingIntents.delete(session)
-    const narration = this.narration(session, active)
-    if (narration !== undefined) agent.inject(narration)
+    agent.inject(this.narration(active))
     return 'committed'
   }
 
-  /** Append one pending selection before the next request assembly. */
-  private onBoundary(session: Session): void {
+  /** Commit a pending transition and return its notice for user selections. */
+  private onBoundary(session: Session): UserMessage | undefined {
     const pending = this.pendingIntents.get(session)
     if (pending === undefined) return
     const target = pending.active
@@ -473,12 +484,11 @@ export class PlanModeController extends Service {
     // Delete only after append succeeds so a later accepted in-turn pre-step
     // can retry a failed durable write.
     this.pendingIntents.delete(session)
+    if (pending.narrate) return this.narration(target)
   }
 
-  /** Build a user-switch notice when the last logged header described the other mode. */
-  private narration(session: Session, target: boolean): UserMessage | undefined {
-    const told = this.loggedActiveAtLastHeader(session)
-    if (told === undefined || told === target) return
+  /** Build the notice accompanying a committed user-selected transition. */
+  private narration(target: boolean): UserMessage {
     const text = target
       ? 'The user switched this session to plan mode.'
       : 'The user switched this session back to the default mode.'

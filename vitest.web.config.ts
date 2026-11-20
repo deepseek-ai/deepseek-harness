@@ -1,5 +1,7 @@
 import tsconfigPaths from 'vite-tsconfig-paths'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
+import WebSnapshotSequencer from './scripts/web-snapshot-sequencer.ts'
+import { webSnapshotProjects } from './scripts/web-snapshot-projects.ts'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 
 // Web browser lane: real host entry points, built-client interaction snapshots,
@@ -23,15 +25,18 @@ export default defineConfig({
   ],
   test: {
     execArgv: vitestExecArgv,
-    include: [
+    // Serial, main, and sliced long-file projects; see scripts/web-snapshot-projects.ts.
+    projects: webSnapshotProjects([
       'apps/web/tests/**/*.e2e.ts',
       'apps/web/tests/**/*.snapshot.ts',
       'packages/experimental/inspector/tests/client-browser.e2e.ts',
-    ],
+    ], configDefaults.exclude),
     // Local and record runs stay serial. CI runs workspace-mutating HMR and
     // dynamic Cordis lifecycle coverage before parallelizing the remaining files.
     testTimeout: 180_000,
     hookTimeout: 120_000,
     fileParallelism: false,
+    // `--shard` splits CI's two web snapshot machines by file weight, not file count.
+    sequence: { sequencer: WebSnapshotSequencer },
   },
 })

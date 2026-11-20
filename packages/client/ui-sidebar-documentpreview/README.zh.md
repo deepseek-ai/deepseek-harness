@@ -43,7 +43,7 @@ kind: "package-reference"
 <a id="addresses"></a>
 ## 地址
 
-tab 使用 `fileAddressFor` 构造的 Session 地址，携带相对或绝对路径。路由在地址及其内容身份中保留 `.` 与 `..` 路径段，由 Host 解析。`hostFileOf(address)` 仅从地址取得 Session，不接收外部 Session 参数，也不借用当前或 Tab Session。Host 通过 Session 文件系统解析文件及关联路径，由该后端控制读取权限。任何 UI（包括 Global 组件）都共享同一完整地址的元数据。[Workspace Files README](../../api/workspace-files/README.zh.md) 定义这些规则；渲染器选择不改变导航地址。
+tab 使用 `fileAddressFor` 构造的 Session 地址，携带绝对路径；打开方不知道 Session 的目录时携带相对路径。路由在地址及其内容身份中保留 `.` 与 `..` 路径段，由 Host 解析。`hostFileOf(address)` 仅从地址取得 Session，不接收外部 Session 参数，也不借用当前或 Tab Session。Host 通过 Session 文件系统解析文件及关联路径，由该后端控制读取权限。任何 UI（包括 Global 组件）都共享同一完整地址的元数据。[Workspace Files README](../../api/workspace-files/README.zh.md) 定义这些规则；渲染器选择不改变导航地址。
 
 全部文本分页加载完成后，Markdown 图片通过已鉴权的 `/api/file` 路由读取绝对文件路径，以及相对于源文档所在目录的路径。相对图片等待 Host 返回文档绝对路径。URL 转义只解码一次；查询参数与片段后缀不计入文件名。HTTP(S) 图片保留原始 URL，加载失败的图片显示 alt 文本。本地图片要求应用基址为 HTTP(S) URL；图片文件不加入自动刷新依赖。
 

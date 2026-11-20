@@ -38,11 +38,15 @@ export function registerServerContext(ctx: Context, server: string, connection: 
     inner.mcpResources.register(server, connection.resources)
   })
   ctx.inject(['systemPrompt'], (inner) => {
+    // A connection without instructions yields empty text, so the replacement notice also has to read correctly alone.
+    const superseded = `The earlier instructions supplied by MCP server ${JSON.stringify(server)} no longer apply.`
     inner.systemPrompt.section({
       name: `mcp:${server}`,
       order: inner.systemPrompt.getSectionOrder('MCP_SERVERS'),
       interpolate: false,
       text: () => connection.instructions(),
+      replacement: superseded,
+      retirement: superseded,
     })
     const { catalog } = connection
     if (catalog !== undefined) {

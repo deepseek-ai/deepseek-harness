@@ -27,6 +27,16 @@ describe('compact plain-language report output', () => {
     expect(() => parseSummary(response(['One.', 'Two.', 'Three.', 'Four.', 'Five.']), 'en')).toThrow()
     expect(() => parseSummary(response(['x'.repeat(321)]), 'en')).toThrow()
   })
+  it('selects the limit of each line by its script when no language is required', () => {
+    expect(parseSummary(response(['一'.repeat(160)]), undefined).progress).toHaveLength(1)
+    expect(() => parseSummary(response(['一'.repeat(161)]), undefined)).toThrow(
+      'Use at most 160 characters for Chinese or Japanese',
+    )
+    expect(() => parseSummary(response(['あ'.repeat(161)]), undefined)).toThrow()
+    expect(parseSummary(response(['x'.repeat(320)]), undefined).progress).toHaveLength(1)
+    expect(parseSummary(response([`${'x'.repeat(200)} 保存`]), undefined).progress).toHaveLength(1)
+    expect(() => parseSummary(response(['x'.repeat(321)]), undefined)).toThrow()
+  })
   it('rejects an oversized malformed report without expanding its repair diagnostics per entry', () => {
     try {
       parseSummary(

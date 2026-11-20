@@ -167,6 +167,10 @@ export function controlDetails(
   // Historical `send_message` and `interrupt_agent` records name their target with `agent_id`.
   const target = arg(args, 'target') || arg(args, 'agent') || arg(args, 'agent_id') || arg(args, 'sessionId') || arg(args, 'job_id')
   switch (name) {
+    case 'session_send_message':
+      if (!detailRecord(json) || !nonempty(json.message_id)) return null
+      return receipt(arg(args, 'session_id'), detailBadge('accepted', t), t,
+        [{ label: t('detail.field.messageId'), value: json.message_id }], arg(args, 'message'))
     case 'list_agents': return agentList(text, json, t)
     case 'job_list': return jobList(text, t)
     case 'terminal_list': return terminalList(text, t)

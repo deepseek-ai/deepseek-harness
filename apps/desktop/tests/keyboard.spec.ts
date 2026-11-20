@@ -828,3 +828,100 @@ it('delivers Windows Edit actions to the focused browser guest without invoking 
   f.keyboard.sendEditingKey('C', ['control'])
   expect(f.contents.sendInputEvent).toHaveBeenCalledTimes(2)
 })
+
+it.each([
+  ['macos', 'Command+,'],
+  ['windows', 'Control+,'],
+  ['linux', 'Control+,'],
+] as const)('builds and updates %s Settings menu availability, accelerator, and guards', async (platform, expectedAccelerator) => {
+  const f = await fixture(platform)
+  const initialMenu = f.keyboard.settingsMenuItem('Settings…')
+  expect(initialMenu).toMatchObject({ id: 'dsh-settings-open', label: 'Settings…', enabled: false })
+  expect(initialMenu).not.toHaveProperty('accelerator')
+  await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
+  expect(f.updateMenu).toHaveBeenCalledOnce()
+  expect(f.keyboard.settingsMenuItem('Settings…').enabled).toBe(false)
+
+  const settingsDefinition: ShortcutDefinition = {
+    id: 'settings.open' as ShortcutCommandId,
+    defaults: desktopDefaults({ code: 'Comma', modifiers: ['primary'] }),
+  }
+  const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, [...f.definitions, settingsDefinition])
+  expect(f.updateMenu).toHaveBeenCalledTimes(2)
+  expect(f.keyboard.settingsMenuItem('Settings…')).toMatchObject({
+    id: 'dsh-settings-open', label: 'Settings…', enabled: true, accelerator: expectedAccelerator,
+  })
+
+  const meta = platform === 'macos'
+  f.contents.emit('before-input-event', { preventDefault: vi.fn() }, {
+    type: 'keyDown', code: 'KeyW', key: ',', modifiers: [meta ? 'meta' : 'control'],
+    meta, control: !meta, alt: false, shift: false, isAutoRepeat: false, isComposing: false,
+  })
+  expect(f.contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(true)
+
+  let currentRevision = initial.revision
+  if (platform === 'windows') {
+    const metaSaved = await f.call<ShortcutSaveResult>(DESKTOP_IPC.shortcutsEdit,
+      { type: 'set', id: 'settings.open', binding: { code: 'Comma', modifiers: ['meta'] } }, currentRevision)
+    expect(metaSaved.status).toBe('saved')
+    currentRevision = metaSaved.snapshot.revision
+    expect(f.keyboard.settingsMenuItem('Settings…').accelerator).toBe('Super+,')
+  }
+
+  const unbound = await f.call<ShortcutSaveResult>(DESKTOP_IPC.shortcutsEdit,
+    { type: 'set', id: 'settings.open', binding: null }, currentRevision)
+  expect(unbound.status).toBe('saved')
+  expect(f.updateMenu).toHaveBeenCalledTimes(platform === 'windows' ? 4 : 3)
+  const unboundMenu = f.keyboard.settingsMenuItem('Settings…')
+  expect(unboundMenu).toMatchObject({ enabled: true })
+  expect(unboundMenu).not.toHaveProperty('accelerator')
+
+  let activeRevision = unbound.snapshot.revision
+  if (platform !== 'linux') {
+    const chorded = await f.call<ShortcutSaveResult>(DESKTOP_IPC.shortcutsEdit,
+      { type: 'set', id: 'settings.open', binding: { code: 'KeyG', secondCode: 'KeyS', modifiers: [] } }, activeRevision)
+    expect(chorded.status).toBe('saved')
+    activeRevision = chorded.snapshot.revision
+    const chordedMenu = f.keyboard.settingsMenuItem('Settings…')
+    expect(chordedMenu).toMatchObject({ enabled: true })
+    expect(chordedMenu).not.toHaveProperty('accelerator')
+  }
+
+  const focusWindow = vi.fn()
+  f.window.isFocused.mockReturnValue(false)
+  f.contents.send.mockClear()
+  ;(f.keyboard.settingsMenuItem('Settings…').click as () => void)()
+  expect(f.contents.send).not.toHaveBeenCalled()
+
+  ;(f.keyboard.settingsMenuItem('Settings…', false, focusWindow).click as () => void)()
+  expect(focusWindow).not.toHaveBeenCalled()
+  expect(f.contents.send).not.toHaveBeenCalled()
+
+  ;(f.keyboard.settingsMenuItem('Settings…', true, focusWindow).click as () => void)()
+  expect(focusWindow).toHaveBeenCalledOnce()
+  expect(f.contents.send).toHaveBeenCalledExactlyOnceWith(DESKTOP_IPC.shortcutsInput, {
+    kind: 'menu', commandId: 'settings.open', revision: activeRevision,
+  })
+
+  await f.call(DESKTOP_IPC.shortcutsRecording, true)
+  focusWindow.mockClear(); f.contents.send.mockClear()
+  ;(f.keyboard.settingsMenuItem('Settings…', true, focusWindow).click as () => void)()
+  expect(focusWindow).not.toHaveBeenCalled()
+  expect(f.contents.send).not.toHaveBeenCalled()
+  await f.call(DESKTOP_IPC.shortcutsRecording, false)
+
+  f.window.isEnabled.mockReturnValue(false)
+  ;(f.keyboard.settingsMenuItem('Settings…', true, focusWindow).click as () => void)()
+  expect(focusWindow).not.toHaveBeenCalled()
+  expect(f.contents.send).not.toHaveBeenCalled()
+  f.window.isEnabled.mockReturnValue(true)
+
+  const overlay = updateOverlayFixture(f)()
+  ;(f.keyboard.settingsMenuItem('Settings…', true, focusWindow).click as () => void)()
+  expect(focusWindow).not.toHaveBeenCalled()
+  expect(f.contents.send).not.toHaveBeenCalled()
+  overlay.destroy()
+
+  await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
+  expect(f.keyboard.settingsMenuItem('Settings…').enabled).toBe(false)
+})

@@ -47,7 +47,7 @@ function DetailItem({ item, t, onOpenFile }: { item: ToolDetailItem } & DetailCo
   return (
     <li className={css.item} data-change={item.change?.value}>
       {item.title !== undefined && (
-        <div className={css.heading}>
+        <div className={css.heading} data-has-status={status !== undefined || undefined}>
           {status !== undefined && (
             <span className={css.status} role="img" aria-label={item.change?.label ?? status.label}>
               {item.change?.value === 'added' ? '+'

@@ -169,7 +169,7 @@ import Darwin
             scheduler.systemPointer.release(connection: connectionID)
             return AXWorker.actionResult
         }
-        if request.method == "toggleMouse", try params.optionalBoolean("useSystemPointer") == true,
+        if request.method == "toggleMouse", try params.optionalBoolean("useSystemInput") == true,
            try params.string("direction") == "up" {
             try scheduler.systemPointer.up(connection: connectionID, app: params.string("appHandle"), window: params.windowID(),
                                           button: WindowPointerInput.button(params.string("mouseButton")))

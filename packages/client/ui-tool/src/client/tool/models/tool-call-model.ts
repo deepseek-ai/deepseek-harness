@@ -111,6 +111,7 @@ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
   subagent_fork: 'tool.title.subagentFork',
   list_agents: 'tool.title.listAgents',
   send_message: 'tool.title.sendMessage',
+  session_send_message: 'tool.title.sendMessage',
   interrupt_agent: 'tool.title.interruptAgent',
   job_list: 'tool.title.listJobs',
   job_output: 'tool.title.readJob',

@@ -72,7 +72,7 @@
   border-radius: 2px;
 }
 
-.heading:has(.statusText) .text {
+.heading[data-has-status] .text {
   flex-basis: 12em;
 }
 

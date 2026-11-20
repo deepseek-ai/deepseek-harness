@@ -1,4 +1,5 @@
 /** Real file tools preserve Review baselines without depending on git or model observations. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -48,6 +49,7 @@ async function boot(environment: string) {
     })
   }
   provideWorkingDirectoryFixture(ctx, cwd)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

@@ -1,0 +1,10 @@
+version: 1
+scenario: mcp-empty-ptc-scoped
+profile: headless
+composition: mcp-empty-ptc
+recording: authored
+header:
+  class: mcp-empty-ptc-scoped
+  pin: true
+  systemPromptSource: ptc-persistent
+  toolSchemasSource: ptc-scoped-repl

@@ -8,6 +8,7 @@
  * PowerShell); the fake-executor suite (tools.spec.ts) carries the coverage
  * gate.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -64,6 +65,7 @@ describe.skipIf(!hasPwsh)('pwsh tool over the real pwsh executor', () => {
     ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

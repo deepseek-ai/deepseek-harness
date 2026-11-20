@@ -25,7 +25,7 @@
 
 每个 tab 都由一个地址字串打开，地址就是 tab 的内容身份。地址分两族。
 
-**资源地址**是 `dsh-resource://<type>/…` 形式的 URL。host 命名资源协议——即 `ResourceProtocolMap` 的键——其后是该协议自己的路径；所有协议共用一个 scheme，新增协议只新增 host、不新增 scheme。`file` 协议的路径以其作用域开头：`session/<sessionId>` 后接相对该会话工作区根的路径（`dsh-resource://file/session/abc/src/notes.txt`），或 `absolute` 后接去掉前导 `/` 的绝对路径（`dsh-resource://file/absolute/home/ys/notes.txt`，Windows 上为 `dsh-resource://file/absolute/C:/x/y.txt`）。id 与每一段路径都做组件编码，盘符的 `:` 保留原样。`fileAddressFor(sessionId, cwd, path)` 构造地址——相对路径或工作区内的绝对路径成为 `session` 相对地址，其他绝对路径成为 `absolute` 地址——`parseFileAddress(address)` 读回各部分或返回 `undefined`（[语法](../../packages/util/workspace-path/README.zh.md)）。
+**资源地址**是 `dsh-resource://<type>/…` 形式的 URL。host 命名资源协议——即 `ResourceProtocolMap` 的键——其后是该协议自己的路径；所有协议共用一个 scheme，新增协议只新增 host、不新增 scheme。`file` 协议的路径以其作用域开头：`session/<sessionId>` 后接 Host 在该 Session 中读取的路径：保留前导 `/` 的绝对路径（`dsh-resource://file/session/abc//home/ys/project/src/notes.txt`），或相对 Session 目录的路径（`dsh-resource://file/session/abc/src/notes.txt`）；或 `absolute` 后接去掉前导 `/` 的绝对路径（`dsh-resource://file/absolute/home/ys/notes.txt`，Windows 上为 `dsh-resource://file/absolute/C:/x/y.txt`）。id 与每一段路径都做组件编码，盘符的 `:` 保留原样。`fileAddressFor(sessionId, cwd, path)` 构造 `session` 地址——绝对路径原样保留，调用方知道 `cwd` 时相对路径与它拼接，因此已打开的 tab 在 Session 的目录移动后仍指向同一个文件——`parseFileAddress(address)` 读回各部分或返回 `undefined`（[语法](../../packages/util/workspace-path/README.zh.md)）。
 
 **页面地址**是 Sidebar 为按 kind（而非按资源）打开的 tab 记下的地址：`sidebar://<kind>`，由 Sidebar 自己在 `openTab(kind)` 运行时写入。调用方从不拼它——引导页与文件树以 `openTab('guide')`、`openTab('files')` 打开——此外不存在任何导航地址（[不做](#not-built)）。
 

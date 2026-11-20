@@ -31,8 +31,6 @@ export interface PlanUnitState {
   wanted: boolean | null
   /** The latest plan command awaiting its paired settlement. */
   running: { commandId: CommandId; wanted: boolean } | null
-  /** Active state recorded by the latest `request/header`, or null. */
-  activeAtLastHeader: boolean | null
   /** Whether a logged `plan/mode` has ever activated plan mode in this Session. */
   entered: boolean
 }

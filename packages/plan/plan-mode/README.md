@@ -45,7 +45,7 @@ The only required configuration is the guidance text the agent follows while pla
 
 | Field | Default | Meaning |
 |---|---|---|
-| `section` | required | Guidance rendered as the `plan:policy` prompt section while plan mode is active |
+| `section` | required | Conditional `plan:policy` guidance retained after the first plan-mode entry |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-plan-mode) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -133,7 +133,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-While plan mode is active, the model sees the deployment's exact `section` text at first-party prompt order 500; inactive mode contributes no text.
+The first entry introduces `plan:policy`: a conditional introduction followed by the configured `section` text. The policy remains registered after exit. A separate `plan:status` states whether plan mode is active; exit and reentry change only this status. After compaction, the service restores the policy and current status together.
 
 ##### Configuration example
 
@@ -143,25 +143,25 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### Token effect
 
-Inactive mode adds no tokens; active mode adds the configured section to every request.
+Before first entry, plan mode contributes no text. Afterwards, the policy stays in history; each transition adds only a short status notice. Compaction introduces the retained policy and current status once.
 
 #### KV Cache effect
 
-The section is stable within plan mode, but entering or leaving changes the system prompt from first-party order 500 onward.
+Mode transitions append status without changing the earlier instruction prefix. The first entry also appends the policy. Provider cache reuse depends on the adapter’s representation.
 
 ### Human command
 
 #### What the model sees
 
-`/plan`, `/plan off`, and their terminal results stay outside model history. A non-empty suffix other than the exact `off` argument becomes one user message through `agent.steer()` after plan mode is selected: admitted image and file blocks in selection order, then the trimmed text block. Bare `/plan` with admitted attachments steers one user message containing only those blocks. An active `/plan off` selection contributes the standard logged user-switch notice only when the last request header described plan mode; cancelling a pending entry contributes none because no request observed it.
+`/plan`, `/plan off`, and their terminal results stay outside model history. A non-empty suffix other than the exact `off` argument becomes one user message through `agent.steer()` after plan mode is selected: admitted image and file blocks in selection order, then the trimmed text block. Bare `/plan` with admitted attachments steers one user message containing only those blocks. Every committed user-selected mode transition adds a logged user-switch notice, including entry before the first request. No-op selections and pending switches cancelled before commitment add none. An approved exit tool result explains its transition without an extra notice.
 
 #### Token effect
 
-The optional message costs the same history tokens as submitting that content separately. Bare `/plan` without attachments and `/plan off` add none; bare `/plan` with attachments has the normal image and file-handle cost. A narrated active exit adds the small retained switch notice.
+The optional message costs the same history tokens as submitting that content separately. Each committed user-selected transition adds a short retained notice; attachments have their normal image and file-handle cost.
 
 #### KV Cache effect
 
-The user block is append-only conversation growth. Entering or leaving plan mode changes the earlier policy section; a narrated exit notice is appended after the reusable request prefix.
+User content and switch notices append after the existing conversation prefix. Mode transitions append system status updates without rewriting the retained policy.
 
 ### Exit tool schema and review exchange
 

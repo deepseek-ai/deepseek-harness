@@ -196,7 +196,7 @@ it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when 
     const temporary = resolve(directory, 'temporary')
     mkdirSync(scripts, { recursive: true })
     mkdirSync(temporary)
-    for (const name of ['windows-packaging-priority.ps1']) {
+    for (const name of ['windows-packaging-priority.ps1', 'windows-packaging-summary.mjs']) {
       writeFileSync(resolve(scripts, name), readFileSync(resolve(root, 'apps/desktop/scripts', name)))
     }
     const stage = resolve(directory, 'stage.ps1')
