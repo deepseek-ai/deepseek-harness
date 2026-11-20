@@ -15,13 +15,13 @@ import Foundation
     private var press: Press?
 
     nonisolated static func event(_ type: CGEventType, source: CGEventSource?, at screen: CGPoint, button: CGMouseButton,
-                                  group: Int64, flags: CGEventFlags = []) throws -> CGEvent {
+                                  group: Int64, flags: CGEventFlags? = nil, clickState: Int64 = 1) throws -> CGEvent {
         guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: button) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system mouse event")
         }
-        event.flags = flags
+        event.flags = flags ?? CGEventSource.flagsState(.combinedSessionState)
         event.setIntegerValueField(.mouseEventNumber, value: group)
-        event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : 1)
+        event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : clickState)
         return event
     }
 
@@ -79,6 +79,7 @@ import Foundation
     func release(connection: UUID) {
         guard let press, press.connection == connection else { return }
         if let point = CGEvent(source: nil)?.location { press.release.location = point }
+        press.release.flags = CGEventSource.flagsState(.combinedSessionState)
         Self.post(press.release)
         self.press = nil
     }

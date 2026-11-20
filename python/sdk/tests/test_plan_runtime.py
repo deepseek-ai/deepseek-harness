@@ -27,12 +27,19 @@ def _command(runtime: _Runtime, session: Session, text: str) -> CommandExecution
     return result
 
 
-def _effective_system(request: dict) -> str:
-    system = "\n".join(_text_blocks(request.get("system", "")))
+def _system_text(request: dict) -> str:
+    blocks = _text_blocks(request.get("system", ""))
     for message in request["messages"]:
         if message["role"] == "system":
-            system = "\n".join(_text_blocks(message["content"]))
-    return system
+            blocks.extend(_text_blocks(message["content"]))
+    return "\n".join(blocks)
+
+
+def _plan_active(request: dict) -> bool:
+    system = _system_text(request)
+    return system.rfind("Plan mode is active. Follow the plan-mode instructions.") > system.rfind(
+        "Plan mode is inactive. The plan-mode instructions no longer apply."
+    )
 
 
 def _tool_names(request: dict) -> set[str]:
@@ -71,7 +78,7 @@ def test_bare_plan_and_off_change_only_plan_state_without_a_model_request(tmp_pa
     ]
 
 
-def test_plan_body_uses_native_input_then_off_removes_guidance_but_keeps_exit_tool(tmp_path: Path) -> None:
+def test_plan_body_uses_native_input_then_off_deactivates_guidance_but_keeps_exit_tool(tmp_path: Path) -> None:
     with _runtime(tmp_path, [_Completion("PLAN_READY"), _Completion("AFTER_OFF")], initial_permission="workspace-write") as runtime:
         session = runtime.harness.start_session(_SESSION_ID)
         execution = _command(runtime, session, "/计划  Design this change without tools. ")
@@ -79,15 +86,19 @@ def test_plan_body_uses_native_input_then_off_removes_guidance_but_keeps_exit_to
         first = runtime.model.captured()[0]
         assert "Design this change without tools." in _request_texts(first)
         assert "/计划  Design this change without tools. " not in _request_texts(first)
-        assert _GUIDANCE in _effective_system(first)
-        assert "Do not edit or write files" in _effective_system(first)
+        assert _plan_active(first)
+        assert "The following instructions apply only while plan mode is active." in _system_text(first)
+        assert _GUIDANCE in _system_text(first)
+        assert "Do not edit or write files" in _system_text(first)
         assert {"exit_plan_mode", "write", "edit"} <= _tool_names(first)
         _assert_request_permission(first, "workspace-write", "ask")
         _command(runtime, session, "/plan off")
         result = runtime.call(session.run, "Continue after the user changed the mode.")
         assert isinstance(result, RunResult) and result.final_response == "AFTER_OFF"
         second = runtime.model.captured()[1]
-        assert _GUIDANCE not in _effective_system(second)
+        assert not _plan_active(second)
+        assert _system_text(second).count(_GUIDANCE) == 1
+        assert "Plan mode is inactive. The plan-mode instructions no longer apply." in _system_text(second)
         assert _tool_names(first) == _tool_names(second)
         assert "The user switched this session back to the default mode." in _request_texts(second)
         _assert_request_permission(second, "workspace-write", "ask")
@@ -109,8 +120,8 @@ def test_plan_body_steers_the_next_step_of_a_running_turn(tmp_path: Path) -> Non
         result = observing.result(timeout=_WAIT_SECONDS)
         assert isinstance(result, RunResult) and result.final_response == "PLANNING_REPLY"
         a, b = runtime.model.captured()
-        assert _GUIDANCE not in _effective_system(a)
-        assert _GUIDANCE in _effective_system(b)
+        assert not _plan_active(a)
+        assert _plan_active(b)
         assert "Design a smaller change." in _request_texts(b)
         _assert_request_permission(b, "workspace-write", "ask")
     events = _read_events(runtime.logs)
@@ -135,7 +146,7 @@ def test_running_bare_selection_does_not_force_a_step_and_can_be_cancelled(tmp_p
         assert isinstance(observing.result(timeout=_WAIT_SECONDS), RunResult)
         assert len(runtime.model.captured()) == 1
         assert isinstance(runtime.call(session.run, "Inspect the next task without tools."), RunResult)
-        assert (_GUIDANCE in _effective_system(runtime.model.captured()[1])) is (not cancel)
+        assert _plan_active(runtime.model.captured()[1]) is (not cancel)
     events = _read_events(runtime.logs)
     assert len(_of_type(events, "turn/start")) == 2
     assert len(_of_type(events, "step/start")) == 2
@@ -164,12 +175,12 @@ def test_review_approval_feedback_and_dismissal_keep_native_model_behavior(tmp_p
         _wait_activity(runtime, session)
         requests = runtime.model.captured()
         assert seen == ([_PLAN, _PLAN_REVISED] if first_choice == "Keep planning" else [_PLAN])
-        assert _GUIDANCE in _effective_system(requests[0])
+        assert _plan_active(requests[0])
         if first_choice == "Keep planning":
-            assert _GUIDANCE in _effective_system(requests[1])
+            assert _plan_active(requests[1])
             assert "Include rollback." in str(requests[1]["messages"])
         if first_choice != "dismiss":
-            assert _GUIDANCE not in _effective_system(requests[-1])
+            assert not _plan_active(requests[-1])
             assert _tool_names(requests[0]) == _tool_names(requests[-1])
         else:
             assert len(requests) == 1, "dismissal started another model request"
@@ -191,7 +202,7 @@ def test_no_review_provider_keeps_plan_mode_and_reports_tool_failure(tmp_path: P
         _command(runtime, session, "/plan Prepare a plan.")
         _wait_activity(runtime, session)
         first, second = runtime.model.captured()
-        assert _GUIDANCE in _effective_system(first) and _GUIDANCE in _effective_system(second)
+        assert _plan_active(first) and _plan_active(second)
         assert "no user-questions answerer accepted the request" in str(second["messages"])
         _command(runtime, session, "/plan off")
     events = _read_events(runtime.logs)
@@ -209,7 +220,7 @@ def test_plan_state_survives_resume_without_changing_permissions(tmp_path: Path)
         session = resumed.call(resumed.harness.resume_session, _SESSION_ID)
         assert isinstance(resumed.call(session.run, "Continue planning without tools."), RunResult)
         [request] = resumed.model.captured()
-        assert _GUIDANCE in _effective_system(request)
+        assert _plan_active(request)
         _assert_request_permission(request, "workspace-write", "ask")
     events = _read_events(resumed.logs)
     assert [e["data"] for e in _of_type(events, "plan/mode")] == [{"active": True}]
@@ -237,7 +248,7 @@ def test_top_level_plan_result_identifies_the_session_for_wait_continue_and_resu
         assert isinstance(result, RunResult) and result.session_id == execution.session_id
         assert result.final_response == "RESTORED_PLAN"
         [request] = resumed.model.captured()
-        assert _GUIDANCE in _effective_system(request)
+        assert _plan_active(request)
         assert "Design this change without tools." in _request_texts(request)
         assert "Continue this plan without tools." in _request_texts(request)
     events = _read_events(resumed.logs, session_id=execution.session_id)
@@ -256,9 +267,9 @@ def test_plan_state_is_local_and_literal_prompts_do_not_toggle_it(tmp_path: Path
         runtime.call(runtime.harness.client.session_prompt, session.id, [{"type": "text", "text": "/plan off"}])
         _wait_activity(runtime, session)
         first, second, third = runtime.model.captured()
-        assert _GUIDANCE not in _effective_system(first)
-        assert _GUIDANCE in _effective_system(second)
-        assert _GUIDANCE in _effective_system(third)
+        assert not _plan_active(first)
+        assert _plan_active(second)
+        assert _plan_active(third)
         assert "/plan off" in _request_texts(third)
     assert not _of_type(_read_events(runtime.logs, session_id="plan-other"), "plan/mode")
     assert [e["data"] for e in _of_type(_read_events(runtime.logs), "plan/mode")] == [{"active": True}]

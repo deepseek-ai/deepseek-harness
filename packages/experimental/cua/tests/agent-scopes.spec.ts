@@ -3,7 +3,6 @@ import { resolve } from 'node:path'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
@@ -13,6 +12,7 @@ import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { CuaConfig, installCua } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -65,6 +65,17 @@ async function setup(presetIds: readonly string[] | false = ['standard', 'ptc'],
 async function cuaPrompts(ctx: Context, agent: Agent): Promise<string[]> {
   return (await ctx.systemPrompt.assemble({ scope: agent })).sections
     .filter(section => section.name === 'computer-use:dsh-cua').map(section => section.text)
+}
+
+/** Commit the selected Agent's prepared system messages. */
+async function commitPrompt(ctx: Context, agent: Agent) {
+  const assembly = await ctx.systemPrompt.assemble({ scope: agent, session: agent.session })
+  const updates = assembly.systemUpdates(false)
+  for (const { message, intent } of updates) {
+    agent.session.append('system/message', { turn: 1, step: 1, message }, intent)
+  }
+  // Callers inspect the updates this commit wrote.
+  return { ...assembly, systemUpdates: () => updates }
 }
 
 /** Mount the preset registry with one `ptc` preset in a composition that started without them. */
@@ -217,13 +228,19 @@ it('selects one CUA transport for existing and new Agents and removes both on un
   expect(standardSections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Fixture CUA program guidance')
   await ctx.agentPresets.select(existing.agent, 'ptc')
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
+  await commitPrompt(ctx, existing.agent)
   await fresh.dispose()
   expect(ctx.tools.get('cua', fresh.agent)).toBeUndefined()
   await mounted.dispose()
   expect(ctx.tools.get('cua_run_code', standard.agent)).toBeUndefined()
   expect(ctx.tools.get('cua', existing.agent)).toBeUndefined()
-  expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
-    .not.toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua' }))
+  const retirement = await commitPrompt(ctx, existing.agent)
+  expect(admittedMessages(retirement).flatMap(message => message.source.sections ?? []))
+    .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', state: 'retired' }))
+  expect(admittedMessages(retirement).flatMap(message => message.content))
+    .toContainEqual({ type: 'text', text: 'The CUA instructions no longer apply.' })
+  expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections
+    .some(section => section.name === 'computer-use:dsh-cua')).toBe(false)
   const reloaded = await ctx.plugin(provider, {})
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   expect(ctx.tools.get('cua', standard.agent)).toBeUndefined()
@@ -520,3 +537,7 @@ it.each([
   expect(prompt?.includes('at the start of every program')).toBe(!runtime.retainsState)
   expect(prompt).not.toContain('Raw tools use { method, params }')
 })
+
+function admittedMessages(assembly: import('@deepseek-ai/dsh-system-prompt').PromptAssembly) {
+  return assembly.systemUpdates(false).map(update => update.message)
+}

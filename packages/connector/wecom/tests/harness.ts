@@ -19,6 +19,7 @@ import type {
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import UpstreamSkills, { type Config as UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
 import { executableFileName } from '../src/directory.ts'
@@ -147,6 +148,7 @@ export async function createHost(skills: Partial<UpstreamSkillsConfig> = {}): Pr
   const ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   const host: WecomHost = {
     ctx, subprocess: ctx.subprocess as ScriptedSubprocess, binDir: await createBinDir(),

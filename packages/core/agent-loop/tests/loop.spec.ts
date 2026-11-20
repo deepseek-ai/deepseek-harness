@@ -65,7 +65,7 @@ function send(agent: Agent, text: string) {
 function systemOf(request: GenerateOptions | undefined): string | undefined {
   const head = request?.messages[0]
   if (head?.role !== 'system') return undefined
-  return head.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+  return head.content.flatMap(block => block.type === 'text' ? [block.text.trim()] : []).filter(Boolean).join('\n\n')
 }
 
 /** All user-message texts recorded in the log (to assert what actually ran). */
@@ -620,7 +620,7 @@ describe('agent loop', () => {
     expect(systemOf(adapter.requests[0])).toBe('You are an AI agent powered by DeepSeek Harness.\n\nYou run on mock.')
   })
 
-  it('sends no system message when system-prompt/assemble short-circuits with an empty assembly', async () => {
+  it('logs an empty system head without sending it when assembly has no instructions', async () => {
     // The documented escape valve: a deployment that must drop the harness
     // openers short-circuits the assemble waterfall; the request then carries
     // NO system field at all (not an empty string).
@@ -635,12 +635,11 @@ describe('agent loop', () => {
     expect(adapter.requests).toHaveLength(1)
     expect('system' in adapter.requests[0]!).toBe(false)
     expect(adapter.requests[0]!.messages.map(message => message.role)).toEqual(['user'])
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toMatchObject([
-      { data: { message: { role: 'system', content: [] } }, surfaceOp: 'append' },
-    ])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'system/message'))
+      .toMatchObject([{ surfaceOp: 'append', data: { message: { content: [] } } }])
   })
 
-  it('keeps a later nonempty prompt ahead of history after an initially empty assembly', async () => {
+  it('appends a newly introduced section after an initially empty assembly', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
     try {
@@ -649,26 +648,23 @@ describe('agent loop', () => {
       const firstIdle = waitForIdle(ctx, agent)
       send(agent, 'first')
       await firstIdle
-      const head = agent.session.snapshotEvents().find(event => event.type === 'system/message')
+      const firstNode = agent.session.surface.nodes[0]
       expect(adapter.requests[0]?.messages.map(message => message.role)).toEqual(['user'])
-      expect(head).toMatchObject({ data: { message: { content: [] } }, surfaceOp: 'append' })
-      expect(agent.session.surface.nodes[0]).toBe(head?.seq)
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'system/message'))
+        .toMatchObject([{ seq: firstNode, surfaceOp: 'append', data: { message: { content: [] } } }])
 
       emptyAssembly()
       const secondIdle = waitForIdle(ctx, agent)
       send(agent, 'second')
       await secondIdle
       expect(adapter.requests).toHaveLength(2)
-      expect(systemOf(adapter.requests[1])).toBe('You are an AI agent powered by DeepSeek Harness.')
-      expect(adapter.requests[1]?.messages.map(message => message.role)).toEqual(['system', 'user', 'assistant', 'user'])
+      expect(adapter.requests[1]?.messages.at(-2)?.content).toEqual([{ type: 'text', text: 'You are an AI agent powered by DeepSeek Harness.' }])
+      expect(adapter.requests[1]?.messages.map(message => message.role)).toEqual(['user', 'assistant', 'system', 'user'])
       const replacement = agent.session.snapshotEvents().findLast(event => event.type === 'system/message')
-      expect(replacement).toMatchObject({
-        surfaceOp: { op: 'replace', startSeq: head?.seq, endSeq: head?.seq },
-        sourceEventSeqs: [head?.seq],
-      })
-      expect(agent.session.surface.nodes[0]).toBe(replacement?.seq)
+      expect(replacement).toMatchObject({ surfaceOp: 'append' })
+      expect(agent.session.surface.nodes[0]).toBe(firstNode)
       expect(agent.session.snapshotEvents().flatMap(event =>
-        event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
+        event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial'])
     } finally {
       await ctx.fiber.dispose()
     }

@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context } from '@deepseek-ai/cordis'
 import { CordisInspectRegistryService } from '@deepseek-ai/dsh-cordis-host-runner'
@@ -19,6 +20,7 @@ import { hostInspectProviders } from '../src/providers.ts'
 async function host(): Promise<Context> {
   const ctx = new Context()
   // The tool registry injects `systemPrompt`; nothing under test registers a prompt section.
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(NativeToolExecutor)

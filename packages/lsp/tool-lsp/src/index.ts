@@ -103,6 +103,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:lsp',
     order: ctx.systemPrompt.getSectionOrder('TOOL_LSP'),
     text: LSP_PROMPT_TEXT,
+    retirement: 'The lsp tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

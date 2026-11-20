@@ -191,25 +191,31 @@ function Surface({
     use(root)
   }, [])
 
-  // The room rule reads pixels, which the layout state does not carry: measure
-  // after every commit (a split, a divider drag, a closed tab all move panes)
-  // and whenever the surface itself is resized (the embedder's column dragged
-  // wider or narrower). A reading that changed nothing renders nothing.
   const remeasure = useCallback((): void => {
     withSurface((root) => {
       const next = measurePaneFits(root, hideSplitWhenBlocked)
       setFits(current => sameFits(current, next) ? current : next)
     })
   }, [withSurface, hideSplitWhenBlocked])
-  useLayoutEffect(() => { remeasure() })
-  useEffect(() => { onRoom?.(fits) }, [fits, onRoom])
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (typeof ResizeObserver === 'undefined') remeasure()
+  })
+  useLayoutEffect(() => {
     const root = surface.current
     if (root === null || typeof ResizeObserver === 'undefined') return undefined
-    const observer = new ResizeObserver(() => { remeasure() })
+    // A layout change can replace a selected tab's pane and strip. Measure its
+    // initial fit before paint; parent width changes need only the resize delivery.
+    remeasure()
+    const observer = new ResizeObserver(remeasure)
     observer.observe(root)
+    // A divider can resize a pane without resizing the surface. At fixed pane
+    // width, changing the strip controls takes space from its chips or its fill.
+    for (const box of root.querySelectorAll('[data-dockkit-pane], [data-dockkit-strip], [data-dockkit-strip-tabs], [data-dockkit-strip-fill]')) {
+      observer.observe(box, { box: 'border-box' })
+    }
     return () => { observer.disconnect() }
-  }, [remeasure])
+  }, [remeasure, state, canSplit])
+  useEffect(() => { onRoom?.(fits) }, [fits, onRoom])
 
   /** Why a pane cannot split right now: the budget first, then its own width. */
   const splitBlock = (paneId: PaneId): SplitBlock | undefined => {

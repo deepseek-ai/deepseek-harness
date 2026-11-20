@@ -541,6 +541,11 @@
     },
     {
       "doc": "docs/subsystems/session.md",
+      "symbol": "SystemSurfaceNode",
+      "source": "packages/core/session/src/surface.ts"
+    },
+    {
+      "doc": "docs/subsystems/session.md",
       "symbol": "SessionSurface",
       "source": "packages/core/session/src/surface.ts"
     },
@@ -578,6 +583,11 @@
     {
       "doc": "docs/subsystems/persistence.md",
       "symbol": "CreateSessionOptions",
+      "source": "packages/core/session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/persistence.md",
+      "symbol": "SessionHeaderMeta",
       "source": "packages/core/session/src/types.ts"
     },
     {

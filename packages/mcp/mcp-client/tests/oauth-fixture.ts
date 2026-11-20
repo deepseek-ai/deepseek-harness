@@ -9,6 +9,7 @@ import { Context, Logger, LoggerLevel, type Exporter } from '@deepseek-ai/cordis
 import Authorization from '@deepseek-ai/dsh-authorization'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import Tools from '@deepseek-ai/dsh-tools'
@@ -115,6 +116,7 @@ export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
     await ctx.plugin(Authorization)
     await ctx.plugin(WebServer, { host: webHost, port: 0 })
   }
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   await ctx.plugin(NativeToolExecutor)

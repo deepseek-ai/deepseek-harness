@@ -25,7 +25,7 @@ describe('keymap keydown routing', () => {
     })
     editor.setRootElement(first)
     const unregister = registerComposerKeymap(editor, {
-      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {},
+      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => false, submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
     })
     onTestFinished(unregister)
@@ -57,7 +57,7 @@ describe('keymap keydown routing', () => {
     registerComposerKeymap(editor, {
       arbitrate: () => 'pass',
       space: () => false,
-      dismissPopup: () => {},
+      dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => true,
       submit,
       intakeFiles: () => {},
@@ -88,7 +88,7 @@ describe('keymap keydown routing', () => {
     const submit = vi.fn()
     const arbitrate = vi.fn(() => 'pass' as const)
     onTestFinished(registerComposerKeymap(editor, {
-      arbitrate, space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+      arbitrate, space: () => false, dismissPopup: () => {}, recallHistory: () => false, canSubmit: () => true,
       submit, intakeFiles: () => {}, pasteText: () => {},
     }))
     editor.update(() => {
@@ -125,7 +125,7 @@ describe('keymap keydown routing', () => {
     registerComposerKeymap(editor, {
       arbitrate,
       space: () => false,
-      dismissPopup: () => {},
+      dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => true,
       submit: () => {},
       intakeFiles: () => {},
@@ -164,7 +164,7 @@ describe('keymap keydown routing', () => {
       editor.setRootElement(root)
       onTestFinished(registerPlainText(editor))
       onTestFinished(registerComposerKeymap(editor, {
-        arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+        arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, recallHistory: () => false, canSubmit: () => true,
         submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
       }))
       return { editor, root, modify }

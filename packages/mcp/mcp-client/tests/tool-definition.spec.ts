@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context } from '@deepseek-ai/cordis'
@@ -13,6 +14,7 @@ describe('MCP result callback adaptation', () => {
   it('preserves the exact execution, arguments and canonical structured results', async () => {
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -50,6 +52,7 @@ describe('MCP result callback adaptation', () => {
     'rejects invalid external results before exposing content (%j)', async (invalid) => {
       const ctx = new Context()
       try {
+        await ctx.plugin(SessionProjectionRegistry)
         await ctx.plugin(SystemPrompt)
         await ctx.plugin(ToolRuntime)
         await ctx.plugin(NativeToolExecutor)
@@ -78,6 +81,7 @@ describe('MCP result callback adaptation', () => {
   ] as const)('classifies %s as an McpToolError', async (_label, raw, taskRequired, message, code) => {
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)

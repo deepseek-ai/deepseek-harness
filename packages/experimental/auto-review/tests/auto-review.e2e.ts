@@ -156,7 +156,7 @@ async function mount(ctx: Context, workspace: string, dshHome: string): Promise<
   })
   await ctx.plugin(ToolFs)
   await ctx.plugin(ToolBash)
-  await ctx.plugin(NodePtcRuntime, {})
+  await ctx.plugin(NodePtcRuntime, { executionMode: 'per-call' })
   await ctx.plugin(AutoReview)
   await ctx.plugin(AgentLoop, { agents: [] })
 }
@@ -207,7 +207,7 @@ function orchestrate(ctx: Context, real: boolean) {
       const callId = `certification-${String(before)}`
       script = [
         callChunks(callId, offeredTool, path === 'native' ? args : {
-          code: `return await tools.${name}(${JSON.stringify(args)});`,
+          code: `await tools.${name}(${JSON.stringify(args)});`,
           description: 'Execute one tool action.',
         }),
         textChunks('The action has settled.'),

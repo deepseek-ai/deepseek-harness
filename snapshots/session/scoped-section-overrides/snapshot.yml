@@ -1,0 +1,10 @@
+version: 1
+scenario: scoped-section-overrides
+profile: headless
+composition: scoped-section-overrides
+recording: authored
+header:
+  class: scoped-section-overrides
+  pin: true
+  promptChanges: 3
+  toolSchemasSource: complete-prompt-in-history

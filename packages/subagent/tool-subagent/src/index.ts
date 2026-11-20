@@ -367,6 +367,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: `tool:${toolName}`,
     order: ctx.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
+    retirement: `The ${toolName} tool is no longer available. Its instructions no longer apply.`,
     text: (context) => {
       if (mounted === undefined) return ''
       const visible = [...delegationTools]

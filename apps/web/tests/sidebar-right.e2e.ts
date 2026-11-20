@@ -164,6 +164,7 @@ async function hitsItself(locator: Locator): Promise<boolean> {
  * surface and release over the conversation.
  */
 async function floatByDrag(page: Page, tab: Locator): Promise<void> {
+  await tab.hover({ trial: true })
   const surface = page.locator('[data-dockkit-surface]').first()
   const box = await surface.boundingBox()
   if (box === null) throw new Error('surface is not rendered')
@@ -474,7 +475,10 @@ describe('web e2e: shipped right Sidebar', () => {
       }
 
       await expect.poll(async () => await tabTitles(column)).toEqual(['Start'])
-      await expectTitleAlignment(column.locator('[data-dockkit-tab-title]'))
+      const guideTitle = column.locator('[data-dockkit-tab-title]')
+      await expectTitleAlignment(guideTitle)
+      // Even this short, unclosable title has the ordinary edge mask, not the close-button mask.
+      expect(await guideTitle.evaluate(el => getComputedStyle(el).maskImage)).toContain('16px')
       await expect.poll(async () => await column.locator('[data-sidebar-right-guide-entry]').count()).toBe(2)
       expect(await column.locator('[data-sidebar-right-guide-entry="browser"]').count()).toBe(0)
       await column.locator('[data-sidebar-right-guide-entry="files"]').click()
@@ -484,7 +488,9 @@ describe('web e2e: shipped right Sidebar', () => {
       const addTab = column.locator('[data-dockkit-add-tab]')
       const filesTab = column.locator('[data-dockkit-tab]').filter({ hasText: 'Files' })
       await expect.poll(async () => await tabTitles(column)).toEqual(['Files'])
-      await expectTitleAlignment(filesTab.locator('[data-dockkit-tab-title]'))
+      const filesTitle = filesTab.locator('[data-dockkit-tab-title]')
+      await expectTitleAlignment(filesTitle)
+      expect(await filesTitle.evaluate(el => getComputedStyle(el).maskImage)).toContain('14px')
       await column.locator('[data-files-state="tree"]').waitFor({ state: 'visible' })
       expect(await filesTab.locator('[data-dockkit-tab-close]').count()).toBe(1)
       await expect.poll(async () => await addTab.count()).toBe(1)

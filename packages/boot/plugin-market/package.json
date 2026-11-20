@@ -103,6 +103,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@types/hosted-git-info": "^3.0.5",
-    "@types/semver": "^7.8.0"
+    "@types/semver": "^7.8.0",
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

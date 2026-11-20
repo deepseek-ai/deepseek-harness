@@ -120,6 +120,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
+  const heldKeys = new Map()
   const observedWindows = new Set()
   let acquired = false
   let generation = 0
@@ -131,6 +132,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
+    if (method === 'releaseHeldKeys') { heldKeys.delete(params.runId); return { dispatched: true } }
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
@@ -249,7 +251,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
-        systemPointerMoved = params.useSystemPointer === true
+        systemPointerMoved = params.useSystemInput === true
         if (!systemPointerMoved && !alternate && !application.hovering) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
         application.hovering = !systemPointerMoved && alternate
       }
@@ -276,6 +278,13 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (incompleteInputTargets) refuse('UNSUPPORTED', 'Paste menu discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text
+      return { dispatched: true }
+    }
+    if (method === 'sendKeyEvent') {
+      const keys = heldKeys.get(params.runId) ?? new Set()
+      if (params.direction === 'down') keys.add(params.key)
+      else if (!keys.delete(params.key)) refuse('INVALID_ARGUMENT', 'Key was not held by this program')
+      heldKeys.set(params.runId, keys)
       return { dispatched: true }
     }
     if (method === 'typeText') application.value += params.text

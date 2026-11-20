@@ -39,7 +39,10 @@ afterEach(async () => {
 })
 
 /** Real preset mounts, Agent lifecycle, and persistence with a scripted model. */
-async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('done'), textResponse('continued'), textResponse('done again')]) {
+async function setup(
+  script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('done'), textResponse('continued'), textResponse('done again')],
+  systemPrompt: { personaPrefix?: string; personaSuffix?: string } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-continuation-presets-'))
   roots.push(root)
   const ctx = new Context()
@@ -47,7 +50,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [tex
   ctx.baseUrl = pathToFileURL(fixtures).href + '/'
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
-  await mountAgentLoopTestDependencies(ctx)
+  await mountAgentLoopTestDependencies(ctx, { systemPrompt })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
@@ -259,7 +262,7 @@ describe('continuable child presets', () => {
   })
 
   it.each([undefined, 'coding'])('restores historical children from their own header preset %s', async (agentPreset) => {
-    const { ctx, parent, adapter } = await setup()
+    const { ctx, parent, adapter } = await setup(undefined, { personaPrefix: 'Deployment persona.', personaSuffix: 'Keep project policy.' })
     parkParent(ctx, parent)
     const childId = brandString<SessionId>('historical-child')
     const historical = await ctx.agents.create({
@@ -291,8 +294,11 @@ describe('continuable child presets', () => {
     expect(stored.meta.agentPreset).toBe(agentPreset)
     expect(stored.events.some(event => event.type === 'agent-preset/selected')).toBe(false)
     expect((adapter.requests[0]?.tools ?? []).map(tool => tool.name)).toEqual([])
-    expect(JSON.stringify(adapter.requests[0]?.messages.filter(message => message.role === 'system')))
-      .toContain('Historical child persona.')
+    const system = JSON.stringify(adapter.requests[0]?.messages.filter(message => message.role === 'system'))
+    expect(system).toContain('Historical child persona.')
+    expect(system).toContain('Keep project policy.')
+    expect(system).toContain('You are an AI agent powered by DeepSeek Harness.')
+    expect(system).not.toContain('Deployment persona.')
   })
 
   it('restores a fork from its own later preset selection', async () => {
