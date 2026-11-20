@@ -4,7 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { NativeError, type NativeClient } from './native-client.ts'
 import { applicationAccessDisplay } from './locales.ts'
-import { systemInputControlPrompt } from './mouse-control-locales.ts'
+import { systemInputControlPrompt } from './system-input-locales.ts'
 
 /** Access is scoped to the live Session and never grants application access. */
 export class SystemInputControl {
