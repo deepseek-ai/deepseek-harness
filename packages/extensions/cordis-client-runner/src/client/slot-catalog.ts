@@ -4972,7 +4972,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.chat.conversation\', () => ctx.slots.register(\n      { name: \'sidebar.chat.conversation\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-subagent/src/client/sidebar-chat/index.tsx:43',
+    source: 'packages/client/ui-subagent/src/client/sidebar-chat/index.tsx:45',
   },
   {
     key: 'sidebar.footer.action',
