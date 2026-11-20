@@ -2,13 +2,15 @@
 
 ## Summary
 
-The [`weighted-approval` workflow](../workflows/weighted-approval.yml) evaluates an approval score from the repository default branch. An unmet policy gets one status comment; a met policy gets an approving review from the approval App. Branch rules require that review in a separate ruleset instead of a CI status. Reviewers are chosen manually; an eligible delegation command requests review from its recipient.
+Two approval publishers are configured during a staged rollout. The legacy [`weighted-approval` workflow](../workflows/weighted-approval.yml) publishes the required `weighted approval` commit status and its `weighted approval decision` check run at their existing paths. The pilot [`weighted-approval-machine` workflow](../workflows/weighted-approval-machine.yml) publishes the same decision as a status comment and an approving review from the machine account `deepseek-ai-harness`. The pilot publishes only when the `DSH_APPROVAL_REVIEW_SCOPE` repository variable selects it and is not a merge requirement while ruleset `27532727` stays disabled. Reviewers are chosen manually; an eligible delegation command requests review from its recipient.
 
 ## Table of Contents
 
 - [Approval scoring](#approval-scoring)
-- [Publishing the outcome](#publishing-the-outcome)
-- [Required review ruleset](#required-review-ruleset)
+- [Legacy status publisher](#legacy-status-publisher)
+- [Pilot review publisher](#pilot-review-publisher)
+- [Rollout](#rollout)
+- [Required review team](#required-review-team)
 - [Delegating points](#delegating-points)
 - [Security](#security)
 - [Verification](#verification)
@@ -18,77 +20,73 @@ The [`weighted-approval` workflow](../workflows/weighted-approval.yml) evaluates
 
 ## Approval scoring
 
-The policy holds when counted approvals reach two points, the pull request is ready for review, and no write-capable reviewer has an effective `CHANGES_REQUESTED` review. The workflow evaluates a pull request when it opens, synchronizes, reopens, becomes ready, becomes a draft, or is edited, including a base-branch change. Review submissions, edits, and dismissals reach the publisher through the no-permission [`weighted-approval-review-event` workflow](../workflows/weighted-approval-review-event.yml); its validated run title and current head identify the pull request. Conversation comment events run the publisher only when the current or previous body contains `/delegate`. Closed or merged pull requests and superseded heads are skipped before API writes or dependency setup. Pull-request, review, and comment events share one concurrency group per pull request.
+Both publishers evaluate an approval score from the repository default branch. The policy holds when counted approvals reach two points, the pull request is ready for review, and no write-capable reviewer has an effective `CHANGES_REQUESTED` review. The legacy publisher evaluates a pull request when it opens, synchronizes, reopens, becomes ready, becomes a draft, or is edited, including a base-branch change. The pilot subscribes to the same events and to the no-permission [`weighted-approval-review-event` workflow](../workflows/weighted-approval-review-event.yml); its validated run title and current head identify the pull request. Conversation comment events run a publisher only when the current or previous body contains `/delegate`. Closed or merged pull requests and superseded heads are skipped before API writes. Each publisher’s pull-request, review, and comment events share one concurrency group per pull request.
 
-Reviewers whose calculated base repository permission is `write` or `admin` count. The [approval policy](approval-policy.json) gives `@07akioni`, `@CreatixChu`, `@imccyu`, `@LegGasai`, `@tianyicui`, `@tianyicui-bot`, `@turtle1999`, and `@turtle2099` two points each; every other write-capable reviewer gets one point. The pull-request author’s own review and reviewers without write permission do not count. The approval App’s own review carries a marker and is excluded from scoring, so it cannot complete the threshold it is evaluating.
+Reviewers whose calculated base repository permission is `write` or `admin` count. The [approval policy](approval-policy.json) gives `@07akioni`, `@CreatixChu`, `@imccyu`, `@LegGasai`, `@tianyicui`, `@tianyicui-bot`, `@turtle1999`, and `@turtle2099` two points each; every other write-capable reviewer gets one point. The pull-request author’s own review and reviewers without write permission do not count. Both publishers identify the machine account’s review by numeric user ID and exclude it from scoring, so that review cannot complete the threshold it is evaluating.
 
-The PR author contributes `min(100, mergedPRCount) × 11 / 1000` points: 0 merged PRs → 0 points, 50 → 0.55, and 100 or more → 1.1. The publisher counts only merged PRs in this repository using the author’s immutable account ID, excluding the current PR. It stops at 100 matches and rejects incomplete history responses. Counts refresh at the next subscribed evaluation event. Author credit is separate from reviewer approvals and cannot satisfy the two-point requirement alone; the author’s own review remains excluded. Human and bot authors, including Dependabot, use the same rule, except that PRs authored by `@turtle2099` receive a fixed 0.2 points without a history lookup. Drafts, blocking reviews, and sufficient reviewer points skip history lookup; logs mark credit as not evaluated. Otherwise, logs show author credit and the capped count, or the fixed credit, separately. Below the cap, counting may scan the repository’s entire merged history; a failed required lookup fails the run.
+The PR author contributes `min(100, mergedPRCount) × 11 / 1000` points: 0 merged PRs → 0 points, 50 → 0.55, and 100 or more → 1.1. The publisher counts only merged PRs in this repository using the author’s immutable account ID, excluding the current PR. It stops at 100 matches and rejects incomplete history responses. Counts refresh at the next subscribed evaluation event. Author credit is separate from reviewer approvals and cannot satisfy the two-point requirement alone; the author’s own review remains excluded. Human and bot authors, including Dependabot, use the same rule, except that PRs authored by `@turtle2099` receive a fixed 0.2 points without a history lookup. Drafts, blocking reviews, and sufficient reviewer points skip history lookup; logs mark credit as not evaluated. Otherwise, logs show author credit and the capped count, or the fixed credit, separately. Below the cap, counting may scan the repository’s entire merged history; a failed required lookup fails the evaluation.
 
 A one-point approval receives weight `min(2, 1 + 4 × ownedLines / totalLines)` from modified or deleted old production-code lines, attributed by `git blame` at the merge base of the live base branch and exact reviewed head. Ownership of 0%, 12.5%, and 25% gives 1, 1.5, and 2 points; higher ownership remains capped at 2. The success threshold remains 2 total points, without rounding the score. New lines do not enter the denominator, and an empty denominator gives no boost. Existing two-point weights remain unchanged. GitHub commit-author accounts identify reviewers across author emails; unlinked authors remain in the denominator without contributing to a reviewer. The publisher logs measured ownership. It skips attribution when reviewer points plus author credit already meet the threshold or a blocking review exists. Displayed scores use at most three decimal places; the decision uses unrounded scores with a tolerance of `1e-12` points for floating-point error. The curve endpoints come from the policy’s default and required points.
 
 Production source means supported code files under `src/` in `packages/`, `apps/`, `python/`, and `native/`, plus the Desktop renderer, Python interpreter scripts, and committed runtime/packer launchers. The [classifier](blame-production.py) excludes documentation, tests, fixtures, snapshots, test support (including `src/testing/` and `src/testing.ts`), examples, generated source, dependencies, vendored code, declarations, comments, and blank lines. Pygments lexers distinguish comments from strings; mixed code/comment lines count, as do C preprocessor directives. Classification uses the old path and content, so changes to the PR’s file locations or generated headers cannot remove old lines from the denominator. Pure renames have no changed lines; renames with edits use the old path for blame.
 
-Each reviewer contributes only the current `APPROVED` or `CHANGES_REQUESTED` decision that GitHub returns. A `DISMISSED` record clears that reviewer's standing decision, including earlier approvals. Comment-only and pending records do not replace a decision. Reviews from deleted accounts and reviewers without current repository access do not count. The workflow does not invalidate an approval by its review commit; the repository's native pull-request rules own stale-review and latest-push requirements.
+Each reviewer contributes only the current `APPROVED` or `CHANGES_REQUESTED` decision that GitHub returns. A `DISMISSED` record clears that reviewer's standing decision, including earlier approvals. Comment-only and pending records do not replace a decision. Reviews from deleted accounts and reviewers without current repository access do not count. The workflows do not invalidate an approval by its review commit; the repository's native pull-request rules own stale-review and latest-push requirements.
 
-The publisher fetches every review and conversation comment, then resolves current repository permission before deciding. Permission changes take effect on the next subscribed event.
+Each publisher fetches every review and conversation comment, then resolves current repository permission before deciding. Permission changes take effect on the next subscribed event.
 
-<a id="publishing-the-outcome"></a>
+<a id="legacy-status-publisher"></a>
 
-## Publishing the outcome
+## Legacy status publisher
 
-When the policy is unmet, the approval App writes one conversation comment containing `<!-- weighted-approval -->`. The comment carries the current score, counted approvals with their ownership or delegation, remaining points, blocking change requests, delegated reviews still awaited, and reviews without write access. Each evaluation updates that comment in place, and the publisher deletes it when the policy holds or the pull request becomes a draft. A comment marker copied by another account is ignored because the publisher only edits comments from a bot account.
+The legacy workflow writes the `weighted approval` commit status on the pull-request head. It writes `pending` below two points, while the pull request is a draft, or while a write-capable reviewer has an effective `CHANGES_REQUESTED` review; it writes `success` only when the threshold is met and no such blocker exists; it writes `error` when setup or evaluation fails. The publisher marks the head pending before Python setup or lexer installation, so failed setup or an interrupted history fetch cannot leave a previous success in place. Ruleset `20925054` requires that status. Keep GitHub Actions as its expected source; a context-only requirement can accept a same-named status from another integration.
 
-When the policy holds, the publisher deletes the status comment and submits an `APPROVE` review carrying the same marker and the final score. It submits no review when the latest marked review is already `APPROVED`. When the policy stops holding, or the pull request becomes a draft, the publisher dismisses every marked `APPROVED` review before publishing the unmet state. The dismissal message is `Weighted approval no longer holds.`.
+The legacy workflow also writes the `weighted approval decision` check run, which reports the same decision as a conclusion: `action_required` while the policy is unmet, `success` when it holds, and `failure` on setup or evaluation failures, with the score or blocker in its title. The check run is not required by branch rules. It is published with a token minted from the approval App (`checks: write`), because GitHub attaches a check run created with the job token to the earliest Actions check suite on the head, and the merge box omits that run when the suite belongs to this `pull_request_target` workflow. The status uses the job token; a failed App token step or check-run write is logged and never changes the status. The [decision about the commit status](../../.agents/notes/archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the measured check-run association and the job-token fallback.
 
-Drafts are never approved: the publisher retracts a previous approval and removes the status comment. An evaluation failure fails the workflow run without writing a partial decision; the previous comment or approval stays as the last completed decision.
+<a id="pilot-review-publisher"></a>
 
-<a id="required-review-ruleset"></a>
+## Pilot review publisher
 
-## Required review ruleset
+The pilot writes no commit status and no check run. When its policy is unmet, the machine account `deepseek-ai-harness` writes one conversation comment containing `<!-- weighted-approval -->`. The comment carries the current score, counted approvals with their ownership or delegation, remaining points, blocking change requests, delegated reviews still awaited, and reviews without write access. Each evaluation updates that comment in place, and the publisher deletes it when the policy holds or the pull request becomes a draft. A comment marker copied by another account is ignored because the publisher identifies its own comments by the machine account’s numeric user ID, `359032549`.
 
-Branch rules must not require the retired `weighted approval` commit status, and the `weighted approval decision` check run no longer exists. The approval is a native pull-request review, so the requirement lives in its own ruleset rather than the required-status-checks group.
+When the policy holds, the pilot submits an `APPROVE` review carrying the same marker, the final score, and the evaluated commit ID. After the review is recorded, it deletes the status comment; a failed submission leaves the comment in place. It submits no review when its latest review is already `APPROVED` for that commit. When the policy stops holding, the pilot dismisses every marked machine-account `APPROVED` review, then posts or updates the comment. A draft dismisses those reviews and removes the comment instead. The dismissal message is `Weighted approval no longer holds.`.
 
-Create the ruleset `Default + release branches — Weighted approval` with the same branch conditions as the merge-requirements ruleset and one approving review:
+Before submitting an approval, the pilot re-reads the pull request and fails the run when it is no longer open or ready, or its head changed. The review names the evaluated commit ID, and the pilot verifies that the returned review names the same commit.
 
-```json
-{
-  "name": "Default + release branches — Weighted approval",
-  "target": "branch",
-  "enforcement": "active",
-  "conditions": {
-    "ref_name": {
-      "include": ["~DEFAULT_BRANCH", "refs/heads/release/*"],
-      "exclude": ["refs/heads/release/*-to-master", "refs/heads/release/session-log-*"]
-    }
-  },
-  "rules": [
-    {
-      "type": "pull_request",
-      "parameters": {
-        "allowed_merge_methods": ["squash", "merge"],
-        "dismiss_stale_reviews_on_push": false,
-        "require_code_owner_review": false,
-        "require_last_push_approval": false,
-        "required_approving_review_count": 1,
-        "required_review_thread_resolution": false,
-        "required_reviewers": []
-      }
-    }
-  ]
-}
-```
+The pilot does not dismiss its approval before evaluating, because dismissing it would itself be a review event and start another evaluation. After identity verification, a scoring failure attempts to dismiss every marked machine-account approval and then fails the run. Setup, credential, or API failures and undelivered events can still leave an earlier approval, so the pilot is not fail-safe on those paths; the team requirement is not enabled until they are verified. Drafts are never approved; the pilot retracts a previous marked approval and removes the status comment.
 
-Remove `weighted approval` from the required status checks in `Default + release branches — Merge requirements`, and set that ruleset’s `required_approving_review_count` to `0`; it keeps its merge methods and review-thread resolution. The two rulesets then enforce separate requirement groups: CI checks in one, the approving review in the other. The required review counts any write-capable approval, including the App’s, so the weighted score decides when the App supplies the approval rather than adding a second approval requirement.
+Stale-review dismissal is off in ruleset `27532727`. A push after publication does not retract the approval automatically; the next evaluation re-scores the new head and retracts or republishes the approval. Workflow runs are asynchronous, so a pull request can briefly show an approval for an earlier commit. Check the reviewed commit before treating the approval as covering the current head.
 
-GitHub counts a GitHub App approval toward required reviews only while the App has write access to the repository. The approval App therefore needs `Contents: write`, `Issues: write`, and `Pull requests: write`, with `vars.DSH_APPROVAL_APP_CLIENT_ID` and `secrets.DSH_APPROVAL_APP_PRIVATE_KEY` configured. The workflow requests exactly those permissions when it mints the token, so a missing permission fails the job instead of publishing an approval that cannot satisfy the ruleset. Keep “Allow GitHub Actions to create and approve pull requests” disabled; the App token supplies the approval, not `GITHUB_TOKEN`.
+<a id="rollout"></a>
 
-After the ruleset exists, open a pull request with two approval points. Expected: the App submits one approving review, the status comment disappears, and `gh pr view <number> --json reviewDecision` reports `APPROVED`. A pull request below two points keeps the status comment and has no App approval.
+## Rollout
+
+The `DSH_APPROVAL_REVIEW_SCOPE` repository variable controls the pilot publisher:
+
+- Unset: the pilot publisher is disabled and writes nothing.
+- An exact decimal pull-request number: only that pull request is published, for the pilot.
+- `all`: open pull-request events are published broadly.
+
+A maintainer can re-evaluate one open pull request with the `workflow_dispatch` input `pull_number`. A dispatch is accepted only from the default branch and only when the scope is `all` or that pull-request number.
+
+The variable does not affect the legacy status publisher. The variable’s current value is the authority for whether a pilot is active; this document does not assert one.
+
+Ruleset `27532727` stays disabled while the pilot runs, so the pilot review is informational and the legacy status remains the merge requirement. No enforcement is added before the pilot’s error behavior, latency, and stale-approval behavior are verified. The legacy status requirement is not retired before the required review team below is verified.
+
+<a id="required-review-team"></a>
+
+## Required review team
+
+After the pilot verifies comment updates, approval submission, dismissal, head binding, error behavior, latency, and stale-approval behavior, re-evaluate every open pull request the requirement will cover and inspect its published comment or approval. Then enable ruleset `27532727` with one required reviewer: a team whose only member is `deepseek-ai-harness`, covering all files. Add one `required_reviewers` entry with `minimum_approvals: 1` and `reviewer` of type `Team`, and configure its file patterns to match the files the requirement covers.
+
+Validate root files, dotfiles, and nested files on a disposable branch before enforcing; do not assume an unverified pattern matches them.
+
+No enforcement is added before those checks pass. Do not add the team or retire the legacy status before that verification: a pilot failure would then block every pull request. After the team requirement is verified, the legacy status requirement and the legacy publisher can be retired.
 
 <a id="delegating-points"></a>
 
 ## Delegating points
 
-Post `/delegate @username` as the entire text of a PR conversation comment to transfer your reviewer points to that user's effective `APPROVED` decision on this PR. For example, `/delegate @turtle1999` lets @turtle1999's approval count your points alongside their own. Until they approve, your points do not count, even if your own approval remains active. Each evaluation reconciles every active eligible command: it dismisses the sender's existing `APPROVED` and `CHANGES_REQUESTED` reviews, then requests review from recipients who have neither approved nor already been requested. This also handles commands posted on drafts once the PR becomes ready and commands whose original event was replaced in the concurrency queue. Other requested reviewers remain unchanged. The command does not submit a review; drafts do not dismiss or request reviews. Comment-only and pending reviews cannot be dismissed. A failed dismissal fails the run and prevents review requests; scores are refreshed after successful dismissal. Request failures are logged without changing the decision, and subsequent evaluations retry outstanding requests.
+Post `/delegate @username` as the entire text of a PR conversation comment to transfer your reviewer points to that user's effective `APPROVED` decision on this PR. For example, `/delegate @turtle1999` lets @turtle1999's approval count your points alongside their own. Until they approve, your points do not count, even if your own approval remains active. The legacy publisher reconciles every active eligible command: it dismisses the sender's existing `APPROVED` and `CHANGES_REQUESTED` reviews, then requests review from recipients who have neither approved nor already been requested. The pilot reads the same commands for scoring but does not dismiss human reviews or request reviews. This also handles commands posted on drafts once the PR becomes ready and commands whose original event was replaced in the concurrency queue. Other requested reviewers remain unchanged. The command does not submit a review; drafts do not dismiss or request reviews. Comment-only and pending reviews cannot be dismissed. A failed dismissal fails the legacy evaluation and prevents review requests; scores are refreshed after successful dismissal. Request failures are logged without changing the decision, and subsequent legacy evaluations retry outstanding requests.
 
 Both accounts must currently have write or admin permission, and neither may be the PR author. Commands involving ineligible accounts are ignored. A sender's newest surviving eligible, author-authorized command wins, in comment creation order; editing an older comment does not move it after newer comments. Submitting any review after delegation automatically takes the points back, including an approval, change request, or comment-only review. Submitting an inline diff comment with “Add single comment” also creates a comment-only review and reclaims the points. Pending reviews do not count; a later dismissal does not restore the delegation. When timestamps are equal, the review takes precedence. A new command after the review can delegate again; editing an older command cannot reactivate it. Post `/delegate @your-own-username` to restore your own review decision. Editing or deleting a command recomputes delegation from remaining comments, so deleting the latest command can restore an older one. Quoted commands, code blocks, review bodies, inline review comments, and commands mixed with other text do not count. Surrounding whitespace is allowed; account matching is case-insensitive. An edited command is accepted only when GitHub identifies the original author as its latest editor; edits by other accounts cannot delegate or cancel that author’s points.
 
@@ -98,7 +96,11 @@ Each sender contributes at most once, using their own fixed weight or production
 
 ## Security
 
-All actions in the approval job are pinned to commit SHAs. The job checks out only the repository default branch. It does not check out or execute pull-request code. Its only secret is the dedicated approval App private key; the minted token is scoped to `Contents: write`, `Issues: write`, and `Pull requests: write` for this repository and owns every read and write, including the status comment, the approving review, dismissal, delegation reconciliation, and review requests. Only when there is no blocker, reviewer points plus author credit are insufficient, and an approval has the policy’s default weight, the job fetches complete history, passes Git objects to the trusted classifier as data, and resolves commit authors in batches of 50. Fetch credentials exist only in the Git child environment. Missing history, parsing failures, or incomplete author queries fail evaluation rather than producing a partial score. The review-event workflow has no `GITHUB_TOKEN` permissions and passes only a decimal pull-request number in its run title. The publisher accepts only successful `pull_request_review` runs from the review-event workflow file, identified by `workflow_run.path`; GitHub can populate `workflow_run.name` with the expanded run title. The publisher rejects an invalid run title and a number that does not resolve to the workflow run's current pull-request head. Pull-request reviews and comments are treated as API data and escaped in logs. Every evaluation verifies command authors and latest editors by immutable account ID through GraphQL, matching the body to the REST comment history before counting points or acting. Missing or inconsistent editor metadata fails evaluation. Non-author edits are ignored. Only active eligible delegations are reconciled; superseded or revoked commands have no effects. Dismissal failures fail the run; request failures remain separate from the approval decision.
+All actions in both jobs are pinned to commit SHAs. Each job checks out only the repository default branch. Neither job checks out or executes pull-request code. Pull-request reviews and comments are treated as API data and escaped in logs. Both publishers verify command authors and latest editors by immutable account ID through GraphQL, matching the body to the REST comment history before counting points or acting. Missing or inconsistent editor metadata fails evaluation. Non-author edits are ignored. The legacy publisher reconciles only active eligible delegations; superseded or revoked commands have no effects.
+
+The legacy status job’s only secret is the approval App private key, used to mint a `checks: write` token for the decision check run; the status and history fetch use the job token. Fetch credentials exist only in the Git child environment. Missing history, parsing failures, or incomplete author queries fail evaluation rather than producing a partial score.
+
+The pilot writes only with `secrets.DSH_APPROVAL_BOT_TOKEN`, the PAT of `deepseek-ai-harness` (user ID 359032549). Before any write it verifies that the token belongs to that account by numeric ID and login. It mints no App token and holds no App private key. `productionOwnership` fetches Git history with the read-only `GITHUB_TOKEN`, so the PAT is not used for that fetch. The publisher recognizes its own comments and reviews by the numeric account ID, so a marker copied by another account is ignored even when the text matches. Only when there is no blocker, reviewer points plus author credit are insufficient, and an approval has the policy’s default weight, the pilot fetches complete history, passes Git objects to the trusted classifier as data, and resolves commit authors in batches of 50. The review-event workflow has no `GITHUB_TOKEN` permissions and passes only a decimal pull-request number in its run title. The pilot accepts only successful `pull_request_review` runs from the review-event workflow file, identified by `workflow_run.path`; GitHub can populate `workflow_run.name` with the expanded run title. The pilot rejects an invalid run title and a number that does not resolve to the workflow run's current pull-request head. During coexistence, the legacy publisher remains the sole writer for delegated human-review dismissals and review requests; the pilot writes only its own comment, its own approving review, and the dismissal of its own approval. Dismissal failures fail the evaluation; request failures remain separate from the approval decision.
 
 Approval policy changes take effect only after they merge into the default branch. This prevents an untrusted pull request from changing the program or policy for its own run.
 
@@ -106,14 +108,16 @@ Approval policy changes take effect only after they merge into the default branc
 
 ## Verification
 
-Run `pnpm run test:approval-policy` for policy parsing, effective review decisions, review-event validation, merged-history pagination and account matching, lazy author credit, permission filtering, weighted scoring, delegation conservation and revocation, editor authorization, comment pagination, dismissal and review-request reconciliation, blockers, drafts, closed-PR skips, status-comment creation and update, comment removal, approving-review submission and deduplication, approval retraction, self-approval exclusion, and API failures. [Workflow tests](../../scripts/ci-workflow.spec.ts) pin the trusted checkout, no-permission review handoff, permissions, App token scopes, events, and commands. The repository gate graph runs the approval policy and workflow tests in CI. The Python SDK job runs `uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'` for real Git histories, lexers, renames, shallow-history rejection, and the publisher’s fetch/analysis integration.
+Run `pnpm run test:approval-policy` for policy parsing, effective review decisions, review-event validation, merged-history pagination and account matching, lazy author credit, permission filtering, weighted scoring, delegation conservation and revocation, editor authorization, comment pagination, dismissal and review-request reconciliation, blockers, drafts, closed-PR skips, legacy status publication, pilot comment and approving-review publication, retraction, scope selection, identity matching by account ID, and API failures. [Workflow tests](../../scripts/ci-workflow.spec.ts) pin the trusted checkout, the no-permission review handoff, the legacy status and App label tokens, the pilot PAT, the absence of App token minting in the pilot, the scope variable, the workflow-dispatch input, events, and commands. The repository gate graph runs the approval policy and workflow tests in CI. The Python SDK job runs `uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'` for real Git histories, lexers, renames, shallow-history rejection, and the publisher’s fetch/analysis integration.
 
 <a id="dev-note"></a>
 
 ## Dev Note
 
+[Weighted approval status gate and decision label](../../.agents/notes/archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the legacy status requirement and the measured check-run association.
+
+[Weighted approval machine review pilot](../../.agents/notes/implemented/process/2026-11-18-weighted-approval-as-review.md) records the staged rollout, the machine account, and the required review team.
+
 [archived Production blame weighting](../../.agents/notes/archived/process/2026-09-11-production-blame-approval-weight.md) records the scoring rationale and measured costs.
 
 [archived PR-scoped delegation](../../.agents/notes/archived/process/2026-09-15-pr-approval-delegation.md) records score ownership and revocation choices.
-
-[Weighted approval as an approving review](../../.agents/notes/implemented/process/2026-11-18-weighted-approval-as-review.md) records why the commit status and decision check run were removed.

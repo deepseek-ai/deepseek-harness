@@ -1,4 +1,4 @@
-# Agent Note: Weighted approval becomes an approving review
+# Agent Note: Weighted approval gains a machine-account review pilot
 
 Status: implemented
 
@@ -6,45 +6,55 @@ English | [中文](2026-11-18-weighted-approval-as-review.zh.md)
 
 ## Problem
 
-The required `weighted approval` commit status carries an approval decision inside the CI check group. It stays `pending` until the policy holds, and issue #6719 recorded that a later `pull_request_target` run can leave the merge box at `Expected` while the API reports `success`, so a passing pull request stays blocked. The status also makes readers treat an approval wait as running CI, and it duplicates the repository's native review requirement with a custom status. The `weighted approval decision` check run added earlier only labels the same state; it does not remove the status gate or the suite-association race.
+The required `weighted approval` commit status keeps the approval decision inside the CI check group. It stays `pending` until the policy holds, so an approval wait looks like running CI, and it duplicates the repository's native review requirement. Issue #6719 records that a later `pull_request_target` run can leave the merge box at `Expected` while the API reports `success`.
+
+The earlier [decision about the commit status](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) kept the status because a required check run could not be associated reliably with the pull-request head. Replacing the status directly would remove the only enforcement of the two-point policy before a review-based requirement is verified. A GitHub App identity cannot satisfy a team-based required reviewer, because an App installation is not a team member, and minting an App token adds a private key to every evaluation.
 
 ## Decision
 
-The `weighted-approval` workflow writes no commit status and no check run. It evaluates the score with the same policy, then publishes the outcome through the approval App:
+The commit status requirement stays in place during a staged rollout. The legacy `weighted-approval` workflow keeps publishing the `weighted approval` commit status and the `weighted approval decision` check run at their existing paths, and ruleset 20925054 keeps requiring the status. The legacy publisher remains the sole writer for delegated human-review dismissals and review requests.
 
-- An unmet policy creates or updates one conversation comment marked `<!-- weighted-approval -->`. The comment lists the score, counted approvals, remaining points, blocking change requests, delegated reviews still awaited, and reviews without write access.
-- A met policy deletes that comment and submits an `APPROVE` review with the same marker. The publisher submits no second review when the latest marked review is already `APPROVED`.
-- A draft, a blocking change request, or a score below the threshold dismisses every marked `APPROVED` review, then posts or keeps the comment. Drafts are never approved.
-- An evaluation failure fails the workflow run without publishing a partial decision.
+A second workflow, `weighted-approval-machine`, publishes the same decision as a native review from the machine account `deepseek-ai-harness` (user ID 359032549). It reuses the scoring policy and the no-permission `weighted-approval-review-event` workflow handoff. It writes only its own comment, approving review, and dismissal of that approval; it reads the other reviews, comments, permissions, and history needed for scoring. It never dismisses a human review or requests review.
 
-The publisher's own marked review is excluded from scoring, so it cannot supply the points it is evaluating. Delegation, author credit, production-line ownership, and the two-point threshold keep their existing rules.
+The pilot writes with `secrets.DSH_APPROVAL_BOT_TOKEN`, the machine account's PAT. It mints no App token and holds no App private key. Before any write it verifies that the token belongs to the machine account by numeric user ID and login. It reads policy inputs with the PAT and fetches merged history and production ownership with the read-only `GITHUB_TOKEN`. The pilot identifies its own comments and reviews by user ID, so a copied marker from another account is ignored. Both publishers exclude the machine account's review from scoring.
 
-The approval App token owns every read and write: reviews, comments, review dismissals, review requests, and GraphQL editor checks. It requests `Contents: write`, `Issues: write`, and `Pull requests: write`. GitHub counts an App approval toward a required review only while the App has write access to the repository, so Contents write is required; a missing permission fails the token step instead of publishing an approval that cannot satisfy the ruleset.
+The pilot publishes:
 
-Branch rules remove the `weighted approval` status from the required-status-checks group. A separate ruleset, `Default + release branches — Weighted approval`, requires one approving review on the default branch and release branches. The `Default + release branches — Merge requirements` ruleset keeps its merge methods and review-thread resolution with `required_approving_review_count` set to `0`. The approval requirement is therefore its own requirement group; it is not a CI check.
+- An unmet policy creates or updates one comment marked `<!-- weighted-approval -->`. The comment lists the score, counted approvals, remaining points, blocking change requests, delegated reviews still awaited, and reviews without write access.
+- A met policy submits an `APPROVE` review for the evaluated commit with the same marker, then deletes that comment after the review is recorded. A failed submission leaves the comment in place. The publisher submits no second review when its latest review is already `APPROVED` for that commit.
+- A draft retracts every marked machine-account `APPROVED` review and removes the comment; drafts are never approved. A blocking change request or a score below the threshold also retracts those reviews and then posts or keeps the comment.
+- Before submitting an approval it re-reads the pull request and fails when it closed, became a draft, or the head changed. The review carries the evaluated commit ID, and the pilot verifies that the returned review names it.
+
+The pilot does not dismiss its approval before evaluating, because dismissing it would itself be a review event and start another evaluation. After identity verification, a scoring failure attempts to dismiss every marked machine-account approval and then fails the run. Setup, credential, or API failures and undelivered events can still leave an earlier approval, so a prior approval can survive those paths. Stale-review dismissal stays off, so a push after publication does not retract the approval; the next evaluation re-scores the new head. Workflow runs are asynchronous, so a pull request can briefly show an approval for an earlier commit. These are pilot limitations; the required review team is not enforced until error behavior, latency, and stale-approval behavior are addressed and verified.
+
+Publication is controlled by `DSH_APPROVAL_REVIEW_SCOPE`: unset disables the pilot; an exact decimal pull-request number publishes only that pull request; `all` publishes open pull-request events broadly. A `workflow_dispatch` input `pull_number` re-evaluates one open pull request from the default branch when the scope selects it. Ruleset 27532727 stays disabled during the pilot, so the review is informational and the legacy status remains the merge requirement.
+
+After the pilot verifies comment updates, approval submission, dismissal, head binding, error behavior, latency, and stale-approval behavior, re-evaluate every open pull request the requirement will cover and inspect its published comment or approval. Then enable ruleset 27532727 with a team whose only member is the machine account as required reviewer for all files, with `minimum_approvals: 1`. That requirement makes the machine account's approval mandatory. Configure the team's file patterns for the files the requirement covers, and validate root files, dotfiles, and nested files on a disposable branch before enforcing. Only after that team requirement is verified does the rollout retire the legacy status requirement and publisher. Neither is removed before then.
 
 ## Verification
 
-The approval policy suite runs 82 keyless tests with `node --test .github/review-ownership/check-approval.test.mjs`, covering comment creation, update and removal, approving-review submission and deduplication, retraction on a score regression and on a draft, exclusion of the publisher's own review from scoring, delegation, scoring, and API failures. The workflow test in `scripts/ci-workflow.spec.ts` pins the trusted checkout, the no-permission review-event handoff, the App token scopes, the events, and the single evaluation command.
+The approval policy suite runs keyless tests with `pnpm run test:approval-policy`, covering both publishers: legacy status publication; pilot comment and approving-review publication; retraction; scope selection; machine identity; head binding; delegation; scoring; and API failures. The workflow test in `scripts/ci-workflow.spec.ts` pins the trusted checkout, the no-permission review-event handoff, the legacy status and App label tokens, the pilot PAT, the absence of App token minting in the pilot, the scope variable, the workflow-dispatch input, the events, and the commands.
 
-The live acceptance path requires the App installation to grant Contents, Issues, and Pull requests write. After this decision merges, remove the retired status requirement, create the separate ruleset, and open a pull request with two approval points. The App submits one `APPROVE` review, the status comment disappears, and `gh pr view <number> --json reviewDecision` reports `APPROVED`.
+The live rollout is staged and is not performed by this change: this change does not set the variable, enable ruleset 27532727, or remove the legacy status requirement. First set `DSH_APPROVAL_REVIEW_SCOPE` to one pilot pull-request number with two approval points and confirm that the machine account submits one `APPROVE` review, the status comment disappears, and `gh pr view <number> --json reviewDecision` reports `APPROVED`; a pull request below two points keeps the comment and has no machine-account approval. Then set the variable to `all` and verify the same behavior on open pull-request events. Re-evaluate every matching open pull request before enforcing the team requirement. Only after the required review team is configured and its error behavior, latency, and stale-approval behavior are verified, retire the legacy status.
 
 ## Alternatives considered
 
-**Keep the commit status and add the comment.** Rejected because the status was the failure being removed: it remains a CI entry that blocks merges, and issue #6719 shows that a later `pull_request_target` run can still render it as expected. The [archived status-gate decision](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the measured check-run association.
+**Replace the commit status directly.** Rejected because it removes enforcement before a review requirement is verified; ruleset 27532727 is disabled and the required review team is not verified.
 
-**Require an App-published check run instead of a review.** Measured on 2026-10-20 and 2026-10-21: a check run created with the workflow token attaches to the earliest Actions suite on the head, and when that suite belongs to the `pull_request_target` publisher the merge box omits it; a required check run published with the job token stayed `Expected` while the REST API and `gh pr checks` listed it complete, and two pull requests needed an administrator bypass. A run published by the approval App fixed the label, not the requirement: the approval would still sit in the checks group.
+**Publish the review with a GitHub App.** Rejected because an App installation cannot join a team, so it cannot satisfy the future singleton-team required reviewer, and every evaluation would mint a token from a private key.
 
-**Approve with `GITHUB_TOKEN`.** Rejected because GitHub blocks workflow-token approvals by default and they do not count toward required reviews. A separate App identity is required.
+**Keep the commit status permanently.** Rejected because the status stays a CI entry that blocks merges and can show `Expected` (issue #6719); the pilot exists to replace it after verification.
 
-**Require a team review.** Rejected because a ruleset's `required_reviewers` accepts teams only; the approval publisher is an App installation, not a team member.
+**Publish the pilot without the scope restriction.** Rejected because an unexpected comment or review state would reach every pull request; the scope variable limits exposure to one pilot pull request and then to `all`.
 
-**Keep both the status and the review.** Rejected because two gates leave the status failure in place and report the same decision twice.
+**Let the pilot reconcile delegated dismissals and review requests.** Rejected because two publishers would write the same human reviews; the legacy publisher remains the sole writer during coexistence.
+
+**Require the singleton team from the first rollout.** Rejected because a pilot failure would then block every pull request; the team requirement waits for verification.
 
 ## Consequences
 
-Any write-capable approval satisfies the required review, including a human approval below two points. The weighted score decides when the App supplies its approval and when the comment reports a deficit; it is no longer an additional merge gate above the native review. A pull request that a maintainer wants to hold below two points therefore needs an explicit change request, not the absence of an approval.
+During coexistence, the legacy status remains the merge requirement, so a pull request can be mergeable on the status while the pilot review reports a deficit. The pilot review is informational until ruleset 27532727 and the team requirement are enabled. A scoring failure attempts to dismiss the pilot's approval, but setup, credential, or API failures and undelivered events can leave an earlier approval standing; a push after publication can also leave an approval for an earlier commit until the next evaluation. Reviewers must check the reviewed commit.
 
-The approval App now needs Contents write, which is broader than the Checks write it had. The App approval persists across later pushes because stale-review dismissal stays off; the next evaluation checks the score again and retracts the approval when the policy stops holding. GitHub rejects an approval of a pull request the App authored, so such a pull request needs a human approval.
+The machine account needs write access to the repository, and its PAT must be rotated and stored as `secrets.DSH_APPROVAL_BOT_TOKEN`; this is broader access than the App installation used for the legacy check-run label. GitHub rejects an approval of a pull request the machine account authored, so such a pull request needs a human approval.
 
-Removing the status removes the `Expected` failure mode from later `pull_request_target` runs. The workflow's own job is no longer a required check; a failed evaluation appears as a failed run on the pull request checks list without blocking a merge that already has its required approval.
+After the team requirement, the machine account's approval is mandatory and the weighted score decides the merge requirement for every pull request; any write-capable human approval no longer satisfies the requirement by itself. Retiring the status then removes the `Expected` failure mode from later `pull_request_target` runs. The legacy publisher's job is no longer required; a failed pilot evaluation appears as a failed run without blocking a merge that already has the required team approval.

@@ -1,4 +1,4 @@
-# Agent Note: Weighted approval 改为 approving review
+# Agent Note: Weighted approval 增加机器账号 review 试点
 
 Status: implemented
 
@@ -6,45 +6,55 @@ Status: implemented
 
 ## Problem
 
-必填的 `weighted approval` commit status 把审批决定放在 CI 检查组里。它在策略满足前一直是 `pending`，而 issue #6719 记录了后续 `pull_request_target` 运行会让 merge box 停在 `Expected`、同时 API 报告 `success`，导致本可通过的拉取请求继续被阻塞。该 status 还让读者把等待审批当成 CI 正在运行，并用自定义 status 重复了仓库原生的 review 要求。此前加入的 `weighted approval decision` check run 只是给同一状态加了标签，并没有移除 status 门禁或 check suite 关联的竞态。
+必填的 `weighted approval` commit status 把审批决定留在 CI 检查组里。它在策略满足前一直是 `pending`，所以等待审批看起来像 CI 正在运行，并且用自定义 status 重复了仓库原生的 review 要求。Issue #6719 记录了后续 `pull_request_target` 运行可能让 merge box 停在 `Expected`，而 API 报告 `success`。
+
+此前的 [关于 commit status 的决定](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md)保留了该 status，因为必填 check run 无法稳定关联到拉取请求 head。直接替换 status 会在基于 review 的要求得到验证之前移除对两点策略的唯一强制执行。GitHub App 身份无法满足基于团队的 required reviewer，因为 App 安装不是团队成员；而且每次评估都要用私钥签发 App token。
 
 ## Decision
 
-`weighted-approval` workflow 不再写 commit status，也不再写 check run。它用同一套策略计算分数，然后通过 approval App 发布结果：
+分阶段上线期间保留 commit status 要求。旧版 `weighted-approval` workflow 继续在既有路径发布 `weighted approval` commit status 和 `weighted approval decision` check run，ruleset 20925054 继续要求该 status。旧版 publisher 仍是委托的人类 review dismissal 和 review request 的唯一写入者。
 
-- 策略未满足时，创建或更新一条带 `<!-- weighted-approval -->` 标记的对话评论。评论列出分数、计入的 approval、剩余点数、阻塞的 change request、仍在等待的委托 review，以及没有写权限的 review。
-- 策略满足时，删除该评论并提交带同一标记的 `APPROVE` review。如果最近一条带标记的 review 已经是 `APPROVED`，不再提交第二条。
-- Draft、阻塞的 change request 或低于阈值的分数会 dismiss 每一条带标记的 `APPROVED` review，然后发布或保留评论。Draft 永远不会被 approve。
-- 评估失败会让 workflow run 失败，不发布部分决定。
+第二个 workflow `weighted-approval-machine` 以机器账号 `deepseek-ai-harness`（用户 ID 359032549）发布同一决定，形式为原生 review。它复用评分策略，以及无权限的 `weighted-approval-review-event` workflow 转交路径。它只写自己的评论、approving review 和对该 approval 的 dismissal；它读取评分所需的其它 review、评论、权限和历史。它从不 dismiss 人类 review，也不发起 review request。
 
-发布器自己的带标记 review 不计入分数，因此它不能提供自己正在评估的点数。委托、作者积分、生产代码行归属和两点阈值保持原有规则。
+试点使用 `secrets.DSH_APPROVAL_BOT_TOKEN`，即机器账号的 PAT。它不签发 App token，也不持有 App 私钥。任何写入之前，它按数字用户 ID 和 login 校验该 token 属于机器账号。它用 PAT 读取策略输入，并用只读的 `GITHUB_TOKEN` 获取合并历史和 production ownership。它按用户 ID 识别自己的评论和 review，因此其它账号复制的 marker 会被忽略。两个 publisher 都把机器账号的 review 排除在计分之外。
 
-Approval App token 承担所有读写：review、评论、review dismissal、review request 和 GraphQL 编辑者校验。它请求 `Contents: write`、`Issues: write` 和 `Pull requests: write`。GitHub 只在 App 对仓库有写权限时才把 App approval 计入 required review，因此必须有 Contents write；缺失权限会让 token 步骤失败，而不是发布一个无法满足 ruleset 的 approval。
+试点发布：
 
-分支规则从 required status checks 组移除 `weighted approval`。单独的 ruleset `Default + release branches — Weighted approval` 在默认分支和 release 分支要求一个 approving review。`Default + release branches — Merge requirements` ruleset 保留合并方式和 review thread resolution，并把 `required_approving_review_count` 设为 `0`。审批要求因此成为独立的 requirement 组，而不是 CI check。
+- 策略未满足时，创建或更新一条带 `<!-- weighted-approval -->` 标记的评论。评论列出分数、计入的 approval、剩余点数、阻塞的 change request、仍在等待的委托 review，以及没有写权限的 review。
+- 策略满足时，先为被评估的提交提交带同一标记的 `APPROVE` review，等 review 记录后删除该评论。提交失败时评论保留。如果最近一条 review 已经是该提交的 `APPROVED`，不再提交第二条。
+- Draft 会撤回每一条带标记的机器账号 `APPROVED` review，并删除评论；Draft 永远不会被 approve。阻塞的 change request 或低于阈值的分数也会撤回这些 review，然后发布或保留评论。
+- 提交 approval 之前，它重新读取拉取请求，并在其关闭、变为 draft 或 head 变化时让 run 失败。review 携带被评估的 commit ID，试点会校验返回的 review 指向该提交。
+
+试点不在评估前 dismiss 自己的 approval，因为 dismiss 本身会是一次 review 事件，并触发另一轮评估。身份校验之后，评分失败会尝试 dismiss 每一条带标记的机器账号 approval，然后让 run 失败。setup、凭据或 API 失败以及未送达的事件仍可能留下较早的 approval，因此这些路径上不能保证失败时没有 approval。stale-review dismissal 保持关闭，所以发布后的 push 不会自动撤回 approval；下一次评估会重新给新 head 计分。workflow run 是异步的，因此拉取请求可能短暂显示针对较早提交的 approval。这些是试点的限制；在错误行为、延迟和 stale approval 行为得到处理并验证之前，不启用 required review team。
+
+发布由 `DSH_APPROVAL_REVIEW_SCOPE` 控制：未设置时禁用试点；一个精确的十进制拉取请求编号只发布该拉取请求；`all` 广泛发布打开的拉取请求事件。`workflow_dispatch` 输入 `pull_number` 在 scope 选中该拉取请求时，从默认分支重新评估一个打开的拉取请求。试点期间 ruleset 27532727 保持禁用，因此该 review 只是信息，旧版 status 仍是合并要求。
+
+在试点验证评论更新、approval 提交、dismissal、head 绑定、错误行为、延迟和 stale approval 行为之后，重新评估该要求将覆盖的每个打开的拉取请求，并检查其已发布的评论或 approval。然后启用 ruleset 27532727，并把一个只有机器账号一名成员的团队设为所有文件的 required reviewer，`minimum_approvals: 1`。该要求使机器账号的 approval 成为强制要求。为该团队配置文件模式以覆盖要求涉及的路径，并在启用前用临时分支验证根目录文件、dotfile 和嵌套文件。只有该团队要求得到验证后，发布流程才退役旧版 status 要求和 publisher。在此之前不移除两者。
 
 ## Verification
 
-审批策略套件用 `node --test .github/review-ownership/check-approval.test.mjs` 运行 82 个 keyless 测试，覆盖评论创建、更新和删除，approving review 的提交与去重，分数回退和 draft 时的撤回，发布器自身 review 从计分中排除，委托、计分和 API 失败。`scripts/ci-workflow.spec.ts` 中的 workflow 测试钉住可信 checkout、无权限的 review 事件转交、App token 权限范围、事件和唯一的评估命令。
+审批策略套件用 `pnpm run test:approval-policy` 运行 keyless 测试，覆盖两个 publisher：旧版 status 发布；试点的评论和 approving review 发布；撤回；scope 选择；机器身份；head 绑定；委托；计分；以及 API 失败。`scripts/ci-workflow.spec.ts` 中的 workflow 测试钉住可信 checkout、无权限的 review 事件转交、旧版 status 与 App 标签 token、试点 PAT、试点不签发 App token、scope 变量、workflow-dispatch 输入、事件和命令。
 
-线上验收路径要求 App 安装授予 Contents、Issues 和 Pull requests 写权限。本决定合并后，移除已退役的 status 要求，创建单独的 ruleset，并打开一个已有两个 approval 点的拉取请求。App 提交一条 `APPROVE` review，状态评论消失，`gh pr view <number> --json reviewDecision` 报告 `APPROVED`。
+线上发布分阶段进行，且不在本次改动中执行：本次改动不设置该变量、不启用 ruleset 27532727，也不移除旧版 status 要求。先把 `DSH_APPROVAL_REVIEW_SCOPE` 设为一个已有两个 approval 点的试点拉取请求编号，确认机器账号提交一条 `APPROVE` review、状态评论消失，且 `gh pr view <number> --json reviewDecision` 报告 `APPROVED`；低于两点的拉取请求保留评论，且没有机器账号的 approval。然后把变量设为 `all`，在打开的拉取请求事件上验证相同行为。在启用团队要求前，重新评估每个匹配的打开的拉取请求。只有在 required review team 配置完成，且其错误行为、延迟和 stale approval 行为得到验证之后，才退役旧版 status。
 
 ## Alternatives considered
 
-**保留 commit status 并加上评论。** 否决，因为该 status 正是要移除的故障：它仍然是阻塞合并的 CI 条目，而且 issue #6719 表明后续 `pull_request_target` 运行仍可能把它渲染为 expected。[归档的 status 门禁决定](../../archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md)记录了实测的 check run 关联结果。
+**直接替换 commit status。** 否决，因为它在基于 review 的要求得到验证之前就移除强制执行；ruleset 27532727 处于禁用状态，required review team 也未经验证。
 
-**改为要求 App 发布的 check run，而不是 review。** 2026-10-20 和 2026-10-21 的实测结果：用 workflow token 创建的 check run 会挂到 head 上最早的 Actions check suite；当该 suite 属于 `pull_request_target` 发布器时，merge box 不会列出它；用 job token 发布的必填 check run 一直显示 `Expected`，而 REST API 和 `gh pr checks` 已列出它完成，两个拉取请求因此需要管理员绕过。由 approval App 发布 run 只修正了标签，没有修正要求：审批仍然留在检查组里。
+**用 GitHub App 发布 review。** 否决，因为 App 安装不能加入团队，无法满足未来只有一名成员的团队 required reviewer；而且每次评估都要用私钥签发 token。
 
-**用 `GITHUB_TOKEN` 提交 approval。** 否决，因为 GitHub 默认阻止 workflow token 提交 approval，而且它们不计入 required review。必须使用独立的 App 身份。
+**永久保留 commit status。** 否决，因为该 status 仍是阻塞合并的 CI 条目，并可能显示 `Expected`（issue #6719）；试点的目的就是在验证后替换它。
 
-**要求团队 review。** 否决，因为 ruleset 的 `required_reviewers` 只接受团队；审批发布器是 App 安装，不是团队成员。
+**试点不设 scope 限制。** 否决，因为意外的评论或 review 状态会波及每个拉取请求；scope 变量先把影响限制在一个试点拉取请求，再扩展到 `all`。
 
-**同时保留 status 和 review。** 否决，因为两道门禁会把 status 的故障留在原处，并重复报告同一个决定。
+**让试点同时协调委托 dismissal 和 review request。** 否决，因为两个 publisher 会写同一批人类 review；并存期间旧版 publisher 保持唯一写入者。
+
+**第一轮就要求该单成员团队。** 否决，因为试点失败会阻塞每个拉取请求；团队要求等待验证。
 
 ## Consequences
 
-任何有写权限的 approval 都满足 required review，包括低于两点的人类 approval。加权分数决定 App 何时提供自己的 approval、评论何时报告缺口；它不再是原生 review 之上的额外合并门禁。因此，维护者若想让低于两点的拉取请求停下，需要显式提交 change request，而不是靠缺少 approval。
+并存期间，旧版 status 仍是合并要求，因此拉取请求可能按 status 可合并，而试点 review 报告缺口。在 ruleset 27532727 和团队要求启用之前，试点 review 只是信息。评分失败会尝试 dismiss 试点的 approval，但 setup、凭据或 API 失败以及未送达的事件可能留下较早的 approval；发布后的 push 也可能让较早提交的 approval 保留到下一次评估。reviewer 必须检查被评审的提交。
 
-Approval App 现在需要 Contents write，比它此前拥有的 Checks write 更宽。由于 stale review dismissal 保持关闭，App approval 会在后续 push 后继续存在；下一次评估会重新检查分数，并在策略不再满足时撤回 approval。GitHub 会拒绝 App 对自己创建的拉取请求提交 approval，因此这类拉取请求需要人类 approval。
+机器账号需要对仓库的写权限，其 PAT 必须轮换并保存为 `secrets.DSH_APPROVAL_BOT_TOKEN`；这比它替换的 App 安装有更宽的访问权限。GitHub 会拒绝机器账号对自己创建的拉取请求提交 approval，因此这类拉取请求需要人类 approval。
 
-移除 status 后，后续 `pull_request_target` 运行不再出现 `Expected` 故障。workflow 自身的 job 不再是必填检查；评估失败会作为失败的 run 出现在拉取请求检查列表中，但不会阻塞已经有 required approval 的合并。
+团队要求生效后，机器账号的 approval 成为强制要求，加权分数决定每个拉取请求能否合并；任何有写权限的人类 approval 都不再单独满足要求。退役 status 后，后续 `pull_request_target` 运行不再出现 `Expected` 故障。旧版 publisher 的 job 不再是必填检查；试点评估失败会作为失败的 run 出现，但不会阻塞已有 required team approval 的合并。
