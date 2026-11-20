@@ -975,6 +975,14 @@ it.skipIf(MODE === 'record')('keeps the link actions in the detail header, folds
     .toEqual(['在 GitHub 中打开', '复制链接', '刷新状态'])
   expect(await more.isVisible()).toBe(false)
 
+  // The status column's two action lines span their blocks like a check's line, so each highlights across its block.
+  const lineWidth = async (line: string): Promise<number | undefined> => (await detail.locator(line).first().boundingBox())?.width
+  await detail.locator('[data-forge-review-request]').waitFor()
+  const checkLine = await lineWidth('[data-forge-check-item]')
+  expect(checkLine).toBeGreaterThan(200)
+  expect(await lineWidth('[data-forge-review-rerun]')).toBe(checkLine)
+  expect(await lineWidth('[data-forge-review-request]')).toBe(checkLine)
+
   // The automatic merge: on for the head the page shows, then the state with its cancellation.
   await detail.getByRole('button', { name: '自动合并', exact: true }).click()
   await page.getByRole('menu').getByText('满足合并条件后，将 #7 合并到 main', { exact: true }).waitFor()

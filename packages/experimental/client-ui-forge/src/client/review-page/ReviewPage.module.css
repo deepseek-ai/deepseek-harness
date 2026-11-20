@@ -1289,6 +1289,11 @@ button.activityLine:focus-visible,
   font-size: 12px;
 }
 
+/* An action line that anchors a menu spans its block like the lines around it. */
+.statusAnchor {
+  display: flex;
+}
+
 .placeholder {
   justify-content: center;
 }
