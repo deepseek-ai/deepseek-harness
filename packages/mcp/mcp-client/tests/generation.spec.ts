@@ -1,5 +1,6 @@
 /** Real SDK cancellation and caller-owned connection budgets. */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { z } from 'zod'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -26,6 +27,7 @@ const config: Config = {
 it('unregisters tools when disposal interrupts the registration result', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   const server = new McpServer({ name: 'fixture', version: '1' })

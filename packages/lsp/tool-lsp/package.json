@@ -61,6 +61,7 @@
     "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

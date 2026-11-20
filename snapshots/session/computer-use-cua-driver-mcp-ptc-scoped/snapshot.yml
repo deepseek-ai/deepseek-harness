@@ -1,0 +1,9 @@
+version: 1
+scenario: computer-use-cua-driver-mcp-ptc-scoped
+profile: headless
+composition: computer-use-cua-driver-mcp-ptc
+recording: authored
+header:
+  class: computer-use-cua-driver-mcp-ptc-scoped
+  pin: true
+  toolSchemasSource: ptc-scoped-repl

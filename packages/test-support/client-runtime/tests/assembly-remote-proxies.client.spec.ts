@@ -19,15 +19,17 @@ async function drain(source: AsyncIterable<unknown>): Promise<unknown[]> {
 describe('remoteNamespacesOf', () => {
   it('collects remote.<ns> injects in both inject forms plus the namespaces of registered endpoints, skipping Gateway-internal ones', () => {
     const modules = new Map<string, ClientPluginModule>([
-      ['a', { apply() {}, inject: ['slots', 'remote.settings', 'remote'] }],
+      ['a', { apply() {}, inject: ['slots', 'remote.settings', 'remote', 'remote.remoteConnection'] }],
       ['b', { apply() {}, inject: { 'remote.session': { required: true }, connection: { required: false } } }],
       ['c', { apply() {} }],
     ])
     const mock = RemoteMock.create().unary('goals/create', ok({ id: 'g' })).stream('workspace/follow', openStream())
       .stream('pluginEvents/follow', openStream())
-    expect(remoteNamespacesOf(modules, mock)).toEqual(['goals', 'pluginEvents', 'session', 'settings', 'workspace'])
-    // A namespace its own roster package mounts gets no proxy.
+      .unary('remoteConnection/status', ok({ ticket: 'none' }))
+    expect(remoteNamespacesOf(modules, mock)).toEqual(['goals', 'pluginEvents', 'remoteConnection', 'session', 'settings', 'workspace'])
     modules.set('@deepseek-ai/dsh-client-hmr', { apply() {} })
+    expect(remoteNamespacesOf(modules, mock)).toEqual(['goals', 'remoteConnection', 'session', 'settings', 'workspace'])
+    modules.set('@deepseek-ai/dsh-client-remote-connection', { apply() {} })
     expect(remoteNamespacesOf(modules, mock)).toEqual(['goals', 'session', 'settings', 'workspace'])
   })
 })

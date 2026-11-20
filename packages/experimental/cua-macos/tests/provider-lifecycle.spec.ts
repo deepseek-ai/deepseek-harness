@@ -23,7 +23,7 @@ import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-sche
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
-import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -143,8 +143,15 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: '7' }
 
+/** Node runtime program formats each PTC case runs under; `complete` renders a statement producing the program value. */
+const PTC_MODES = [
+  { mode: 'per-call', config: { executionMode: 'per-call' }, complete: (expression: string) => `return ${expression};` },
+  { mode: 'scoped REPL', config: { executionMode: 'persistent-in-memory', replScoped: true }, complete: (expression: string) => `${expression};` },
+] as const satisfies readonly { mode: string; config: NodeRuntimeConfig; complete: (expression: string) => string }[]
+type PtcMode = typeof PTC_MODES[number]
+
 async function setup(
-  model?: { provider: string; model: string }, ptc = false, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
+  model?: { provider: string; model: string }, ptc?: PtcMode, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
 ) {
   native.connect.mockClear()
   native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
@@ -160,7 +167,7 @@ async function setup(
     await ctx.plugin(SubprocessLocal)
     await ctx.plugin(Sandbox)
     await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-    await ctx.plugin(NodeRuntime)
+    await ctx.plugin(NodeRuntime, ptc.config)
   } else await ctx.plugin(Subprocess, [])
   const provider = await ctx.plugin(NativeProvider, { ...config, ...overrides })
   await mountAgentLoopTestHarness(ctx)
@@ -205,22 +212,24 @@ it('requires an enclosing run_code before sending a directional key', async () =
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it.each(['run_code', 'cua_run_code'] as const)('finishes a shortcut-only %s without requesting held-key cleanup', async (name) => {
-  const f = await setup(undefined, true)
+const PROGRAM_TOOLS = PTC_MODES.flatMap(mode => (['run_code', 'cua_run_code'] as const).map(name => ({ mode, name })))
+
+it.each(PROGRAM_TOOLS)('finishes a shortcut-only $name in $mode.mode without requesting held-key cleanup', async ({ mode, name }) => {
+  const f = await setup(undefined, mode)
   await selectApplication(f)
   native.request.mockClear().mockResolvedValue({ dispatched: true })
   const result = await executeProgram(f, name,
-    "return await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } });",
+    mode.complete("await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } })"),
     'Press Command+A')
   expect(result.isError).toBe(false)
   expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
   expect(native.cleanup).not.toHaveBeenCalled()
 })
 
-it.each((['run_code', 'cua_run_code'] as const).flatMap(name =>
-  ['return', 'throw', 'pause', 'pause with cleanup error'].map(ending => ({ name, ending })),
-))('cleans up only the held W when $name ends by $ending', async ({ name, ending }) => {
-  const f = await setup(undefined, true)
+it.each(PROGRAM_TOOLS.flatMap(tool =>
+  ['return', 'throw', 'pause', 'pause with cleanup error'].map(ending => ({ ...tool, ending })),
+))('cleans up only the held W when $name in $mode.mode ends by $ending', async ({ mode, name, ending }) => {
+  const f = await setup(undefined, mode)
   await selectApplication(f)
   const held = new Set<string>()
   const events: string[] = []
@@ -264,7 +273,7 @@ it.each((['run_code', 'cua_run_code'] as const).flatMap(name =>
     "if ((await tools.check_held_keys({})).join(',') !== 'w,d') throw Error('lost held keys');",
     "await key('d', 'up');",
     "if ((await tools.check_held_keys({})).join(',') !== 'w') throw Error('lost W');",
-    ending === 'throw' ? "throw Error('program failed');" : "return 'done';",
+    ending === 'throw' ? "throw Error('program failed');" : mode.complete("'done'"),
   ].join('\n')
   const result = await executeProgram(f, name, code, 'Exercise held keys', controller.signal)
   expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', ...ending === 'pause with cleanup error' ? [] : ['w:up']])
@@ -273,8 +282,10 @@ it.each((['run_code', 'cua_run_code'] as const).flatMap(name =>
   if (ending === 'throw') expect(JSON.stringify(result.content)).toContain('program failed')
 })
 
-it.each(['running', 'settling'] as const)('awaits held-key cleanup before unloading native resources while the raw program is %s', async (phase) => {
-  const f = await setup(undefined, true)
+const UNLOAD_PHASES = PTC_MODES.flatMap(mode => (['running', 'settling'] as const).map(phase => ({ mode, phase })))
+
+it.each(UNLOAD_PHASES)('awaits held-key cleanup before unloading native resources while the raw $mode.mode program is $phase', async ({ mode, phase }) => {
+  const f = await setup(undefined, mode)
   await selectApplication(f)
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -298,7 +309,7 @@ it.each(['running', 'settling'] as const)('awaits held-key cleanup before unload
   const controller = new AbortController()
   let settled = false
   const running = executeProgram(f, 'run_code',
-    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({}); return 'finished';",
+    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({}); " + mode.complete("'finished'"),
     'Hold a key during provider unload', controller.signal).then((result) => { settled = true; return result })
   let closing: Promise<void> | undefined
   try {
@@ -328,8 +339,8 @@ it.each(['running', 'settling'] as const)('awaits held-key cleanup before unload
   }
 })
 
-it('closes the native connection after a held-key cleanup failure and reuses that failure at program settlement', async () => {
-  const f = await setup(undefined, true)
+it.each(PTC_MODES)('closes the native connection after a $mode program held-key cleanup failure and reuses that failure at program settlement', async (mode) => {
+  const f = await setup(undefined, mode)
   await selectApplication(f)
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -831,7 +842,7 @@ it('refuses screenshot capture when no attachment store is mounted', async () =>
 })
 
 it('captures screenshots through a configured target without resolving a model route', async () => {
-  const f = await setup(undefined, false, { screenshotTarget: { longEdge: 10, maxBytes: 100_000 } })
+  const f = await setup(undefined, undefined, { screenshotTarget: { longEdge: 10, maxBytes: 100_000 } })
   await selectApplication(f)
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-fixed-target-'))
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })

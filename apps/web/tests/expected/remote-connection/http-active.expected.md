@@ -1,0 +1,20 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - paragraph: 通过以下方式，在其他设备上登录并使用 DeepSeek Harness。
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - code: {{access-address}}?token={{login-token}}
+    - button "复制链接"
+  - region "二维码登录":
+    - heading "二维码登录" [level=3]
+    - button "重新生成"
+    - button "取消"
+    - img "一次性登录二维码"
+    - paragraph:
+      - timer: {{seconds}} 秒后过期
+    - paragraph: 请勿分享登录二维码
+    - paragraph: 二维码使用或过期前，持有它的人都可以登录，请勿传播
+    - paragraph: HTTP 会明文传输登录凭据，请仅在可信网络中使用
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

@@ -8,6 +8,7 @@ import { reportSchema } from '../src/records.ts'
 import type { IntervalReport, StoredRequest } from '../src/records.ts'
 import { summarizeReport } from '../src/summary.ts'
 import { taskLanguageInstruction } from '../src/policy.ts'
+import { reportStyle } from '../src/prompt.ts'
 
 const summary = { progress: ['The planner saves changes after restart.'], uncertainties: [], userActions: [] }
 const chunks: StreamChunk[] = [
@@ -122,6 +123,18 @@ describe('independent summary queries', () => {
     expect(sent?.purpose).toBe('timeline-report')
     expect(sent?.messages[1]).toEqual(captured.messages[1])
     expect(input.request).toEqual(captured)
+  })
+  it('sends the report style without a language rule when following the chat', async () => {
+    const { ctx, input } = await setup()
+    input.settings.language = 'chat'
+    await summarizeReport(ctx.llm, input, new AbortController().signal)
+    const question = input.record.mock.calls[0]?.[0].messages.at(-1)?.content[0]
+    if (question?.type !== 'text') throw new Error('Missing report question')
+    expect(question.text.endsWith(reportStyle)).toBe(true)
+    input.children = [input.draft]
+    input.draft = { ...input.draft, level: 1, children: [input.draft.id] }
+    await summarizeReport(ctx.llm, input, new AbortController().signal)
+    expect(input.record.mock.calls[1]?.[0].system).toBe(reportStyle)
   })
   it('uses the latest captured system message instead of rewriting an already updated language prefix', async () => {
     const { ctx, input } = await setup()

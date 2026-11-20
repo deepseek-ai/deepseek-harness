@@ -165,6 +165,7 @@ flowchart TD
     pkg_client_locale["client-locale"]
     pkg_client_modules["client-modules"]
     pkg_client_product_analytics["client-product-analytics"]
+    pkg_client_remote_connection["client-remote-connection"]
     pkg_client_resources["client-resources"]
     pkg_client_script_realm["client-script-realm"]
     pkg_client_script_realm_iframe["client-script-realm-iframe"]
@@ -246,6 +247,7 @@ flowchart TD
   end
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
+    pkg_dingtalk["dingtalk"]
     pkg_feishu["feishu"]
     pkg_linear["linear"]
     pkg_notion["notion"]
@@ -444,6 +446,7 @@ flowchart TD
     pkg_session_title_first_prompt_llm["session-title-first-prompt-llm"]
     pkg_session_title_llm["session-title-llm"]
     pkg_session_turn_outline["session-turn-outline"]
+    pkg_tool_session_control["tool-session-control"]
     pkg_working_directory["working-directory"]
   end
   subgraph group_settings["packages/settings"]
@@ -536,8 +539,6 @@ flowchart TD
   pkg_typert_loader --> pkg_typert_registry
   pkg_typert_protocol --> pkg_error
   pkg_util_ripgrep --> pkg_subprocess
-  pkg_system_prompt --> pkg_llm
-  pkg_system_prompt --> pkg_scope
   pkg_skill --> pkg_error
   pkg_skill --> pkg_llm
   pkg_skill --> pkg_scope
@@ -550,6 +551,9 @@ flowchart TD
   pkg_attachment_local --> pkg_home_paths
   pkg_hmr --> pkg_app_boot
   pkg_hmr --> pkg_cmdline
+  pkg_client_remote_connection --> pkg_credentials
+  pkg_client_remote_connection --> pkg_error
+  pkg_client_remote_connection --> pkg_host_webserver
   pkg_authorization --> pkg_credentials
   pkg_authorization --> pkg_error
   pkg_credentials_local --> pkg_atomic_write
@@ -593,6 +597,10 @@ flowchart TD
   pkg_remote_mock --> pkg_typert_protocol
   pkg_session_snapshot --> pkg_http_proxy
   pkg_session_snapshot --> pkg_session
+  pkg_system_prompt --> pkg_llm
+  pkg_system_prompt --> pkg_scope
+  pkg_system_prompt --> pkg_session
+  pkg_system_prompt --> pkg_session_projection
   pkg_fs --> pkg_llm
   pkg_fs --> pkg_sandbox
   pkg_skill_office --> pkg_skill
@@ -607,10 +615,7 @@ flowchart TD
   pkg_deepseek_account --> pkg_util_values
   pkg_config_editor --> pkg_app_boot
   pkg_config_editor --> pkg_hmr
-  pkg_cli_account --> pkg_subprocess
-  pkg_cli_account --> pkg_system_prompt
   pkg_upstream_skills --> pkg_skill
-  pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_speech_to_text --> pkg_settings
   pkg_experimental_translator --> pkg_credentials
   pkg_experimental_translator --> pkg_launch_environment
@@ -624,7 +629,6 @@ flowchart TD
   pkg_plugin_recommendations --> pkg_typert_protocol
   pkg_skill_badge --> pkg_skill
   pkg_host_product_telemetry_otel --> pkg_otel
-  pkg_persona --> pkg_system_prompt
   pkg_ptc_runtime --> pkg_attachment
   pkg_ptc_runtime --> pkg_error
   pkg_ptc_runtime --> pkg_sandbox
@@ -693,12 +697,9 @@ flowchart TD
   pkg_api_workspace_controller --> pkg_storage_domain
   pkg_api_workspace_controller --> pkg_typert_protocol
   pkg_api_workspace_controller --> pkg_workspace
-  pkg_feishu --> pkg_cli_account
-  pkg_feishu --> pkg_skill
-  pkg_tencent_meeting --> pkg_cli_account
-  pkg_tencent_meeting --> pkg_upstream_skills
-  pkg_wecom --> pkg_cli_account
-  pkg_wecom --> pkg_upstream_skills
+  pkg_cli_account --> pkg_subprocess
+  pkg_cli_account --> pkg_system_prompt
+  pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_api_speech_to_text --> pkg_experimental_speech_to_text
   pkg_experimental_api_speech_to_text --> pkg_typert_protocol
   pkg_experimental_client_ui_cot_translation --> pkg_experimental_translator
@@ -712,6 +713,7 @@ flowchart TD
   pkg_lsp_stdio --> pkg_lsp
   pkg_lsp_stdio --> pkg_subprocess
   pkg_lsp_stdio --> pkg_timeout
+  pkg_persona --> pkg_system_prompt
   pkg_bash_local --> pkg_shell
   pkg_bash_local --> pkg_subprocess
   pkg_bash_local --> pkg_timeout
@@ -754,6 +756,14 @@ flowchart TD
   pkg_web_search_deepseek --> pkg_launch_environment
   pkg_web_search_deepseek --> pkg_session
   pkg_web_search_deepseek --> pkg_web
+  pkg_dingtalk --> pkg_cli_account
+  pkg_dingtalk --> pkg_skill
+  pkg_feishu --> pkg_cli_account
+  pkg_feishu --> pkg_skill
+  pkg_tencent_meeting --> pkg_cli_account
+  pkg_tencent_meeting --> pkg_upstream_skills
+  pkg_wecom --> pkg_cli_account
+  pkg_wecom --> pkg_upstream_skills
   pkg_file_reference --> pkg_agent
   pkg_harness_dev_context --> pkg_agent
   pkg_harness_dev_context --> pkg_session
@@ -1564,6 +1574,14 @@ flowchart TD
   pkg_sdk_client --> pkg_llm
   pkg_sdk_client --> pkg_sdk_protocol
   pkg_sdk_client --> pkg_session
+  pkg_tool_session_control --> pkg_api_session_controller
+  pkg_tool_session_control --> pkg_brand
+  pkg_tool_session_control --> pkg_error
+  pkg_tool_session_control --> pkg_llm
+  pkg_tool_session_control --> pkg_session
+  pkg_tool_session_control --> pkg_subagent
+  pkg_tool_session_control --> pkg_tools
+  pkg_tool_session_control --> pkg_workspace
   pkg_tool_agent_team --> pkg_agent
   pkg_tool_agent_team --> pkg_agent_team
   pkg_tool_agent_team --> pkg_session
@@ -1799,13 +1817,13 @@ flowchart TD
 | [`typert-loader`](../packages/typert/loader) | `typert` | [`typert-registry`](../packages/typert/registry) |
 | [`typert-protocol`](../packages/typert/protocol) | `typert` | [`error`](../packages/util/error) |
 | [`util-ripgrep`](../packages/util/ripgrep) | `util` | [`subprocess`](../packages/subprocess/subprocess) |
-| [`system-prompt`](../packages/core/system-prompt) | `core` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope) |
 | [`skill`](../packages/skill/skill) | `skill` | [`error`](../packages/util/error), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope) |
 | [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
 | [`spill`](../packages/spill/spill) | `spill` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`api-terminal-controller`](../packages/api/terminal-controller) | `api` | [`subprocess`](../packages/subprocess/subprocess) |
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths) |
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
+| [`client-remote-connection`](../packages/client/remote-connection) | `client` | [`credentials`](../packages/credentials/credentials), [`error`](../packages/util/error), [`host-webserver`](../packages/host/webserver) |
 | [`authorization`](../packages/credentials/authorization) | `credentials` | [`credentials`](../packages/credentials/credentials), [`error`](../packages/util/error) |
 | [`credentials-local`](../packages/credentials/credentials-local) | `credentials` | [`atomic-write`](../packages/util/atomic-write), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment) |
 | [`action-cards`](../packages/experimental/action-cards) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
@@ -1826,21 +1844,19 @@ flowchart TD
 | [`otel`](../packages/telemetry/otel) | `telemetry` | [`session`](../packages/core/session) |
 | [`remote-mock`](../packages/test-support/remote-mock) | `test-support` | [`typert-protocol`](../packages/typert/protocol) |
 | [`session-snapshot`](../packages/test-support/session-snapshot) | `test-support` | [`http-proxy`](../packages/util/http-proxy), [`session`](../packages/core/session) |
+| [`system-prompt`](../packages/core/system-prompt) | `core` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`fs`](../packages/fs/fs) | `fs` | [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox) |
 | [`skill-office`](../packages/skill/skill-office) | `skill` | [`skill`](../packages/skill/skill) |
 | [`spill-local`](../packages/spill/spill-local) | `spill` | [`spill`](../packages/spill/spill) |
 | [`session-log-export`](../packages/session-query/session-log-export) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`deepseek-account`](../packages/account/deepseek-account) | `account` | [`authorization`](../packages/credentials/authorization), [`brand`](../packages/util/brand), [`credentials`](../packages/credentials/credentials), [`host-webserver`](../packages/host/webserver), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |
 | [`config-editor`](../packages/boot/config-editor) | `boot` | [`app-boot`](../packages/boot/app-boot), [`hmr`](../packages/boot/hmr) |
-| [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
 | [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
-| [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-speech-to-text`](../packages/experimental/speech-to-text) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`experimental-translator`](../packages/experimental/translator) | `experimental` | [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
 | [`plugin-recommendations`](../packages/experimental/plugin-recommendations) | `experimental` | [`llm`](../packages/llm/llm), [`skill`](../packages/skill/skill), [`typert-protocol`](../packages/typert/protocol) |
 | [`skill-badge`](../packages/experimental/skill-badge) | `experimental` | [`skill`](../packages/skill/skill) |
 | [`host-product-telemetry-otel`](../packages/host/product-telemetry-otel) | `host` | [`otel`](../packages/telemetry/otel) |
-| [`persona`](../packages/preset/persona) | `preset` | [`system-prompt`](../packages/core/system-prompt) |
 | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime) | `ptc-runtime` | [`attachment`](../packages/attachment/attachment), [`error`](../packages/util/error), [`sandbox`](../packages/sandbox/sandbox) |
 | [`sandbox-local`](../packages/sandbox/sandbox-local) | `sandbox` | [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox), [`session`](../packages/core/session) |
 | [`sandbox-windows-acl`](../packages/sandbox/sandbox-windows-acl) | `sandbox` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess) |
@@ -1859,14 +1875,14 @@ flowchart TD
 | [`skill-filesystem`](../packages/skill/skill-filesystem) | `skill` | [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`skill`](../packages/skill/skill) |
 | [`deepseek-auth`](../packages/account/deepseek-auth) | `account` | [`credentials`](../packages/credentials/credentials), [`deepseek-account`](../packages/account/deepseek-account), [`error`](../packages/util/error), [`launch-environment`](../packages/util/launch-environment) |
 | [`api-workspace-controller`](../packages/api/workspace-controller) | `api` | [`api-gateway`](../packages/api/gateway), [`client-connection`](../packages/client/connection), [`host-directory-picker`](../packages/host/directory-picker), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`typert-protocol`](../packages/typert/protocol), [`workspace`](../packages/workspace/workspace) |
-| [`feishu`](../packages/connector/feishu) | `connector` | [`cli-account`](../packages/connector/cli-account), [`skill`](../packages/skill/skill) |
-| [`tencent-meeting`](../packages/connector/tencent-meeting) | `connector` | [`cli-account`](../packages/connector/cli-account), [`upstream-skills`](../packages/connector/upstream-skills) |
-| [`wecom`](../packages/connector/wecom) | `connector` | [`cli-account`](../packages/connector/cli-account), [`upstream-skills`](../packages/connector/upstream-skills) |
+| [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
+| [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-api-speech-to-text`](../packages/experimental/api-speech-to-text) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`typert-protocol`](../packages/typert/protocol) |
 | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | `experimental` | [`experimental-translator`](../packages/experimental/translator) |
 | [`experimental-speech-to-text-sensevoice`](../packages/experimental/speech-to-text-sensevoice) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`subprocess`](../packages/subprocess/subprocess) |
 | [`hook-protocol`](../packages/experimental/hook-protocol) | `experimental` | [`session`](../packages/core/session), [`shell`](../packages/shell/shell) |
 | [`lsp-stdio`](../packages/lsp/lsp-stdio) | `lsp` | [`error`](../packages/util/error), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`persona`](../packages/preset/persona) | `preset` | [`system-prompt`](../packages/core/system-prompt) |
 | [`bash-local`](../packages/shell/bash-local) | `shell` | [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`pwsh-local`](../packages/shell/pwsh-local) | `shell` | [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`llm-deepseek-account`](../packages/llm/llm-deepseek-account) | `llm` | [`agent`](../packages/core/agent), [`deepseek-account`](../packages/account/deepseek-account), [`deepseek-auth`](../packages/account/deepseek-auth), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`llm-deepseek`](../packages/llm/llm-deepseek) |
@@ -1876,6 +1892,10 @@ flowchart TD
 | [`goal`](../packages/goal/goal) | `goal` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`typert-protocol`](../packages/typert/protocol) |
 | [`web-deepseek-api`](../packages/web/web-deepseek-api) | `web` | [`agent`](../packages/core/agent), [`credentials`](../packages/credentials/credentials), [`deepseek-auth`](../packages/account/deepseek-auth), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`web`](../packages/web/web) |
 | [`web-search-deepseek`](../packages/web/web-search-deepseek) | `web` | [`agent`](../packages/core/agent), [`credentials`](../packages/credentials/credentials), [`deepseek-auth`](../packages/account/deepseek-auth), [`launch-environment`](../packages/util/launch-environment), [`session`](../packages/core/session), [`web`](../packages/web/web) |
+| [`dingtalk`](../packages/connector/dingtalk) | `connector` | [`cli-account`](../packages/connector/cli-account), [`skill`](../packages/skill/skill) |
+| [`feishu`](../packages/connector/feishu) | `connector` | [`cli-account`](../packages/connector/cli-account), [`skill`](../packages/skill/skill) |
+| [`tencent-meeting`](../packages/connector/tencent-meeting) | `connector` | [`cli-account`](../packages/connector/cli-account), [`upstream-skills`](../packages/connector/upstream-skills) |
+| [`wecom`](../packages/connector/wecom) | `connector` | [`cli-account`](../packages/connector/cli-account), [`upstream-skills`](../packages/connector/upstream-skills) |
 | [`file-reference`](../packages/context/file-reference) | `context` | [`agent`](../packages/core/agent) |
 | [`harness-dev-context`](../packages/context/harness-dev-context) | `context` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt) |
 | [`time-context`](../packages/context/time-context) | `context` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`util-time`](../packages/util/time) |
@@ -2014,6 +2034,7 @@ flowchart TD
 | [`tool-subagent-control`](../packages/subagent/tool-subagent-control) | `subagent` | [`agent`](../packages/core/agent), [`agent-team`](../packages/team/agent-team), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`schedule`](../packages/schedule/schedule) | `schedule` | [`agent`](../packages/core/agent), [`api-session-controller`](../packages/api/session-controller), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`storage-domain`](../packages/storage/storage-domain), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`util-time`](../packages/util/time), [`workspace`](../packages/workspace/workspace) |
 | [`sdk-client`](../packages/sdk/client) | `sdk` | [`llm`](../packages/llm/llm), [`sdk-protocol`](../packages/sdk/protocol), [`session`](../packages/core/session) |
+| [`tool-session-control`](../packages/session/tool-session-control) | `session` | [`api-session-controller`](../packages/api/session-controller), [`brand`](../packages/util/brand), [`error`](../packages/util/error), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`workspace`](../packages/workspace/workspace) |
 | [`tool-agent-team`](../packages/team/tool-agent-team) | `team` | [`agent`](../packages/core/agent), [`agent-team`](../packages/team/agent-team), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`client-test-runtime`](../packages/test-support/client-runtime) | `test-support` | [`api-gateway`](../packages/api/gateway), [`api-session-controller`](../packages/api/session-controller), [`api-workspace-controller`](../packages/api/workspace-controller), [`attachment`](../packages/attachment/attachment), [`client-connection`](../packages/client/connection), [`client-hmr`](../packages/client/hmr), [`client-modules`](../packages/client/modules), [`client-store`](../packages/client/store), [`client-ui-chat`](../packages/client/ui-chat), [`client-ui-context-menu`](../packages/client/ui-context-menu), [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-renderer`](../packages/client/ui-renderer), [`client-ui-session`](../packages/client/ui-session), [`client-ui-session-status`](../packages/client/ui-session-status), [`client-ui-settings`](../packages/client/ui-settings), [`client-ui-slots`](../packages/client/ui-slots), [`client-web`](../packages/client/web), [`remote-mock`](../packages/test-support/remote-mock), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`typert-protocol`](../packages/typert/protocol) |
 | [`subagent-dsh-sdk`](../packages/subagent/subagent-dsh-sdk) | `subagent` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`sdk-client`](../packages/sdk/client), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`subprocess`](../packages/subprocess/subprocess) |

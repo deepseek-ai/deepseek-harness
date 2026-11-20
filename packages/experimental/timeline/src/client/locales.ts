@@ -136,7 +136,8 @@ export const en = {
   settingsUnavailable: 'Timeline settings are unavailable. Enable the plugin, then reconnect.',
   settingsReadOnly: 'This profile’s configuration is read only.',
   language: 'Task and report language',
-  languageHint: 'Applies to new task text and reports. Follow app uses the Harness display language.',
+  languageHint:
+    'Applies to new task text and reports. Follow app uses the Harness display language. Follow chat lets the agent choose the language from the conversation.',
   progressDecimalsHint: 'Sets the number of decimal places shown for progress.',
   segmentedProgressHint: 'Shows completed, active, pending and blocked work as separate parts of the progress bar.',
   replaceTodoHint: 'Uses Timeline task trees in place of Todo tools in this profile.',
@@ -144,6 +145,7 @@ export const en = {
   autoOpenSidebarHint:
     'Opens the sidebar when the first task tree appears in a session and the window is wider than 768 px. You can still open it from the progress bar.',
   followAppLanguage: 'Follow app',
+  followChatLanguage: 'Follow chat',
   progressDecimals: 'Progress decimal places',
   minutes: 'min',
   underSecond: '<1s',
@@ -219,7 +221,7 @@ export const en = {
   controlAnswered: 'Replied, state unchanged',
   controlSuperseded: 'Replaced by a newer request',
   controlUnavailable: 'Task no longer in the plan',
-  discussionHistory: 'Discussion history',
+  discussionHistory: 'All discussions in this session',
   taskHistory: 'Change history',
   emptyTaskHistory: 'No changes recorded.',
   controlReplyRequest:
@@ -360,7 +362,7 @@ export const zh: Record<TimelineKey, string> = {
   settingsUnavailable: '时间线设置不可用，请启用插件后重新连接',
   settingsReadOnly: '当前配置为只读',
   language: '任务与报告语言',
-  languageHint: '用于新任务文本和报告。跟随应用时使用 Harness 的界面语言',
+  languageHint: '用于新任务文本和报告。跟随应用时使用 Harness 的界面语言，跟随对话时由智能体根据对话选择语言',
   progressDecimalsHint: '设置进度显示的小数位数',
   segmentedProgressHint: '在进度条中分别显示已完成、进行中、待开始和已阻塞的工作',
   replaceTodoHint: '在当前配置的会话中，用时间线任务树替代待办工具',
@@ -368,6 +370,7 @@ export const zh: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     '窗口宽度超过 768 像素时，会话中出现第一棵任务树会自动打开侧栏。也可从进度条手动打开。',
   followAppLanguage: '跟随应用',
+  followChatLanguage: '跟随对话',
   progressDecimals: '进度小数位数',
   minutes: '分钟',
   underSecond: '不到 1 秒',
@@ -437,7 +440,7 @@ export const zh: Record<TimelineKey, string> = {
   controlAnswered: '已回复，状态未变',
   controlSuperseded: '已被新请求替代',
   controlUnavailable: '任务已不在计划中',
-  discussionHistory: '讨论记录',
+  discussionHistory: '本会话的全部讨论',
   taskHistory: '更改记录',
   emptyTaskHistory: '暂无更改记录',
   controlReplyRequest: '记录任务状态的变化，再使用回复引用通过 timeline_reply 说明结果或阻碍。',
@@ -577,7 +580,8 @@ export const ja: Record<TimelineKey, string> = {
   settingsUnavailable: '設定を利用できません。プラグインを有効にして再接続してください。',
   settingsReadOnly: 'このプロファイルの設定は読み取り専用です。',
   language: 'タスクとレポートの言語',
-  languageHint: '新しいタスクのテキストとレポートに適用します。アプリに従う場合は Harness の表示言語を使います。',
+  languageHint:
+    '新しいタスクのテキストとレポートに適用します。アプリに従う場合は Harness の表示言語を使います。会話に従う場合は、エージェントが会話に合わせて言語を選びます。',
   progressDecimalsHint: '進捗の表示に使う小数点以下の桁数を設定します。',
   segmentedProgressHint: '完了、進行中、未着手、ブロック中の作業を進捗バーの別々の区画で表示します。',
   replaceTodoHint: 'このプロファイルで Todo ツールの代わりにタイムラインのタスクツリーを使います。',
@@ -585,6 +589,7 @@ export const ja: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'ウィンドウの幅が 768 px を超える場合、セッションに最初のタスクツリーが表示されるとサイドバーが開きます。進捗バーから手動で開くこともできます。',
   followAppLanguage: 'アプリに従う',
+  followChatLanguage: '会話に従う',
   progressDecimals: '進捗の小数点以下桁数',
   minutes: '分',
   underSecond: '1秒未満',
@@ -657,7 +662,7 @@ export const ja: Record<TimelineKey, string> = {
   controlAnswered: '確認が必要',
   controlSuperseded: '新しい依頼に置換済み',
   controlUnavailable: '作業は利用不可',
-  discussionHistory: 'コメント履歴',
+  discussionHistory: 'このセッションのすべてのコメント',
   taskHistory: '変更履歴',
   emptyTaskHistory: '変更の記録はありません。',
   controlReplyRequest:
@@ -803,7 +808,8 @@ export const es: Record<TimelineKey, string> = {
   settingsUnavailable: 'Los ajustes no están disponibles. Activa el complemento y vuelve a conectar.',
   settingsReadOnly: 'La configuración de este perfil es de solo lectura.',
   language: 'Idioma de tareas e informes',
-  languageHint: 'Se aplica al texto nuevo de las tareas y a los informes. Seguir la app usa el idioma de Harness.',
+  languageHint:
+    'Se aplica al texto nuevo de las tareas y a los informes. Seguir la app usa el idioma de Harness. Seguir la conversación deja que el agente elija el idioma según la conversación.',
   progressDecimalsHint: 'Define el número de decimales que se muestran en el progreso.',
   segmentedProgressHint: 'Separa el trabajo completado, activo, pendiente y bloqueado en la barra de progreso.',
   replaceTodoHint: 'Usa los árboles de tareas de Timeline en lugar de las herramientas Todo en este perfil.',
@@ -811,6 +817,7 @@ export const es: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'Abre la barra lateral cuando aparece el primer árbol de tareas de la sesión y la ventana mide más de 768 px de ancho. También puedes abrirla desde la barra de progreso.',
   followAppLanguage: 'Seguir la app',
+  followChatLanguage: 'Seguir la conversación',
   progressDecimals: 'Decimales del progreso',
   minutes: 'min',
   underSecond: '<1 s',
@@ -886,7 +893,7 @@ export const es: Record<TimelineKey, string> = {
   controlAnswered: 'Requiere atención',
   controlSuperseded: 'Sustituida por otra solicitud',
   controlUnavailable: 'Trabajo no disponible',
-  discussionHistory: 'Historial de discusiones',
+  discussionHistory: 'Todas las discusiones de esta sesión',
   taskHistory: 'Historial de cambios',
   emptyTaskHistory: 'No hay cambios registrados.',
   controlReplyRequest:
@@ -1035,7 +1042,8 @@ export const fr: Record<TimelineKey, string> = {
   settingsUnavailable: 'Les paramètres sont indisponibles. Activez le module, puis reconnectez-vous.',
   settingsReadOnly: 'La configuration de ce profil est en lecture seule.',
   language: 'Langue des tâches et des rapports',
-  languageHint: 'S’applique aux nouveaux textes de tâches et rapports. Suivre l’app utilise la langue de Harness.',
+  languageHint:
+    'S’applique aux nouveaux textes de tâches et rapports. Suivre l’app utilise la langue de Harness. Suivre la conversation laisse l’agent choisir la langue selon la conversation.',
   progressDecimalsHint: 'Définit le nombre de décimales affichées pour la progression.',
   segmentedProgressHint: 'Sépare le travail terminé, en cours, en attente et bloqué dans la barre de progression.',
   replaceTodoHint: 'Utilise les arbres de tâches de Timeline à la place des outils Todo dans ce profil.',
@@ -1043,6 +1051,7 @@ export const fr: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'Ouvre le panneau latéral lorsque le premier arbre de tâches apparaît dans la session et que la fenêtre fait plus de 768 px de large. La barre de progression permet aussi de l’ouvrir.',
   followAppLanguage: 'Suivre l’app',
+  followChatLanguage: 'Suivre la conversation',
   progressDecimals: 'Décimales de progression',
   minutes: 'min',
   underSecond: '<1 s',
@@ -1118,7 +1127,7 @@ export const fr: Record<TimelineKey, string> = {
   controlAnswered: 'À vérifier',
   controlSuperseded: 'Remplacée par une nouvelle demande',
   controlUnavailable: 'Travail indisponible',
-  discussionHistory: 'Historique des discussions',
+  discussionHistory: 'Toutes les discussions de cette session',
   taskHistory: 'Historique des modifications',
   emptyTaskHistory: 'Aucune modification enregistrée.',
   controlReplyRequest:
@@ -1266,7 +1275,8 @@ export const de: Record<TimelineKey, string> = {
     'Die Einstellungen sind nicht verfügbar. Aktivieren Sie das Plugin und verbinden Sie sich erneut.',
   settingsReadOnly: 'Die Konfiguration dieses Profils ist schreibgeschützt.',
   language: 'Sprache für Aufgaben und Berichte',
-  languageHint: 'Gilt für neue Aufgabentexte und Berichte. Wie App übernimmt die Anzeigesprache von Harness.',
+  languageHint:
+    'Gilt für neue Aufgabentexte und Berichte. Wie App übernimmt die Anzeigesprache von Harness. Wie Chat überlässt dem Agenten die Sprachwahl passend zum Chat.',
   progressDecimalsHint: 'Legt die Anzahl der Dezimalstellen für die Fortschrittsanzeige fest.',
   segmentedProgressHint: 'Zeigt abgeschlossene, laufende, ausstehende und blockierte Arbeit getrennt im Fortschrittsbalken.',
   replaceTodoHint: 'Verwendet die Aufgabenbäume der Zeitleiste anstelle der Todo-Werkzeuge in diesem Profil.',
@@ -1274,6 +1284,7 @@ export const de: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'Öffnet die Seitenleiste beim ersten Aufgabenbaum der Sitzung, wenn das Fenster breiter als 768 px ist. Sie lässt sich auch über den Fortschrittsbalken öffnen.',
   followAppLanguage: 'Wie App',
+  followChatLanguage: 'Wie Chat',
   progressDecimals: 'Nachkommastellen des Fortschritts',
   minutes: 'Min.',
   underSecond: '<1 Sek.',
@@ -1350,7 +1361,7 @@ export const de: Record<TimelineKey, string> = {
   controlAnswered: 'Prüfung erforderlich',
   controlSuperseded: 'Durch neue Anfrage ersetzt',
   controlUnavailable: 'Arbeit nicht verfügbar',
-  discussionHistory: 'Diskussionsverlauf',
+  discussionHistory: 'Alle Diskussionen dieser Sitzung',
   taskHistory: 'Änderungsverlauf',
   emptyTaskHistory: 'Keine Änderungen aufgezeichnet.',
   controlReplyRequest:
@@ -1497,7 +1508,8 @@ export const ru: Record<TimelineKey, string> = {
   settingsUnavailable: 'Настройки недоступны. Включите плагин и подключитесь снова.',
   settingsReadOnly: 'Настройки этого профиля доступны только для чтения.',
   language: 'Язык задач и отчётов',
-  languageHint: 'Применяется к новому тексту задач и отчётам. При выборе языка приложения используется язык интерфейса Harness.',
+  languageHint:
+    'Применяется к новому тексту задач и отчётам. При выборе языка приложения используется язык интерфейса Harness. При выборе языка чата агент сам выбирает язык по содержанию чата.',
   progressDecimalsHint: 'Задаёт число знаков после запятой для отображения прогресса.',
   segmentedProgressHint: 'Разделяет завершённую, активную, ожидающую и заблокированную работу на шкале прогресса.',
   replaceTodoHint: 'Использует деревья задач Timeline вместо инструментов Todo в этом профиле.',
@@ -1505,6 +1517,7 @@ export const ru: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'Открывает боковую панель при появлении первого дерева задач в сеансе, если ширина окна больше 768 пикселей. Панель также можно открыть с индикатора прогресса.',
   followAppLanguage: 'Как в приложении',
+  followChatLanguage: 'Как в чате',
   progressDecimals: 'Знаков после запятой',
   minutes: 'мин',
   underSecond: '<1 с',
@@ -1578,7 +1591,7 @@ export const ru: Record<TimelineKey, string> = {
   controlAnswered: 'Требует внимания',
   controlSuperseded: 'Заменён новым запросом',
   controlUnavailable: 'Работа недоступна',
-  discussionHistory: 'История обсуждений',
+  discussionHistory: 'Все обсуждения этого сеанса',
   taskHistory: 'История изменений',
   emptyTaskHistory: 'Изменения не записаны.',
   controlReplyRequest:
@@ -1722,7 +1735,8 @@ export const pt: Record<TimelineKey, string> = {
   settingsUnavailable: 'As configurações estão indisponíveis. Ative o plugin e reconecte.',
   settingsReadOnly: 'A configuração deste perfil é somente leitura.',
   language: 'Idioma das tarefas e dos relatórios',
-  languageHint: 'Vale para novos textos de tarefas e relatórios. Seguir o app usa o idioma de exibição do Harness.',
+  languageHint:
+    'Vale para novos textos de tarefas e relatórios. Seguir o app usa o idioma de exibição do Harness. Seguir a conversa deixa o agente escolher o idioma de acordo com a conversa.',
   progressDecimalsHint: 'Define o número de casas decimais exibidas no progresso.',
   segmentedProgressHint: 'Mostra separadamente o trabalho concluído, ativo, pendente e bloqueado na barra de progresso.',
   replaceTodoHint: 'Usa as árvores de tarefas da linha do tempo no lugar das ferramentas Todo neste perfil.',
@@ -1730,6 +1744,7 @@ export const pt: Record<TimelineKey, string> = {
   autoOpenSidebarHint:
     'Abre a barra lateral quando a primeira árvore de tarefas aparece na sessão e a janela tem mais de 768 px de largura. Você também pode abri-la pela barra de progresso.',
   followAppLanguage: 'Seguir o app',
+  followChatLanguage: 'Seguir a conversa',
   progressDecimals: 'Casas decimais do progresso',
   minutes: 'min',
   underSecond: '<1 s',
@@ -1805,7 +1820,7 @@ export const pt: Record<TimelineKey, string> = {
   controlAnswered: 'Requer atenção',
   controlSuperseded: 'Substituído por novo pedido',
   controlUnavailable: 'Trabalho indisponível',
-  discussionHistory: 'Histórico de discussões',
+  discussionHistory: 'Todas as discussões desta sessão',
   taskHistory: 'Histórico de alterações',
   emptyTaskHistory: 'Nenhuma alteração registrada.',
   controlReplyRequest:

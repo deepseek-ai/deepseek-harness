@@ -42,7 +42,9 @@ dsh --profile web --no-open --port 8080
 
 启动后你会看到 `dsh web:` 行，其根 URL 携带新的进程 token。除非 `--no-open` 或 SSH 会话抑制，否则默认浏览器会打开该 URL、取得签名 cookie，再重定向到不含认证参数的同一目录。页面加载且你可以与 agent 对话，就说明成功了。两种可预期的失败：前端未构建时，启动会以构建提示停止（checkout 中运行 `pnpm run build`）；浏览器无法打开时，stderr 会打印不含凭据的诊断，但服务器会继续运行——请自行打开已打印的启动 URL。
 
-**设置 → 模型**显示 **DeepSeek**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
+登录页将令牌输入与配对申请分成独立卡片。可粘贴登录链接或其中的令牌；登录链接可在已登录设备的设置 → 远程连接中复制。只有登录链接或令牌格式正确时“继续”才可用；不可用时激活按钮会显示校验提示。编辑输入内容会关闭提示，只有再次尝试提交时才重新显示。令牌被拒绝时显示占满内容宽度的错误横幅，与配对失败横幅一致。申请访问前即可看到配对操作说明。其他浏览器可以从此页申请访问。在已登录浏览器的**设置 → 远程连接**中核对显示码并批准后，申请浏览器会自动进入应用。[浏览器配对](../../client/remote-connection/README.zh.md)说明审批规则与申请限制。
+
+**设置 → 模型**显示 **DeepSeek API**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
 
 已保存的模型选择覆盖组合默认值。设置卡接受兼容 Messages 的 API 地址与凭据引用。
 

@@ -247,8 +247,6 @@ Available at app or window level depending on the platform.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
-Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
-
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```
 

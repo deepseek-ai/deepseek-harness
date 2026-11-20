@@ -66,17 +66,19 @@ export function estimateContent(blocks: readonly ContentBlock[]): number {
  * Price the rendered system prompt: the `system/message` surface node's text.
  * Adapters serialize the prompt as a plain string — a system-role message or
  * the request's system field — not as a typed content block, so the price is
- * text density plus role framing with no per-block overhead.
+ * text density plus blank-line separators and role framing with no per-block overhead.
  * @param message - system-role message to price without mutation.
  * @returns heuristic system-prompt tokens; 0 for empty content ("no system prompt").
  */
 export function estimateSystemMessage(message: Message): number {
-  if (message.content.length === 0) return 0
   let characters = 0
   for (const block of message.content) {
-    characters += block.type === 'text' ? block.text.length : JSON.stringify(block).length
+    const text = block.type === 'text' ? block.text.trim() : JSON.stringify(block)
+    if (text.length === 0) continue
+    if (characters > 0) characters += 2
+    characters += text.length
   }
-  return Math.ceil(characters / CHARS_PER_TOKEN) + ROLE_OVERHEAD
+  return characters === 0 ? 0 : Math.ceil(characters / CHARS_PER_TOKEN) + ROLE_OVERHEAD
 }
 
 /**

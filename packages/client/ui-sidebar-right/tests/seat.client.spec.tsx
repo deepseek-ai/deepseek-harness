@@ -21,6 +21,12 @@ import { ShortcutRegistry } from '@deepseek-ai/dsh-client-shortcuts/src/client/r
 import type { SidebarRightTabInfo, SidebarRightTabMenuOwnerProps } from '../src/client/contract/slots.ts'
 import type { createSidebarRightStore } from '../src/client/stores.ts'
 
+declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
+  interface SidebarRightTabParamsMap {
+    'transient-view': { text: string }
+  }
+}
+
 declare module '../src/client/contract/params.ts' {
   interface SidebarRightResourceParamsMap {
     test: { line?: number; x?: number }
@@ -171,6 +177,26 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
     openerView: () => openerView!,
   }
 }
+
+it('keeps an openContent body and its navigation through tab and Session switches', async () => {
+  const h = await mountSeat()
+  act(() => { h.registerPage('transient-view') })
+  act(() => { h.controller.openContent('transient-view', { text: 'In memory' }, { key: 'k' }) })
+  const tab = h.controller.active()!
+  const selector = `[data-tab-body="${tab.id}"]`
+  const body = element(h.view.container, selector)
+  act(() => { h.controller.openTab('guide') })
+  expect(body.isConnected).toBe(true)
+  await act(async () => { await h.runtime.sessions.add({ id: OTHER }) })
+  act(() => { h.selectSession(OTHER) })
+  expect(body.isConnected).toBe(true)
+  act(() => { h.selectSession(SESSION) })
+  act(() => { h.controller.focus(tab.id) })
+  expect(element(h.view.container, selector)).toBe(body)
+  expect(h.bodies.get(tab.id)?.tab.navigation.params).toEqual({ text: 'In memory' })
+  act(() => { h.controller.close(tab.id) })
+  expect(body.isConnected).toBe(false)
+})
 
 it('keeps duplicate Session Tabs independent and preserves a body through docking and float focus', async () => {
   const h = await mountSeat()

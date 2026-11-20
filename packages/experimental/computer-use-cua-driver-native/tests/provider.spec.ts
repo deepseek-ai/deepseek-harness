@@ -1,4 +1,5 @@
 /** Native SDK lifecycle and catalog behavior without desktop access. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -21,6 +22,7 @@ beforeEach(async () => {
   resetFixture()
   ctx = new Context()
   await ctx.plugin(ComputerUseRegistry)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

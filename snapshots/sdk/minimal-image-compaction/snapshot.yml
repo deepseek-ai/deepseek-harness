@@ -6,3 +6,4 @@ recording: authored
 header:
   class: sdk-minimal-image-compaction
   pin: true
+  promptChanges: 1

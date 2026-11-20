@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-turn-scoped
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc-scoped
+  pin: true
+# Replays the ptc-turn programs as scoped REPL statements.

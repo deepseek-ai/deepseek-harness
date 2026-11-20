@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-21-section-based-system-updates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-21-section-based-system-updates.md
+/agent-note-section-based-system-updates:
+  en: 782bf68313d80f8c
+  zh: 269fe6df917ba8d1
+/agent-note-section-based-system-updates/problem:
+  en: a83ea0b9159b4413
+  zh: b99c7aa991a2bfbc
+/agent-note-section-based-system-updates/decision:
+  en: e68f889b2f53accd
+  zh: b2a91efdea6a3d62
+/agent-note-section-based-system-updates/decision/registration-and-retirement:
+  en: a731f245615075cb
+  zh: 4381fbd0c3c083ac
+/agent-note-section-based-system-updates/decision/canonical-records-and-fixed-assembly:
+  en: 8c44de7fbc3610cd
+  zh: fd2eab0252d96eaa
+/agent-note-section-based-system-updates/alternatives-considered:
+  en: 1367dc65863691b0
+  zh: ffdd4888ee03a1b1
+/agent-note-section-based-system-updates/consequences:
+  en: f95aa7065a87e9d7
+  zh: e57d2d7be50bdcac

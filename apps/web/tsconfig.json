@@ -23,6 +23,11 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/device-pairing.e2e.ts",
+    "tests/pairing-completion.e2e.ts",
+    "tests/pairing-recovery.e2e.ts",
+    "tests/remote-connection.e2e.ts",
+    "tests/remote-connection-fixture.ts",
     "tests/home-whale.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
     "tests/session-panel-layout.e2e.ts",
@@ -72,6 +77,7 @@
     "tests/minimal-preset.snapshot.ts",
     "tests/message-feedback-protocol.snapshot.ts",
     "tests/preset-migration.snapshot.ts",
+    "tests/session-send-message.snapshot.ts",
     "tests/subagent-fork-schedule.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",
@@ -269,6 +275,7 @@
     "tests/window-drag-coverage.e2e.ts",
     "tests/window-drag-inheritance.e2e.ts",
     "tests/complex-history.perf.ts",
+    "tests/dingtalk-connection.e2e.ts",
     "tests/pwsh-terminal.e2e.ts",
     "tests/wecom-connection.e2e.ts",
     "tests/tencent-meeting-connection.e2e.ts",

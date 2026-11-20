@@ -50,7 +50,7 @@ kind: "package-reference"
     filesApiTimeoutMs: 20000
 ```
 
-请求用 `provider: deepseek-official` 选择路由；模型 id 原样传到协议，因此新增 DeepSeek 模型无需重新注册。省略 `models` 时公布支持文本和图像的 `deepseek-flash`，以及仅支持文本的 `deepseek-v4-pro`，各自的上下文窗口均为官方模型列表声明的 1,048,576 token。显式列表会替换这些默认值，核心调用中未列出的模型 id 仍作为纯文本路由原样通过。在官方端点上，当 `models` 保持这些默认值时，API key 路由改为使用服务端的模型列表（[列表规则](../llm-deepseek-api-key/README.zh.md#use-this-package)）。GUI 选择要求模型具有目录条目；条目消失后，已保存的选择仍可提交请求。包括模型发现工具在内的客户端可通过 `ctx.llm.listModels('deepseek-official')` 读取这些建议性条目。支持图片的条目可把 `imagePixelBudget` 设置为正整数或 `low`，也可以设置 `imageMaxBytes`。当端点把 `messages` 中任意位置最新的 `system` 消息读作完整的有效系统提示词时，条目可以声明 `systemPromptUpdate: in-history`；适配器会在已解析模型与已准备调用上报告该模式，agent loop（智能体循环）随后把变化后的提示词追加到已缓存历史之后，而不是改写开头的 system 消息（[决策规则](../../core/agent-loop/README.zh.md#understand-the-implementation)）。默认的 `deepseek-flash` 条目声明该模式；其他模型需通过 `models` 显式声明，`in-history` 以外的任何值都会在加载时以 `llm-deepseek: catalog model "<id>" systemPromptUpdate must be "in-history" when present` 失败。
+请求用 `provider: deepseek-official` 选择路由；模型 id 原样传到协议，因此新增 DeepSeek 模型无需重新注册。省略 `models` 时公布支持文本和图像的 `deepseek-flash`，以及仅支持文本的 `deepseek-v4-pro`，各自的上下文窗口均为官方模型列表声明的 1,048,576 token。显式列表会替换这些默认值，核心调用中未列出的模型 id 仍作为纯文本路由原样通过。在官方端点上，当 `models` 保持这些默认值时，API key 路由改为使用服务端的模型列表（[列表规则](../llm-deepseek-api-key/README.zh.md#use-this-package)）。GUI 选择要求模型具有目录条目；条目消失后，已保存的选择仍可提交请求。包括模型发现工具在内的客户端可通过 `ctx.llm.listModels('deepseek-official')` 读取这些建议性条目。支持图片的条目可把 `imagePixelBudget` 设为正整数或 `low`，并可设置 `imageMaxBytes`。端点支持消息内的原生系统增量时，条目可声明 `systemPromptUpdate: in-history`。所有路由都按段准入；此能力选择适配器表示。默认的 `deepseek-flash` 条目声明该模式；其他模型需通过 `models` 显式声明，`in-history` 以外的任何值都会在加载时以 `llm-deepseek: catalog model "<id>" systemPromptUpdate must be "in-history" when present` 失败。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -85,7 +85,7 @@ kind: "package-reference"
 
 官方根地址为 `https://api.deepseek.com/anthropic`。显式 `baseURL` 或 `$DEEPSEEK_BASE_URL` 提供兼容 Messages 的根地址；`dsh` 启动器从启动环境或 `$DSH_HOME/.env` 接受该变量，绝不从项目 `.env` 接受（[app-boot](../../boot/app-boot/README.zh.md)）。模型与 Files 请求分别追加 `/v1/messages` 和 `/v1/files`，但末尾严格匹配的 `/v1` 路径段会直接复用。末尾斜线不改变这些结果。基址必须使用 HTTP(S)，且不含凭据、查询或片段。
 
-Messages 以内容块发送文本、思考、工具调用和工具结果，以 `output_config.effort` 发送推理强度，并以 Files 引用或内联 base64 发送图片。声明 `systemPromptUpdate: in-history` 的模型保留初始顶层 system，在对应 user/tool-result 轮次之后发送新的 system 快照；未声明能力时，使用最新快照作为顶层 system。回放元数据保留模型与思考签名。无效的回放元数据产生警告并省略签名，不丢弃文本或工具历史。 模型条目可声明 `toolUpdate: addition-only` 或 `in-history`；默认 `deepseek-flash` 条目声明 `addition-only`。投影后的 developer 工具更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块，引用已声明名称，延迟声明携带 `defer_loading`。包含这些块的请求发送 `mid-conversation-tool-changes-2026-07-01` beta 请求头。 Messages 会省略 assistant 的空文本块，并跳过转换后没有内容的 assistant 消息，包括其他协议保存的历史。已存储的 Session 内容保持原样。
+Messages 以内容块发送文本、思考、工具调用和工具结果，以 `output_config.effort` 发送推理强度，并以 Files 引用或内联 base64 发送图片。声明 `systemPromptUpdate: in-history` 的模型保留初始顶层 system，在对应 user/tool-result 轮次之后发送新的 system 增量；未声明能力时，将所有存活系统消息拼接为顶层 system。回放元数据保留模型与思考签名。无效的回放元数据产生警告并省略签名，不丢弃文本或工具历史。 模型条目可声明 `toolUpdate: addition-only` 或 `in-history`；默认 `deepseek-flash` 条目声明 `addition-only`。投影后的 developer 工具更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块，引用已声明名称，延迟声明携带 `defer_loading`。包含这些块的请求发送 `mid-conversation-tool-changes-2026-07-01` beta 请求头。 Messages 会省略 assistant 的空文本块，并跳过转换后没有内容的 assistant 消息，包括其他协议保存的历史。已存储的 Session 内容保持原样。 系统文本块分别去除首尾空白并忽略空块；适配器将它们以空行分隔，生成提供方的 system 字符串。
 
 <a id="account-credentials"></a>
 ### 账号凭据

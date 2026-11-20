@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 // Type-only: make `ctx.get('sandboxPolicy')`, `ctx.get('approval')`, and
 // `ctx.get('permissionPresets')` resolve to their services when composed — delegation consumes them
@@ -215,7 +215,7 @@ function applyChildOverrides(childCtx: Context, composition: ChildComposition): 
   })
   if (composition.persona !== undefined) {
     childCtx.systemPrompt.section({
-      name: 'deployment:persona-prefix',
+      name: PERSONA_PREFIX_SECTION,
       order: childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'),
       text: composition.persona,
     })

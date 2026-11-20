@@ -1,0 +1,4 @@
+# Replays the ptc-node-read-only confinement check with the scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

@@ -721,6 +721,7 @@ schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]
 /**
  * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
  * Rendering any executor-owned section requires the viewing scope's selection to remain available.
+ * Disposal retires its sections; a replacement's same-name sections supersede those notices.
  * @param executor - initialized provider owned by the contributing plugin.
  * @returns the effect disposer. Unloading leaves the selection unavailable until it is replaced.
  */

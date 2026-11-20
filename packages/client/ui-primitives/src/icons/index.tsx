@@ -656,3 +656,9 @@ export const IconSaveOutlineRegular = productIcon('save-outline', 'regular')
 
 /** Medium floppy-disk save action. */
 export const IconSaveOutlineMedium = productIcon('save-outline', 'medium')
+
+/** Regular remote connection phone artwork; both weights preserve its filled contours. */
+export const IconRemoteConnectionOutlineRegular = productIcon('remote-connection-outline', 'regular')
+
+/** Medium remote connection phone artwork; both weights preserve its filled contours. */
+export const IconRemoteConnectionOutlineMedium = productIcon('remote-connection-outline', 'medium')

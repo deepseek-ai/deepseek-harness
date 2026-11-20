@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`、`ctx.sessionController`、`ctx.workspaceRegistry`、调用 Agent | `tool/call`、接收方的 `agent/inbox/spliced`、`tool/result` | - | dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。 |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -55,6 +56,38 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-tool-session-control"></a>
+
+## `@deepseek-ai/dsh-tool-session-control`
+
+### `session_send_message`
+
+向独立 Session 发送消息。仅当用户明确要求你向另一个 Session 发送消息时使用此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The target session ID."
+    },
+    "message": {
+      "type": "string",
+      "description": "Nonblank message to deliver."
+    }
+  },
+  "required": [
+    "session_id",
+    "message"
+  ]
+}
+```
+
+来源：[`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -2294,7 +2327,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。corrupt、unsupported 或 unavailable 表示该行自身的后代目录无法读取，该行本身仍是可发送消息的成员。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。共享容量报告 running/limit；容量受限时不要再创建代理。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。corrupt、unsupported 或 unavailable 表示该行自身的后代目录无法读取，该行本身仍是可发送消息的成员。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2453,7 +2486,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+      "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
       "items": {
         "type": "string"
       }
@@ -2579,7 +2612,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Replacement advisory write scopes for edit.",
+      "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
       "items": {
         "type": "string"
       }

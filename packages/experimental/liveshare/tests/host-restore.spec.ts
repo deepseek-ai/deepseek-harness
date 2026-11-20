@@ -334,12 +334,19 @@ describe('liveshare owner host', () => {
   }, 20_000)
 
   it('keeps an owner-started turn when a share narrows', async () => {
+    const warn = vi.spyOn(console, 'warn')
+    onTestFinished(() => { warn.mockRestore() })
     const cancel = vi.fn()
-    const live = liveAgent('session-1', cancel)
+    const live = { ...liveAgent('session-1', cancel), status: 'idle' }
+    const registration = Promise.withResolvers<() => void>()
     let authority: Record<string, unknown> = {
       version: 1, accessMode: 'open', allowedSubjectIds: [], sessionMode: 'write',
     }
     const relay = createHttpServer((request, response) => {
+      if (request.headers.upgrade === 'websocket') {
+        registration.resolve(() => { response.writeHead(403); response.end() })
+        return
+      }
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify(request.url?.includes('owner-credential') === true
         ? { supported: true }
@@ -357,6 +364,14 @@ describe('liveshare owner host', () => {
     closers.push(dispose)
 
     await host.liveshareShares.list()
+    const refuseRegistration = await registration.promise
+    refuseRegistration()
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith('[liveshare] share offline share=share-1 reason=relay refused registration status=403')
+    }, { timeout: 10_000 })
+    // The terminal refusal clears cached access; restore v1 before narrowing the grant.
+    await host.liveshareShares.list()
+    expect(cancel).not.toHaveBeenCalled()
     // The owner starts turn 7 and its first step admits no share-viewer input, which the host records
     // before the narrowing read below.
     const ownerMessage = createUserMessage({ content: [{ type: 'text', text: 'owner' }], source: { kind: 'user' } })
@@ -368,6 +383,7 @@ describe('liveshare owner host', () => {
       messages: [ownerMessage],
       signal: new AbortController().signal,
     }, async () => ({ kind: 'enter', messages: [ownerMessage] }))
+    live.status = 'running'
 
     authority = { version: 2, accessMode: 'selected', allowedSubjectIds: [], sessionMode: 'write' }
     await host.liveshareShares.list()

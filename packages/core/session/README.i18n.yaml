@@ -20,9 +20,12 @@
 /deepseek-ai-dsh-session/use-this-package/create-and-inspect-sessions:
   en: add81d4e7d6b479c
   zh: ec8715380ffe5406
+/deepseek-ai-dsh-session/use-this-package/validate-a-log-and-build-a-header:
+  en: 726f85dae1bc50a6
+  zh: d6904368dfc45ed6
 /deepseek-ai-dsh-session/use-this-package/append-and-derive:
-  en: c9ad40c8a8f2cd0b
-  zh: 0b76ae73f39bbb18
+  en: 4928d978b5babd72
+  zh: 38e65aca870d208d
 /deepseek-ai-dsh-session/use-this-package/read-the-log:
   en: c4bf3103b9762b6c
   zh: 369c734bb20de2ea
@@ -30,8 +33,8 @@
   en: 002b8240caa0c57c
   zh: e0954dd62913a944
 /deepseek-ai-dsh-session/use-this-package/fork-a-session:
-  en: 4fcc9eb5c0278b51
-  zh: 2a26e81ebffbd9a6
+  en: 015f738db789b4b5
+  zh: 062cac456cb744f5
 /deepseek-ai-dsh-session/use-this-package/flush-durable-state:
   en: 70a7673145c851ad
   zh: 0dd1667d9518993d
@@ -45,8 +48,8 @@
   en: bbfb53c50100ab13
   zh: 303a8ee47f4f656a
 /deepseek-ai-dsh-session/understand-the-implementation/source-map:
-  en: c596a8f74b4f1b79
-  zh: a29f23c4c1d1ff75
+  en: cc05cde73a434a87
+  zh: 9be95b465bd191c9
 /deepseek-ai-dsh-session/understand-the-implementation/append-validation:
   en: 5c09583bc8e1ffc6
   zh: 3b25552de2d1f9b6
@@ -54,8 +57,8 @@
   en: 160b35afd9d866e4
   zh: cd1021e0ef567f87
 /deepseek-ai-dsh-session/understand-the-implementation/derived-history:
-  en: 4a9861492a8c3869
-  zh: e9566de647206230
+  en: e2467425aed4b6f0
+  zh: d16db5da8c3620c0
 /deepseek-ai-dsh-session/understand-the-implementation/the-request-header:
   en: 1349f47bea4dab00
   zh: 20cc03f2c87ec492

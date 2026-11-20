@@ -40,6 +40,7 @@ describe('product icon set', () => {
     expect(medium.sort()).toEqual(regular.sort())
     expect(iconNames).toEqual(expect.arrayContaining([
       'IconMicrophoneOutlineRegular',
+      'IconRemoteConnectionOutlineRegular',
       'IconPlanOutlineRegular', 'IconCompactOutlineRegular', 'IconShieldOutlineRegular', 'IconDeliverDocRegular',
       'IconWarningTriangleOutlineRegular', 'IconCompareSplitOutlineRegular', 'IconCloseCircleFillRegular',
       'IconEyeOutlineRegular', 'IconEyeOffOutlineRegular',
