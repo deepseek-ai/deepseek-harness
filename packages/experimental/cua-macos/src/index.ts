@@ -8,7 +8,6 @@ import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
-import { installHeldKeys } from './held-keys.ts'
 import type { NativeChannelFactory } from '@deepseek-ai/dsh-cua/native-client'
 import { watchWindowActivity } from './recent-activity.ts'
 import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
@@ -71,7 +70,7 @@ export const Config = Schema.object({
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const createChannel: NativeChannelFactory = (owner, native) => createSharedNativeChannel(owner, native, config.recentActivityWindowMs)
   const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowRead: watchWindowActivity(ctx) },
-    sendKeyEvent: installHeldKeys(ctx),
+    heldInputState: true,
     getGuidance: (kind: 'raw' | 'standalone') => macosGuidance(kind, config.recentActivityWindowMs !== 'off'), capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {

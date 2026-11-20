@@ -116,12 +116,13 @@ export const NativeResourceParameters = {
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }
-/** Host-only launch continuation and user-facing system permission controls; absent from model arguments. */
+/** Host-only launch, permission, and held-input operations; absent from model arguments. */
 export const NativeOnlyOperations = [
   operation('launchApp', app), operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
+  operation('getHeldInputs', {}), operation('releaseHeldInputs', {}),
 ] as const
 
 /** Application selection returned only after a successful app selection. */

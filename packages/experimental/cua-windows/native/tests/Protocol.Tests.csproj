@@ -11,6 +11,8 @@
   <ItemGroup>
 	<ProjectReference Include="../protocol/CuaProtocol.csproj" />
 	<Compile Include="../entry/PatternActions.cs" Link="PatternActions.cs" />
+    <Compile Include="../entry/HeldInputs.cs" Link="HeldInputs.cs" />
+    <Compile Include="../entry/Win32.cs" Link="Win32.cs" />
   </ItemGroup>
 
 </Project>

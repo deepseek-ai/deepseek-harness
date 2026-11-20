@@ -74,6 +74,7 @@ foreach (var direction in new[] { "down", "up" })
 }
 foreach (var invalid in new[]
 {
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","taskId":"other"}""",
     """{"appHandle":"app","windowId":"1","mouseButton":"left"}""",
     """{"appHandle":"app","windowId":"1","direction":"down"}""",
     """{"appHandle":"app","mouseButton":"left","direction":"down"}""",
@@ -82,6 +83,14 @@ foreach (var invalid in new[]
     """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","x":1,"y":2}""",
 })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"mouse\",\"method\":\"toggleMouse\",\"params\":" + invalid + "}")), "INVALID_ARGUMENT");
+
+foreach (var method in new[] { "getHeldInputs", "releaseHeldInputs" })
+{
+    var query = $$$"""{"id":"holds","method":"{{{method}}}","params":{}}""";
+    Check(NativeRequest.Parse(WireJson.Parse(query)).Method == method, "Held-input operations use the requesting connection");
+    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"other"}}""")), "INVALID_ARGUMENT");
+}
+HeldInputChecks.Run(Check, Refuses);
 
 var actionSchema = NativeRequest.Parse(WireJson.Parse("""{"id":"schema","method":"getActionSchema","params":{"action":"Invoke.Invoke"}}"""));
 Check(actionSchema.Params.EnumerateObject().Select(item => item.Name).SequenceEqual(["action"]),

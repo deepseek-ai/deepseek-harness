@@ -31,10 +31,11 @@ it.skipIf(process.platform !== 'win32')('loads the Windows provider and rejects 
   const prompt = await ctx.systemPrompt.assemble({ scope: agent })
   expect(prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Windows:')
   expect(prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text).not.toContain('useSystemInput')
+  expect(prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('a system reminder lists any remaining keys and mouse buttons')
   const toggleMouse = prompt.sections.find(section => section.name === 'computer-use:dsh-cua')?.text
     .split('\n').find(line => line.startsWith('- toggleMouse('))
   expect(toggleMouse).toContain("toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult")
-  expect(toggleMouse).toContain("Release held buttons explicitly with 'up'; the opposite event is not sent automatically.")
+  expect(toggleMouse).toContain("Send 'up' to release a held button immediately.")
   expect(toggleMouse).toContain('press or release the specified mouse button at the current pointer position without moving it.')
   expect(toggleMouse).not.toContain('Not implemented')
   expect(JSON.stringify(ctx.tools.get('cua', agent)!.parameters)).not.toContain('useSystemInput')

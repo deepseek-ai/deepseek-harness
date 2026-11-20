@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
-import { NativeError, type NativeClient } from './native-client.ts'
+import { NativeError } from './native-client.ts'
 import { applicationAccessDisplay } from './locales.ts'
 import { systemInputControlPrompt } from './system-input-locales.ts'
 
@@ -10,29 +10,7 @@ import { systemInputControlPrompt } from './system-input-locales.ts'
 export class SystemInputControl {
   private readonly decisions = new WeakMap<Agent, boolean | 'asking'>()
 
-  private readonly pressed = new WeakMap<Agent['session'], NativeClient>()
-
-  constructor(private readonly ctx: Context, private readonly requireApproval: boolean) {
-    ctx.on('session/event', (session, event) => {
-      if (event.type !== 'turn/end') return
-      const client = this.pressed.get(session)
-      this.pressed.delete(session)
-      if (client && !client.disposed) {
-        void client.requestCleanup('releaseSystemButton', {}).catch((error: unknown) => {
-          ctx.logger.warn('Could not release system input at turn end: %s', error)
-        })
-      }
-    })
-  }
-
-  /**
-   * Arm turn-end cleanup before posting; cancellation can hide an already dispatched press.
-   * @param agent Owner of the current turn.
-   * @param client Connection that owns and can release the native button.
-   */
-  trackPress(agent: Agent, client: NativeClient): void {
-    this.pressed.set(agent.session, client)
-  }
+  constructor(private readonly ctx: Context, private readonly requireApproval: boolean) {}
 
   /**
    * Select the per-call route and any approval required before dispatch.
