@@ -5,21 +5,14 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { Button, Modal, IconApiOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
-    function CommandHint({ t }) {
-      return h('span', null, h('kbd', null, '/'), ' ', t('browseCommands'))
-    }
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {
         const labels = {
           start: 'Input activity', cancel: 'Cancel activity', insert: 'Insert result', stale: 'Draft changed',
           setup: 'Input plugin setup', details: 'Open setup', later: 'Later', config: 'Input plugin configuration',
-          browseCommands: 'to browse commands',
         }
         ctx.effect(() => ctx.locale.register('fixtureInput', { en: labels, zh: labels }))
-        ctx.slots.inject('conversation.input.placeholder', () => ctx.slots.register({
-          name: 'conversation.input.placeholder', locale: 'fixtureInput', select: ({ sessionId }) => sessionId,
-        }, CommandHint))
         ctx.slots.inject('conversation.input.activity', () => ctx.slots.register({
           name: 'conversation.input.activity', locale: 'fixtureInput',
         }, ({ inputActions, onActiveChange, locked, t }) => {
