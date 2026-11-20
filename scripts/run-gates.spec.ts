@@ -26,6 +26,7 @@ import {
 beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_SHARD', undefined)
+  vi.stubEnv('DSH_BENCH_PHASE', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
@@ -293,6 +294,26 @@ describe('gate graph validation', () => {
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
     expect(scripts['test:bench:built']).toBe('tsx scripts/run-bench-suite.ts')
+  })
+
+  it.each(['first', 'last'] as const)('runs the %s benchmark phase on restored shared-build output', (phase) => {
+    const subject = withEnv('DSH_BENCH_PHASE', phase, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt')))
+    const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+
+    expect(scripts['check:ci:bench-prebuilt']).toBe('tsx scripts/run-gates.ts ci-bench-prebuilt')
+    expect(subject).toHaveLength(1)
+    expect(subject[0]).toMatchObject({
+      id: 'bench',
+      label: `performance benchmarks (${phase} phase)`,
+      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/run-ci-bench.ts', `--phase=${phase}`],
+    })
+  })
+
+  it.each([undefined, '', 'all', 'second'])('refuses benchmark phase %j', (raw) => {
+    expect(() => withEnv('DSH_BENCH_PHASE', raw, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt'))))
+      .toThrow('benchmark phase must be "first" or "last"')
   })
 
   it('checks all maintained repository references locally and in CI', () => {

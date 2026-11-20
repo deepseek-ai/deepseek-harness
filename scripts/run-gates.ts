@@ -9,6 +9,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { parseBenchPhase } from './bench-phase.ts'
 import { CLIENT_BUILD_PROFILE_SELECTOR } from './client-build-environment.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './coverage-exempt.ts'
 import { COVERAGE_PARTITIONS_ENV, COVERAGE_SHARD_ENV, parseCoveragePartitionCount, parseCoverageShard } from './coverage-partitions.ts'
@@ -25,6 +26,7 @@ export type Mode =
   | 'ci-coverage-shard'
   | 'ci-unit'
   | 'ci-bench'
+  | 'ci-bench-prebuilt'
   | 'ci-snapshot'
   | 'ci-artifacts'
   | 'ci-consumers'
@@ -169,6 +171,7 @@ function parseMode(raw: string | undefined): Mode {
     case 'ci-coverage-shard':
     case 'ci-unit':
     case 'ci-bench':
+    case 'ci-bench-prebuilt':
     case 'ci-snapshot':
     case 'ci-artifacts':
     case 'ci-consumers':
@@ -187,7 +190,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-coverage-shard | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-build | ci-consumers-prebuilt | ci-web-snapshot-prebuilt | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-coverage-shard | ci-unit | ci-bench | ci-bench-prebuilt | ci-snapshot | ci-artifacts | ci-consumers | ci-build | ci-consumers-prebuilt | ci-web-snapshot-prebuilt | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -341,6 +344,8 @@ export function gatesForMode(selected: Mode): Gate[] {
       return ciUnitGates()
     case 'ci-bench':
       return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts'], { label: 'performance benchmarks' })]
+    case 'ci-bench-prebuilt':
+      return ciBenchPrebuiltGates()
     case 'ci-snapshot':
       return [ciBuildGate(), snapshotGate()]
     case 'ci-artifacts':
@@ -667,6 +672,17 @@ function ciPrebuiltConsumerGates(): Gate[] {
  */
 function ciPrebuiltWebSnapshotGates(): Gate[] {
   return [webSnapshotGate([])]
+}
+
+/**
+ * One benchmark phase (`DSH_BENCH_PHASE`) on a checkout whose build output was
+ * restored from the `ci-build` lane; only the benchmark workers are built here.
+ */
+function ciBenchPrebuiltGates(): Gate[] {
+  const phase = parseBenchPhase(process.env.DSH_BENCH_PHASE)
+  return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts', `--phase=${phase}`], {
+    label: `performance benchmarks (${phase} phase)`,
+  })]
 }
 
 function webSnapshotGate(needs: string[], after?: string[]): Gate {

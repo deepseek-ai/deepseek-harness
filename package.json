@@ -96,6 +96,7 @@
     "check:ci:coverage-shard": "tsx scripts/run-gates.ts ci-coverage-shard",
     "check:ci:unit": "tsx scripts/run-gates.ts ci-unit",
     "check:ci:bench": "tsx scripts/run-gates.ts ci-bench",
+    "check:ci:bench-prebuilt": "tsx scripts/run-gates.ts ci-bench-prebuilt",
     "check:ci:snapshot": "tsx scripts/run-gates.ts ci-snapshot",
     "check:ci:artifacts": "tsx scripts/run-gates.ts ci-artifacts",
     "check:ci:consumers": "tsx scripts/run-gates.ts ci-consumers",

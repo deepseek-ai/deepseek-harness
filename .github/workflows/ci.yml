@@ -417,17 +417,33 @@ jobs:
       - name: Run lint and duplication
         run: pnpm run check:ci:lint:contracts-ready
 
+  # The two suite phases run on separate idle runners from the shared build
+  # output: phase `first` holds the corpus cases that tolerate a sibling and
+  # phase `last` the browser, animation-frame, and fresh-child cases that need
+  # an idle runner (SERIAL_BENCH_FILES in scripts/run-bench-suite.ts).
   node-24-bench:
+    needs: node-24-build
     if: github.event_name == 'pull_request'
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
           || 'ubuntu-24.04' }}
-    name: node 24 / benchmarks
-    # Wall-clock budgets need an otherwise idle runner, so this job runs the
-    # benchmark lane alone instead of joining a concurrent gate aggregate, and
-    # keeps its own two-file parallelism inside that runner. The self-hosted
-    # failover pool is shared, so the benchmarks stay on hosted Linux there.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            phase: first
+          - shard: 2
+            phase: last
+    name: node 24 / benchmarks ${{ matrix.shard }}/2
+    # Wall-clock budgets need an otherwise idle runner, so each phase runs
+    # alone on its runner instead of joining a concurrent gate aggregate; the
+    # first phase keeps its own two-file parallelism inside that runner. The
+    # self-hosted failover pool is shared, so the benchmarks stay on hosted
+    # Linux there.
     timeout-minutes: 20
+    env:
+      DSH_BENCH_PHASE: ${{ matrix.phase }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -459,18 +475,95 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Download build output
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/build-output
+
+      - name: Unpack build output
+        run: |
+          set -o pipefail
+          archive="$RUNNER_TEMP/build-output/build-output.tar.zst"
+          # -m stamps restored files with the extraction time: newer than this
+          # checkout and never in the future.
+          zstd -dc -T0 "$archive" | tar -xmf -
+          test -f apps/cli/lib/bin.js && test -f apps/web/dist/index.html && test -f .dsh-build/client-build-environment.json
+
+      # node-24-build can run on another pool (vm-backup under self-hosted
+      # failover) while the benchmarks stay on hosted Linux, so the restored
+      # Node-API addon is loaded here and rebuilt on this runner if it fails.
+      - name: Rebuild the native addon if the restored one does not load
+        run: |
+          addon=native/system/packages/linux-x64/bin/glibc/system.node
+          if node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"; then
+            echo "Restored native addon loads on this runner."
+          else
+            echo "::notice::Restored native addon does not load on this runner; rebuilding it."
+            pnpm run build:native-system
+            node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"
+          fi
+
       - name: Install benchmark browser and hosted dependencies
         run: pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium
 
       - name: Run performance benchmarks
         env:
           DSH_GATE_VERBOSE: '1'
-        run: pnpm run check:ci:bench
+        run: pnpm run check:ci:bench-prebuilt
 
-      # The report global teardown renders benchmarks/.dsh-report after the run,
-      # including after a failing budget assertion. A run that fails before
-      # recording any timing has no report, so missing files warn instead of
-      # failing the benchmark job a second time.
+      # The report global teardown writes results.jsonl and environment.json
+      # after the run, including after a failing budget assertion; the report
+      # job renders both phases into one report. A phase that fails before
+      # recording any timing has no results, so missing files warn.
+      - name: Upload benchmark results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: benchmark-results-${{ matrix.shard }}
+          path: benchmarks/.dsh-report/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+          # A re-run of this phase replaces the previous attempt's results.
+          overwrite: true
+
+  # Bookkeeping only: renders one scaled report from both phases, including
+  # after a failing budget. The benchmark verdict comes from node-24-bench, so
+  # this job stays out of all-checks-passed.
+  node-24-bench-report:
+    needs: node-24-bench
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-2vcpu-ubuntu-2404'
+          || 'ubuntu-latest' }}
+    name: node 24 / benchmark report
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: benchmark-results-*
+          path: ${{ runner.temp }}/benchmark-results
+
+      # The renderer runs under Node type stripping and needs no install.
+      - name: Render scaled benchmark report
+        run: |
+          shopt -s nullglob
+          phases=("$RUNNER_TEMP"/benchmark-results/*/)
+          if (( ${#phases[@]} == 0 )); then
+            echo "::warning::No benchmark phase uploaded results."
+            exit 0
+          fi
+          node scripts/render-benchmark-report.ts benchmarks/.dsh-report "${phases[@]}"
+
       - name: Upload scaled benchmark report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7.0.1
