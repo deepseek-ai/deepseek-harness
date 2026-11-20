@@ -55,7 +55,7 @@ export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZon
   return createPortal(
     <>
       {targets.map(target => (
-        <DropTarget key={`${sessionId}:${target.paneId ?? ''}`} target={target} label={t('open.sidebar')}
+        <DropTarget key={`${sessionId}:${target.paneId ?? ''}`} target={target} quiet={targets.length > 1} label={t('open.sidebar')}
           onDrop={() => { openAside(sessionId, target.paneId) }} />
       ))}
     </>,
@@ -63,8 +63,10 @@ export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZon
   )
 }
 
-function DropTarget({ target, label, onDrop }: {
+function DropTarget({ target, quiet, label, onDrop }: {
   readonly target: SessionDropTarget
+  /** Show the card only while the pointer is over this target, because another target shares the drag. */
+  readonly quiet: boolean
   readonly label: string
   readonly onDrop: () => void
 }) {
@@ -83,6 +85,7 @@ function DropTarget({ target, label, onDrop }: {
       style={{ left: target.left, top: target.top, width: target.width, height: target.height }}
       data-session-drop-zone={target.paneId ?? ''}
       data-active={over || undefined}
+      data-quiet={quiet || undefined}
       onDragEnter={accept}
       onDragOver={accept}
       onDragLeave={(event) => {

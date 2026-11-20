@@ -207,6 +207,9 @@ describe('Session drop zone', () => {
     view.set(MAIN)
     const panes = document.querySelectorAll<HTMLElement>('[data-session-drop-zone]')
     expect([...panes].map(element => element.dataset.sessionDropZone)).toEqual(['p1', 'p2'])
+    // With several panes, each target keeps its card hidden until the pointer is over it.
+    expect([...panes].every(element => element.hasAttribute('data-quiet'))).toBe(true)
+    expect(zone.hasAttribute('data-quiet')).toBe(false)
     fire(panes[1]!, 'drop')
     expect(view.openAside).toHaveBeenLastCalledWith(MAIN, 'p2')
 

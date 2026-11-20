@@ -1,10 +1,11 @@
-/* One drop target covers each docked pane of the open right Sidebar, leaving
-   the Sidebar's divider and the chat area visible, or the area a collapsed
-   Sidebar would open in (rectangles set inline). Each draws the dock kit's
-   drop hint with an 8px inset on every side: a blurred ground under a dashed
-   card that takes the accent while the pointer is over it. Targets stack
-   above the narrow-window drawer (71) and its mask (70), below menus and
-   toasts. */
+/* One drop target covers each docked pane of the open right Sidebar, or the
+   area a collapsed Sidebar would open in (rectangles set inline). The target
+   itself paints nothing, so the pane's own left border and the divider between
+   panes stay visible; its card, 8px in from every side, carries the dock kit's
+   drop hint: a blurred ground under a dashed frame that takes the accent while
+   the pointer is over it. With several targets, only the one under the pointer
+   shows its card. Targets stack above the narrow-window drawer (71) and its
+   mask (70), below menus and toasts. */
 .zone {
   position: fixed;
   z-index: 72;
@@ -12,9 +13,6 @@
   display: flex;
   padding: 8px;
   pointer-events: auto;
-  background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
-  backdrop-filter: blur(6px);
-  animation: zoneIn 140ms ease-out;
 }
 
 .card {
@@ -30,12 +28,21 @@
   color: var(--dsw-alias-label-tertiary);
   border: 1.5px dashed var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-lg);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
+  backdrop-filter: blur(6px);
   transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out;
+  animation: zoneIn 140ms ease-out;
+}
+
+.zone[data-quiet]:not([data-active]) .card {
+  visibility: hidden;
 }
 
 .zone[data-active] .card {
   color: var(--dsw-alias-label-secondary);
-  background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color) 8%, transparent);
+  background:
+    linear-gradient(color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color) 8%, transparent)),
+    color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
   border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
 }
 
@@ -63,6 +70,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zone { animation: none; }
-  .card { transition: none; }
+  .card { transition: none; animation: none; }
 }
