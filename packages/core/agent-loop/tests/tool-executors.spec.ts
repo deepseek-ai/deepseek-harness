@@ -17,7 +17,7 @@ import AgentLoop from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
 /** An independent execution implementation: no PTC executor inheritance or delegation. */
-function independent(ctx: Context, name: string, trace: string[]): ToolExecutor {
+function independent(ctx: Context, name: string, trace: string[], sectionPrefix = 'tools'): ToolExecutor {
   const transport = defineTool({
     name, description: `Execute through ${name}.`, parameters: {},
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
@@ -29,8 +29,8 @@ function independent(ctx: Context, name: string, trace: string[]): ToolExecutor 
   })
   const executor: ToolExecutor = {
     sections: [
-      { name: 'tools:transport', order: 800, text: `Call ${name}.`, interpolate: false },
-      { name: 'tools:sdk', order: 5000, text: tools => tools.map(tool => tool.name).join(', '), interpolate: false },
+      { name: `${sectionPrefix}:transport`, order: 800, text: `Call ${name}.`, interpolate: false },
+      { name: `${sectionPrefix}:sdk`, order: 5000, text: tools => tools.map(tool => tool.name).join(', '), interpolate: false },
     ],
     describe: () => ({ schemas: [transport], knownNames: [name] }),
     async execute(input) {
@@ -145,7 +145,7 @@ it('dispatches through the current Agent scope after prompt listeners rebuild th
   const agent = await ctx.agentLoop.create(brandString<SessionId>('changing'), { provider: 'mock', model: 'mock' })
   bindScopeParent(agent, presetKey)
   const selectNearer = () => {
-    const nearer = independent(agent.ctx, 'first_eval', trace)
+    const nearer = independent(agent.ctx, 'first_eval', trace, 'nearer-tools')
     const execute = nearer.execute.bind(nearer)
     nearer.execute = (input) => { trace.push('nearer'); return execute(input) }
     agent.ctx.tools.setExecutor(nearer)
@@ -208,25 +208,23 @@ it('refreshes executor projections without emitting tool registry changes', asyn
   expect(registryChanges).toBe(0)
 })
 
-it.each([
-  ['occupied', 1, 'already registered'],
-  ['invalid-order', Number.NaN, 'order must be a finite number'],
-] as const)('rolls back executor section registrations when %s is rejected', async (name, order, message) => {
+it('rolls back executor section registrations when a later section has an invalid order', async () => {
   const ctx = await setup()
-  const key = { preset: name }
+  const key = { preset: 'invalid-order' }
   const scope = await scoped(ctx, key)
   scope.ctx.systemPrompt.section({ name: 'occupied', order: 1, text: 'Existing guidance.' })
   const executor: ToolExecutor = {
     ...independent(scope.ctx, 'rejected_eval', []),
     sections: [
       { name: 'transient', order: 0, text: 'Must be rolled back.' },
-      { name, order, text: 'Invalid contribution.' },
+      { name: 'occupied', order: Number.NaN, text: 'Invalid contribution.' },
     ],
   }
-  expect(() => scope.ctx.tools.setExecutor(executor)).toThrow(message)
+  expect(() => scope.ctx.tools.setExecutor(executor)).toThrow('order must be a finite number')
   const assembly = await ctx.systemPrompt.assemble({ scope: key })
   expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
   expect(assembly.sections.map(section => section.name)).not.toContain('transient')
+  expect(assembly.sections.find(section => section.name === 'occupied')?.text).toBe('Existing guidance.')
 })
 
 it('assembles independent tools and section text for overlapping prompt assemblies', async () => {
@@ -260,14 +258,15 @@ it('assembles independent tools and section text for overlapping prompt assembli
   expect(first.tools.map(tool => tool.name)).toEqual(['echo'])
   expect(first).not.toHaveProperty('toolExecutor')
   expect(second.tools.map(tool => tool.name)).toEqual(['next_eval'])
-  expect(second.sections).toContainEqual({ name: 'tools:transport', text: 'Call next_eval.', interpolate: false })
-  expect(second.sections).toContainEqual({ name: 'tools:sdk', text: 'echo', interpolate: false })
+  expect(second.sections).toContainEqual({ name: 'tools:transport', order: 800, text: 'Call next_eval.', interpolate: false })
+  expect(second.sections).toContainEqual({ name: 'tools:sdk', order: 5000, text: 'echo', interpolate: false })
   expect(projections).toBe(1)
 })
 
 it('keeps the foundation usable for registration and requires an explicit executor for calls', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   ctx.tools.register(defineTool({

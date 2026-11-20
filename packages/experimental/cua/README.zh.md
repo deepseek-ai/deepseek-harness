@@ -41,17 +41,21 @@ kind: "package-reference"
 
 使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。macOS 和 Windows 共用的原始 `getState` 结果可返回 `hasUnreadableElements: true`，表示本次树中有未能读到的元素。其他情况下可省略该字段。节点数或深度达到上限时，由 `truncated` 单独标记。
 
+通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
+
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
 通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
 
-`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。 失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
+`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。 失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。 `screenshotTarget.maxBytes` 是编码字节硬上限；继续缩图后，截图坐标使用最终编码尺寸。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-提供方声明支持系统指针时，`win.drag(from, to, { useSystemPointer: true })` 和 `win.mouseMove` 共用本次会话的鼠标授权。每次需要移动系统指针时都要显式传入该选项。
+支持系统输入的提供方允许 `mouseMove`、`toggleMouse`、`click`、`drag`、`pressKey` 和 `sendKeyEvent` 传入 `useSystemInput`。`true` 请求系统键鼠输入，省略或传 `false` 保留提供方的默认方式。`pressKey(key, modifiers, options)` 和 `sendKeyEvent(key, direction, options)` 的选项是第三个参数。
+
+要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 
 `click(target, { holdMs: 800 })` 按住鼠标按钮 800 毫秒后松开。`holdMs` 仅适用于 `click`；它接受非负整数，双击时应用于每次按下；0 表示按下后立即松开，不额外等待。提供方配置 `maxClickHoldMs` 限制显式按住时长，默认 5000 毫秒。指定时长后使用鼠标事件；省略时保留普通点击行为。按住时间计入操作超时，取消或超时会松开按钮。已接收的输入无法撤销；辅助进程被强制终止时无法保证松开。
 
@@ -80,12 +84,16 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方声明 `systemPointer: true` 后，`mouseMove` 和 `drag` 都必须支持显式传入 `useSystemPointer: true`。两种操作共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
+声明 `systemInput: true` 的提供方必须支持上述六个方法的显式系统输入，包括系统点击和拖动期间的键盘修饰键。共通层使用 `requireSystemInputApproval` 控制会话授权，校验参数并拒绝子任务请求系统输入，再调用提供方。未声明此能力的提供方拒绝该选项，不接收新增原生参数。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 
 <details>
 <summary>共享执行与平台职责</summary>
+
+实现 `CuaBackend.heldInputState` 的提供方通过 `getHeldInputs({})` 返回当前连接的持有记录，通过 `releaseHeldInputs({})` 释放这些输入并返回结果。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；DSH 和 MCP 的正常程序结束和回合结束均保持输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。macOS 和 Windows 都实现了这套协议。能力方法列表保持静态。
+
+每个 Agent 使用独立的原生输入连接，多个程序和回合可以复用这条连接。DSH 收到停止请求或模型报错时启动清理。原生释放尚未确认时，Agent 可以结束回合，`whenIdle()` 也可以返回。后续 CUA 调用等待清理结果。程序执行成功后，如果最终工具结果失败，CUA 立即清理这次调用所属的输入。原工具错误可以先返回，清理失败会另行报告。确认释放后，DSH 为模型记录释放提醒，并撤销仍在队列中的旧持有提醒。清理失败会通过 `agent/error` 单独报告，并禁用该任务后续的 CUA 操作。程序失败或取消、执行中的 MCP 请求收到取消、环境重置、连接关闭和提供方卸载，各自等待清理完成。
 
 [授权存储](src/permission-store.ts)复用 `storageDomain` 和配置的后端。默认 JSON 后端写入 `$DSH_HOME/storages/cua_permissions_<sha256>.json`，摘要对应 profile 的真实目录。每次授权检查在 profile 文件锁内打开并读取最新状态，随后关闭存储域；原生操作使用单独的应用锁。撤销会等待其他进程已获准执行的操作结束；撤销完成后，各进程都拒绝旧句柄。不同电脑或 PID 命名空间不能共享这把锁。
 
@@ -95,13 +103,13 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入从 Node 提供方的 `resolvePersistentExecution` 辅助函数获取执行设置，再用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。CUA 将 Node 提供方声明为 peer 依赖，使这些设置与已安装的提供方版本一致。此设置独立于系统权限和应用授权。
 
-提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
+提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。提供方可通过 `windowRead` 获取窗口读取所用的授权连接，并在读取成功后接收原生回复。平台读取 helper 缓存的窗口活动时，会在查询前后核对应用授权，无须等待正在执行的桌面操作。
 
 提供方实现 `CuaBackend.getGuidance(kind)`，其中 `kind: 'raw' | 'standalone'`，分别返回原始 `cua` 调用和 `cua_run_code` 程序的操作指引；两种形态可以返回相同文本。共享 CUA 为两份结果统一补充对应能力的权限指引、配置的 AX 读取默认值和最大点击按住时长。
 
 提供方通过 `NativeClient.registerCleanup(cleanup)` 注册归连接所有的资源清理；返回的 disposer 用于注销回调。连接仍可发送请求时，回调收到 `canRequest: true`，通过 `requestCleanup()` 执行原生清理，并等待确认后返回。连接被强制关闭后，`canRequest: false` 只允许清理本地状态。程序结束和连接关闭都触发清理时，每项资源复用同一个已缓存的清理 Promise。
 
-正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
+原生清理期间到达的请求等待清理确认后再发送。等待期间取消的请求不会发给 helper。正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
 `agentPreset` 默认为 `ptc`：使用该 preset 的 Agent 获得原始 `cua` 工具和 PTC 指引，其他 Agent 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset、未组合 preset 的 Agent，以及没有 preset 注册表的组合中的全部 Agent，例如 SDK、headless 和 ACP profile。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件、可选 preset 注册表的加载与卸载和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。preset 选择或注册表变化后，某个 Agent 的更新失败时只记录警告，不影响其他 Agent 的更新。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。设置 `agentPreset: false` 可改为全局注册原始 `cua` 工具；没有 preset 的 Host 挂载 PTC 工具执行器时，需要这项设置才能提供 `tools.cua`。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
@@ -142,7 +150,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### 模型可见内容
 
-默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 程序只绑定 `tools.cua`，普通工具仍可直接调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
+默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 模型指引介绍对象 API。PTC 指引包含桥接初始化模板：持久模式初始化一次，非持久模式在每次程序开始时初始化。程序绑定 `tools.cua` 用于分派；普通工具在 `cua_run_code` 外调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
 
 #### Token 影响
 

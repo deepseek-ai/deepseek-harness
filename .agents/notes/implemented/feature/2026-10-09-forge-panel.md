@@ -14,7 +14,7 @@ English | [中文](2026-10-09-forge-panel.zh.md)
 
 Review and worktree controls serve one code-change workflow. One Plugins entry lets users enable that workflow without having to distinguish the underlying package split. Packages and the two worktree services remain independent so each owns its before-Session or in-conversation creation flow.
 
-The Remote inspects the checkout through the Session's subprocess provider under its [resolved permissions and query restrictions](../bug-fix/2026-10-28-forge-git-session-permissions.md), so it reads what the Session's commands see. Inspection reads the top-level, Git, and common Git directories, the branch or the abbreviated HEAD commit, the upstream, the remotes, and the size of the branch's changes against its fork point. It runs when a Session is followed, after each `working-directory/change`, `tool/result`, and `sandbox/mode` event, and on refresh, one at a time with one trailing rerun.
+The Remote inspects the checkout through the Session's subprocess provider under its [resolved permissions and query restrictions](../bug-fix/2026-10-28-forge-git-session-permissions.md), so it reads what the Session's commands see. Inspection reads the top-level, Git, and common Git directories, the branch or the abbreviated HEAD commit, the upstream, the remotes, and the size of the branch's changes against its fork point. It runs when a Session is followed, after each `workspace-root/change`, `tool/result`, and `sandbox/mode` event, and on refresh, one at a time with one trailing rerun.
 
 Status polling follows panel subscriptions: a Session's bindings are watched only while one of its surfaces is mounted, and the registry stops polling change requests nobody watches. Each card keeps the last snapshot a poll returned, so a transient failure keeps the title and number visible. A Session's only open change request starts expanded, and with several every card starts collapsed; the user's first toggle replaces this default.
 
@@ -32,12 +32,7 @@ Review comments capture the file, side, range, complete hunk, and reviewed head 
 
 ## Deferred
 
-A left-navigation review page next to Plugins and Scheduled tasks, listing the user's pull requests or merge requests on the selected provider, is deferred. It attaches without changing this package's Session surfaces:
-
-- **Provider capability** — an optional `ForgeProvider` method such as `listForViewer(host, filter, signal)` returns change request references; GitHub implements it with `gh search prs --author @me` or the GraphQL `viewer`, and the registry aggregates enabled providers.
-- **Remote** — a stream like `follow` that is keyed by provider and filter instead of a Session and polls through the same `ctx.forge.watch`.
-- **Client** — a `sidebar.panellist` entry with a `main` page in this package, as `ui-schedule` does, rendering `ChangeRequestCard`, which takes a change request, its snapshot, and optional actions.
-- **Settings** — provider choice and hosts on the bundle's configuration page.
+The left-navigation review page this section deferred is implemented as the [code review page](2026-11-11-forge-review-page.md); its lists come from an optional provider capability and its page reads change requests by URL, so this package's Session surfaces did not change.
 
 The changes view offers no scope for one commit or for the last turn yet; both would be further `ForgeLocalScope` kinds read through `localDiff`.
 

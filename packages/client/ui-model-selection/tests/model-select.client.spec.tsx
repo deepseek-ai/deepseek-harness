@@ -474,8 +474,9 @@ describe('ModelSelect reasoning effort', () => {
     expect(menu.style.left).toBe('')
     expect(menu.style.top).toBe('')
     expect(measure).not.toHaveBeenCalled()
-    // Interactions inside the trigger subtree or the portaled card stay open.
-    expect(fireEvent.mouseDown(menu)).toBe(true)
+    // Interactions inside the trigger subtree or the portaled card stay open;
+    // presses on the card keep focus where it is.
+    expect(fireEvent.mouseDown(menu)).toBe(false)
     expect(fireEvent.mouseDown(trigger)).toBe(false)
     fireEvent.blur(trigger, { relatedTarget: menu })
     expect(screen.getByRole('menu')).toBeTruthy()
@@ -591,6 +592,23 @@ describe('ModelSelect keyboard walk', () => {
     expect(select).not.toHaveBeenCalled()
     fireEvent.keyDown(focused!, { key: 'Escape' })
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: pane === 'model' ? /^模型/ : /推理等级/ }))
+  })
+
+  it('keeps focus and the card open when non-focusable model pane content is pressed', () => {
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available
+      directory={createSnapshotStore(state({ groups: modelGroups(5) }))}
+      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^模型/ }))
+    const search = screen.getByRole('searchbox')
+    const heading = document.querySelector<HTMLElement>('[data-menu-group-heading]')!
+    // false = preventDefault ran, so the browser keeps focus where it was.
+    expect(fireEvent.mouseDown(heading)).toBe(false)
+    expect(fireEvent.mouseDown(screen.getAllByRole('menu')[0]!)).toBe(false)
+    // Text inputs keep their default so the caret can still be placed.
+    expect(fireEvent.mouseDown(search)).toBe(true)
+    expect(screen.getAllByRole('menu').length).toBeGreaterThan(0)
   })
 
   it('↑↓ walk the rows of the shown pane, wrapping, and stay open', () => {

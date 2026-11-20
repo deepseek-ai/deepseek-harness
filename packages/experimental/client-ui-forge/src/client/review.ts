@@ -2,6 +2,7 @@
 
 import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ForgeCommitRange, ForgeDiffFile } from '../types.ts'
+import type { ForgePanelKey } from './locales.ts'
 
 /** A comment on consecutive lines of one side of one displayed hunk. */
 export interface ReviewComment {
@@ -117,4 +118,30 @@ export function reviewMatches(selection: ReviewSelection, source: ReviewSource, 
   if (selection.source.kind === 'change' && (source.kind !== 'change' || source.headSha !== selection.source.headSha)) return false
   const comment = selection.comment
   return selectReviewLines(file, comment.side, comment.startLine, comment.endLine)?.hunk === comment.hunk
+}
+
+/** Copy of the quote actions: the button, the tag of a quoted comment, and the failure, which the review page renames. */
+export interface QuoteCopy {
+  /** Text of the button that quotes a comment or thread. */
+  readonly add: ForgePanelKey
+  /** Tag of a comment that was quoted. */
+  readonly added: ForgePanelKey
+  /** Message when the quote was refused. */
+  readonly failed: ForgePanelKey
+}
+
+/** The quote copy of the right-sidebar changes tab, which quotes into the Session's input. */
+export const INPUT_QUOTE_COPY: QuoteCopy = { add: 'review.addToInput', added: 'review.quoted', failed: 'review.inputFailed' }
+
+/**
+ * Run a quote action and report its outcome once it settles; a rejected quote counts as refused.
+ * @param result - whether the quote was accepted, now or once it settles.
+ * @param done - receives the outcome.
+ */
+export function settleQuote(result: boolean | Promise<boolean>, done: (accepted: boolean) => void): void {
+  if (typeof result === 'boolean') {
+    done(result)
+    return
+  }
+  void result.then(done, () => { done(false) })
 }

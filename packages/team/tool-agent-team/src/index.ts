@@ -111,6 +111,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   ctx.systemPrompt.section({
     name: 'team:policy',
+    retirement: 'The shared task board is no longer available. Its instructions no longer apply.',
     order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
     text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
   })
@@ -124,7 +125,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       write_scopes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Advisory workspace-relative file or directory prefixes this task expects to modify.',
+        description: 'Advisory file or directory prefixes relative to the workspace root; no absolute paths or ".." segments. Omit or pass [] if no workspace files will be modified.',
       },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
@@ -212,7 +213,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       subject: { type: 'string', description: 'Replacement title for edit.' },
       description: { type: 'string', description: 'Replacement details for edit.' },
       blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
-      write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
+      write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.' },
       owner: { type: 'string', description: 'Agent name of the root or any continuable descendant for root-only reassign; omit to unassign.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),

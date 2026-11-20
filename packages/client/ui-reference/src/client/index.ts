@@ -11,6 +11,11 @@
  * workspace is not the current one. A session is dated from the Host session
  * list, so the `@` menu and the session list never disagree about its age.
  *
+ * A file or folder mention in sent text renders as a chip only after the
+ * Session's filesystem confirms the path exists; picking a listed candidate
+ * confirms it, and any other mention stays original text until a Host stat
+ * answers.
+ *
  * @module @deepseek-ai/dsh-client-ui-reference/client
  */
 // Type-only: pulls the generated Remote API and ctx.remote merge through the Client assembly boundary.
@@ -21,10 +26,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { FileReference, FolderReference, type FileReferenceInjected } from './FileReference.tsx'
-import { fileReferenceRule, folderReferenceRule } from './user-text-rules.ts'
+import {
+  FileReference, FolderReference, type FileReferenceInjected, type PathPresenceInjected,
+} from './FileReference.tsx'
+import { createPathPresence, type MentionSessionId } from './path-presence.ts'
+import { fileReferenceRule, folderReferenceRule, mentionPath } from './user-text-rules.ts'
 export type {} from './user-text-rules.ts'
 import type {
   ClientSessionContext, InputTriggerCrumb, InputTriggerServiceContract, InputTriggerSource,
@@ -34,6 +43,7 @@ import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/typ
 import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
 import { abbreviateHomePath, fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type ReferenceKey } from './locales.ts'
+import { registerReferenceMenu } from './context-menu.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
@@ -45,7 +55,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 /** Required services: the trigger registry, the Remote namespaces, and the copy. */
 export const inject = [
   'inputTriggers', 'locale', 'sessions', 'remote', 'remote.fileReferences',
-  'remote.sessionReferenceResolver', 'sidebarRight', 'slots', 'uiConversation',
+  'remote.sessionReferenceResolver', 'remote.workspaceFiles', 'sidebarRight', 'slots', 'uiConversation',
 ]
 
 /**
@@ -55,21 +65,29 @@ export const inject = [
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
+  ctx.inject(['contextMenus', 'conversation'], (menuCtx) => { registerReferenceMenu(menuCtx, t) })
   const sessions = ctx.get('sessions') as ISessions
+  const presence = createPathPresence((sessionId, path, signal) => ctx.remote.workspaceFiles.stat(sessionId, path, signal))
+  ctx.effect(() => () => { presence.dispose() }, 'ui-reference: mention path stats')
+  const presenceFor = (sessionId: MentionSessionId): PathPresenceInjected => ({
+    keyedHooks: { pathPresence: path => presence.source(sessionId, path) },
+  })
   ctx.uiConversation.userText.register(fileReferenceRule)
   ctx.uiConversation.userText.register(folderReferenceRule)
   ctx.slots.inject('conversation.user.text.node', function* () {
     yield ctx.slots.register({
       name: 'conversation.user.text.node', key: 'file', priority: 100, locale: NS,
       inject: (sessionId: UserTextNodeProps<'file'>['sessionId']): FileReferenceInjected => ({
-        resolveFilePath: path => resolveWorkspacePath(sessions.list.getSnapshot().byId[sessionId]?.cwd, path),
+        ...presenceFor(sessionId),
+        resolveFilePath: path => resolveWorkspacePath(sessionDirectory(sessions, sessionId), path),
         openFile: (path) => {
-          const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          ctx.sidebarRight.openResource(fileAddressFor(sessionId, cwd, path))
+          ctx.sidebarRight.openResource(fileAddressFor(sessionId, sessionDirectory(sessions, sessionId), path))
         },
       }),
     }, FileReference)
-    yield ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder', priority: 100 }, FolderReference)
+    yield ctx.slots.register({
+      name: 'conversation.user.text.node', key: 'folder', priority: 100, inject: presenceFor,
+    }, FolderReference)
   })
   const source: InputTriggerSource = {
     trigger: '@',
@@ -129,7 +147,7 @@ export function apply(ctx: ClientContext): void {
     header(_session: ClientSessionContext, req) {
       return crumbsFor(req.query, req.quoted === true, req.drilled, t)
     },
-    onPick({ candidate, action }) {
+    onPick({ candidate, session, action }) {
       const value = parseCandidate(candidate.value)
       if (value?.kind === 'file') {
         // A directory row carries two verbs: the settling pick resolves the
@@ -139,13 +157,16 @@ export function apply(ctx: ClientContext): void {
         if (value.fileKind === 'directory' && action === 'drill') {
           return { text: value.mention, continue: true }
         }
+        const mention = absoluteMention(value.mention, sessionDirectory(sessions, session.sessionId))
+        // The Host has just listed this path, so its sent echo renders as a chip without a stat.
+        presence.confirm(session.sessionId, mentionPath(mention))
         return {
           insert: {
             source: 'reference',
-            ref: value.mention,
+            ref: mention,
             label: value.fileKind === 'directory' ? `${value.label}/` : value.label,
             appearance: value.fileKind === 'directory' ? 'folder' : 'file',
-            clipboardText: value.mention,
+            clipboardText: mention,
           },
         }
       }
@@ -164,9 +185,8 @@ export function apply(ctx: ClientContext): void {
     },
     openReference(session, { ref, appearance }) {
       if (appearance !== 'file') return false
-      const path = ref.startsWith('@"') ? ref.slice(2, -1) : ref.slice(1)
-      const cwd = sessions.list.getSnapshot().byId[session.sessionId]?.cwd
-      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, cwd, path))
+      const path = mentionPath(ref)
+      ctx.sidebarRight.openResource(fileAddressFor(session.sessionId, sessionDirectory(sessions, session.sessionId), path))
       return true
     },
     codec: {
@@ -179,6 +199,20 @@ export function apply(ctx: ClientContext): void {
 }
 
 type Translate = (key: ReferenceKey, params?: Record<string, unknown>) => string
+
+/**
+ * Spell a listed mention by its absolute path, so the sent text names the same file after the Session's directory moves.
+ * @param mention - the listed `@path` spelling, relative to the Session's directory.
+ * @param directory - the Session's directory, when known.
+ * @returns the absolute spelling; the listed one when the path is already absolute, no directory is known, or the
+ *   absolute path cannot be written as a mention.
+ */
+function absoluteMention(mention: string, directory: string | undefined): string {
+  const listed = mentionPath(mention)
+  const path = resolveWorkspacePath(directory, listed)
+  if (path === listed) return mention
+  return formatFileMention({ path, kind: 'file' }, mention.startsWith('@"')) ?? mention
+}
 
 type ReferenceCandidateValue =
   | { kind: 'file'; fileKind: FileReferenceCandidate['kind']; label: string; mention: string }

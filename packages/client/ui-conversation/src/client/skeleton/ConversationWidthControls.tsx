@@ -27,6 +27,22 @@ function resolveContentWidth(columnWidth: number, preference: number | null): nu
   return Math.max(680, Math.min(columnWidth * 0.64, 880))
 }
 
+/**
+ * How much the content width changes per pixel the pointer travels outward.
+ * The centered column grows about its center, so both edges move and the
+ * width changes by twice the travel. While the body keeps an end reserve
+ * free, the column's end edge stays where the reserve holds it and only its
+ * start edge moves, by the pointer's travel.
+ * @param body - the Conversation body that holds the handles and the scrollport.
+ * @returns 1 while the scrollport pads its end for a reserve, otherwise 2.
+ */
+function widthPerPixel(body: HTMLElement): number {
+  const scrollport = body.querySelector<HTMLElement>('[data-conversation-scroll]')
+  /* v8 ignore next -- the Conversation body always contains its scroll element. */
+  if (scrollport === null) return 2
+  return Number.parseFloat(getComputedStyle(scrollport).paddingInlineEnd) > 0 ? 1 : 2
+}
+
 /** Convert a wheel event's vertical delta to scrollport pixels. */
 function wheelDeltaY(event: React.WheelEvent, scrollport: HTMLElement): number {
   if (event.deltaMode === WHEEL_DELTA_LINE) {
@@ -41,22 +57,29 @@ function wheelDeltaY(event: React.WheelEvent, scrollport: HTMLElement): number {
 function WidthHandle(props: {
   side: 'left' | 'right'
   onStart: () => number
+  /** Content-width change per pixel of outward pointer travel, read as the drag advances. */
+  scale: () => number
   onDrag: (width: number) => void
   onCommit: (width: number) => void
   onEnd: () => void
 }) {
   const dragging = useRef(false)
-  const base = useRef(0)
+  /** The width the drag has reached, before the layout's limits apply. */
+  const width = useRef(0)
   const origin = useRef(0)
   const latest = useRef(0)
+  /** Pointer X the width was last advanced to. */
+  const applied = useRef(0)
   const frame = useRef<number | null>(null)
   const callbacks = useRef(props)
   callbacks.current = props
 
   const outwardWidth = () => {
-    const dx = latest.current - origin.current
+    const dx = latest.current - applied.current
+    applied.current = latest.current
     const outward = callbacks.current.side === 'right' ? dx : -dx
-    return base.current + outward * 2
+    width.current += outward * callbacks.current.scale()
+    return width.current
   }
   const cancelFrame = () => {
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null }
@@ -67,7 +90,8 @@ function WidthHandle(props: {
     event.currentTarget.setPointerCapture(event.pointerId)
     origin.current = event.clientX
     latest.current = event.clientX
-    base.current = callbacks.current.onStart()
+    applied.current = event.clientX
+    width.current = callbacks.current.onStart()
     dragging.current = true
     event.currentTarget.toggleAttribute('data-dragging', true)
   }, [])
@@ -134,20 +158,23 @@ function WidthHandle(props: {
  * @returns two active-phase width handles, or no controls outside the active phase.
  */
 export function ConversationWidthControls({ container, phase }: ConversationWidthControlsProps) {
-  const publishWidths = useCallback((container: HTMLDivElement): void => {
-    const target = container.parentElement ?? container
-    const column = container.offsetWidth
-    target.style.setProperty('--dsh-conversation-column-width', `${column}px`)
+  const publishWidths = useCallback((container: HTMLDivElement, column: number): void => {
+    // The axis registers these inputs without inheritance, so they belong on the body that derives from them.
+    container.style.setProperty('--dsh-conversation-column-width', `${column}px`)
     const preference = readWidthPreference()
-    if (preference === null) target.style.removeProperty('--dsh-chat-user-width')
-    else target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
+    if (preference === null) container.style.removeProperty('--dsh-chat-user-width')
+    else container.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
   }, [])
 
   useLayoutEffect(() => {
     if (container === null) return
-    const observer = new ResizeObserver(() => { publishWidths(container) })
-    observer.observe(container)
-    publishWidths(container)
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        for (const size of entry.borderBoxSize) publishWidths(container, Math.round(size.inlineSize))
+      }
+    })
+    observer.observe(container, { box: 'border-box' })
+    publishWidths(container, container.offsetWidth)
     return () => { observer.disconnect() }
   }, [container, publishWidths])
 
@@ -157,15 +184,14 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
   }, [container])
   const onDrag = useCallback((width: number): void => {
     if (container === null) return
-    const target = container.parentElement ?? container
-    target.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(container.offsetWidth, width)}px`)
+    container.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(container.offsetWidth, width)}px`)
   }, [container])
   const onCommit = useCallback((width: number): void => {
     if (container === null) return
     localStorage.setItem(WIDTH_PREF_KEY, `${resolveContentWidth(container.offsetWidth, width)}`)
   }, [container])
   const onEnd = useCallback((): void => {
-    if (container !== null) publishWidths(container)
+    if (container !== null) publishWidths(container, container.offsetWidth)
   }, [container, publishWidths])
 
   if (container === null || phase !== 'active') return null
@@ -174,6 +200,7 @@ export function ConversationWidthControls({ container, phase }: ConversationWidt
       key={side}
       side={side}
       onStart={onStart}
+      scale={() => widthPerPixel(container)}
       onDrag={onDrag}
       onCommit={onCommit}
       onEnd={onEnd}

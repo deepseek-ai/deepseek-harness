@@ -805,7 +805,8 @@ function serializeButton(button: CardButtonComponent): Record<string, unknown> {
     element_id: button.id,
     text: plainText(button.text),
     type: button.type,
-    ...button.submit ? { form_action_type: 'submit' } : {},
+    // Feishu Card JSON 2.0 requires a non-empty, card-unique `name` on form submit buttons (error 200530 otherwise).
+    ...button.submit ? { name: button.id, form_action_type: 'submit' } : {},
     ...button.size ? { size: button.size } : {},
     ...button.width ? { width: button.width } : {},
     ...button.icon ? { icon: { tag: 'standard_icon', token: button.icon } } : {},
@@ -852,7 +853,7 @@ export function serializeComponent(component: CardComponent, key: KeyOf): Record
       return {
         tag: 'form',
         element_id: component.id,
-        name: component.name,
+        name: component.name || component.id,
         elements: component.elements.map(child => serializeComponent(child, key)),
       }
     case 'input':

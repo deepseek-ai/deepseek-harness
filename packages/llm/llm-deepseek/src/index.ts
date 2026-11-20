@@ -1,5 +1,4 @@
 /** DeepSeek Messages transport, request configuration, and model capabilities. */
-export { deepSeekApiKeyConfigured, rejectDeepSeekAccountToken, resolveDeepSeekAccountToken, resolveDeepSeekApiKey } from './credential.ts'
 export { catalogModelFields, deepSeekConfigFields, Config, isBuiltInCatalog, plainOptions, resolveAdapterOptions, PUBLIC_BASE_URL } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export {
@@ -21,10 +20,10 @@ export {
   DEFAULT_LOW_DETAIL_IMAGE_PIXEL_BUDGET,
   DEFAULT_MAX_IMAGES_PER_REQUEST,
   DEFAULT_MAX_REQUEST_FILES_BYTES,
-  DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+  DEFAULT_REQUEST_IMAGE_TARGET_BYTES,
   REQUEST_IMAGE_MAX_DIMENSION,
   deepSeekImageRequestPricing,
-  resolveRequestImageMaxBytes,
+  resolveRequestImageTargetBytes,
   resolveRequestImageTarget,
 } from './request-pricing.ts'
 export { deepSeekImageTokens, deepSeekRequestImageDimensions } from './image-tokens.ts'

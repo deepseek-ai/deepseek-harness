@@ -36,8 +36,11 @@
   en: 580441bd6cce9ee9
   zh: a5f093d8e7dec2ee
 /client-component-rules/build-and-style-follow-their-owners:
-  en: 561df1e1709a004c
-  zh: 89ca6eb4533648b8
+  en: 10cf740d4a8bb15f
+  zh: 01a3265f58dee3a1
+/client-component-rules/selectors-match-through-a-class-or-attribute-not-not-empty-or-has:
+  en: f37261ef34a9d593
+  zh: 83d9735801f6bb3d
 /client-component-rules/a-key-states-what-it-identifies:
   en: 1d6f9bdc2b267fef
   zh: cf4d579ca877c422

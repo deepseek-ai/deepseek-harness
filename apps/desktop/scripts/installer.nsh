@@ -94,16 +94,19 @@ ManifestDPIAware true
 !macroend
 
 !macro customUnInstall
+  Call un.BeginCleanup
+  Call un.CleanRegistration
   Call un.CleanData
 !macroend
 
 !macro customPageAfterChangeDir
   !define MUI_PAGE_CUSTOMFUNCTION_PRE InstallerBeforeInstall
   !define MUI_PAGE_CUSTOMFUNCTION_SHOW InstallerProgressShow
+  !define MUI_PAGE_CUSTOMFUNCTION_LEAVE InstallerProgressLeave
 !macroend
 
 !macro customFinishPage
-  Page custom InstallerFinish InstallerFinishLeave
+  ; The final instfiles page keeps its controls until the user dismisses it.
 !macroend
 
 ; Installation work publishes stage changes without disturbing the NSIS caller.
@@ -172,6 +175,10 @@ ManifestDPIAware true
 
 !macro customCheckAppRunning
   !ifdef BUILD_UNINSTALLER
+    ; Manual uninstall reports deletion errors with retry and a saveable report.
+    ${If} ${isUpdated}
+  !endif
+  !ifdef BUILD_UNINSTALLER
     InitPluginsDir
     File "/oname=$PLUGINSDIR\window-frame.dll" "${INSTALLER_BUILD_DIR}\window-frame.dll"
   !endif
@@ -199,6 +206,9 @@ ManifestDPIAware true
     SetErrorLevel 2
     Quit
   ${EndIf}
+  !ifdef BUILD_UNINSTALLER
+    ${EndIf}
+  !endif
 !macroend
 
 !macro customInstallerDirectoryFailed

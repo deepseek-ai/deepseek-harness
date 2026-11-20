@@ -10,21 +10,21 @@ A fixed Session creation directory cannot represent a task that changes checkout
 
 ## Decision
 
-`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `working-directory/change`; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
+`dsh-working-directory` owns one logged effective directory per Session. Its projection initializes from the immutable original project and folds `workspace-root/change` events; consumers read that owner instead of deriving execution paths from the header or sandbox root. Directory changes validate through the filesystem provider, serialize within the Session, and publish only after the new directory is available.
 
-The `dsh-base` composition mounts `working_directory({ cd? })` globally. The tool reads or changes the Session directory, so every Agent preset can select or recover it, including presets without file-editing tools. The Web composition keeps action tools in preset scopes.
+Only Host operations change the directory: worktree creation and exit, the forge panel, SDK requests, and child startup call the service. The [workspace-root note](2026-11-03-session-workspace-root.md) removed the model-facing `working_directory` tool, records each change as `workspace-root/change`, and ignores stored `working-directory/change` events.
 
 Required user-context snapshots carry the current value; each committed change attempts to queue a notice through the ordinary Agent inbox. Cancellation or disposal may discard unadmitted notices while the directory event survives for subsequent requests. The original project is the recovery destination when the selected directory disappears. Missing recovery destinations produce an error. Write permissions remain independent.
 
-Subagents capture the parent's current directory or an explicit override and commit their selected directory after inherited history. Existing processes, terminals, and persistent shells keep their process-local directory. Project instructions, skills, and completion follow the effective directory without changing Session identity, grouping, or runtime composition.
+Subagents start in the parent's current directory or a Host-chosen directory and commit that directory after inherited history. Existing processes, terminals, and persistent shells keep their process-local directory. The model's file and process tools, project instructions, skills, completion, and the sandbox boundary follow the effective directory, which is the [workspace root](2026-11-03-session-workspace-root.md), without changing Session identity, grouping, or runtime composition.
 
-Live Session skill catalogs and file completion validate through the same directory owner. These reads can commit recovery and queue its notice before discovery, keeping discovered files and subsequent operations tied to the committed Session directory. Cold skill catalogs read the recorded projection without activating an Agent.
+Live Session skill catalogs and file completion validate through the same directory owner, then read the workspace root. These reads can commit recovery and queue its notice before discovery, keeping discovered files and subsequent operations tied to the committed Session directories. Cold skill catalogs read the recorded root projection without activating an Agent.
 
-Web sidebar terminal environment lookup reads the effective directory without filesystem validation or recovery, so a missing directory does not prevent reconnecting to a retained terminal. New terminal creation validates and recovers through the directory owner before spawning; the process keeps that directory independently of later Session changes.
+Web sidebar terminal environment lookup reads the workspace root without filesystem validation or recovery, so a missing directory does not prevent reconnecting to a retained terminal. New terminal creation validates and recovers through the directory owner before spawning in the workspace root; the process keeps that directory independently of later Session changes.
 
 Playwright MCP and Chrome DevTools MCP validate the effective directory when acquiring a Session's MCP connection and use it to launch the server. Later directory changes do not restart the retained server or change its process directory.
 
-File links and command directory labels use result metadata captured when each operation runs, so historical rows remain correct after later directory changes.
+File links and command directory labels use result metadata captured when each operation runs, so historical rows remain correct after later directory changes. References in prose, user mentions, and opened Sidebar tabs follow [conversation file references after directory moves](../bug-fix/2026-11-19-conversation-file-references-after-directory-moves.md).
 
 The [prompt-variables note](2026-07-05-prompt-variables-and-tool-guidance-ownership.md) retains strict interpolation, route-variable ownership, and tool-guidance ownership. The [environment-suffix note](../../archived/bug-fix/2026-09-06-environment-prompt-suffix.md) retains ordered prefix/suffix placement for deployment, Harness source, and Web guidance. This decision owns directory state and placement in user context.
 
@@ -44,4 +44,4 @@ The runtime exposes one directory owner and preserves the original project. Cons
 
 `{{cwd}}` has no loop-provided value; custom personas that depend on that built-in fail strict interpolation. Deployments remove those references using the [system-prompt migration guidance](../../../../packages/core/system-prompt/README.md). When both the current directory and its recovery destination are unavailable, prompt assembly rejects model turns; the [directory service recovery guidance](../../../../packages/session/working-directory/README.md#known-limitations-and-deferred-work) requires restoring the directory or selecting an existing absolute directory through the SDK or host service.
 
-Verification covers independent Sessions, relative changes, replay, cancellation, recovery, tool disposal, user-context rendering, provider inheritance, and real directory-based operations.
+Verification covers independent Sessions, relative changes, replay, cancellation, recovery, user-context rendering, provider inheritance, and real directory-based operations.

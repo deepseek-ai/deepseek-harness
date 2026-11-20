@@ -1,0 +1,6 @@
+- insert:
+    - id: dingtalk
+      name: '@deepseek-ai/dsh-dingtalk'
+      config:
+        binDir: !!js process.cwd() + '/dws-bin'
+        skillsDir: !!js process.cwd() + '/dws-skills'

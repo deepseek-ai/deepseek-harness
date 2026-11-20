@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record for backend.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines/backend.md
+/b-backend:
+  en: 86a5f492360c89e3
+  zh: 2c4a7c2b6b1f9b60

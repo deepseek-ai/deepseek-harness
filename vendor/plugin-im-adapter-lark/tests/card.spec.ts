@@ -371,11 +371,14 @@ describe('card structure', () => {
       behaviors: [{ type: 'callback', value: { v4: { id: 'sel-size' } } }],
     })
     // The submit button is what turns the controls into one callback carrying `form_value`.
+    // Feishu Card JSON 2.0 rejects a submit button without a non-empty `name` (code 200530).
     expect(submit).toMatchObject({
       tag: 'button',
+      name: submit!.element_id,
       form_action_type: 'submit',
       behaviors: [{ type: 'callback', value: { v4: { id: 'btn-submit' } } }],
     })
+    expect(submit!.name).toBeTruthy()
     expect(submit!.text).toEqual({ tag: 'plain_text', content: 'Send' })
   })
 

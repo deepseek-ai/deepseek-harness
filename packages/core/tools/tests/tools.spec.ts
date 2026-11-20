@@ -33,6 +33,7 @@ const testToolSignal = new AbortController().signal
 
 async function setup() {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -56,6 +57,7 @@ describe('ToolRuntime', () => {
   it.each([{ mode: 'ptc' }, { maxParallelSubCalls: 4 }])('rejects removed execution configuration %j during plugin mounting', async (config) => {
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       // @ts-expect-error Removed fields can still arrive from untyped configuration files.
       await expect(ctx.plugin(ToolRuntime, config).await()).rejects.toThrow('invalid config')
@@ -64,6 +66,7 @@ describe('ToolRuntime', () => {
 
   it('settles accepted calls after the actual native executor fiber unloads', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     const provider = ctx.plugin(NativeToolExecutor)

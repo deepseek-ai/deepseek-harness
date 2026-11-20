@@ -118,7 +118,7 @@ Desktop 父进程为每个 Host 进程持有新私有凭据，并在 ready 前�
 | Provider 注册 | 只有内置 BrowserAuth 提供网络身份 | 有序独立验证器选择一个存活 Peer；[认证测试](../../../../packages/client/connection/tests/authentication.host.spec.ts)覆盖作用域卸载、验证故障和取消 |
 | HTTP 与 upgrade 接入 | 消费者调用 Connection 准入 | 路由 auth 一次提供 Peer；真实 [Provider 传输测试](../../../../packages/api/gateway/tests/authentication-provider.host.spec.ts)覆盖两种载体 |
 | 服务器隔离 | 路由表按实例持有，index 注入覆盖 root | 五个事件均使用 WebServer subject；[服务器](../../../../packages/host/webserver/tests/event-isolation.host.spec.ts)和[应用](../../../../packages/bundle/web-app/tests/event-isolation.host.spec.ts)测试覆盖普通／global 监听器及保留的外部 Host |
-| 浏览器 OAuth 返回 | 回调校验 state 与 PKCE | 有作用域的前置回调保留校验，并接受真实跨站导航；[账号测试](../../../../packages/credentials/deepseek-account/tests/account.spec.ts)保留错误 Host 和 SSH 转发覆盖，[Chromium](../../../../apps/web/tests/account-login.e2e.ts)断言实际 Fetch Metadata header |
+| 浏览器 OAuth 返回 | 回调校验 state 与 PKCE | 有作用域的前置回调保留校验，并接受真实跨站导航；[账号测试](../../../../packages/account/deepseek-account/tests/account.spec.ts)保留错误 Host 和 SSH 转发覆盖，[Chromium](../../../../apps/web/tests/account-login.e2e.ts)断言实际 Fetch Metadata header |
 | 启动输出 | WebApp 打印／打开一个 Connection 生成的登录 URL | [启动测试](../../../../packages/bundle/web-app/tests/startup.host.spec.ts)覆盖按序入口、首个可打开项、空列表、就绪和 SSH 抑制 |
 | Desktop runtime 消费者 | 以带 Token 的 ready URL 交换 Cookie | [Runtime smoke 测试](../../../../apps/desktop/tests/smoke-runtime.spec.ts)在 HTTP 探针中使用私有 Cookie；[产物 Remote 测试](../../../../packages/api/remotes/tests/built-lib.e2e.ts)收集当前 Provider 入口，并传递准入 Peer |
 

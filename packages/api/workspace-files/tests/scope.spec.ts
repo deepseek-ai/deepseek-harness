@@ -26,10 +26,53 @@ function header(id: SessionId, cwd?: string): SessionHeader {
 }
 
 describe('Workspace Files Session scope lookup', () => {
+  it('prefers the recorded workspace root of a live or stored Session over its header directory', async () => {
+    const liveId = brandString<SessionId>('live-relocated')
+    const coldId = brandString<SessionId>('cold-relocated')
+    const plainId = brandString<SessionId>('cold-plain')
+    const liveRoot = resolve('live-workspace')
+    const liveWorktree = resolve('live-workspace', '.agents', 'worktrees', 'topic')
+    const coldRoot = resolve('cold-workspace')
+    const coldWorktree = resolve('elsewhere', 'cold-topic')
+    const stat = vi.fn(async (id: SessionId) => {
+      if (id === coldId) return { header: header(coldId, coldRoot) }
+      if (id === plainId) return { header: header(plainId, coldRoot) }
+      return undefined
+    })
+    const cachedSnapshot = vi.fn((meta: SessionHeader) =>
+      meta.id === coldId ? { asOfSeq: 4, values: { workingDirectory: coldWorktree } } : undefined)
+    const ctx = new Context()
+    ctx.provide('fs', {} as never)
+    // A live Session's root is the one the sandbox policy bounds it by.
+    const resolvePolicy = vi.fn(() => ({ mode: 'workspace-write', workspaceRoot: liveWorktree }))
+    ctx.provide('sandboxPolicy', { workspaceRoot: resolve('fallback-workspace'), resolve: resolvePolicy } as never)
+    ctx.provide('sessionPersistence', { stat } as never)
+    ctx.provide('sessionProjectionCache', { cachedSnapshot } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const typert = await ctx.plugin(TypertRegistry)
+    const workspaceFiles = await ctx.plugin(WorkspaceFiles, CAPS)
+    try {
+      const live = ctx.sessions.create(liveId, { meta: { cwd: liveRoot, origin: 'subagent' } })
+      await expect(ctx.workspaceFiles.scopeOf(liveId)).resolves.toEqual({ sessionId: liveId, workspaceRoot: liveWorktree })
+      expect(resolvePolicy).toHaveBeenCalledWith({ session: live })
+      await expect(ctx.workspaceFiles.scopeOf(coldId)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldWorktree })
+      await expect(ctx.workspaceFiles.scopeOf(plainId)).resolves.toEqual({ sessionId: plainId, workspaceRoot: coldRoot })
+      expect(cachedSnapshot).toHaveBeenCalledWith(expect.objectContaining({ id: coldId }), ['workingDirectory'])
+      const lookup = ctx.typert.lookups.get('workspaceFileScope')
+      if (lookup === undefined) throw new Error('workspaceFileScope lookup did not register')
+      await expect(lookup.resolve(liveId)).resolves.toEqual({ sessionId: liveId, workspaceRoot: liveWorktree })
+    } finally {
+      await workspaceFiles.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
   it('uses live or stored headers without an Agent and leaves with its plugin', async () => {
     const liveId = brandString<SessionId>('live-subagent')
     const coldId = brandString<SessionId>('cold-subagent')
     const fallbackId = brandString<SessionId>('cold-without-cwd')
+    const liveFallbackId = brandString<SessionId>('live-without-cwd')
     const missingId = brandString<SessionId>('missing')
     const liveRoot = resolve('live-workspace')
     const coldRoot = resolve('cold-workspace')
@@ -41,7 +84,8 @@ describe('Workspace Files Session scope lookup', () => {
     })
     const ctx = new Context()
     ctx.provide('fs', {} as never)
-    ctx.provide('sandboxPolicy', { workspaceRoot: fallbackRoot } as never)
+    const resolvePolicy = ({ session }: { session: { header: SessionHeader } }) => ({ mode: 'read-only', workspaceRoot: session.header.cwd ?? fallbackRoot })
+    ctx.provide('sandboxPolicy', { workspaceRoot: fallbackRoot, resolve: resolvePolicy } as never)
     ctx.provide('sessionPersistence', { stat } as never)
     const sessions = await ctx.plugin(SessionStore)
     const typert = await ctx.plugin(TypertRegistry)
@@ -49,6 +93,7 @@ describe('Workspace Files Session scope lookup', () => {
 
     try {
       ctx.sessions.create(liveId, { meta: { cwd: liveRoot, origin: 'subagent' } })
+      ctx.sessions.create(liveFallbackId, { meta: { origin: 'subagent' } })
       expect(ctx.get('agents')).toBeUndefined()
       const lookup = ctx.typert.lookups.get('workspaceFileScope')
       expect(lookup).toMatchObject({
@@ -62,11 +107,15 @@ describe('Workspace Files Session scope lookup', () => {
       if (lookup === undefined) throw new Error('workspaceFileScope lookup did not register')
 
       await expect(lookup.resolve(liveId)).resolves.toEqual({ sessionId: liveId, workspaceRoot: liveRoot })
+      await expect(lookup.resolve(liveFallbackId)).resolves.toEqual({ sessionId: liveFallbackId, workspaceRoot: fallbackRoot })
       expect(stat).not.toHaveBeenCalled()
+      const signal = new AbortController().signal
+      await expect(ctx.workspaceFiles.scopeOf(coldId, signal)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldRoot })
+      expect(stat).toHaveBeenLastCalledWith(coldId, { signal })
       await expect(lookup.resolve(coldId)).resolves.toEqual({ sessionId: coldId, workspaceRoot: coldRoot })
       await expect(lookup.resolve(fallbackId)).resolves.toEqual({ sessionId: fallbackId, workspaceRoot: fallbackRoot })
       await expect(lookup.resolve(missingId)).resolves.toBeUndefined()
-      expect(stat.mock.calls.map(([id]) => id)).toEqual([coldId, fallbackId, missingId])
+      expect(stat.mock.calls.map(([id]) => id)).toEqual([coldId, coldId, fallbackId, missingId])
 
       await workspaceFiles.dispose()
       expect(ctx.typert.lookups.get('workspaceFileScope')).toBeUndefined()

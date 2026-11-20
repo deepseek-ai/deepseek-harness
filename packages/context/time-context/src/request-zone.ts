@@ -1,4 +1,4 @@
-/** Browser-zone facts from committed or proposed user-rpc messages and model-facing policy text. */
+/** Browser-zone facts from committed or proposed user messages and model-facing policy text. */
 
 import { canonicalizeTimeZone } from '@deepseek-ai/dsh-util-time'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
@@ -11,15 +11,14 @@ export type BrowserTimeZoneContext =
   | { readonly kind: 'missing' }
 
 /**
- * Read the raw zone reported by a user-rpc source; validation belongs to request preparation.
- * @param message - user message; only user sources with a string rpcId and clientTimeZone contribute.
- * @returns the reported zone, or undefined when no user-rpc zone was reported.
+ * Read the raw zone reported by a user source; validation belongs to request preparation.
+ * Writers canonicalize the zone before commit, and request preparation still refuses a noncanonical value.
+ * @param message - user message; only user sources with a string clientTimeZone contribute.
+ * @returns the reported zone, or undefined when no user zone was reported.
  */
 export function reportedBrowserTimeZone(message: UserMessage): string | undefined {
   const source = message.source
   return source.kind === 'user'
-    && 'rpcId' in source
-    && typeof source.rpcId === 'string'
     && 'clientTimeZone' in source
     && typeof source.clientTimeZone === 'string'
     ? source.clientTimeZone
@@ -56,7 +55,7 @@ function browserTimeZone(value: string): string {
  * @param messages - proposed messages, or entered plus proposed messages selected by the legacy reader.
  * @param enteredTimeZones - reported zones from committed messages, before the proposed messages.
  * @returns Sorted, duplicate-free browser-zone facts.
- * @throws TypeError when a user-rpc source carries an invalid or noncanonical zone.
+ * @throws TypeError when a user source carries an invalid or noncanonical zone.
  */
 export function deriveBrowserTimeZoneContext(
   messages: readonly UserMessage[],

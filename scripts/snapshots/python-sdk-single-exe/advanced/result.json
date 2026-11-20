@@ -18,7 +18,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -78,10 +79,48 @@
             {
               "type": "text",
               "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
             }
           ],
           "source": {
-            "kind": "system-prompt"
+            "kind": "system-prompt",
+            "sections": [
+              {
+                "name": "harness:identity",
+                "order": -1000,
+                "state": "active",
+                "contentIndex": 0
+              },
+              {
+                "name": "tool:jobs",
+                "order": 1600,
+                "state": "active",
+                "contentIndex": 1
+              },
+              {
+                "name": "tool:workflow",
+                "order": 2600,
+                "state": "active",
+                "contentIndex": 2
+              },
+              {
+                "name": "tool:subagent",
+                "order": 2800,
+                "state": "active",
+                "contentIndex": 3
+              }
+            ]
           },
           "id": "{{messageId}}"
         }
@@ -119,7 +158,8 @@
           }
         ],
         "source": {
-          "kind": "user"
+          "kind": "user",
+          "clientTimeZone": "UTC"
         },
         "role": "user",
         "id": "{{messageId}}"
@@ -208,8 +248,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "initial"
@@ -303,8 +342,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "series"
@@ -1511,7 +1549,8 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "user",
+                  "clientTimeZone": "UTC"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -1608,10 +1647,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -1661,7 +1738,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -1768,8 +1846,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -1893,8 +1970,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "series"
@@ -2694,6 +2770,10 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
                   },
                   {
@@ -2702,7 +2782,9 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -2965,6 +3047,10 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
                   },
                   {
@@ -2973,7 +3059,9 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -3097,10 +3185,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -3146,6 +3272,10 @@
             "content": [
               {
                 "type": "text",
+                "text": "Agent lead sent a message: "
+              },
+              {
+                "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
               },
               {
@@ -3154,7 +3284,9 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "agent-message",
+              "form": "relay",
+              "senderSessionId": "{{parent}}"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -3175,7 +3307,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.\n</system-reminder>"
+                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with \"Agent <name> sent a message:\". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply.\n</system-reminder>"
               }
             ],
             "source": {
@@ -3200,7 +3332,7 @@
                 },
                 {
                   "name": "subagent:delegation",
-                  "text": "You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                  "text": "You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with \"Agent <name> sent a message:\". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply."
                 }
               ]
             },
@@ -3237,8 +3369,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -3267,33 +3398,13 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
-          "type": "session/title",
-          "seq": 24,
-          "time": 0,
-          "data": {
-            "title": "Reply with exactly DIRECT_CHILD_OK and",
-            "messageSeqs": [
-              20
-            ],
-            "source": {
-              "kind": "fallback"
-            }
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-1}}",
-        "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 25,
+          "seq": 24,
           "time": 0,
           "data": {
             "sessionId": "{{child-1}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 24
+            "throughSeq": 23
           }
         }
       }
@@ -3304,7 +3415,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "assistant/message",
-          "seq": 26,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3418,7 +3529,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/end",
-          "seq": 27,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3433,7 +3544,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 28,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3790,11 +3901,17 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -3990,11 +4107,17 @@
                 "content": [
                   {
                     "type": "text",
+                    "text": "Agent lead sent a message: "
+                  },
+                  {
+                    "type": "text",
                     "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "agent-message",
+                  "form": "relay",
+                  "senderSessionId": "{{parent}}"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -4118,10 +4241,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -4167,11 +4328,17 @@
             "content": [
               {
                 "type": "text",
+                "text": "Agent lead sent a message: "
+              },
+              {
+                "type": "text",
                 "text": "Reply with exactly WORKFLOW_CHILD_OK and nothing else."
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "agent-message",
+              "form": "relay",
+              "senderSessionId": "{{parent}}"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -4192,7 +4359,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.\n</system-reminder>"
+                "text": "<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with \"Agent <name> sent a message:\". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply.\n</system-reminder>"
               }
             ],
             "source": {
@@ -4217,7 +4384,7 @@
                 },
                 {
                   "name": "subagent:delegation",
-                  "text": "You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                  "text": "You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it. Messages from other agents begin with \"Agent <name> sent a message:\". Other user messages come from the human user, who reads this conversation directly. You can still message other agents to coordinate, but answer the human user in your reply."
                 }
               ]
             },
@@ -4254,8 +4421,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -4284,33 +4450,13 @@
       "payload": {
         "sessionId": "{{child-2}}",
         "event": {
-          "type": "session/title",
-          "seq": 24,
-          "time": 0,
-          "data": {
-            "title": "Reply with exactly WORKFLOW_CHILD_OK and",
-            "messageSeqs": [
-              20
-            ],
-            "source": {
-              "kind": "fallback"
-            }
-          }
-        }
-      }
-    },
-    {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{child-2}}",
-        "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 25,
+          "seq": 24,
           "time": 0,
           "data": {
             "sessionId": "{{child-2}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 24
+            "throughSeq": 23
           }
         }
       }
@@ -4321,7 +4467,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "assistant/message",
-          "seq": 26,
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4435,7 +4581,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/end",
-          "seq": 27,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4450,7 +4596,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 28,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,

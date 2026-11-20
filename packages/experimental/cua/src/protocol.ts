@@ -1,6 +1,7 @@
 /** JSON validation shared by model tool admission and the native object facade. */
 import { Buffer } from 'node:buffer'
 import { z } from 'zod'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
 const windowId = z.string().min(1)
@@ -51,11 +52,13 @@ const dragTargets = [
     fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
 ] as const
 
-const systemPointerOption = {
-  useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
+const systemInputOption = {
+  useSystemInput: z.boolean().optional().describe('True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.'),
 }
 
-function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag: D) {
+const toggle = z.object({ ...window, mouseButton: pointer.mouseButton.unwrap(), direction: z.enum(['down', 'up']) }).strict()
+
+function requestSchema<I extends z.ZodRawShape>(input: I) {
   return z.discriminatedUnion('method', [
     operation('getCapabilities', {}), operation('listApps', {}),
     operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
@@ -70,41 +73,39 @@ function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag:
       maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),
     operation('listActions', snapshot),
+    operation('getActionSchema', { action: z.string().min(1) }),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
     operation('invoke', snapshot),
-    operation('toggleMouse', { ...window, mouseButton: pointer.mouseButton.unwrap(), direction: z.enum(['down', 'up']) }),
-    z.object({ method: z.literal('mouseMove'), params: hover }).strict(),
+    z.object({ method: z.literal('toggleMouse'), params: toggle.extend(input) }).strict(),
+    z.object({ method: z.literal('mouseMove'), params: z.union(MouseMoveTargets.map(target => target.extend(input))) }).strict(),
     z.object({ method: z.literal('click'), params: z.union([
-      z.object({ ...snapshot, ...click }).strict(),
-      z.object({ ...absoluteCoordinate, ...click }).strict(),
-      z.object({ ...relativeCoordinate, ...click }).strict(),
+      z.object({ ...snapshot, ...click, ...input }).strict(),
+      z.object({ ...absoluteCoordinate, ...click, ...input }).strict(),
+      z.object({ ...relativeCoordinate, ...click, ...input }).strict(),
     ]) }).strict(),
     operation('setValue', { ...snapshot, value: jsonValue }),
     operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
       selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
     operation('typeText', { ...app, windowId: windowId.optional(), text: z.string() }),
     operation('paste', { ...app, windowId: windowId.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
-    operation('pressKey', { ...app, windowId: windowId.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
-    operation('sendKeyEvent', { ...app, windowId: windowId.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
+    operation('pressKey', { ...app, ...input, windowId: windowId.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
+    operation('sendKeyEvent', { ...app, ...input, windowId: windowId.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
     z.object({ method: z.literal('scroll'), params: z.union([
       z.object({ ...absoluteCoordinate,
         deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
       z.object({ ...relativeCoordinate,
         deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
     ]) }).strict(),
-    z.object({ method: z.literal('drag'), params: drag }).strict(),
+    z.object({ method: z.literal('drag'), params: z.union(dragTargets.map(target => target.extend(input))) }).strict(),
     operation('screenshot', window),
   ])
 }
 
-/** Portable model operations, including standard hover without a system-pointer option. */
-export const Request = requestSchema(z.union(MouseMoveTargets), z.union(dragTargets))
+/** Portable operations for providers without explicit system-input selection. */
+export const Request = requestSchema({})
 
-/** Model operations for providers that can move the user's system pointer. */
-export const SystemPointerRequest = requestSchema(
-  z.union(MouseMoveTargets.map(target => target.extend(systemPointerOption))),
-  z.union(dragTargets.map(target => target.extend(systemPointerOption))),
-)
+/** Operations for providers supporting explicit system mouse input and keyboard modifiers. */
+export const SystemInputRequest = requestSchema(systemInputOption)
 
 /** Native resource fields supplied or completed by the Host before dispatch. */
 export const NativeResourceParameters = {
@@ -115,12 +116,13 @@ export const NativeResourceParameters = {
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }
-/** Host-only launch continuation and user-facing system permission controls; absent from model arguments. */
+/** Host-only launch, permission, and held-input operations; absent from model arguments. */
 export const NativeOnlyOperations = [
   operation('launchApp', app), operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
+  operation('getHeldInputs', {}), operation('releaseHeldInputs', {}),
 ] as const
 
 /** Application selection returned only after a successful app selection. */
@@ -159,6 +161,13 @@ export const StateResult = z.object({
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())
+/** Validates CUA response fields and JSON values; native providers own the nested schema definitions. */
+export const ActionSchemaResult = z.object({
+  type: z.literal('object'),
+  properties: z.object({ argument: z.record(z.string(), jsonValue) }).strict(),
+  required: z.union([z.tuple([]), z.tuple([z.literal('argument')])]),
+  additionalProperties: z.literal(false),
+}).strict().transform(schema => schema as ObjectJsonSchema)
 /** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: pixelDimension, pixelHeight: pixelDimension, windowId,
@@ -174,8 +183,8 @@ export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
   /** Whether the provider supports application-level accessibility observations. */
   appLevelAccessibility: z.boolean(),
-  /** Whether mouseMove accepts an explicit request to move the system pointer. */
-  systemPointer: z.boolean().default(false),
+  /** Whether mouseMove, toggleMouse, click, drag, pressKey, and sendKeyEvent accept explicit system input. */
+  systemInput: z.boolean().default(false),
   /** Scopes that support keyboard input. */
   keyboard: z.array(z.enum(['app', 'window'])),
   sessionLocked: z.boolean().nullable(),

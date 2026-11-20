@@ -60,7 +60,7 @@ BootManifest { ...; release?: WebBootRelease }
 ```
 
 - [ClientModuleRegistry](../../../../packages/client/modules/src/index.ts) 在构造时计算一次 release，由 `compose()` 写入每个 graph；`release` 不计入 `graph.rev`。不新增配置项，组合配置不变。
-- `__DSH_BOOT__` 和每个 SSE `graph` 帧都带这个字段，所以一个 graph 帧同时携带 Host 的 release 和完整模块图；client-hmr 的 Host 半侧不变。rebuilt 帧与同一条 SSE 连接上前一个 graph 帧来自同一个 Host 进程，因此沿用那一帧的 release。
+- `__DSH_BOOT__` 和插件事件流的每个 `baseline`、`graph` 帧都带这个字段，所以一个 graph 帧同时携带 Host 的 release 和完整模块图；client-hmr 的 Host 半侧不变。rebuilt 帧与同一代流上前一个 graph 帧来自同一个 Host 进程，因此沿用那一帧的 release。
 - `parseBootManifest` 允许 `release` 缺省，拒绝非字符串的 `version` 或 `commit`，并丢弃身份以外的成员，因此相等判断只看这两个字段。`readRelease` 只读取收到的 graph 的 `release` 成员，所以页面先比较 release，再校验其余内容；读不出的 release 视为缺省。不认识该字段的旧页面会忽略它。
 
 ### 页面侧
@@ -136,8 +136,7 @@ class ClientEntries {
 - Host 提供其他 release 期间，插件更新（包括在 Host 上启用或停用插件）要等刷新后才会到达页面。
 - Host 回到页面的 release 时，只替换 revision 不同的模块。revision 取自产物元数据，所以即使重新构建出的代码完全相同，也会把重建过的模块替换一次，不弹框。
 - 组合里没有注册确认框时，仍会暂停来自其他 release 的更新并记录警告，用户看不到提示。
-- API 连接和 SSE 是两条独立通道，旧页面可能在确认框出现之前就已显示协议错误。
-- 重启中的 Host 若在注册路由前对 `/plugins/events` 返回非 200 状态，浏览器会永久关闭这条 SSE，页面在刷新前检测不到 release 变化。
+- 插件事件流以终止性错误结束后，页面在刷新前检测不到 release 变化。
 - 不经 dev-web 的源码启动没有 commit，开发期只能检测到版本号变化。
 - 每个标签页各自提示、各自记录。
 - 单元测试通过 `ClientEntries` 固定 gate 的行为（同一 release 的替换、其他 release 不应用任何内容、回到启动 release 只替换变化了的模块、撤回、缺失 release），并覆盖 manifest 解析、Host 发布的 release、共享预设给 Node 半侧的 define，以及确认框的渲染与回调。

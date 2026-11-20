@@ -293,16 +293,14 @@
   min-width: 0;
 }
 
-/* Embedder controls at the strip's end, spaced from the kit's own split
-   control as they are from each other: the strip's 4px gap plus this 4px
-   margin equals the 8px between the controls. */
+/* Embedder controls continue the strip's 4px control spacing. */
 .stripChrome {
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
   height: 28px;
-  margin-left: 4px;
+  margin-left: 0;
 }
 
 /* macOS desktop: an embedder may pin this surface at the window's top edge.
@@ -379,11 +377,8 @@
    centres on the text's line rather than sitting on its baseline and keeps
    one distance from it. The clip is horizontal in intent; the line box must
    hold the descenders it would otherwise cut, hence a line-height above the
-   chip's own 1. No ellipsis: a title wider than its box (`TabTitle` sets
-   `data-dockkit-tab-clipped`) fades out over its last 16px instead. A mask on
-   the title rather than a painted gradient: the chip's fill is bare,
-   translucent hover, or the active tag colour, and a mask matches every one
-   without naming it. */
+   chip's own 1. Only the last 16px of the title box fade, whether or not
+   the text overflows. A mask keeps the chip's fill visible underneath. */
 .tabTitle {
   display: flex;
   flex: 1 1 auto;
@@ -392,25 +387,20 @@
   min-width: 0;
   overflow: hidden;
   line-height: 1.4;
-}
-
-.tabTitle[data-dockkit-tab-clipped] {
   mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
 }
 
 /* While the close shows, the title is gone under the close's circle and fades
    out over the 16px before it: the circle spans the chip's last 24px and the
    title ends 10px inside the chip, so the title's last 14px are under it.
-   Later than the clipped mask, so a clipped chip showing its close fades
-   under the close. A floating panel's header chip has no close, so it keeps
-   the clipped mask alone. */
-.tab:not(.floatTitle):focus-within .tabTitle,
-.tabActive .tabTitle {
+   Quiet and floating titles have no overlaid close. */
+.tab:not(.floatTitle, .tabQuiet):focus-within .tabTitle,
+.tabActive:not(.tabQuiet) .tabTitle {
   mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
 }
 
 @media (hover: hover) {
-  .tab:not(.floatTitle):hover .tabTitle {
+  .tab:not(.floatTitle, .tabQuiet):hover .tabTitle {
     mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
   }
 }
@@ -495,7 +485,7 @@
 
 /* A pane's lone unclosable chip is a label, not a choice: no tab, no
    hover fill — the primary ink on the pane's own ground. Its title never
-   yields to a close control, so it keeps the clipped fade alone. */
+   yields to a close control, so it keeps the ordinary title fade. */
 .tab.tabQuiet {
   color: var(--dsw-alias-label-primary);
   background: transparent;
@@ -508,21 +498,6 @@
     background: transparent;
     cursor: default;
   }
-}
-
-.tab.tabQuiet .tabTitle,
-.tab.tabQuiet:focus-within .tabTitle {
-  mask-image: none;
-}
-
-@media (hover: hover) {
-  .tab.tabQuiet:hover .tabTitle {
-    mask-image: none;
-  }
-}
-
-.tab.tabQuiet .tabTitle[data-dockkit-tab-clipped] {
-  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
 }
 
 .tabDragging {

@@ -66,6 +66,23 @@ describe('local attachment service', () => {
     }
   })
 
+  it('validates request-image shrink controls in both schema and programmatic construction', () => {
+    for (const value of [0, 1, Infinity]) {
+      expect(() => LocalAttachmentStore.Config({ requestImageMinShrinkFactor: value })).toThrow()
+      expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: value }))
+        .toThrow(/requestImageMinShrinkFactor/)
+    }
+    for (const value of [0, 1.1, Infinity]) {
+      expect(() => LocalAttachmentStore.Config({ requestImageByteHeadroom: value })).toThrow()
+      expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: value }))
+        .toThrow(/requestImageByteHeadroom/)
+    }
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: Number.NaN }))
+      .toThrow(/requestImageMinShrinkFactor/)
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: Number.NaN }))
+      .toThrow(/requestImageByteHeadroom/)
+  })
+
   it('saves and reads through the service boundary', async () => {
     const dshHome = await mkdtemp(join(tmpdir(), 'dsh-attachment-service-'))
     try {
@@ -86,7 +103,7 @@ describe('local attachment service', () => {
         String(ref.attachmentId).slice('sha256:'.length),
       ))
       await expect(readFile(hostPath)).resolves.toEqual(Buffer.from(data))
-      const request = await service.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1024 })
+      const request = await service.readImageRequest(ref, { width: 1, height: 1, maxImageBytes: 1024, imageTargetBytes: 1024 })
       expect(request).not.toHaveProperty('access')
 
       const fileData = Uint8Array.of(0, 1, 2, 255)

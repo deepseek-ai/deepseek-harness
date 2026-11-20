@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -63,14 +64,28 @@ function searchProvider(result: WebSearchResult, isAvailable = available): WebSe
   return { id: 'stub-search', available: () => isAvailable, search: () => Promise.resolve(result) }
 }
 
+/**
+ * An agent whose Session reports `route` as the provider route of its latest model request.
+ * @param id - the agent's Session id.
+ * @param route - the route, or undefined for a Session that has made no model request.
+ * @returns the agent fixture.
+ */
+function agentOnRoute(id: string, route?: string): Agent {
+  const requestContext = () => route === undefined ? undefined : { provider: route, model: 'test' }
+  return { id: brandString<SessionId>(id), session: { requestContext } } as Agent
+}
+
 /** Mount the real registry, seam, and tool-web; return an executor helper. */
 async function mountTools(opts: {
   config?: ToolWeb.Config
   webConfig?: { searchProvider?: string; fetchProvider?: string }
   search?: WebSearchProvider
   fetchProvider?: WebFetchProvider
+  /** Provider route of the agent's latest model request. */
+  route?: string
 } = {}): Promise<{ ctx: Context; agent: Agent; fiber: Awaited<ReturnType<Context['plugin']>>; call: (name: string, args: unknown) => Promise<ToolExecutionResult> }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -78,7 +93,7 @@ async function mountTools(opts: {
   if (opts.search) ctx.web.registerSearchProvider(opts.search)
   if (opts.fetchProvider) ctx.web.registerFetchProvider(opts.fetchProvider)
   const fiber = await ctx.plugin(ToolWeb, opts.config ?? {})
-  const agent = { id: brandString<SessionId>('tool-web') } as Agent
+  const agent = agentOnRoute('tool-web', opts.route)
   await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
   let counter = 0
   const call = (name: string, args: unknown) => executeInStep(ctx, agent, { signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
@@ -772,6 +787,26 @@ describe('tool-web execution through the real registry', () => {
     await fiber.dispose()
   })
 
+  it.each([
+    ['Messages search for a model request on a DeepSeek model route', 'deepseek-account', 'deepseek-official'],
+    ['the Search API for a model request on another route', 'openai', 'deepseek-search-api'],
+    ['the Search API for a Session that has made no model request', undefined, 'deepseek-search-api'],
+  ])('with no provider configured, searches through %s', async (_label, route, expected) => {
+    const requests: unknown[] = []
+    const { ctx, fiber, call } = await mountTools(route === undefined ? {} : { route })
+    for (const id of ['deepseek-search-api', 'deepseek-official']) {
+      ctx.web.registerSearchProvider({
+        id, available: () => available,
+        search: (request) => { requests.push(request); return Promise.resolve({ content: id, sources: [], truncated: false }) },
+      })
+    }
+    const out = await call('web_search', { queries: ['one', 'two'] })
+    expect(out.isError).toBe(false)
+    expect(out.value).toMatchObject({ content: `### one\n\n${expected}\n\n### two\n\n${expected}` })
+    expect(requests).toEqual(['one', 'two'].map(query => ({ query, maxResults: 10, ...route === undefined ? {} : { llmProvider: route } })))
+    await fiber.dispose()
+  })
+
   it.each([{}, { queries: [123] }])('rejects absent or wrongly typed queries with a structured INVALID_ARGS error', async (args) => {
     const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: searchProvider({ sources: [], truncated: false }) })
     const out = await call('web_search', args)
@@ -922,6 +957,7 @@ describe('searchMaxResults is plugin config', () => {
     ['fractional', 1.5],
   ])('rejects a %s searchMaxResults at load', async (_label, value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -962,6 +998,7 @@ describe('searchSummaryMaxChars is plugin config', () => {
 
   it.each([['zero', 0], ['fractional', 2.5]])('rejects a %s searchSummaryMaxChars at load', async (_label, value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(WebRuntime, {})
@@ -1023,6 +1060,7 @@ describe('searchMaxQueries is plugin config', () => {
 
   it.each([0, -1, 1.5])('rejects an invalid searchMaxQueries value %s at load', async (value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1052,6 +1090,7 @@ describe('tool-call timeout budget is plugin config', () => {
     ['searchTimeoutMs', { searchTimeoutMs: -5 }],
   ])('rejects a non-positive-integer %s at load', async (key, config) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1085,6 +1124,7 @@ describe('fetchMaxOutputChars is plugin config', () => {
 
   it.each([0, -1, 1.5])('rejects an invalid fetchMaxOutputChars value %s at load', async (value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1207,6 +1247,7 @@ describe('web tool admission per model step', () => {
   }) {
     const ctx = new Context()
     mounted.push(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1217,7 +1258,7 @@ describe('web tool admission per model step', () => {
     for (const provider of setup.providers) ctx.web.registerSearchProvider(provider)
     for (const provider of setup.fetchProviders ?? []) ctx.web.registerFetchProvider(provider)
     const fiber = await ctx.plugin(ToolWeb, {})
-    const agent = { id: brandString<SessionId>('web-search-admission') } as Agent
+    const agent = agentOnRoute('web-search-admission')
     await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
     const selection: ModelSelection = { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' }
     const step = async (): Promise<{ toolSet: ResolvedToolSet; tools: string[]; prompt: string }> => {

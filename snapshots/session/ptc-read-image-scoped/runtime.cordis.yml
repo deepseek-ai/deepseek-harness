@@ -1,0 +1,4 @@
+# Recorded programs are scoped REPL statements.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

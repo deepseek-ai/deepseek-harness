@@ -64,6 +64,7 @@ export class LocalFileReferenceService extends FileReferenceService {
           name: 'context:file-reference',
           order: scope.systemPrompt.getSectionOrder('FILE_REFERENCE'),
           text: () => agent.ctx.tools.get('read', agent) === undefined ? '' : FILE_REFERENCE_PROMPT,
+          retirement: 'The instructions for context:file-reference no longer apply.',
         })
       })
       this.promptFibers.set(agent, fiber)

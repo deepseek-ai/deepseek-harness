@@ -311,6 +311,16 @@ describe('background summaries through a real agent loop', () => {
     expect(f.reports()[0]?.summary.progress).toEqual([languageText[language].noActivity])
     expect(adapter.checks).toHaveLength(0)
   })
+  it('writes no-activity text in the app language when following the chat', async () => {
+    const adapter = new Adapter()
+    adapter.calls = 0
+    const f = await running({ language: 'chat' }, adapter)
+    f.ctx.provide('settings', { describe: () => [{ ns: 'locale', value: { preference: 'ja' } }] } as never)
+    await vi.advanceTimersByTimeAsync(60000)
+    await f.waitRecords('plugin:timeline/report')
+    expect(f.reports()[0]?.summary.progress).toEqual([languageText.ja.noActivity])
+    expect(adapter.checks).toHaveLength(0)
+  })
   it.each([true, false])(
     'identifies independent-runtime main requests through Agent admission; main=%s',
     async (main) => {
@@ -659,7 +669,7 @@ describe('background summaries through a real agent loop', () => {
   it('hard-codes no activity without calling the model, including later empty intervals', async () => {
     const adapter = new Adapter()
     adapter.calls = 0
-    const f = await running({}, adapter)
+    const f = await running({ language: 'en' }, adapter)
     await vi.advanceTimersByTimeAsync(60000)
     await f.waitRecords('plugin:timeline/report')
     expect(f.reports()[0]).toMatchObject({

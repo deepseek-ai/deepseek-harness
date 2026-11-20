@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "WeCom プラグイン",
+    "description": "会話の中で WeCom のドキュメント、カレンダー、会議、ToDo、メッセージを使用します。",
+    "detail": "docs/DETAIL.md"
+  }
+}

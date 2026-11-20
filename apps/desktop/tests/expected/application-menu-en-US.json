@@ -7,6 +7,14 @@
     "type": "separator"
   },
   {
+    "id": "dsh-settings-open",
+    "label": "Settings…",
+    "enabled": false
+  },
+  {
+    "type": "separator"
+  },
+  {
     "label": "Check for Updates…"
   },
   {

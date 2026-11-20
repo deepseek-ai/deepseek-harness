@@ -61,6 +61,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="request-protocol"></a>
 ## 请求协议
 
+每条连接通过握手字段 `recentActivityWindowMs` 或参数 `--recent-activity-window-ms` 设置回看时长，默认 60000 毫秒，填 `"off"` 可关闭。为判断先前观察到的窗口是否可能发生变化，启用的连接在内存中按窗口和来源保留最近一次活动的时间。外部输入监听器通过进程和窗口 ID 判断点击或滚动属于哪个窗口，处理后即丢弃事件。Host 在每个已授权的应用句柄下调用 `takeWindowActivity` 查询观察过的窗口，并在本轮结束时调用 `clearWindowActivity`。所有窗口都停止等待提醒时，helper 卸载共享监听器。
+
 操作帧为 `{ "id": "opaque request id", "method": "method name", "params": {} }`。对应回复只包含 `result` 或 `error: {code, message}` 中的一项；无效信封返回 `INVALID_REQUEST`，ID 为 null。每条连接同时最多发送一个操作。`{ "type": "cancel", "id": "request id" }` 取消该请求，迟到的取消不会产生额外回复。`protocol.schema.json` 定义操作字段。
 
 截图诊断通过原始连接发送 `type: "diagnostic"` 帧。记录包含 requestId、stage、从接收开始计算的 elapsedMs 和可选的 errorCode，不含窗口标题、AX 文本或图片字节。stdin/stdout 代理在 stderr 上以 `[cua-screenshot]` 前缀转发诊断，操作回复仍写入 stdout。Host 保留有上限的诊断缓冲区，并将其附在截图失败中。
@@ -77,13 +79,14 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
+| `getActionSchema` | 查询动作的参数 JSON Schema。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
-| `invoke`, `performAction`, `mouseMove`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
+| `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
 每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。如果进程在授权期间启动，而当前连接已取得其句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
 
-稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（系统鼠标操作要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
+稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统按下或拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
 应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可选的可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程路径查询失败时，运行中的有效 Bundle ID 仍可用于授权，记录省略 executablePath；路径可取得时仍须与所选目标一致。两种身份均不可用时，在执行目标操作前返回 APP_PATH_UNAVAILABLE，保留路径查询原因和 errno。PROCESS_INSPECTION_FAILED 表示无法验证进程实例，只有进程检查返回 ESRCH 时才报告进程不存在；两种失败都不触发自动重试。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
@@ -101,7 +104,9 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 窗口隐藏本身不会使 AX 快照失效。刷新清单时，只有同一窗口 ID 仍存在且观察到的尺寸未变，才能继续使用此前截图的像素坐标。观察到尺寸变化后需要重新截图；窗口销毁后不能继续操作。清单中省略窗口不会阻止按已知 ID 发起输入。窗口归属、尺寸和输入检查仍然生效，成功分派不代表应用已接收。
 
-点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemPointer: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
+窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。
+
+点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemInput: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
 
 `click.holdMs` 是可选的每次按住时长，单位为毫秒，接受非负整数；0 表示不额外等待。每个连接通过 `maxClickHoldMs` 限制显式按住时长。诊断 helper 的 `--max-click-hold-ms` 选项默认 5000。省略时保留普通点击时长。整个手势占用请求调度槽位；取消、超时和断开连接会中断等待，在释放槽位前发送对应的松开事件。已接收的事件仍然生效，进程被强制终止时无法保证清理。
 
@@ -109,7 +114,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。`pressKey` 向目标 PID 依次发送修饰键和一个主键的按下事件，再逆序释放。操作中途取消也会逆序释放已按下的键。键盘事件直接发给目标进程，绕过全局 HID 队列。按键名由平台定义；KP_0 和 KP_Enter 等数字键盘名称保留物理键码。后台鼠标操作可能改变键盘焦点。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。`typeText` 的每次按下和抬起后等待配置的文本事件间隔；`pressKey` 使用自己的按下与释放节奏，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-宿主为每次 `run_code` 或 `cua_run_code` 的 `sendKeyEvent` 附上执行标识。按下时，helper 保存已选应用、接收进程的 PID 与启动时间、物理键码及对应的松开事件。持有方再次按下普通键时，helper 复用原记录，向接收进程发送一次带 `keyboardEventAutorepeat` 标志的按下事件。AppKit 视图可能只收到首次按下和最终松开，过滤中间的重复事件。重复、显式松键和执行结束时都会核对原进程身份。其他执行尝试按下或松开同一个键时，错误会指出键名，并区分其他会话和同一连接内的其他执行。正常返回、异常退出或用户暂停时，宿主等待在途原生请求结束，再通知 helper 释放该执行持有的其余按键。连接断开时，helper 也会清理该连接持有的按键。
+`HeldInputs` 在派发前记录请求所属的连接、应用、原进程身份、键码或按钮、释放事件和实际输入方式。重复按键只保留一条记录。显式 up 使用保存的目标和输入方式；进程退出或 PID 身份变化后跳过定向释放。`getHeldInputs` 只报告当前连接的记录，不读取用户物理按键状态。成功结束的程序用该快照生成提醒。程序失败、取消或销毁时，`releaseHeldInputs` 按派发顺序的反序统一释放键盘和鼠标记录。正常程序结束和回合结束不释放输入。`releaseHeldInputs` 返回已派发 up 的记录，用于确认后的清理提醒。连接关闭先等待原生操作停止，再兜底释放。完整击键、文本、点击和拖动保留操作内清理。
 
 所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
@@ -129,7 +134,9 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 
 `paste` 提供一种纯文本或 HTML 剪贴板格式，调用应用已启用的标准 Paste 菜单命令，并等待剪贴板数据请求。随后仅在所有权标记和修改计数仍匹配时恢复原有格式。Host 通过文件锁串行化不同 helper 的粘贴。maxClipboardBytes 同时限制输入和保留内容，不支持的菜单和过大的数据在分派前失败。后续复制会被保留。取消会尽可能恢复仍持有的剪贴板数据，强制结束不保证恢复，数据请求也不证明目标已完成编辑。 分派完成后，`pasteReadTimeoutMs` 限制等待剪贴板读取的时间。到期返回 `PASTE_NOT_CONSUMED`，关闭延迟数据提供方，并仅在仍持有剪贴板时恢复原内容。该失败不能证明应用以后不会处理已排队的 Paste 命令；决定是否重试前先检查目标内容。
 
-默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据本会话的授权或免询问配置决定本次悬停的路径，再向 helper 传入 `useSystemPointer`。
+`useSystemInput: true` 将 `pressKey`、`sendKeyEvent` 和支持的鼠标操作派发到系统输入队列。系统键盘按下检查前台应用；释放使用按下时保存的输入方式，即使目标失焦或退出也释放系统键。`click` 和 `drag` 复用已有鼠标配对释放逻辑，在手势外层按下并反序释放系统修饰键。系统模式拒绝再次按下已经持有的键，防止释放其他输入的按键。
+
+默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据本会话的授权或免询问配置决定本次悬停的路径，再向 helper 传入 `useSystemInput`。
 
 开启后，系统指针路线会检查前台应用和坐标命中的窗口，不满足条件时返回 `FOREGROUND_REQUIRED`。返回值 `hoverRoute` 和 `systemPointerMoved` 说明走了哪条路线以及是否移动了可见光标。悬停不会按下鼠标，也不会在读取后还原光标。后续输入可能中断悬停。点击只在目标点发送按键事件，不先在窗口外点击。
 
@@ -167,7 +174,7 @@ Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests
 
 隔离的 Electron/Chromium 检查使用 `python3 packages/experimental/cua-macos/native/tests/electron_e2e.py --electron /absolute/path/to/Electron.app/Contents/MacOS/Electron`。省略 `--electron` 时使用桌面工作区已安装的运行时，检查不下载 Electron。渲染器禁用 Node 集成，启用上下文隔离和 Chromium 沙箱，使用独立 userData/sessionData/log 目录及本地 fixture 页面。渲染器的点击/输入事件通过主进程写出独立观察，测试动作仍通过原生 helper 执行。AX 轮询等待 Chromium 辅助功能启用后的真实控件。原生和 Electron 子进程组由测试持有，在删除临时文件前停止。可选产物包含仅有 fixture 的截图和私有请求记录。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。 使用 `--drag-only` 可验证后台目标在按下前被拒绝，以及前台拖动的事件顺序、按键状态和两轴位移。测试在第一次移动后取消，核对只在最后投递的位置释放一次。
+运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--system-input-only` 可验证系统点击、快捷键、前台接收窗口观察到的独立按键状态，以及取消后的鼠标和修饰键释放。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。 使用 `--drag-only` 可验证后台目标在按下前被拒绝，以及前台拖动的事件顺序、按键状态和两轴位移。测试在第一次移动后取消，核对只在最后投递的位置释放一次。 使用 `--toggle-only` 可检查三种按键各自的按下和松开、指针移出后的松开，以及调用前后的光标位置。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/paste_e2e.py --artifacts /private/evidence`，验证自有 AppKit 应用在后台接收 Paste 动作但不读取数据时返回 `PASTE_NOT_CONSUMED`，以及前台读取同一次粘贴后成功。测试要求 Mac 已解锁并已授予辅助功能权限，只激活自有的两个应用，并独立记录收到的动作和文本以核对 helper 回复。
 

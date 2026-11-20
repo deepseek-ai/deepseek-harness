@@ -47,6 +47,8 @@ kind: "package-reference"
 
 装载 Gateway 时，没有活动事件流的 Client 查询在发送前就会失败。此检查不订阅断连：已发送的查询仍沿用原期限。没有 Gateway 的独立事件传输保持相同的超时行为。
 
+源码运行与构建产物运行的 Host 均通过 `agentId` RPC 字段接收响应中的 Session 标识。响应据此关联待处理请求，不解析或恢复普通 Agent，因此 subagent 会话也能接收 Client 结果。Remote 访问仍要求拥有该 Session 的权限。
+
 Client 查询在 `clientInspectTimeoutMs` 内接受首个有效页面响应。某个页面失败不会阻止其他页面成功回答。若没有有效结果，查询返回首个 Client 错误或输出校验诊断；若没有页面回答，则提示调用方打开或重新连接 Harness 页面后重试。取消和注册表卸载也会结束待处理查询。页面重连不会重放错过的请求，因此需在连接恢复后重试。Host 查询不受此超时影响。
 
 查询失败抛出 `InspectError`：`INSPECT_PROVIDER_NOT_FOUND`、`INSPECT_METHOD_NOT_FOUND` 与 `INSPECT_INVALID_INPUT` 在发送前拒绝请求；`INSPECT_INVALID_OUTPUT` 拒绝提供方返回值；`INSPECT_CLIENT_UNAVAILABLE` 表示没有页面或注册表已卸载；`INSPECT_TIMEOUT` 表示 Client 期限已到。Host 提供方可以抛出自己的 `HarnessError`，例如 `INSPECT_TARGET_NOT_FOUND`；其他提供方失败变为 `INSPECT_FAILED`，原始错误保留为 `cause`。取消时重新抛出信号的 reason。

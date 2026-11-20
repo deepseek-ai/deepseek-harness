@@ -191,6 +191,7 @@ export function Settings({ useSettings, useLocale, useStore, actions, save, t }:
                   }}
                 >
                   <option value="ui">{t('followAppLanguage')}</option>
+                  <option value="chat">{t('followChatLanguage')}</option>
                   {outputLanguages.map(language => (
                     <option key={language} value={language}>
                       {languageText[language].label}

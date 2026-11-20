@@ -1,0 +1,12 @@
+[
+  {
+    "windowId": "7",
+    "source": "agent",
+    "ageSeconds": 8
+  },
+  {
+    "windowId": "7",
+    "source": "external-input",
+    "ageSeconds": 4
+  }
+]

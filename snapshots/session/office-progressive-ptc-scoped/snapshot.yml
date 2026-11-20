@@ -1,0 +1,13 @@
+version: 1
+scenario: office-progressive-ptc-scoped
+profile: headless
+platform: posix
+composition: office-render-tools-ptc
+recording: authored
+header:
+  class: office-render-tools-ptc-scoped
+  pin: true
+  toolSchemasSource: ptc-scoped-repl
+  promptChanges: 1
+workspace:
+  setup: office-retired-ptc

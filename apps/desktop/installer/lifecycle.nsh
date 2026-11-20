@@ -54,6 +54,7 @@ Function InstallerBeforeInstall
 FunctionEnd
 
 Function InstallerProgressShow
+    StrCpy $InstallerPhase "installing"
     ; Only the stock worker executes installation; this overlay runs on the UI thread.
     ShowWindow $mui.InstFilesPage 0
     StrCpy $0 0
@@ -79,12 +80,24 @@ Function .onInstFailed
     Quit
 FunctionEnd
 
-Function InstallerFinish
-    System::Call '$PLUGINSDIR\window-frame.dll::InstallerFinishProgress(p $InstallerProgressWindow) i.r0 ?c'
-    ${If} $0 == 0
-        Quit
+Function InstallerProgressLeave
+    IfAbort failed
+    ${If} $InstallerPhase == "installing"
+        System::Call '$PLUGINSDIR\window-frame.dll::InstallerFinishProgress(p $InstallerProgressWindow, w "$(INSTALLER_FINISH)", w "$(INSTALLER_LAUNCH)") i.r0 ?c'
+        ${If} $0 == 0
+            MessageBox MB_OK|MB_ICONSTOP "$(INSTALLER_UI_ERROR)"
+            SetErrorLevel 2
+            Quit
+        ${EndIf}
+        StrCpy $InstallerPhase "success"
+        Abort
     ${EndIf}
-    System::Call 'user32::DestroyWindow(p $InstallerProgressWindow)'
-    StrCpy $InstallerPhase "success"
-    Call InstallerCreate
+    System::Call '$PLUGINSDIR\window-frame.dll::InstallerTakeFinishChoice(p $InstallerProgressWindow) i.r0 ?c'
+    ${If} $0 < 0
+        Abort
+    ${EndIf}
+    Call InstallerFinishLeave
+    Return
+failed:
+    ; NSIS owns installation failure and its exit code.
 FunctionEnd

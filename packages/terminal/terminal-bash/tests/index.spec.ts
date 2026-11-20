@@ -257,7 +257,8 @@ describe('BashTerminalBackend startup rollback', () => {
 
   it('wraps confined argv, scrubs the environment, and returns initialized sessions', async () => {
     const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx)
+    // The Agent's Session records no directory, so the directory service's default bounds it.
+    provideWorkingDirectoryFixture(ctx, resolve('/workspace'))
     await ctx.plugin(RecordingSandbox)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: '/workspace' })

@@ -1,5 +1,8 @@
 /** Model catalog and request-local dependencies for DeepSeek Messages. */
-import type { LlmModelInfo, ModelModality, SystemPromptUpdate, ToolUpdate, ResolvedRetryPolicy, ImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
+import type {
+  ImageAttachmentAccess, LlmError, LlmModelInfo, ModelModality, ResolvedRetryPolicy,
+  SystemPromptUpdate, ToolUpdate,
+} from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import type { DeepSeekLlmApiExtensionRequest, PreparedDeepSeekLlmApiExtensions } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
@@ -26,7 +29,7 @@ export interface DeepSeekCatalogModel {
    */
   imagePixelBudget?: number | 'low'
   /** Encoded-byte target for one deterministic request preview; the smallest quality-ladder output is used when no quality fits. */
-  imageMaxBytes?: number
+  imageTargetBytes?: number
   /**
    * `'in-history'` declares that the endpoint reads the latest `system`
    * message at any position of the conversation as the complete effective
@@ -81,11 +84,23 @@ export interface DeepSeekConnectionOptions {
   retryPolicy: ResolvedRetryPolicy
 }
 
-/** Authentication captured by the provider for one request and its file operations. */
+/**
+ * Authentication the provider plugin releases for one request and its file operations, with the request-failure
+ * classification bound to that credential.
+ */
 export interface DeepSeekRequestAuth {
-  /** Credential headers sent unchanged to the resolved endpoint. */
-  headers: Readonly<Record<string, string>>
-  /** Classify a failure using the captured credential; callback failure preserves the original error. */
+  /** Request headers carrying the credential. */
+  readonly headers: Readonly<Record<string, string>>
+  /**
+   * Aborts when the owner withdraws the credential while the request may carry it, as an account sign-out does. It
+   * ends the request and its file operations as the caller's cancellation does. Absent for credentials that are
+   * never withdrawn.
+   */
+  readonly revoked?: AbortSignal
+  /**
+   * Classify a failure using the captured credential; callback failure preserves the original error. The end a
+   * withdrawn credential causes arrives here too, for the provider plugin to name.
+   */
   onRequestError?: (error: unknown) => Promise<unknown>
 }
 
@@ -111,8 +126,17 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   connect?: (signal?: AbortSignal) => Promise<Connection>
   /** Refuse a model before any network I/O by throwing an `LlmError`; omission admits every model. */
   admit?: (connection: Connection, model: string) => void
-  /** Resolve authentication from this request's connection snapshot; never re-read the endpoint. */
-  resolveAuth: (connection: Connection) => Promise<DeepSeekRequestAuth>
+  /**
+   * Release authentication for `endpoint` from this request's connection
+   * snapshot, or `undefined` when the route has no credential for it; never
+   * re-read the endpoint. Model requests pass the connection's own base URL.
+   */
+  resolveAuth: (connection: Connection, endpoint: string) => Promise<DeepSeekRequestAuth | undefined>
+  /**
+   * The failure a model request reports when {@link resolveAuth} releases no
+   * credential for the route's own endpoint; omission reports `MISSING_CREDENTIAL`.
+   */
+  missingCredential?: (connection: Connection, provider: string) => LlmError
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */
   resolveUserId: () => AnonymousUserId
   /** Resolve the current durable attachment service; absence rejects image input. */

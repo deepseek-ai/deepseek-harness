@@ -41,6 +41,8 @@ The supported commands below are existing Desktop native operations that can exe
 
 `session/query` is the wire entry used by high-level SDK `run()` for strings and content-block arrays. Ordinary inputs retain their blocks and use the existing prompt queue. The full SDK recognizes bare `/compact`, `/permission <preset>` with a non-blank preset, `/plan [off|message]`, and `/goal [objective|clear|edit objective|pause|resume]` identified by their official definition IDs. Bare `/permission` or `/权限`, `/compact extra`, and all other input including `/model` remain ordinary prompts. A missing command also preserves the prompt path; a selected handler's failure never falls back. An unknown preset is a native command error. Encoded image blocks accompany recognized commands through native attachment admission. `session/prompt` remains the low-level queued-input entry without native slash-command routing.
 
+Each ordinary prompt records its user zone on its message source `{ kind: 'user', clientTimeZone }`. An explicit `timeZone` must canonicalize through the same check the Web Host applies; otherwise the request fails with a `TypeError`, which the transport answers as JSON-RPC `-32603`, before a Session is created or input is routed. An omitted `timeZone` samples `Intl.DateTimeFormat().resolvedOptions().timeZone` when that prompt is accepted, not once per process. A sampled value that does not canonicalize, such as `+00:00` under `TZ=GMT` or `Etc/Unknown`, records no zone and does not fail the prompt. The source carries no `rpcId` because the SDK has no Web submission identity. Native commands record no zone, like Web command execution.
+
 Host and Desktop adapters share `dsh-commands/builtin` for definition identity and English/Chinese aliases. The aliases `/压缩`, `/权限`, `/计划`, and `/目标` follow their official definitions after renaming; execution uses the current registered name. Exact names take precedence, but an unrelated same-name definition is not an SDK builtin and remains an ordinary prompt. Other builtin capabilities remain outside the SDK command set.
 
 The first text block supplies the complete command line; encoded images may precede or follow it. When that line matches a supported command, it must be the only text block and every other block must be an encoded image. Additional text blocks, durable image references, and other content types reject with a JSON-RPC error before execution or enqueue, without prompt fallback. Ordinary prompts preserve all block content and ordering. Empty arrays and arrays containing only blank text are rejected; image-only input is allowed.
@@ -55,7 +57,7 @@ Without attachments, `/plan` and `/plan off` change only native plan state. `/pl
 
 Creation and edit accept images as reference material before the next round; show, pause, resume, and clear reject attachments without changing goal state. Compact and permission commands also reject attachments. Handler refusals never fall back to ordinary prompts; an image may already be stored before the handler refuses, as on Desktop. These SDK inputs accept raster images, not general file uploads or client-supplied attachment references.
 
-`session/working-directory/get` accepts `{ sessionId }`; `session/working-directory/set` accepts `{ sessionId, path }`. Both return `{ cwd }` and create an unknown Session without starting a model turn. Reads recover missing directories through the working-directory service; changes preserve origin metadata and permissions, and reach the model through logged user context.
+`session/working-directory/get` accepts `{ sessionId }`; `session/working-directory/set` accepts `{ sessionId, path }`. Both return `{ cwd }` and create an unknown Session without starting a model turn. Reads recover missing directories through the working-directory service; changes preserve origin metadata, move the `workspace-write` boundary to the new directory, and reach the model through logged user context.
 
 ### Wiring
 
@@ -88,6 +90,19 @@ An initialized client advertising `capabilities.userQuestions` handles questions
 
 The plugin answers `shutdown`, flushes the response, disposes the root context so SDK-owned agents, subscriptions, and persistence reach quiescence, then exits 0. EOF and signal exits belong to the app bin, which also disposes the root context. Unloading only this plugin stops serving without exiting the process.
 
+### Requests for a disposed agent
+
+A request for a session whose agent has left the agent registry fails with `session agent was disposed outside the server: <sessionId>; <context>`. The context states what the server observed:
+
+| Context | Meaning |
+|---|---|
+| `the runtime is shutting down; last process event before teardown: <event> at <time>` | The whole runtime is being disposed. `<event>` is `SIGTERM`, `SIGINT`, `uncaught exception: <first line>`, `unhandled rejection: <first line>`, or `stdin closed`. It is the last such event seen before disposal began, not an established cause. |
+| `the runtime is shutting down; no process event was observed before teardown` | The whole runtime is being disposed and none of those events preceded it. |
+| `the SDK server is shutting down` | This plugin is unloading or answering `shutdown`. |
+| `the agent loop was unloaded at <time> while the runtime keeps running; first plugin unloading at that time: "<name>"` | Only the agent loop went away; the process stays up. `<name>` is the plugin whose unload began first among those in progress, usually the agent loop or a service it requires; when unloads overlap it can be an unrelated plugin. The time and plugin are omitted when the server did not observe the removal. |
+
+A signal or an unhandled rejection is recorded only when another listener already handles that event, so mounting this plugin never changes whether the process terminates. Failure text is the first line of the message, at most 200 characters, or `<unprintable>` for a value without a string form; the full report stays on stderr.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -107,6 +122,7 @@ The plugin is a thin presentation adapter: [`HarnessSdkJsonRpcServer`](src/serve
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, stdio wiring, request dispatch, shared shutdown/exit task |
+| [`src/process-events.ts`](src/process-events.ts) | Record of the last signal, fatal failure, or input end seen before runtime teardown |
 | [`src/user-questions.ts`](src/user-questions.ts) | Native question adapter: host forwarding, answer validation, cancellation |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`: protocol methods, per-session agent creation, lifecycle subscriptions, teardown |
 
@@ -142,7 +158,7 @@ Read these pages when the plugin contract is not enough. They move from the wire
 
 #### What the model sees
 
-Ordinary `session/query` input and accepted `session/prompt` content enter a user message with their original block order. Ordinary input enters the prompt queue without reapplying permission defaults. Inline `SdkEncodedImageBlock` values are validated and committed through the composition's attachment store first, so the session log retains content-addressed image references rather than base64 bytes. This package adds no system-prompt prose or tool schema; those come from the other plugins in the composition.
+Ordinary `session/query` input and accepted `session/prompt` content enter a user message with their original block order. Ordinary input enters the prompt queue without reapplying permission defaults. Inline `SdkEncodedImageBlock` values are validated and committed through the composition's attachment store first, so the session log retains content-addressed image references rather than base64 bytes. This package adds no system-prompt prose or tool schema; those come from the other plugins in the composition. A mounted [`time-context`](../../context/time-context/README.md#model-experience) reads the recorded zone, so a prompt with zone `UTC` produces `Browser time zone for this request: UTC. Interpret otherwise-unqualified dates and times in this zone.`, and a prompt without one produces the `unavailable` policy.
 
 #### Token effect
 

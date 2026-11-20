@@ -24,6 +24,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import SubagentRuntime, { type SubagentRunId, type SubagentStartRequest, type SubagentRun, type SubagentResult, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import type { JsonRpcTransportPeer } from '@deepseek-ai/dsh-sdk-protocol'
 import { HarnessSdkJsonRpcServer } from '../src/index.ts'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 
 class FakeTransport implements JsonRpcTransportPeer {
   notifications: { method: string; params?: Record<string, unknown> }[] = []
@@ -62,6 +63,14 @@ function promptAgentFixture(fields: Pick<Agent, 'id' | 'followup'> & Partial<Pic
     whenIdle: () => Promise.resolve(),
     ...fields,
   }
+}
+
+/** Complete the handshake on a route that is already registered, so no adapter is mounted. */
+async function initializedServer(ctx: Context): Promise<HarnessSdkJsonRpcServer> {
+  ctx.provide('llm', { listProviders: () => [{ id: 'fake' }], resolveCallConfig: () => Promise.resolve({}) })
+  const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+  await server.initialize({ cwd: process.cwd(), provider: 'fake', model: 'fake' })
+  return server
 }
 
 afterEach(async () => {
@@ -258,12 +267,14 @@ describe('HarnessSdkJsonRpcServer', () => {
         .rejects.toThrow('SDK server is not initialized')
       expect(ctx.agents.list()).toEqual([])
       await server.initialize({ cwd: root, provider: 'mock', model: 'mock' })
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: root })
+      // The header carries the canonical spelling of the configured directory.
+      const canonicalRoot = await realpath(root)
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: canonicalRoot })
       const selected = await realpath(child)
       await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected })
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: root })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: canonicalRoot })
       const agent = ctx.agents.get(brandString<SessionId>('a'))!
-      expect(agent.session.header.cwd).toBe(root)
+      expect(agent.session.header.cwd).toBe(canonicalRoot)
       await server.prompt({ sessionId: 'a', contentBlocks: [{ type: 'text', text: 'where' }] })
       await agent.whenIdle()
       expect(agent.session.snapshotEvents().some(event => event.type === 'user/message'
@@ -502,6 +513,77 @@ describe('HarnessSdkJsonRpcServer', () => {
     // The detached agent was never driven by the rejected prompt.
     expect(followup).toHaveBeenCalledOnce()
     await server.shutdown()
+  })
+
+  it('reports when the registry dropped the agent if no plugin unload accompanied it', async () => {
+    const agent = promptAgentFixture({ id: brandString<SessionId>('dropped'), followup: vi.fn<Agent['followup']>() })
+    let live = true
+    const ctx = testContext()
+    ctx.provide('agents', {
+      create: vi.fn(async () => ({ agent, dispose: vi.fn(() => Promise.resolve()) })),
+      get: () => live ? agent : undefined,
+    })
+    const server = await initializedServer(ctx)
+    const prompt = () => server.prompt({ sessionId: 'dropped', contentBlocks: [{ type: 'text', text: 'hi' }] })
+    await prompt()
+
+    live = false
+    ctx.emit('agent/disposed', { agent })
+
+    await expect(prompt()).rejects.toThrow(new RegExp(
+      String.raw`^session agent was disposed outside the server: dropped; the agent loop was unloaded at \d{4}-\d{2}-\d{2}T[\d:.]+Z$`,
+    ))
+    await server.shutdown()
+  })
+
+  it('reports an unloaded agent registry as a disposed agent', async () => {
+    const agent = promptAgentFixture({ id: brandString<SessionId>('unregistered'), followup: vi.fn<Agent['followup']>() })
+    const ctx = testContext()
+    const registry = await ctx.plugin({
+      name: 'test-agent-registry',
+      apply(registryCtx: Context) {
+        registryCtx.provide('agents', {
+          create: vi.fn(async () => ({ agent, dispose: vi.fn(() => Promise.resolve()) })),
+          get: () => agent,
+        })
+      },
+    })
+    const server = await initializedServer(ctx)
+    const prompt = () => server.prompt({ sessionId: 'unregistered', contentBlocks: [{ type: 'text', text: 'hi' }] })
+    await prompt()
+
+    await registry.dispose()
+
+    await expect(prompt()).rejects.toThrow(/^session agent was disposed outside the server: unregistered; the agent loop was unloaded$/)
+    await server.shutdown()
+  })
+
+  it('reports its own shutdown to a wait that outlives the agent', async () => {
+    const idle = Promise.withResolvers<undefined>()
+    const agent = promptAgentFixture({
+      id: brandString<SessionId>('closing'),
+      followup: vi.fn<Agent['followup']>(),
+      whenIdle: () => idle.promise,
+    })
+    let live = true
+    const ctx = testContext()
+    ctx.provide('agents', {
+      create: vi.fn(async () => ({ agent, dispose: vi.fn(() => Promise.resolve()) })),
+      get: () => live ? agent : undefined,
+    })
+    const server = await initializedServer(ctx)
+    await server.prompt({ sessionId: 'closing', contentBlocks: [{ type: 'text', text: 'hi' }] })
+    const waiting = server.wait({ sessionId: 'closing' })
+    const outcome = expect(waiting).rejects.toThrow(
+      'session agent was disposed outside the server: closing; the SDK server is shutting down',
+    )
+
+    const shutdown = server.shutdown()
+    live = false
+    idle.resolve(undefined)
+
+    await outcome
+    await shutdown
   })
 
   it('forwards whole-agent status without attributing a turn outcome', async () => {
@@ -1050,6 +1132,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(LlmDeepSeek, { models: [{ id: 'preinstalled-model' }] })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
@@ -1059,8 +1142,81 @@ describe('HarnessSdkJsonRpcServer', () => {
       expect(inspect.hasAdapterFor('missing-provider')).toBe(false)
       await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'preinstalled-model' })
 
-      expect(ctx.get('llm')?.listProviders().filter(provider => provider.id === 'deepseek-official')).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
+      expect(ctx.get('llm')?.listProviders().filter(provider => provider.id === 'deepseek-official')).toEqual([{ id: 'deepseek-official', name: 'DeepSeek API' }])
       await server.shutdown()
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['a composition without DeepSeek authentication', false],
+    ['a composition that mounts DeepSeek authentication', true],
+  ] as const)('mounts the official route for %s and removes at shutdown only what it mounted', async (_composition, mounted) => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-fallback-auth-'))
+    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // A loopback endpoint keeps the fallback-mounted official route off the network; no request is sent.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
+    if (mounted) await ctx.plugin(DeepSeekAuth)
+    const officialRoute = (): boolean => ctx.get('llm')?.listProviders().some(provider => provider.id === 'deepseek-official') ?? false
+    // Reported as a boolean: a failed assertion must not print the service and its context.
+    const authentication = (): boolean => ctx.get('deepseekAuth') !== undefined
+    try {
+      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      expect([officialRoute(), authentication()]).toEqual([true, true])
+      await server.shutdown()
+      expect([officialRoute(), authentication()]).toEqual([false, mounted])
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['a composition without DeepSeek authentication', false],
+    ['a composition that mounts DeepSeek authentication', true],
+  ] as const)('leaves %s as it was when the fallback route does not mount', async (_composition, mounted) => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-fallback-failed-'))
+    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // The official route rejects a base URL that is no HTTP(S) root while it mounts.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'ftp://deepseek.test/anthropic')
+    if (mounted) await ctx.plugin(DeepSeekAuth)
+    const authentication = (): boolean => ctx.get('deepseekAuth') !== undefined
+    try {
+      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+      await expect(server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'deepseek-v4-flash' }))
+        .rejects.toThrow('Messages baseURL must be an HTTP(S) root')
+      expect(authentication()).toBe(mounted)
+      await server.shutdown()
+      expect(authentication()).toBe(mounted)
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
+  it('removes the DeepSeek authentication it mounted when the fallback route fails to dispose', async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-fallback-dispose-'))
+    const ctx = await makeHarness(storageDir)
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
+    try {
+      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      const [route] = ctx.registry.get(LlmDeepSeek)?.fibers ?? []
+      if (route === undefined) throw new Error('expected the fallback route fiber')
+      const rawDispose = route.dispose
+      const failure = new Error('route teardown failed')
+      vi.spyOn(route, 'dispose').mockImplementation(async () => {
+        await rawDispose()
+        throw failure
+      })
+      await expect(server.shutdown()).rejects.toBe(failure)
+      expect(ctx.get('deepseekAuth') !== undefined).toBe(false)
     } finally {
       await ctx.fiber.dispose()
       await rm(storageDir, { recursive: true, force: true })
@@ -1071,6 +1227,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-new-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(LlmDeepSeek)
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
@@ -1079,7 +1236,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         .rejects.toThrow('no adapter registered for provider "private"')
 
       expect(ctx.get('llm')?.listProviders()).toEqual([
-        { id: 'deepseek-official', name: 'DeepSeek' },
+        { id: 'deepseek-official', name: 'DeepSeek API' },
       ])
       await server.shutdown()
     } finally {
@@ -1354,6 +1511,6 @@ describe('HarnessSdkJsonRpcServer', () => {
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 
     await expect(server.shutdown()).rejects.toBe(listenerFailure)
-    expect(disposed.toSorted()).toEqual(Array.from({ length: subscription }, (_, index) => index + 1))
+    expect(disposed.toSorted((a, b) => a - b)).toEqual(Array.from({ length: subscription }, (_, index) => index + 1))
   })
 })

@@ -14,7 +14,7 @@ The [DeepSeek Search and Fetch guide](https://api-docs.deepseek.com/zh-cn/guides
 
 ### Protocol selection and deployment
 
-The APIs register as `deepseek-search-api` and `deepseek-fetch-api`. Messages search remains separately registered as `deepseek-official`. The web service selects each provider through `web.searchProvider` and `web.fetchProvider`, which the Search and Fetch menus on the Web search and fetch page set independently; the shipped composition selects the Search API and local HTTP fetch, as the [selection decision](../architecture/2026-10-29-web-provider-selection.md) records. A saved selection takes effect on the next operation because the web service reads both selections per operation. Each operation resolves one settings snapshot, including its endpoint and credential. Both APIs read the `web-deepseek-api` namespace, and each capability resolves its own endpoint and credential.
+The APIs register as `deepseek-search-api` and `deepseek-fetch-api`. Messages search remains separately registered as `deepseek-official`. The web service selects each provider through `web.searchProvider` and `web.fetchProvider`, which the Search and Fetch menus on the Web search and fetch page set independently; the shipped composition selects local HTTP fetch and no search provider, which runs the Search API outside the DeepSeek model routes, as the [selection decision](../architecture/2026-10-29-web-provider-selection.md) records. A saved selection takes effect on the next operation because the web service reads both selections per operation. Each operation resolves one settings snapshot, including its endpoint and credential. Both APIs read the `web-deepseek-api` namespace, and each capability resolves its own endpoint and credential.
 
 Direct retrieval appends `/search` or `/fetch` to an API base. A capability without its own YAML endpoint fields uses the origin of the conversation's DeepSeek model route base URL with `/v1/tools`, which for the public deployment is the guide's `https://api.deepseek.com/v1/tools`; the [selection decision](../architecture/2026-10-29-web-provider-selection.md) owns that derivation and the credential each operation sends. The verified development base is `http://api-dev.deepseek.com:8031/api/v1/tools`; its prefix differs and is never inferred from the hostname, so such a deployment sets the complete base in `searchBaseURL` or `fetchBaseURL`. An unparseable base leaves that capability's provider unavailable.
 
@@ -36,7 +36,7 @@ The HTTP provider retains its own URL validation and resource limits. Selecting 
 
 ### Default migration
 
-The shipped composition selects `deepseek-search-api`; the [selection decision](../architecture/2026-10-29-web-provider-selection.md) owns that default and its no-fallback rule. API keys and account tokens both reach the public routes. Deployments behind a gateway without `/v1/tools` routes set `searchBaseURL` to a base that serves them. A stored `web.searchProvider: deepseek-official` selects Messages search, and any other stored selection keeps its provider.
+The shipped composition fixes no search provider: a search runs Messages search for a model request on a DeepSeek model route and `deepseek-search-api` on every other route; the [selection decision](../architecture/2026-10-29-web-provider-selection.md) owns that default and its no-fallback rule. API keys and account tokens both reach the public routes. Deployments behind a gateway without `/v1/tools` routes set `searchBaseURL` to a base that serves them. A stored `web.searchProvider: deepseek-official` selects Messages search, and any other stored selection keeps its provider.
 
 ### Legacy Messages search
 
@@ -48,11 +48,11 @@ The independent `dsh-web-search-deepseek` provider sends Messages search request
 
 **Reuse the Messages address or infer a route prefix.** The protocols and deployed prefixes differ. Separate bases preserve existing configurations and avoid sending a valid request to the wrong route.
 
-**Require an explicit Search API base.** The Search API is the shipped search default, and an empty default would leave it unavailable until every user enters an address that the DeepSeek model route already determines. Other deployments still set their own base.
+**Require an explicit Search API base.** The Search API is the shipped search default outside the DeepSeek model routes, and an empty default would leave it unavailable until every user enters an address that the DeepSeek model route already determines. Other deployments still set their own base.
 
 **Keep the APIs inside the Messages provider behind a provider-local switch.** A switch inside the Messages provider cannot change fetch routing, so `web_fetch` would stay on HTTP unless the user also edited `web.fetchProvider`; it also ties the APIs' lifecycle to Messages search. Separate registrations let the web service's existing selection choose each provider, without coupling either API to the Messages provider.
 
-**Share one transport between Messages search and the new APIs.** A shared web transport would couple different request formats and failure mappings. Credential values instead come from the shared [`llm-deepseek` credential helpers](../../../../packages/llm/llm-deepseek/src/credential.ts); Messages search and the Search/Fetch API transports remain independent.
+**Share one transport between Messages search and the new APIs.** A shared web transport would couple different request formats and failure mappings. Credentials instead come from one service, `ctx.deepseekAuth`, which releases the request headers of the API key or the account sign-in; Messages search and the Search/Fetch API transports remain independent.
 
 **Split Search and Fetch into separate packages.** The guide serves both APIs from one base with one credential; separate packages would duplicate settings that address one deployment. Independent selection does not require separate packages, because each API registers its own provider id. Each operation lives in its own module, so either API can change without the other.
 

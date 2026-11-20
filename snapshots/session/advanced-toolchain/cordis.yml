@@ -39,3 +39,8 @@
       name: '@deepseek-ai/dsh-tool-cordis'
     - id: advanced-toolchain-presentation
       name: './presentation.mjs'
+
+# Recorded programs are async function bodies, so replay keeps the per-call runtime.
+- id: ptc-runtime
+  config:
+    executionMode: per-call

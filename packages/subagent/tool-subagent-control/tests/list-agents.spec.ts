@@ -10,7 +10,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { NO_START_CAPABILITIES, type SubagentResult } from '@deepseek-ai/dsh-subagent'
 import type { SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -122,11 +122,11 @@ describe('list_agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('lead [inactive] — root agent\nagent-1 [inactive] — workflow child')
-    expect(result.isError ? undefined : result.value).toEqual([
+    expect(text(result)).toBe('Subagent capacity: running=0, limit=8\nlead [inactive] — root agent\nagent-1 [inactive] — workflow child')
+    expect(result.isError ? undefined : result.value).toEqual({ running: 0, limit: 8, agents: [
       { name: 'lead', status: 'inactive', description: 'root agent' },
       { name: 'agent-1', status: 'inactive', description: 'workflow child' },
-    ])
+    ] })
   })
 
   it('omits external leaves without diagnostics', async () => {
@@ -137,7 +137,36 @@ describe('list_agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('lead [inactive] — root agent')
+    expect(text(result)).toBe('Subagent capacity: running=0, limit=8\nlead [inactive] — root agent')
+  })
+
+  it('counts a live external child even though it has no member row', async () => {
+    const { ctx, parent } = await setup([])
+    const result = Promise.withResolvers<SubagentResult>()
+    ctx.subagents.registerProvider({
+      name: 'external', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
+      start: async () => ({
+        id: brandString<SessionId>('live-external'), result: result.promise,
+        dispose: async () => { result.resolve({ output: [], stopReason: 'completed' }) },
+      }),
+    })
+    const started = await ctx.subagents.startActivation({
+      delivery: 'caller', provider: 'external', label: 'external work',
+      prompt: [], parent, signal: testToolSignal,
+    })
+    try {
+      const listed = await callTool(ctx, 'list_agents', {}, parent)
+      expect(listed.isError ? undefined : listed.value).toEqual({
+        running: 1, limit: 8,
+        agents: [{ name: 'lead', status: 'inactive', description: 'root agent' }],
+      })
+    } finally {
+      result.resolve({ output: [], stopReason: 'completed' })
+      await started.result
+      await started.dispose()
+    }
+    const settled = await callTool(ctx, 'list_agents', {}, parent)
+    expect(settled.isError ? undefined : settled.value).toMatchObject({ running: 0, limit: 8 })
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -159,7 +188,7 @@ describe('list_agents', () => {
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('lead [inactive] — root agent')
+    expect(text(result)).toBe('Subagent capacity: running=0, limit=8\nlead [inactive] — root agent')
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -215,7 +244,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'lead [inactive] — root agent\n'
+      'Subagent capacity: running=0, limit=8\nlead [inactive] — root agent\n'
       + `${started.childId} [inactive] — real child\n`
       + 'runner [running] — still working\n'
       + 'waiting-child [inactive] — waiting on descendants',
@@ -249,7 +278,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'lead [inactive] — root agent\n'
+      'Subagent capacity: running=0, limit=8\nlead [inactive] — root agent\n'
       + 'historical-one-shot [unavailable]\n'
       + 'agent-1 [inactive] — summarize the doc',
     )
@@ -264,7 +293,7 @@ describe('list_agents', () => {
     expect(schema?.description).toContain('inactive means no turn is executing')
     // The enum is the closed vocabulary the model renders, so pin it rather than
     // scanning prose that legitimately reads "not to poll for completion".
-    expect(ctx.tools.get('list_agents')?.output.schema.items?.properties?.status?.enum)
+    expect(ctx.tools.get('list_agents')?.output.schema.properties?.agents?.items?.properties?.status?.enum)
       .toEqual(['running', 'inactive', 'corrupt', 'unsupported', 'unavailable'])
   })
 
@@ -328,7 +357,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'lead [inactive] — root agent\n'
+      'Subagent capacity: running=1, limit=8\nlead [inactive] — root agent\n'
       + 'agent-1 [inactive] — waiting branch\n'
       + 'agent-1/agent-1 [running] — nested leaf',
     )
@@ -376,7 +405,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'lead [inactive] — root agent\n'
+      'Subagent capacity: running=0, limit=8\nlead [inactive] — root agent\n'
       + 'deep-leaf [inactive] — deep leaf\n'
       + 'broken-node [unavailable]',
     )
@@ -406,7 +435,7 @@ describe('list_agents', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
     const expected = [
-      'lead [inactive] — root agent',
+      'Subagent capacity: running=2, limit=8\nlead [inactive] — root agent',
       'agent-1 [running] — alpha task',
       'agent-2 [inactive] — beta task',
       'agent-3 [inactive] — gamma task',

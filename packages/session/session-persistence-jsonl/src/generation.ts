@@ -25,7 +25,7 @@ import { pipeline, Readable } from 'node:stream'
 import { scheduler } from 'node:timers/promises'
 import { isDeepStrictEqual } from 'node:util'
 import { constants, createZstdCompress } from 'node:zlib'
-import { Session } from '@deepseek-ai/dsh-session'
+import { validateSessionLog } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { BlockAssembler, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import { SessionFormatError } from '@deepseek-ai/dsh-session-format'
@@ -534,10 +534,9 @@ async function verifyCurrentGeneration(
       `current session generation contains ${generation.events.length} events, expected ${expectedEventCount}`,
     )
   }
-  Session.fromRestore(
-    generation.meta.id,
-    generation.events,
+  validateSessionLog(
     generation.meta,
+    generation.events,
     generation.inheritedEventCount,
     'detached',
     currentSessionMessageProjections,

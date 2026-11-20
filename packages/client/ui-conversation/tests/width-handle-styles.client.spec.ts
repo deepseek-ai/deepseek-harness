@@ -16,8 +16,9 @@ function rule(css: string, selector: string): string {
 
 describe('conversation width handle styles', () => {
   it('keeps the gutter hit target narrow', () => {
-    const handle = rule(conversationCss, '.widthHandle')
-    expect(handle).toMatch(/width:\s*min\(\s*10px/)
+    for (const side of ['left', 'right']) {
+      expect(conversationCss).toMatch(new RegExp(`\\.widthHandle\\[data-side='${side}'\\]\\s*\\{[^}]*width:\\s*min\\(\\s*10px`, 's'))
+    }
   })
 
   it('keeps the hover indicator compact', () => {

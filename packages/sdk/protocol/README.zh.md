@@ -62,9 +62,11 @@ kind: "package-library"
 
 `session/wait` 接受已有 SDK 会话的 `{ sessionId }`，在根 Agent 持续空闲且活跃的受管理后代工作结束后返回 `{}`。带有停放输入的空闲后代保持驻留，不阻塞这次等待。未知 id，以及没有后续终止事件记录的 Agent 运行时错误，都会使请求失败。等待期间提交的通知在同一传输上先于响应到达；原始 `session.status` 转换仍表示整个 Agent 的状态。
 
-`session/query` 接受 `{ sessionId, contentBlocks }`，其中 `contentBlocks` 使用 `SdkPromptContentBlock[]`。两个 SDK 都将字符串规范化为文本块，并通过同一入口发送内容块数组。普通输入保留内容块顺序排队，返回 `{ kind: "prompt", messageId }`；受支持命令结束后返回 `{ kind: "command", execution }`。已识别命令要求一个完整文本块，其他块只能是编码图片；其他组合会在执行或入队前被拒绝。图片经过原生附件接纳与处理器校验。空数组和只包含空白文本的数组会被拒绝；允许仅图片输入。Prompt 回执不是模型结果，命令完成也不要求 inbox 回执或 idle 通知。识别规则及受支持命令由 [SDK 服务端](../server/README.zh.md)定义。
+`session/query` 接受 `{ sessionId, contentBlocks, timeZone? }`，其中 `contentBlocks` 使用 `SdkPromptContentBlock[]`。两个 SDK 都将字符串规范化为文本块，并通过同一入口发送内容块数组。普通输入保留内容块顺序排队，返回 `{ kind: "prompt", messageId }`；受支持命令结束后返回 `{ kind: "command", execution }`。已识别命令要求一个完整文本块，其他块只能是编码图片；其他组合会在执行或入队前被拒绝。图片经过原生附件接纳与处理器校验。空数组和只包含空白文本的数组会被拒绝；允许仅图片输入。Prompt 回执不是模型结果，命令完成也不要求 inbox 回执或 idle 通知。识别规则及受支持命令由 [SDK 服务端](../server/README.zh.md)定义。
 
 `session/prompt` 将内容块排入队列，不经过原生 slash command 路由；运行时 skill（技能）识别仍然适用。
+
+`session/prompt` 与 `session/query` 都接受可选的 `timeZone`：这条 prompt 的用户时区，取值为 `UTC` 或 IANA Area/Location 名称。运行时会将其规范化，例如别名 `US/Eastern` 记录为 `America/New_York`。其他取值会让请求以 JSON-RPC `-32603` 失败，错误信息写明被拒的值和可接受的格式；`session/query` 在路由前拒绝，因此 prompt 与命令都不会执行。省略 `timeZone` 时，运行时为每条 prompt 采样自身进程时区，该时区不可用时不记录。原生命令不记录时区。模型可见的结果由 [SDK server](../server/README.zh.md#model-experience) 负责。
 
 命令生命周期通知先于 `session/query` 的 handler 响应到达。命令查询以同一 `commandId` 的 `session.query.completed` 通知结束高层观察，等待命令启动的模型活动；目标创建和恢复还等待目标终止及收尾活动。状态命令无需模型 turn，其完成通知可以先于响应到达。SDK 内部消费该回执并返回 `RunResult`，转发器必须保持顺序。关闭会取消尚未结束的观察。
 

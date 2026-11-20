@@ -110,10 +110,16 @@
       "path": "../../boot/plugin-market"
     },
     {
+      "path": "../../interaction/action-cards"
+    },
+    {
+      "path": "../../extensions/plugin-recommendations"
+    },
+    {
       "path": "../../document/office-kit"
     },
     {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../../web/web"

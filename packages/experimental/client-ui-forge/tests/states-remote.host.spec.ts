@@ -137,7 +137,7 @@ describe('forgePanel.changeRequestStates', () => {
     expect([...first.values()]).toEqual(expect.arrayContaining([state(7), state(8)]))
     expect(first.has(pullUrl(10))).toBe(false)
     // Other client-visible units of a loaded Session change without rebinding anything.
-    b.session.append('working-directory/change', { cwd: `${b.session.header.cwd ?? ''}/sub` })
+    b.session.append('workspace-root/change', { cwd: `${b.session.header.cwd ?? ''}/sub` })
     b.ctx.forgeSession.track(b.session, pullUrl(9))
     expect((await r.until(states => states.has(pullUrl(9)))).get(pullUrl(9))).toEqual(state(9))
     expect(records.get(storedKey(pullUrl(9)))).toEqual(state(9))

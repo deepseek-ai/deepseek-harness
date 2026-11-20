@@ -24,7 +24,7 @@ kind: "package-reference"
 
 在原生 Windows 的源码检出中，提供方启用时通过 PATH 中的 .NET 10 SDK 构建当前架构的 helper，输出到 `native/bin/win-<arch>`。`helperPath` 可指定现有 exe 的绝对路径。手动构建时，在本包中执行 `pnpm run build:native:x64` 或 `pnpm run build:native:arm64`。使用独立 win-x64 ZIP 时，需要完整解压，并将 `helperPath` 指向其中的 exe。使用 `build:native` 生成的 `native/bin/local` 产物时，需要匹配的 Windows .NET 运行时，并显式配置 `helperPath`。
 
-`buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 30000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
+`buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 600000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
 
 <a id="interface-semantics"></a>
 ## 接口语义
@@ -43,6 +43,7 @@ kind: "package-reference"
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口；窗口关闭后，列表也可以变为空。
 - `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。执行窗口操作时会检查目标是否仍属于所选应用。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
+- 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
 
@@ -55,6 +56,8 @@ kind: "package-reference"
 4. `dispatched` 只表示分派情况，不证明预期效果已经发生。继续操作前先观察结果。窗口变化、快照过期、超时或取消后，不要盲目重放输入，也不要自动切换目标窗口。
 5. 授权针对当前会话中的应用。尊重拒绝和撤销，不使用其他工具绕过。重新连接会使已保留的句柄失效，继续操作前必须重新选择应用。
 
+`win.toggleMouse(button, direction)` 在当前指针位置发送一次系统按键事件。按下时，所选窗口必须在前台，指针也必须命中该窗口。请通过原 Window 对象松开；松开只释放桌面按钮，不切换焦点，也不移动指针。
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -62,7 +65,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-程序可以读取应用和窗口标识、观察结果及动作结果。仅执行选择操作不会提供辅助功能树。
+程序可以读取应用和窗口标识、观察结果及动作结果。仅执行选择操作不会提供辅助功能树。程序成功后，提醒会列出仍按住的键和鼠标按钮、所属窗口和桌面输入方式。一条连接持有按键或鼠标按钮时，其他连接仍可使用不同的键或按钮。程序异常、取消或重置时会请求按派发顺序的反序释放。断连时，helper 会在关闭时限内最后尝试一次。失败或超时后，它会静默丢弃这条连接的持有记录。
 
 #### Token 影响
 
@@ -77,9 +80,11 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
-- 悬停、点击、滚动和拖拽使用系统指针。`requireSystemPointerApproval` 不会为 Windows 操作弹出单独的指针授权提示。
+- 悬停、点击、滚动和拖拽使用系统指针。`requireSystemInputApproval` 不会为 Windows 操作弹出单独的指针授权提示。
 - 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。
-- 清理输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
+- 持有提醒和清理只依据 helper 自己派发的输入。如果你也按住同一个键或按钮，helper 之后发送的 up 可能打断你的按压。
+- Windows 通过桌面派发输入。焦点变化或原窗口关闭后，确认释放表示桌面接受了 up，原窗口可能收不到该事件。释放时直接发送保存的 up 事件，无需检查当前前台窗口或锁屏状态。显式 up 返回 `foregroundChanged: null`。若 Windows 在处理显式清理请求时拒绝 up，本任务不能继续使用 CUA。请先检查桌面，再开始新任务。
+- 清理完整动作内的临时输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
 - helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
 - Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。
 - 不支持 `findApps`、启动应用和应用级辅助功能。请让用户打开所需应用或窗口。

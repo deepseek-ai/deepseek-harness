@@ -1,3 +1,5 @@
+import type { CompactionRowInjected } from '../src/client/chat/CompactionItem.tsx'
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AssistantNodeInjected } from '../src/client/chat/AssistantNodeView.tsx'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
@@ -22,6 +24,8 @@ import {
 import {
   apply as applyChat, inject as injectChat, type ChatFlowDataInjected, type ChatViewInjected,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { SessionWireEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createChatStore } from '../src/client/stores.ts'
@@ -46,6 +50,7 @@ type ChatActions = ChatInstance['actions']
 function sessionFakeFor() {
   return {
     loadOlder: vi.fn<ISession['loadOlder']>(() => Promise.resolve()),
+    consumeOlder: vi.fn<ISession['consumeOlder']>(() => true),
     loadThrough: vi.fn<ISession['loadThrough']>(() => Promise.resolve()),
     readAttachment: vi.fn<ISession['readAttachment']>(() => Promise.resolve({
       ok: true,
@@ -69,7 +74,8 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
-    openResource: vi.fn<(address: string) => void>(),
+    openContent: vi.fn<typeof runtime.ctx.sidebarRight.openContent>(),
+    openResource: vi.fn<typeof runtime.ctx.sidebarRight.openResource>(),
     openTab: vi.fn<(kind: string, options?: unknown) => void>(),
   }
   runtime.ctx.provide('sidebarRight', sidebarRight as never)
@@ -84,7 +90,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
-  runtime.remote.provideNamespaces({ session: { openWorkspacePath } })
+  const events = vi.fn<ClientRemote['session']['events']>(async ({ throughSeq }) => ({
+    ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: {
+      type: 'compaction/summary', seq: throughSeq ?? 42, time: 0, data: { summary: [{ type: 'text', text: '# Summary' }] },
+    } }] },
+  }))
+  runtime.remote.provideNamespaces({ session: { openWorkspacePath, events } })
   const openSession = vi.fn<(id: SessionId) => void>()
   runtime.ctx.provide('uiWorkspace', {
     openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
@@ -105,12 +116,12 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'settings.general.item': { kind: 'list', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
-  await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
+  await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   const registerGroups = withProcessGroups ? undefined
     : vi.spyOn(runtime.ctx.uiConversation.groups, 'register').mockImplementation(() => () => {})
   const chat = await runtime.mount({ inject: [...injectChat], apply: applyChat })
@@ -134,12 +145,17 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     return { instance, injected: injectFlow(reference.sessionId) }
   }
   return {
+    compactionRow(key: 'compaction' | 'manual-compaction') {
+      const entry = runtime.slots.entries('conversation.chat.node').find(row => row.options.key === key)!
+      const inject = entry.inject as NonNullable<typeof entry.inject> & ((id: SessionId) => CompactionRowInjected)
+      return inject(ROOT)
+    },
     get linkPreference() {
       const row = runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'link-opening')!
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
-    runtime, chat, chatSettings, browserAvailable,
+    events, runtime, chat, chatSettings, browserAvailable,
     layout, openWorkspacePath, sidebarRight, sidebarRightTabs, session, chatViewApi, chatFlowApi, rootReference, openSession,
   }
 }
@@ -256,6 +272,8 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     injected.loadOlder()
     expect(b.session.loadOlder).toHaveBeenCalledExactlyOnceWith({ deferConsumption: true })
+    expect(injected.consumeOlder()).toBe(true)
+    expect(b.session.consumeOlder).toHaveBeenCalledOnce()
 
     void injected.loadThrough(SessionSeq(42))
     expect(b.session.loadThrough).toHaveBeenCalledWith(42)
@@ -299,21 +317,22 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     await injected.openFile('src/a.ts')
     // Files stay in the product: a relative path is handed to the Sidebar as an
-    // address under this session's scope, not to a desktop opener.
-    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    // address under this session's scope, not to a desktop opener. The address
+    // carries the path joined to the Session's directory.
+    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
     expect(b.openWorkspacePath).not.toHaveBeenCalled()
 
-    // An absolute path inside the session's workspace is the same session-relative address.
+    // The absolute spelling of the same file is the same address, so the Sidebar reuses its tab.
     await injected.openFile('/proj/src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
 
     // A name a URL would otherwise mangle survives the round trip.
     await injected.openFile('src/a b#c.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a%20b%23c.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a%20b%23c.ts')
 
     // A line travels as the `file` type's navigation parameter, not in the address.
     await injected.openFile('src/a.ts', { line: 7 })
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts', { params: { line: 7 } })
     await b.runtime.dispose()
   })
 
@@ -322,8 +341,9 @@ describe('Chat inject API', () => {
     const { injected } = b.chatViewApi(b.rootReference)
     vi.spyOn(b.runtime.ctx.contextMenus, 'open')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/proj/.agents/worktrees/w')
+    // The address carries the path joined to the directory the Session works in at the click.
     await injected.openFile('src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
     expect(injected.resolveFilePath('src/a.ts')).toBe('/proj/.agents/worktrees/w/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', null)
     expect(injected.resolveFilePath('file.ts')).toBe('/proj/file.ts')
@@ -331,12 +351,15 @@ describe('Chat inject API', () => {
 
     // A leading `./` names the same file, so the Sidebar reuses its tab.
     await injected.openFile('./src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
-    await injected.openFile('/proj/src/a.ts')
-    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
 
-    // Outside the workspace, the address carries the absolute path after the Session id.
+    // An absolute path keeps naming its file, inside the Session's directory or outside it.
+    await injected.openFile('/proj/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/src/a.ts')
     await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/elsewhere')
+    await injected.openFile('/proj/.agents/worktrees/w/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//proj/.agents/worktrees/w/src/a.ts')
+    // A relative path follows the directory the Session works in at the click.
     await injected.openFile('src/a.ts')
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//elsewhere/src/a.ts')
     await b.runtime.dispose()
@@ -443,6 +466,67 @@ describe('Chat inject API', () => {
     } finally {
       await b.runtime.dispose()
     }
+  })
+
+  it('opens recorded summaries by Session and stops pending reads when the viewer unloads', async () => {
+    const b = await bench()
+    try {
+      const row = b.compactionRow('manual-compaction')
+      const signal = new AbortController().signal
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(b.events).not.toHaveBeenCalled()
+      const viewer = await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'session', sessionId: ROOT }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent).toHaveBeenCalledWith('compaction-summary',
+        { summaryMarkdown: '# Summary' }, { key: JSON.stringify([ROOT, 42]) })
+      const child = { parentSessionId: 'parent/1' as SessionId, childSessionId: ROOT, mode: 'continuable' as const }
+      vi.spyOn(b.runtime.ctx.sessions, 'subagentAddress').mockReturnValue(child)
+      await row.openCompaction(42, signal)
+      expect(b.events).toHaveBeenLastCalledWith({ address: { kind: 'subagent', ...child }, throughSeq: 42, maxMessages: 1 }, expect.any(AbortSignal))
+      expect(b.sidebarRight.openContent.mock.calls[0]![2]?.key).not.toBe(b.sidebarRight.openContent.mock.calls[1]![2]?.key)
+      b.events.mockImplementationOnce(async (_query, active) => {
+        await viewer.dispose()
+        expect(active?.aborted).toBe(true)
+        throw new Error('cancelled')
+      })
+      expect(await row.openCompaction(42, signal)).toBeNull()
+      expect(row.hooks.compactionPreview.getSnapshot()).toBe(false)
+      expect(b.sidebarRight.openContent).toHaveBeenCalledTimes(2)
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('reports unreadable summaries and keeps cancelled reads out of the sidebar', async () => {
+    const b = await bench()
+    try {
+      const row = b.compactionRow('compaction')
+      const signal = new AbortController().signal
+      await b.runtime.mount({ apply(ctx) { ctx.provide('documentPreviews', {} as never) } })
+      await vi.waitFor(() => { expect(row.hooks.compactionPreview.getSnapshot()).toBe(true) })
+      const event = { seq: 42, time: 0, type: 'compaction/summary', data: { summary: [{ type: 'text', text: 'summary' }] } }
+      const records: SessionWireEvent[] = [{ ...event, seq: 41 }, { ...event, type: 'other' },
+        ...[null, {}, { summary: [null] }, { summary: [{}] }, { summary: [{ type: 'text', text: 5 }] },
+          { summary: [{ type: 'image' }, { type: 'text', text: ' ' }] }].map(data => ({ ...event, data }))]
+      for (const invalid of records) {
+        b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event: invalid }] } })
+        expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      }
+      b.events.mockRejectedValueOnce(new Error('offline'))
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) })
+      expect(await row.openCompaction(42, signal)).toBe('无法读取摘要')
+      b.events.mockResolvedValueOnce({ ok: true, value: { cursor: 42, hasMore: false, records: [] } })
+      expect(await row.openCompaction(42, signal)).toContain('摘要不可用')
+      expect(await row.openCompaction(42, AbortSignal.abort())).toBeNull()
+      const pending = new AbortController()
+      b.events.mockImplementationOnce(async () => {
+        pending.abort()
+        return { ok: true, value: { cursor: 42, hasMore: false, records: [{ type: 'event', event }] } }
+      })
+      expect(await row.openCompaction(42, pending.signal)).toBeNull()
+      expect(b.sidebarRight.openContent).not.toHaveBeenCalled()
+    } finally { await b.runtime.dispose() }
   })
 
   it('keeps local link choices usable when settings cannot persist', async () => {

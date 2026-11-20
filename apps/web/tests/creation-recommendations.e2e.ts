@@ -1,4 +1,4 @@
-/** The completed answer offers creation through a propose_action card; choosing a location does not start it. */
+/** The completed answer offers creation through an action-card block shown as a card; choosing a location does not start it. */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,32 +20,39 @@ describe('creation recommendation after an explicit wish', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true,
-      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/personalized-recommendations', import.meta.url)), enabled: true }] },
+      actionCards: true,
     })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
   })
   afterAll(async () => { await browser?.close(); await scaffold?.close() })
 
-  it('shows one card below the answer, lets the user change location, and restores a dismissal', async () => {
+  it('keeps the creation controls after a documentation example and restores only the chosen dismissal', async () => {
     const tripwire = watchConsole(page)
     await page.setViewportSize({ width: 620, height: 900 })
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     const input = page.locator('[data-composer-input]').first()
-    const settled = scaffold.whenTurnSettled()
-    await input.fill(fixtureUserPrompts(await readFile(fixture, 'utf8'))[0]!)
-    await input.press('Enter')
-    await settled
-    const card = page.locator('[data-action-card]')
+    const prompts = fixtureUserPrompts(await readFile(fixture, 'utf8'))
+    async function sendTurn(prompt: string) {
+      const settled = scaffold.whenTurnSettled()
+      await input.fill(prompt)
+      await input.press('Enter')
+      await settled
+    }
+    await sendTurn(prompts[0]!)
+    const creationSelector = '[data-action="create_personalized_page"]'
+    const card = page.locator(creationSelector)
     await card.waitFor({ state: 'visible' })
-    expect(await card.count()).toBe(1)
     expect(await page.locator('[data-turn-tail] [data-action-card]').count()).toBe(1)
     const answer = page.getByText('I can create a persistent counter with increment and reset controls. Choose its location below.', { exact: true })
     const answerBox = await answer.boundingBox()
     const cardBox = await card.boundingBox()
     expect(answerBox).not.toBeNull()
     expect(cardBox!.y).toBeGreaterThanOrEqual(answerBox!.y + answerBox!.height)
+    // The answer's action-card block stays hidden; only the card below shows its proposal.
+    expect(await page.getByText('create_personalized_page').count()).toBe(0)
+    expect(await page.locator('.md-code-block').count()).toBe(0)
     expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
     await compareOrRefreshGolden(join(directory, 'offered.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
     const info = card.getByRole('button', { name: 'How creation works and token usage', exact: true })
@@ -104,6 +111,11 @@ describe('creation recommendation after an explicit wish', () => {
     expect(await custom.count()).toBe(0)
     await compareOrRefreshGolden(join(directory, 'options.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    await sendTurn(prompts[1]!)
+    const dismissExample = page.locator('[data-action="my_example"]').getByRole('button', { name: 'Not now', exact: true })
+    await dismissExample.waitFor()
+    expect(await page.locator('[data-action-card]').count()).toBe(2)
+    expect(await card.getByRole('button', { name: 'Create', exact: true }).isEnabled()).toBe(true)
     await card.getByRole('button', { name: 'Not now', exact: true }).click()
     await card.getByRole('status').getByText('Dismissed', { exact: true }).waitFor()
     const warnings = tripwire.warnings.length
@@ -113,14 +125,11 @@ describe('creation recommendation after an explicit wish', () => {
     expect(await card.getByRole('button', { name: 'Create', exact: true }).count()).toBe(0)
     expect(await card.getByRole('button', { name: 'Show more', exact: true }).isVisible()).toBe(true)
     expect((await scaffold.ctx.pluginManager.listBundles()).some(bundle => bundle.name.startsWith('@dsh-local/view-'))).toBe(false)
-    await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, '[data-action-card]', scaffold.workspaceCwd), scaffold.mode)
-    const statusSettled = scaffold.whenTurnSettled()
-    await input.fill(fixtureUserPrompts(await readFile(fixture, 'utf8'))[1]!)
-    await input.press('Enter')
-    await statusSettled
+    await compareOrRefreshGolden(join(directory, 'dismissed.expected.md'), await captureStableAria(page, creationSelector, scaffold.workspaceCwd), scaffold.mode)
+    await sendTurn(prompts[2]!)
     await page.getByText('The counter proposal was dismissed. Creation never started.', { exact: true }).waitFor()
-    expect(await card.count()).toBe(1)
     expect(await card.getByRole('button', { name: 'Create', exact: true }).count()).toBe(0)
+    expect(await dismissExample.isEnabled()).toBe(true)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     if (scaffold.mode === 'replay') await assertFixtureInventory(directory, [

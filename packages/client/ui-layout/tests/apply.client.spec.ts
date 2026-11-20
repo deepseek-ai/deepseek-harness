@@ -3,7 +3,7 @@
 import ShortcutsService from '../../shortcuts/src/client/index.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { stubConfigForm, syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { HostObservable, SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
@@ -58,7 +58,7 @@ async function bench() {
   if (ctx === undefined) throw new Error('the fixture owner did not activate')
   const slotsFiber = ctx.plugin(SlotRegistry)
   ctx.provide('locale', new LocaleRuntime(ctx))
-  await ctx.plugin(ShortcutsService).await()
+  await ctx.plugin(ShortcutsService, syncedConfig({})).await()
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)

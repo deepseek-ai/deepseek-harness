@@ -8,7 +8,14 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { AnonymousEntries, NamedEntries, ScopedLayers, scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey, ScopeLayer, Scoped } from '@deepseek-ai/dsh-scope'
-import type { ContextSnapshotSection, ToolSchema } from '@deepseek-ai/dsh-llm'
+import { createMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextSnapshotSection, SystemMessage, ToolSchema } from '@deepseek-ai/dsh-llm'
+import type { Session, SurfaceIntent } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { assembleSystemAdmission, assertDistinctSections } from './admission.ts'
+import { sectionAdmissionsDefinition } from './projection.ts'
+import type { RenderedSection } from './admission.ts'
+import type { SectionAdmissions } from './projection.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -19,7 +26,10 @@ declare module '@deepseek-ai/cordis' {
     /**
      * Presentation waterfall over assembled sections, contexts, and variables.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners
-     * receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned.
+     * receive only that scope's assemblies. Returned section text determines updates;
+     * omitting a previously admitted section leaves its instructions unchanged.
+     * Empty text withdraws its instructions; registration disposal retires it.
+     * Tool declarations remain provider-owned.
      * A supplied signal controls only this explicit assembly request and must not
      * be retained to control later turns. A registered complete section is
      * restored after this waterfall, so listeners cannot add to or replace
@@ -40,6 +50,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Merge-extensible context for one prompt assembly. */
 export interface AssembleContext {
+  /** Session receiving system updates; omission produces a registry-only presentation. */
+  session?: Session
   /**
    * Scope whose providers and waterfall listeners participate. When absent,
    * only global providers and subject-less listeners participate.
@@ -51,7 +63,7 @@ export interface AssembleContext {
 
 /** One contributed section of the system prompt (registry input). */
 export interface PromptSection {
-  /** Unique name — a duplicate registration throws (see {@link SystemPrompt.section}). */
+  /** Logical source name; the nearest scope and latest registration in that scope win. */
   readonly name: string
   /**
    * Sections are concatenated in ascending order. Equal orders use code-unit
@@ -59,9 +71,10 @@ export interface PromptSection {
    */
   readonly order: number
   /**
-   * Static text or a provider evaluated at each assembly with that assembly's
-   * {@link AssembleContext}. The text may reference `{{variable}}`s — they are
-   * interpolated later, by {@link renderPrompt}, unless `interpolate` is false.
+   * Static text or a provider evaluated with that assembly's {@link AssembleContext}
+   * only while this registration is effective. The text may reference `{{variable}}`s — they are
+   * interpolated later unless `interpolate` is false, then trimmed before rendering
+   * and admission. Interior whitespace is preserved.
    */
   readonly text: string | ((context: AssembleContext) => string)
   /** Whether to interpolate prompt variables. Defaults to true; false preserves literal text. */
@@ -70,9 +83,30 @@ export interface PromptSection {
    * Treat this contribution as the complete system prompt. Assembly still
    * runs the cooperative waterfall so tools, contexts, and variables can be
    * resolved, then restores this exact section as the sole prompt section.
+   * Admission appends prospective supersession notices on entry, changes,
+   * and exit; earlier messages retain their positions until compaction.
    * More than one effective complete section makes assembly fail.
    */
   readonly complete?: boolean
+  /** Optional trimmed notice before changed text; blank text suppresses this notice. */
+  readonly replacement?: string
+  /**
+   * Literal notice, nonempty after trimming, sent when no visible registration remains
+   * to Sessions that previously admitted this name. The last disposed definition captured
+   * by the Session supplies the notice; omission uses a notice naming the section.
+   * A remaining or newly registered definition is compared as ordinary source text.
+   */
+  readonly retirement?: string
+}
+
+/**
+ * Live Cordis registration shared with the Sessions that captured its definition.
+ * Disposal order selects the final retirement notice when all captured owners leave.
+ */
+interface SectionRegistration {
+  readonly definition: PromptSection
+  /** Undefined while live; otherwise the service-local disposal order. */
+  disposedAt?: number
 }
 
 /** Dynamic model context materialized as a durable user-role snapshot. */
@@ -91,6 +125,14 @@ export interface PromptContext {
 
 /** One section of an assembly: {@link PromptSection} with its text resolved. */
 export interface AssembledSection {
+  /** This contribution exclusively supersedes earlier system-prompt sections from admission onward. */
+  complete?: boolean
+  /** Notice preceding an ordinary update to this section. */
+  replacement?: string
+  /** This literal text retires a disposed registration. */
+  retire?: boolean
+  /** Placement retained for canonical history reconstruction. */
+  order: number
   /** The contributing section's unique name. */
   name: string
   /** The resolved (but not yet interpolated) section text. */
@@ -128,8 +170,21 @@ export interface PromptPresentation {
   variables: Record<string, string | undefined>
 }
 
+/** One `system/message` write that admits captured sections into a Session. */
+export interface SystemUpdate {
+  readonly message: SystemMessage
+  readonly intent: SurfaceIntent<'system/message'>
+}
+
 /** Completed model inputs: the presentation plus tool declarations in canonical order. */
 export interface PromptAssembly extends PromptPresentation {
+  /**
+   * Compare the captured sections with the Session's committed state at the time of the call.
+   * Append the returned writes in order, without yielding, before each model attempt.
+   * A retry returns only the rebuild that compaction requires; an assembly without a Session returns none.
+   * @param retry - whether an earlier attempt of the step already committed this assembly.
+   */
+  systemUpdates: (retry: boolean) => readonly SystemUpdate[]
   tools: ToolSchema[]
 }
 
@@ -183,20 +238,16 @@ const CONTEXT_ORDERS = {
   // Process-specific paths and endpoints stay out of the cached system prompt.
   HARNESS_SOURCE: 200,
   WEB_SURFACE: 210,
+  PLUGIN_CLIS: 220,
 } as const
 
 /** Name of a centrally allocated runtime-context position. */
 export type PromptContextOrderName = keyof typeof CONTEXT_ORDERS
 
-/**
- * The deployment persona prefix's section name. Exported because a
- * composition can replace this slot — an agent preset shadows the
- * deployment's persona with its own — and both sides naming the same section
- * is what makes the replacement work rather than duplicate.
- */
+/** Persona prefix name for deployment defaults and ordinary scoped section overrides. */
 export const PERSONA_PREFIX_SECTION = 'deployment:persona-prefix'
 
-/** Deployment persona suffix section name shared by global and scoped contributions. */
+/** Persona suffix name for deployment defaults and independent scoped section overrides. */
 export const PERSONA_SUFFIX_SECTION = 'deployment:persona-suffix'
 
 /** Valid variable names: how they are written between the braces. */
@@ -268,13 +319,13 @@ export interface Config {
   /** Include optional runtime-context snapshots in model history (default true); required context remains. */
   includeRuntimeContext?: boolean
   /**
-   * Deployment-wide persona prefix template before first-party guidance. A scoped section named
-   * `deployment:persona-prefix` shadows it; `{{variable}}` references are strict.
+   * Deployment-wide persona prefix template before first-party guidance. A section
+   * named {@link PERSONA_PREFIX_SECTION} can override it; `{{variable}}` references are strict.
    */
   personaPrefix?: string
   /**
-   * Persona suffix template after first-party guidance. A scoped `deployment:persona-suffix`
-   * section shadows it; `{{variable}}` references are strict. Defaults to empty.
+   * Persona suffix template after first-party guidance. A section named
+   * {@link PERSONA_SUFFIX_SECTION} can override it; `{{variable}}` references are strict. Defaults to empty.
    */
   personaSuffix?: string
   /**
@@ -286,17 +337,18 @@ export interface Config {
 }
 
 /**
- * Interpolate strict `{{variable}}` references, drop empty sections, and join
- * the rest with blank lines. Sections with `interpolate: false` retain literal
- * text. Malformed, unknown, or undefined references in other sections throw;
- * a lone `{{` without any later `}}` is literal prose, and substituted values
- * are not scanned again.
+ * Interpolate strict `{{variable}}` references, trim each section, drop empty
+ * text, and join the rest with blank lines. Sections with `interpolate: false` retain literal
+ * text except for surrounding whitespace. Malformed, unknown, or undefined
+ * references in other sections throw; a lone `{{` without any later `}}` is
+ * literal prose, and substituted values are not scanned again.
  * @param assembly - the assembly whose sections and variables to render.
  * @returns the rendered prompt, or `''` when all sections are empty.
  */
 export function renderPrompt(assembly: PromptAssembly): string {
-  return assembly.sections
+  return assembly.sections.filter(section => !section.retire)
     .map(section => section.interpolate === false ? section.text : interpolate(section, assembly.variables, 'section'))
+    .map(text => text.trim())
     .filter(text => text.length > 0)
     .join('\n\n')
 }
@@ -400,7 +452,8 @@ type VariableProvider = (context: AssembleContext) => string | undefined
 
 /** All prompt registrations owned by one global or scoped layer. */
 class PromptLayer implements ScopeLayer {
-  readonly sections: NamedEntries<PromptSection>
+  /** Same-name registrations in insertion order; disposal removes the exact entry. */
+  readonly sections = new Map<string, SectionRegistration[]>()
   readonly contexts: NamedEntries<PromptContext>
   readonly runtimeContextSuppressors = new AnonymousEntries<true>()
   readonly toolProviders = new AnonymousEntries<ToolProvider>()
@@ -411,9 +464,6 @@ class PromptLayer implements ScopeLayer {
    * @param scope - the scoped owner, or `undefined` for global registrations.
    */
   constructor(scope: ScopeKey | undefined) {
-    this.sections = new NamedEntries(name => new Error(scope === undefined
-      ? `prompt section "${name}" is already registered (for a per-agent override, register through that agent's \`agent.ctx\` instead)`
-      : `prompt section "${name}" is already registered in this scope`))
     this.contexts = new NamedEntries(name => new Error(scope === undefined
       ? `prompt context "${name}" is already registered (for a per-agent override, register through that agent's \`agent.ctx\` instead)`
       : `prompt context "${name}" is already registered in this scope`))
@@ -424,7 +474,7 @@ class PromptLayer implements ScopeLayer {
 
   /** @returns whether this layer owns no prompt registrations. */
   isEmpty(): boolean {
-    return this.sections.isEmpty()
+    return this.sections.size === 0
       && this.contexts.isEmpty()
       && this.runtimeContextSuppressors.isEmpty()
       && this.toolProviders.isEmpty()
@@ -434,6 +484,7 @@ class PromptLayer implements ScopeLayer {
 
 /** Registry service for the prompt inputs assembled before each model step. */
 export class SystemPrompt extends Service {
+  static inject = ['sessionProjections']
   static Config: z<Config> = z.object({
     includeHarnessIdentity: z.boolean().default(true),
     includeRuntimeContext: z.boolean().default(true),
@@ -448,6 +499,12 @@ export class SystemPrompt extends Service {
     () => { this.ctx.emit('system-prompt/change') },
   )
   private readonly toolOrder: string[] | undefined
+  /** Orders disposals without retaining dead registrations in the shared registry. */
+  private readonly retirementOrder = { next: 0 }
+  /** Visible owners captured per Session, including disposed definitions awaiting admission. */
+  private readonly sessionSources = new WeakMap<Session, Map<string, SectionRegistration[]>>()
+  /** Initialized before dependent plugins activate. */
+  private admission!: ProjectionHandle<SectionAdmissions>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'systemPrompt')
@@ -474,23 +531,36 @@ export class SystemPrompt extends Service {
     if (!(config.includeRuntimeContext ?? true)) this.suppressRuntimeContext()
   }
 
+  protected async [Service.init](): Promise<void> {
+    this.admission = await this.ctx.sessionProjections.register(sectionAdmissionsDefinition)
+  }
+
   /**
-   * Register an ordered prompt section in the calling context's scope. A scoped
-   * section shadows a global section with the same name; duplicates within one
-   * layer and non-finite orders throw. Registration and disposal emit
-   * `system-prompt/change`.
-   * @param section - the section to register.
-   * @returns the exact Cordis effect disposer.
+   * Register a section; the nearest scope wins, then the latest registration
+   * within that scope. Disposal reveals the next live definition. Retirement
+   * is admitted only after no registration remains in the visible scope chain.
+   * @param section - definition, canonical order and optional transition notices.
+   * @returns the exact Cordis disposer; retirement is observed at later assembly.
    */
   section(section: PromptSection): () => void {
     if (!Number.isFinite(section.order)) {
       throw new TypeError(`prompt section "${section.name}" order must be a finite number`)
     }
-    return this.layers.effect(
-      this.ctx,
-      layer => layer.sections.insert(section.name, section),
-      { label: 'systemPrompt.section()' },
-    )
+    if (section.retirement?.trim().length === 0) {
+      throw new TypeError(`retirement for prompt section "${section.name}" requires nonempty literal text`)
+    }
+    const registration: SectionRegistration = { definition: section }
+    const retirementOrder = this.retirementOrder
+    return this.layers.effect(this.ctx, (layer) => {
+      const registrations = layer.sections.get(section.name) ?? []
+      layer.sections.set(section.name, registrations)
+      registrations.push(registration)
+      return () => {
+        registration.disposedAt = retirementOrder.next++
+        registrations.splice(registrations.indexOf(registration), 1)
+        if (registrations.length === 0) layer.sections.delete(section.name)
+      }
+    }, { label: 'systemPrompt.section()' })
   }
 
   /**
@@ -610,38 +680,82 @@ export class SystemPrompt extends Service {
 
   /**
    * Assemble global and scoped providers, detach tool parameters, apply
-   * canonical ordering, then run the presentation waterfall. Scoped sections
-   * and variables shadow globals. The waterfall's text is authoritative except
+   * canonical ordering, then run the presentation waterfall. Scoped variables
+   * shadow globals; section IDs have one effective owner. The waterfall's text is authoritative except
    * that an effective complete section is restored afterwards as the sole
-   * prompt section; tool declarations stay provider-owned.
+   * prompt section; tool declarations stay provider-owned. Section text and
+   * lifecycle are fixed here; `systemUpdates()` compares them with committed state later.
    * @param context - the optional scope, step tool set, and plugin-defined assembly fields.
-   * @returns the post-waterfall assembly with ordered tool declarations and any complete prompt enforced.
+   * @returns the post-waterfall presentation and the system updates for the supplied Session.
    */
-  // Keep configuration failures on the declared asynchronous error path.
   async assemble(context: AssembleContext = {}): Promise<PromptAssembly> {
     const scope = context.scope
+
+    // Committed names and provider values are captured before the waterfall can yield.
+    const session = context.session
+    const committed = session === undefined ? undefined : this.admission.stateOf(session)
+    const retained = context.session === undefined
+      ? new Map<string, SectionRegistration[]>()
+      : this.sessionSources.get(context.session) ?? new Map<string, SectionRegistration[]>()
+    if (context.session !== undefined) this.sessionSources.set(context.session, retained)
+
+    // Outer scopes are visited first; later registrations replace the effective definition.
     const scopeLayers = this.layers.chainLayers(scope)
-    const runtimeContextSuppressed = !this.layers.global.runtimeContextSuppressors.isEmpty()
-      || scopeLayers.some(layer => !layer.runtimeContextSuppressors.isEmpty())
-    // Scoped variables shadow globals.
-    const variables: Record<string, string | undefined> = {}
-    for (const [name, provider] of this.layers.global.variables.entries()) {
-      variables[name] = provider(context)
+    const visibleLayers = [this.layers.global, ...scopeLayers]
+    const sectionByName = new Map<string, PromptSection & { retire?: true }>()
+    const visibleRegistrations = new Map<string, SectionRegistration[]>()
+    for (const layer of visibleLayers) {
+      for (const [name, registrations] of layer.sections) {
+        const inherited = visibleRegistrations.get(name) ?? []
+        visibleRegistrations.set(name, inherited.concat(registrations))
+        for (const registration of registrations) sectionByName.set(name, registration.definition)
+      }
     }
-    // Scope-chain variables, farthest first, so the nearest scope wins a name.
-    for (const layer of scopeLayers) {
+    for (const [name, registrations] of visibleRegistrations) {
+      retained.set(name, registrations)
+    }
+
+    const admittedNames = new Set(committed?.sections.map(section => section.name))
+    for (const [name, registrations] of retained) {
+      let retiredDefinition: PromptSection | undefined
+      let lastDisposal = -1
+      for (const registration of registrations) {
+        const disposedAt = registration.disposedAt
+        if (disposedAt === undefined) {
+          // Any live owner keeps the logical source active, regardless of other disposals.
+          retiredDefinition = undefined
+          break
+        }
+        if (disposedAt > lastDisposal) {
+          retiredDefinition = registration.definition
+          lastDisposal = disposedAt
+        }
+      }
+      if (retiredDefinition === undefined) continue
+      if (!admittedNames.has(name)) {
+        retained.delete(name)
+        continue
+      }
+      sectionByName.set(name, {
+        name,
+        order: retiredDefinition.order,
+        text: retiredDefinition.retirement ?? `The earlier instructions from ${name} no longer apply.`,
+        interpolate: false,
+        retire: true,
+      })
+    }
+
+    const runtimeContextSuppressed = visibleLayers.some(layer => !layer.runtimeContextSuppressors.isEmpty())
+    const variables: Record<string, string | undefined> = {}
+    for (const layer of visibleLayers) {
       for (const [name, provider] of layer.variables.entries()) {
         variables[name] = provider(context)
       }
     }
-    // Scoped sections shadow globals before the deterministic order sort.
-    const sectionByName = this.layers.merge(scope, layer => layer.sections)
     const contextByName = this.layers.merge(scope, layer => layer.contexts)
-    // Validate order against pre-restriction names while collecting visible schemas.
-    const providers = [
-      ...this.layers.global.toolProviders.values(),
-      ...scopeLayers.flatMap(layer => [...layer.toolProviders.values()]),
-    ]
+
+    // Keep all declared names for order validation, including tools restricted from this step.
+    const providers = visibleLayers.flatMap(layer => [...layer.toolProviders.values()])
     const collected: ToolSchema[] = []
     const knownNames = new Set<string>()
     for (const provider of providers) {
@@ -652,48 +766,99 @@ export class SystemPrompt extends Service {
         parameters: structuredClone(parameters),
         ...deferLoading === true ? { deferLoading } : {},
       }))
-      const acceptedKnownNames = result.knownNames ?? schemas.map(tool => tool.name)
       collected.push(...schemas)
+      const acceptedKnownNames = result.knownNames ?? schemas.map(tool => tool.name)
       for (const name of acceptedKnownNames) knownNames.add(name)
     }
+
     const sectionDefinitions = [...sectionByName.values()].sort(comparePromptSections)
     const completeSections = sectionDefinitions.filter(section => section.complete === true)
     if (completeSections.length > 1) {
       throw new Error(`multiple complete prompt sections are active: ${completeSections.map(section => JSON.stringify(section.name)).join(', ')}`)
     }
+    const sections: AssembledSection[] = []
     let completeSection: AssembledSection | undefined
-    const sections = sectionDefinitions
-      .map((section) => {
-        const assembled = {
-          name: section.name,
-          text: typeof section.text === 'function' ? section.text(context) : section.text,
-          ...section.interpolate !== undefined ? { interpolate: section.interpolate } : {},
-        }
-        if (section.complete === true) completeSection = { ...assembled }
-        return assembled
-      })
-    const tools = orderTools(collected, this.toolOrder, knownNames)
-    const assembly: PromptPresentation = {
-      sections,
-      contexts: [...contextByName.values()]
-        .filter(entry => !runtimeContextSuppressed || entry.required === true)
-        .sort((a, b) => a.order - b.order)
-        .map(entry => resolveContext(entry, context)),
-      variables,
+    for (const section of sectionDefinitions) {
+      const text = typeof section.text === 'function' ? section.text(context) : section.text
+      const assembled: AssembledSection = { name: section.name, order: section.order, text }
+      if (section.interpolate !== undefined) assembled.interpolate = section.interpolate
+      if (section.replacement !== undefined) assembled.replacement = section.replacement
+      if (section.retire !== undefined) assembled.retire = section.retire
+      if (section.complete !== undefined) assembled.complete = section.complete
+      if (section.complete === true) completeSection = { ...assembled }
+      sections.push(assembled)
     }
+    const tools = orderTools(collected, this.toolOrder, knownNames)
+    const contexts = [...contextByName.values()]
+      .filter(entry => !runtimeContextSuppressed || entry.required === true)
+      .sort((a, b) => a.order - b.order)
+      .map(entry => resolveContext(entry, context))
+    const assembly: PromptPresentation = { sections, contexts, variables }
     const transformed = await this.ctx.waterfall(
       scopeTarget(this, scope), 'system-prompt/assemble', assembly, context,
       () => Promise.resolve(assembly),
     )
-    if (completeSection === undefined && !runtimeContextSuppressed) return { ...transformed, tools }
-    const requiredContexts = new Set([...contextByName.values()].filter(entry => entry.required === true).map(entry => entry.name))
-    return {
+
+    const presentation: PromptPresentation = {
       ...transformed,
-      tools,
-      sections: completeSection === undefined ? transformed.sections : [completeSection],
-      contexts: runtimeContextSuppressed ? transformed.contexts.filter(entry => requiredContexts.has(entry.name)) : transformed.contexts,
+      sections: [...transformed.sections].sort(comparePromptSections),
     }
+    if (completeSection !== undefined) {
+      // A registered complete prompt cannot be altered or supplemented by middleware.
+      presentation.sections = [completeSection]
+    }
+    if (runtimeContextSuppressed) {
+      const requiredNames = new Set([...contextByName.values()].filter(entry => entry.required === true).map(entry => entry.name))
+      presentation.contexts = transformed.contexts.filter(entry => requiredNames.has(entry.name))
+    }
+
+    if (session === undefined) {
+      return { ...presentation, tools, systemUpdates: () => [] }
+    }
+    const renderedSections = presentation.sections.map((section): RenderedSection => {
+      const text = section.interpolate === false ? section.text : interpolate(section, presentation.variables, 'section')
+      if (section.retire) {
+        return { kind: 'retired', name: section.name, order: section.order, notice: text.trim(), complete: section.complete === true }
+      }
+      return {
+        kind: 'active', name: section.name, order: section.order, text: text.trim(),
+        replacement: section.replacement?.trim(), complete: section.complete === true,
+      }
+    })
+    assertDistinctSections(renderedSections)
+    return { ...presentation, tools, systemUpdates: retry => this.systemUpdates(session, renderedSections, retry) }
   }
+
+  /** Writes that bring a Session's committed sections to one assembly's captured sections. */
+  private systemUpdates(session: Session, sections: readonly RenderedSection[], retry: boolean): SystemUpdate[] {
+    const state = this.admission.stateOf(session)
+    // System changes that another writer logs between attempts wait for the next assembly.
+    if (retry && !state.needsRebuild) return []
+    const admission = assembleSystemAdmission(state, sections)
+    if (admission.kind === 'append') {
+      // The first commitment reserves a system head even without instructions.
+      const messages = admission.messages.length === 0 && session.surface.nodes.length === 0
+        ? [createMessage({ role: 'system', content: [], source: { kind: 'system-prompt', sections: [] } })]
+        : admission.messages
+      return messages.map(message => ({ message, intent: { surfaceOp: 'append' } }))
+    }
+
+    const [head, ...additions] = session.surface.systemNodes
+    const updates: SystemUpdate[] = []
+    for (const { seq, isEmpty } of additions) {
+      if (isEmpty) continue
+      const message = createMessage({
+        role: 'system', content: [], source: { kind: 'system-prompt', sections: [] },
+      })
+      updates.push({ message, intent: { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] } })
+    }
+    // A head reset completes recovery; write it last so interrupted cleanup stays pending.
+    updates.push({ message: admission.message, intent: head === undefined
+      ? { surfaceOp: 'append' }
+      : { surfaceOp: { op: 'replace', startSeq: head.seq, endSeq: head.seq }, sourceEventSeqs: [head.seq] } })
+    return updates
+  }
+
 }
 
 export default SystemPrompt

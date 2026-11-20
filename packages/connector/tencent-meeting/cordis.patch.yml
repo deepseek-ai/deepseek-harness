@@ -1,0 +1,3 @@
+- insert:
+    - id: tencent-meeting
+      name: '@deepseek-ai/dsh-tencent-meeting'

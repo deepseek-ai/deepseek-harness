@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.4/forge-rate-limited-failure/guide.md
+/:
+  en: a269b2e48637b03f
+  zh: c9448349795ddcba
+/forgefailure-code-gains-rate-limited:
+  en: 4f089ad68e437051
+  zh: d410b8ae2e2ade27
+/forgefailure-code-gains-rate-limited/change:
+  en: 97194ff490de2bbe
+  zh: 49f6c69fd0dff633
+/forgefailure-code-gains-rate-limited/migration:
+  en: b7d9cfab3582d1ca
+  zh: dbf6458a78bf8931

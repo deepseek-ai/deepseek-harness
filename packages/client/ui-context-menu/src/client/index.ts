@@ -4,7 +4,8 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import z from '@deepseek-ai/schemastery'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { ContextMenuConfig } from '../types.ts'
 import { MENU_TRANSITION_MS } from '@deepseek-ai/dsh-client-ui-primitives'
 import { menuTargetKey } from './target-key.ts'
 import { MenuRegistry } from './registry.ts'
@@ -44,15 +45,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { /** Menu operation feedback. */ contextMenu: 'failed' | 'back' }
 }
 
-/** Maximum time to prepare each contribution before omitting its pending actions. */
-export interface Config { resolutionTimeoutMs?: number }
-/** Validated Client menu preparation budget. */
-export const Config: z<Config> = z.object({ resolutionTimeoutMs: z.natural().min(1).default(1000) })
+/** Preparation budget while the Host sends none; the value the Client used before the field moved to the Host. */
+const ABSENT_RESOLUTION_TIMEOUT_MS = 1000
 
 /** Required overlay and localization services. */
 export const inject = ['slots', 'locale', 'shortcuts']
-/** @param ctx - plugin-owned Client context. @param config - validated preparation budget. */
-export function apply(ctx: Context, config: Config = Config({})): void {
+/** @param ctx - plugin-owned Client context. @param config - Host-synced preparation budget, read when each menu prepares. */
+export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): void {
   ctx.effect(() => ctx.locale.register('contextMenu', dictionaries), 'context menu: locale')
   const t = ctx.locale.bind('contextMenu')
   const handle = createMenuStore()
@@ -81,7 +80,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       },
     } } })
   }
-  const registry = new MenuRegistry((message) => { notify(message ?? t('failed')) }, config.resolutionTimeoutMs)
+  const registry = new MenuRegistry((message) => { notify(message ?? t('failed')) }, () => config.resolutionTimeoutMs.get() ?? ABSENT_RESOLUTION_TIMEOUT_MS)
   const cancelOpening = (): void => {
     clearTimeout(openingTimer); finishOpening?.(); finishOpening = undefined
     active?.unsubscribe(); active?.resolution.dispose(); active = undefined

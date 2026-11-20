@@ -19,7 +19,7 @@
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },
     { "path": "../../client/ui-sidebar" },
-    { "path": "../../client/ui-workspace" },
+    { "path": "../../client/ui-workspace/tsconfig.client.json" },
     { "path": "../../client/ui-slots" },
     { "path": "../../typert/protocol" }
   ]

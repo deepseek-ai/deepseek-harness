@@ -53,7 +53,10 @@ function fakeGh(check: GhOutput, ...mutations: Array<GhOutput | Thrown>): { run:
 }
 
 function provider(run: GhRunner): GitHubProvider {
-  return new GitHubProvider(run, ['github.com'], { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000 })
+  return new GitHubProvider(run, ['github.com'], {
+    maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+    maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  })
 }
 
 function payload(field: string, value: unknown = { id: 'x' }): GhOutput {

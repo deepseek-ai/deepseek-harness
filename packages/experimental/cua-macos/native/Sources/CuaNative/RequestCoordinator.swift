@@ -10,7 +10,9 @@ import Darwin
     private let worker: AXWorker
     private let capture: WindowCapture
     private let permissions: SystemPermissions
-    private let permissionOwner: UUID
+    private let connectionID: UUID
+    private let activity: RecentActivity
+    private let inputMonitor: ExternalInputMonitor
     private let clipboard = ClipboardPaste()
     private let input: JSONLInput
     private let writer: JSONLWriter
@@ -29,13 +31,17 @@ import Darwin
     private var nextCancelled = false
 
     init(configuration: HelperConfiguration, capture: WindowCapture, channel: SharedSocket,
-         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions, permissionOwner: UUID,
+         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions, connectionID: UUID,
+         activity: RecentActivity, inputMonitor: ExternalInputMonitor,
          onClose: @escaping @MainActor @Sendable () -> Void,
          onFatal: @escaping @Sendable (NativeFailure, Double) -> Void) {
         self.configuration = configuration
         self.capture = capture
         self.permissions = permissions
-        self.permissionOwner = permissionOwner
+        self.connectionID = connectionID
+        self.activity = activity
+        self.inputMonitor = inputMonitor
+        if let lookback = configuration.recentActivityWindowMs { activity.connect(connectionID, lookbackMs: lookback) }
         self.cancellation = cancellation
         self.channel = channel
         self.scheduler = scheduler
@@ -43,7 +49,7 @@ import Darwin
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
                           textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs,
-                          heldKeys: scheduler.heldKeys)
+                          heldInputs: scheduler.heldInputs, connectionID: connectionID)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation, channel: channel)
         self.writer = writer
     }
@@ -103,9 +109,27 @@ import Darwin
                 let request = try NativeRequest(data: data)
                 requestID = .string(request.id)
                 if request.method == "screenshot" { try self.capture.requireAvailable() }
-                let result = try await self.scheduler.perform(cancellation: self.cancellation) {
-                    control.startOperation()
-                    return try await self.execute(request, trace: trace)
+                let result: JSONValue
+                if request.method == "takeWindowActivity" || request.method == "clearWindowActivity" {
+                    // This query reads in-memory history and must not wait for another client's desktop operation.
+                    let params = try RequestParameters(request)
+                    if request.method == "takeWindowActivity" {
+                        guard let values = params.values["observations"]?.object else { throw RequestParameters.invalid("Missing window observations") }
+                        let observations = try values.mapValues { value in
+                            guard let time = value.string.flatMap(UInt64.init) else { throw RequestParameters.invalid("Invalid observation time") }
+                            return time
+                        }
+                        result = .array(activity.take(owner: connectionID, handle: try params.string("appHandle"), observations: observations))
+                    } else {
+                        activity.clear(connectionID)
+                        result = .null
+                    }
+                    if !activity.hasInterests { inputMonitor.stop() }
+                } else {
+                    result = try await self.scheduler.perform(cancellation: self.cancellation) {
+                        control.startOperation()
+                        return try await self.execute(request, trace: trace)
+                    }
                 }
                 if let failure = control.failure { throw failure }
                 response = .object(["id": requestID, "result": result])
@@ -165,10 +189,39 @@ import Darwin
     private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         try cancellation.check()
+        if request.method == "getHeldInputs" {
+            return try scheduler.heldInputs.held(connection: connectionID)
+        }
+        if request.method == "releaseHeldInputs" {
+            return .array(try scheduler.heldInputs.release(connection: connectionID))
+        }
         if request.method == "screenshot" { try capture.requireAvailable() }
+        // A dispatched action can invalidate the snapshot that identifies its window.
+        let target = configuration.recentActivityWindowMs != nil && params.contains("appHandle")
+            ? await worker.activityTarget(params) : nil
+        if let target, request.method == "getState" || request.method == "screenshot" {
+            inputMonitor.start()
+            defer { if !activity.hasInterests { inputMonitor.stop() } }
+            return try await activity.withObservation(target, handle: params.string("appHandle"), owner: connectionID) {
+                try await self.dispatch(request, params: params, trace: trace)
+            }
+        }
+        let result = try await dispatch(request, params: params, trace: trace)
+        if let target, result["dispatched"] == .bool(true) {
+            activity.record(target, owner: connectionID)
+            if activity.hasInterests { inputMonitor.start() }
+        }
+        return result
+    }
+    private func dispatch(_ request: NativeRequest, params: RequestParameters, trace: ScreenshotTrace?) async throws -> JSONValue {
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
+        if request.method == "toggleMouse", try params.string("direction") == "up" {
+            let dispatched = try scheduler.heldInputs.pointerUp(owner: .init(connection: connectionID,
+                app: params.string("appHandle")), window: params.windowID(), button: WindowPointerInput.button(params.string("mouseButton")))
+            return .object(["dispatched": .bool(dispatched)])
+        }
         if request.method == "permissionStatus" {
             result = permissions.status()
         } else if request.method == "applicationIcons" {
@@ -182,7 +235,7 @@ import Darwin
             let text = try PermissionGuideText(instruction: params.string("instruction"), backLabel: params.string("backLabel"),
                 finderLabel: params.string("finderLabel"), unavailableMessage: params.string("unavailableMessage"),
                 settingsMessage: params.string("settingsMessage"))
-            result = try permissions.request(params.string("permission"), owner: permissionOwner, text: text,
+            result = try permissions.request(params.string("permission"), owner: connectionID, text: text,
                 interval: Double(params.integer("pollIntervalMs", in: 100...Int(Int32.max))) / 1000)
         } else if request.method == "openPermissionSettings" {
             result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
@@ -214,8 +267,13 @@ import Darwin
             case .foreground(let plan): result = try await performForeground(plan, requestID: request.id)
             case .mouseMove(let route, let point):
                 let latch = cancellation
-                try WindowPointerInput.mouseMove(in: route, at: point, checkCancellation: { try latch.check() })
+                let owner = HeldInputs.Owner(connection: connectionID, app: try params.string("appHandle"))
+                try scheduler.systemPointer.move(owner: owner, in: route, at: point, checkCancellation: { try latch.check() })
                 result = AXWorker.mouseMoveResult(route: "system-pointer", pointerMoved: true)
+            case .systemButtonDown(let route, let button):
+                try scheduler.systemPointer.down(owner: .init(connection: connectionID, app: params.string("appHandle")), in: route, button: button,
+                                                 checkCancellation: { try cancellation.check() })
+                result = AXWorker.actionResult
             case .paste(let plan):
                 try await clipboard.perform(text: plan.text, format: plan.format, maxBytes: plan.maxBytes, readTimeout: plan.readTimeout,
                     checkCancellation: { try cancellation.check() }) { requireClipboard in
@@ -254,7 +312,7 @@ import Darwin
     private func shutdown() {
         guard !stopping else { return }
         stopping = true
-        permissions.closeGuide(owner: permissionOwner)
+        permissions.closeGuide(owner: connectionID)
         cancellation.cancel()
         deadline?.cancel()
         deadline = nil
@@ -270,6 +328,8 @@ import Darwin
             await pending?.value
             deadline?.cancel()
             deadline = nil
+            do { try scheduler.heldInputs.release(connection: connectionID) }
+            catch { fputs("Could not confirm input release on disconnect: \(error)\n", stderr) }
             await worker.shutdown()
             onClose()
         }

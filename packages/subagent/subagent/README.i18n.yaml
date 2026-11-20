@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-subagent/use-this-package:
-  en: 924b8c15f9529028
-  zh: 9fb0c399b5a79e3e
+  en: a1b7ee0ede0a92a4
+  zh: 239fea312abae13b
 /deepseek-ai-dsh-subagent/use-this-package/enabling-delegation:
   en: c0718955687ff245
   zh: eb2d3cdbe92e0fe2
@@ -24,8 +24,8 @@
   en: 86c982223fab1a3a
   zh: 3d220d8ed84eab9a
 /deepseek-ai-dsh-subagent/use-this-package/activation-capacity:
-  en: 4b40bd380bea81ce
-  zh: 896a584190981168
+  en: e71b0b167a363335
+  zh: 7589fd81779fd757
 /deepseek-ai-dsh-subagent/use-this-package/local-and-external-children:
   en: d6eef66bc1d293fe
   zh: e4754d38212c0b2e
@@ -51,8 +51,8 @@
   en: 5923a61c09d9ae04
   zh: 15202a92872a11e9
 /deepseek-ai-dsh-subagent/understand-the-implementation/provider-preparation-and-structured-output:
-  en: 61cddba23f4e7d1c
-  zh: 052c8331a747403f
+  en: 824914462110bcf1
+  zh: ae5ce35d09801728
 /deepseek-ai-dsh-subagent/understand-the-implementation/activation-settlement:
   en: ba22f6dd5f15f405
   zh: a469c6a4e49adea9
@@ -68,6 +68,18 @@
 /deepseek-ai-dsh-subagent/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-subagent/model-experience/message-authorship:
+  en: 4350a9a08e35641b
+  zh: 75cd6deac5f7430a
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/what-the-model-sees:
+  en: 572bb322919ae1cb
+  zh: 5c49bbd85cf0fd31
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/token-effect:
+  en: 8611aab0a4bcb5b4
+  zh: c2286d8a73b818ac
+/deepseek-ai-dsh-subagent/model-experience/message-authorship/kv-cache-effect:
+  en: 55d5610dcc9049e3
+  zh: 382e85de9c81cb11
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice:
   en: f7cec22ba9d3fb4f
   zh: 67b1d40f9b136f71

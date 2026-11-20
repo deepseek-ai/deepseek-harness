@@ -33,19 +33,20 @@ kind: "package-reference"
 
 ### 最小配置
 
-加载服务并让唯一挂载的后端自动选择，或用 `searchProvider`／`fetchProvider` 固定提供方 id。环境变量 `$DSH_WEB_SEARCH_PROVIDER` 与 `$DSH_WEB_FETCH_PROVIDER` 提供相同字段，不是另一条优先级链。下面两个后端都注册了抓取提供方，因此示例固定 `fetchProvider: http`。
+加载服务并让唯一挂载的后端自动选择，或用 `searchProvider`／`fetchProvider` 固定提供方 id。环境变量 `$DSH_WEB_SEARCH_PROVIDER` 与 `$DSH_WEB_FETCH_PROVIDER` 提供相同字段，不是另一条优先级链。下面两个后端都注册了抓取提供方，因此示例固定 `fetchProvider: http`。其中的 DeepSeek 后端要求挂载 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md) 以取得凭据。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
   config:
     fetchProvider: http
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-web-deepseek-api'
 - name: '@deepseek-ai/dsh-web-fetch-http'
 ```
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `searchProvider` | （未设置） | 固定的搜索提供方 id；未设置时仅在恰好一个可用时自动选择 |
+| `searchProvider` | （未设置） | 固定的搜索提供方 id；未设置时优先使用[请求的模型路由](#provider-selection)对应的可用 DeepSeek 提供方，否则仅在恰好一个可用时自动选择 |
 | `fetchProvider` | （未设置） | 固定的抓取提供方 id；未设置时仅在恰好一个可用时自动选择 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web)是每个受支持字段及其 JSDoc 的穷尽式真源。
@@ -62,8 +63,9 @@ const result = await ctx.web.search({ query: 'deepseek harness', maxResults: 8 }
 const page = await ctx.web.fetch({ url: 'https://example.com' })
 ```
 
-两个调用都接受可选的 `AbortSignal`，用于把取消转发给提供方。规范化的请求与结果形状是调用方赖以构建的约定；[web 子系统](../../../docs/subsystems/web.zh.md) 参考中的词汇章节对其有穷尽式描述。
+为模型请求发起的搜索还会在 `llmProvider` 中携带该请求的提供方路由，供[提供方选择](#provider-selection)读取。两个调用都接受可选的 `AbortSignal`，用于把取消转发给提供方。规范化的请求与结果形状是调用方赖以构建的约定；[web 子系统](../../../docs/subsystems/web.zh.md) 参考中的词汇章节对其有穷尽式描述。
 
+<a id="provider-selection"></a>
 ### 提供方选择
 
 每次调用都在执行时解析提供方，注册或加载顺序从不影响结果。已配置的提供方 id 在已注册且可用时优先；没有配置 id 时，服务运行唯一可用的提供方，或在情况不明时明确失败：
@@ -73,11 +75,12 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 | 已配置 id 已注册且可用 | 运行该提供方 |
 | 已配置 id 未注册 | `WEB_PROVIDER_CONFIGURED_MISSING` |
 | 已配置 id 已注册但不可用 | `WEB_PROVIDER_CONFIGURED_UNAVAILABLE` |
+| 无搜索 id，请求的 `llmProvider` 所优先的提供方已注册且可用 | 运行该提供方 |
 | 无 id，恰好一个已注册的可用提供方 | 运行它 |
 | 无 id，没有可用提供方 | `WEB_PROVIDER_UNAVAILABLE` |
 | 无 id，多个可用提供方 | `WEB_PROVIDER_AMBIGUOUS` |
 
-随附的 `deepseek-official` 与 `deepseek-search-api` 搜索 id 分别选择旧版 Messages 搜索与直接 Search API。
+随附的 `deepseek-official` 与 `deepseek-search-api` 搜索 id 分别选择旧版 Messages 搜索与直接 Search API。没有配置搜索提供方时，为 `deepseek-official` 或 `deepseek-account` 模型路由上的模型请求发起的搜索优先使用 `deepseek-official`，因为 DeepSeek 不对 Messages 搜索按次收费；其他路由上的请求以及不服务于任何模型请求的搜索优先使用 `deepseek-search-api`。这一优先规则固定在本包中，仅在被优先的提供方已注册且可用时生效，因此没有这些提供方的组合按上表选择。[base 组合](../../bundle/base/cordis.patch.yml)挂载这两个提供方且不配置搜索提供方。已配置的 `searchProvider` 或 `$DSH_WEB_SEARCH_PROVIDER` 对所有路由生效。
 
 提供方的可用性是一项廉价的局部检查——例如其 API 密钥是否存在——并且从不发起网络调用，因此选择保持快速且确定。
 
@@ -111,7 +114,7 @@ ctx.remote.$on('web/providers-changed', () => { /* re-read the lists */ })
 <a id="search-readiness"></a>
 ### 搜索与抓取就绪
 
-`searchReady(llmProvider?)` 与 `fetchReady(llmProvider?)` 询问 `search()` 或 `fetch()` 会选中的提供方：为该对话路由上的模型请求发起的操作是否有可发送的凭据；[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 据此决定每个模型步骤是否准入 `web_search` 与 `web_fetch`。提供方通过可选的 `ready(llmProvider)` 回答，它是只检查配置的判断，禁止发起网络调用；未实现它的提供方视为就绪。选择失败时就绪方法回答 true，因为对应操作会把该失败报告为结构化 `WebError`。就绪判断从不改变选中哪个提供方。
+`searchReady(llmProvider?)` 与 `fetchReady(llmProvider?)` 询问 `search()` 或 `fetch()` 会选中的提供方（搜索为携带该 `llmProvider` 的请求所选中的提供方）：为该对话路由上的模型请求发起的操作是否有可发送的凭据；[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 据此决定每个模型步骤是否准入 `web_search` 与 `web_fetch`。提供方通过可选的 `ready(llmProvider)` 回答，它是只检查配置的判断，禁止发起网络调用；未实现它的提供方视为就绪。选择失败时就绪方法回答 true，因为对应操作会把该失败报告为结构化 `WebError`。就绪判断从不改变选中哪个提供方。
 
 ```text
 // false only when the selected provider cannot authenticate this route's operations:
@@ -138,7 +141,7 @@ const fetchOffered = await ctx.web.fetchReady('deepseek-official')
 本包建立在一个刻意的分离之上：
 
 - **一个 seam，两个独立操作。** 搜索与抓取没有共享请求 schema 或业务逻辑，但它们共用一个服务，使提供方选择、取消、错误与产品配置只有一个归属方。并行的 `Search`／`Fetch` 方法对是有意为之。
-- **选择绝不依赖顺序。** 能力要么固定提供方 id，要么在恰好注册一个可用提供方时自动选择；`search()`／`fetch()` 在执行时解析提供方。
+- **选择绝不依赖顺序。** 能力要么固定提供方 id，要么在恰好注册一个可用提供方时自动选择，未固定的搜索优先使用请求的模型路由对应的 DeepSeek 提供方；`search()`／`fetch()` 在执行时解析提供方。
 - **服务拥有结果上限。** `maxResults` 由 seam 在提供方返回后强制执行，因此超量返回的提供方绝不可能泄漏超出调用方要求的来源。
 
 ### 源码地图
@@ -154,7 +157,7 @@ const fetchOffered = await ctx.web.fetchReady('deepseek-official')
 
 ### 选择流程
 
-执行时，服务先按配置 id、再按唯一可用提供方解析提供方，没有明确赢家时抛出对应的 `WebError`。搜索结果随后经过 `capSources`：把 `sources[]` 截断到 `maxResults` 并标记 `truncated`。`searchReady()` 与 `fetchReady()` 解析与对应操作相同的提供方，解析抛错时回答 true，否则返回该提供方 `ready()` 的回答，提供方没有 `ready()` 时回答 true。注册基于 effect：提供方随调用 fiber 注册，fiber 释放时注销；同一能力类型下重复的 id 会在注册时被拒绝。
+执行时，服务先按配置 id、搜索再按请求路由所优先的可用提供方、最后按唯一可用提供方解析提供方，没有明确赢家时抛出对应的 `WebError`。搜索结果随后经过 `capSources`：把 `sources[]` 截断到 `maxResults` 并标记 `truncated`。`searchReady()` 与 `fetchReady()` 解析与对应操作相同的提供方，解析抛错时回答 true，否则返回该提供方 `ready()` 的回答，提供方没有 `ready()` 时回答 true。注册基于 effect：提供方随调用 fiber 注册，fiber 释放时注销；同一能力类型下重复的 id 会在注册时被拒绝。
 
 </details>
 
@@ -192,8 +195,9 @@ const fetchOffered = await ctx.web.fetchReady('deepseek-official')
 这些限制说明本服务单独使用时在哪些方面不完整。它们是当前包约束。
 
 - **没有可用性观测**：`listProviders()` 与 `web/providers-changed` 只报告哪些提供方已注册，不报告它们是否可用；没有能力状态查询，`searchReady()` 与 `fetchReady()` 只报告选中提供方的凭据就绪状态，选择失败时回答 true。可用性只能通过执行搜索或抓取并按抛出的 code 路由来观测，无提供方失败是通用的 `WEB_PROVIDER_UNAVAILABLE`，不枚举逐提供方原因（见 [Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md)）。
-- **搜索请求只携带 `query` 与 `maxResults`**：提供方无关的控制项（新近程度、域名过滤条件、区域提示、搜索深度）暂缓至后端都能诚实支持时（见 [seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)）。
+- **搜索请求只携带 `query`、`maxResults` 与 `llmProvider`**：提供方无关的控制项（新近程度、域名过滤条件、区域提示、搜索深度）暂缓至后端都能诚实支持时（见 [seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)）。
 - **`WebFetchBody` 没有 `pdf` 分支**：可提取文本的 PDF 支持属于明确的延期工作；封闭联合会使新增该分支成为跨 web 包、由编译强制执行的变更。
+- **按路由的搜索优先规则是固定的**：两条 DeepSeek 模型路由与两个 DeepSeek 搜索提供方 id 是本包中的常量，因此部署只能通过配置 `searchProvider` 改变结果；提供方无关的规则延期至出现第二组路由与提供方时。
 - **提供方支持的页面提取不属于 `fetch()` 范围**：Firecrawl/Tavily 风格的 `web_extract` 能力延期，而不会扩展抓取操作。
 
 <a id="dev-note"></a>

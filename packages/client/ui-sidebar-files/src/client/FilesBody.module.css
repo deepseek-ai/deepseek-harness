@@ -74,17 +74,28 @@
   border-left: 0;
 }
 
-/* Covered content stays laid out but cannot receive keyboard focus. The rule
-   names its row through `data-files-navigator-row`: a `:has()` without a
-   subject makes the browser restyle the whole document after any DOM change. */
-[data-files-navigator-row]:has(> .navigator.fill) > :not(.navigator) {
-  visibility: hidden;
+/* Covered content stays laid out but cannot receive keyboard focus. The rules
+   name their row through `data-files-navigator-row`: a `:has()` without a
+   subject makes the browser restyle the whole document after any DOM change.
+   The `:has()` match only sets a property on the row; a `:has()` rule that
+   selects the row's children makes Chromium restyle the whole document on
+   unrelated scrolls, such as the Chat turn rail's. */
+[data-files-navigator-row] {
+  --files-navigator-covered: initial;
+}
+
+[data-files-navigator-row] > :not(.navigator) {
+  visibility: var(--files-navigator-covered, inherit);
+}
+
+[data-files-navigator-row]:has(> .navigator.fill) {
+  --files-navigator-covered: hidden;
 }
 
 /* navigator-layout `FULLSCREEN_QUERY`: every layout fills the row. */
 @media (width < 768px) {
-  [data-files-navigator-row]:has(> .navigator:not(.wholePage)) > :not(.navigator) {
-    visibility: hidden;
+  [data-files-navigator-row]:has(> .navigator:not(.wholePage)) {
+    --files-navigator-covered: hidden;
   }
 
   .navigator {
@@ -158,7 +169,8 @@
 
 /* The page's 38px row flush under the pane's strip: the root's path, then
    reload and the directory actions. With the strip's 38px above, its rule lies where the conversation header's does
-   (ui-conversation ConversationRoot `.header`, 76px with the same rule). */
+   (ui-conversation ConversationRoot `.header`, 76px with the same rule).
+   Without a handoff, the final icon shares the upper collapse control’s column. */
 .header {
   display: flex;
   flex: 0 0 auto;
@@ -168,6 +180,27 @@
   height: 38px;
   padding: 0 6px 0 16px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* A real handoff aligns its frame to the upper glyph. */
+.header:has(.externalActions > :global([data-slot]) > *) {
+  padding-right: 13.5px;
+}
+
+.externalActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+/* Only a split control needs the extra separation to align Search with Split. */
+.externalActions:has(button[aria-haspopup='menu']) {
+  margin-left: 4.5px;
+}
+
+/* The renderer retains a display:contents slot anchor when every contribution returns null. */
+.externalActions:not(:has(:global([data-slot]) > *)) {
+  display: none;
 }
 
 /* The margin plus the header's gap keeps the path 16px clear of reload. */
@@ -253,6 +286,12 @@
 .tool svg {
   width: 15px;
   height: 15px;
+}
+
+/* The landscape folder needs the full 16px slot to match the adjacent glyphs visually. */
+.tool[data-files-navigator-toggle] svg {
+  width: 16px;
+  height: 16px;
 }
 
 @media (hover: hover) {

@@ -1,0 +1,31 @@
+# Agent Note: 代码评审页
+
+Status: implemented
+
+[English](2026-11-11-forge-review-page.md) | 中文
+
+## Problem
+
+[forge 面板](2026-10-09-forge-panel.zh.md)显示一个会话创建或推送的变更请求。评审者还需要请自己评审的、自己创建的以及与自己有关的变更请求，不必先找到或创建拥有它们的会话就能阅读和评审；也需要就其中一个与 Agent 对话，而且这段对话不能混进无关的已有对话。
+
+## Decision
+
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 在左侧导航中加入“代码评审”页，列出三个登录用户列表，并完整显示一个变更请求。
+
+- **列表**——可选的 `ForgeProvider` 能力（`viewer`、`listForViewer`、`countForViewer`）返回未关闭变更请求的摘要；GitHub 每个列表用一次 GraphQL 搜索回答，因为在一个文档中放多个搜索会超时。Host 只在页面流或计数流存在时读取列表，不经过 forge 的状态轮询，因为几十个变更请求的批量快照会超过 GitHub 的查询时限；只有显示中的变更请求经 `ForgeService.watch` 轮询。
+- **按 URL 读取**——页面的 `forgePanel/review*` 方法以 URL 而不是会话指定变更请求；它们与会话绑定的方法共用实现，只有可以使用 Host 代码托管凭据的调用方能访问。
+- **描述**——`readDescription` 返回 Markdown 正文、标签以及私有附件的签名地址，页面替换这些地址后以省略 HTML 的方式渲染。
+- **变更**——页面自己绘制变更视图（从右侧栏标签中拆出），面板状态只含显示中的变更请求；插件的透镜、行注释和插槽仍只在会话标签中，因为这些扩展点以会话为对象。
+- **对话**——对话标签为 `connectWorkspace` 在与仓库同名的工作区中解析出的空白会话嵌入 `conversation.content`，从不提供已有对话。在 Hero 中选择工作区由页面自己处理，这与内容的每个属主处理各自的选择一致：页面连接该工作区的空白会话并在对话标签中显示它，而主 Conversation 会把它打开为主会话。该会话的首条消息进入收件箱时才绑定变更请求，因此从未使用的空白会话保持未绑定。
+- **主机**——页面把所有已配置的主机合并列出；在主机与账号之间选择要等到第二个能列出变更请求的提供方。
+
+## Alternatives considered
+
+- **每个变更请求用一个会话来阅读**——否决：阅读描述或 diff 会创建无人对话的会话并绑定它们。
+- **在已有对话中评审**——用户否决：对话上下文会与评审混在一起。
+- **经状态轮询列出**——否决：在评审者常见的列表规模下，批量快照查询会超时。
+- **打开对话时就绑定**——否决：空白会话与“新会话”共用，会把绑定带进无关的对话。
+
+## Consequences
+
+forge 注册表增加第五组可选能力和 `rate-limited` 失败码，记录在[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.4/forge-rate-limited-failure/guide.zh.md)中。在对话的首条消息之前重启 Host 会丢失暂存的绑定。

@@ -99,6 +99,8 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
     private let scheduler = RequestScheduler()
     private let capture = WindowCapture()
     private let permissions = SystemPermissions()
+    private let activity = RecentActivity()
+    private lazy var inputMonitor = ExternalInputMonitor(activity: activity)
     private let instanceID = UUID().uuidString
     private var connections: [UUID: RequestCoordinator] = [:]
     private var startupDeadline: NativeDeadline?
@@ -197,7 +199,7 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
         let lifetime = self.lifetime
         let onFatal: @MainActor @Sendable () -> Void = { [weak self] in self?.closeConnections() }
         let coordinator = RequestCoordinator(configuration: configuration, capture: capture, channel: channel, cancellation: cancellation,
-            scheduler: scheduler, writer: writer, permissions: permissions, permissionOwner: id, onClose: { [weak self] in
+            scheduler: scheduler, writer: writer, permissions: permissions, connectionID: id, activity: activity, inputMonitor: inputMonitor, onClose: { [weak self] in
                 channel.shutdown()
                 guard let self else { lifetime.remove(id); return }
                 self.disconnected(id)
@@ -212,6 +214,8 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
 
     private func disconnected(_ id: UUID) {
         connections.removeValue(forKey: id)
+        activity.disconnect(id)
+        if !activity.hasInterests { inputMonitor.stop() }
         lifetime.remove(id)
         exitIfEmpty()
     }

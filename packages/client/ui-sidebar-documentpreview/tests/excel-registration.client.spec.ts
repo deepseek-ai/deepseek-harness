@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { binaryDocumentPath, DocumentPreviewRegistry } from '../src/client/document/registry.ts'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { apply } from '../src/client/excel/index.ts'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/excel/locales.ts'
@@ -18,7 +18,7 @@ it('registers complete binary reads and removes the slot and locale on disposal'
   ctx.provide('documentPreviews', registry)
   ctx.provide('locale', { register: registerLocale, bind: () => makeTranslate(en) } as never)
   ctx.provide('slots', { inject: (_name: string, callback: () => () => void) => callback(), register } as never)
-  const limits = Config({}).excel
+  const limits = EXCEL_DEFAULTS
   const fiber = ctx.plugin({ apply: (scope) => { apply(scope, limits) } })
   try {
     await fiber.await()

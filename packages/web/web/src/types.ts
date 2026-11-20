@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-web/types
  */
 
-import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 
 declare module '@deepseek-ai/cordis' {
@@ -38,6 +38,12 @@ export interface WebSearchRequest {
    * bound regardless.
    */
   readonly maxResults?: number
+  /**
+   * Provider route id of the model request this search serves. While no search
+   * provider is configured, the seam selects with it, as `searchReady()` selects
+   * with its argument. Omitted = the search serves no model request.
+   */
+  readonly llmProvider?: string
 }
 
 /**

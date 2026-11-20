@@ -148,7 +148,7 @@ describe('spawn preset selection', () => {
   it('requires the preset service when selection is configured', async () => {
     const ctx = new Context()
     contexts.push(ctx)
-    await expect(tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' })).rejects.toThrow(/requires the agent-presets service/)
+    expect(() => { tool.apply(ctx, { provider: 'spawn', agentPreset: 'writer' }) }).toThrow(/requires the agent-presets service/)
   })
 
   it.each([
@@ -307,6 +307,7 @@ describe('spawn preset selection', () => {
   it.each(['agent restriction', 'inherited historical filter', 'selected historical filter'] as const)(
     'hides preset delegation from schemas, guidance, and execution with %s', async (mode) => {
       const { ctx, onStart } = await setup({})
+      await ctx.loader.root.update([])
       await ctx.agentPresets.register({ id: 'delegating', plugins: [{
         name: 'cordis:subagentTool', config: { provider: 'custom-spawn', agentPreset: 'reviewer' },
       }] })
@@ -344,6 +345,7 @@ describe('spawn preset selection', () => {
 
   it('switches to a preset with a missing child reference and retries delegation after declaration', async () => {
     const { ctx } = await setup({})
+    await ctx.loader.root.update([])
     await mountSpawn(ctx, 'spawn')
     await ctx.agentPresets.register({
       id: 'pending-reference',

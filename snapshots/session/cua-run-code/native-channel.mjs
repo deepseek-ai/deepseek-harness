@@ -12,18 +12,36 @@ export function createNativeFixture(selectorPid) {
   const calls = []
   const events = []
   const state = { count: 0, openedChannels: 0, closedChannels: 0 }
+  const held = []
+  let controlled
   let nextHeldClick
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
   const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
 
   function createChannel() {
-    state.openedChannels++
+    const connection = ++state.openedChannels
     const stdout = new PassThrough()
     let acquired = false
     let generation = 0
     let observed
+    let blocked
     let heldCallId
     function dispatch(method, params) {
+      if (method === 'getHeldInputs') return held.filter(press => press.connection === connection).map(press => press.kind === 'key'
+        ? { kind: 'key', key: press.key, appHandle: press.appHandle, ...press.windowId === undefined
+          ? { mode: 'application' } : { windowId: press.windowId, mode: 'system' } }
+        : { kind: 'mouse', button: press.key, appHandle: press.appHandle, windowId: press.windowId, mode: press.mode })
+      if (method === 'releaseHeldInputs') {
+        const released = dispatch('getHeldInputs', params).reverse()
+        for (let index = held.length - 1; index >= 0; index--) {
+          const press = held[index]
+          if (press.connection === connection) {
+            events.push(`${press.key}:up`)
+            held.splice(index, 1)
+          }
+        }
+        return released
+      }
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
       if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: selectorPid ?? 4 }]
       if (method === 'getApp') {
@@ -35,6 +53,18 @@ export function createNativeFixture(selectorPid) {
           authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } }
       }
       if (!acquired || params.appHandle !== 'fixture-app') throw new Error('Acquire the application before using its handle')
+      if (method === 'sendKeyEvent' || method === 'toggleMouse') {
+        const key = params.key ?? params.mouseButton
+        const index = held.findIndex(press => press.connection === connection && press.key === key)
+        if (params.direction === 'down' && index < 0) held.push({ connection, key, appHandle: params.appHandle,
+            kind: method === 'sendKeyEvent' ? 'key' : 'mouse', windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' })
+        if (params.direction === 'up') {
+          if (index < 0) throw new Error('Input was not held by this connection')
+          held.splice(index, 1)
+        }
+        events.push(`${key}:${params.direction}`)
+        return { dispatched: true }
+      }
       if (method === 'listWindows') return [window]
       if (method === 'getState') {
         observed = `fixture-snapshot-${++generation}`
@@ -53,13 +83,33 @@ export function createNativeFixture(selectorPid) {
     const stdin = new Writable({ write(chunk, _encoding, callback) {
       try {
         const { type, id, method, params } = JSON.parse(chunk.toString())
-        if (type === 'cancel' && id === heldCallId) {
+        if (type === 'cancel' && blocked?.id === id) {
+          events.push('native-cancelled')
+          blocked.control.cancelled.resolve()
+          if (!blocked.control.waitForCancellation) blocked.finish({ code: 'NATIVE_CANCELLED', message: 'Fixture input cancelled.' })
+        } else if (type === 'cancel' && id === heldCallId) {
           heldCallId = undefined
           events.push('native-cancelled')
           stdout.write(JSON.stringify({ id, error: { code: 'NATIVE_CANCELLED', message: 'Fixture click cancelled.' } }) + '\n')
+        } else if (type === 'cancel') {
+          // A reply can settle immediately before the caller's cancellation reaches the helper.
         } else {
           calls.push({ id, method, params })
-          if (method === 'click' && nextHeldClick !== undefined) {
+          if (controlled?.method === method) {
+            const control = controlled
+            controlled = undefined
+            const result = control.afterDispatch ? dispatch(method, params) : undefined
+            const finish = error => {
+              if (!blocked) return
+              blocked = undefined
+              const response = error ? { id, error } : { id, result: result ?? dispatch(method, params) }
+              stdout.write(JSON.stringify(response) + '\n')
+            }
+            blocked = { id, control, finish }
+            control.reply = finish
+            control.disconnect = () => { stdout.end() }
+            control.entered.resolve()
+          } else if (method === 'click' && nextHeldClick !== undefined) {
             heldCallId = id
             const started = nextHeldClick
             nextHeldClick = undefined
@@ -80,13 +130,23 @@ export function createNativeFixture(selectorPid) {
         if (closed) return
         closed = true
         events.push('native-close')
+        for (let index = held.length - 1; index >= 0; index--) if (held[index].connection === connection) held.splice(index, 1)
         stdin.end()
         stdout.end()
       },
       waitForClose: () => done,
     }
   }
-  return { createChannel, calls, events, state,
+  return { createChannel, calls, events, state, held,
+    controlNext(method, { afterDispatch = false, waitForCancellation = false } = {}) {
+      if (controlled) throw new Error('Another request is already controlled')
+      const entered = Promise.withResolvers(), cancelled = Promise.withResolvers()
+      const control = { method, afterDispatch, waitForCancellation, entered, cancelled,
+        reply: () => { throw new Error('Request has not arrived') }, disconnect: () => { throw new Error('Request has not arrived') } }
+      controlled = control
+      return { entered: entered.promise, cancelled: cancelled.promise,
+        reply: error => control.reply(error), disconnect: () => control.disconnect() }
+    },
     holdNextClick() {
       if (nextHeldClick !== undefined) throw new Error('A fixture click is already held')
       nextHeldClick = Promise.withResolvers()

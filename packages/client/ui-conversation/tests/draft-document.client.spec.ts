@@ -14,6 +14,7 @@ import { scanTextRefs } from '../src/client/input/decorations.ts'
 import { ReferenceChipNode } from '../src/client/input/editor/chip-node.tsx'
 import { CommandChipNode } from '../src/client/input/editor/command-chip-node.tsx'
 import { QuoteNode } from '../src/client/input/editor/QuoteNode.tsx'
+import { $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 import { TextRefNode } from '../src/client/input/editor/text-ref.ts'
 import { SessionInputShell, type SessionInputDeps } from '../src/client/input/facade.ts'
 
@@ -854,5 +855,56 @@ describe('plain-text reference catalogs', () => {
     expect(slices('@person @"" @"a/b')).toEqual([])
     expect(slices('@"open @')).toEqual([])
     expect(slices('drill @"open dir/。')).toEqual(['@"open dir/'])
+  })
+})
+
+describe('path references typed one character at a time', () => {
+  /** Insert each character at the live selection as its own edit, the way key presses arrive. */
+  function typeText(shell: SessionInputShell, text: string): void {
+    for (const char of text) shell.paste(char)
+  }
+
+  it.each([
+    ['@src/index.ts', ['@src/index.ts']],
+    ['@vite.config.ts', ['@vite.config.ts']],
+    ['@out/v1.2/readme', ['@out/v1.2/readme']],
+    ['@out/w1,x', ['@out/w1,x']],
+    ['看下 @src/app.test.ts 有问题', ['@src/app.test.ts']],
+  ])('keeps %s in typed order with the caret after the last character', (text, references) => {
+    const shell = makeShell()
+    typeText(shell, text)
+    expect(shell.snapshot.draft).toBe(text)
+    expect(shell.caretSpan()).toEqual({ start: text.length, end: text.length })
+    expect(textReferences(shell)).toEqual(references)
+  })
+
+  it('leaves punctuation that ends a sentence outside the reference', () => {
+    const shell = makeShell()
+    typeText(shell, '@src/a.ts. Next')
+    expect(shell.snapshot.draft).toBe('@src/a.ts. Next')
+    expect(shell.caretSpan()).toEqual({ start: 15, end: 15 })
+    expect(textReferences(shell)).toEqual(['@src/a.ts'])
+  })
+
+  it('extends a reference over the start of a longer run and keeps the caret after the typed character', () => {
+    const shell = makeShell()
+    typeText(shell, '@src/a. x')
+    expect(textReferences(shell)).toEqual(['@src/a'])
+    shell.editor.update(() => { $selectDetectSpan({ start: 7, end: 7 }) }, { discrete: true })
+    typeText(shell, 't')
+    expect(shell.snapshot.draft).toBe('@src/a.t x')
+    expect(shell.caretSpan()).toEqual({ start: 8, end: 8 })
+    expect(textReferences(shell)).toEqual(['@src/a.t'])
+  })
+
+  it('leaves the text after a named reference in place when its catalog drops the name', async () => {
+    const lexicon = createSnapshotStore<ReadonlyMap<'/' | '@', readonly string[]>>(new Map([['@', ['alice']]]))
+    const provider = triggerProvider(lexicon)
+    const shell = makeShell({ inputTriggers: () => provider })
+    typeText(shell, '@alice.')
+    expect(textReferences(shell)).toEqual(['@alice'])
+    lexicon.set(new Map())
+    await vi.waitFor(() => { expect(textReferences(shell)).toEqual([]) })
+    expect(shell.snapshot.draft).toBe('@alice.')
   })
 })

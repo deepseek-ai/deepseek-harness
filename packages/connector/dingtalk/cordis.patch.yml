@@ -1,0 +1,3 @@
+- insert:
+    - id: dingtalk
+      name: '@deepseek-ai/dsh-dingtalk'

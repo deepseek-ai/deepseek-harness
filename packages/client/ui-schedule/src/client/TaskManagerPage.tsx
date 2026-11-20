@@ -285,7 +285,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                 </Tooltip>}
               />}
             </div>
-            <div className={css.list}>
+            <div className={clsx(css.list, showRecommendations && css.listWithRecommendations)}>
               {selected === undefined && <CatalogFeedback status={status} populated={rows.length > 0} onRetry={onRetry} t={t} />}
               {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
                 <ScheduleEmptyIllustration className={css.emptyIllustration} />

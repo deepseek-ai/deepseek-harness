@@ -13,6 +13,14 @@ import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 
+/** Current concurrency capacity of one subagent tree; observing it reserves no slots. */
+export interface SubagentCapacity {
+  /** Occupied slots, including starting, resident, and stopping children; excludes the root. */
+  readonly running: number
+  /** Configured maximum; running may exceed it after the limit is lowered. */
+  readonly limit: number
+}
+
 /** Identifies one subagent residency epoch across its lifecycle event pair. */
 export type SubagentRunId = Branded<'SubagentRunId'>
 
@@ -152,7 +160,7 @@ export interface SubagentStartRequest {
   readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
-  /** Content delivered as the child's user message. */
+  /** Initial task; local continuable children record it as a message from the parent agent. */
   readonly prompt: ContentBlock[]
   /**
    * The spawning agent. Its effective directory supplies the default cwd;
@@ -225,9 +233,10 @@ export interface ContinuableCreateRequest {
  */
 export interface ContinuableCreateSpec {
   /**
-   * Completed-turn prefix of the parent's log to seed the child session with,
-   * or absent for a fresh child. Same durable contract as
-   * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
+   * Unmodified completed-turn prefix of the parent's log, contiguous from seq
+   * 0 with lossless JSON and balanced steps and turns; absent for a fresh child.
+   * The manager uses its length as the fork cut and stores the prefix as
+   * supplied, so a transformed prefix would diverge from the parent history.
    */
   readonly seed?: readonly SessionEvent[]
 }

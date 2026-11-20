@@ -105,10 +105,11 @@ jobs:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: apps/desktop/scripts
       - name: Stage workflow helpers
+        id: helpers
         run: |
           $helpers = Join-Path $env:RUNNER_TEMP "packaging-helpers-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $helpers -ErrorAction Stop | Out-Null
-          foreach ($name in @('windows-packaging-priority.ps1')) {
+          foreach ($name in @('windows-packaging-priority.ps1', 'windows-packaging-summary.mjs')) {
             Copy-Item -LiteralPath (Join-Path 'apps/desktop/scripts' $name) -Destination $helpers -ErrorAction Stop
           }
           "PACKAGE_CI_HELPERS=$helpers" >> $env:GITHUB_ENV
@@ -176,6 +177,14 @@ jobs:
         env:
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
         run: node apps/desktop/scripts/prepare-windows-ci.mjs
+      - name: Summarize packaging parameters
+        if: always() && steps.helpers.outcome == 'success'
+        env:
+          PACKAGE_INPUT_VERSION_MODE: ${{ inputs.version_mode }}
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: node "$env:PACKAGE_CI_HELPERS/windows-packaging-summary.mjs"
       - name: Check packaging configuration and toolchain
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
