@@ -46,7 +46,11 @@ export type ModelMenuOptions = ModelMenuControls & {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
-    /** Session options appended after model and reasoning controls in the root menu. */
+    /**
+     * Session options appended after model and reasoning controls in the root menu.
+     * Render each interactive entry as a `button` with role `menuitem`, `menuitemradio`, or `switch`:
+     * Arrow keys and Tab reach only those rows.
+     */
     'conversation.input.model.options': {
       kind: 'list'
       scope: 'session'

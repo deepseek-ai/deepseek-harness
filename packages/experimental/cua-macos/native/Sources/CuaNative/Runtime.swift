@@ -21,6 +21,7 @@ struct HelperConfiguration: Sendable {
     var shutdownGraceSeconds: Double = 3
     var textEventIntervalSeconds: Double = 0.00025
     var maxClickHoldMs = 5000
+    var recentActivityWindowMs: Int? = 60_000
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
     init(arguments: [String]) throws {
@@ -30,6 +31,12 @@ struct HelperConfiguration: Sendable {
             let key = arguments[index]
             let text = arguments[index + 1]
             switch key {
+            case "--recent-activity-window-ms":
+                if text == "off" { recentActivityWindowMs = nil; break }
+                guard let value = Int(text), (1...2147483647).contains(value) else {
+                    throw RequestParameters.invalid("Recent activity window must be off or an integer from 1 to 2147483647 milliseconds")
+                }
+                recentActivityWindowMs = value
             case "--max-click-hold-ms":
                 guard let value = Int(text), (0...2147483647).contains(value) else {
                     throw RequestParameters.invalid("Maximum click hold must be a nonnegative integer within 2147483647 milliseconds")
@@ -64,12 +71,12 @@ struct HelperConfiguration: Sendable {
         guard let fields = decoded.object, Set(fields.keys) == ["type", "protocol", "runtimeKey", "config"],
               fields["type"] == .string("hello"), fields["protocol"] == .number(1),
               fields["runtimeKey"] == .string(runtimeKey), let config = fields["config"]?.object,
-              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "maxClickHoldMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
+              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "maxClickHoldMs", "screenshotTimeoutMs", "timeoutMs", "graceMs", "recentActivityWindowMs"] else {
             throw NativeFailure(code: "NATIVE_PROTOCOL", message: "Expected shared helper protocol 1 hello for this runtime")
         }
         func number(_ name: String) throws -> String {
             guard let number = config[name]?.number, number.isFinite else { throw RequestParameters.invalid("\(name) must be finite") }
-            if ["maxRequestBytes", "maxResponseBytes", "maxClickHoldMs"].contains(name) {
+            if ["maxRequestBytes", "maxResponseBytes", "maxClickHoldMs", "recentActivityWindowMs"].contains(name) {
                 guard let integer = Int(exactly: number) else { throw RequestParameters.invalid("\(name) must be an integer") }
                 return String(integer)
             }
@@ -80,7 +87,7 @@ struct HelperConfiguration: Sendable {
             "--ax-timeout-ms", number("axTimeoutMs"), "--text-event-interval-ms", number("textEventIntervalMs"),
             "--max-click-hold-ms", number("maxClickHoldMs"),
             "--screenshot-timeout-ms", number("screenshotTimeoutMs"), "--timeout-ms", number("timeoutMs"),
-            "--shutdown-grace-ms", number("graceMs"),
+            "--shutdown-grace-ms", number("graceMs"), "--recent-activity-window-ms", config["recentActivityWindowMs"] == .string("off") ? "off" : number("recentActivityWindowMs"),
         ])
     }
 }

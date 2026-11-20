@@ -270,9 +270,9 @@ export abstract class AttachmentStore extends Service {
   /**
    * Generate or read one deterministic model-request version from the stored normalized image.
    * @param ref - durable provider-independent normalized attachment reference.
-   * @param target - route-chosen dimensions and byte target; an unmet byte target yields the smallest ladder output.
+   * @param target - route-chosen maximum dimensions, hard byte limit, and preferred byte target.
    * @param signal - optional cancellation.
-   * @returns request bytes and the cache/upload identity covering every transform input.
+   * @returns request bytes within the hard limit, actual encoded dimensions, and a cache/upload identity covering every transform input.
    */
   readImageRequest(
     ref: ImageAttachmentRef,

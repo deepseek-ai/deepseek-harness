@@ -1,0 +1,9 @@
+version: 1
+scenario: pi-ai-image-limits
+profile: headless
+composition: default
+recording: authored
+header:
+  class: pi-ai-image-limits
+  pin: true
+  systemPromptSource: text-turn

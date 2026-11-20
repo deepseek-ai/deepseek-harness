@@ -1,0 +1,4 @@
+# Replays the cua-native Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

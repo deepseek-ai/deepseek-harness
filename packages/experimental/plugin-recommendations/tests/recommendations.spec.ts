@@ -190,13 +190,14 @@ describe('official recommendations', () => {
     expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
   })
 
-  it('leaves a replaced card unenabled', async () => {
+  it('enables the earlier proposal after dismissing a later one', async () => {
     const f = await fixture()
     const first = f.propose('card-first')
     f.agent.session.append('turn/start', { turn: 2 })
-    f.propose('card-second')
-    expect(await f.ctx.actionCards.act(f.agent, first, 'enable')).toEqual({ status: 'settled', decision: { cardId: first, action: ACTION, phase: 'replaced' } })
-    expect(f.manager.setBundleEnabled).not.toHaveBeenCalled()
+    const second = f.propose('card-second')
+    expect(await f.ctx.actionCards.act(f.agent, second, 'dismiss')).toMatchObject({ decision: { cardId: second, phase: 'dismissed' } })
+    expect(await f.ctx.actionCards.act(f.agent, first, 'enable')).toEqual({ status: 'settled', decision: { cardId: first, action: ACTION, phase: 'enabled' } })
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledOnce()
   })
 
   it('allows dismissal without global profile access but refuses enabling', async () => {

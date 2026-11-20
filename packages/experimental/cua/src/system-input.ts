@@ -1,13 +1,13 @@
-/** Session approval for explicit system mouse input, shared by capable CUA providers. */
+/** Session approval for explicit system input, shared by capable CUA providers. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { NativeError, type NativeClient } from './native-client.ts'
 import { applicationAccessDisplay } from './locales.ts'
-import { mouseControlPrompt } from './mouse-control-locales.ts'
+import { systemInputControlPrompt } from './system-input-locales.ts'
 
 /** Access is scoped to the live Session and never grants application access. */
-export class MouseControl {
+export class SystemInputControl {
   private readonly decisions = new WeakMap<Agent, boolean | 'asking'>()
 
   private readonly pressed = new WeakMap<Agent['session'], NativeClient>()
@@ -19,7 +19,7 @@ export class MouseControl {
       this.pressed.delete(session)
       if (client && !client.disposed) {
         void client.requestCleanup('releaseSystemButton', {}).catch((error: unknown) => {
-          ctx.logger.warn('Could not release system mouse input at turn end: %s', error)
+          ctx.logger.warn('Could not release system input at turn end: %s', error)
         })
       }
     })
@@ -37,28 +37,28 @@ export class MouseControl {
   /**
    * Select the per-call route and any approval required before dispatch.
    * @param agent Agent owning the live Session.
-   * @param requested Whether the caller explicitly requested system mouse input.
+   * @param requested Whether the caller explicitly requested system input.
    * @returns Native pointer mode and an optional preparation that must succeed before input.
    */
-  resolve(agent: Agent, requested: boolean): { useSystemPointer: boolean; prepare?: (signal: AbortSignal) => Promise<void> } {
-    if (!requested) return { useSystemPointer: false }
+  resolve(agent: Agent, requested: boolean): { useSystemInput: boolean; prepare?: (signal: AbortSignal) => Promise<void> } {
+    if (!requested) return { useSystemInput: false }
     if (agent.session.header.origin === 'subagent') {
-      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', 'Delegated tasks cannot control the system mouse. Use a window-directed action or report the required system-pointer gesture to the main task.')
+      throw new NativeError('SYSTEM_INPUT_UNAVAILABLE', 'Delegated tasks cannot control the system keyboard or mouse. Use a window-directed action or report the required system input to the main task.')
     }
-    if (!this.requireApproval || this.decisions.get(agent) === true) return { useSystemPointer: true }
-    return { useSystemPointer: true, prepare: signal => this.approve(agent, signal) }
+    if (!this.requireApproval || this.decisions.get(agent) === true) return { useSystemInput: true }
+    return { useSystemInput: true, prepare: signal => this.approve(agent, signal) }
   }
 
   private async approve(agent: Agent, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const decision = this.decisions.get(agent)
-    if (decision === 'asking') throw new NativeError('MOUSE_CONTROL_PENDING', 'Wait for the outstanding mouse control request')
+    if (decision === 'asking') throw new NativeError('SYSTEM_INPUT_PENDING', 'Wait for the outstanding system input request')
     let granted = decision
     if (granted === undefined) {
       const questions = this.ctx.get('userQuestions')
-      if (!questions) throw new NativeError('MOUSE_APPROVAL_UNAVAILABLE', 'No human answerer is available for mouse control')
-      const id = 'cua-mouse-control'
-      const display = { ...mouseControlPrompt, approve: applicationAccessDisplay.approve }
+      if (!questions) throw new NativeError('SYSTEM_INPUT_APPROVAL_UNAVAILABLE', 'No human answerer is available for system input')
+      const id = 'cua-system-input'
+      const display = { ...systemInputControlPrompt, approve: applicationAccessDisplay.approve }
       const approve = display.approve.en
       const reject = 'Deny'
       this.decisions.set(agent, 'asking')
@@ -75,11 +75,11 @@ export class MouseControl {
       } catch (error) {
         this.decisions.delete(agent)
         if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
-          throw new NativeError('MOUSE_APPROVAL_CANCELLED', 'The mouse control request was dismissed. Continue without mouse control unless the user asks to reconsider', { cause: error })
+          throw new NativeError('SYSTEM_INPUT_APPROVAL_CANCELLED', 'The system input request was dismissed. Continue without system input unless the user asks to reconsider', { cause: error })
         }
         throw error
       }
     }
-    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system mouse control for this session. No input was sent. Use pointer-free actions.')
+    if (!granted) throw new NativeError('SYSTEM_INPUT_DENIED', 'The user declined system input for this session. No input was sent. Use non-system actions.')
   }
 }

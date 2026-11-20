@@ -12,6 +12,39 @@
         "index": 0,
         "block": {
           "type": "tool-call",
+          "id": "cua-ptc-activity-without-inspect",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nawait tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: '7' } });\",\"description\":\"Read app state without inspecting the result\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
           "id": "cua-ptc-native-result",
           "name": "run_code",
           "arguments": "{\"code\":\"const { readFile } = await import('node:fs/promises');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst target = { appHandle: app.appHandle, windowId: '7' };\\nconst first = await tools.cua({ method: 'getState', params: { ...target, maxElements: 1 } });\\nconst state = first.truncated ? await tools.cua({ method: 'getState', params: { ...target, maxElements: 16 } }) : first;\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: '7' } });\\nconst bytes = await readFile(shot.path);\\ninspect({ appHandle: app.appHandle, initiallyTruncated: first.truncated, recoveredTextField: !first.tree.includes('AXTextField') && state.tree.includes('AXTextField'), hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.width, imageHeight: shot.height }, shot); return;\",\"description\":\"Read native CUA values and receive one screenshot\"}"
@@ -147,6 +180,39 @@
           "id": "cua-ptc-observe-after-limit",
           "name": "run_code",
           "arguments": "{\"code\":\"const { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst tree = await app.getAccessibilityTree();\\nif (!tree.includes('Count: 3')) throw new Error('Output overflow changed the action count');\\ninspect({ count: 3, repeated: false });\",\"description\":\"Verify both planned actions completed without replaying input\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-system-input",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst win = await app.getWindow('8');\\nawait win.getAccessibilityTree();\\nconst clicked = await win.click([100, 100], { relative: true, modifiers: ['shift'], useSystemInput: true });\\nconst chord = await app.pressKey('s', ['shift'], { useSystemInput: true });\\nawait app.sendKeyEvent('shift', 'down', { useSystemInput: true });\\nconst released = await app.sendKeyEvent('shift', 'up', { useSystemInput: true });\\ninspect({ systemClick: clicked.dispatched, systemChord: chord.dispatched, systemKeyReleased: released.dispatched });\",\"description\":\"Use explicit system clicks and keyboard input\"}"
         }
       },
       {

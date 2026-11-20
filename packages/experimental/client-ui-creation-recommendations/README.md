@@ -29,7 +29,7 @@ Enable the [Personalized recommendations bundle](../personalized-recommendations
 
 ### Outcomes and recovery
 
-An unstarted card stays available until a newer proposal in the same conversation replaces it. The replaced card keeps its history with a Replaced label and no creation or location controls. Supplied initial content appears below the plan as folded data, so the user sees what the Creator will receive. Started tasks retain their progress and retry actions. The shared card projection owns this state, so reload does not reactivate a card.
+Each unstarted card keeps its Create button and location picker across later proposals. Supplied initial content appears below the plan as folded data, so the user sees what the Creator will receive. Started tasks retain their progress and retry actions.
 
 Creation, installation and removal receipts come from the Session projection. The card restores them after reconnecting. A lost action reply shows an actionable error; retry uses the Host’s recorded state. Pending requests disable repeated actions. During generation, Cancel stops the child and waits for cleanup before retry. Accepted installations finish without cancellation. The information disclosure contains the source directory and explains that Undo keeps those files. The removed card offers Restore; when the retained files are gone, it asks for a new proposal.
 

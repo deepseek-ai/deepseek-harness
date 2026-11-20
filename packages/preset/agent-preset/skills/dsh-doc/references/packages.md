@@ -157,6 +157,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-cli-account` | yes | Host Service of CLI app plugins: each plugin registers its third-party CLI and account, and the Service gives the model the CLI's absolute path, runs one account operation at a time, and shows the account on the Plugins page |
+| `@deepseek-ai/dsh-dingtalk` | yes | DingTalk plugin: the official dws CLI with its skills, and sign-in from the Plugins page |
 | `@deepseek-ai/dsh-feishu` | yes | Feishu plugin: the official lark-cli with its embedded skills, and account connection from the Plugins page |
 | `@deepseek-ai/dsh-linear` | yes | Linear plugin: Linear's hosted MCP server, authorized through the shared MCP manager |
 | `@deepseek-ai/dsh-notion` | yes | Notion plugin: Notion's hosted MCP server, authorized through the shared MCP manager |

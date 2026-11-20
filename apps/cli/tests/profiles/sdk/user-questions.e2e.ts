@@ -23,7 +23,7 @@ it.each([
       requests.push(JSON.parse(body) as Record<string, unknown>)
       const tool = mode === 'ptc' ? {
         type: 'tool_use', id: 'question-call', name: 'run_code', input: {
-          code: `return await tools.ask_user_question(${JSON.stringify({ questions })});`, description: 'Ask which output format to use',
+          code: `await tools.ask_user_question(${JSON.stringify({ questions })});`, description: 'Ask which output format to use',
         },
       } : { type: 'tool_use', id: 'question-call', name: 'ask_user_question', input: { questions } }
       response.writeHead(200, { 'content-type': 'text/event-stream' })

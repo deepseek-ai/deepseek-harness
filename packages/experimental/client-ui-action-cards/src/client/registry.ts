@@ -18,7 +18,7 @@ export interface FoldedTextProps {
 export interface ActionCardBodyProps<N extends Extract<keyof LocaleNamespaceMap, string>> {
   /** The card as admitted; the body validates `details` with its own schema. */
   readonly proposal: ActionCardProposal
-  /** Recorded or derived card state; undefined while the card is unstarted. */
+  /** Latest recorded card decision; undefined while the card is unstarted. */
   readonly decision: ActionCardDecision | undefined
   readonly sessionId: SessionId
   /** Title and folded brief rendered by the frame; the body places them in its layout. */

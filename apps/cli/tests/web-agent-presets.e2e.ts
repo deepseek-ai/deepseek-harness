@@ -723,6 +723,9 @@ describe('the shipped Web composition', () => {
       const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
       expect(sdk).not.toContain('str_replace_editor')
       expect(sdk).toContain('web_search')
+      // Like `standard`, PTC manages plugins when the Host provides an editable profile.
+      expect(toolNames(ctx, coded.agent)).toContain('plugin_manager')
+      expect(sdk).toContain('plugin_manager')
 
       // The presentation is this agent's alone: the deployment default is
       // native, and the session composed from `standard` still sees it.

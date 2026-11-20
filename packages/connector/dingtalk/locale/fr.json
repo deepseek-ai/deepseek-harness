@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin DingTalk",
+    "description": "Utilisez le calendrier, les tâches, les documents, les tableaux IA, les discussions de groupe et les contacts de DingTalk dans les conversations.",
+    "detail": "docs/DETAIL.md"
+  }
+}

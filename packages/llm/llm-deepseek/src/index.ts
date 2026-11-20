@@ -20,10 +20,10 @@ export {
   DEFAULT_LOW_DETAIL_IMAGE_PIXEL_BUDGET,
   DEFAULT_MAX_IMAGES_PER_REQUEST,
   DEFAULT_MAX_REQUEST_FILES_BYTES,
-  DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+  DEFAULT_REQUEST_IMAGE_TARGET_BYTES,
   REQUEST_IMAGE_MAX_DIMENSION,
   deepSeekImageRequestPricing,
-  resolveRequestImageMaxBytes,
+  resolveRequestImageTargetBytes,
   resolveRequestImageTarget,
 } from './request-pricing.ts'
 export { deepSeekImageTokens, deepSeekRequestImageDimensions } from './image-tokens.ts'

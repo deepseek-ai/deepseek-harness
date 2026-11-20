@@ -1,0 +1,11 @@
+version: 1
+scenario: advanced-toolchain-scoped
+profile: headless
+composition: advanced-toolchain
+recording: authored
+header:
+  class: native-ptc-native-scoped
+  pin: true
+  changes: 2
+  promptChanges: 2
+  childSystemPrompts: [1, 2]

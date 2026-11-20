@@ -90,11 +90,13 @@ composer 提供 `retry(failureSeq)` 处理生成失败后的恢复。输入栏�
 
 composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 
+候选菜单未处理按键且光标位于草稿末尾时，不带修饰键的 ArrowUp 和 ArrowDown 会召回已加载的 Session 历史中用户发出的消息文本。只有草稿为空时才能开始浏览，只有草稿仍是上一次显示且未修改的消息时才能继续浏览；任何修改（包括撤销）都会结束浏览，草稿变成普通草稿，因此已输入或改过的文字不会被替换。浏览期间光标不在末尾时，方向键在当前消息内移动光标。按键时从 Session 的事件窗口由新到旧读取消息；没有文字的消息和连续重复的消息会被跳过，越过最新一条时回到空草稿。每次切换都是一次普通的、可撤销的编辑：撤销回到切换前显示的草稿。
+
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在受布局视口约束的 CSS 锚定面板中查看 token 构成，没有统计项时也可打开；上下文用量和容量尚不可用时，按钮保持隐藏。浏览器缩放和平移时面板随页面移动，因此可以超出视觉视口。Hero 之外，这一行为空时仍保留一项读数的高度，因此会话统计和上下文用量稍后到达不会改变 composer 的高度；Hero 不显示空行。
 
 关闭代码工作工具时，外壳仅隐藏 Trajectory；其他插件贡献的 View 仍然可用。可用 View 少于两个时隐藏 View 标签栏。在 Trajectory 激活时关闭代码工作工具会返回 Chat；已保存的 View 偏好和 Session 记录保持不变。开启后，Trajectory 恢复可用。View 所有者接收可用列表，使导航操作跟随相同的可见性。
 
-root 作用域的 `conversation.session.header.views.actions` list 有注册项时，标签行中的 View 标签之后显示带提示框的**更多会话视图**按钮。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的头部之外的 View，含 `id`、`label`、`pinned` 与 `active`；不含 Chat）、在本 Session 选择 View 的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。头部在内存中保存所有 Session 共用的已收起 View id 列表；标签栏不显示已收起的 View，并将已注册的 Chat 放在首位，确保它始终留在更多菜单外。插件重新加载时 Pin 选择重置，不读取旧 localStorage 值。标签栏是否显示按可用 View 计算，不按已固定的 View 计算，因此其他 View 全部收起时，标签栏和“更多”仍然显示。收起当前激活的 View 会立即隐藏其标签，但不会切走其内容。更多菜单仅包含头部之外的 View，通过 `active` 标识当前 View。头部读取当前行可用宽度，为更多按钮与内边距预留 48px，每个标签估算 120px，其余 View 按注册顺序进入更多。单个 ResizeObserver 观察标签行，使窗口缩放和侧栏展开能够更新分组；当前选中项变化不改变顺序。标签行移除时断开观察。如果环境没有 ResizeObserver，仍按初始宽度计算，但不继续观察。当前 View 收起时，更多按钮高亮。每个标签按字符宽度估算文本宽度；只有估算结果超过 88px 单元格时，才通过提示框提供全名。至少保留一个优先展示的外部标签。未注册 View 的 id 保留在内存 Pin 列表中，直到插件重新加载。
+root 作用域的 `conversation.session.header.views.actions` list 有注册项时，标签行中的 View 标签之后显示带提示框的**更多会话视图**按钮。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的头部之外的 View，含 `id`、`label`、`pinned` 与 `active`；不含 Chat）、在本 Session 选择 View 的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。头部在内存中保存所有 Session 共用的已收起 View id 列表；标签栏不显示已收起的 View，并将已注册的 Chat 放在首位，确保它始终留在更多菜单外。插件重新加载时 Pin 选择重置，不读取旧 localStorage 值。标签栏是否显示按可用 View 计算，不按已固定的 View 计算，因此其他 View 全部收起时，标签栏和“更多”仍然显示。收起当前激活的 View 会立即隐藏其标签，但不会切走其内容。更多菜单仅包含头部之外的 View，通过 `active` 标识当前 View。头部读取当前行可用宽度，为更多按钮与内边距预留 48px，每个标签估算 120px，其余 View 按注册顺序进入更多。初次测量后，窗口或侧栏缩放时，头部使用 ResizeObserver 送达的标签行宽度更新分组；当前选中项变化不改变顺序。标签行移除时断开观察。如果环境没有 ResizeObserver，仍按初始宽度计算，但不继续观察。当前 View 收起时，更多按钮高亮。每个标签按字符宽度估算文本宽度；只有估算结果超过 88px 单元格时，才通过提示框提供全名。至少保留一个优先展示的外部标签。未注册 View 的 id 保留在内存 Pin 列表中，直到插件重新加载。
 
 输入框注册「文件」命令动作，负责其标题、可用性和原生文件选择器回调。菜单可用性与实际调用都读取已挂载输入框当前的附件接收策略。输入框卸载或锁定后该动作不可用，插件 dispose（资源释放）时移除注册。回调绑定留在输入模块内部。
 
@@ -126,7 +128,11 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 <a id="end-reserve"></a>
 
-主 Conversation body 可以在行向末端空出一段位置，留给停在 transcript 旁边的内容，例如停靠的[会话面板](../ui-session-panel/README.zh.md#docking)。样式表在 `[data-conversation-content]` 元素上设置长度 `--dsh-chat-end-reserve` 来提出申请。滚动容器随即给末端加上 `--dsh-chat-end-inset` 的内边距，大小是所缺留白的两倍，居中的 transcript 列和输入框保持各自宽度向起始边缘移动，直到列后的空间等于预留值。`--dsh-chat-end-reserve-max` 是在列保持宽度和两侧内边距的前提下，起始留白能让出的最大预留；超出它的申请得不到任何内边距，因此申请方要先读取这个最大值，再依赖这段位置。主体从滚动容器的宽度推出这些长度，并把该宽度发布为 `--dsh-conversation-viewport-width`，因此它们在滚动容器、宽度拖拽条和 Chat 侧边层中的值相同。宽度拖拽条随列移动。内边距大于零时，预留固定了列的末端边缘，因此拖动任一拖拽条都只移动起始边缘，宽度的变化等于指针移动的距离而不是它的两倍；列被拖到超过起始留白能让出的宽度时不再有内边距，重新居中。内边距立即生效。样式表如果希望某次变化带动画，就在这次变化期间在同一个元素上再设置 `--dsh-chat-end-reserve-transition`（一个时长和一条缓动曲线），滚动容器的内边距和 Chat 侧边层的外边距随之一起过渡。嵌入式 occurrence 不让位：它的最大预留和内边距都是 0。
+主 Conversation body 可以在行向末端空出一段位置，留给停在 transcript 旁边的内容，例如停靠的[会话面板](../ui-session-panel/README.zh.md#docking)。样式表在 `[data-conversation-content]` 元素上设置长度 `--dsh-chat-end-reserve` 来提出申请。滚动容器随即给末端加上 `--dsh-chat-end-inset` 的内边距，大小是所缺留白的两倍，居中的 transcript 列和输入框保持各自宽度向起始边缘移动，直到列后的空间等于预留值。`--dsh-chat-end-reserve-max` 是在列保持宽度和两侧内边距的前提下，起始留白能让出的最大预留；超出它的申请得不到任何内边距，因此申请方要先读取这个最大值，再依赖这段位置。这个最大值随每次缩放变化且不继承：样式表在 `[data-conversation-content]` 元素本身上读取它，并在那里把后代需要的值推导为已注册的长度，只有推导结果变化时该长度才变化。主体的其他变化输入同样不继承，传给后代的 `--dsh-chat-content-width` 与 `--dsh-chat-end-inset` 是计算后的长度，因此缩放只有在它们变化时才重新计算正文样式。主体从滚动容器的宽度推出这些长度，并把该宽度发布为 `--dsh-conversation-viewport-width`，因此它们在滚动容器、宽度拖拽条和 Chat 侧边层中的值相同。宽度拖拽条随列移动。内边距大于零时，预留固定了列的末端边缘，因此拖动任一拖拽条都只移动起始边缘，宽度的变化等于指针移动的距离而不是它的两倍；列被拖到超过起始留白能让出的宽度时不再有内边距，重新居中。内边距立即生效。样式表如果希望某次变化带动画，就在这次变化期间在同一个元素上再设置 `--dsh-chat-end-reserve-transition`（一个时长和一条缓动曲线），滚动容器的内边距和 Chat 侧边层的外边距随之一起过渡。嵌入式 occurrence 不让位：它的最大预留和内边距都是 0。
+
+内置输入栏通过 `conversation.input.placeholder` 为可编辑会话的空输入框提供占位提示。插件通过 chain 的选择器匹配拥有者传入的 `sessionId`。匹配的组件可渲染本地化文字或不参与交互的行内 JSX，例如 `<kbd>/</kbd>`。提示可见时，其文字用作输入框的无障碍名称。所有选择器均返回 `null` 时，输入栏按当前状态显示首页、Plan 或默认提示。选择工作区、输入受阻、会话不可用或可将排队消息送入当前轮次时，输入栏显示相应的内置提示。
+
+替换 `conversation.composer.bar` 的插件可以直接使用 `ComposerBarProps`。它默认使用一组固定的子插槽，内置输入栏新增插槽时，现有插件的类型仍然兼容。替换组件也可以使用 `ComposerBarProps<keyof typeof children>`，从传给 `slots.register` 的 `children` 声明中推导自己可以渲染的键。
 
 常驻 composer 在无 Session 与有 Session 之间保持挂载。输入空白字符会隐藏占位提示；没有附件的纯空白草稿无法发送。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 是携带认领的行首原子 chip，文件夹文本引用以图标前缀携带文件夹图形，草稿文字和引用语义字段由逐 Session Conversation store 持久化。QueueDock 从 Session 的 `inbox` 投影读取 `next-turn`，包含从冷状态恢复的消息，仅排除仍由本地 transcript 提交承接的 requestId。其他排队行保留正常展示和操作。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览使用 [UserText Factory](#sent-user-text)（wire 会话形式折叠为其标签），并按原始附件顺序展示本地或持久化的图片和文件。图片使用缩略图，文件使用紧凑的名称与大小卡片。编辑态在 ui-primitives 的 `InlineEditor` 中展示字面发送文本，因此重新编辑不会丢失换行。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。 composer 键盘映射经斜杠流水线裁决触发菜单的按键——Tab 确认高亮补全项（可下钻项则下钻），Escape 与 Shift+Tab 离开菜单且不选定——其余按键交给编辑器自身。 在 Apple 平台上，Home 与 End 把光标移到当前视觉行的行首或行末，而不是滚动对话，按住 Shift 时扩展选区；光标紧贴在 quote 左侧时，End 与 Cmd+Right 走同一路径移到该行末尾。 接管键盘的浮层通过 `SessionInput.focus()` 把键盘还回来，该路径走 Lexical 自己的 focus，因此光标回到草稿原来的位置而不是开头。
 
@@ -240,6 +246,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 - **刷新会丢弃草稿附件**——只有在 Session 之间切换时附件才会保留；刷新后重新打开的输入框会提示丢失并请用户重新添加，崩溃时不会有提示。Session 未显示期间，粘贴的图片会把字节保留在内存中（[决策](../../../.agents/notes/implemented/bug-fix/2026-11-13-draft-attachments-across-session-switches.zh.md)）。
 - **文档级文件拖放未经路由**——每个已挂载的附件视图都会处理文档级文件拖放，因此在右侧栏打开可继续的子代理对话时，一次拖放会把文件同时加入两个 composer；只有窗口级粘贴经过单一的粘贴路由。
 - **出错的 Definition 让每次发布都完整回放**——增量 flush 失败后，assembler 回放已加载的完整窗口，以保持视图正确。若某个 Definition 在每次更新中都失败，在其 owner 修复前，每次发布都会回放整个窗口（[Window 更新路径](../../../docs/subsystems/conversation.zh.md#window-update-paths)）。
+- **消息召回按纯文本读取已加载的历史**——只召回已在 Client 事件窗口中的消息，更早的分页加载后才能召回。召回只还原消息的文本块：引用 chip 以 mention 文本出现，quote 以 Markdown 出现，附件不会还原。没有文字的消息（例如只带附件的提交）会被跳过，命令不会产生用户消息，因此两者都不召回。失败的提交从未写入日志，所以不召回，草稿会保留它。
 
 
 <a id="dev-note"></a>

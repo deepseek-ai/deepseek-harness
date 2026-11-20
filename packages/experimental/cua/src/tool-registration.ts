@@ -54,10 +54,13 @@ declare module '@deepseek-ai/cordis' {
  * Project a configured screenshot target onto one stored image.
  * @param configured - Validated `screenshotTarget`.
  * @param image - Durable normalized screenshot.
- * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
+ * @returns Maximum screenshot dimensions, with the configured byte value as both the hard limit and the soft target.
  */
 export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
-  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
+  return {
+    ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxImageBytes: configured.maxBytes,
+    imageTargetBytes: configured.maxBytes,
+  }
 }
 
 /**

@@ -28,15 +28,16 @@ it.skipIf(process.platform !== 'darwin').each([
     const patch = join(directory, 'native-fixture.yml')
     // Permission inspection fails against this non-helper executable; activation still permits dismissing setup.
     await writeFile(patch, JSON.stringify([{ id: 'cua-macos', config: { helperPath: process.execPath } }]))
-    const defaults = join(directory, 'script-defaults')
-    if (script) {
-      await mkdir(defaults)
-      await writeFile(join(defaults, 'package.json'), JSON.stringify({ name: 'cua-script-defaults', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-      await writeFile(join(defaults, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: vm-script\n    scriptPersistence: false\n')
-    }
+    // Both variants start without retained state so that the persistent-mode action has an effect.
+    const defaults = join(directory, 'ptc-defaults')
+    await mkdir(defaults)
+    await writeFile(join(defaults, 'package.json'), JSON.stringify({ name: 'cua-ptc-defaults', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
+    await writeFile(join(defaults, 'cordis.patch.yml'), script
+      ? '- id: ptc-runtime\n  config:\n    executionMode: vm-script\n    scriptPersistence: false\n'
+      : '- id: ptc-runtime\n  config:\n    executionMode: per-call\n')
     const harnessHome = join(directory, 'home')
     const scaffold = ownedScaffold = await launchWebScaffold({
-      profile: { packages: script ? [{ dir: defaults, enabled: true }] : [] },
+      profile: { packages: [{ dir: defaults, enabled: true }] },
       harnessHome, extraOverlayPath: [
         fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), patch,
       ] })

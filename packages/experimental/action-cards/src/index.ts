@@ -19,10 +19,6 @@ declare module '@deepseek-ai/cordis' {
 
 /** The user action every card offers; the shared service records it. */
 const DISMISS = 'dismiss'
-/** Phases the projection derives from the log; no decision may record them. */
-const DERIVED_PHASES: readonly string[] = ['replaced']
-/** Phases after which no user action changes the card. */
-const FINAL_PHASES: readonly string[] = ['dismissed', ...DERIVED_PHASES]
 
 const STATUS_PREAMBLE = 'Latest status of action cards from user actions and background work. '
   + 'These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress.'
@@ -223,13 +219,12 @@ export class ActionCards extends TypertRemoteService {
    * Record a card decision in the Session log; the next model request reports it.
    * @param agent - agent whose Session owns the card.
    * @param decision - the card's new state.
-   * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+   * @throws when no kind ever registered the decision's action with this service.
    */
   record(agent: Agent, decision: ActionCardDecision): void {
     if (!this.kinds.has(decision.action) && !this.retired.has(decision.action)) {
       throw new Error(`action-cards: cannot record a decision for unregistered action "${decision.action}"`)
     }
-    if (DERIVED_PHASES.includes(decision.phase)) throw new Error(`action-cards: phase "${decision.phase}" is derived from the log and cannot be recorded`)
     this.append(agent, decision)
   }
 
@@ -299,7 +294,7 @@ export class ActionCards extends TypertRemoteService {
     if (refusal !== undefined) return refusal
     const decision = ownEntry(this.projection.stateOf(agent.session).view.decisions, proposal.cardId)
     // Without its kind no recorded phase is known to be open, and the kind may return to act on it.
-    if (decision !== undefined && (FINAL_PHASES.includes(decision.phase) || kind?.openPhases.includes(decision.phase) !== true)) {
+    if (decision !== undefined && (decision.phase === 'dismissed' || kind?.openPhases.includes(decision.phase) !== true)) {
       return { status: 'settled', decision }
     }
     const data = kind?.dismissal(proposal, payload)
@@ -315,7 +310,7 @@ export class ActionCards extends TypertRemoteService {
     const refusal = await this.reconciled(agent, kind, proposal, verb)
     if (refusal !== undefined) return refusal
     const decision = ownEntry(this.projection.stateOf(agent.session).view.decisions, proposal.cardId)
-    if (decision !== undefined && FINAL_PHASES.includes(decision.phase)) return { status: 'settled', decision }
+    if (decision?.phase === 'dismissed') return { status: 'settled', decision }
     if (policy.writes === true && this.ctx.get('sandboxPolicy')?.resolve({ session: agent.session }).mode === 'read-only') return refused('read-only')
     return await kind.act(agent, proposal, verb, payload)
   }

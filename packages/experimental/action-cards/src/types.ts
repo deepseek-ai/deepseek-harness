@@ -28,11 +28,7 @@ export interface ActionCardProposal {
   readonly details: ActionCardFields
 }
 
-/**
- * Latest state of one card. Kinds define their own phases; `dismissed` is shared.
- * `replaced` (a later proposal superseded an unstarted card) is derived from the
- * log and never recorded.
- */
+/** Latest recorded decision of one card. Kinds define their own phases alongside the shared `dismissed` phase. */
 export interface ActionCardDecision {
   readonly cardId: ActionCardId
   readonly action: string

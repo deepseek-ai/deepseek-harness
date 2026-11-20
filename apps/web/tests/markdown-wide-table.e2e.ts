@@ -216,13 +216,13 @@ async function awaitTableLayout(target: Page): Promise<void> {
     const element = document.querySelector('[data-sidebar-collapsed][data-rightbar-collapsed]')
     if (element === null) return false
     const tracks = getComputedStyle(element).gridTemplateColumns.split(' ').map(Number.parseFloat)
-    const root = element.querySelector<HTMLElement>('div[data-phase]')
+    const body = element.querySelector<HTMLElement>('div[data-phase] [data-conversation-content]')
     // Desktop retains the rail; the mobile drawer leaves the whole width to the transcript.
     return tracks[0] === (element.hasAttribute('data-sidebar-drawer') ? 0 : 56) && tracks.at(-1) === 0
       && element.getAnimations().every(animation =>
         animation.playState === 'finished' || animation.playState === 'idle')
-      && root !== null
-      && root.style.getPropertyValue('--dsh-conversation-column-width') === `${String(root.offsetWidth)}px`
+      && body !== null
+      && body.style.getPropertyValue('--dsh-conversation-column-width') === `${String(body.offsetWidth)}px`
   }, undefined, { timeout: 10_000 })
 }
 

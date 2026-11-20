@@ -53,7 +53,7 @@ function reasonKey(reason: string): RecommendationKey {
 /** Status copy of a recorded phase; `restart-required` refines enabled. */
 function statusKey(phase: string, data: CardData): RecommendationKey | undefined {
   switch (phase) {
-    case 'dismissed': case 'replaced': case 'already-enabled': case 'failed': case 'unconfirmed': return phase
+    case 'dismissed': case 'already-enabled': case 'failed': case 'unconfirmed': return phase
     case 'enabled': return data.application === 'restart-required' ? 'restart-required' : 'enabled'
     default: return undefined
   }

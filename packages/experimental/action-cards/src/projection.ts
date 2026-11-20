@@ -84,11 +84,11 @@ function cardFieldsOf(message: AssistantMessage): CardFields | undefined {
 
 /**
  * Full-Session fold. The first valid `action-card` block in a turn's answer text becomes the card, named by the id of
- * its assistant message. Later blocks of that turn create no card, and a newer card replaces every unstarted earlier
- * card. Interrupted answers, subagent Sessions and events inherited by a forked Session create no proposals.
+ * its assistant message. Later blocks of that turn create no card. Interrupted answers, subagent Sessions and events inherited
+ * by a forked Session create no proposals.
  */
 export const actionCardProjection: ActionCardProjectionDefinition = {
-  key: 'actionCards', stateVersion: 3, stateSchema,
+  key: 'actionCards', stateVersion: 4, stateSchema,
   init: (header, inheritedEventCount) => ({
     inheritedEventCount, offers: header.origin !== 'subagent', view: { proposals: {}, decisions: {} }, admittedTurn: null, pendingStatus: {},
   }),
@@ -106,13 +106,8 @@ export const actionCardProjection: ActionCardProjectionDefinition = {
         const fields = cardFieldsOf(message)
         if (fields === undefined) return state
         const cardId = brandString<ActionCardId>(message.id)
-        const decisions = { ...state.view.decisions }
-        // A newer card supersedes every unstarted card; the model made that choice, so no status is reported.
-        for (const earlier of Object.values(state.view.proposals)) {
-          if (decisions[earlier.cardId] === undefined) decisions[earlier.cardId] = { cardId: earlier.cardId, action: earlier.action, phase: 'replaced' }
-        }
         const proposals = { ...state.view.proposals, [cardId]: { cardId, turn, ...fields } }
-        return { ...state, admittedTurn: turn, view: { proposals, decisions } }
+        return { ...state, admittedTurn: turn, view: { ...state.view, proposals } }
       }
       default: {
         const record = pluginRecordOf(event)

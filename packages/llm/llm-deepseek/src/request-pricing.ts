@@ -9,6 +9,7 @@
  * @module dsh-llm-deepseek/request-pricing
  */
 
+import { MAX_IMAGE_BYTES } from './defaults.ts'
 import { offloadedImageText, requestImageHandleText, textOnlyImageText } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentAccessResolver, ImageBlock, LlmImageRequestPrice, LlmImageRequestPricing } from '@deepseek-ai/dsh-llm'
 import { longEdgeDimensions, requestImageDimensions } from '@deepseek-ai/dsh-attachment'
@@ -23,7 +24,7 @@ export const DEFAULT_MAX_IMAGES_PER_REQUEST = 600
 /** Total-pixel budget matching provider low-detail image input. */
 export const DEFAULT_LOW_DETAIL_IMAGE_PIXEL_BUDGET = 512 * 512
 /** Encoded-byte target for one deterministic model-request image; the smallest quality-ladder output is used when no quality fits. */
-export const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+export const DEFAULT_REQUEST_IMAGE_TARGET_BYTES = 2 * 1024 * 1024
 /**
  * Provider per-side limit for a request carrying 15 or more images, applied
  * to every request image so the image count never changes a projection.
@@ -36,18 +37,17 @@ export const REQUEST_IMAGE_MAX_DIMENSION = 4096
  * @returns the route's encoded-byte target.
  * @internal
  */
-export function resolveRequestImageMaxBytes(model: DeepSeekCatalogModel): number {
-  return model.imageMaxBytes ?? DEFAULT_REQUEST_IMAGE_MAX_BYTES
+export function resolveRequestImageTargetBytes(model: DeepSeekCatalogModel): number {
+  return model.imageTargetBytes ?? DEFAULT_REQUEST_IMAGE_TARGET_BYTES
 }
 
 /**
- * Resolve the deterministic request target one DeepSeek model route chooses
- * for one source image: the published token grid unless the model overrides
- * it with a pixel budget, then the provider per-side limit, then the route's
- * encoded-byte target. Small images are never enlarged.
+ * Resolve maximum request dimensions from the published token grid or the
+ * model's pixel budget, capped by the provider per-side limit. Small images
+ * are never enlarged. Byte limits remain separate from the dimension bounds.
  * @param model - Advertised model route and its optional image overrides.
  * @param source - intrinsic dimensions of the normalized attachment.
- * @returns Complete request dimensions and encoded-byte target.
+ * @returns Maximum request dimensions, the fixed provider hard byte limit, and the model's soft encoded-byte target.
  * @internal
  */
 export function resolveRequestImageTarget(
@@ -61,7 +61,7 @@ export function resolveRequestImageTarget(
   const capped = Math.max(projected.width, projected.height) > REQUEST_IMAGE_MAX_DIMENSION
     ? longEdgeDimensions(source.width, source.height, REQUEST_IMAGE_MAX_DIMENSION)
     : projected
-  return { ...capped, maxBytes: resolveRequestImageMaxBytes(model) }
+  return { ...capped, maxImageBytes: MAX_IMAGE_BYTES, imageTargetBytes: resolveRequestImageTargetBytes(model) }
 }
 
 /**

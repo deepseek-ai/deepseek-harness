@@ -96,7 +96,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 ### Per-session agent setup
 
-Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
+Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard, PTC, and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
 Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard, PTC, and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
 
