@@ -492,7 +492,9 @@ scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope 
 @Remote async stat(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceFileStat>
 
 /**
- * List the direct children of one directory inside the Session's workspace.
+ * List the direct children of one directory of the Session's workspace: one
+ * that resolves inside the workspace root, or one whose path descends from
+ * the root by child names through a link that resolves outside it.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
  * @param path - workspace path, absolute or relative to the workspace root.
  * @param signal - caller cancellation.
@@ -518,12 +520,13 @@ scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope 
 
 /**
  * Watch one file or a directory's direct entries in the Session's filesystem.
- * Files use the backend's read authority; directories remain workspace-scoped.
+ * Files use the backend's read authority; a directory passes the same workspace check as `list`.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
- * @param path - target path; the Host determines its type and confines directories to the workspace.
+ * @param path - target path; the Host determines its type and applies the workspace check to a directory.
  * @param signal - generation cancellation.
  * @returns `ready` once the target watch is active, then current metadata for queued and live invalidations.
- * @throws RemoteError when watching is unavailable or a directory is outside the workspace.
+ * @throws RemoteError when watching is unavailable, or a directory neither resolves inside the
+ *   workspace root nor has a path that descends from it.
  */
 @Remote({ mode: 'stream' }) changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>
 ```
