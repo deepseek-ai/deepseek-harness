@@ -45,7 +45,9 @@ The plugin reads the layout of the Session's directory at three points, each of 
 - after every Host move of the Session's directory, before `ctx.workingDirectory.set` returns;
 - at the directory validation before each model request.
 
-Each read replaces the Session's registration with its result, so a Git directory that disappeared or no longer names the worktree stops being granted at the next read. Disposing the Agent or unloading the plugin removes the registration.
+Each read replaces the Session's registration with its result, so a Git directory that disappeared or no longer names the worktree stops being granted at the next read. A read takes the caller's cancellation; a cancelled read changes nothing.
+
+A grant belongs to the directory it was read for. It ends in the step that commits a Host move to another directory, before the entered directory is read, so no policy combines the entered directory with the Git directory of the one left. Disposing the Agent or unloading the plugin removes the registration; a read still in flight then registers nothing, and the unload waits for it.
 
 ### Which directories qualify
 
@@ -55,12 +57,14 @@ The files in a Session's directory are writable by the Session, so its `.git` fi
 2. `<common>/worktrees/<name>/commondir` resolves to `<common>`.
 3. `<common>/worktrees/<name>/gitdir` resolves to `<directory>/.git`.
 4. `<common>` neither contains the directory nor lies inside it.
+5. `<common>` holds a `HEAD` file, an `objects` directory, and a `refs` directory.
+6. `<common>/worktrees/<name>` lies in no directory the deployment or another plugin already lets the Session write. Pointer files the Session can write prove nothing about the directory above them, so the plugin neither grants `<X>` through a writable `<X>/worktrees/<name>` nor widens a configured grant of one administration directory to the whole Git directory. Once the plugin granted a Git directory, later reads accept that same directory.
 
 Absolute and relative pointers, a worktree of a bare repository, and a worktree nested inside another worktree qualify. The main checkout needs no grant. A subdirectory of a worktree and a submodule checkout do not qualify.
 
 ### Failures
 
-A layout that cannot be read grants nothing. The plugin logs one warning per Session and directory, and the directory operation or Agent creation that triggered the read succeeds; the next read tries again.
+A layout that cannot be read grants nothing, and neither does a pointer file larger than 8192 bytes. The plugin logs one warning per Session and directory, and the directory operation or Agent creation that triggered the read succeeds; the next read tries again.
 
 -----
 
@@ -70,7 +74,7 @@ A layout that cannot be read grants nothing. The plugin logs one warning per Ses
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin listens to `agent/created`, to `agent/disposed`, and to the `working-directory/access` waterfall, where it reads after `next()` returned the committed directory. It keeps the disposer of one registration per Session. A read whose directory the Session left before the read finished is discarded, because the move that followed has its own read. The plugin's context owns every registration, so unloading the plugin removes them all.
+The plugin listens to `agent/created`, to `agent/disposed`, and to the `working-directory/access` waterfall, where it reads after `next()` returned the committed directory. A prepended `session/event` listener ends a grant when a `workspace-root/change` names another directory, which is the step that commits the move; a Session that publishes no events loses it when the read of the entered directory starts. The plugin keeps one registration per Session with the directory it was read for. A read whose directory the Session left before the read finished is discarded, because the move that followed has its own read, and so is one whose Agent was disposed meanwhile. The plugin's context owns every registration, so unloading the plugin removes them all.
 
 | Source | Responsibility |
 |---|---|
@@ -109,7 +113,9 @@ This package contributes no prompt text. The sandbox policy's context changes wh
 - **Windows** — the plugin registers nothing on Windows, where process confinement ignores additional writable directories. Git commands that write the repository from a worktree Session need an approved escalation or `danger-full-access` there.
 - **Top-level directory only** — a Session whose directory is a subdirectory of a worktree, or a submodule checkout, receives no grant.
 - **No narrower grant** — the registration interface accepts directories, so `hooks` and `config` cannot be excluded from the grant.
-- **Between reads** — a Git directory that is removed stays registered until the next read, and the Session's confined operations fail with `SANDBOX_INVALID_ROOT` until then. An operation that resolved its policy before a move finished keeps the permissions it resolved.
+- **Between reads** — a Git directory that is removed stays registered until the next read, and the Session's confined operations fail with `SANDBOX_INVALID_ROOT` until then. An operation that resolved its policy before a move committed keeps the permissions it resolved, and one that resolves it between the commit and the end of the read of the entered directory holds no grant.
+- **Earlier permissions** — the checks compare the pointer files with what the Session can write now. Pointer files and Git directory entries planted while a Session could write more, under `danger-full-access` or from the main checkout before it entered a worktree, pass them; the grant then reaches a directory that party could already write at the time. Platform temporary directories are not compared either.
+- **Regular entries** — a Git directory whose `HEAD`, `objects`, or `refs` is a symbolic link does not qualify.
 - **Sessions without an Agent** — only Sessions of live Agents receive a grant.
 
 <a id="dev-note"></a>

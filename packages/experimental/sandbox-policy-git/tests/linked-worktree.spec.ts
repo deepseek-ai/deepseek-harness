@@ -2,7 +2,7 @@
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { sharedGitDirectory } from '../src/linked-worktree.ts'
+import { linkedWorktree } from '../src/linked-worktree.ts'
 import { cleanup, filesystem, git, repository, scratch, worktree } from './harness.ts'
 
 const signal = new AbortController().signal
@@ -12,7 +12,7 @@ afterEach(cleanup)
 async function layout(): Promise<{ base: string; repo: string; read: (root: string) => Promise<string | undefined> }> {
   const { base, repo } = await scratch()
   const fs = await filesystem(base)
-  return { base, repo, read: root => sharedGitDirectory(fs, root, signal) }
+  return { base, repo, read: async root => (await linkedWorktree(fs, root, signal))?.common }
 }
 
 /** A hand-written checkout directory whose `.git` file holds `pointer`. */
@@ -21,6 +21,13 @@ async function checkout(base: string, name: string, pointer: string): Promise<st
   await mkdir(root, { recursive: true })
   await writeFile(join(root, '.git'), pointer)
   return root
+}
+
+/** Give a hand-written directory the entries Git requires of a Git directory. */
+async function gitEntries(common: string): Promise<void> {
+  await writeFile(join(common, 'HEAD'), 'ref: refs/heads/main\n')
+  await mkdir(join(common, 'objects'))
+  await mkdir(join(common, 'refs'))
 }
 
 /** A hand-written administration directory at `path` with the given pointer files; undefined omits a file. */
@@ -130,7 +137,11 @@ describe('pointer files the checkout itself could have written', () => {
     expect(await read(directory)).toBeUndefined()
     expect(await read(await forged('escaping', '/\n'))).toBeUndefined()
     expect(await read(await forged('sibling', '..\n'))).toBeUndefined()
-    expect(await read(await forged('complete', '../..\n'))).toBe(join(base, 'complete-git'))
+    // Matching pointers alone name nothing: the directory they name must be a Git directory.
+    const complete = await forged('complete', '../..\n')
+    expect(await read(complete)).toBeUndefined()
+    await gitEntries(join(base, 'complete-git'))
+    expect(await read(complete)).toBe(join(base, 'complete-git'))
   })
 
   it('names nothing when the administration directory does not point back at the checkout', async () => {
@@ -162,6 +173,64 @@ describe('pointer files the checkout itself could have written', () => {
     expect(await read(self)).toBeUndefined()
     expect(await read(same)).toBeUndefined()
     expect(await read(inside)).toBeUndefined()
+  })
+})
+
+describe('what the named directory must hold', () => {
+  it('names nothing until the directory holds a HEAD file, an objects directory, and a refs directory', async () => {
+    const { base, read } = await layout()
+    const common = join(base, 'shaped-git')
+    const root = join(base, 'shaped')
+    await administration(join(common, 'worktrees', 'x'), '../..\n', `${join(root, '.git')}\n`)
+    await checkout(base, 'shaped', `gitdir: ${join(common, 'worktrees', 'x')}\n`)
+
+    expect(await read(root)).toBeUndefined()
+    await mkdir(join(common, 'HEAD'))
+    expect(await read(root)).toBeUndefined()
+    await rm(join(common, 'HEAD'), { recursive: true })
+    await writeFile(join(common, 'HEAD'), 'ref: refs/heads/main\n')
+    expect(await read(root)).toBeUndefined()
+    await writeFile(join(common, 'objects'), '')
+    expect(await read(root)).toBeUndefined()
+    await rm(join(common, 'objects'))
+    await mkdir(join(common, 'objects'))
+    expect(await read(root)).toBeUndefined()
+    await mkdir(join(common, 'refs'))
+    expect(await read(root)).toBe(common)
+  })
+
+  it('returns the administration directory whose files name the worktree', async () => {
+    const { base, repo } = await scratch()
+    const linked = await worktree(repo, base, 'linked')
+
+    expect(await linkedWorktree(await filesystem(base), linked, signal)).toEqual({
+      common: join(repo, '.git'), administration: join(repo, '.git', 'worktrees', 'linked'),
+    })
+  })
+})
+
+describe('pointer file size', () => {
+  it('reads a pointer file of exactly 8192 bytes and rejects one byte more, in each of the three files', async () => {
+    const { base, repo, read } = await layout()
+    const linked = await worktree(repo, base, 'sized')
+    const admin = join(repo, '.git', 'worktrees', 'sized')
+    for (const file of [join(linked, '.git'), join(admin, 'commondir'), join(admin, 'gitdir')]) {
+      const text = (await readFile(file, 'utf8')).trimEnd()
+      await writeFile(file, text.padEnd(8192, '\n'))
+      expect(await read(linked)).toBe(join(repo, '.git'))
+      await writeFile(file, text.padEnd(8193, '\n'))
+      await expect(read(linked)).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
+      await writeFile(file, `${text}\n`)
+    }
+  })
+
+  it('counts bytes, not characters', async () => {
+    const { base, read } = await layout()
+    // 2731 three-byte characters are 8193 bytes.
+    const root = await checkout(base, 'multibyte', '\u4e2d'.repeat(2731))
+    expect(Buffer.byteLength(await readFile(join(root, '.git'), 'utf8'))).toBe(8193)
+
+    await expect(read(root)).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
   })
 })
 

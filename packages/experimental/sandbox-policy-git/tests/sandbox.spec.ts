@@ -32,9 +32,11 @@ const sandboxUsable = await (async () => {
 afterEach(cleanup)
 
 /** Repositories live in the source tree: temporary directories are writable under `workspace-write` by themselves. */
-async function mounted(): Promise<{ ctx: Context; base: string; repo: string }> {
+async function mounted(
+  additionalWritableRoots: (base: string) => string[] = () => [],
+): Promise<{ ctx: Context; base: string; repo: string }> {
   const { base, repo } = await scratch(process.cwd())
-  const ctx = await compose(base)
+  const ctx = await compose(base, additionalWritableRoots(base))
   await ctx.plugin(LocalSandbox)
   await ctx.plugin(sandboxPolicyGit)
   return { ctx, base, repo }
@@ -85,5 +87,22 @@ describe.skipIf(!sandboxUsable)('linked worktree grant under the process sandbox
     expect(extraRoots(ctx, agent)).toBeUndefined()
     await confined(ctx, agent, thief, ...WRITE, join(thief, 'inside.txt'))
     await expect(confined(ctx, agent, thief, ...WRITE, join(repo, '.git', 'forged'))).rejects.toThrow(DENIED)
+  })
+
+  it('leaves the parent unwritable when the pointer files lie in a directory the deployment granted', async () => {
+    const { ctx, base } = await mounted(scratchBase => [join(scratchBase, 'code', 'worktrees', 'granted')])
+    const parent = join(base, 'code')
+    const granted = join(parent, 'worktrees', 'granted')
+    const root = join(base, 'project')
+    await mkdir(granted, { recursive: true })
+    await mkdir(root)
+    await writeFile(join(root, '.git'), `gitdir: ${granted}\n`)
+    await writeFile(join(granted, 'commondir'), '../..\n')
+    await writeFile(join(granted, 'gitdir'), `${join(root, '.git')}\n`)
+    const { agent } = await announced(ctx, root, 'granted-elsewhere')
+
+    expect(extraRoots(ctx, agent)).toEqual([granted])
+    await confined(ctx, agent, root, ...WRITE, join(granted, 'inside.txt'))
+    await expect(confined(ctx, agent, root, ...WRITE, join(parent, 'outside.txt'))).rejects.toThrow(DENIED)
   })
 })

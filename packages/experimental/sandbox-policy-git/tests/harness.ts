@@ -12,7 +12,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
@@ -77,24 +77,37 @@ export async function filesystem(base: string): Promise<FileSystem> {
   return ctx.fs
 }
 
-/** The services the plugin injects, under a `workspace-write` default, without the plugin. */
-export async function compose(base: string): Promise<Context> {
+/**
+ * The services the plugin injects, under a `workspace-write` default, without the plugin.
+ * @param base - fallback workspace root and filesystem base.
+ * @param additionalWritableRoots - directories the deployment grants to every Session.
+ */
+export async function compose(base: string, additionalWritableRoots: string[] = []): Promise<Context> {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(LocalFileSystem, { cwd: base })
-  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: base })
+  await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: base, additionalWritableRoots })
   await ctx.plugin(WorkingDirectoryService)
   return ctx
 }
 
-/** An Agent whose Session was opened in `cwd`; `register` announces it and resolves once creation listeners ran. */
-export function agentIn(ctx: Context, cwd: string, name: string): { agent: Agent; register: () => ReturnType<Context['agents']['register']> } {
+/**
+ * An Agent whose Session was opened in `cwd`; `register` announces it and resolves once creation listeners ran.
+ * The Session lives in the Session store, as every product Session does, unless `detached` asks for one that
+ * publishes no `session/event`.
+ */
+export function agentIn(
+  ctx: Context, cwd: string, name: string, detached = false,
+): { agent: Agent; register: () => ReturnType<Context['agents']['register']> } {
   const scope = ctx.plugin(() => {})
   const id = brandString<SessionId>(name)
-  const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
+  const session = detached
+    ? Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
+    : ctx.sessions.create(id, { meta: { cwd } })
   const agent: Agent = {
     id, session, options: {}, status: 'idle', ctx: scope.ctx, model: unsupportedModel(), inbox: unsupportedInbox(),
     send() {}, followup() {}, steer() {}, inject() {}, cancel() {},
@@ -104,8 +117,10 @@ export function agentIn(ctx: Context, cwd: string, name: string): { agent: Agent
 }
 
 /** Announce an Agent in `cwd` and wait for its creation listeners. */
-export async function announced(ctx: Context, cwd: string, name: string): Promise<{ agent: Agent; dispose: () => Promise<void> }> {
-  const { agent, register } = agentIn(ctx, cwd, name)
+export async function announced(
+  ctx: Context, cwd: string, name: string, detached = false,
+): Promise<{ agent: Agent; dispose: () => Promise<void> }> {
+  const { agent, register } = agentIn(ctx, cwd, name, detached)
   const registration = register()
   await registration
   return { agent, dispose: async () => { await registration() } }
