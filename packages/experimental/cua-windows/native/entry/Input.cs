@@ -93,7 +93,7 @@ internal static class Input
         return ((ushort)(mapped & 0xFF), false, modifiers.ToArray());
     }
 
-    private static string HoldKeyName(string name) => name.ToLowerInvariant() switch
+    internal static string HoldKeyName(string name) => name.ToLowerInvariant() switch
     {
         "control" => "ctrl",
         "return" => "enter",
@@ -104,13 +104,9 @@ internal static class Input
         var key => key,
     };
 
-    internal static void ReleaseKey(Guid connection, string app, nint window, string name, RequestContext context)
-        => context.HeldInputs.Up(connection, app, window, HoldKeyName(name), true);
-
     internal static bool KeyDown(Guid connection, AppState app, WindowState window, string name, RequestContext context)
     {
         Windows.RequireForeground(app, window, context);
-        name = HoldKeyName(name);
         var key = ResolveKey(name, includeModifiers: true);
         if (key.Modifiers.Length != 0)
             throw new NativeFailure("UNSUPPORTED", "This key requires modifiers in the target keyboard layout; send each modifier and the base key separately");
@@ -186,9 +182,6 @@ internal static class Input
         Send(Move(point));
         return new { dispatched = true, hoverRoute = "system-pointer", systemPointerMoved = before.X != point.X || before.Y != point.Y };
     }
-
-    internal static void ReleaseButton(Guid connection, string app, nint window, string button, RequestContext context)
-        => context.HeldInputs.Up(connection, app, window, button, false);
 
     internal static bool ButtonDown(Guid connection, AppState app, WindowState window, string button, RequestContext context)
     {

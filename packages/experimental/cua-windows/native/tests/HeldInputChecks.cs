@@ -12,7 +12,6 @@ internal static class HeldInputChecks
         var target = new HeldInputs.Target("app", 72, 122, 100);
         var events = new List<string>();
         var blocked = false;
-        var interactive = true;
         void Receive(Win32.Input input)
         {
             if (blocked) throw new NativeFailure("INPUT_BLOCKED", "SendInput returned zero");
@@ -21,10 +20,7 @@ internal static class HeldInputChecks
             var up = isKey ? (input.Data.Keyboard.Flags & 2) != 0 : input.Data.Mouse.Flags == 4;
             events.Add($"{control}:{(up ? "up" : "down")}");
         }
-        var inputs = new HeldInputs(Receive, () =>
-        {
-            if (!interactive) throw new NativeFailure("SESSION_LOCKED", "The interactive desktop is unavailable");
-        });
+        var inputs = new HeldInputs(Receive);
 
         bool Key(Guid connection, ushort key, string name, CancellationToken cancellation = default)
             => inputs.Down(connection, target, key, name,
@@ -43,8 +39,7 @@ internal static class HeldInputChecks
             new() { Data = new() { Mouse = new() { Flags = 2 } } },
             new() { Data = new() { Mouse = new() { Flags = 4 } } }, default), "Record the accepted mouse down");
         check(Key(a, 87, "w") && !Key(a, 87, "w"), "A repeated key does not duplicate a hold");
-        refuses(() => inputs.RequireOwner(b, "app", 72), "INPUT_BUSY");
-        refuses(() => inputs.RequireOwner(a, "app", 73), "INPUT_BUSY");
+        refuses(() => Key(b, 87, "w"), "INPUT_BUSY");
         refuses(() => inputs.RequireAvailable(1), "INPUT_BUSY");
         refuses(() => inputs.Up(b, "app", 72, "w", true), "INPUT_NOT_HELD");
         refuses(() => inputs.Up(a, "app", 73, "w", true), "INPUT_NOT_HELD");
@@ -58,6 +53,13 @@ internal static class HeldInputChecks
         check(inputs.Release(a, default).Length == 3
             && events.TakeLast(3).SequenceEqual(["16:up", "87:up", "1:up"]), "Release in mixed reverse order, including repress");
         check(inputs.Release(a, default).Length == 0, "Duplicate connection cleanup sends no up");
+        Key(a, 87, "w");
+        Key(b, 68, "d");
+        var beforeRelease = events.Count;
+        inputs.Up(a, "app", 72, "w", true);
+        check(inputs.Get(b).Length == 1 && events.Skip(beforeRelease).SequenceEqual(["87:up"]),
+            "One connection can release W while another holds D");
+        inputs.Up(b, "app", 72, "d", true);
         using (var cancelled = new CancellationTokenSource())
         {
             cancelled.Cancel();
@@ -65,10 +67,6 @@ internal static class HeldInputChecks
             catch (OperationCanceledException) { check(inputs.Get(a).Length == 0, "Cancelled down never dispatches"); }
         }
         Key(a, 87, "w");
-        interactive = false;
-        refuses(() => inputs.Release(a, default), "INPUT_CLEANUP_FAILED");
-        check(inputs.Get(a).Length == 1, "A locked desktop leaves the failed release recorded");
-        interactive = true;
         blocked = true;
         refuses(() => inputs.Release(a, default), "INPUT_CLEANUP_FAILED");
         check(inputs.Get(a).Length == 1, "A refused release stays recorded for disconnect fallback");

@@ -4,7 +4,7 @@ using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
 
-internal sealed class HeldInputs(Action<Win32.Input> send, Action requireInteractive)
+internal sealed class HeldInputs(Action<Win32.Input> send)
 {
     internal readonly record struct Target(string AppHandle, nint Window, int ProcessId, long ProcessStarted);
     private sealed record Press(Guid Connection, Target Target, ushort Control, string Name, Win32.Input Up)
@@ -19,14 +19,6 @@ internal sealed class HeldInputs(Action<Win32.Input> send, Action requireInterac
 
     private readonly object gate = new();
     private readonly List<Press> pressed = [];
-
-    internal void RequireOwner(Guid connection, string app, nint window)
-    {
-        lock (gate)
-            if (pressed.Any(press => press.Connection != connection
-                || press.Target.AppHandle != app || press.Target.Window != window))
-                throw new NativeFailure("INPUT_BUSY", "Another connection or window owns held desktop input; release it before sending input to this window");
-    }
 
     internal void RequireAvailable(ushort control)
     {
@@ -62,7 +54,7 @@ internal sealed class HeldInputs(Action<Win32.Input> send, Action requireInterac
         }
     }
 
-    internal void Up(Guid connection, string app, nint window, string name, bool keyboard)
+    internal void Up(Guid connection, string app, nint? window, string name, bool keyboard)
     {
         lock (gate)
         {
@@ -105,7 +97,6 @@ internal sealed class HeldInputs(Action<Win32.Input> send, Action requireInterac
 
     private void ReleaseAt(int index)
     {
-        requireInteractive();
         send(pressed[index].Up);
         pressed.RemoveAt(index);
     }

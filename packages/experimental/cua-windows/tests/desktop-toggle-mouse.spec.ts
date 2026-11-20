@@ -185,10 +185,15 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     await expect.poll(async () => (await inspect()).inputEvents.slice(beforeSwitch)).toContain('W:down')
     const switched = await fixture.command('sibling', FixtureState)
     expect(switched.foreground).toBe(switched.window)
+    const peerTarget = { appHandle: otherApp.appHandle, windowId: switched.window, key: 'd' }
+    await other.request('sendKeyEvent', { ...peerTarget, direction: 'down' }, signal)
     await native.dispose()
     await expect.poll(async () => {
       const sibling = await fixture.command('inspect-sibling', FixtureState)
       return { foreground: sibling.foreground, events: sibling.inputEvents.slice(switched.inputEvents.length) }
     }).toEqual({ foreground: switched.window, events: ['W:up'] })
-
+    expect(released.parse(await other.request('getHeldInputs', {}, signal)).map(input => input.key)).toEqual(['d'])
+    await fixture.command('focus', FixtureState)
+    expect(await other.request('sendKeyEvent', { ...peerTarget, direction: 'up' }, signal))
+      .toMatchObject({ dispatched: true, foregroundChanged: null })
   }, 120_000)
