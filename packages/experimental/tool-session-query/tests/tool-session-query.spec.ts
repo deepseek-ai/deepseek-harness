@@ -306,7 +306,7 @@ describe('registration and schemas', () => {
 
     await mounted.fiber.dispose()
     expect(mounted.ctx.tools.schemas().map(schema => schema.name)).toEqual([])
-    expect((await mounted.ctx.systemPrompt.assemble()).sections.map(section => section.name))
+    expect((await mounted.ctx.systemPrompt.assemble()).sections.filter(section => !section.retire).map(section => section.name))
       .not.toContain('tool:session-query')
   })
 

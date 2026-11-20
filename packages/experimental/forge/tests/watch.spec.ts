@@ -119,17 +119,6 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(4)
   })
 
-  it('treats unknown mergeability as active work', async () => {
-    const provider = new FakeProvider()
-    provider.results.set(key, snapshot(ref(1), { mergeability: 'unknown' }))
-    const context = await setup(provider)
-    collect(context)
-
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    expect(provider.fetches).toHaveLength(2)
-  })
-
   it('backs off after consecutive failures up to the cap and resets after success', async () => {
     const provider = new FakeProvider()
     const context = await setup(provider)

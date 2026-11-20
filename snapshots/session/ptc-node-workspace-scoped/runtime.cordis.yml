@@ -1,0 +1,4 @@
+# Replays the ptc-node-workspace confinement check with the scoped REPL.
+- id: ptc-runtime-late
+  config:
+    executionMode: persistent-in-memory

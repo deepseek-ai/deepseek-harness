@@ -136,8 +136,7 @@ it.for(['standard', 'ptc'] as const)('compares the shipped %s tool sets and perm
   expect(sdk.names).toContain('plugin_manager')
   const optOut = await collect('sdk', mode, [{ id: 'tool-plugin-manager', disabled: true }])
   expect(optOut.names).not.toContain('plugin_manager')
-  expect(() => { assertToolParity(mode, optOut.names, desktop.names) }).toThrow(
-    mode === 'ptc' ? 'Stale exceptions: sdk:plugin_manager' : 'Missing from SDK: plugin_manager')
+  expect(() => { assertToolParity(mode, optOut.names, desktop.names) }).toThrow('Missing from SDK: plugin_manager')
 })
 
 it.for(['standard', 'ptc'] as const)('detects missing shared tools in %s', async (mode, test) => {

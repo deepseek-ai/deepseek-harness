@@ -1,5 +1,6 @@
 import { MESSAGES_RESPONSE } from './messages-response.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
+import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -11,9 +12,12 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import * as jsonrpc from '../src/index.ts'
 
 /**
@@ -35,6 +39,8 @@ interface ApplyHarness {
   fiber: Awaited<ReturnType<Context['plugin']>>
   /** Frames, write completions, and exits in observation order. */
   events: WireEvent[]
+  /** Stands in for `process`; SIGTERM has an owner, as under the launcher. */
+  processEvents: EventEmitter
   outputErrors: Error[]
   send(frame: Record<string, unknown>): void
   sendRaw(text: string): void
@@ -121,10 +127,13 @@ async function mountPlugin(
   const exit = (code: number): void => { events.push({ kind: 'exit', code }) }
 
   ctx.effect(() => () => { events.push({ kind: 'root-disposed' }) }, 'jsonrpc test root-disposal witness')
+  const processEvents = new EventEmitter()
+  processEvents.on('SIGTERM', () => {})
   const fiber = await ctx.plugin(jsonrpc, {
     input,
     output,
     exit,
+    processEvents,
   })
 
   const frames = (): Record<string, unknown>[] =>
@@ -133,6 +142,7 @@ async function mountPlugin(
     ctx,
     fiber,
     events,
+    processEvents,
     outputErrors,
     send: (frame) => { input.write(`${JSON.stringify(frame)}\n`) },
     sendRaw: (text) => { input.write(text) },
@@ -282,6 +292,68 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
         params: { sessionId: 'main', status: 'idle' },
       })
     } finally {
+      await harness.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports the signal that preceded runtime shutdown to a pending session/wait', async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-signal-'))
+    const llmServer = await mockCompletionServer()
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    vi.stubEnv('DEEPSEEK_BASE_URL', llmServer.url)
+    const harness = await mountPlugin(storageDir, {
+      beforeServer: async (ctx) => { await ctx.plugin(SubagentRuntime) },
+    })
+    const release = Promise.withResolvers<undefined>()
+    try {
+      const { ctx } = harness
+      harness.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'dsagent-model' } })
+      await harness.waitForFrame(frame => frame.id === 1, 'initialize response')
+      harness.send({ jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'main', contentBlocks: [{ type: 'text', text: 'first' }] } })
+      await harness.waitForFrame(
+        frame => frame.method === 'session.status'
+          && (frame.params as { status?: string } | undefined)?.status === 'idle',
+        'idle session status',
+      )
+      const main = ctx.agents.get(brandString<SessionId>('main'))!
+      const entered = Promise.withResolvers<undefined>()
+      ctx.on('agent/pre-step', async ({ agent }, next) => {
+        if (agent.session.header.parentSession !== undefined) {
+          entered.resolve(undefined)
+          await release.promise
+        }
+        return next()
+      })
+      ctx.subagents.registerProvider({
+        name: 'local-test', capabilities: NO_START_CAPABILITIES, inheritsParentContext: false,
+        prepareContinuable: () => Promise.resolve({}),
+      })
+      await ctx.subagents.startActivation({
+        provider: 'local-test', label: 'running child', delivery: 'caller', signal: new AbortController().signal,
+        parent: main, prompt: [{ type: 'text', text: 'work' }],
+      })
+      await entered.promise
+      harness.send({ jsonrpc: '2.0', id: 3, method: 'session/wait', params: { sessionId: 'main' } })
+      // Stream delivery completes before a timer runs, so the wait is joined to the child here.
+      await settle()
+
+      harness.processEvents.emit('SIGTERM')
+      const agents = ctx.agents
+      const disposing = harness.dispose()
+      await vi.waitFor(() => { expect(agents.get(main.id)).toBeUndefined() })
+      release.resolve(undefined)
+
+      const response = await harness.waitForFrame(frame => frame.id === 3, 'wait response')
+      const error = response.error as { code: number; message: string }
+      expect(error.code).toBe(-32603)
+      expect(error.message).toMatch(new RegExp(
+        '^session agent was disposed outside the server: main; the runtime is shutting down; '
+        + String.raw`last process event before teardown: SIGTERM at \d{4}-`,
+      ))
+      await disposing
+    } finally {
+      release.resolve(undefined)
       await harness.dispose()
       await rm(storageDir, { recursive: true, force: true })
     }

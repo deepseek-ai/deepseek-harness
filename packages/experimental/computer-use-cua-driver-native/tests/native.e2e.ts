@@ -1,4 +1,5 @@
 /** Opt-in native SDK compatibility check without screenshots, input, or permission prompts. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -18,6 +19,7 @@ it.skipIf(process.env.DSH_COMPUTER_USE_NATIVE_E2E !== '1')(
     const ctx = new Context()
     try {
       await ctx.plugin(ComputerUseRegistry)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)

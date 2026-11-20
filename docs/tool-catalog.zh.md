@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`、`ctx.sessionController`、`ctx.workspaceRegistry`、调用 Agent | `tool/call`、接收方的 `agent/inbox/spliced`、`tool/result` | - | dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。 |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -55,6 +56,38 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-tool-session-control"></a>
+
+## `@deepseek-ai/dsh-tool-session-control`
+
+### `session_send_message`
+
+向独立 Session 发送消息。仅当用户明确要求你向另一个 Session 发送消息时使用此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The target session ID."
+    },
+    "message": {
+      "type": "string",
+      "description": "Nonblank message to deliver."
+    }
+  },
+  "required": [
+    "session_id",
+    "message"
+  ]
+}
+```
+
+来源：[`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -583,7 +616,7 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
 
 ### `run_code`
 
-针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，异步函数的函数体（仅限可擦除语法，支持顶层 `await` 和 `return`）；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。使用 inspect(...values) 展示选定的文本和图片。程序是异步 TypeScript 函数的函数体，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层 await 和 return。使用 inspect(...values) 展示输出。不要使用 console。模板字面量的 raw 形式只用于反斜杠必须原样保留的短文本，例如正则表达式；其他文本，尤其是文件内容和命令，用普通字符串书写。文件内容写成引号字符串数组，每行一个元素，用换行符拼接；不要写成一个模板字面量。每次调用在新的 Node 进程中运行，可通过 await import(...) 使用 Node API。相对路径以传入的工作目录为准；process.env 初始为空。直接文件系统访问遵循本次执行的沙箱策略。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
+针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，要执行的程序；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。使用 inspect(...values) 展示选定的文本和图片。程序由 TypeScript REPL 语句组成，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层声明和 await；不支持顶层 return。使用 inspect(...values) 展示输出。不要使用 console。模板字面量的 raw 形式只用于反斜杠必须原样保留的短文本，例如正则表达式；其他文本，尤其是文件内容和命令，用普通字符串书写。文件内容写成引号字符串数组，每行一个元素，用换行符拼接；不要写成一个模板字面量。程序在严格模式下运行：给未声明的名字赋值会抛错，有意设置全局变量请使用 globalThis；eval 和 new Function 不可用。变量、函数和导入的模块在本 Agent 的多次调用之间保留在内存中。每次调用在自己的顶层作用域中运行一个程序。它的顶层 let、const、var、class 和 function 声明，以及它从之前程序收到的名字，会拷贝到之后程序的顶层作用域：之后的程序收到的是这些变量的拷贝而不是引用，因此它们持有的对象仍然共享。同一个程序里，要么使用拷贝来的名字，要么重新声明它；不要既声明一个名字又使用它拷贝来的值。给拷贝来的名字赋值，即使它是用 const 声明的，也只改变本程序的拷贝，之后的程序会收到这个拷贝。不要在块内声明 var；块级 var 会改变之后程序拷贝到的值。之前程序中的函数和仍在运行的代码保留它们捕获的值，它们之后的赋值不会被拷贝；共享的可变状态请放在对象中。如果程序在重新声明已有名字的声明完成前失败，之后的程序保留该名字原先的值。使用 await import(...) 加载模块；require 和 module 不可用。相对导入说明符按本环境第一个程序的工作目录解析，而 process.cwd() 和相对文件路径跟随每个程序的工作目录。直接文件系统访问遵循环境启动时的沙箱策略；process.env 初始为空。超时和取消结果会说明保留的变量是被保留还是被清除。重启、沙箱变更或进程失败会清除它们。请重新创建缺失的变量和资源；对话历史不会恢复状态。之前的修改和工具效果不会回滚。获批的沙箱提权使用全新环境，之后丢弃其中的变量。请在程序结束前等待工具调用和清理完成；未完成的工具调用会被拒绝。完成、超时或取消后，新的工具调用会被拒绝，捕获的输出会被丢弃；后台工作仍可能改变状态。请在程序结束前等待子进程完成；原始输出归属于当前执行。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
 
 ```json
 {
@@ -591,7 +624,7 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
   "properties": {
     "code": {
       "type": "string",
-      "description": "The program: the body of an async TypeScript function."
+      "description": "The TypeScript program to execute, following this tool's execution instructions."
     },
     "description": {
       "type": "string",
@@ -2294,7 +2327,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。corrupt、unsupported 或 unavailable 表示该行自身的后代目录无法读取，该行本身仍是可发送消息的成员。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。共享容量报告 running/limit；容量受限时不要再创建代理。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。corrupt、unsupported 或 unavailable 表示该行自身的后代目录无法读取，该行本身仍是可发送消息的成员。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2453,7 +2486,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+      "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
       "items": {
         "type": "string"
       }
@@ -2579,7 +2612,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "write_scopes": {
       "type": "array",
-      "description": "Replacement advisory write scopes for edit.",
+      "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
       "items": {
         "type": "string"
       }

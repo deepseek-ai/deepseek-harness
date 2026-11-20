@@ -41,7 +41,7 @@ DeepSeek 账号和 API Key 路由显示为独立提供方分组，各自展示�
 
 composer 菜单中的模型名称和推理等级均使用 400（regular）字重，包括选中项。搜索框沿用 command 弹窗的紧凑样式，在浅／深色主题下均保持背景和边框透明，不显示前置图标，占位文字使用 caption 色。主指针精度较低的设备使用 16px 搜索文字，避免 Safari 聚焦缩放；精细指针设备保留 12px。搜索内容非空时显示清除按钮；点击后恢复完整列表，并将焦点留在搜索框。
 
-两个入口均按提供方分组，DeepSeek 账号排第一，DeepSeek 排第二，第三方提供方保持目录原有顺序。两者采用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 异步观察的共享吸顶标题：原位透明，仅吸顶时使用主题的 94% 不透明填充，macOS 桌面端以外使用 `md` 圆角。composer 菜单只显示模型与推理强度名称。导航箭头与关联的模型或推理强度值使用相同的前景色。`/model` 弹窗以提供方名称作为分组标题、模型名称作为选项行，不在每行重复提供方，也不显示目录说明。搜索占位文字、无匹配提示和空目录提示与 composer 模型菜单共用同一组本地化文案。弹窗应用所选模型的默认推理强度；composer 随后可以选择任一已公布的推理强度。适配器没有推理元数据时不显示 Effort 行；不存在任意推理强度输入。
+两个入口均按提供方分组，DeepSeek 账号排第一，DeepSeek API 排第二，第三方提供方保持目录原有顺序。两者采用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 异步观察的共享吸顶标题：原位透明，仅吸顶时使用主题的 94% 不透明填充，macOS 桌面端以外使用 `md` 圆角。composer 菜单只显示模型与推理强度名称。导航箭头与关联的模型或推理强度值使用相同的前景色。`/model` 弹窗以提供方名称作为分组标题、模型名称作为选项行，不在每行重复提供方，也不显示目录说明。搜索占位文字、无匹配提示和空目录提示与 composer 模型菜单共用同一组本地化文案。弹窗应用所选模型的默认推理强度；composer 随后可以选择任一已公布的推理强度。适配器没有推理元数据时不显示 Effort 行；不存在任意推理强度输入。
 
 展开的控件无法排在同一行时，composer 将模型与推理强度文字替换为模型图标；空间足够后恢复文字。触发器的无障碍名称、提示和菜单仍提供完整选择。
 
@@ -61,7 +61,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 当会话被其他写句柄占用时，模型选择失败提示用户退出其他正在运行的 DSH 后重试。
 
-会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。贡献项调用 `openPane({ key, title })`，显示注册到会话级 keyed slot `conversation.input.model.pane` 的内容；入口按钮的 `data-model-menu-pane` 必须与注册键一致。一级与二级贡献项均收到 `locked`、`reportFailure(message)` 和 `dismiss()`：锁定包含模型或推理等级保存中状态，失败由菜单宿主的 toast 提示，关闭时同步聚焦触发按钮，供贡献方随后打开其他浮层。设置与确认逻辑由贡献插件负责。一级与二级面板共用 240px 宽度，并保持视口两侧的 12px 边距；模型与推理等级列表仍按内容定宽。菜单把二级面板呈现为以 `title` 命名的分组；面板自行设置初始焦点，未设置时焦点停留在菜单容器上。Escape 将焦点还给入口行；Tab 关闭二级面板而不激活开关。
+会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。每个可交互的贡献项都应渲染为 `button`，role 取 `menuitem`、`menuitemradio` 或 `switch`；方向键与 Tab 只会到达这些行。贡献项调用 `openPane({ key, title })`，显示注册到会话级 keyed slot `conversation.input.model.pane` 的内容；入口按钮的 `data-model-menu-pane` 必须与注册键一致。一级与二级贡献项均收到 `locked`、`reportFailure(message)` 和 `dismiss()`：锁定包含模型或推理等级保存中状态，失败由菜单宿主的 toast 提示，关闭时同步聚焦触发按钮，供贡献方随后打开其他浮层。设置与确认逻辑由贡献插件负责。一级与二级面板共用 240px 宽度，并保持视口两侧的 12px 边距；模型与推理等级列表仍按内容定宽。菜单把二级面板呈现为以 `title` 命名的分组；面板自行设置初始焦点，未设置时焦点停留在菜单容器上。Escape 将焦点还给入口行；Tab 关闭二级面板而不激活开关。
 
 -----
 

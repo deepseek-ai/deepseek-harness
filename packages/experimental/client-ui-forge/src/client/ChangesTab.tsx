@@ -128,9 +128,11 @@ export interface ChangesTabInjected {
   readonly viewedFiles: ViewedFiles
   /**
    * Read the signed-in user's viewed marks on a change request's files at `headSha`, or null when its provider keeps
-   * none; `signal` aborts the read.
+   * none; `fresh` skips the marks the host keeps, and `signal` aborts the read.
    */
-  readonly changeRequestViewed: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeViewedFiles | null>>
+  readonly changeRequestViewed: (
+    url: string, headSha: string, fresh: boolean, signal: AbortSignal,
+  ) => Promise<RemoteResult<ForgeViewedFiles | null>>
   /** Set or clear the signed-in user's viewed mark on one file of a change request. */
   readonly setFileViewed: (url: string, request: ForgeViewedRequest) => Promise<RemoteResult<void>>
   /** Read one file of a change request at a commit. */
@@ -295,6 +297,7 @@ function baseFailureOf(failed: string | null, base: ForgeBaseBranch | null, t: T
  * @param scope - local scope to read.
  * @param commits - chosen commits of a change request, or null for all of it.
  * @param head - head commit of the change request's latest status, or null.
+ * @param fresh - whether the viewed marks are read from the code host although the host keeps some, as after a refresh.
  * @param reads - the Remote reads.
  * @param signal - cancellation of the reads.
  * @returns the changes, or why they could not be read.
@@ -304,6 +307,7 @@ async function readChanges(
   scope: ForgeLocalScope,
   commits: ForgeCommitRange | null,
   head: string | null,
+  fresh: boolean,
   reads: Pick<ChangesTabInjected, 'localDiff' | 'changeRequestDiff' | 'changeRequestViewed'>,
   signal: AbortSignal,
 ): Promise<RemoteResult<ChangesData>> {
@@ -315,7 +319,7 @@ async function readChanges(
   }
   const [result, marks] = await Promise.all([
     reads.changeRequestDiff(source.url, commits, signal),
-    commits === null && head !== null && head !== '' ? reads.changeRequestViewed(source.url, head, signal) : Promise.resolve(null),
+    commits === null && head !== null && head !== '' ? reads.changeRequestViewed(source.url, head, fresh, signal) : Promise.resolve(null),
   ])
   if (!result.ok) return result
   if (marks !== null && !marks.ok && marks.error.code === 'forgePanel/stale-head') return marks
@@ -705,9 +709,10 @@ export function ChangesView({
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
   // A read starts once the panel state arrives and again when what it describes moves. A change request's read
-  // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
+  // also waits for the first status of the panel stream, which names the head the Host reads at, unless no provider
+  // serves it or its first poll failed; until then the entry may show a snapshot the Host kept from an earlier stream.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
-  const head = entry?.snapshot?.headSha ?? (pending ? null : '')
+  const head = pending ? null : entry?.snapshot?.headSha ?? ''
   // An accepted review change the host announced, from any plugin, reads a change request's viewed marks again.
   const hostRevision = entry?.reviewRevision ?? 0
   const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}`
@@ -729,11 +734,16 @@ export function ChangesView({
   useEffect(() => { latestStatusAt.current = statusAt }, [statusAt])
   const [refused, setRefused] = useState<{ readonly read: string; readonly statusAt: number | null } | null>(null)
   const waiting = refused !== null && refused.read === read && refused.statusAt === statusAt
+  // The refresh whose read finished last; until the read of a later refresh finishes, reads skip the viewed marks the
+  // host keeps, which marks changed on the code host itself leave unchanged.
+  const finishedAttempt = useRef(attempt)
   useEffect(() => {
     if (!tab.visible || read === null || read === finished || waiting) return
     const controller = new AbortController()
     const readAt = latestStatusAt.current
-    void readChanges(source, localScope, changeCommits, head, { localDiff, changeRequestDiff, changeRequestViewed }, controller.signal)
+    const fresh = finishedAttempt.current !== attempt
+    const reads = { localDiff, changeRequestDiff, changeRequestViewed }
+    void readChanges(source, localScope, changeCommits, head, fresh, reads, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return
         if (!result.ok && result.error.code === 'forgePanel/stale-head') {
@@ -741,6 +751,7 @@ export function ChangesView({
           setFailure(null)
           return
         }
+        finishedAttempt.current = attempt
         setFinished(read)
         if (result.ok) {
           setLoaded({ key: dataKey, data: result.value })
@@ -750,12 +761,12 @@ export function ChangesView({
         }
       })
     return () => { controller.abort() }
-  }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, head, dataKey, localDiff, changeRequestDiff,
+  }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, head, attempt, dataKey, localDiff, changeRequestDiff,
     changeRequestViewed])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   // Threads show only while they were read at the head of the latest status and, for the whole change request, at
   // the head the shown diff was read at, so their positions number the shown files.
-  const prHead = entry?.snapshot?.headSha ?? null
+  const prHead = pending ? null : entry?.snapshot?.headSha ?? null
   const prAuthor = entry?.snapshot?.author ?? null
   const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
     updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision + hostRevision, read: changeRequestReview })

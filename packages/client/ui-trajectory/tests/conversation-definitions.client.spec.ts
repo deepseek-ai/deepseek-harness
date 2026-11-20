@@ -921,7 +921,7 @@ describe('Trajectory conversation Definitions', () => {
     value.flush()
     expect(snapshot(value).systemPrompts).toBeUndefined()
     expect(snapshot(value).requests.find(request => request.purpose === 'assistant'))
-      .toMatchObject({ prompt: { system: 'known prompt', config: { provider: 'test', model: 'test' } } })
+      .toMatchObject({ prompt: { system: 'original\n\nknown prompt', config: { provider: 'test', model: 'test' } } })
   })
 
   it('carries an in-history prompt update into later requests as a system change at its own position', () => {
@@ -987,18 +987,18 @@ describe('Trajectory conversation Definitions', () => {
       ? [request.prompt?.system, request.promptChange]
       : undefined)).toEqual([
       ['first prompt', { seq: 3, time: 1_700_000_000_003, kind: 'initial' }],
-      ['updated prompt', {
+      ['first prompt\n\nupdated prompt', {
         seq: 10,
         time: 1_700_000_000_010,
         kind: 'system',
         previous: { config: { provider: 'test', model: 'test' }, system: 'first prompt', tools: [] },
       }],
-      ['updated prompt', undefined],
-      ['updated prompt', undefined],
+      ['first prompt\n\nupdated prompt', undefined],
+      ['first prompt\n\nupdated prompt', undefined],
     ])
   })
 
-  it.each(['replay', 'live'] as const)('compares consecutive A → B → C updates against B (%s)', (mode) => {
+  it.each(['replay', 'live'] as const)('compares accumulated sections with the preceding request (%s)', (mode) => {
     const history = [
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
@@ -1029,8 +1029,8 @@ describe('Trajectory conversation Definitions', () => {
       ? { system: request.prompt?.system, previous: request.promptChange?.previous?.system }
       : null)).toEqual([
       { system: 'A', previous: undefined },
-      { system: 'B', previous: 'A' },
-      { system: 'C', previous: 'B' },
+      { system: 'A\n\nB', previous: 'A' },
+      { system: 'A\n\nB\n\nC', previous: 'A\n\nB' },
     ])
   })
 
@@ -1075,7 +1075,7 @@ describe('Trajectory conversation Definitions', () => {
     }
     expect(snapshot(value).requests.filter(request => request.purpose === 'assistant')
       .map(request => [request.prompt?.system, request.promptChange?.previous?.system])).toEqual([
-      ['A', undefined], ['B', 'A'], ['A', 'B'],
+      ['A', undefined], ['A\n\nB', 'A'], ['A', 'A\n\nB'],
     ])
     expect(snapshot(value).requests.at(-1)).toMatchObject({ promptChange: { seq: 12, kind: 'system' } })
   })
@@ -1095,7 +1095,7 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(uncertain).systemPrompts).toBeUndefined()
     value.prepend([system(1, 'A'), system(3, 'B'), system(5, 'A2', 1)], false)
     value.flush()
-    expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: 'C' } })
+    expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: 'D\n\nC' } })
   })
 
   it('withholds inherited prompts when a replacement reaches an unloaded endpoint', () => {
@@ -1127,7 +1127,7 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(value).requests.map(request => request.purpose === 'assistant'
       ? [request.prompt?.system, request.promptChange]
       : undefined)).toEqual([
-      ['updated prompt', { seq: 4, time: 1_700_000_000_004, kind: 'initial' }],
+      ['first prompt\n\nupdated prompt', { seq: 4, time: 1_700_000_000_004, kind: 'initial' }],
     ])
   })
 

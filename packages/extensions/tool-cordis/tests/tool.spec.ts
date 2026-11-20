@@ -2,6 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { CordisInspectRegistryService } from '@deepseek-ai/dsh-cordis-host-runner'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry, { type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -10,6 +11,7 @@ import * as ToolCordis from '../src/index.ts'
 async function fixture() {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(CordisInspectRegistryService, 10_000)

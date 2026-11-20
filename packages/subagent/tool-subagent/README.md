@@ -167,12 +167,12 @@ The schema is prefix-stable across adapter registration and catalog changes. Eac
 
 #### What the model sees
 
-Visible delegation tools share delegation and collaboration guidance, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Ending the turn works because a settled child notifies its parent and a notice that reaches an idle parent starts one independent model request; hosts that keep children progressing alternate `agent.whenIdle()` and `waitForChildren(agent)` ([`dsh-subagent`](../subagent/README.md), [`session.ts`](../../acp/acp/src/session.ts)). Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
+Visible delegation tools share delegation and collaboration guidance, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Ending the turn works because a settled child notifies its parent and a notice that reaches an idle parent starts one independent model request; hosts that keep children progressing alternate `agent.whenIdle()` and `waitForChildren(agent)` ([`dsh-subagent`](../subagent/README.md), [`session.ts`](../../acp/acp/src/session.ts)). Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible and the default concurrency limit of `8`, the text is:
 
 ##### Tool-guidance section
 
 ```markdown
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. The concurrency limit of all the subagents is 8. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
 
 Bash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.
 ```
@@ -183,7 +183,7 @@ Two guidance paragraphs per parent request with visible delegation tools, listin
 
 #### KV Cache effect
 
-Prefix-stable while the visible tool names are unchanged; adding or removing a visible tool changes the guidance.
+Prefix-stable while the visible tool names and configured concurrency limit are unchanged; each prompt assembly reads the current limit.
 
 ### Runtime depth context
 

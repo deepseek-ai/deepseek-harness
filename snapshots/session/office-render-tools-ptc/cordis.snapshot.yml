@@ -81,6 +81,8 @@
 
 - id: ptc-runtime
   config:
+    # Recorded programs are async function bodies.
+    executionMode: per-call
     launch:
       kind: node-script
       executable: !!js process.cwd() + '/office-ptc-node'

@@ -1,0 +1,19 @@
+version: 1
+scenario: ptc-node-workspace-scoped
+profile: headless
+composition: ptc-node-workspace
+recording: authored
+header:
+  class: ptc-node-workspace-scoped
+  pin: true
+  systemPromptSource: ptc-persistent
+  toolSchemasSource: ptc-persistent-scoped
+replay:
+  override: true
+platform: posix
+permission: workspace-write
+environment:
+  ELECTRON_RUN_AS_NODE: '1'
+workspace:
+  final: true
+  parent: outside-temp

@@ -90,6 +90,19 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 插件应答 `shutdown`，刷新响应并 dispose 根上下文，使 SDK 持有的 agent、订阅与持久化达到完全停稳，然后以 0 退出。EOF 与信号退出归 app bin 负责，后者也会 dispose 根上下文。仅卸载此插件会停止服务，但不会退出进程。
 
+### 针对已销毁 agent 的请求
+
+当会话的 agent 已离开 agent 注册表时，针对该会话的请求以 `session agent was disposed outside the server: <sessionId>; <context>` 失败。其中 context 说明服务端观察到的情况：
+
+| Context | 含义 |
+|---|---|
+| `the runtime is shutting down; last process event before teardown: <event> at <time>` | 整个运行时正在被 dispose。`<event>` 为 `SIGTERM`、`SIGINT`、`uncaught exception: <首行>`、`unhandled rejection: <首行>` 或 `stdin closed`。它是 dispose 开始前最后观察到的此类事件，不是已确认的原因。 |
+| `the runtime is shutting down; no process event was observed before teardown` | 整个运行时正在被 dispose，且此前没有出现上述事件。 |
+| `the SDK server is shutting down` | 此插件正在卸载，或正在应答 `shutdown`。 |
+| `the agent loop was unloaded at <time> while the runtime keeps running; first plugin unloading at that time: "<name>"` | 只有 agent loop 被卸载，进程仍在运行。`<name>` 是当时正在进行的卸载中最先开始的插件，通常是 agent loop 或它依赖的某个服务；多个卸载重叠时可能是无关插件。服务端未观察到移除过程时，省略时间和插件名。 |
+
+只有当某个信号或未处理的 Promise 拒绝已有其他监听者处理时，才会记录该事件，因此挂载此插件不会改变进程是否终止。失败文本取消息首行，最多 200 个字符；没有字符串形式的值记为 `<unprintable>`；完整报告仍在 stderr。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -109,6 +122,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、stdio 接线、请求分发、共享关闭与退出任务 |
+| [`src/process-events.ts`](src/process-events.ts) | 记录运行时拆除前最后出现的信号、致命失败或输入结束 |
 | [`src/user-questions.ts`](src/user-questions.ts) | 原生问答适配器：宿主转发、答案校验、取消 |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`：协议方法、逐会话 agent 创建、生命周期订阅、清理 |
 

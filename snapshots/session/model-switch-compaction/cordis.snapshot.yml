@@ -1,4 +1,4 @@
-# The second request selects a smaller model before its header is committed.
+# The third request selects a smaller model before its header is committed.
 
 - id: agent-instructions
   disabled: true

@@ -1,0 +1,11 @@
+version: 1
+scenario: ptc-read-image-attachment-path-scoped
+profile: headless
+composition: ptc-image
+recording: authored
+header:
+  class: ptc-image-scoped
+replay:
+  override: true
+platform: posix
+# Replays the ptc-read-image-attachment-path programs as scoped REPL statements.

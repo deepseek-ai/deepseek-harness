@@ -28,8 +28,12 @@ function signedBodyCookie(store: RecordCredentials, name: string, body: string):
 
 interface ResponseState {
   status?: number
-  headers?: Readonly<Record<string, string>>
+  headers?: Readonly<Record<string, string | string[]>>
   body?: string
+}
+
+function setCookies(state: ResponseState): string[] {
+  return [state.headers?.['set-cookie'] ?? []].flat()
 }
 
 function response(): { value: ConnectionIndexResponse; state: ResponseState } {
@@ -78,14 +82,32 @@ function exchange(
   auth: BrowserAuth,
   authority = '127.0.0.1:3080',
   secure = false,
+  cookie?: string,
 ): { cookie: string; launchUrl: string; state: ResponseState } {
   const launchUrl = auth.authenticatedUrl(`http://${authority}`)
   const target = new URL(launchUrl)
   const res = response()
-  expect(auth.authorizeIndex(request(`${target.pathname}${target.search}`, authority), res.value, secure)).toBe(false)
-  const setCookie = res.state.headers?.['set-cookie']
+  const init = cookie === undefined ? {} : { cookie }
+  expect(auth.authorizeIndex(request(`${target.pathname}${target.search}`, authority, init), res.value, secure)).toBe(false)
+  const setCookie = setCookies(res.state)[0]
   if (setCookie === undefined) throw new Error('token exchange did not set a cookie')
   return { cookie: setCookie.split(';', 1)[0]!, launchUrl, state: res.state }
+}
+
+/** One sign-in per port, issued one second apart from `startPort` upward. */
+function signedInPorts(auth: BrowserAuth, startPort: number, count: number): string[] {
+  return Array.from({ length: count }, (_, index) => {
+    vi.advanceTimersByTime(1000)
+    return exchange(auth, `127.0.0.1:${String(startPort + index)}`).cookie
+  })
+}
+
+function cookieNameOf(pair: string): string {
+  return pair.slice(0, pair.indexOf('='))
+}
+
+function expired(pair: string, secure = false): string {
+  return `${cookieNameOf(pair)}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}`
 }
 
 afterEach(() => {
@@ -124,7 +146,7 @@ describe('API credentials', () => {
         return res.value.writeHead(status, headers)
       },
     }, false, publish)
-    const cookie = res.state.headers?.['set-cookie']?.split(';', 1)[0]
+    const cookie = setCookies(res.state)[0]?.split(';', 1)[0]
     if (cookie === undefined) throw new Error('API connect did not set a cookie')
     const [name, value] = cookie.split('=') as [string, string]
     const payload = { version: 2, authority, id, issuedAt, expiresAt: issuedAt + 30 * 86_400_000 }
@@ -253,7 +275,7 @@ describe('BrowserAuth', () => {
     const token = mounted.searchParams.get('token')
     const exchanged = response()
     expect(auth.authorizeIndex(request(`/?token=${String(token)}`, 'gateway.example'), exchanged.value)).toBe(false)
-    const setCookie = exchanged.state.headers?.['set-cookie']
+    const setCookie = setCookies(exchanged.state)[0]
     if (setCookie === undefined) throw new Error('mount exchange did not set a cookie')
     expect(auth.isAuthenticated(request(
       '/', 'gateway.example', { cookie: setCookie.split(';', 1)[0]! },
@@ -325,6 +347,56 @@ describe('BrowserAuth', () => {
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(false)
     vi.setSystemTime(new Date('2026-08-23T00:00:00.000Z'))
     expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie }))).toBe(false)
+  })
+
+  it('expires all but the 16 most recently issued cookies of other ports when it signs in', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-20T00:00:00.000Z'))
+    const auth = await createAuth(new RecordCredentials())
+    const previous = exchange(auth).cookie
+    const others = signedInPorts(auth, 40_000, 19)
+    vi.advanceTimersByTime(1000)
+
+    const within = exchange(auth, '127.0.0.1:3080', false, [previous, ...others.slice(3)].join('; '))
+    expect(within.state.headers?.['set-cookie']).toBeTypeOf('string')
+
+    // Request order is unrelated to issue order; the three earliest sign-ins go.
+    const crowded = exchange(auth, '127.0.0.1:3080', false, [
+      'theme=dark', ...[...others].reverse(), previous, 'dsh-auth-fixture=signed', 'flag',
+    ].join('; '))
+    expect(setCookies(crowded.state)).toEqual([
+      expect.stringMatching(new RegExp(`^${cookieNameOf(previous)}=v1\\..*; Max-Age=2592000; Path=/; `, 'u')),
+      expired(others[2]!), expired(others[1]!), expired(others[0]!),
+    ])
+    expect(auth.isAuthenticated(request('/', '127.0.0.1:3080', { cookie: crowded.cookie }))).toBe(true)
+
+    const tls = exchange(auth, '127.0.0.1:3080', true, others.slice(0, 17).join('; '))
+    expect(setCookies(tls.state).slice(1)).toEqual([expired(others[0]!, true)])
+  })
+
+  it('orders other ports by the issue time their cookies claim, unreadable values first', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-20T00:00:00.000Z'))
+    // Another Harness home signs with a secret this process cannot verify.
+    const elsewhere = signedInPorts(await createAuth(new RecordCredentials()), 41_000, 16)
+    const auth = await createAuth(new RecordCredentials())
+    const claim = (payload: unknown): string => `v1.${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')}.unverified`
+    const unreadable = [
+      'broken',
+      'v1.%.unverified',
+      `v1.${Buffer.from('not json', 'utf8').toString('base64url')}.unverified`,
+      claim(null),
+      claim({ issuedAt: 'now' }),
+      claim({ issuedAt: Date.now() + 0.5 }),
+    ].map((value, index) => `${cookieNameOf(exchange(auth, `127.0.0.1:${String(42_000 + index)}`).cookie)}=${value}`)
+    const repeated = `${cookieNameOf(elsewhere[0]!)}=${claim({ issuedAt: Date.now() + 60_000 })}`
+
+    const signedIn = exchange(auth, '127.0.0.1:3080', false, [...unreadable, ...elsewhere].join('; '))
+    expect(setCookies(signedIn.state).slice(1)).toEqual(unreadable.map(pair => expired(pair)))
+
+    // A name that appears twice counts once.
+    const repeatedName = exchange(auth, '127.0.0.1:3080', false, [unreadable[0]!, ...elsewhere, repeated].join('; '))
+    expect(setCookies(repeatedName.state).slice(1)).toEqual([expired(unreadable[0]!)])
   })
 
   it('loads one secret per activation and replaces it after deletion on the next activation', async () => {

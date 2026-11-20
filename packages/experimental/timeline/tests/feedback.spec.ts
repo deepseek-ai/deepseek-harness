@@ -4,12 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as Timeline from '../src/index.ts'
 import type {} from '../src/reminders.ts'
+import { languageText } from '../src/policy.ts'
 import { reportSchema, taskId } from '../src/records.ts'
 import { prioritiesOf } from '../src/tasks.ts'
 import { setup } from './fixture.ts'
 
-async function fixture() {
-  const f = await setup({ intervalMs: 86400000 })
+async function fixture(config: Partial<Timeline.Config> = {}) {
+  const f = await setup({ intervalMs: 86400000, ...config })
   let count = 0
   const call = (name: string, args: object) =>
     executeTool(f.ctx, {
@@ -272,6 +273,23 @@ describe('user-owned Timeline feedback', () => {
       expect(
         f.agent.inbox.nextStep.filter(message => message.source.kind === 'timeline-priority'),
       ).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+      await f.close()
+    }
+  })
+  it('summarizes a P0 notice in the app language when following the chat', async () => {
+    const f = await fixture({ language: 'chat' })
+    try {
+      f.ctx.provide('settings', { describe: () => [{ ns: 'locale', value: { preference: 'ja' } }] } as never)
+      f.start()
+      await f.adapter.ready.promise
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      await f.ctx.timeline.edit({ ...f.base, action: 'priority', priority: 'P0' })
+      await vi.advanceTimersByTimeAsync(750)
+      expect(
+        f.agent.inbox.nextStep.find(message => message.source.kind === 'timeline-priority')?.source,
+      ).toMatchObject({ summary: languageText.ja.priority })
     } finally {
       vi.useRealTimers()
       await f.close()

@@ -5,6 +5,7 @@
  * commit + image-block rendering, attachment admission failures, and the
  * regression that `read` keeps its text-only contract.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
@@ -115,6 +116,7 @@ async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin((options.toolMode ?? 'native') === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
@@ -765,7 +767,7 @@ describe('image admission failures', () => {
 
   it.each([
     'ATTACHMENT_WRITE_FAILED', 'TOO_MANY_IMAGES', 'INVALID_IMAGE_BASE64', 'INVALID_FILE_BASE64', 'INVALID_ATTACHMENT_REF',
-    'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
+    'IMAGE_REQUEST_TOO_LARGE', 'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
     'ATTACHMENT_FILES_UNSUPPORTED',
   ] as const)('passes AttachmentError %s without a read remedy through unchanged', async (code) => {
     const result = await failingSave(() => new AttachmentError('Stored attachment failed.', code))
@@ -934,6 +936,7 @@ describe('registration surface', () => {
     const ctx = new Context()
     try {
       provideWorkingDirectoryFixture(ctx)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
@@ -956,6 +959,7 @@ describe('registration surface', () => {
   it('withdraws read_image when the tool-fs fiber or the attachment store is disposed (HMR safety)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

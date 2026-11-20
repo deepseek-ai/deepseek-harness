@@ -525,6 +525,17 @@ describe('agent tools in the production loop', () => {
       await f.close()
     }
   })
+  it('adds no language rule to the planning guidance when following the chat', async () => {
+    const f = await setup({ language: 'chat' })
+    try {
+      const prompt = await f.ctx.systemPrompt.assemble({ scope: f.agent })
+      const text = prompt.sections.find(section => section.name === 'timeline:planning')?.text
+      expect(text).toContain("reuse the goal's tree")
+      expect(text?.endsWith("Keep replies focused on the user's work.")).toBe(true)
+    } finally {
+      await f.close()
+    }
+  })
   it('denies an explicit agent-local Todo override without breaking registration', async () => {
     const f = await setup({ intervalMs: 86400000 })
     let writes = 0

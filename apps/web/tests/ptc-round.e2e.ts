@@ -1,7 +1,8 @@
-// PTC mode browser round trip with nested sub-calls and details selection.
+// PTC mode browser round trip with nested sub-calls and details selection, for each program format.
 // Record: DSH_SNAPSHOT=record writes the current Session generation, then a keyless
 // DSH_SNAPSHOT=refresh regenerates ui.expected.md.
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
@@ -13,19 +14,25 @@ import {
 } from './scaffold.ts'
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
 
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/ptc-round/session.v3.jsonl', import.meta.url))
-const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/ui.expected.md', import.meta.url))
-const TRAJECTORY_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/trajectory.expected.md', import.meta.url))
-const CODE_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/code.expected.md', import.meta.url))
-const PREPARING_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/preparing.expected.md', import.meta.url))
-const REQUEST_LIFECYCLE_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/ptc-round/request-lifecycle.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
 
 // Elicits the successful and failed sub-rows this scenario asserts.
 const PROMPT = 'Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt '
   + 'catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop.'
 
-describe('web e2e: PTC mode round renders nested sub-calls', () => {
+const VARIANTS = [
+  { executionMode: 'per-call', dir: 'ptc-round', fixture: 'session.v3.jsonl' },
+  { executionMode: 'persistent-in-memory', dir: 'ptc-round-scoped', fixture: 'session.v4.jsonl' },
+] as const
+
+describe.each(VARIANTS)('web e2e: PTC mode round renders nested sub-calls ($executionMode)', ({ executionMode, dir, fixture }) => {
+  const snapshotDir = fileURLToPath(new URL(`../../../snapshots/web/${dir}`, import.meta.url))
+  const FIXTURE = join(snapshotDir, fixture)
+  const UI_EXPECTED = join(snapshotDir, 'ui.expected.md')
+  const TRAJECTORY_EXPECTED = join(snapshotDir, 'trajectory.expected.md')
+  const CODE_EXPECTED = join(snapshotDir, 'code.expected.md')
+  const PREPARING_EXPECTED = join(snapshotDir, 'preparing.expected.md')
+  const REQUEST_LIFECYCLE_EXPECTED = join(snapshotDir, 'request-lifecycle.expected.md')
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -36,6 +43,8 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
       agentPresets: { default: 'ptc' },
+      // per-call programs are async function bodies; persistent-in-memory programs are scoped REPL statements.
+      ptcExecutionMode: executionMode,
       compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })
@@ -55,7 +64,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   })
 
   it('drives the recorded prompt to a settled turn (all modes)', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-drive'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-drive-${executionMode}`))
     const requestStates: string[] = []
     if (MODE !== 'record') {
       expect(fixtureUserPrompts(await readFile(await selectedSessionFixture(FIXTURE), 'utf8'))).toEqual([PROMPT])
@@ -176,7 +185,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   })
 
   it.skipIf(MODE === 'record')('renders the code parent row with always-visible nested sub-rows', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-rows'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-rows-${executionMode}`))
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
     // The parent run_code row wears the code variant with the model-authored
     // description as its summary (the presentCall contract).
@@ -190,7 +199,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   }, 60_000)
 
   it.skipIf(MODE === 'record')('expands the nested bash terminal inline before and after reload', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-rightbar'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-rightbar-${executionMode}`))
     let liveTerminalAria: string | undefined
     for (const reloaded of [false, true]) {
       if (reloaded) {
@@ -222,7 +231,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   })
 
   it.skipIf(MODE === 'record')('matches the expanded conversation aria golden with stable anchors', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-aria'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-aria-${executionMode}`))
     const row = page.locator('[data-subcalls] [data-sample="bash"]').first()
     await expandOwningTurnProcess(page, row)
     if (await row.getAttribute('aria-expanded') !== 'true') await row.click()
@@ -235,7 +244,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   })
 
   it.skipIf(MODE === 'record')('inspects recorded PTC source, wrapping, and original JSON in the trajectory', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-inspector'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-inspector-${executionMode}`))
     const call = sessionEvents.find(event => event.type === 'tool/call' && event.data.name === 'run_code')
     if (call?.type !== 'tool/call') throw new Error('recorded PTC call missing')
     const args = JSON.parse(call.data.arguments) as { code: string; description: string }
@@ -276,7 +285,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
   })
 
   it.skipIf(MODE === 'record')('renders the same recorded tool round in Japanese without translating model or tool data', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-japanese'))
+    onTestFailed(() => saveFailureShot(page, `web-e2e-ptc-japanese-${executionMode}`))
     await openSettings(page, 'en')
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
     await settings.getByRole('button', { name: 'English', exact: true }).click()
@@ -292,7 +301,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     await row.locator('xpath=..').getByText('echo CODE_ROUND_OK', { exact: true }).waitFor()
     const snapshot = await captureExpandedTurnProcessAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(
-      fileURLToPath(new URL('../../../snapshots/web/ptc-round/ui-ja.expected.md', import.meta.url)), snapshot, MODE,
+      join(snapshotDir, 'ui-ja.expected.md'), snapshot, MODE,
     )
   })
 

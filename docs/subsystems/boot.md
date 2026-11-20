@@ -88,7 +88,7 @@ register<Details>(kind: ActionCardKind<Details>): () => void
  * Record a card decision in the Session log; the next model request reports it.
  * @param agent - agent whose Session owns the card.
  * @param decision - the card's new state.
- * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+ * @throws when no kind ever registered the decision's action with this service.
  */
 record(agent: Agent, decision: ActionCardDecision): void
 

@@ -522,7 +522,7 @@
                 "up"
               ]
             },
-            "useSystemPointer": {
+            "useSystemInput": {
               "type": "boolean"
             }
           },
@@ -574,7 +574,7 @@
                   "minLength": 1,
                   "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                 },
-                "useSystemPointer": {
+                "useSystemInput": {
                   "type": "boolean"
                 }
               },
@@ -608,7 +608,7 @@
                   "type": "number",
                   "minimum": 0
                 },
-                "useSystemPointer": {
+                "useSystemInput": {
                   "type": "boolean"
                 }
               },
@@ -703,6 +703,9 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 9007199254740991
+                },
+                "useSystemInput": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -776,6 +779,9 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 9007199254740991
+                },
+                "useSystemInput": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1084,6 +1090,9 @@
               "items": {
                 "type": "string"
               }
+            },
+            "useSystemInput": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -1135,6 +1144,9 @@
             "runId": {
               "type": "string",
               "minLength": 1
+            },
+            "useSystemInput": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -1290,7 +1302,7 @@
               "minimum": 1,
               "maximum": 240
             },
-            "useSystemPointer": {
+            "useSystemInput": {
               "type": "boolean"
             }
           },

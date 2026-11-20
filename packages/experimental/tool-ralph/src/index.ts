@@ -414,6 +414,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:ralph',
     order: ctx.systemPrompt.getSectionOrder('TOOL_RALPH'),
     text: 'Use the ralph tool ONLY when the direct human explicitly asks for a Ralph loop or fresh-agent iterative execution. Each Ralph round starts a fresh child with no conversation seed and uses the shared workspace as durable memory. Completion and blockers are worker reports, not independent evaluation. Use same-session goal tools for ordinary long-running objectives, and plain subagents or workflows for bounded delegation and fan-out.',
+    retirement: 'The ralph tool is no longer available. Its guidance no longer applies.',
   })
   ctx.tools.register(defineTool({
     name: 'ralph',

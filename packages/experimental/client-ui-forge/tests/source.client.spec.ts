@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { createNoticeSource, createPanelSource, createStreamSource, foldStates } from '../src/client/source.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createNoticeSource, createPanelSource, createStreamSource, foldStates, HIDDEN_GRACE_MS } from '../src/client/source.ts'
 import type { PanelStream } from '../src/client/source.ts'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelState } from '../src/types.ts'
 import { entry, listState, ready, snapshot } from './client-fixtures.client.ts'
@@ -204,6 +204,126 @@ describe('createPanelSource', () => {
     panel.close()
     expect(streams).toHaveLength(0)
     expect(panel.hooks.panel.getSnapshot()).toEqual({ state: null, disconnected: false })
+  })
+})
+
+/** A page whose visibility the test sets by hand. */
+function page(hidden = false) {
+  const listeners = new Set<() => void>()
+  return {
+    listeners,
+    visibility: {
+      hidden: () => hidden,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    },
+    set(next: boolean) {
+      hidden = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+describe('a stream source that follows the page visibility', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  function pausing(tab = page()) {
+    const streams: ReturnType<typeof feed>[] = []
+    const resets = new Set<() => void>()
+    const panel = createPanelSource({
+      open: (signal): PanelStream => {
+        const stream = feed()
+        stream.signal = signal
+        streams.push(stream)
+        return stream
+      },
+      subscribeReset: (listener) => {
+        resets.add(listener)
+        return () => { resets.delete(listener) }
+      },
+      visibility: tab.visibility,
+    })
+    return { panel, streams, tab, reset: () => { for (const listener of [...resets]) listener() } }
+  }
+
+  it('closes its stream once the page has been hidden for 30 seconds, keeps the value, and opens a stream when the page shows', async () => {
+    const { panel, streams, tab } = pausing()
+    const observable = panel.hooks.panel
+    const seen: unknown[] = []
+    const unsubscribe = observable.subscribe(() => { seen.push(observable.getSnapshot()) })
+    streams[0]?.push(ready())
+    await vi.advanceTimersByTimeAsync(0)
+
+    tab.set(true)
+    await vi.advanceTimersByTimeAsync(HIDDEN_GRACE_MS - 1)
+    // A second change while hidden does not start the period again.
+    tab.set(true)
+    expect(streams[0]?.disposed).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(streams[0]?.disposed).toHaveBeenCalled()
+    expect(streams[0]?.signal?.aborted).toBe(true)
+    expect(observable.getSnapshot()).toEqual({ state: ready(), disconnected: false })
+    expect(seen).toEqual([{ state: ready(), disconnected: false }])
+
+    tab.set(false)
+    expect(streams).toHaveLength(2)
+    const later = ready({ changeRequests: [entry(1, snapshot(1))] })
+    streams[1]?.push(later)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(observable.getSnapshot()).toEqual({ state: later, disconnected: false })
+    unsubscribe()
+    expect(tab.listeners.size).toBe(0)
+  })
+
+  it('keeps its stream when the page shows again within 30 seconds', async () => {
+    const { panel, streams, tab } = pausing()
+    const unsubscribe = panel.hooks.panel.subscribe(() => {})
+
+    tab.set(true)
+    await vi.advanceTimersByTimeAsync(HIDDEN_GRACE_MS - 1)
+    tab.set(false)
+    await vi.advanceTimersByTimeAsync(HIDDEN_GRACE_MS)
+
+    expect(streams).toHaveLength(1)
+    expect(streams[0]?.disposed).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('opens no stream after a transport reset while paused, and one on the new connection when the page shows', async () => {
+    const { panel, streams, tab, reset } = pausing()
+    const unsubscribe = panel.hooks.panel.subscribe(() => {})
+    tab.set(true)
+    await vi.advanceTimersByTimeAsync(HIDDEN_GRACE_MS)
+
+    reset()
+    expect(streams).toHaveLength(1)
+    tab.set(false)
+    expect(streams).toHaveLength(2)
+    reset()
+    expect(streams).toHaveLength(3)
+    unsubscribe()
+  })
+
+  it('starts the period when its first subscriber arrives on a hidden page, and forgets it with the last subscriber', async () => {
+    const { panel, streams } = pausing(page(true))
+    const unsubscribe = panel.hooks.panel.subscribe(() => {})
+    expect(streams).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(1)
+
+    unsubscribe()
+    expect(vi.getTimerCount()).toBe(0)
+
+    // A source that paused opens a stream for its next first subscriber.
+    const again = panel.hooks.panel.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(HIDDEN_GRACE_MS)
+    expect(streams[1]?.disposed).toHaveBeenCalled()
+    again()
+    const third = panel.hooks.panel.subscribe(() => {})
+    expect(streams).toHaveLength(3)
+    third()
   })
 })
 

@@ -403,7 +403,7 @@ export interface SearchLimits {
 
 ## `@deepseek-ai/dsh-attachment-local`
 
-- `source`: [`packages/attachment/attachment-local/src/index.ts:65`](../packages/attachment/attachment-local/src/index.ts)
+- `source`: [`packages/attachment/attachment-local/src/index.ts:70`](../packages/attachment/attachment-local/src/index.ts)
 
 ```ts config-catalog
 /** Local attachment backend configuration. */
@@ -431,6 +431,10 @@ export interface Config {
   normalizedImageMaxBytes?: number
   /** Maximum simultaneous normalization or request-image transformations in this service instance. */
   imageCompressionConcurrency?: number
+  /** Minimum long-edge shrink divisor after a request image exceeds its hard byte limit; must be greater than one. Default: 1.1. */
+  requestImageMinShrinkFactor?: number
+  /** Fraction of the hard byte limit used to estimate the next request-image size; in (0, 1]. Default: 0.95. */
+  requestImageByteHeadroom?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-attachment-local -->
@@ -584,6 +588,44 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-product-analytics -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
+<a id="deepseek-aidsh-client-remote-connection"></a>
+
+## `@deepseek-ai/dsh-client-remote-connection`
+
+- `inject`: `connection` · `connection.authentication` · `credentials` · `webServer` · `webApp`
+- `source`: [`packages/client/remote-connection/src/index.ts:33`](../packages/client/remote-connection/src/index.ts)
+
+```ts config-catalog
+/** Deployment timing and limits for remote browser login. */
+export interface Config {
+  /** Absolute lifetime in days for Remote browser credentials; default 30. */
+  cookieMaxAgeDays: number
+  /** Invitation lifetime in milliseconds; expiry never renews an existing browser session. */
+  ticketLifetimeMs: number
+  /** Interval in milliseconds between the settings panel's status reads. */
+  pollIntervalMs: number
+  /** Limits for anonymous requests and approval delivery. */
+  pairing: {
+    /** Lifetime in milliseconds, including retries of approved delivery. Default: 300000. */
+    requestTtlMs: number
+    /** Maximum retained requests, including terminal requests until expiry. Default: 32. */
+    maxRequests: number
+    /** Minimum interval between anonymous creations across this process. Default: 1000. */
+    requestIntervalMs: number
+    /** Minimum applicant polling interval and periodic approval-list refresh interval. Default: 2000. */
+    pollIntervalMs: number
+    /** Complete anonymous HTTP request timeout in milliseconds. Default: 10000. */
+    requestTimeoutMs: number
+    /** Additional attempts after network, timeout, rate-limit, or server failures. Default: 3. */
+    maxRetries: number
+    /** Maximum exponential retry delay in milliseconds; at least pollIntervalMs. Default: 10000. */
+    retryMaxDelayMs: number
+  }
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-shortcuts -->
 <a id="deepseek-aidsh-client-shortcuts"></a>
@@ -900,7 +942,7 @@ export interface ToolResultPruneConfig {
 ## `@deepseek-ai/dsh-cordis-host-runner`
 
 - `inject`: `tools`
-- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:106`](../packages/extensions/cordis-host-runner/src/index.ts)
+- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:107`](../packages/extensions/cordis-host-runner/src/index.ts)
 
 ```ts config-catalog
 /** Runner configuration. */
@@ -1083,6 +1125,29 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-chat-import -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-dingtalk -->
+<a id="deepseek-aidsh-dingtalk"></a>
+
+## `@deepseek-ai/dsh-dingtalk`
+
+- `inject`: `cliAccounts` · `skills`
+- `source`: [`packages/connector/dingtalk/src/index.ts:34`](../packages/connector/dingtalk/src/index.ts)
+
+```ts config-catalog
+/** Where dws and its skills come from, and how long one download may take. */
+export interface Config {
+  /** Absolute directory holding the `dws` executable; when set, dws is not downloaded. */
+  binDir?: string
+  /** Directory holding the upstream skills laid out as `multi/` in the release's `dws-skills.zip`; when set, they are not downloaded. */
+  skillsDir?: string
+  /** Release download prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>`. */
+  releaseUrls: string[]
+  /** How long one prefix may take to deliver an asset before the next one is tried. */
+  releaseTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-dingtalk -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-api-speech-to-text -->
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
@@ -1274,13 +1339,22 @@ export interface Config {
    * `testPaths` and before the built-in rules.
    */
   interfacePaths?: string[]
-  /** Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit and update time. */
+  /**
+   * Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit
+   * and update time, and, counted apart, of viewed marks kept for later reads at the same head commit.
+   */
   maxCachedReviewBytes?: number
   /**
-   * Age in milliseconds at which review threads kept in memory are read from the code host again; a GitHub pull
-   * request's update time does not change when a thread is resolved.
+   * Age in milliseconds at which review threads and viewed marks kept in memory are read from the code host again; a
+   * GitHub pull request's update time does not change when a thread is resolved, and nothing announces a mark changed
+   * on the code host itself.
    */
   reviewRefreshMs?: number
+  /**
+   * Age in milliseconds past which the status of a change request is read at once when a Session's panel or the
+   * review page starts to show it.
+   */
+  statusMaxAgeMs?: number
   /** Deadline in milliseconds for one lens `classify` call. */
   lensTimeoutMs?: number
   /** Most UTF-8 bytes of file text one lens `classify` call may read. */
@@ -1330,18 +1404,18 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:767`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:833`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
 export interface Config {
-  /** Poll interval in milliseconds while checks run or mergeability is unknown. */
+  /** Poll interval in milliseconds while checks run, and for one poll after a status first reports an unknown mergeability. */
   activeIntervalMs?: number
   /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
-  /** Deadline in milliseconds for one provider fetch. */
+  /** Deadline in milliseconds for one provider fetch: one polling call, or one read of complete checks. */
   fetchTimeoutMs?: number
 }
 ```
@@ -1371,6 +1445,13 @@ export interface Config {
    * one review read, which reports itself truncated past it.
    */
   maxReviewThreads?: number
+  /**
+   * Most pull requests one snapshot query reads. The forge registry polls that many pull requests of a host per call,
+   * each call within its own fetch deadline; a read of more pull requests on one host sends several queries in turn.
+   */
+  snapshotBatchSize?: number
+  /** The same bound for one brief query. */
+  briefBatchSize?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number
   /** Most files whose viewed marks one read lists; GitHub lists at most 3,000 files of a pull request. */
@@ -2195,7 +2276,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:251`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:257`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -2303,11 +2384,16 @@ export interface PiAiProviderProfile {
    * steps rewrite the request prefix less often.
    */
   imageOffloadCountQuantum?: number
+  /** Fixed divisor of maxRequestImageBytes when allocating hard per-image budgets; independent of current image count. Default: 20. */
+  requestImageBudgetCount?: number
   /** Total-pixel budget for each deterministic inline request version. */
   requestImagePixelBudget?: number
+  /** Maximum width and height for each request image; omission uses the selected pi-ai model's resize limits. */
+  requestImageMaxDimension?: number
   /**
-   * Raw encoded-byte target for each deterministic inline request version;
-   * the smallest quality-ladder output is used when no quality fits.
+   * Hard per-image encoded-byte cap overriding the selected model's base64 budget.
+   * The effective cap is the smaller of this value and the route's equal share of maxRequestImageBytes.
+   * Omission uses the catalog budget converted to raw bytes, or 1 MiB without catalog metadata.
    */
   requestImageMaxBytes?: number
   /** Provider-owned model-request retry policy; omission uses normal mode with five retries. */
@@ -2924,7 +3010,7 @@ export interface PresetSpec {
 ## `@deepseek-ai/dsh-persona`
 
 - `inject`: `systemPrompt`
-- `source`: [`packages/preset/persona/src/index.ts:30`](../packages/preset/persona/src/index.ts)
+- `source`: [`packages/preset/persona/src/index.ts:23`](../packages/preset/persona/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the persona text this composition contributes. */
@@ -3085,7 +3171,7 @@ export interface Config {
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  /** persistent-in-memory, the default, retains a REPL per owner; per-call uses fresh async function bodies; vm-script uses VM contexts. */
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
@@ -3349,7 +3435,7 @@ export interface Config {
 
 - `inject`: `agents` · `workingDirectory`
 - `refs`: `Readable` (`node:stream`) · `Writable` (`node:stream`)
-- `source`: [`packages/sdk/server/src/index.ts:24`](../packages/sdk/server/src/index.ts)
+- `source`: [`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
 
 ```ts config-catalog
 /** JSON-RPC deployment config plus runtime-only test hooks. */
@@ -3362,6 +3448,15 @@ export interface JsonRpcConfig {
   output?: Writable
   /** Process-exit override; production uses `process.exit`. */
   exit?: (code: number) => void
+  /** Process-event override; production uses `process`. */
+  processEvents?: RuntimeProcessEvents
+}
+
+/** The slice of `process` this module observes; `node:events` emitters satisfy it. */
+export interface RuntimeProcessEvents {
+  listenerCount(event: string): number
+  prependListener(event: string, listener: (...args: unknown[]) => void): unknown
+  off(event: string, listener: (...args: unknown[]) => void): unknown
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-sdk-jsonrpc-server -->
@@ -3959,7 +4054,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 - `inject`: `workingDirectory` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/subagent/subagent/src/index.ts:186`](../packages/subagent/subagent/src/index.ts)
+- `source`: [`packages/subagent/subagent/src/index.ts:188`](../packages/subagent/subagent/src/index.ts)
 
 ```ts config-catalog
 /** Host configuration for continuable subagent capacity. */
@@ -4175,7 +4270,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:266`](../packages/core/system-prompt/src/index.ts)
+- `inject`: `sessionProjections`
+- `source`: [`packages/core/system-prompt/src/index.ts:316`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -4185,13 +4281,13 @@ export interface Config {
   /** Include optional runtime-context snapshots in model history (default true); required context remains. */
   includeRuntimeContext?: boolean
   /**
-   * Deployment-wide persona prefix template before first-party guidance. A scoped section named
-   * `deployment:persona-prefix` shadows it; `{{variable}}` references are strict.
+   * Deployment-wide persona prefix template before first-party guidance. A section
+   * named {@link PERSONA_PREFIX_SECTION} can override it; `{{variable}}` references are strict.
    */
   personaPrefix?: string
   /**
-   * Persona suffix template after first-party guidance. A scoped `deployment:persona-suffix`
-   * section shadows it; `{{variable}}` references are strict. Defaults to empty.
+   * Persona suffix template after first-party guidance. A section named
+   * {@link PERSONA_SUFFIX_SECTION} can override it; `{{variable}}` references are strict. Defaults to empty.
    */
   personaSuffix?: string
   /**
@@ -4444,7 +4540,7 @@ export interface Config {
   reportReasoningEffort?: string
 }
 
-/** A fixed output language or the app preference. */
+/** A fixed output language, the app preference, or the language the agent chooses from the chat. */
 export type Language = (typeof languages)[number]
 
 /** One language supported for Timeline model output. */
@@ -5590,6 +5686,7 @@ export interface Config {
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` · `systemPrompt` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
+| `@deepseek-ai/dsh-tool-session-control` | `tools` · `sessionController` · `workspaceRegistry` | [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-session-list` | `tools` · `sessions` · `sessionQuery` · `workspaceRegistry` · `sessionProjections` | [`packages/session-query/tool-session-list/src/index.ts`](../packages/session-query/tool-session-list/src/index.ts) |
 | `@deepseek-ai/dsh-tools` | `systemPrompt` | [`packages/core/tools/src/index.ts`](../packages/core/tools/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |

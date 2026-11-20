@@ -190,6 +190,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:goal',
     order: ctx.systemPrompt.getSectionOrder('TOOL_GOAL'),
     text: guidance(resolved.blockedAfterConsecutiveRounds),
+    retirement: 'The goal-management tools are no longer available. Their guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

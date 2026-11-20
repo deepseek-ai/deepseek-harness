@@ -1,0 +1,10 @@
+version: 1
+scenario: both-mode-turn-scoped
+profile: headless
+composition: ptc-shell
+recording: authored
+header:
+  class: ptc-shell-scoped
+  pin: true
+  toolSchemasSource: ptc-turn-scoped
+# Replays the both-mode-turn programs as scoped REPL statements.

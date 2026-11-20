@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeFailure, ForgeProvider, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeFailure, ForgeProvider, ForgeReadiness, ForgeReviewData, ForgeViewedFiles } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -189,6 +189,25 @@ describe('forgePanel.follow', () => {
     expect(opened.provider.probes).toEqual(['fake.test'])
   })
 
+  it.each([
+    ['at once when its latest status is older than statusMaxAgeMs', { statusMaxAgeMs: 1 }, [[7], [7]]],
+    ['with the regular poll when its latest status is younger', {}, [[7]]],
+  ])('reads a bound change request that another watcher already read %s, when the panel starts', async (_, config, fetches) => {
+    const { repo } = await project()
+    const opened = await open(repo, config)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    // Another watcher, as the review page is, read the status before the panel starts; it ends with the context.
+    opened.ctx.forge.watch({ repository: demo, number: 7 }, () => {})
+    await vi.waitFor(() => { expect(opened.provider.fetches).toEqual([[7]]) })
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    const follower = reader(opened)
+    await follower.until(state => polled(state, pullUrl(7)))
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    expect(opened.provider.fetches).toEqual(fetches)
+  })
+
   it('binds the open change requests of the upstream branch once per remote and branch, and looks again on refresh', async () => {
     const { repo } = await project()
     await git(repo, 'checkout', '-b', 'feat')
@@ -366,7 +385,7 @@ describe('forgePanel.follow', () => {
     expect(follower.states.every(state => state.checkout.state !== 'ready' || state.directory === linked)).toBe(true)
   })
 
-  it('shares one panel among followers and starts a fresh one after the last leaves', async () => {
+  it('shares one panel among followers and starts the next one from the kept state after the last leaves', async () => {
     const { repo } = await project()
     const opened = await open(repo)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
@@ -382,7 +401,9 @@ describe('forgePanel.follow', () => {
     expect(opened.ctx.forge.latest(ref)).toBeUndefined()
 
     const third = reader(opened)
-    await expect(third.until(() => true)).resolves.toMatchObject({ checkout: { state: 'pending' } })
+    await expect(third.until(() => true)).resolves.toMatchObject({
+      checkout: { state: 'ready' }, changeRequests: [{ url: pullUrl(7), update: null, snapshot: snapshot(ref) }],
+    })
   })
 
   it('ends followers whose signal aborts while waiting and when the Remote stops', async () => {
@@ -2045,31 +2066,91 @@ describe('forgePanel actions', () => {
     const head = 'a'.repeat(40)
     const request = { path: 'src/app.ts', viewed: true, headSha: head }
 
-    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toBeNull()
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, false, signal)).resolves.toBeNull()
     await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider keeps no viewed marks' })
     const marks = { headSha: head, files: { 'src/app.ts': 'dismissed' as const }, truncated: false }
     const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(async () => marks)
     const setViewed = vi.fn<NonNullable<ForgeProvider['setViewed']>>(async () => undefined)
     Object.assign(opened.provider, { viewedFiles, setViewed })
-    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toEqual(marks)
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, false, signal)).resolves.toEqual(marks)
     await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal)).resolves.toBeUndefined()
     expect(setViewed).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), request, expect.any(AbortSignal))
 
+    // The marks kept from the read above would answer a read that is not fresh.
     viewedFiles.mockResolvedValueOnce({ code: 'stale', message: 'moved' }).mockResolvedValueOnce({ code: 'unavailable', message: 'rate limited' })
-    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, true, signal))
       .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
-    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, true, signal))
       .rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'rate limited' })
     setViewed.mockResolvedValueOnce({ code: 'stale', message: 'moved' })
     await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
       .rejects.toMatchObject({ code: 'forgePanel/stale-head' })
     await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), { ...request, path: '' }, signal)).rejects.toThrow('Invalid viewed file')
     for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
-      await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, url, head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, url, head, false, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
       await expect(opened.ctx.forgePanel.setFileViewed(opened.session, url, request, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
     }
     expect(setViewed).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the viewed marks read at a head, amends them after a saved mark, and reads the host again when asked or at another head', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+    const other = 'b'.repeat(40)
+    const listed = (headSha: string): ForgeViewedFiles => ({ headSha, files: { 'src/app.ts': 'dismissed', 'docs/notes.txt': 'viewed' }, truncated: false })
+    const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(async (_ref, headSha) => listed(headSha))
+    const setViewed = vi.fn<NonNullable<ForgeProvider['setViewed']>>(async () => undefined)
+    const threads: ForgeReviewData = {
+      headSha: head, viewer: null, threads: [], truncated: false, pendingReview: null, viewerCanReview: false, reviewEvents: [],
+    }
+    const readReview = vi.fn<NonNullable<ForgeProvider['readReview']>>(async () => threads)
+    Object.assign(opened.provider, { viewedFiles, setViewed, readReview })
+    const panel = opened.ctx.forgePanel
+    const read = (headSha = head, fresh = false): Promise<ForgeViewedFiles | null> =>
+      panel.changeRequestViewed(opened.session, pullUrl(7), headSha, fresh, signal)
+    const save = (path: string, viewed: boolean, headSha = head): Promise<void> =>
+      panel.setFileViewed(opened.session, pullUrl(7), { path, viewed, headSha }, signal)
+
+    await expect(read()).resolves.toEqual(listed(head))
+    await expect(read()).resolves.toEqual(listed(head))
+    expect(viewedFiles).toHaveBeenCalledOnce()
+    await expect(panel.changeRequestReview(opened.session, pullUrl(7), head, false, signal)).resolves.toEqual(threads)
+
+    // A saved mark replaces the kept state of a listed file and leaves the kept threads.
+    await save('src/app.ts', true)
+    await save('docs/notes.txt', false)
+    await save('unlisted.ts', true)
+    await expect(read()).resolves.toEqual({ headSha: head, files: { 'src/app.ts': 'viewed', 'docs/notes.txt': 'unviewed' }, truncated: false })
+    await expect(panel.changeRequestReview(opened.session, pullUrl(7), head, false, signal)).resolves.toEqual(threads)
+    expect(viewedFiles).toHaveBeenCalledOnce()
+    expect(readReview).toHaveBeenCalledOnce()
+
+    // A fresh read replaces the kept marks with what the host lists.
+    await expect(read(head, true)).resolves.toEqual(listed(head))
+    await expect(read()).resolves.toEqual(listed(head))
+    expect(viewedFiles).toHaveBeenCalledTimes(2)
+
+    // A mark saved at another head forgets the kept marks, and a read that the save overtook is not kept.
+    const held = Promise.withResolvers<ForgeViewedFiles>()
+    await save('src/app.ts', true, other)
+    viewedFiles.mockReturnValueOnce(held.promise)
+    const overtaken = read()
+    await save('src/app.ts', false)
+    held.resolve(listed(head))
+    await expect(overtaken).resolves.toEqual(listed(head))
+    await expect(read()).resolves.toEqual(listed(head))
+    expect(viewedFiles).toHaveBeenCalledTimes(4)
+
+    // A review write drops the kept threads and leaves the kept marks.
+    await opened.ctx.parallel('forge/review-changed', { repository: demo, number: 7 }, { kind: 'submit', headSha: head })
+    await expect(panel.changeRequestReview(opened.session, pullUrl(7), head, false, signal)).resolves.toEqual(threads)
+    await expect(read()).resolves.toEqual(listed(head))
+    expect(readReview).toHaveBeenCalledTimes(2)
+    expect(viewedFiles).toHaveBeenCalledTimes(4)
   })
 
   it('reruns checks, requests reviews, lists reviewers, and updates the branch of a bound change request', async () => {
@@ -2256,6 +2337,8 @@ describe('forgePanel configuration', () => {
     [{ graceMs: 1.5 }, 'forge-panel: graceMs must be a positive integer no greater than 2147483647'],
     [{ maxOutputBytes: -1 }, 'forge-panel: maxOutputBytes must be a positive integer no greater than 2147483647'],
     [{ readinessTimeoutMs: 2_147_483_648 }, 'forge-panel: readinessTimeoutMs must be a positive integer no greater than 2147483647'],
+    [{ statusMaxAgeMs: 0 }, 'forge-panel: statusMaxAgeMs must be a positive integer no greater than 2147483647'],
+    [{ statusMaxAgeMs: 1.5 }, 'forge-panel: statusMaxAgeMs must be a positive integer no greater than 2147483647'],
     [{ maxBranches: 0 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],

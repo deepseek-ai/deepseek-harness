@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-19-conversation-file-references-after-directory-moves.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-19-conversation-file-references-after-directory-moves.md
+/agent-note-conversation-file-references-after-directory-moves:
+  en: 7c9b48dfb0ed6d1d
+  zh: ee798f35eb331fa0
+/agent-note-conversation-file-references-after-directory-moves/problem:
+  en: 73cba25d5f74c0d0
+  zh: bfaf698abaeb9387
+/agent-note-conversation-file-references-after-directory-moves/decision:
+  en: 17dfb45b8f45c62d
+  zh: aa9868110a63b921
+/agent-note-conversation-file-references-after-directory-moves/alternatives-considered:
+  en: 99dc2ca8f3af2c59
+  zh: 9f9346a258ddb73c
+/agent-note-conversation-file-references-after-directory-moves/consequences:
+  en: a9acefcc270d69e8
+  zh: 90904b444fb060c4

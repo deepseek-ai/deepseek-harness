@@ -1,11 +1,9 @@
 /** Current installed Session validation used after vocabulary-aware format restoration. */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   SESSION_FORMAT_VERSION,
-  Session,
-  type SessionId,
   SessionLogOffset,
+  validateSessionLog,
 } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionFormatArtifact, SessionFormatHeader } from '@deepseek-ai/dsh-session-format'
@@ -22,10 +20,9 @@ export function validateInstalledCurrentSessionHeader(header: SessionFormatHeade
       `installed Session format is v${SESSION_FORMAT_VERSION}, got v${header.version}`,
     )
   }
-  Session.fromRestore(
-    brandString<SessionId>(header.id),
-    [],
+  validateSessionLog(
     header as unknown as SessionHeader,
+    [],
     SessionLogOffset(0),
     'detached',
   )
@@ -42,10 +39,9 @@ export function validateInstalledCurrentSessionArtifact(artifact: SessionFormatA
       `installed Session format is v${SESSION_FORMAT_VERSION}, got v${artifact.header.version}`,
     )
   }
-  Session.fromRestore(
-    brandString<SessionId>(artifact.header.id),
-    artifact.events as SessionEvent[],
+  validateSessionLog(
     artifact.header as unknown as SessionHeader,
+    artifact.events as SessionEvent[],
     SessionLogOffset(artifact.inheritedEventCount),
     'detached',
     currentSessionMessageProjections,

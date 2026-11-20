@@ -1,0 +1,17 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      anthropic:
+        apiKeyEnv: ANTHROPIC_API_KEY
+      image-override:
+        api: anthropic-messages
+        baseURL: https://image-override.invalid
+        requestImageMaxDimension: 3000
+        requestImageMaxBytes: 4096
+        models:
+          - id: vision
+            input: [text, image]
+
+- insert:
+    - id: pi-image-limits-probe
+      name: '../../../packages/llm/llm-pi-ai/tests/fixtures/image-limits.ts'

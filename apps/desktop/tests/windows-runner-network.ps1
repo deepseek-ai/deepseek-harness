@@ -9,7 +9,7 @@ $pwshLink = Join-Path $root 'tools/pwsh-7.6.6'
 if ($CheckStartup) { $null = New-Item -ItemType Junction -Path $pwshLink -Target $PSHOME }
 $server = $null
 $saved = @{}
-foreach ($name in @('HTTP_PROXY','HTTPS_PROXY','NO_PROXY','NODE_USE_ENV_PROXY')) { $saved[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
+foreach ($name in @('HTTP_PROXY','HTTPS_PROXY','NO_PROXY','NODE_USE_ENV_PROXY','NODE_OPTIONS')) { $saved[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
 try {
     if ($null -ne (Read-RunnerNetwork $root)) { throw 'Absent configuration changed behavior.' }
     $fixture = Join-Path $root 'proxy.cjs'
@@ -41,6 +41,16 @@ server.listen(0, '127.0.0.1', () => fs.writeFileSync(path.join(root, 'port'), St
         if ($server.HasExited -or [DateTime]::UtcNow -gt $deadline) { throw 'Proxy fixture did not become ready.' }
         Start-Sleep -Milliseconds 50
     }
+    # Observe natural event-loop drain in the real redirected probe, without replacing fetch.
+    $lifecycle = Join-Path $root 'probe-lifecycle.cjs'
+    @'
+const fs = require('node:fs');
+const path = require('node:path');
+if (process.env.DSH_NETWORK_PROBE_URL) {
+  process.once('beforeExit', () => fs.appendFileSync(path.join(__dirname, 'drained'), 'drained\n'));
+}
+'@ | Set-Content -LiteralPath $lifecycle
+    $env:NODE_OPTIONS = '--require "' + $lifecycle.Replace('\', '/') + '"'
     $port = Get-Content (Join-Path $root 'port') -Raw
     $config = @{proxyUrl="http://127.0.0.1:$port";noProxy='';serviceName='';probeUrl='http://runner-probe.invalid/ready';attempts=2;timeoutSeconds=2;retrySeconds=1}
     function Write-Config { $config | ConvertTo-Json | Set-Content (Join-Path $root 'runner-network.json') }
@@ -48,6 +58,7 @@ server.listen(0, '127.0.0.1', () => fs.writeFileSync(path.join(root, 'port'), St
     $parsed = Read-RunnerNetwork $root
     Set-RunnerNetwork $parsed
     Wait-RunnerNetwork $parsed
+    if (-not (Test-Path (Join-Path $root 'drained')) -or (Get-Content (Join-Path $root 'drained')).Count -ne 1) { throw 'Successful probe bypassed normal Node event-loop drain.' }
     if ($env:NODE_USE_ENV_PROXY -ne '1' -or $env:HTTP_PROXY -ne $config.proxyUrl -or $env:HTTPS_PROXY -ne $config.proxyUrl) { throw 'Proxy environment was not applied.' }
     # Full startup requires the operator's installed packaging toolchain and persistent PATH.
     if ($CheckStartup) {
@@ -90,7 +101,19 @@ server.listen(0, '127.0.0.1', () => fs.writeFileSync(path.join(root, 'port'), St
     $config.timeoutSeconds = 1
     $failure = $null
     try { Wait-RunnerNetwork $config } catch { $failure = $_ }
-    if (-not $failure -or (Get-Content (Join-Path $root 'requests')).Count -ne 6) { throw 'Unresponsive endpoint did not terminate its probe.' }
+    if (-not $failure -or -not $failure.Exception.Message.StartsWith('Runner network dependency unavailable;') -or (Get-Content (Join-Path $root 'requests')).Count -ne 6) { throw 'Unresponsive endpoint did not terminate its probe.' }
+    # Retain a bound non-listening socket so no concurrent fixture can claim the refused port.
+    $refused = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::InterNetwork, [Net.Sockets.SocketType]::Stream, [Net.Sockets.ProtocolType]::Tcp)
+    try {
+        $refused.Bind([Net.IPEndPoint]::new([Net.IPAddress]::Loopback, 0))
+        $config.proxyUrl = "http://127.0.0.1:$($refused.LocalEndPoint.Port)"
+        $config.noProxy = ''
+        $config.probeUrl = 'http://runner-probe.invalid/ready'
+        Set-RunnerNetwork $config
+        $failure = $null
+        try { Wait-RunnerNetwork $config } catch { $failure = $_ }
+        if (-not $failure -or -not $failure.Exception.Message.StartsWith('Runner network dependency unavailable;') -or (Get-Content (Join-Path $root 'requests')).Count -ne 6) { throw 'Refused proxy connection admitted startup or reached the HTTP fixture.' }
+    } finally { $refused.Dispose() }
     foreach ($invalid in @('extra','credential','budget','type','wildcard','malformed')) {
         $bad = $config.Clone()
         switch ($invalid) {
@@ -106,7 +129,7 @@ server.listen(0, '127.0.0.1', () => fs.writeFileSync(path.join(root, 'port'), St
         try { $null = Read-RunnerNetwork $root } catch { $failure = $_ }
         if (-not $failure -or $failure.ToString().Contains('fake-secret')) { throw 'Invalid configuration accepted or disclosed.' }
     }
-    Write-Output "PASS: absent config, proxy routing, Node proxy opt-in, service readiness, bounded failure and redacted invalid config; startup integration=$CheckStartup."
+    Write-Output "PASS: absent config, redirected native Node HTTP success, non-2xx, refused proxy, request timeout, proxy routing, Node proxy opt-in, service readiness, bounded failure and redacted invalid config; startup integration=$CheckStartup."
 } finally {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name,$saved[$name],'Process') }
     if ($server) { if (-not $server.HasExited) { $server.Kill($true); $server.WaitForExit() }; $server.Dispose() }

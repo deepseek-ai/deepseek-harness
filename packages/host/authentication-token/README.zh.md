@@ -35,6 +35,8 @@ kind: "package-reference"
 
 携带启动 Token query 的根路径请求由原 Token 交换处理：成功的 `GET /` 返回303、写入 Cookie，并重定向到 `./`；无效凭据返回401。其他路径的请求交给其路由 owner。WebApp 就绪后收集入口时，本插件向传入的基地址追加进程 Token，同时保留 authority、路径与其他 query 字段。贡献的入口允许自动打开。Token 不读取 WebApp 服务，也不拥有打印、就绪判断或原生浏览器打开器。
 
+浏览器会把同一 hostname 的 Cookie 发给每个 port，因此该 hostname 下所有已登录 authority 的 Cookie 会出现在同一个 `Cookie` 请求头中。成功的根路径交换因此还会让请求携带的其他 authority 的 Cookie 过期，只保留声明的签发时间最新的 16 个。它只选取符合生成格式的名称，并在不验证签名的情况下读取签发时间，因为其他 Harness home 使用不同的密钥签名。`/connect` 交换不让任何 Cookie 过期。
+
 浏览器 v1 Cookie 认证为本插件拥有的共享 Peer。`/connect` 声明匿名路由准入：Connection 检查来源，handler 随后验证启动 Token、创建 API Peer，并在 v2 Cookie 中签入其 ID。有效 v2 Cookie 通过同一 Provider 认证页面与 API 请求。Peer 的 principal 与 RemoteAccess 决定权限，不区分页面/API purpose 等级。Token 限制每个 API Peer 只有一条 `/api/remote.mux` Socket；重复关联返回409，不撤销首条连接。该 Socket 关闭时先同步撤销凭据，再释放 Peer；后续使用该 Cookie 的请求被拒绝。其他升级路由（包括 Inspector CDP）不认领该 Peer，也不在关闭时撤销它。
 
 签名密钥仍使用 Credentials 的 `client-connection/browser-session` grant 记录。Cookie 名称、签名 audience、有效期验证及监听器决定的 `Secure` 属性遵循既有协议。重载保留根应用的启动 Token 与尚有效 Cookie，同时创建新的插件共享 Peer。Token 激活失败允许应用在缺少此验证器时继续运行，但不允许未认证访问受保护路由。Desktop 可以同时挂载本 Provider 与私有凭据 Provider。
@@ -78,6 +80,8 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 浏览器 Cookie 共用一个插件 Peer；结束插件作用域时，其存活连接一同结束。
+- 同一浏览器在同一 hostname 下最多保持 17 个 authority 的登录：最近一次登录的 authority，以及签发时间最新的另外 16 个。根路径交换按签发时间而非最近使用排序；Cookie 被过期的 authority 在下次加载页面时返回 401，直到重新打开其启动 URL。
+- 浏览器的 `Cookie` 请求头若已超过 Node.js 的 16,384 字节请求头上限，会在交换运行前收到 431，因此在用户清除该 hostname 的站点数据之前不会有任何 Cookie 过期。在不执行过期的 Host 上登录仍会增加 Cookie。
 - 明文 HTTP 不加密 bearer Cookie。Cookie 的 `Secure` 属性由监听器 TLS 决定。
 - Token 中间件只拥有根路径交换。其他 HTML 或产品路径仍由路由 owner 处理，包括这些路径上的 token query。
 

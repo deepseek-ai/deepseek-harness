@@ -17,6 +17,17 @@ const DAY_MILLISECONDS = 24 * 60 * 60 * 1000
 const SECRET_BYTES = 32
 const TOKEN_QUERY = 'token'
 const COOKIE_PREFIX = 'dsh-auth-'
+/** Exactly the names `cookieName` generates: the prefix and an unpadded base64url SHA-256 digest. */
+const GENERATED_COOKIE_NAME = new RegExp(`^${COOKIE_PREFIX}[A-Za-z0-9_-]{43}$`, 'u')
+/**
+ * Other authorities' cookies a browser sign-in leaves in place. Browsers send one hostname's
+ * cookies to every port, so each signed-in port adds a 226-character pair to every request, and
+ * Node.js 24 answers 431 before any handler runs once request headers pass 16,384 bytes: measured
+ * with Chromium 149, at about 70 cookies. Sixteen others keep the `Cookie` header near 3.9 KB and
+ * leave room for about 50 sign-ins on Hosts that expire nothing. Raise it only while that room
+ * remains and Node.js keeps this default limit.
+ */
+const RETAINED_OTHER_COOKIES = 16
 const COOKIE_PAYLOAD_VERSION = 1
 const STORED_SECRET_VERSION = 1
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]*$/
@@ -118,17 +129,60 @@ function cookieName(authority: string): string {
   return COOKIE_PREFIX + encodeBase64Url(createHash('sha256').update(authority).digest())
 }
 
-/** Read the exact generated cookie without implementing general Cookie decoding. */
-function cookieValue(headerValue: string, name: string): string | undefined {
+/** Split a Cookie header into name and value pairs without implementing general Cookie decoding. */
+function cookiePairs(headerValue: string): [name: string, value: string][] {
+  const pairs: [string, string][] = []
   for (const segment of headerValue.split(';')) {
     const at = segment.indexOf('=')
-    if (at === -1 || segment.slice(0, at).trim() !== name) continue
-    return segment.slice(at + 1).trim()
+    if (at !== -1) pairs.push([segment.slice(0, at).trim(), segment.slice(at + 1).trim()])
   }
-  return undefined
+  return pairs
 }
 
-/** Serialize the fixed browser-session attributes; generated names and values are cookie-safe base64url. */
+/** Read the exact generated cookie; the first pair of that name wins. */
+function cookieValue(headerValue: string, name: string): string | undefined {
+  return cookiePairs(headerValue).find(([candidate]) => candidate === name)?.[1]
+}
+
+/**
+ * Issue time a cookie value claims, read without checking its signature: another Harness home
+ * signs with a secret this process does not hold. The result only orders cookies for expiry and
+ * never authenticates. An unreadable value counts as issued at time zero.
+ */
+function claimedIssuedAt(value: string): number {
+  const body = decodeBase64Url(value.split('.')[1] ?? '')
+  if (body === undefined) return 0
+  try {
+    const decoded: unknown = JSON.parse(body.toString('utf8'))
+    return isRecord(decoded) && typeof decoded.issuedAt === 'number' && Number.isSafeInteger(decoded.issuedAt)
+      ? decoded.issuedAt
+      : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Select the other authorities' cookies a sign-in expires: every generated-name cookie in the
+ * request except `ownName` and the `RETAINED_OTHER_COOKIES` with the latest claimed issue time.
+ * Equal times keep request order.
+ */
+function supersededCookieNames(headerValue: string | undefined, ownName: string): string[] {
+  if (headerValue === undefined) return []
+  const issued = new Map<string, number>()
+  for (const [name, value] of cookiePairs(headerValue)) {
+    if (name !== ownName && GENERATED_COOKIE_NAME.test(name)) issued.set(name, claimedIssuedAt(value))
+  }
+  return [...issued]
+    .sort(([, left], [, right]) => right - left)
+    .slice(RETAINED_OTHER_COOKIES)
+    .map(([name]) => name)
+}
+
+/**
+ * Serialize the fixed browser-session attributes; generated names and values are cookie-safe
+ * base64url. An empty value with a zero lifetime makes the browser delete the cookie of that name.
+ */
 function sessionCookie(
   name: string,
   value: string,
@@ -252,7 +306,10 @@ export class BrowserAuth {
    * Authenticate an index request. A valid root query token mints the cookie
    * and redirects to the directory-relative clean `./`; a valid cookie lets
    * the caller serve the index; every other request receives the same minimal
-   * 401 response.
+   * 401 response. The minting response also expires the other authorities'
+   * generated-name cookies its request carries, except the
+   * `RETAINED_OTHER_COOKIES` with the latest claimed issue time, so one
+   * browser's `Cookie` header stays bounded.
    * @param req - incoming root or configured-index request.
    * @param res - response owned when this method returns false.
    * @param secure - whether the listener receiving this request serves TLS; the
@@ -277,13 +334,16 @@ export class BrowserAuth {
           issuedAt,
           expiresAt,
         }, this.secret)
+        const name = cookieName(authority)
+        const minted = sessionCookie(name, value, expiresAt, Math.floor(this.maxAgeMilliseconds / 1000), secure)
+        const superseded = supersededCookieNames(header(req.headers, 'cookie'), name)
+          .map(other => sessionCookie(other, '', 0, 0, secure))
         res.writeHead(303, {
           'cache-control': 'no-store',
           'location': './',
           'referrer-policy': 'no-referrer',
-          'set-cookie': sessionCookie(
-            cookieName(authority), value, expiresAt, Math.floor(this.maxAgeMilliseconds / 1000), secure,
-          ),
+          // A lone cookie stays one string for callers that read a single Set-Cookie value.
+          'set-cookie': superseded.length === 0 ? minted : [minted, ...superseded],
         })
         res.end()
         return false

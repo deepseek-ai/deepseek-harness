@@ -1,0 +1,106 @@
+{
+  "packages/client/ui-chat/src/client/chat/ChatView.module.css": {
+    "has-outside-subject": {
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))) ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)))": 1,
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > :nth-last-child(0n+2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)))):is(.flowItem:not([data-chat-flow-kind=\"user\"]):not([data-chat-flow-kind=\"steering\"]):not([data-chat-flow-kind=\"turn-trigger\"]), [data-chat-group-key]) ~ .running > .runningDivider": 1,
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > [data-chat-flow-kind=\"turn-process\"]:not(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)) + :not([hidden]):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))):not(.running):not(:has(:scope > [data-slot=\"conversation.chat.node\"] > [data-chat-steering-batch]))": 1
+    },
+    "unkeyed-costly-subject": {
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))) ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)))": 1,
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > [data-chat-flow-kind=\"turn-process\"] + :not([hidden]):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))):not(.running):not([data-submission-echo], [data-pending-steering]):not(:has(:scope > [data-slot=\"conversation.chat.node\"] > [data-chat-steering-batch]))": 1,
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > [data-chat-flow-kind=\"turn-process\"]:not(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)) + :not([hidden]):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))):not(.running):not(:has(:scope > [data-slot=\"conversation.chat.node\"] > [data-chat-steering-batch]))": 1,
+      ":is(.column, :global([data-slot=\"conversation.chat.flow\"])) > [data-chat-group-part=\"response\"]:not([hidden]):not(:empty) + :not([hidden]):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty))):not(.running):not(:has(:scope > [data-slot=\"conversation.chat.node\"] > [data-chat-steering-batch]))": 1,
+      ".column > .older + :global([data-slot=\"conversation.chat.flow\"]) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(:scope > [data-slot=\"conversation.chat.node\"]:empty)))": 1,
+      ".column[data-chat-motion] > :global([data-slot=\"conversation.chat.flow\"]) > :not([data-chat-motion])": 2,
+      ".column[data-chat-motion] > :not([data-chat-motion])": 2,
+      ".column[data-input-fold] > :global([data-slot=\"conversation.chat.flow\"]) > :not([data-chat-motion])": 1,
+      ".column[data-input-fold] > :not([data-chat-motion])": 1
+    }
+  },
+  "packages/client/ui-chat/src/client/chat/MessageIconActions.module.css": {
+    "has-outside-subject": {
+      ":is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"]):has(:scope ~ :is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"])) .actions": 1,
+      ":is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"]):has(:scope ~ :is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"])):focus-within .actions": 1,
+      ":is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"]):has(:scope ~ :is([data-chat-flow-kind=\"user\"], [data-chat-flow-kind=\"steering\"])):hover .actions": 1
+    }
+  },
+  "packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css": {
+    "has-outside-subject": {
+      ".root:has([data-conversation-composer-overlay]) .widthHandle": 1,
+      ".scrollBody:has([data-conversation-composer-overlay]) > :global([data-slot=\"conversation.session\"]) > .viewArea": 1,
+      ".scrollBody:has([data-conversation-composer-overlay]) > .composerSeat": 1
+    }
+  },
+  "packages/client/ui-primitives/src/JsonTree.module.css": {
+    "has-outside-subject": {
+      ".row:has(:scope > .copySlot) > .stringField .stringToggleSlot": 1,
+      ".row:has(:scope > .stringField) > .copySlot": 1,
+      ".row:hover:not(:has(.row:hover)) > .copySlot": 1
+    }
+  },
+  "packages/client/ui-primitives/src/markdown/MarkdownText.module.css": {
+    "unkeyed-costly-subject": {
+      ".markdown li > *:last-child:not(:global(.md-code-block), .fenceSeat)": 1
+    }
+  },
+  "packages/client/ui-session-panel/src/client/SessionPanel.module.css": {
+    "has-outside-subject": {
+      ".head:hover:has(:scope > .grip) > .actions": 1,
+      ".panel :where([data-session-panel-row] > [data-row-part=\"body\"]:has([data-row-part=\"detail\"]) > [data-row-part=\"icon\"])": 1,
+      ".section:not(:has(:scope > .body > [data-slot]:empty), :has(:scope > .body > [data-slot] > [data-slot]:only-child:empty)) ~ .section:not(:has(:scope > .body > [data-slot]:empty), :has(:scope > .body > [data-slot] > [data-slot]:only-child:empty))": 1
+    }
+  },
+  "packages/client/ui-shortcuts/src/client/Reference.module.css": {
+    "has-outside-subject": {
+      ".row:has(:focus-visible) .rowActions": 1
+    }
+  },
+  "packages/client/ui-sidebar-browser/src/client/view/Browser.module.css": {
+    "has-outside-subject": {
+      ":global(html:has([data-dockkit-pointer])) .webview": 1
+    }
+  },
+  "packages/client/ui-sidebar-documentpreview/src/client/pdf/PdfBody.module.css": {
+    "unkeyed-costly-subject": {
+      ".text :global(.textLayer) > :not(:global(.markedContent))": 1
+    }
+  },
+  "packages/client/ui-sidebar-files/src/client/FilesBody.module.css": {
+    "unkeyed-costly-subject": {
+      "[data-files-navigator-row] > :not(.navigator)": 1
+    }
+  },
+  "packages/client/ui-sidebar/src/client/SidebarRoot.module.css": {
+    "has-outside-subject": {
+      ".panelEntry:has(:focus-visible) .panelUnpin": 1,
+      ".panelEntry:has(.panelUnpin):has(:focus-visible) .panelTrailing": 1,
+      ".panelEntry:has(.panelUnpin):hover .panelTrailing": 1
+    }
+  },
+  "packages/client/ui-tool/src/client/tool/components/ToolRow.module.css": {
+    "has-outside-subject": {
+      ".row:not([aria-expanded=\"true\"]):has(.fileTargetLink:hover) .diffAdded": 1,
+      ".row:not([aria-expanded=\"true\"]):has(.fileTargetLink:hover) .diffRemoved": 1
+    }
+  },
+  "packages/client/ui-workspace/src/client/rows/Rows.module.css": {
+    "has-outside-subject": {
+      ".sessionRow:has(.pinnedAction) .pinIndicator": 1
+    },
+    "unkeyed-costly-subject": {
+      ".sessionRow .rowQuickActions > :global([data-slot]) > :not(.pinnedAction)": 1
+    }
+  },
+  "packages/experimental/client-ui-forge/src/client/ChangedFiles.module.css": {
+    "unkeyed-costly-subject": {
+      ".viewed > :not(.chevron):not(.name):not(.threads)": 1
+    }
+  },
+  "packages/experimental/timeline/src/client/timeline.css": {
+    "has-outside-subject": {
+      "body:has(.dsh-timeline[data-timeline-dock-open=\"true\"]) .timeline-dock[data-current-tree=\"true\"] .timeline-dock-action svg": 1,
+      "body:has(.dsh-timeline[data-timeline-dock-open=\"true\"]) .timeline-dock[data-current-tree=\"true\"] .timeline-dock-close": 1,
+      "body:has(.dsh-timeline[data-timeline-dock-open=\"true\"]) .timeline-dock[data-current-tree=\"true\"] .timeline-dock-open": 1
+    }
+  }
+}

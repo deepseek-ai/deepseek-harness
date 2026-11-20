@@ -56,6 +56,7 @@
     "Sources/CuaNative/SharedHelperProxy.swift",
     "Sources/CuaNative/SharedHelperRuntime.swift",
     "Sources/CuaNative/SharedHelperServer.swift",
+    "Sources/CuaNative/SystemKeyboardInput.swift",
     "Sources/CuaNative/TextSelection.swift",
     "Sources/CuaNative/WindowCapture.swift",
     "Sources/CuaNative/WindowGeometry.swift"

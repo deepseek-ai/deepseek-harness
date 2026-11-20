@@ -4,6 +4,7 @@ import type { RefObject, SyntheticEvent } from 'react'
 import type { MenuEntry, MenuItem } from './Menu.tsx'
 import { submenuNeedsPage } from './menu-submenu-position.ts'
 import { usePointerGrace } from './pointer-grace.ts'
+import { menuPopupSelector } from './useModalLayer.ts'
 
 /** Whether a pointer event can request hover interactions.
  * @param event - current pointer, including mixed-input touch events.
@@ -42,9 +43,10 @@ export function useMenuSubmenu(options: {
   items: readonly MenuEntry[]
   footer: readonly MenuEntry[] | undefined
   listRef: RefObject<HTMLDivElement>
+  searchRowsRef: RefObject<HTMLDivElement>
   refocusAnchor: () => void
 }): MenuSubmenu {
-  const { open, items, footer, listRef, refocusAnchor } = options
+  const { open, items, footer, listRef, searchRowsRef, refocusAnchor } = options
   const [expanded, setExpanded] = useState<{ id: string; trigger: HTMLButtonElement; activated: boolean } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   // A DOM target suppresses its focus-open handler until focus restoration completes.
@@ -160,12 +162,13 @@ export function useMenuSubmenu(options: {
     // React DOM normalizes text-node event targets to their parent element.
     const row = (event.target as Element).closest('button[role="menuitem"]')
     if (row === null || row.getAttribute('aria-haspopup') === 'menu') return
-    if (row.closest('[role="menu"]') === event.currentTarget) collapse()
+    const rootRows = searchRowsRef.current ?? listRef.current
+    if (rootRows !== null && row.closest(menuPopupSelector) === rootRows) collapse()
   }
   return {
     entry, panelRef, parentAnchor, measured, page, hidden,
     contains,
-    activeList: (focused: Node | null) => page || contains(focused) ? panelRef.current : listRef.current,
+    activeList: (focused: Node | null) => page || contains(focused) ? panelRef.current : searchRowsRef.current ?? listRef.current,
     returnToParent: (): boolean => {
       if (entry === undefined || hidden) return false
       returnToParent()

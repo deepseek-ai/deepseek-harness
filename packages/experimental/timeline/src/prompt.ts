@@ -9,19 +9,26 @@ State what the work found or changed. For example, write "Import can erase saved
 Return only JSON: {"progress":["<result and impact>","<evidence>","<remaining gap or decided next step>"],"uncertainties":[],"userActions":[]}. Use 1–4 progress items, normally 3–4 when supported. Make the first item a standalone preview. Use later items for evidence, limits, or a decided next step. Preserve distinct findings in rollups and merge repeated results.
 Each item is plain text on one line, at most 320 characters, or 160 for Chinese or Japanese. List up to two evidenced unresolved decisions in uncertainties. Label recommendations as proposals. List up to two useful actions the user can take in parallel now in userActions. Omit routine approvals and the agent's own work. Use empty arrays for groups with no applicable items.`
 
+const compactScript = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu
+
 /**
  * Validate the new compact output without rejecting older, longer durable reports on replay.
  * @param text - the text to parse.
- * @param language - configured Timeline language.
+ * @param language - required output language; without one, a line written mostly in Chinese or Japanese characters uses the shorter limit.
  * @returns the validated progress, questions, and actions.
  */
-export function parseSummary(text: string, language: OutputLanguage): Summary {
+export function parseSummary(text: string, language: OutputLanguage | undefined): Summary {
   const compact = language === 'zh-CN' || language === 'ja'
   const line = z
     .string()
     .trim()
     .min(1)
     .max(compact ? 160 : 320)
+    .refine(
+      value =>
+        language !== undefined || value.length <= 160 || (value.match(compactScript)?.length ?? 0) * 2 <= value.length,
+      'Use at most 160 characters for Chinese or Japanese',
+    )
     .refine(
       value => !value.includes('\n') && !value.includes('`'),
       'Use plain text without newlines or code',

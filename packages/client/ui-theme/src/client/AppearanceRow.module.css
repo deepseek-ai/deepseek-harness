@@ -25,7 +25,7 @@
 
 /* Appearance cube (figma '.Selector Cube' 276x82, pad 20/32, centered
  * icon-over-label column, gap 4); flexed down from the figma width so all
- * three sit on one row in the 800 panel, wrapping when narrower. */
+ * three sit on one row at the panel's default width, wrapping when narrower. */
 .themeCube {
   box-sizing: border-box;
   flex: 1 1 180px;

@@ -117,6 +117,12 @@
     - id: session-controller
       name: '@deepseek-ai/dsh-api-session-controller'
 
+    # Optional session_send_message tool; it activates targets through the
+    # Session controller above and lets an Agent message any ordinary Session.
+    - id: tool-session-control
+      name: '@deepseek-ai/dsh-tool-session-control'
+      disabled: true
+
     # One background job's observation record streamed over Typert Remote;
     # the roster rides the session control stream above.
     - id: job-controller
@@ -344,6 +350,9 @@
 
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
+
+    - id: remote-connection
+      name: '@deepseek-ai/dsh-client-remote-connection'
 
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'

@@ -346,6 +346,11 @@ function validateSurfaceRegion(session: Session, start: SessionSeq, end: Session
       `compactRegion: start seq ${start} (position ${startIdx}) is after end seq ${end} (position ${endIdx}) on the surface`,
     )
   }
+  // The validated start and end guarantee a nonempty surface.
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  if (startIdx === 0 && systemHead(session, nodes[0]!) !== undefined) {
+    throw new Error('compactRegion: the selected range includes the protected initial system message')
+  }
   // oxlint-disable-next-line typescript/no-non-null-assertion
   if (!toolPairingBalancedBefore(session, nodes[startIdx]!)) {
     throw new Error(`compactRegion: start seq ${start} is not a balanced boundary (would split a step's tool-call/result pair)`)

@@ -126,9 +126,6 @@ export function ActionCard({ proposal, decision, sessionId, act, bind, useBodies
   </section>
 }
 
-/** Phases the fallback can name; other kind phases leave only the summary. */
-const NAMED_PHASES: Readonly<Record<string, ActionCardKey>> = { dismissed: 'dismissed', replaced: 'replaced' }
-
 /** Title, brief and Not now for a card whose kind registered no body in this browser or whose body rejects its `details`. */
 function FallbackBody({ summary, decision, act, t }: {
   summary: ReactNode
@@ -137,7 +134,6 @@ function FallbackBody({ summary, decision, act, t }: {
 } & PropsLocale<'actionCards'>) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<ActionCardKey>()
-  const phase = decision === undefined || !Object.hasOwn(NAMED_PHASES, decision.phase) ? undefined : NAMED_PHASES[decision.phase]
   const dismiss = async () => {
     setPending(true)
     setError(undefined)
@@ -152,7 +148,7 @@ function FallbackBody({ summary, decision, act, t }: {
   }
   return <div className={css.body}>
     {summary}
-    {phase !== undefined && <p role="status" className={css.status}>{t(phase)}</p>}
+    {decision?.phase === 'dismissed' && <p role="status" className={css.status}>{t('dismissed')}</p>}
     {error !== undefined && <p role="alert" className={css.status}>{t(error)}</p>}
     {decision === undefined && <footer className={css.footer}>
       <Button variant="ghost" size="sm" disabled={pending} onClick={() => { void dismiss() }}>{t('dismiss')}</Button>

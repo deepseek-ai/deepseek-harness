@@ -501,7 +501,7 @@ describe('Cordis provider composition', () => {
     if (inHistory && model === MODEL) await ctx.settings.update(Messages.name, { models: [{ id: model, systemPromptUpdate: 'in-history' }] })
     let prompt = 'first prompt'
     ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
-      ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
+      ...await next(), sections: [{ name: 'test', text: prompt, replacement: prompt === '' ? 'The prior prompt is inactive.' : '', order: 0 }],
     }))
     const agentOptions = { provider: 'deepseek-official', model }
     const agent = await ctx.agentLoop.create(brandString<SessionId>('prompt-update'), agentOptions)
@@ -519,15 +519,20 @@ describe('Cordis provider composition', () => {
     prompt = 'restored prompt'
     await send(resumed, 'restore')
     expect(http.requests.map(request => request.body.system)).toEqual(inHistory
-      ? ['first prompt', 'first prompt', 'first prompt', undefined, undefined, undefined]
-      : ['first prompt', 'second prompt', 'second prompt', undefined, undefined, 'restored prompt'])
+      ? Array(6).fill('first prompt')
+      : ['first prompt', 'first prompt\n\nsecond prompt', 'first prompt\n\nsecond prompt',
+        'first prompt\n\nsecond prompt\n\nThe prior prompt is inactive.',
+        'first prompt\n\nsecond prompt\n\nThe prior prompt is inactive.',
+        'first prompt\n\nsecond prompt\n\nThe prior prompt is inactive.\n\nrestored prompt'])
     for (const [index, request] of http.requests.entries()) {
       const messages = request.body.messages as { role: string; content: unknown[] }[]
       expect(messages.filter(message => message.role === 'assistant')).toHaveLength(index)
-      expect(messages.filter(message => message.role === 'system').map(message => message.content)).toEqual(
-        !inHistory ? [] : index === 1 || index === 2 ? [[{ type: 'text', text: 'second prompt' }]]
-          : index === 5 ? [[{ type: 'text', text: 'restored prompt' }]] : [],
-      )
+      const updates: string[] = []
+      if (inHistory && index >= 1) updates.push('second prompt')
+      if (inHistory && index >= 3) updates.push('The prior prompt is inactive.')
+      if (inHistory && index >= 5) updates.push('restored prompt')
+      expect(messages.filter(message => message.role === 'system').map(message => message.content))
+        .toEqual(updates.map(text => [{ type: 'text', text }]))
       expect(JSON.stringify(messages.filter(message => message.role !== 'system'))).not.toMatch(/first prompt|second prompt|restored prompt/)
     }
     expect(resumed.session.requestContext()?.systemPromptUpdate).toBe(inHistory ? 'in-history' : undefined)
@@ -538,7 +543,7 @@ describe('Cordis provider composition', () => {
     await ctx.settings.update(Messages.name, { baseURL: http.url, models: [{ id: MODEL, systemPromptUpdate: 'in-history' }] })
     let prompt = 'old prompt'
     ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
-      ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
+      ...await next(), sections: [{ name: 'test', text: prompt, replacement: prompt === '' ? 'The prior prompt is inactive.' : '', order: 0 }],
     }))
     const agentOptions = { provider: 'deepseek-official', model: MODEL }
     const agent = await ctx.agentLoop.create(brandString<SessionId>('capability-switch'), agentOptions)
@@ -554,18 +559,18 @@ describe('Cordis provider composition', () => {
     await send(resumed, 'resume')
     for (const request of http.requests.slice(2)) {
       expect(request.path).toBe('/anthropic/v1/messages')
-      expect(request.body.system).toBe(inHistory ? 'old prompt' : 'current prompt')
+      expect(request.body.system).toBe(inHistory ? 'old prompt' : 'old prompt\n\ncurrent prompt')
       const messages = request.body.messages as { role: string }[]
       expect(messages.filter(message => message.role === 'assistant')).toHaveLength(2)
       expect(messages.filter(message => message.role === 'system')).toHaveLength(inHistory ? 1 : 0)
       expect(JSON.stringify(messages.filter(message => message.role !== 'system'))).not.toMatch(/old prompt|current prompt/)
     }
     expect(JSON.stringify(seed)).toBe(saved)
-    expect(agent.session.deriveMessages().filter(message => message.role === 'system')).toHaveLength(inHistory ? 2 : 1)
-    expect(resumed.session.deriveMessages().filter(message => message.role === 'system')).toHaveLength(inHistory ? 2 : 1)
+    expect(agent.session.deriveMessages().filter(message => message.role === 'system')).toHaveLength(2)
+    expect(resumed.session.deriveMessages().filter(message => message.role === 'system')).toHaveLength(2)
   })
 
-  it('maps multiple system snapshots on direct compaction calls to the latest prompt', async () => {
+  it('preserves all system additions on direct compaction calls', async () => {
     const { ctx, http } = await boot()
     const history = [createSystemMessage('old'), user(),
       createAssistantMessage({ content: [{ type: 'text', text: 'OK' }], source: { provider: 'deepseek-official', model: MODEL } }),
@@ -573,7 +578,7 @@ describe('Cordis provider composition', () => {
     const saved = JSON.stringify(history)
     const response = await assemble(ctx.llm.stream(options({ messages: history, purpose: 'compaction' })))
     expect(response.assembler.finish.kind).toBe('stop')
-    expect(http.requests[0]?.body.system).toBe('current')
+    expect(http.requests[0]?.body.system).toBe('old\n\ncurrent')
     expect((http.requests[0]?.body.messages as { role: string }[]).map(message => message.role)).toEqual(['user', 'assistant', 'user'])
     expect(JSON.stringify(history)).toBe(saved)
   })
