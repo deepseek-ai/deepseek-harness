@@ -71,19 +71,19 @@ enum AXTextFormatter {
         return String(repeating: "  ", count: level) + "- " + id + body(node, details: details)
     }
 
-    static func body(_ node: AXTextNode, details: Bool) -> String {
+    static func body(_ node: AXTextNode, details: Bool, inlineFocusAndSelection: Bool = true) -> String {
         var line = node.role
         if let subrole = node.subrole, !subrole.isEmpty, subrole != "AXUnknown", subrole != node.role,
            details || !["AXStandardWindow", "AXHostingView"].contains(subrole) { line += " subrole=\(subrole)" }
         if node.enabled == false { line += " disabled" }
-        if node.focused == true { line += " focused" }
+        if inlineFocusAndSelection, node.focused == true { line += " focused" }
         if let expanded = node.expanded { line += " expanded=\(expanded)" }
         if node.selected == true { line += " selected" }
         else if details, let selected = node.selected { line += " selected=\(selected)" }
         if AXTextNode.valueRoles.contains(node.role) {
             line += " valueWritable=\(node.valueWritable.map(String.init) ?? "unknown")"
         }
-        if AXTextNode.textRoles.contains(node.role), node.role != "AXStaticText" || node.selectionWritable == true || details {
+        if inlineFocusAndSelection, AXTextNode.textRoles.contains(node.role), node.role != "AXStaticText" || node.selectionWritable == true || details {
             line += " selectionWritable=\(node.selectionWritable.map(String.init) ?? "unknown")"
         }
         var seen: Set<String> = []
@@ -104,9 +104,11 @@ enum AXTextFormatter {
         field(node.help, prefix: " help=")
         field(node.url, prefix: " url=", deduplicate: false)
         if details || seen.isEmpty { field(node.identifier, prefix: " id=") }
-        if node.invalidSelection { line += " selection=unavailable" }
-        else if let range = node.selectedRange { line += " selection=[\(range.location),\(range.length)]" }
-        if let text = node.selectedText, !text.isEmpty { line += " selectedText=\(String(reflecting: text))" }
+        if inlineFocusAndSelection {
+            if node.invalidSelection { line += " selection=unavailable" }
+            else if let range = node.selectedRange { line += " selection=[\(range.location),\(range.length)]" }
+            if let text = node.selectedText, !text.isEmpty { line += " selectedText=\(String(reflecting: text))" }
+        }
         var actions: [String] = []
         for raw in node.actions {
             let name = actionName(raw)

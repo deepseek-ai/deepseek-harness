@@ -129,17 +129,17 @@ func cancelledReadDiscardsThePublishedWindowBeforeAnotherRequest(code: String) t
     #expect(try reader.read(full).tree == full.tree)
 }
 
-private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused: Int? = nil, selectedText: String? = nil) throws -> AXProjection {
+private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused: Int? = nil, selectedText: String? = nil, field: Int? = nil) throws -> AXProjection {
     let refs = (0...50).map { AXUIElementCreateApplication(Int32($0 + 500)) }
     return try AXTreeProjection.project(roots: AXObservedChildren(entries: [refs[0]]), focusedWindowID: 7, windowScoped: true,
         maxElements: 100, maxDepth: 10, includeMenus: false, details: false, numbered: true, checkCancellation: {}) { element in
         let key = try #require(refs.firstIndex(of: element))
         let group = key == 1 || key == 2
-        let role = key == 0 ? "AXWindow" : group ? "AXToolbar" : "AXButton"
+        let role = key == 0 ? "AXWindow" : group ? "AXToolbar" : key == field ? "AXTextField" : "AXButton"
         let title = key == 0 ? "Document" : group ? "Actions" : labels[key] ?? "Save"
         let nodes = key == 0 ? [1, 2] : group ? children[key - 1] : []
         return AXReadNode(text: AXTextNode(index: nil, role: role, title: title, value: nil, description: nil,
-            actions: role == "AXButton" ? ["AXPress"] : [], enabled: true, valueWritable: nil, selectionWritable: nil,
+            actions: role == "AXButton" ? ["AXPress"] : [], enabled: true, valueWritable: nil, selectionWritable: key == field ? focused == key : nil,
             selected: nil, selectedRange: nil, selectedText: key == focused ? selectedText : nil, focused: focused == key),
             children: AXObservedChildren(entries: nodes.map { refs[$0] }))
     }
@@ -169,10 +169,10 @@ private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused:
 @Test func focusIsReportedSeparatelyEvenWhenNoTreeRowsChange() throws {
     var r = Reader()
     let children = [[3], [4]]
-    _ = try r.read(toolbars(children, focused: 3))
-    let changed = try r.read(toolbars(children, focused: 4))
-    #expect(changed.tree == "There has been no change in the accessibility tree.\nThe focused UI element is 4 AXButton \"Save\"")
-    let selected = try r.read(toolbars(children, focused: 4, selectedText: "Selection"))
+    _ = try r.read(toolbars(children, focused: 3, field: 4))
+    let changed = try r.read(toolbars(children, focused: 4, field: 4))
+    #expect(changed.tree == "There has been no change in the accessibility tree.\nThe focused UI element is 4 AXTextField valueWritable=unknown \"Save\"")
+    let selected = try r.read(toolbars(children, focused: 4, selectedText: "Selection", field: 4))
     #expect(selected.tree == "There has been no change in the accessibility tree.\nSelected text: \"Selection\"")
 }
 
