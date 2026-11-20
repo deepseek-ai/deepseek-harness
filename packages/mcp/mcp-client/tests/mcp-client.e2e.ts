@@ -7,6 +7,7 @@
  *
  * No API key needed — all servers are local/keyless.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -43,6 +44,7 @@ const localBin = join(packageDir, 'node_modules', '.bin')
 
 async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

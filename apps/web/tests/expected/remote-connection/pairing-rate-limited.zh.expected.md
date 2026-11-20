@@ -1,0 +1,6 @@
+- region "配对此设备":
+  - heading "配对此设备" [level=2]
+  - paragraph: 申请后，在另一台已登录设备的“设置 → 远程连接”核对配对码并批准，此设备将自动登录。
+  - button "正在申请配对…" [disabled]
+  - button "取消申请"
+  - status: 请求过于频繁，稍后自动重试…

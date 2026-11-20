@@ -54,10 +54,13 @@ declare module '@deepseek-ai/cordis' {
  * Project a configured screenshot target onto one stored image.
  * @param configured - Validated `screenshotTarget`.
  * @param image - Durable normalized screenshot.
- * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
+ * @returns Maximum screenshot dimensions, with the configured byte value as both the hard limit and the soft target.
  */
 export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
-  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
+  return {
+    ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxImageBytes: configured.maxBytes,
+    imageTargetBytes: configured.maxBytes,
+  }
 }
 
 /**
@@ -76,7 +79,7 @@ export function installCuaTools(
   // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
   const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
   const programBridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
-  const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
+  const prompt = { retirement: 'The CUA instructions no longer apply.', name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
     if (runtime === undefined) return guidance

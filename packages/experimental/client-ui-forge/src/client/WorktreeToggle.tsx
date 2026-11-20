@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconEditOutlineRegular, IconPlusOutlineRegular,
-  IconSearchOutlineRegular, Input, Menu, MenuItemButton, Tooltip,
+  Menu, MenuItemButton, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -13,7 +13,6 @@ import { branchLabel, LOCAL_REF_PREFIX, REMOTE_REF_PREFIX } from '../branch-name
 import type { ForgeBaseBranch, ForgePanelState, ForgeWorktreeBases, ForgeWorktreeBlocker } from '../types.ts'
 import { branchSearchStatus, useBranchSearch } from './branch-search.tsx'
 import type { NS } from './locales.ts'
-import { searchFieldKeyDown } from './menu-search.ts'
 import type { PanelSnapshot } from './source.ts'
 import { WorktreeNameDialog, type WorktreeRequestResult } from './WorktreeNameDialog.tsx'
 import css from './WorktreeToggle.module.css'
@@ -77,6 +76,9 @@ function nameParts(branch: ForgeBaseBranch, remote: string | undefined): { reado
     : { prefix: '', rest: branch.name }
 }
 
+/** Id of the footer row that opens the naming dialog. */
+const NAME_ENTRY = 'name'
+
 function BranchRows({ rows, chosen, pick }: {
   readonly rows: readonly BaseRow[]
   readonly chosen: string | null
@@ -112,7 +114,7 @@ function WorktreeMenu({ from, name, held, bases, choose, nameBranch, t }: {
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
-  const { query, setQuery, listing, retry, reset, field } = useBranchSearch(open, bases)
+  const { query, setQuery, listing, retry, reset } = useBranchSearch(open, bases)
   const chosen = refOf(from)
   const close = (): void => {
     setOpen(false)
@@ -134,9 +136,9 @@ function WorktreeMenu({ from, name, held, bases, choose, nameBranch, t }: {
     ...remote, rows: remote.branches.filter(matches).map(branch => ({ branch, remote: remote.name })),
   }))
     .filter(remote => remote.rows.length > 0)
-  const first = pinned[0] ?? local[0] ?? remotes[0]?.rows[0]
+  const empty = pinned.length === 0 && local.length === 0 && remotes.length === 0
 
-  const body: ReactNode = branchSearchStatus({ listing, empty: first === undefined, retry, className: css.status, t }) ?? <>
+  const body: ReactNode = branchSearchStatus({ listing, empty, retry, className: css.status, t }) ?? <>
     {pinned.length > 0 && <div role="group" aria-label={t('worktree.pinned')}><BranchRows rows={pinned} chosen={chosen} pick={pick} /></div>}
     {local.length > 0 && (
       <div role="group" aria-label={t('diff.base.local')}>
@@ -167,6 +169,18 @@ function WorktreeMenu({ from, name, held, bases, choose, nameBranch, t }: {
       className={css.anchor}
       listClassName={css.menu}
       onClose={close}
+      search={{ label: t('diff.base.search'), value: query, onChange: setQuery, skipAutoFocusOnTouch: true }}
+      footer={[{
+        id: NAME_ENTRY,
+        icon: name === null ? <IconPlusOutlineRegular size={14} /> : <IconEditOutlineRegular size={14} />,
+        label: (
+          <span className={css.option} data-forge-worktree-name-entry="">
+            <span className={css.footerLabel}>{t(name === null ? 'worktree.name.add' : 'worktree.name.label')}</span>
+            <span className={clsx(css.footerValue, name !== null && css.footerName)}>{name ?? t('worktree.name.auto')}</span>
+          </span>
+        ),
+      }]}
+      onSelect={() => { close(); nameBranch() }}
       anchor={
         <Tooltip label={label} side="bottom" portal delayMs={500}>
           <button type="button" className={clsx(css.base, name !== null && css.named)} aria-haspopup="menu" aria-expanded={open} aria-label={label}
@@ -180,22 +194,7 @@ function WorktreeMenu({ from, name, held, bases, choose, nameBranch, t }: {
       }
     >
       <div className={css.menuRoot} data-forge-worktree-menu="">
-        <div className={css.search}>
-          <Input ref={field} className={clsx(css.searchInput)} icon={<IconSearchOutlineRegular size={14} />} value={query}
-            aria-label={t('diff.base.search')} placeholder={t('diff.base.search')}
-            onChange={(event) => { setQuery(event.target.value) }}
-            onKeyDown={(event) => { searchFieldKeyDown(event, first === undefined ? undefined : () => { pick(first.branch.ref) }) }} />
-        </div>
         <div className={css.rows}>{body}</div>
-        <div className={css.footer}>
-          <MenuItemButton icon={name === null ? <IconPlusOutlineRegular size={14} /> : <IconEditOutlineRegular size={14} />}
-            onSelect={() => { close(); nameBranch() }}>
-            <span className={css.option} data-forge-worktree-name-entry="">
-              <span className={css.footerLabel}>{t(name === null ? 'worktree.name.add' : 'worktree.name.label')}</span>
-              <span className={clsx(css.footerValue, name !== null && css.footerName)}>{name ?? t('worktree.name.auto')}</span>
-            </span>
-          </MenuItemButton>
-        </div>
       </div>
     </Menu>
   )

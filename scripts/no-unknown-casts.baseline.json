@@ -463,9 +463,6 @@
     "910b6d005a8e354f7fd58ae7498f66746a88f8ba0145b61b7d462ac33d4531cf": 1,
     "e1afcf3bd21c4348c25c31b75c3d96e12710fc3bb3165da6a77a48731cb7e737": 1
   },
-  "packages/client/ui-conversation/tests/system-prompt.client.spec.ts": {
-    "42549864041fd67324d61bb593b73ab9a4ba5e5e756c35faa513ebd571f28f26": 1
-  },
   "packages/client/ui-conversation/tests/todo-panel.client.spec.tsx": {
     "88bd974d30d3b8da90642fa12ee8a1030174fad583bb78ff20a13202c8e04c25": 1
   },
@@ -722,9 +719,6 @@
     "6517a00893f4956fa1670426a26a1e2e6e7fe21136e82bf1b42731394998f221": 1
   },
   "packages/compaction/compaction/tests/tool-pairing.spec.ts": {
-    "14e30710f1223914ed7a6258d232c5082e539f1da8e45a62580b41445bd18686": 1,
-    "6aab53b3e5d082179308a888a26c622e8992b1a74f38bd4fee37d337d66c6584": 1,
-    "c387d84f2582ad93b2b123b5a2865127def18cd99d9240d4cdceb9965d0f9ad5": 1,
     "e9cbed9d889ff09b5300f7c8c58aa24096e3804f40280be06b66badd38ac59f5": 1
   },
   "packages/context/agent-instructions/tests/agent-instructions.spec.ts": {
@@ -768,7 +762,6 @@
     "96465479e2917a67964dd7a63395b95c80c701d4d8815263cd5f234d0e21dd95": 1
   },
   "packages/core/agent-loop/tests/request-reconstruction.spec.ts": {
-    "c544a3d350d02eb410d8d702de426baebe29befa0d7e6a99e0fba12059c837eb": 1,
     "f7dc30743e893e67b36ac9364f8b3b96d65b3dc762f59d857ed48cab06ae087a": 3
   },
   "packages/core/agent-loop/tests/resume.spec.ts": {
@@ -791,7 +784,7 @@
   "packages/core/scope/tests/store.spec.ts": {
     "612bd4047fa63f957ecb33d7fc7544c489301c3c0592e9a42dafe2cb85311165": 1
   },
-  "packages/core/session/src/index.ts": {
+  "packages/core/session/src/validation.ts": {
     "487a58a6269113d4cbfd31915a9abdbf016e672be9a2af2c6d5d57b087d0b011": 1
   },
   "packages/core/session/tests/canonical-envelopes.spec.ts": {

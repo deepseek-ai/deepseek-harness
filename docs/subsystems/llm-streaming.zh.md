@@ -72,6 +72,8 @@ type Message = MessageRoleMap[keyof MessageRoleMap]
 
 `DeveloperMessage` 以 `developer` 角色按对话顺序记录增量智能体 Session 变更。`ToolAdditionBlock.toolName` 激活由所在 Session 事件的历史请求头引用所选定的定义；`ToolRemovalBlock.toolName` 移除当前生效的定义。其他消息角色拒绝这两种内容块。`deferLoading` 独立控制工具定义的加载请求，不要求存在添加记录。请求头绑定见 [Session](../../packages/core/session/README.zh.md)，提供方支持限制见 [LLM 包](../../packages/llm/llm/README.zh.md#known-limitations-and-deferred-work)。 已解析和已准备模型元数据中的 `ToolUpdate` 为 `in-history` 或 `addition-only`。`GenerateOptions.toolHistory` 携带 `ToolHistory`：初始 `tools` 和有序 `updates`，每项把 developer `messageId` 绑定到已解析历史定义的 `additions`。运行时将此状态投影为提供方声明，不修改已记录请求头中的有效工具列表。
 
+`SystemPromptMessageSource.sections` 将活跃指令与转换通知关联到具名来源。活跃记录通过 `contentIndex` 标识规范文本；来源拥有的通知使用 `noticeIndex`，其中退役通知的记录不包含规范文本。[system-prompt 包](../../packages/core/system-prompt/README.zh.md)负责索引规则与已提交状态的重建。
+
 消息来源本身也是一个可合并扩展的和类型：
 
 ```ts type-equiv
@@ -574,7 +576,7 @@ interface LlmModelInfo {
 }
 ```
 
-对正确性敏感的元数据与参考目录分开解析，并归服务该确切路由的适配器所有。上下文容量、适配器调用默认值、推理选项和系统提示词更新模式共用同一个确切模型结果，消费方因而无需重复执行权威模型解析。`SystemPromptUpdate` 只有一个值 `'in-history'`：模型把 `messages` 中任意位置最新的 `system` 消息读作完整的有效系统提示词，因此 agent loop 可以把变化后的提示词追加到已缓存历史之后，而不是改写第 0 条消息（[决策规则](../../packages/core/agent-loop/README.zh.md#understand-the-implementation)）；模式缺失表示只读取开头的 system 消息，`normalizeModelInfo` 以 `INVALID_MODEL_INFO` 拒绝任何其他值。
+对正确性敏感的元数据与参考目录分开解析，并归服务该确切路由的适配器所有。上下文容量、适配器调用默认值、推理选项和系统提示词更新模式共用同一个确切模型结果，消费方因而无需重复执行权威模型解析。`SystemPromptUpdate` 只有一个值 `'in-history'`，声明原生支持对话历史中的系统更新。系统准入独立于该能力追加章节变化；每次更新增加指令或显式取代较早指令，而非隐式替换完整提示词。模式缺失时，适配器通过其支持的提示词或提醒格式表示这些更新。`normalizeModelInfo` 以 `INVALID_MODEL_INFO` 拒绝任何其他模式。
 
 ```ts type-equiv
 /** Provider-owned context capacity for one exact provider/model route. */
@@ -804,11 +806,13 @@ interface LlmDiscoveredModel {
 
 ### 请求信封：`LlmCallConfig` 与记录的 header
 
-循环从已记录状态构建每个请求。`EpochHeader` 记录调用配置，标记由适配器默认值提供的字段，并通过完整的 `request/header` 快照记录权威返回工具顺序（由 `toolOrder` 配置；未配置时按字典序）。渲染后的提示词是派生历史——surface 第 0 号节点上的 `system/message`，加上 `in-history` 路由追加的任何后续系统节点——因此请求头与派生历史共同使请求可由会话日志重建。见 [session.md](session.zh.md#the-request-header-event-requestheader) 与[可重建性 Agent Note](../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.zh.md)。
+循环从已记录状态构建每个请求。`EpochHeader` 记录调用配置，标记由适配器默认值提供的字段，并通过完整的 `request/header` 快照记录权威返回工具顺序（由 `toolOrder` 配置；未配置时按字典序）。系统提示词是派生历史：按表面顺序排列的初始 `system/message` 与后续章节更新。请求头与派生历史共同使请求可由会话日志重建。见 [session.md](session.zh.md#the-request-header-event-requestheader) 与[可重建性 Agent Note](../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.zh.md)。
 
-已弃用的 `agent/request` hook 仍可供现有监听器使用。新代码通过 [Session 模型选择](../../packages/core/agent/README.zh.md#use-this-package) 设置模型与推理强度。该 hook 收到基于步骤已捕获模型选择的冻结调用配置初值，可以替换采样等控制参数。替换值必须保留提供方、模型及可选的显式推理强度；要改变这些选择，需在下一个步骤之前记录新的 Session 选择。waterfall（瀑布式事件）开始前，循环会移除标记为适配器默认值的值，使确切模型准备过程填入所选路由的当前值；未带标记的显式设置仍保留在提议中。waterfall 结束后，准备过程会在轮次信号控制下拒绝显式指定但不受支持的推理强度 ID（不自动调整），并记录生效配置以及由适配器默认值提供的字段。步骤准入时，该 waterfall 与准备过程在组装和 `step/start` 之后、系统提示词与已接纳用户批次提交之前运行；在任一阶段取消都不会提交这两者。已准备调用的能力决定提示词协调，调用直至分派完成始终持有同一项适配器注册。到达 `llm/stream` 的请求会被深度冻结，因此变更会抛异常；请求还携带进程本地循环标识，使观察者不会把单独记录的冻结辅助调用误认成对话请求。
+已弃用的 `agent/request` hook 仍可供现有监听器使用。新代码通过 [Session 模型选择](../../packages/core/agent/README.zh.md#use-this-package) 设置模型与推理强度。该 hook 收到基于步骤已捕获模型选择的冻结调用配置初值，可以替换采样等控制参数。替换值必须保留提供方、模型及可选的显式推理强度；要改变这些选择，需在下一个步骤之前记录新的 Session 选择。waterfall（瀑布式事件）开始前，循环会移除标记为适配器默认值的值，使确切模型准备过程填入所选路由的当前值；未带标记的显式设置仍保留在提议中。waterfall 结束后，准备过程会在轮次信号控制下拒绝显式指定但不受支持的推理强度 ID（不自动调整），并记录生效配置以及由适配器默认值提供的字段。步骤准入时，该 waterfall 与准备过程在组装和 `step/start` 之后、系统提示词与已接纳用户批次提交之前运行；在任一阶段取消都不会提交这两者。系统准入使用已组装的章节增量，不读取已准备调用的能力；调用直至分派完成始终持有同一项适配器注册。到达 `llm/stream` 的请求会被深度冻结，因此变更会抛异常；请求还携带进程本地循环标识，使观察者不会把单独记录的冻结辅助调用误认成对话请求。
 
-在协议中，循环构建的请求只有派生历史：渲染后的提示词作为开头的 `system` 角色消息（surface 第 0 号节点，即一个 `system/message` 事件）传输，并且当已准备调用声明 `systemPromptUpdate: 'in-history'` 时，变化后的非空提示词可以作为后续的 `system` 角色消息跟在已缓存历史之后，由模型读作有效提示词；请求的 `system` 字段不设置——`GenerateOptions.system` 服务于标题提供方等直接单次调用方。空渲染文本使派生历史不包含任何系统消息，即使先前请求保留了多个提示词版本。已记录的请求会以最新的 `user/message`（轮次首步）或上一步的工具结果（后续步骤）结尾。
+在适配器边界，循环构建的请求通过 `messages` 携带派生历史，不设置 `system` 字段。`GenerateOptions.system` 服务于标题提供方等直接单次调用方。章节变化与退出通知追加系统消息，不删除历史中的较早指令；其文本向模型说明哪些指令仍然适用。初始空系统节点保留在日志中，但不产生模型消息。
+
+适配器负责提供方请求中的分隔符。DeepSeek 与 pi-ai 适配器会裁剪每个系统文本块，丢弃空块，并以空行连接其余块。DeepSeek 会将开头的系统消息合并到顶层 `system` 字段，并在支持时原生传输后续更新；不支持时，则将所有系统文本按历史顺序合并。pi-ai 会将开头的系统消息合并到 `systemPrompt`，并将后续更新表示为原生系统消息或 user 角色的系统提醒。详见 [DeepSeek 序列化](../../packages/llm/llm-deepseek/README.zh.md)与 [pi-ai 历史转换](../../packages/llm/llm-pi-ai/README.zh.md)。
 
 FIXME(call-config-shape)：重新审视其余哪些字段出于缓存目的确实属于 epoch 层级（`model` 和模型持有的推理强度已明确属于；采样标量目前出于谨慎保留在此）。
 
@@ -935,12 +939,12 @@ declare abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
   /**
-   * Resolve the image dimensions and byte target this adapter sends to the model.
+   * Resolve the maximum image dimensions and byte budgets this adapter uses for the model.
    * The default preserves normalized images; adapters that resize must override it.
    * @param _provider - registered provider route.
    * @param _model - exact model id.
    * @param image - normalized image whose request projection is being resolved.
-   * @returns the same target used by request serialization, before provider-internal processing.
+   * @returns the target used by request serialization; encoded images can be smaller to satisfy the hard byte limit.
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;
   /**
@@ -1119,7 +1123,7 @@ imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | u
  * @param provider - registered provider route.
  * @param model - exact model id.
  * @param image - normalized image reference.
- * @returns dimensions and byte target used by the adapter's request serializer.
+ * @returns maximum dimensions and byte budgets used by the request serializer; readImageRequest returns the actual encoded dimensions.
  */
 imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget
 

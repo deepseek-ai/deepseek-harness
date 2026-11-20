@@ -24,8 +24,11 @@ import { MACHINE_PROFILES, matchMachineProfile } from './machine-profiles.ts'
 
 /** Directory owning `results.jsonl` and `report.html`; ignored by Git. */
 export const REPORT_DIRECTORY = join(import.meta.dirname, '..', '.dsh-report')
-const RESULTS_PATH = join(REPORT_DIRECTORY, 'results.jsonl')
-const REPORT_PATH = join(REPORT_DIRECTORY, 'report.html')
+const RESULTS_FILE = 'results.jsonl'
+const ENVIRONMENT_FILE = 'environment.json'
+const REPORT_FILE = 'report.html'
+const RESULTS_PATH = join(REPORT_DIRECTORY, RESULTS_FILE)
+const REPORT_PATH = join(REPORT_DIRECTORY, REPORT_FILE)
 
 /** Identity and reader-facing description of one benchmark case, shown when hovering its rows in the report. */
 export interface BenchmarkCase {
@@ -120,23 +123,112 @@ export function setup(): void {
   rmSync(REPORT_DIRECTORY, { recursive: true, force: true })
 }
 
-/** Vitest global teardown: render the report when a case recorded a timing and this phase owns the report. */
+/**
+ * Vitest global teardown: when a case recorded a timing and this phase owns the report, render it and
+ * record the measuring machine beside the results, so {@link mergeReportDirectories} can render one
+ * report from phases measured on separate machines.
+ */
 export function teardown(): void {
   if (reportPhase() === 'first') return
   if (!existsSync(RESULTS_PATH)) return
-  const records = readFileSync(RESULTS_PATH, 'utf8').split('\n').filter(line => line !== '').map(line => JSON.parse(line) as TimingRecord | MemoryRecord)
-  const cpuModel = cpus()[0]?.model.trim() ?? 'unknown CPU'
+  const environment = measuringEnvironment()
+  writeFileSync(join(REPORT_DIRECTORY, ENVIRONMENT_FILE), `${JSON.stringify(environment)}\n`)
   writeFileSync(REPORT_PATH, renderReport({
-    records,
+    records: readRecords(RESULTS_PATH),
+    ...environment,
+    revision: process.env['GITHUB_SHA'],
+    generatedAt: new Date().toISOString(),
+  }))
+  console.log(`benchmark report: ${REPORT_PATH}`)
+}
+
+/** The machine fields of {@link ReportData}, measured by the process that ran the cases. */
+export type MeasuringEnvironment = Pick<ReportData, 'cpuModel' | 'platform' | 'node' | 'cores' | 'measuredProfile'>
+
+function measuringEnvironment(): MeasuringEnvironment {
+  const cpuModel = cpus()[0]?.model.trim() ?? 'unknown CPU'
+  return {
     cpuModel,
     platform: `${process.platform}-${process.arch}`,
     node: process.version,
-    revision: process.env['GITHUB_SHA'],
-    generatedAt: new Date().toISOString(),
     cores: availableParallelism(),
     measuredProfile: matchMachineProfile(cpuModel),
-  }))
-  console.log(`benchmark report: ${REPORT_PATH}`)
+  }
+}
+
+function readRecords(path: string): (TimingRecord | MemoryRecord)[] {
+  return readFileSync(path, 'utf8').split('\n').filter(line => line !== '').map(line => JSON.parse(line) as TimingRecord | MemoryRecord)
+}
+
+function readEnvironment(path: string): MeasuringEnvironment {
+  const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
+  if (typeof value !== 'object' || value === null) throw new Error(`${path} must hold a JSON object.`)
+  const field = (name: string): unknown => Reflect.get(value, name)
+  const cpuModel = field('cpuModel')
+  const platform = field('platform')
+  const node = field('node')
+  const cores = field('cores')
+  const measuredProfile = field('measuredProfile')
+  if (typeof cpuModel !== 'string' || typeof platform !== 'string' || typeof node !== 'string'
+    || typeof cores !== 'number' || !Number.isInteger(cores) || cores < 1
+    || (measuredProfile !== undefined && typeof measuredProfile !== 'string')) {
+    throw new Error(`${path} must record cpuModel, platform, node, a positive integer cores, and an optional measuredProfile.`)
+  }
+  return { cpuModel, platform, node, cores, measuredProfile }
+}
+
+/**
+ * Combine the results of phases that each ran alone on its own machine into the inputs of one report.
+ * Records are concatenated in directory order. When every phase reports the same machine, the report
+ * uses it; otherwise the CPU models are listed together and the measured profile is left for the reader
+ * to choose, because one profile cannot describe both machines.
+ * @param directories - report directories, each holding `results.jsonl` and `environment.json`.
+ * @param revision - commit the phases measured.
+ * @param generatedAt - render time.
+ * @returns the report inputs and any machine mismatch to surface.
+ * @throws If no directory holds results, or a directory holds results without a valid environment.
+ */
+export function mergeReportDirectories(
+  directories: readonly string[],
+  revision: string | undefined,
+  generatedAt: string,
+): { readonly data: ReportData; readonly warnings: readonly string[] } {
+  const phases = directories
+    .filter(directory => existsSync(join(directory, RESULTS_FILE)))
+    .map(directory => ({
+      records: readRecords(join(directory, RESULTS_FILE)),
+      environment: readEnvironment(join(directory, ENVIRONMENT_FILE)),
+    }))
+  const [first] = phases
+  if (first === undefined) throw new Error(`no benchmark results under ${JSON.stringify(directories)}.`)
+  const models = [...new Set(phases.map(phase => phase.environment.cpuModel))]
+  const warnings = models.length > 1
+    ? [`benchmark phases ran on different CPUs (${models.join(' | ')}); choose the measured profile in the report.`]
+    : []
+  return {
+    data: {
+      records: phases.flatMap(phase => phase.records),
+      ...first.environment,
+      ...models.length > 1 ? { cpuModel: models.join(' | '), measuredProfile: undefined } : {},
+      revision,
+      generatedAt,
+    },
+    warnings,
+  }
+}
+
+/**
+ * Render one report from several phase report directories into `outputDirectory/report.html`.
+ * @param outputDirectory - directory to write the report into.
+ * @param directories - phase report directories; ones without results are skipped.
+ * @returns the warnings from {@link mergeReportDirectories}.
+ * @throws If no directory holds results.
+ */
+export function renderMergedReport(outputDirectory: string, directories: readonly string[]): readonly string[] {
+  const { data, warnings } = mergeReportDirectories(directories, process.env['GITHUB_SHA'], new Date().toISOString())
+  mkdirSync(outputDirectory, { recursive: true })
+  writeFileSync(join(outputDirectory, REPORT_FILE), renderReport(data))
+  return warnings
 }
 
 /** Inputs embedded in one rendered report. */

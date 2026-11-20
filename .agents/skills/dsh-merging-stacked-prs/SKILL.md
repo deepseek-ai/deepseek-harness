@@ -5,7 +5,7 @@ description: Use when landing a stack of dependent GitHub PRs (A ← B ← C, wh
 
 # Landing an official GitHub PR stack
 
-Land dependent PRs through GitHub's native stack object and `gh stack merge`. Do not reproduce stack semantics by merging and retargeting individual PRs with `gh pr merge` and `gh pr edit`. The root [AGENTS.md](../../../AGENTS.md) owns the allowed merge-forward and rebase histories; the [stack review guide](../../../docs/cookbook/responding-to-pr-review-on-a-stack.md) owns review-fix propagation.
+Land dependent PRs through GitHub's native stack object and `gh stack merge`. Do not reproduce stack semantics by merging and retargeting individual PRs with `gh pr merge` and `gh pr edit`. The root [AGENTS.md](../../../AGENTS.md) owns the rebase-with-rerere default and the author-requested merge-forward exception; the [stack review guide](../../../docs/cookbook/responding-to-pr-review-on-a-stack.md) owns review-fix propagation.
 
 ## Require native stack support
 
@@ -67,10 +67,10 @@ Never dissolve, reorder, or rebuild an existing stack automatically; `gh stack l
 
 ## Refresh only when needed
 
-Do not rewrite branches merely because a refresh mechanism exists. When the live merge state or repository rules require an updated trunk, choose either allowed history:
+Do not rewrite branches merely because a refresh mechanism exists. When the live merge state or repository rules require an updated trunk, enable rerere (`git config rerere.enabled true`), then rebase; inspect each replayed resolution before staging it. Use merge-forward only when the PR author explicitly asks for it:
 
 - **Native cascading rebase:** check out the remote stack with `gh stack checkout <pr-or-stack>` when it is not tracked locally, then run `gh stack sync`. The command may rebase and lease-protected force-push every active layer before local validation. Immediately inspect the rewritten scope, run the relevant checks for every affected layer, and do not merge or claim readiness until they pass. If sync detects a rebase conflict, use `gh stack rebase`, resolve and validate it, then publish with `gh stack push`. If checkout or sync reports divergent local and remote stack compositions, cancel and ask rather than deleting or recreating the remote stack automatically.
-- **Incremental merge-forward:** merge the trunk into the bottom affected branch, then propagate each updated parent into its child in bottom-to-top order and push normally. If the base advances during an in-progress merge, preserve that checkpoint before merging the newer tip.
+- **Incremental merge-forward, on the PR author's explicit request:** merge the trunk into the bottom affected branch, then propagate each updated parent into its child in bottom-to-top order and push normally. If the base advances during an in-progress merge, preserve that checkpoint before merging the newer tip.
 
 Any history rewrite is allowed after review, but it invalidates commit-OID assumptions. Re-fetch exact heads and re-audit unresolved review threads, approvals, mergeability, and checks after the push. Never use raw `--force` or overwrite a concurrently advanced remote head.
 

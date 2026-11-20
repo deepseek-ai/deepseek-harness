@@ -46,7 +46,9 @@ kind: "package-reference"
         baseURL: https://proxy.example.com:8443
         reasoning: high
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
-        requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
+        requestImageMaxDimension: 3000  # override catalog width and height limits
+        requestImageMaxBytes: 1048576   # hard per-image cap before allocation
+        requestImageBudgetCount: 20     # fixed number of equal budget shares
         maxRequestImageBytes: 20971520   # accumulated base64 payload
         maxRequestImages: 50             # retained image occurrences
         imageOffloadCountQuantum: 10     # oldest images offloaded per count overflow
@@ -86,11 +88,17 @@ kind: "package-reference"
 | `defaultContextWindow` | `1,000,000` | 未描述模型的容量回退 |
 | `defaultMaxTokens` | `128,000` | 未描述模型的输出上限回退 |
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
-| `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
+| `requestImageMaxDimension` | 目录中的宽高限制 | 每张请求图片的最大宽度和高度；显式配置会覆盖目录中的两个限制 |
+| `requestImageMaxBytes` | 目录的 base64 上限换算为原始字节；否则为 `1 MiB` | 分摊前的单图硬上限；显式配置会覆盖目录上限 |
+| `requestImageBudgetCount` | `20` | 图片总预算的固定分摊张数，与当前保留图片数量无关 |
 | `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
 | `maxRequestImages` | `50` | 保留请求图片数量上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败。默认值取 Azure OpenAI 的 50 张上限；提供方接受更多图片的路由应调高 |
 | `imageOffloadCountQuantum` | `10`，不超过 `maxRequestImages` | 每次数量超限时省略的最老图片数 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
+
+请求图片继承所选 pi-ai 模型的 `inputLimits.images.resize` 宽度、高度和 base64 字节上限。`requestImageMaxDimension` 用同一个值覆盖宽高，不能分别配置不同的宽度和高度上限。`requestImageMaxBytes` 按原始编码字节覆盖单图上限。最终硬上限为 `min(3 × floor(maxRequestImageBytes / (4 × requestImageBudgetCount)), requestImageMaxBytes 或目录上限或 1 MiB)`，其中目录上限通过 `3 × floor(catalogBytes / 4)` 换算。总预算须为每份预算至少提供 4 个 base64 字节。默认每张图分得 0.75 MiB，20 张达到该上限的图片最多占用 20 MiB base64 载荷。历史增长不会改变分摊张数；`maxRequestImages` 单独控制保留图片数量。目录缺少某个尺寸时，路由不限制该轴，总像素仍由 `requestImagePixelBudget` 控制。
+
+pi 不暴露单独的软字节目标，共享编码器的 `imageTargetBytes` 等于最终 `maxImageBytes`。质量阶梯结束后仍超限的图片会继续缩小尺寸并重新编码，直到满足上限；无法满足的极小上限会明确报错。存储附件保持不变。图片描述和截图坐标使用最终编码尺寸。调大 `requestImageBudgetCount` 会减小每张图的分配额度，调小则增加额度；总预算仍按实际载荷执行。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -142,7 +150,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 适配器建立在不可变快照与按操作解析之上。每个操作都会在第一次 `await` 前捕获整个快照——profile 加一个持有每条路由所构建 `Provider` 的 `createModels()` 集合——配置变更会构建新集合而非修改使用中的集合，因此在一个配置下开始的请求绝不会在另一个配置下结束。路由自己的凭据引用经 harness seam 解析，并以请求 `apiKey` 选项传入，pi-ai 将其视为优先级最高的 auth 覆盖——这正是明确失败引用语义的所在。该覆盖未覆盖的一切都经集合自身的 auth 到达 pi-ai：凭据存储持有登录写入、刷新轮换的记录（以 `llm-pi-ai/<provider id>` 寻址），auth context 回答提供方解析时提出的 ambient 问题。两者跨快照保持稳定，因此配置变更重建集合时不会忘记谁已登录。运行时 import 使用 pi-ai 的 provider、API 与 utility 入口；`src/models.ts` 提供本适配器所需的少量 model helper，而不会求值 pi-ai 聚合入口。
 
-初始提示词文本和可用工具分别使用 pi-ai 的 `Context.systemPrompt` 与 `Context.tools`；后续系统消息和工具更新保留在 `Context.messages` 中。pi-ai 负责规范化这些字段，并应用所选协议的序列化规则。
+初始提示词文本和可用工具分别使用 pi-ai 的 `Context.systemPrompt` 与 `Context.tools`；后续系统消息和工具更新保留在 `Context.messages` 中。pi-ai 负责规范化这些字段，并应用所选协议的序列化规则。用户和工具文本块保持独立，由 pi-ai 序列化。系统文本（包括 developer 更新）在交给 pi-ai 前用空行拼接，因为 pi-ai 原本会用单个换行符拼接独立的系统文本块。初始提示词和 system-reminder 回退使用相同的分隔符。空文本块会被忽略。系统文本块会先去除首尾空白，因此仅含空白的块也会被忽略；用户和工具文本保留其空白。
 
 <a id="request-headers"></a>
 ### 请求头
@@ -223,7 +231,7 @@ Anthropic 可以将每个已签名 thinking 块绑定到生成它时的请求前
 
 #### 模型看到什么
 
-所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置数量仍超过路由的 `maxRequestImages`，或其精确 base64 载荷超过 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。在 Anthropic Messages 路由上，如果回放响应的请求前缀自生成后发生变化（例如经过压缩），该响应会丢失 thinking 块；其文本和工具调用保留。 `imageRequestTarget(provider, model, image)` 向截图调用方提供与模型请求一致的图片尺寸和字节目标；不缩放图片的适配器保留归一化后的原图。
+所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置数量仍超过路由的 `maxRequestImages`，或其精确 base64 载荷超过 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。默认每张编码图片最多为 0.75 MiB，20 张达到上限的图片可以放入 20 MiB base64 总预算。较小的图片可以保留更多，但仍受数量上限限制。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。在 Anthropic Messages 路由上，如果回放响应的请求前缀自生成后发生变化（例如经过压缩），该响应会丢失 thinking 块；其文本和工具调用保留。 `imageRequestTarget(provider, model, image)` 向截图调用方提供最大尺寸和字节上限；`readImageRequest` 返回执行字节限制后的实际编码尺寸。
 
 #### Token 影响
 
@@ -231,7 +239,7 @@ Anthropic 可以将每个已签名 thinking 块绑定到生成它时的请求前
 
 #### KV Cache 影响
 
-传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。省略过期的 Anthropic thinking 发生在前缀变化之后，而该变化已在变化的消息处结束复用。第一个省略无摘要记录的 thinking 的请求会在第一条此类消息处结束复用，且仅发生一次。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，在下一次决策前前缀保持稳定。数量超限时一次省略 `imageOffloadCountQuantum` 张图片，因此饱和路由每新增这么多张图片才让复用在最老的保留图片处结束一次。
+传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。省略过期的 Anthropic thinking 发生在前缀变化之后，而该变化已在变化的消息处结束复用。第一个省略无摘要记录的 thinking 的请求会在第一条此类消息处结束复用，且仅发生一次。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，在下一次决策前前缀保持稳定。数量超限时一次省略 `imageOffloadCountQuantum` 张图片，因此饱和路由每新增这么多张图片才让复用在最老的保留图片处结束一次。 修改字节预算配置可能缩放历史请求图片并影响前缀复用；仅新增图片不会改变单图分配额度。
 
 ### 提供方响应
 
@@ -267,7 +275,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **目录外模型需要明确的协议**——目录路由保留每个模型的协议，包括 `azure` 下的两种 Azure API。混合协议目录中不存在的模型需要显式设置路由级 `api`；该设置覆盖路由上的所有模型，且必须属于受支持的自定义协议。Azure 部署名称应通过 `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` 设置，模型 ID 保持为目录中的 ID。
 - **模态声明不受校验**——声明 `image` 而其网关不支持的模型会在提示词准入后被提供方拒绝。持久图片仍留在历史中，同一误声明模型可能再次失败；切换到纯文本模型仍然可行，因为共享 LLM 运行时会针对该请求把图片引用投影为稳定文本。
 - **未认证路由取决于其协议**——不点名凭据的路由解析为已配置但无密钥，但 pi-ai 的 OpenAI 兼容实现仍要求 API 密钥或 `Authorization` 标头，因此无密钥本地服务器需要由 `apiKeyEnv` 引用或 `headers` 中的 `Authorization` 条目提供的占位凭据。pi-ai 的 Gemini 实现会拒绝没有 API 密钥的请求，因此 `google-generative-ai` 路由始终需要 `apiKeyEnv`，其值以 `x-goog-api-key` 发送。
-- **Gemini 只接受四个推理等级**——在 `google-generative-ai` 上，pi-ai 的 Gemini 实现只发送 `minimal`、`low`、`medium` 或 `high`（不区分大小写），`reasoningEfforts` 的值为其他名称时请求失败；[模型页](../../client/ui-settings-models/README.zh.md)只为此类路由提供这些档位。不带等级的请求（包括 `off`）会发送 pi-ai 的关闭思考配置，无法关闭思考的模型（例如 Gemini 2.5 Pro）可能拒绝该请求。
+- **Gemini 只接受四个推理等级**——在 `google-generative-ai` 上，pi-ai 的 Gemini 实现只发送 `minimal`、`low`、`medium` 或 `high`（不区分大小写），`reasoningEfforts` 的值为其他名称时请求失败；[模型页](../../client/ui-settings-models/README.zh.md)只为 `api` 指定该协议的路由提供这些档位。不带等级的请求（包括 `off`）会发送 pi-ai 的关闭思考配置，无法关闭思考的模型（例如 Gemini 2.5 Pro）可能拒绝该请求。
 - **不支持 `GenerateOptions.stop`**——pi-ai 的通用流式选项无法跨提供方保证停止序列行为。
 - **对话更新支持只来自已安装的 pi-ai 目录**——原生系统与工具更新需要目录模型的对话中 compat 标志，profile 不能设置这些标志。手工声明的路由与未标记的模型会以用户角色提醒接收后续系统文本，并在每次请求开头接收完整的当前工具列表。
 - **图片只在 user 与工具结果消息中被接受**——system、developer 或 assistant 历史中的图片在两条转换路径上都会以 `UNSUPPORTED_CONTENT` 失败。

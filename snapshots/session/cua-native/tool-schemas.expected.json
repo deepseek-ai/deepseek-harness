@@ -522,8 +522,8 @@
                       "up"
                     ]
                   },
-                  "useSystemPointer": {
-                    "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                     "type": "boolean"
                   }
                 },
@@ -571,8 +571,8 @@
                         "minLength": 1,
                         "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -611,8 +611,8 @@
                         "type": "boolean",
                         "const": false
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -654,8 +654,8 @@
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -747,6 +747,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -825,6 +829,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -906,6 +914,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1124,6 +1136,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
+                  },
                   "windowId": {
                     "type": "string",
                     "minLength": 1
@@ -1165,6 +1181,10 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
                   },
                   "windowId": {
                     "type": "string",
@@ -1383,8 +1403,8 @@
                         "type": "number",
                         "minimum": 0
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -1462,8 +1482,8 @@
                         "minimum": 0,
                         "maximum": 999
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },

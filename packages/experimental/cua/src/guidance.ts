@@ -14,7 +14,7 @@ Signatures show resolved return values after await. ActionResult = { dispatched:
 Supported modifier names depend on the platform and the operation; see the platform guidance.
 
 Setup and discovery:
-- cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
+- cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
 - cua.listApps() -> { id: string, displayName: string, isRunning: boolean, pid?: number }[] — list applications the provider exposes for selection with their current running state; pass the returned id unchanged to cua.getApp.
 - cua.findApps(query: string) -> { id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[] — search installed applications, including stopped matches.
 - cua.getState() -> { apps: { id: string, displayName: string, isRunning: boolean, pid?: number }[], browsers: [] } — summarize the same provider discovery; this is not an accessibility observation.
@@ -61,13 +61,23 @@ Available at app or window level depending on the platform.
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.`
 
 /**
- * Describe the system-pointer option for a provider that declares the capability.
+ * Describe the system-input option for a provider that declares the capability.
  * @param guidance Provider instructions including the shared operation catalog.
  * @returns The capability-specific signature and permission instructions.
  */
-export function withSystemPointerGuidance(guidance: string): string {
-  const signature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean })'
-  return `${guidance.replace(hoverSignature, signature)}
+export function withSystemInputGuidance(guidance: string): string {
+  const methods = new Set(['mouseMove', 'toggleMouse', 'click', 'drag', 'pressKey', 'sendKeyEvent'])
+  const catalog = guidance.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
+    if (!methods.has(method)) return entry
+    const end = entry.indexOf(') -> ')
+    if (end < 0) throw new Error(`System input guidance is missing the result separator for ${method}`)
+    const signature = entry.slice(0, end)
+    const extended = signature.includes('options:') || signature.includes('options?:')
+      ? signature.replace(' }', ', useSystemInput?: boolean }')
+      : `${signature}, options?: { useSystemInput?: boolean }`
+    return extended + entry.slice(end)
+  })
+  return `${catalog}
 
-Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system mouse control.`
+Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.`
 }

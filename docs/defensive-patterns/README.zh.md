@@ -20,7 +20,7 @@
 |---|---|
 | 包导出面、包形态、构建面、依赖声明 | [package-surface.zh.md](package-surface.zh.md) |
 | 远程服务、`@Remote` 方法、API 分发、API 层的业务归属 | [remote-and-api.zh.md](remote-and-api.zh.md) |
-| 客户端组件、slots、store、hooks、effect | [client-components.zh.md](client-components.zh.md) |
+| 客户端组件、slots、store、hooks、effect、样式表选择器 | [client-components.zh.md](client-components.zh.md) |
 | Session 读取、持有、会话节点、renderer | [conversation-and-session.zh.md](conversation-and-session.zh.md) |
 | 时序、状态表示、共享归属、去中心化、重构、迁移、性能证据、清理、回调、子进程 | [general.zh.md](general.zh.md) |
 

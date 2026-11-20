@@ -1,4 +1,5 @@
 /** Explicit opt-in compatibility check against an installed Cua Driver executable. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { isAbsolute } from 'node:path'
@@ -33,6 +34,7 @@ it.skipIf(executable === undefined || executable === '')(
     const ctx = new Context()
     try {
       await ctx.plugin(ComputerUse)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)

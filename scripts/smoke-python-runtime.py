@@ -2577,7 +2577,13 @@ def build_in_history_snapshot_files(
     systems = [event for event in result.events if event.get("type") == "system/message"]
     assert len(systems) == 2, systems
     assert [event.get("surfaceOp") for event in systems] == ["append", "append"], systems
-    prompts = [message_text(event["data"]["message"]["content"]) for event in systems]
+    prompts = [
+        "\n\n".join(
+            block["text"].strip() for block in event["data"]["message"]["content"]
+            if block["type"] == "text" and block["text"].strip()
+        )
+        for event in systems
+    ]
     assert "Python SDK prompt version 1." in prompts[0], prompts
     assert "Python SDK prompt version 2." not in prompts[0], prompts
     assert "Python SDK prompt version 2." in prompts[1], prompts
@@ -3044,7 +3050,7 @@ def scrub_snapshot_header(value: dict[object, object]) -> None:
 
 
 def scrub_snapshot_system_message(value: dict[object, object]) -> None:
-    """Tokenize the rendered prompt text of a `system/message` surface node."""
+    """Tokenize system text while retaining whitespace separators and source attribution."""
     if value.get("type") != "system/message":
         return
     data = value.get("data")
@@ -3054,7 +3060,11 @@ def scrub_snapshot_system_message(value: dict[object, object]) -> None:
         return
     for block in content:
         if isinstance(block, dict) and block.get("type") == "text":
-            block["text"] = "{{system}}"
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                leading = text[:len(text) - len(text.lstrip())]
+                trailing = text[len(text.rstrip()):]
+                block["text"] = leading + "{{system}}" + trailing
 
 
 def render_jsonl(records: list[object]) -> str:

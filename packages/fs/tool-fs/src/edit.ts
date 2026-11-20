@@ -80,6 +80,7 @@ export function applyEditTool(ctx: Context, sandbox: FsSandboxController): void 
     text: ({ scope }) => ctx.tools.get('edit', scope) === undefined
       ? ''
       : 'Read a file before editing it unless you just created or edited it in this session.',
+    retirement: 'The edit tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

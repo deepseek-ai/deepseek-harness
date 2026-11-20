@@ -161,7 +161,7 @@ describe('contextBreakdown session projection', () => {
     expect(systemTokens + messageTokens).toBe(ctx.tokenMeter.measure(session).surfaceTokens)
   })
 
-  it('moves a superseded in-history prompt into the message figure and subtracts it with a compaction', async () => {
+  it('counts all system additions separately from user messages across compaction', async () => {
     const { ctx, session } = await harness()
     const agree = (): ContextBreakdownProjection => {
       const projection = projected(ctx, session)
@@ -175,12 +175,12 @@ describe('contextBreakdown session projection', () => {
     // An in-history route appends the changed prompt; node 0 stays model-visible history.
     const verbose = 'You are verbose and thorough.'
     const superseded = appendSystem(session, verbose)
-    expect(agree()).toMatchObject({ systemTokens: Math.ceil(verbose.length / 4) + 4, messageTokens: 9 + 8 })
+    expect(agree()).toMatchObject({ systemTokens: 8 + Math.ceil(verbose.length / 4) + 4, messageTokens: 9 })
     const followUp = appendUser(session, 'efgh')
     appendSystem(session, 'You are terse once more.')
     expect(agree()).toMatchObject({
-      systemTokens: Math.ceil('You are terse once more.'.length / 4) + 4,
-      messageTokens: 9 + 8 + 9 + Math.ceil(verbose.length / 4) + 4,
+      systemTokens: 8 + Math.ceil(verbose.length / 4) + 4 + Math.ceil('You are terse once more.'.length / 4) + 4,
+      messageTokens: 18,
     })
 
     // Compacting the span that holds the superseded mid-history prompt shrinks the message figure by it.
@@ -193,7 +193,7 @@ describe('contextBreakdown session projection', () => {
       surfaceOp: { op: 'replace', startSeq: question, endSeq: followUp },
       sourceEventSeqs: [question, superseded, followUp],
     })
-    expect(agree().messageTokens).toBe(8 + estimateMessage(summary))
+    expect(agree().messageTokens).toBe(estimateMessage(summary))
   })
 
   it('restores the surviving head when compaction removes the newest large prompt', async () => {
@@ -326,21 +326,21 @@ describe('contextBreakdown session projection', () => {
     expect(JSON.stringify(claimed)).toBe(armed)
   })
 
-  it('classifies the last nonempty system by position despite rewrites and extra source citations', async () => {
+  it('counts surviving system additions despite rewrites and extra source citations', async () => {
     const { ctx, session } = await harness()
     let head = appendSystem(session, 'head')
     let question = appendUser(session, 'question')
     const middle = appendSystem(session, 'middle prompt')
     const tail = appendSystem(session, 'last prompt in surface order')
     head = replaceSystem(session, head, 'head rewritten at a newer event seq')
-    const agree = (text: string): void => {
+    const agree = (...texts: string[]): void => {
       const view = projected(ctx, session)
-      expect(view.systemTokens).toBe(estimateSystemMessage(createSystemMessage(text)))
+      expect(view.systemTokens).toBe(texts.reduce((sum, text) => sum + estimateSystemMessage(createSystemMessage(text)), 0))
       expect(view.messageTokens).toBeGreaterThanOrEqual(0)
       expect(view.systemTokens + view.messageTokens)
         .toBe(ctx.tokenMeter.measure(session).nodes.reduce((total, node) => total + node.heuristicTokens, 0))
     }
-    agree('last prompt in surface order')
+    agree('head rewritten at a newer event seq', 'middle prompt', 'last prompt in surface order')
     appendSummaryMeter(ctx, session, question, question)
     question = session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'rewritten question' }], source: { kind: 'user' },
@@ -352,14 +352,14 @@ describe('contextBreakdown session projection', () => {
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'middle summary' }], source: { kind: 'user' },
     }), { surfaceOp: { op: 'replace', startSeq: question, endSeq: middle }, sourceEventSeqs: [question, middle, tail] })
-    agree('last prompt in surface order')
+    agree('head rewritten at a newer event seq', 'last prompt in surface order')
     // An unmetered replacement of a retained system prompt is priced from that prompt's own entry.
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'tail summary' }], source: { kind: 'user' },
     }), { surfaceOp: { op: 'replace', startSeq: tail, endSeq: tail }, sourceEventSeqs: [tail, head] })
     agree('head rewritten at a newer event seq')
     const repeated = appendSystem(session, 'head rewritten at a newer event seq')
-    agree('head rewritten at a newer event seq')
+    agree('head rewritten at a newer event seq', 'head rewritten at a newer event seq')
     replaceSystem(session, repeated, '')
     agree('head rewritten at a newer event seq')
     replaceSystem(session, head, '')
@@ -373,9 +373,9 @@ describe('contextBreakdown session projection', () => {
     const middle = appendSystem(session, 'middle')
     const tail = appendSystem(session, 'tail')
     appendSystem(session, '')
-    expect(projected(ctx, session).systemTokens).toBe(5)
+    expect(projected(ctx, session).systemTokens).toBe(16)
     replaceSystem(session, tail, '')
-    expect(projected(ctx, session).systemTokens).toBe(6)
+    expect(projected(ctx, session).systemTokens).toBe(11)
     replaceSystem(session, middle, '')
     expect(projected(ctx, session)).toMatchObject({ systemTokens: 5, messageTokens: 10 })
     head = replaceSystem(session, head, 'fallback head')
@@ -431,12 +431,12 @@ describe('contextBreakdown session projection', () => {
     const first = appendUser(session, 'question')
     const last = appendSystem(session, 'x'.repeat(4000))
     await ctx.plugin(TokenMeter)
-    expect(projected(ctx, session)).toMatchObject({ systemTokens: 1004, messageTokens: 15 })
+    expect(projected(ctx, session)).toMatchObject({ systemTokens: 1009, messageTokens: 10 })
     const checkpoint = JSON.parse(JSON.stringify(
       ctx.sessionProjections.checkpoint(session),
     )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
     const row = checkpoint['contextBreakdown']!
-    expect(row.ver).toBe(6)
+    expect(row.ver).toBe(7)
     expect(ctx.sessionProjections.viewCheckpoint(checkpoint).contextBreakdown).toEqual(projected(ctx, session))
     appendSummaryMeter(ctx, session, first, last)
     const meter = session.snapshotEvents().at(-1)!
@@ -457,7 +457,7 @@ describe('contextBreakdown session projection', () => {
       stale, session.snapshotEvents(), SessionLogOffset(0), session.header, session.inheritedEventCount,
     )
     expect(replayed.snapshot.values.contextBreakdown).toEqual(projected(ctx, session))
-    expect(replayed.checkpoint['contextBreakdown']?.ver).toBe(6)
+    expect(replayed.checkpoint['contextBreakdown']?.ver).toBe(7)
     const invalid = {
       ...checkpoint,
       contextBreakdown: {
@@ -491,7 +491,7 @@ describe('contextBreakdown session projection', () => {
         systemTokens: 8, toolsTokens: staleValue.toolsTokens, messageTokens: 9,
       })
       expect(restored.checkpoint).toEqual(current)
-      expect(restored.checkpoint['contextBreakdown']?.ver).toBe(6)
+      expect(restored.checkpoint['contextBreakdown']?.ver).toBe(7)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -549,7 +549,14 @@ describe('shared estimator', () => {
 
   it('prices the system node without block overhead and an empty prompt to zero', () => {
     expect(estimateSystemMessage(createSystemMessage(''))).toBe(0)
+    expect(estimateSystemMessage(createSystemMessage(' \n '))).toBe(0)
     expect(estimateSystemMessage(createSystemMessage('abcdefgh'))).toBe(6)
+    expect(estimateSystemMessage(createMessage({ role: 'system', content: [
+      { type: 'text', text: ' abcd ' }, { type: 'text', text: 'efgh' },
+    ], source: { kind: 'system-prompt', sections: [
+      { name: 'first', order: 0, state: 'active', contentIndex: 0 },
+      { name: 'second', order: 1, state: 'active', contentIndex: 1 },
+    ] } }))).toBe(estimateSystemMessage(createSystemMessage('abcd\n\nefgh')))
     // estimateMessage routes the system role to the same figure.
     expect(estimateMessage(createSystemMessage('abcdefgh'))).toBe(6)
     // A non-text block in a system message keeps a conservative JSON price.
@@ -558,7 +565,7 @@ describe('shared estimator', () => {
       role: 'system',
       content: [{ type: 'text', text: 'abcd' }, image],
       source: SYSTEM_SOURCE,
-    }))).toBe(Math.ceil((4 + JSON.stringify(image).length) / 4) + 4)
+    }))).toBe(Math.ceil((6 + JSON.stringify(image).length) / 4) + 4)
   })
 
   it('prices the envelope tool schemas and absent tools to zero', () => {

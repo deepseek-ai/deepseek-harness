@@ -164,6 +164,10 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     },
   },
   'desktop-ptc-context': { expectedFinalResponse: 'SDK snapshot OK' },
+  'desktop-ptc-context-scoped': {
+    expectedFinalResponse: 'SDK snapshot OK',
+    patches: [fileURLToPath(new URL('./desktop-ptc-context-scoped/runtime.cordis.yml', import.meta.url))],
+  },
   'cua-run-code': {
     expectedFinalResponse: 'The retained application and window report Count: 2. The counter persisted across calls, and the program exposes only tools.cua. The screenshot was attached after the first call.',
     environment: { DSH_PERMISSION_MODE: 'danger-full-access' },
@@ -225,11 +229,23 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     patches: [fileURLToPath(new URL('./tool-error-details/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ERROR_DETAILS_OK',
   },
+  'tool-error-details-scoped': {
+    patches: [fileURLToPath(new URL('./tool-error-details-scoped/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'ERROR_DETAILS_OK',
+  },
   'ptc-cancel': {
     patches: [fileURLToPath(new URL('./ptc-cancel/runtime.cordis.yml', import.meta.url))],
   },
   'ptc-turn': {
     patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'CODE_ONE+CODE_TWO',
+    expectedTools: { run_code: ['code', 'description'] },
+  },
+  'ptc-cancel-scoped': {
+    patches: [fileURLToPath(new URL('./ptc-cancel-scoped/runtime.cordis.yml', import.meta.url))],
+  },
+  'ptc-turn-scoped': {
+    patches: [fileURLToPath(new URL('./ptc-turn-scoped/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'CODE_ONE+CODE_TWO',
     expectedTools: { run_code: ['code', 'description'] },
   },
@@ -423,9 +439,9 @@ function assembledSystem(log: PersistedLog): string {
   const event = log.content.trimEnd().split('\n')
     .map(line => JSON.parse(line) as LoggedSystemMessage)
     .find(candidate => candidate.type === 'system/message')
-  const system = event?.data?.message?.content?.[0]?.text
-  if (typeof system !== 'string') throw new Error('session log has no system/message text')
-  return system
+  const content = event?.data?.message?.content
+  if (content === undefined) throw new Error('session log has no system/message text')
+  return content.map(block => block.text).join('')
 }
 
 function assembledRuntimeContexts(log: PersistedLog): string[] {
@@ -1339,6 +1355,12 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const events = parseSessionLog(parent.content)
         expect(events.filter(event => event.type === 'plan/mode').map(event => event.data.active))
           .toEqual([true, false, true, false])
+        expect(events.filter(event => event.type === 'user/message').filter(event => event.data.source.kind === 'plan-mode')
+          .map(event => event.data.content)).toEqual([
+          [{ type: 'text', text: 'The user switched this session to plan mode.' }],
+          [{ type: 'text', text: 'The user switched this session to plan mode.' }],
+          [{ type: 'text', text: 'The user switched this session back to the default mode.' }],
+        ])
         expect(events.filter(event => event.type === 'command/run').map(event => ({ name: event.data.name, args: event.data.args })))
           .toEqual([{ name: 'plan', args: ' Prepare a plan through exit_plan_mode; revise after feedback and acknowledge approval.' },
             { name: 'plan', args: '' }, { name: 'plan', args: ' off' }])
@@ -1350,8 +1372,9 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(modelRequests).toHaveLength(6)
         const active = modelRequests.map((request) => {
           const messages = request.messages as JsonObject[]
-          const system = messages.filter(message => message.role === 'system').at(-1)
-          return JSON.stringify(system).includes('You are in plan mode.')
+          const system = JSON.stringify(messages.filter(message => message.role === 'system'))
+          return system.lastIndexOf('Plan mode is active. Follow the plan-mode instructions.')
+            > system.lastIndexOf('Plan mode is inactive. The plan-mode instructions no longer apply.')
         })
         expect(active).toEqual([false, true, true, false, true, false])
         expect(modelRequests.map(request => (request.tools as JsonObject[]).some(tool => tool.name === 'exit_plan_mode')))
@@ -1468,7 +1491,12 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(continuationRequest.tools).toEqual(initialRequest.tools)
         expect(continuationRequest.provider).toBe(initialRequest.provider)
         expect(continuationRequest.model).toBe(initialRequest.model)
-        expect(continuationMessages[0]).toEqual(initialMessages[0])
+        expect(continuationMessages[0]).toEqual({
+          ...initialMessages[0],
+          id: expect.any(String),
+          source: { ...(initialMessages[0]?.source as JsonObject), reset: true },
+        })
+        expect(continuationMessages[0]?.id).not.toBe(initialMessages[0]?.id)
         expect(summaryMessages.slice(0, -1)).toEqual(initialMessages)
         expect(summaryMessages.at(-1)).toMatchObject({ role: 'user', content: [{
           type: 'text', text: expect.stringContaining('You are now acting as a compaction engine'),
@@ -1480,13 +1508,15 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(texts).not.toContain(done?.data.text)
         expect(texts).toContain('SDK_COMPACT_READY')
       }
-      if (scenario.name === 'ptc-cancel') {
+      if (scenario.name === 'ptc-cancel' || scenario.name === 'ptc-cancel-scoped') {
         const events = results.flatMap(result => result.events)
         expect(events.find(event => event.type === 'tool/result')).toMatchObject({ data: {
           message: {
             toolCallId: 'ptc-cancel',
             isError: true,
-            content: [{ type: 'text', text: 'Error: tool call aborted' }],
+            content: [{ type: 'text', text: scenario.name === 'ptc-cancel'
+              ? 'Error: tool call aborted'
+              : 'Error: tool call aborted: execution canceled; retained variables were preserved' }],
           },
           error: { name: 'AbortError', code: 'ABORTED' },
         } })
@@ -1613,7 +1643,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
           message: { content: [{ type: 'text', text: expect.stringContaining('subagent limit reached (active child limit: 1)') }], isError: true },
         } })
       }
-      if (scenario.name === 'tool-error-details') {
+      if (scenario.name === 'tool-error-details' || scenario.name === 'tool-error-details-scoped') {
         const events = results.flatMap(result => result.events)
         const headers = events.filter(event => event.type === 'request/header')
           .map(event => (event.data.header as { tools: { name: string }[] }).tools.map(tool => tool.name))
@@ -1734,7 +1764,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(systems.map(event => event.surfaceOp)).toEqual(['append', 'append'])
         const prompts = systems.map(event => (event.data as {
           message: { content: Array<{ text: string }> }
-        }).message.content[0]!.text)
+        }).message.content.map(block => block.text).join(''))
         expect(prompts[0]).not.toContain('Snapshot guidance added after the first read')
         expect(prompts[1]).toContain('Snapshot guidance added after the first read')
         expect(prompts[1]).not.toBe(prompts[0])

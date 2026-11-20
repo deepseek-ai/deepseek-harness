@@ -60,6 +60,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:session-query',
     order: ctx.systemPrompt.getSectionOrder('TOOL_SESSION_QUERY'),
     text: PROMPT_TEXT,
+    retirement: 'The session-query tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

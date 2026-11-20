@@ -80,22 +80,18 @@ export function pathPartsOf(path: string): { readonly directory: string; readonl
 export * from './file-address.ts'
 
 /**
- * The address for a path as a caller holds it: a relative path, or an absolute
- * path inside the Session's workspace, becomes a `session`-scoped address; an
- * absolute path outside it, or one whose workspace root is unknown, keeps its
- * absolute path in that Session's address.
+ * The address of a file as a caller holds its path. The address carries the
+ * absolute path whenever one is known, so it names the same file after the
+ * Session's directory moves: an absolute path is kept, and a relative path is
+ * joined to `cwd`. A relative path without `cwd` stays relative, and the Host
+ * resolves it against the Session's directory at each read.
  * @param sessionId - the Session the path is read in.
- * @param cwd - that Session's workspace root, when known.
- * @param path - absolute or workspace-relative path, in either separator spelling.
- * @returns the `dsh-resource://file/…` address.
+ * @param cwd - the directory that Session works in, when known.
+ * @param path - absolute path or path relative to `cwd`, in either separator spelling.
+ * @returns the `dsh-resource://file/session/…` address.
  */
 export function fileAddressFor(sessionId: string, cwd: string | undefined, path: string): string {
-  const normalized = path.replace(/\\/g, '/')
-  if (!isAbsoluteWorkspacePath(normalized)) return sessionFileAddress(sessionId, normalized)
-  const root = cwd === undefined ? '' : cwd.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (root !== '' && normalized === root) return sessionFileAddress(sessionId, '')
-  if (root !== '' && normalized.startsWith(`${root}/`)) return sessionFileAddress(sessionId, normalized.slice(root.length + 1))
-  return sessionFileAddress(sessionId, normalized)
+  return sessionFileAddress(sessionId, resolveWorkspacePath(cwd, path))
 }
 
 /**

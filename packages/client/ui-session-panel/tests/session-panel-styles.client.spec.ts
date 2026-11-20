@@ -31,10 +31,12 @@ const px = (value: string | undefined): number => {
 }
 
 describe('SessionPanel.module.css docking geometry', () => {
-  const metrics = declarationsOf('.panel, .dockProbe')
+  const metrics = declarationsOf(':global([data-conversation-content]), .panel, .dockProbe')
   const clear = px(metrics['--panel-clear'])
   const edge = px(metrics['--panel-edge'])
   const minWidth = px(metrics['--panel-min-width'])
+  /** The body's reserve step, evaluated: clamped to 0..1px. */
+  const reserveRoom = (reserveMax: number): number => Math.min(1, Math.max(0, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
 
   it('derives the docked width and the dock probe from one set of metrics', () => {
     expect([clear, edge, minWidth]).toEqual([40, 8, 300])
@@ -46,15 +48,28 @@ describe('SessionPanel.module.css docking geometry', () => {
     const probe = declarationsOf('.dockProbe')
     expect(probe['width']).toBe(
       'max(calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),'
-      + ' calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px))',
+      + ' var(--dsh-session-panel-reserve-room))',
     )
     expect(probe['max-width']).toBe('1px')
+  })
+
+  it('derives the reserve step on the Conversation body, where the non-inherited maximum is readable', () => {
+    expect(declarationsOf(':global([data-conversation-content])')).toEqual({
+      '--dsh-session-panel-reserve-room': 'clamp(0px,'
+        + ' calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px),'
+        + ' 1px)',
+    })
+    expect(declarationsOf(":global([data-slot='conversation.chat.flow'])")['--dsh-session-panel-reserve-room']).toBe('initial')
+    // The aside inherits the computed step when it flips; the message rows keep the initial value.
+    expect(css.replace(/\s+/g, ' ')).toContain(
+      "@property --dsh-session-panel-reserve-room { syntax: '<length>'; inherits: true; initial-value: 0px; }",
+    )
   })
 
   it('makes the probe 1px wide exactly from the gutter that holds the panel at its minimum width', () => {
     // The declarations above, evaluated: a width below 0 is used as 0, and max-width caps the probe at 1px.
     const probeWidth = (gutter: number, reserveMax = 0): number =>
-      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, reserveRoom(reserveMax)))
     const dockedWidth = (gutter: number): number => Math.min(360, Math.max(minWidth, gutter - clear - edge))
     expect([probeWidth(0), probeWidth(347), probeWidth(347.5), probeWidth(348), probeWidth(900)]).toEqual([0, 0, 0.5, 1, 1])
     // At the first gutter that docks, the panel is at its minimum width and keeps both clearances.
@@ -65,7 +80,7 @@ describe('SessionPanel.module.css docking geometry', () => {
 
   it('gives the probe room as well from the largest end reserve that covers the gutter, whatever the gutter is', () => {
     const probeWidth = (gutter: number, reserveMax: number): number =>
-      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, reserveRoom(reserveMax)))
     // A 260px gutter holds no panel, and the transcript can leave 348px: room. This term is a step at 348px, as the
     // body's end inset is, so the probe has room exactly where the body makes it.
     expect([probeWidth(260, 347), probeWidth(260, 347.96), probeWidth(260, 348), probeWidth(260, 900)]).toEqual([0, 0, 1, 1])
@@ -77,8 +92,7 @@ describe('SessionPanel.module.css docking geometry', () => {
 
   it('asks the Conversation body for exactly the gutter that docks the panel while the probe carries the mark', () => {
     const request = declarationsOf(':global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve])')
-    expect(request).toEqual({ '--dsh-chat-end-reserve': 'calc(40px + 8px + 300px)' })
-    expect(40 + 8 + 300).toBe(clear + edge + minWidth)
+    expect(request).toEqual({ '--dsh-chat-end-reserve': 'calc(var(--panel-clear) + var(--panel-edge) + var(--panel-min-width))' })
   })
 
   it('keeps the probe out of sight, out of the layout flow, and away from the pointer', () => {

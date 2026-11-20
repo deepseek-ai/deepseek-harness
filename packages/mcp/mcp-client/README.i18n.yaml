@@ -99,20 +99,20 @@
   en: 9a662db85a7da1b8
   zh: 5272801e35cff20a
 /deepseek-ai-dsh-mcp-client/model-experience/on-demand-tools/kv-cache-effect:
-  en: 00dfcfa57f432f83
-  zh: b2ed0b51b2fd4723
+  en: 2d63ef736644d73b
+  zh: f7fffb95cca62ffa
 /deepseek-ai-dsh-mcp-client/model-experience/server-instructions:
   en: a3cb7c5760a8c141
   zh: ec9fc8d4f00a5eb6
 /deepseek-ai-dsh-mcp-client/model-experience/server-instructions/what-the-model-sees:
-  en: d3e9d53702f9c494
-  zh: 62bd2b185abbd38c
+  en: 0f00c63e7b2c36c2
+  zh: fa56a0e607506c21
 /deepseek-ai-dsh-mcp-client/model-experience/server-instructions/token-effect:
-  en: 082214331ebf38d7
-  zh: 2251c4f8e4d2e05c
+  en: 6dc5419c543f3b01
+  zh: 6b637d8c6f04eca1
 /deepseek-ai-dsh-mcp-client/model-experience/server-instructions/kv-cache-effect:
-  en: 189198f7ace2a991
-  zh: 00948145a803d614
+  en: 8cc97c1aea173d71
+  zh: b7ced8660c64a11a
 /deepseek-ai-dsh-mcp-client/known-limitations-and-deferred-work:
   en: ac3fb21a979d917f
   zh: be73a4475be6530c

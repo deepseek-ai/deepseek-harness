@@ -16,10 +16,12 @@ final class WindowPointerInput {
     }
 
     private let poster: PIDEventPoster
+    private let systemKeyboard: SystemKeyboardInput
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(poster: PIDEventPoster, checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(poster: PIDEventPoster, systemKeyboard: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
         self.poster = poster
+        self.systemKeyboard = systemKeyboard
         self.checkCancellation = checkCancellation
     }
 
@@ -67,50 +69,55 @@ final class WindowPointerInput {
         poster.post(event, to: route.owner.pid)
     }
 
-    /// Post balanced mouse presses; holdMs replaces each press-to-release interval and remains cancellable.
+    /// Post balanced mouse presses; system input also holds and releases the requested keyboard modifiers.
     func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int, modifiers: [String] = [],
-               holdMs: Int? = nil, isolation: isolated (any Actor)? = #isolation) async throws {
+               holdMs: Int? = nil, useSystemInput: Bool = false, isolation: isolated (any Actor)? = #isolation) async throws {
         try checkCancellation()
         try Self.validate(point, in: route)
         guard (button == "left" && (count == 1 || count == 2)) || (["right", "middle"].contains(button) && count == 1) else {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported mouse button or click count")
         }
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         let selectedButton = try Self.button(button)
-        let flags = try KeyboardInput.modifierFlags(modifiers)
+        var flags = try KeyboardInput.modifierFlags(modifiers)
+        if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
         let group = Self.clickGroup()
         let screen = Self.screenPoint(point, in: route)
         let move = try mouseEvent(
             source: source, route: route, screen: screen, local: point,
             type: .mouseMoved, button: .left, clickState: 0, subtype: 3,
-            group: group, number: button == "left" ? 2 : nil, flags: flags
+            group: group, number: button == "left" ? 2 : nil, flags: flags, useSystemInput: useSystemInput
         )
-        if button == "left" {
-            var pairs: [MousePair] = []
-            for index in 1...count {
-                pairs.append(try mousePair(
-                    source: source, route: route, screen: screen, local: point,
-                    button: .left, clickState: Int64(index), group: group, downNumber: 3, upNumber: 3, flags: flags
-                ))
+        let pairs = try (1...count).map { index in
+            try mousePair(source: source, route: route, screen: screen, local: point,
+                          button: selectedButton, clickState: Int64(index), group: group,
+                          downNumber: button == "left" ? 3 : nil, upNumber: button == "left" ? 3 : nil,
+                          flags: flags, useSystemInput: useSystemInput)
+        }
+        var releaseModifiers: (() -> Void)?
+        defer { releaseModifiers?() }
+        if useSystemInput {
+            try Self.validateWindow(route)
+            try await Self.checkSystemHit(route, at: screen)
+            try Self.requireReleasedButtons()
+            releaseModifiers = try systemKeyboard.pressModifiers(modifiers, check: checkCancellation)
+        }
+        func post(_ event: CGEvent) {
+            if useSystemInput { SystemPointerInput.post(event) }
+            else { poster.post(event, to: route.owner.pid) }
+        }
+        try checkCancellation()
+        post(move)
+        try await Task.sleep(for: .milliseconds(button == "left" ? 15 : 12))
+        for (index, pair) in pairs.enumerated() {
+            if useSystemInput {
+                try Self.validateWindow(route)
+                try await Self.checkSystemHit(route, at: screen)
+                try Self.requireReleasedButtons()
             }
-            try checkCancellation()
-            poster.post(move, to: route.owner.pid)
-            try await Task.sleep(for: .milliseconds(15))
-            for (index, pair) in pairs.enumerated() {
-                try await Self.postPair(downInterval: .milliseconds(holdMs ?? 1), checkCancellation: checkCancellation,
-                    down: { poster.post(pair.down, to: route.owner.pid) }, up: { poster.post(pair.up, to: route.owner.pid) })
-                if index + 1 < pairs.count { try await Task.sleep(for: .milliseconds(80)) }
-            }
-        } else {
-            let pair = try mousePair(
-                source: source, route: route, screen: screen, local: point,
-                button: selectedButton, clickState: 1, group: group, flags: flags
-            )
-            try checkCancellation()
-            poster.post(move, to: route.owner.pid)
-            try await Task.sleep(for: .milliseconds(12))
-            try await Self.postPair(downInterval: .milliseconds(holdMs ?? 28), checkCancellation: checkCancellation,
-                down: { poster.post(pair.down, to: route.owner.pid) }, up: { poster.post(pair.up, to: route.owner.pid) })
+            try await Self.postPair(downInterval: .milliseconds(holdMs ?? (button == "left" ? 1 : 28)),
+                                    checkCancellation: checkCancellation, down: { post(pair.down) }, up: { post(pair.up) })
+            if index + 1 < pairs.count { try await Task.sleep(for: .milliseconds(80)) }
         }
         try checkCancellation()
     }
@@ -152,7 +159,7 @@ final class WindowPointerInput {
     /// Drag the selected button along an interpolated path, releasing at the last posted point on cancellation.
     func drag(
         in route: WindowRoute, from start: WindowPoint, to end: WindowPoint, durationMs: Int, steps: Int,
-        button: String = "left", modifiers: [String] = [], useSystemPointer: Bool = false,
+        button: String = "left", modifiers: [String] = [], useSystemInput: Bool = false,
         isolation: isolated (any Actor)? = #isolation
     ) async throws {
         try checkCancellation()
@@ -161,20 +168,21 @@ final class WindowPointerInput {
         guard (1...5000).contains(durationMs), (1...240).contains(steps) else {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Drag durationMs must be 1...5000 and steps 1...240")
         }
-        let source = try Self.source()
+        let source = try Self.source(system: useSystemInput)
         let selected = try Self.button(button)
-        let flags = try KeyboardInput.modifierFlags(modifiers)
+        var flags = try KeyboardInput.modifierFlags(modifiers)
+        if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
         let group = Self.clickGroup()
         func event(_ type: CGEventType, at point: WindowPoint) throws -> CGEvent {
             let screen = Self.screenPoint(point, in: route)
-            if !useSystemPointer {
+            if !useSystemInput {
                 return try mouseEvent(source: source, route: route, screen: screen, local: point, type: type,
                                       button: selected, clickState: 1, subtype: 0, group: group, flags: flags)
             }
             return try SystemPointerInput.event(type, source: source, at: screen, button: selected, group: group, flags: flags)
         }
         func post(_ event: CGEvent) {
-            if useSystemPointer {
+            if useSystemInput {
                 SystemPointerInput.post(event)
             } else {
                 poster.post(event, to: route.owner.pid)
@@ -188,25 +196,28 @@ final class WindowPointerInput {
             let fraction = Double(index) / Double(steps)
             let local = WindowPoint(x: start.x + (end.x - start.x) * fraction, y: start.y + (end.y - start.y) * fraction)
             let movement = try event(Self.dragged(selected), at: local)
-            if useSystemPointer {
+            if useSystemInput {
                 movement.setIntegerValueField(.mouseEventDeltaX, value: Int64(local.x.rounded() - previous.x.rounded()))
                 movement.setIntegerValueField(.mouseEventDeltaY, value: Int64(local.y.rounded() - previous.y.rounded()))
             }
             path.append(DragStep(movement: movement, release: try event(Self.up(selected), at: local)))
             previous = local
         }
-        if useSystemPointer {
+        var releaseModifiers: (() -> Void)?
+        defer { releaseModifiers?() }
+        if useSystemInput {
             try Self.validateWindow(route)
             try await Self.checkSystemHit(route, at: down.location)
             try Self.requireReleasedButtons()
             try checkCancellation()
+            releaseModifiers = try systemKeyboard.pressModifiers(modifiers, check: checkCancellation)
             post(try event(.mouseMoved, at: start))
         }
         let check = checkCancellation
         try await Self.postDrag(down: down, initialRelease: initialRelease, path: path,
                                 interval: Self.dragStepInterval(durationMs: durationMs, steps: steps),
                                 validate: { type, point in
-            if useSystemPointer {
+            if useSystemInput {
                 try await Self.checkSystemHit(route, at: point)
                 if type == Self.down(selected) { try Self.requireReleasedButtons() }
             }
@@ -261,18 +272,18 @@ final class WindowPointerInput {
     private func mousePair(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         button: CGMouseButton, clickState: Int64, group: Int64,
-        downNumber: Int64? = nil, upNumber: Int64? = nil, flags: CGEventFlags = []
+        downNumber: Int64? = nil, upNumber: Int64? = nil, flags: CGEventFlags = [], useSystemInput: Bool = false
     ) throws -> MousePair {
         try MousePair(
             down: mouseEvent(
                 source: source, route: route, screen: screen, local: local,
                 type: Self.down(button),
-                button: button, clickState: clickState, subtype: 3, group: group, number: downNumber, flags: flags
+                button: button, clickState: clickState, subtype: 3, group: group, number: downNumber, flags: flags, useSystemInput: useSystemInput
             ),
             up: mouseEvent(
                 source: source, route: route, screen: screen, local: local,
                 type: Self.up(button),
-                button: button, clickState: clickState, subtype: 3, group: group, number: upNumber, flags: flags
+                button: button, clickState: clickState, subtype: 3, group: group, number: upNumber, flags: flags, useSystemInput: useSystemInput
             )
         )
     }
@@ -280,8 +291,12 @@ final class WindowPointerInput {
     private func mouseEvent(
         source: CGEventSource, route: WindowRoute, screen: CGPoint, local: WindowPoint,
         type: CGEventType, button: CGMouseButton, clickState: Int64, subtype: Int64,
-        group: Int64?, number: Int64? = nil, flags: CGEventFlags = []
+        group: Int64?, number: Int64? = nil, flags: CGEventFlags = [], useSystemInput: Bool = false
     ) throws -> CGEvent {
+        if useSystemInput {
+            return try SystemPointerInput.event(type, source: source, at: screen, button: button,
+                                                group: group ?? 0, flags: flags, clickState: clickState)
+        }
         guard let event = CGEvent(
             mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: button
         ) else {
@@ -326,8 +341,8 @@ final class WindowPointerInput {
         CGPoint(x: CGFloat(route.bounds.x + point.x), y: CGFloat(route.bounds.y + point.y))
     }
 
-    private static func source() throws -> CGEventSource {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+    private static func source(system: Bool = false) throws -> CGEventSource {
+        guard let source = CGEventSource(stateID: system ? .combinedSessionState : .hidSystemState) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create pointer event source")
         }
         return source

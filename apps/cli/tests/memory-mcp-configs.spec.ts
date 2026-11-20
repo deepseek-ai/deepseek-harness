@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
@@ -122,6 +123,7 @@ describe('third-party memory MCP example overlays', () => {
       [...patches, fixturePatch],
       (ctx) => {
         liveContexts.add(ctx)
+        ctx.loader.builtins['memory-test-session-projection'] = SessionProjectionRegistry
         ctx.loader.builtins['memory-test-system-prompt'] = SystemPrompt
         ctx.loader.builtins['memory-test-tools'] = ToolRuntime
         ctx.loader.builtins['memory-test-mcp-client'] = McpClient

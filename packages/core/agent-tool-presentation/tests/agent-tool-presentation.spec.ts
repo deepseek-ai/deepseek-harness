@@ -5,6 +5,7 @@
  * inherited executor.
  */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -39,6 +40,7 @@ class StubRuntime extends PtcRuntime {
 async function host(options: { runtime?: boolean; language?: string } = {}) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

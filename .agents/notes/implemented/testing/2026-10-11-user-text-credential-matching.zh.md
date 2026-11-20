@@ -38,7 +38,7 @@ Status: implemented
 
 ### 性能门禁
 
-[benchmarks/user-text](../../../../benchmarks/user-text/user-text.bench.client.ts) 在 `node 24 / benchmarks` 必跑 lane 中运行。编译后的 worker 使用生产的 UserText 注册表和全部已发布匹配器（会话、文件、文件夹、skill、命令、空白、凭据），在纯 Node 下分两个进程运行：计时与分配。
+[benchmarks/user-text](../../../../benchmarks/user-text/user-text.bench.client.ts) 在 `node 24 / benchmarks 2/2` 必跑 lane 中运行。编译后的 worker 使用生产的 UserText 注册表和全部已发布匹配器（会话、文件、文件夹、skill、命令、空白、凭据），在纯 Node 下分两个进程运行：计时与分配。
 
 | 项 | 内容 |
 |---|---|

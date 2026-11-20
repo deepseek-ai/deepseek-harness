@@ -2,17 +2,15 @@
  * Render the install icons of the Web application from the official
  * application tile.
  *
- * A browser installs a Web App only with a raster 192px and a 512px icon, masks
- * the icon it puts on the home screen, and has no manifest support for iOS,
- * which reads `apple-touch-icon` instead. The whale favicon is the bare mark
- * drawn edge to edge: handed to a launcher directly it loses its fins to the
- * mask, and it carries neither the tile nor a background of its own. This
- * script rasterizes the official application tile (`apps/desktop/resources/icon.svg`,
- * the artwork the desktop application ships) into the committed PNGs under
- * `public/`. Every variant crops the tile's drop shadow, which belongs to a
- * desktop window rather than a launcher; the maskable variant additionally
- * scales the whale inside the safe zone a platform mask may crop, leaving the
- * tile's own gradient to fill the icon so no mask meets a seam.
+ * This script rasterizes the official application tile
+ * (`apps/desktop/resources/icon.svg`) into the committed PNGs under `public/`.
+ * The bare favicon has no background, and its edge-to-edge fins can be cropped
+ * by a launcher mask. The tile's drop shadow belongs to a desktop window, so
+ * every install variant crops it. The generic 192px and 512px icons have
+ * transparent rounded corners matching the macOS tile. Safari prefers the
+ * linked Apple touch icon, which stays square for system masking. The maskable
+ * variant scales the whale inside the platform's safe zone while retaining
+ * the tile's own gradient to the edges, so no platform mask meets a seam.
  *
  * The committed PNGs are the output; rerun
  * `pnpm --filter @deepseek-ai/dsh-web-frontend run render:app-icons` after the
@@ -33,6 +31,9 @@ export const ICON_OUTPUT_DIRECTORY = fileURLToPath(new URL('../public/', import.
 
 /** Tile edge in source units; every render density is expressed against it. */
 const TILE_EDGE = 1024
+
+/** Corner radius in source units, matching `apps/desktop/resources/icon-macos.svg`. */
+const TILE_CORNER_RADIUS = 230
 
 /** Tile inset in the source canvas: the drop shadow occupies the surrounding band. */
 const TILE_INSET = { x: 40, y: 32 } as const
@@ -60,6 +61,9 @@ export const MASKABLE_SAFE_RADIUS_RATIO = 0.4
 /** Root element of the source document, rewritten to crop the canvas to the tile. */
 const SOURCE_ROOT = /^<svg[^>]*>/u
 
+/** Source definitions element, including attributes preserved during clip insertion. */
+const SOURCE_DEFINITIONS = /<defs(?:\s[^>]*)?>/u
+
 /** The tile group's drop shadow; stripped because a launcher icon has no window around it. */
 const TILE_SHADOW_GROUP = '<g filter="url(#filter0_d_1637_371)">'
 
@@ -72,18 +76,18 @@ export interface AppIconVariant {
   readonly file: string
   /** Square edge in pixels. */
   readonly size: number
-  /** Which rendering the platform receives. */
-  readonly kind: 'tile' | 'maskable'
+  /** Target rendering; `tile` is an opaque square for system masking. */
+  readonly kind: 'rounded' | 'tile' | 'maskable'
 }
 
 /**
  * Install icons the Web application ships. Chrome requires the 192px and 512px
- * raster pair to offer installation, prefers a maskable icon for the home
- * screen, and iOS reads the touch icon alone.
+ * raster pair to offer installation. Platforms that apply their own masks
+ * receive a separate opaque maskable icon; Safari prefers the linked Apple touch icon.
  */
 export const APP_ICON_VARIANTS: readonly AppIconVariant[] = [
-  { file: 'icon-192.png', size: 192, kind: 'tile' },
-  { file: 'icon-512.png', size: 512, kind: 'tile' },
+  { file: 'icon-192.png', size: 192, kind: 'rounded' },
+  { file: 'icon-512.png', size: 512, kind: 'rounded' },
   { file: 'icon-maskable-512.png', size: 512, kind: 'maskable' },
   { file: 'apple-touch-icon.png', size: 180, kind: 'tile' },
 ]
@@ -102,13 +106,14 @@ function aboutCenter(scale: number): string {
 }
 
 /** Replace the source root so the icon canvas is exactly the tile. */
-function reparent(source: string): string {
+function reparent(source: string, tileGroup = '<g>'): string {
   const trimmed = source.trim()
   const root = SOURCE_ROOT.exec(trimmed)
   if (root === null) throw new Error('app icons: the tile source has no root element')
   if (!trimmed.includes(TILE_SHADOW_GROUP)) throw new Error('app icons: the tile source has no shadowed tile group')
   if (!trimmed.includes(TILE_ARTWORK_GROUP)) throw new Error('app icons: the tile source has no artwork group')
-  return `${croppedRoot()}${trimmed.slice(root[0].length).replace(TILE_SHADOW_GROUP, '<g>')}`
+  if (!SOURCE_DEFINITIONS.test(trimmed)) throw new Error('app icons: the tile source has no definitions element')
+  return `${croppedRoot()}${trimmed.slice(root[0].length).replace(TILE_SHADOW_GROUP, tileGroup)}`
 }
 
 /**
@@ -118,6 +123,19 @@ function reparent(source: string): string {
  */
 export function tileDocument(source: string): string {
   return reparent(source)
+}
+
+/**
+ * Round the generic install tile for launchers that display it without a mask.
+ * @param source - complete `icon.svg` document.
+ * @returns an SVG document with transparent rounded corners and unscaled artwork.
+ */
+export function roundedDocument(source: string): string {
+  return reparent(source, '<g clip-path="url(#install-tile-clip)">')
+    .replace(SOURCE_DEFINITIONS, '$&<clipPath id="install-tile-clip"><rect'
+      + ` x="${String(TILE_INSET.x)}" y="${String(TILE_INSET.y)}"`
+      + ` width="${String(TILE_EDGE)}" height="${String(TILE_EDGE)}"`
+      + ` rx="${String(TILE_CORNER_RADIUS)}"/></clipPath>`)
 }
 
 /**
@@ -137,7 +155,7 @@ export function maskableDocument(source: string): string {
 
 /**
  * Rasterize one rewritten document at a square edge.
- * @param document - output of {@link tileDocument} or {@link maskableDocument}.
+ * @param document - output of {@link tileDocument}, {@link roundedDocument} or {@link maskableDocument}.
  * @param size - square edge in pixels.
  * @returns the PNG bytes.
  */
@@ -157,6 +175,7 @@ async function renderPng(document: string, size: number): Promise<Buffer> {
 
 function documentForVariant(source: string, kind: AppIconVariant['kind']): string {
   switch (kind) {
+    case 'rounded': return roundedDocument(source)
     case 'tile': return tileDocument(source)
     case 'maskable': return maskableDocument(source)
     default: return assertNever(kind)

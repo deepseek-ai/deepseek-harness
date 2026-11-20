@@ -81,15 +81,17 @@ function option(state: ForgePanelState | null, translate = t) {
     act(() => { panel.set({ state: next, disconnected: false }) })
   }
   const rows = (): string[] => screen.queryAllByRole('menuitem').map(row => row.textContent ?? '')
-  const search = (): HTMLElement => screen.getByRole('textbox', { name: en['diff.base.search'] })
+  const search = (): HTMLElement => screen.getByRole('searchbox', { name: en['diff.base.search'] })
   return { view, panel, request, cancel, bases, checkbox, base, publish, rows, search }
 }
 
-/** Open the base menu and wait for its branches. */
+/** Open the base menu and wait for its branches; returns the menu card. */
 async function openMenu(b: ReturnType<typeof option>): Promise<HTMLElement> {
   fireEvent.click(b.base()!)
   await settle()
-  return screen.getByRole('menu')
+  const card = screen.getByRole('menu').closest<HTMLElement>('[data-menu-popup]')
+  if (card === null) throw new Error('no menu card')
+  return card
 }
 
 /** The tooltip of the option after the pointer rests on it. */
@@ -343,6 +345,7 @@ describe('WorktreeToggle base menu', () => {
     expect(screen.getByText(en['diff.base.empty'])).toBeTruthy()
     fireEvent.keyDown(b.search(), { key: 'Enter' })
     expect(b.request).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(b.rows()).toEqual([`${en['worktree.name.add']}${en['worktree.name.auto']}`])
   })
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-persona` gives one agent its own persona: a preset mounts this composable row to register persona prefix and suffix sections, shadowing the deployment-wide defaults for that session. It can also make the prefix the session's complete system prompt, suppressing every other section, and can turn off optional runtime context for the session. Mount it inside a preset composition — mounting it globally collides with the prompt registry's own persona registration and fails loud. Without this row, a preset could change an agent's tools but never its identity.
+`dsh-persona` supplies a persona prefix and suffix through ordinary system sections. Mount it in a preset to customize that preset’s sessions, or globally to override deployment defaults. It can also make the prefix the complete system prompt, suppressing every other section, and turn off optional runtime context for its scope.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this row inside a preset composition to give that preset's sessions their own persona. The row needs an agent scope: mounted outside one it collides with the prompt registry's own `deployment:persona-prefix` registration and fails loud — the deployment persona already has an owner, and the whole point of this row is to shadow it for one agent.
+Mount this row inside a preset composition to give that preset’s sessions their own persona. A global mount applies to every scope that does not override it. The `system-prompt` row supplies deployment defaults beneath these registrations.
 
 ### Configuration
 
@@ -38,7 +38,7 @@ Mount this row inside a preset composition to give that preset's sessions their 
 | Field | Default | Meaning |
 |---|---|---|
 | `prefix` | required | Persona prose rendered as the `deployment:persona-prefix` section |
-| `suffix` | `''` | Template for `deployment:persona-suffix`; omitted or empty text shadows the global suffix away |
+| `suffix` | `''` | Template for `deployment:persona-suffix`; omitted or empty text clears the suffix for this scope |
 | `complete` | `false` | Use only the rendered prefix as the system prompt; ignore the suffix |
 | `includeRuntimeContext` | `true` | Include optional runtime context for this agent scope; false suppresses optional contributions without disabling their owning services; required contributions remain |
 
@@ -46,11 +46,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Persona behavior
 
-The persona `prefix` and `suffix` are templates: complete `{{…}}` groups resolve strictly against registered prompt variables when the prompt renders, not when it assembles. Each empty template still shadows its deployment-wide section, then disappears at render. Omitted `suffix` defaults to empty; it does not inherit the global suffix. With `complete: true`, assembly still resolves contexts, tools, variables, and cooperative listeners, but the prompt registry restores this exact prefix as the sole section; no identity, suffix, tool guidance, or listener can append prompt text. With `includeRuntimeContext: false`, optional context providers are not evaluated for this scope, and assembly-listener contributions are discarded unless registered as required. Required providers remain active at assembly and request admission.
+The persona `prefix` and `suffix` are templates: complete `{{…}}` groups resolve strictly against registered prompt variables when the prompt renders. Empty templates clear the corresponding persona text. Omitted `suffix` defaults to empty; it does not inherit the global suffix. With `complete: true`, assembly still resolves contexts, tools, variables, and cooperative listeners, but the prompt registry restores this exact prefix as the sole section; no identity, suffix, tool guidance, or listener can append prompt text. With `includeRuntimeContext: false`, optional context providers are not evaluated for this scope, and assembly-listener contributions are discarded unless registered as required. Required providers remain active at assembly and request admission.
 
 ### When to use it
 
-Use this row when a preset must change an agent's identity and not only its tools. The deployment-wide persona itself is configured on the `dsh-system-prompt` row, not here; this row exists only to shadow or replace it for one agent.
+Use this row when a composition must change an agent’s identity as well as its tools. Preset and agent scopes override enclosing persona sections; within the same scope, the latest live registration wins. Unloading the row restores the next live definition for each section.
 
 -----
 
@@ -62,17 +62,17 @@ Use this row when a preset must change an agent's identity and not only its tool
 
 ### How the row registers
 
-The row registers scoped persona prefix and suffix sections using the registry's shared names and named orders. Each shadows its deployment default instead of appearing beside it; the registry owns ordering, interpolation, and complete-prompt enforcement. `includeRuntimeContext: false` calls `ctx.systemPrompt.suppressRuntimeContext()`.
+The row calls `ctx.systemPrompt.section()` separately for `deployment:persona-prefix` and `deployment:persona-suffix`, using their registered order slots. The prefix carries `complete`; the suffix defaults to empty. Cordis owns both registrations, and disposal reveals earlier definitions through the ordinary section-resolution path. `includeRuntimeContext: false` calls `ctx.systemPrompt.suppressRuntimeContext()`.
 
-### Why the row is scope-only
+### How overrides compose
 
-`dsh-system-prompt` owns the global persona as its own config and registers `deployment:persona-prefix` unconditionally, so a process has exactly one. This row collides with that registration outside an agent scope, by design: the row exists because a preset cannot mount the prompt registry itself.
+Prefix and suffix are independent section names. This row registers both, so an omitted suffix clears inherited suffix text. A plugin that registers only the prefix leaves the suffix inherited. Removing one registration does not retire its logical source while another visible registration remains.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, persona section registration, runtime-context suppression |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, persona section registrations, runtime-context suppression |
 
 </details>
 
@@ -84,7 +84,7 @@ The row registers scoped persona prefix and suffix sections using the registry's
 Read these pages when the package-level contract is not enough; they move from the preset composition to the prompt registry this row feeds.
 
 - [agent-presets package](../agent-preset-registry/README.md) — the preset composition this row mounts into.
-- [System prompt subsystem](../../../docs/subsystems/system-prompt.md) — sections, assembly, and the persona slot this row shadows.
+- [System prompt subsystem](../../../docs/subsystems/system-prompt.md) — sections, assembly, and the persona values this row configures.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-persona) — every accepted config field and its source declaration.
 
 -----
@@ -96,15 +96,15 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The `deployment:persona-prefix` section at order `0` carries this row's `prefix`; `deployment:persona-suffix` at order `10200` carries its `suffix`, after first-party guidance. Both replace their deployment defaults and resolve prompt variables. In complete mode, the model sees only the rendered prefix section as its system prompt. Runtime context remains enabled by default. With `includeRuntimeContext: false`, the model still receives required context, such as the current working directory and subagent identity; optional context is omitted.
+The `deployment:persona-prefix` section at order `0` carries this row’s `prefix`; `deployment:persona-suffix` at order `10200` carries its `suffix`, after first-party guidance. Both replace their deployment defaults and resolve prompt variables. Complete mode selects only the rendered prefix for admission; changing into or out of it appends a notice superseding earlier instructions. Earlier system messages retain their positions until compaction. Runtime context remains enabled by default. With `includeRuntimeContext: false`, required context such as the current working directory and subagent identity remains; optional context is omitted.
 
 #### Token effect
 
-Fixed for a given preset: the persona prefix and suffix tokens on every request that agent makes, and none for any other agent. Empty text contributes nothing. Complete mode removes every other system-prompt token for that agent. Required runtime context still contributes tokens when optional context is disabled.
+Persona text contributes tokens to every request in its scope. Initial complete mode excludes other system sections; a later transition adds its notice and selected text while earlier messages retain their token cost until compaction. Empty initial text contributes nothing. Required runtime context still contributes tokens when optional context is disabled.
 
 #### KV Cache effect
 
-Prefix-stable while the rendered template variables and text are unchanged. Suffix changes leave preceding instructions unchanged when the model, prefix, and tools match. Prefix changes affect the early prefix; provider cache sharing is not guaranteed.
+Unchanged rendered persona values add no messages. Changes append updated instructions and a notice while retaining earlier messages. Provider serialization determines whether that retained prefix is reusable.
 
 ## Known Limitations and Deferred Work
 
@@ -113,7 +113,6 @@ Prefix-stable while the rendered template variables and text are unchanged. Suff
 
 These limits define when the row is a poor fit. They are current package constraints, not a task backlog.
 
-- **No global mount** — the prompt registry owns the unscoped persona slot, so this row is usable only from a scoped composition. A deployment-wide persona change belongs in the `system-prompt` row's own config.
 - **No per-provider runtime-context filter** — `includeRuntimeContext: false` suppresses all optional contributions for the scope; it cannot suppress required contributions.
 
 <a id="dev-note"></a>

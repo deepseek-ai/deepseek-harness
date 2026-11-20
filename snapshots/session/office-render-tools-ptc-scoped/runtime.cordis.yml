@@ -1,0 +1,7 @@
+# Replays the office-render-tools-ptc Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory
+    launch:
+      kind: node-script
+      executable: !!js process.cwd() + '/office-ptc-node'

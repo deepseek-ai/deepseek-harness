@@ -47,13 +47,13 @@ kind: "package-reference"
 
 通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
 
-`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。 失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
+`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。 失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。 `screenshotTarget.maxBytes` 是编码字节硬上限；继续缩图后，截图坐标使用最终编码尺寸。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-支持系统指针的提供方在 `mouseMove`、`drag` 和 `toggleMouse` 之间共用会话鼠标授权。每次操作系统鼠标都要显式传 `{ useSystemPointer: true }`。
+支持系统输入的提供方允许 `mouseMove`、`toggleMouse`、`click`、`drag`、`pressKey` 和 `sendKeyEvent` 传入 `useSystemInput`。`true` 请求系统键鼠输入，省略或传 `false` 保留提供方的默认方式。`pressKey(key, modifiers, options)` 和 `sendKeyEvent(key, direction, options)` 的选项是第三个参数。
 
 要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 
@@ -84,7 +84,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方声明 `systemPointer: true` 后，`mouseMove`、`drag` 和 `toggleMouse` 均支持显式传入 `useSystemPointer: true`，三者共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
+声明 `systemInput: true` 的提供方必须支持上述六个方法的显式系统输入，包括系统点击和拖动期间的键盘修饰键。共通层使用 `requireSystemInputApproval` 控制会话授权，校验参数并拒绝子任务请求系统输入，再调用提供方。未声明此能力的提供方拒绝该选项，不接收新增原生参数。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 
