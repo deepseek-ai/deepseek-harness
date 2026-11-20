@@ -1664,14 +1664,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.label\', () => ctx.slots.register(\n      { name: \'conversation.input.model.label\' },\n      ({ provider, model }) => React.createElement(\'span\', { title: provider.name }, model.name),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:80',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:84',
   },
   {
     key: 'conversation.input.model.options',
     kind: 'list',
     scope: 'session',
     summary: 'Session options appended after model and reasoning controls in the root menu.',
-    doc: 'Session options appended after model and reasoning controls in the root menu.',
+    doc: 'Session options appended after model and reasoning controls in the root menu.\nRender each interactive entry as a `button` with role `menuitem`, `menuitemradio`, or `switch`:\nArrow keys and Tab reach only those rows.',
     registerOptions: [
       {
         name: 'id',
@@ -1729,7 +1729,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.options\', () => ctx.slots.register(\n      { name: \'conversation.input.model.options\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:50',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:54',
   },
   {
     key: 'conversation.input.model.pane',
@@ -1779,7 +1779,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.pane\', () => ctx.slots.register(\n      { name: \'conversation.input.model.pane\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-model-selection/src/client/slots.ts:60',
+    source: 'packages/client/ui-model-selection/src/client/slots.ts:64',
   },
   {
     key: 'conversation.input.overlay',
