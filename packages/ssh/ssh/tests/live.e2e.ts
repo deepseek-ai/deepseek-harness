@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { NodePtcRuntime } from '@deepseek-ai/dsh-ptc-runtime-node'
+import { NodePtcRuntime, type Config as NodePtcRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as LspStdio from '@deepseek-ai/dsh-lsp-stdio'
 import { SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection'
@@ -24,6 +24,12 @@ const configPath = process.env.DSH_SSH_TEST_CONFIG
 const bootstrap = process.env.DSH_SSH_TEST_BOOTSTRAP
 const languageServer = process.env.DSH_SSH_TEST_LSP
 const enabled = configPath !== undefined && process.platform !== 'win32'
+
+/** Node runtime program formats the remote PTC case runs under; `complete` renders a statement producing the program value. */
+const PTC_MODES = [
+  { mode: 'per-call', config: { executionMode: 'per-call' }, complete: (expression: string) => `return ${expression}` },
+  { mode: 'scoped REPL', config: { executionMode: 'persistent-in-memory', replScoped: true }, complete: (expression: string) => expression },
+] as const satisfies readonly { mode: string; config: NodePtcRuntimeConfig; complete: (expression: string) => string }[]
 
 async function setup() {
   const config = JSON.parse(readFileSync(configPath as string, 'utf8')) as Config
@@ -246,18 +252,17 @@ describe.skipIf(!enabled)('POSIX SSH runtime acceptance', () => {
     }
   }, 60_000)
 
-  it.skipIf(bootstrap === undefined)('runs PTC remotely with empty environment, bindings, denial and a bounded hot loop', async () => {
+  it.skipIf(bootstrap === undefined).each(PTC_MODES)('runs $mode PTC remotely with empty environment, bindings, denial and a bounded hot loop', async (mode) => {
     const test = await setup()
-    const fiber = test.ctx.plugin(NodePtcRuntime, {
-      launch: test.ctx.ssh.ptcLaunch,
-    })
+    const fiber = test.ctx.plugin(NodePtcRuntime, { ...mode.config, launch: test.ctx.ssh.ptcLaunch })
     try {
       await fiber
       const runtime = test.ctx.ptcRuntime
       const bindings = [{ global: 'tools', functions: { echo: async (input: unknown) => String(input) } }]
       const policy: SandboxPolicy = { mode: 'workspace-write', workspaceRoot: test.root }
       const result = await runtime.run(runtime.resolve({
-        program: 'const fs=await import(\'node:fs/promises\');await fs.writeFile(\'ptc.txt\',\'node\');return {where:process.cwd(),env:Object.keys(process.env),echo:await tools.echo(\'host binding\')}',
+        program: 'const fs=await import(\'node:fs/promises\');await fs.writeFile(\'ptc.txt\',\'node\');'
+          + mode.complete('({where:process.cwd(),env:Object.keys(process.env),echo:await tools.echo(\'host binding\')})'),
         bindings, cwd: test.root, sandboxPolicy: policy,
       }))
       expect(result).toMatchObject({ value: { where: test.root, env: [], echo: 'host binding' }, sandbox: { mode: 'workspace-write' } })

@@ -1,0 +1,5 @@
+# Replays the cua-ptc Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory
+    maxOutputBytes: 4096

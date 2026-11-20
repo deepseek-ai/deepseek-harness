@@ -522,8 +522,7 @@ describe('deriveTrajectoryLayout', () => {
       // A landed compaction renders no cell, but is still a real log position,
       // so it moves the cursor after the visible context row.
       {
-        kind: 'compaction', seq: 5, time: 9_500, summary: 'checkpoint facts',
-        summaryEventSeq: 4, shadowedItemCount: 2, shadowedTokenCount: 100,
+        kind: 'compaction', seq: 5, summaryEventSeq: 4, time: 9_500, shadowedItemCount: 2, shadowedTokenCount: 100,
       },
       {
         kind: 'assistant', seq: 6, time: 10_000, turn: 1, step: 0,

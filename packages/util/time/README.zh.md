@@ -29,7 +29,7 @@ kind: "package-library"
 
 它是**库，不是服务也不是插件**：无 `ctx`、不注册任何东西、不持有状态。
 
-在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller` 与 `dsh-subagent` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取绝对选择器与墙钟选择器，通过 `resolveLocalInstant` 解析本地目标，并使用共享的 `Cron` / `RRule` 重复规则值；`dsh-session-format-v0-to-v1` 通过 `fourDigitYearEpoch` 校验持久记录里的调度时刻，同时保留它自己的已发布日志错误。`dsh-time-context` 通过 `Duration` 读取其耗时读数，并保留它注入那一行的措辞。Schedule 保留记录类型、相对间隔、每日/每周策略和投递限制。库可用于宿主和浏览器代码，无需 Cordis 服务。
+在接收时区或墙钟选择器的那个边界上调用它，让值在进入任何持久物之前先过一遍。`dsh-api-session-controller`、`dsh-subagent` 和 `dsh-sdk-jsonrpc-server` 通过 `canonicalClientTimeZone` 接收调用方所报时区；`dsh-time-context` 通过 `canonicalizeTimeZone` 接收某一轮请求所报时区，并拒绝别名而不是把它改写；`dsh-schedule` 通过严格解析器读取绝对选择器与墙钟选择器，通过 `resolveLocalInstant` 解析本地目标，并使用共享的 `Cron` / `RRule` 重复规则值；`dsh-session-format-v0-to-v1` 通过 `fourDigitYearEpoch` 校验持久记录里的调度时刻，同时保留它自己的已发布日志错误。`dsh-time-context` 通过 `Duration` 读取其耗时读数，并保留它注入那一行的措辞。Schedule 保留记录类型、相对间隔、每日/每周策略和投递限制。库可用于宿主和浏览器代码，无需 Cordis 服务。
 
 
 ### 入口
@@ -48,7 +48,7 @@ if (local.kind === 'accepted') {
 Duration.fromMilliseconds(1_500).decompose() // { days: 0, hours: 0, minutes: 0, seconds: 1, milliseconds: 500 }
 ```
 
-不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限且落在可精确表示的范围内，并把非负的时间段拆成整数量。它只发布消费方会调用的部分；面向其它单位或时间段算术的成员都随第一个需要它的调用方落地。
+不可用的时区名称由 `canonicalClientTimeZone` 回答 `undefined`，由调用方抛出自己的拒绝——Session 提示词用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。SDK 服务端在创建 Session 或分派命令前校验显式传入的时区，无效值会触发 `TypeError`，JSON-RPC 传输层返回错误码 `-32603`。`canonicalizeTimeZone`、各严格解析器与 `fourDigitYearEpoch` 则会说明拒绝原因，以带判别值的结果回答，其 `rejected` 分支携带稳定的拒绝原因，由各调用方选择自己的错误码与诊断文案。`formatFourDigitYearInstant` 与 `resolveLocalInstant` 接收已校验的值，分别回答字符串与纪元毫秒，无法表示的纪元或落在 DST 缺口内的墙钟值回答 `undefined`。`Duration` 是一个基于单一毫秒计数的冻结值类型：它校验计数有限且落在可精确表示的范围内，并把非负的时间段拆成整数量。它只发布消费方会调用的部分；面向其它单位或时间段算术的成员都随第一个需要它的调用方落地。
 
 -----
 

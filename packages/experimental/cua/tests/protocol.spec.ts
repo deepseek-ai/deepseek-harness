@@ -1,7 +1,7 @@
 /** Model-authored operation JSON cannot supply host configuration or bypass retained identities. */
 import { expect, it } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, SystemPointerRequest, WindowsResult } from '../src/protocol.ts'
+import { CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, SystemInputRequest, WindowsResult } from '../src/protocol.ts'
 
 it('preserves opaque window IDs in requests and results', () => {
   const windowId = 'window-main'
@@ -72,7 +72,7 @@ it('admits arbitrary key names with an explicit key-event direction', () => {
 })
 
 it.each(['left', 'right', 'middle'])('admits explicit %s mouse-button events without coordinates', (mouseButton) => {
-  for (const schema of [Request, SystemPointerRequest]) {
+  for (const schema of [Request, SystemInputRequest]) {
     for (const direction of ['down', 'up']) {
       const request = { method: 'toggleMouse', params: { appHandle: 'app', windowId: '23', mouseButton, direction } }
       expect(schema.parse(request)).toEqual(request)
@@ -80,10 +80,10 @@ it.each(['left', 'right', 'middle'])('admits explicit %s mouse-button events wit
   }
 })
 
-it.each([true, false])('admits the system button option only for capable providers (%s)', (useSystemPointer) => {
-  const request = { method: 'toggleMouse', params: { appHandle: 'a', windowId: '1', mouseButton: 'left', direction: 'down', useSystemPointer } }
+it.each([true, false])('admits the system button option only for capable providers (%s)', (useSystemInput) => {
+  const request = { method: 'toggleMouse', params: { appHandle: 'a', windowId: '1', mouseButton: 'left', direction: 'down', useSystemInput } }
   expect(Request.safeParse(request).success).toBe(false)
-  expect(SystemPointerRequest.parse(request)).toEqual(request)
+  expect(SystemInputRequest.parse(request)).toEqual(request)
 })
 
 it.each([
@@ -91,10 +91,10 @@ it.each([
   { direction: undefined }, { direction: 'press' },
   { appHandle: undefined }, { windowId: undefined },
   { x: 1 }, { y: 2 }, { relative: true }, { elementId: '0' }, { snapshotId: 'snapshot' },
-  { modifiers: [] }, { useSystemPointer: 'yes' },
+  { modifiers: [] }, { useSystemInput: 'yes' },
 ])('rejects invalid mouse-button event parameters %j', (invalid) => {
   const params = { appHandle: 'app', windowId: '23', mouseButton: 'left', direction: 'down', ...invalid }
-  for (const schema of [Request, SystemPointerRequest]) {
+  for (const schema of [Request, SystemInputRequest]) {
     expect(schema.safeParse({ method: 'toggleMouse', params }).success).toBe(false)
   }
 })
@@ -144,7 +144,7 @@ it.each([
   { appHandle: 'app', windowId: '23', x: 1, y: 2 },
 ])('accepts a mouse move target %j without button input', (params) => {
   expect(Request.parse({ method: 'mouseMove', params })).toEqual({ method: 'mouseMove', params })
-  for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }, { useSystemPointer: 'yes' }]) {
+  for (const extra of [{ mouseButton: 'left' }, { clickCount: 1 }, { modifiers: ['shift'] }, { useSystemInput: 'yes' }]) {
     expect(Request.safeParse({ method: 'mouseMove', params: { ...params, ...extra } }).success).toBe(false)
   }
 })
@@ -165,6 +165,18 @@ it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element i
   const params = { appHandle: 'app', snapshotId: 'snapshot', elementId }
   expect(Request.parse({ method: 'click', params })).toEqual({ method: 'click', params })
   expect(Request.safeParse({ method: 'click', params: { ...params, elementId: '' } }).success).toBe(false)
+})
+
+it('admits action schema queries with only a nonempty action name', () => {
+  const params = { action: 'Transform.Resize' }
+  for (const schema of [Request, SystemInputRequest]) {
+    expect(schema.parse({ method: 'getActionSchema', params })).toEqual({ method: 'getActionSchema', params })
+    for (const invalid of [
+      {}, { action: '' }, { action: 1 }, { ...params, appHandle: 'app' },
+      { ...params, windowId: '23' }, { ...params, snapshotId: 'snapshot' },
+      { ...params, elementId: '0' }, { ...params, argument: null },
+    ]) expect(schema.safeParse({ method: 'getActionSchema', params: invalid }).success).toBe(false)
+  }
 })
 
 it('admits an element action query only with a retained snapshot identity', () => {
@@ -245,7 +257,7 @@ it.each([true, false])('requires the reported application-level accessibility ca
     platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility,
     keyboard: ['app'], sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemInput: false })
   const { appLevelAccessibility: _omitted, ...missing } = capabilities
   expect(CapabilitiesResult.safeParse(missing).success).toBe(false)
 })
@@ -261,7 +273,7 @@ it.each([
     platform: 'windows', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: false,
     keyboard, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemInput: false })
 })
 
 it.each([
@@ -290,9 +302,34 @@ it.each<[string, Record<string, number | boolean>]>([
   ['drag', { relative: true, fromX: 1, fromY: 2, toX: 3, toY: 4 }],
 ])('admits %s system-pointer control only for supporting providers', (method, points) => {
   const target = { appHandle: 'app', windowId: '1', ...points }
-  const request = { method, params: { ...target, useSystemPointer: true } }
+  const request = { method, params: { ...target, useSystemInput: true } }
   expect(Request.safeParse(request).success).toBe(false)
-  expect(SystemPointerRequest.safeParse(request).success).toBe(true)
-  expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)
-  expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, arbitraryField: true } }).success).toBe(false)
+  expect(SystemInputRequest.safeParse(request).success).toBe(true)
+  expect(SystemInputRequest.safeParse({ ...request, params: { ...target, useSystemInput: 'true' } }).success).toBe(false)
+  expect(SystemInputRequest.safeParse({ ...request, params: { ...target, arbitraryField: true } }).success).toBe(false)
+})
+
+it.each([
+  { method: 'mouseMove', params: { appHandle: 'a', windowId: '1', x: 2, y: 3 } },
+  { method: 'toggleMouse', params: { appHandle: 'a', windowId: '1', mouseButton: 'left', direction: 'down' } },
+  { method: 'click', params: { appHandle: 'a', windowId: '1', x: 2, y: 3, modifiers: ['shift'] } },
+  { method: 'drag', params: { appHandle: 'a', windowId: '1', fromX: 2, fromY: 3, toX: 4, toY: 5 } },
+  { method: 'pressKey', params: { appHandle: 'a', key: 's', modifiers: ['command'] } },
+  { method: 'sendKeyEvent', params: { appHandle: 'a', key: 'shift', direction: 'down' } },
+])('selects system input for $method only on a supporting provider', ({ method, params }) => {
+  for (const useSystemInput of [true, false]) {
+    const request = { method, params: { ...params, useSystemInput } }
+    expect(SystemInputRequest.parse(request)).toEqual(request)
+    expect(Request.safeParse(request).success).toBe(false)
+  }
+  expect(SystemInputRequest.safeParse({ method, params: { ...params, useSystemPointer: true } }).success).toBe(false)
+})
+
+it.each([
+  { method: 'typeText', params: { appHandle: 'a', text: 'text' } },
+  { method: 'paste', params: { appHandle: 'a', text: 'text' } },
+  { method: 'scroll', params: { appHandle: 'a', windowId: '1', x: 2, y: 3, deltaLinesX: 0, deltaLinesY: 1 } },
+  { method: 'invoke', params: { appHandle: 'a', snapshotId: 'snapshot', elementId: 'button' } },
+])('keeps the input route fixed for $method', ({ method, params }) => {
+  expect(SystemInputRequest.safeParse({ method, params: { ...params, useSystemInput: true } }).success).toBe(false)
 })

@@ -34,7 +34,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'list_subagent_models', 'list_workspace', 'load_workspace_dependencies', 'lsp', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',
       'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_edit',
       'schedule_list', 'schedule_view', 'send_message', 'session_event_read', 'session_event_search',
-      'session_event_trace', 'session_search', 'session_trace', 'skill',
+      'session_event_trace', 'session_search', 'session_send_message', 'session_trace', 'skill',
       'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',
       'str_replace_editor', 'subagent', 'subagent_oar', 'team_task_create',
       'team_task_get', 'team_task_list', 'team_task_update', 'terminal_close', 'terminal_list',

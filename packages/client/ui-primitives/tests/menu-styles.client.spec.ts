@@ -31,4 +31,8 @@ describe('Menu.module.css', () => {
   it('scrolls the rows inside the cap so the pinned footer stays visible', () => {
     expect(css).toMatch(/\.scrollable \.viewport \{[^}]*overflow-y: auto/)
   })
+
+  it('limits the scrolling rows to the requested count at the current row height', () => {
+    expect(css).toMatch(/\.viewport \{[^}]*max-height: calc\(var\(--dsh-menu-visible-rows\) \* var\(--dsh-menu-row-height\)\)/)
+  })
 })

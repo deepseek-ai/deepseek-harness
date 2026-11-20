@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DingTalk plugin",
+    "description": "Use DingTalk calendar, to-dos, docs, AI tables, group chats, and contacts in conversations.",
+    "detail": "docs/DETAIL.md"
+  }
+}

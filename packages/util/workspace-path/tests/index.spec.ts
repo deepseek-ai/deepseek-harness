@@ -5,23 +5,33 @@ import {
 } from '@deepseek-ai/dsh-util-workspace-path'
 
 describe('Workspace path helpers', () => {
-  it('addresses every path by session and keeps absolute paths outside the workspace', () => {
-    expect(fileAddressFor('s', '/w', 'src/a.ts')).toBe('dsh-resource://file/session/s/src/a.ts')
-    expect(fileAddressFor('s', undefined, 'src/a.ts')).toBe('dsh-resource://file/session/s/src/a.ts')
-    expect(fileAddressFor('s', '/w/', '/w/src/a.ts')).toBe('dsh-resource://file/session/s/src/a.ts')
-    expect(fileAddressFor('s', '/w', '/w')).toBe('dsh-resource://file/session/s/')
+  it('addresses a file by its absolute path when the path or the Session directory supplies one', () => {
+    expect(fileAddressFor('s', '/w', 'src/a.ts')).toBe('dsh-resource://file/session/s//w/src/a.ts')
+    expect(fileAddressFor('s', '/w/', './src/a.ts')).toBe('dsh-resource://file/session/s//w/src/a.ts')
+    expect(fileAddressFor('s', '/w/', '/w/src/a.ts')).toBe('dsh-resource://file/session/s//w/src/a.ts')
+    expect(fileAddressFor('s', '/w', '/w')).toBe('dsh-resource://file/session/s//w')
     expect(fileAddressFor('s', '/w', '/work/a.ts')).toBe('dsh-resource://file/session/s//work/a.ts')
     expect(fileAddressFor('s', undefined, '/etc/hosts')).toBe('dsh-resource://file/session/s//etc/hosts')
-    expect(fileAddressFor('s', 'C:\\w', 'C:\\w\\x.ts')).toBe('dsh-resource://file/session/s/x.ts')
+    expect(fileAddressFor('s', 'C:\\w', 'x.ts')).toBe('dsh-resource://file/session/s/C:/w/x.ts')
+    expect(fileAddressFor('s', 'C:\\w', 'C:\\w\\x.ts')).toBe('dsh-resource://file/session/s/C:/w/x.ts')
     expect(fileAddressFor('s', 'C:\\w', 'D:\\x.ts')).toBe('dsh-resource://file/session/s/D:/x.ts')
+    expect(fileAddressFor('s', '\\\\server\\share', 'x.ts')).toBe('dsh-resource://file/session/s///server/share/x.ts')
+    expect(fileAddressFor('s', '\\\\server\\share', '\\\\server\\share\\x.ts')).toBe('dsh-resource://file/session/s///server/share/x.ts')
     expect(fileAddressFor('s', undefined, '\\\\server\\share\\x.ts')).toBe('dsh-resource://file/session/s///server/share/x.ts')
-    expect(fileAddressFor('s', '\\\\server\\share', '\\\\server\\share\\x.ts')).toBe('dsh-resource://file/session/s/x.ts')
   })
 
-  it.each(['/workspace', undefined])('round-trips a parent-relative address with workspace root %s', (cwd) => {
-    const address = fileAddressFor('s', cwd, '../outside/a.txt')
-    expect(address).toBe('dsh-resource://file/session/s/../outside/a.txt')
-    expect(parseFileAddress(address)).toEqual({ scope: 'session', sessionId: 's', path: '../outside/a.txt' })
+  it('keeps a relative path relative while the Session directory is unknown', () => {
+    expect(fileAddressFor('s', undefined, 'src/a.ts')).toBe('dsh-resource://file/session/s/src/a.ts')
+    expect(fileAddressFor('s', '', './src/a.ts')).toBe('dsh-resource://file/session/s/src/a.ts')
+  })
+
+  it('keeps parent segments in the address for the Host to resolve', () => {
+    const joined = fileAddressFor('s', '/workspace', '../outside/a.txt')
+    expect(joined).toBe('dsh-resource://file/session/s//workspace/../outside/a.txt')
+    expect(parseFileAddress(joined)).toEqual({ scope: 'session', sessionId: 's', path: '/workspace/../outside/a.txt' })
+    const relative = fileAddressFor('s', undefined, '../outside/a.txt')
+    expect(relative).toBe('dsh-resource://file/session/s/../outside/a.txt')
+    expect(parseFileAddress(relative)).toEqual({ scope: 'session', sessionId: 's', path: '../outside/a.txt' })
   })
 
   it('classifies POSIX, Windows drive, and UNC paths as absolute and everything else as relative', () => {

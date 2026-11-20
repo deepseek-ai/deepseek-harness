@@ -185,7 +185,7 @@ describe('goal tool registration and presentation', () => {
 
     await fiber.dispose()
     expect(ctx.tools.get('get_goal')).toBeUndefined()
-    expect((await ctx.systemPrompt.assemble()).sections.some(item => item.name === 'tool:goal')).toBe(false)
+    expect((await ctx.systemPrompt.assemble()).sections.find(item => item.name === 'tool:goal')).toBeUndefined()
   })
 
   it('uses args-only generic render intent and soft-fails malformed replay args', async () => {

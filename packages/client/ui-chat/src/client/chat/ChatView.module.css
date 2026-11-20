@@ -361,10 +361,15 @@
    inherits the scrollport's --dsh-composer-height and
    --dsh-conversation-viewport-height. Above the turn rail (7) and the
    back-to-bottom control (8). It publishes the end gutter, the inline space
-   between the centered transcript column and the frame's end edge, for the
+   between the transcript column and the frame's end edge, for the
    occupant's inline sizes: the percentage resolves against the layer in an
    element whose containing block is the layer, as it does in the
-   back-to-bottom control's padding below. */
+   back-to-bottom control's padding below. The Conversation body's end
+   reserve narrows the frame by --dsh-chat-end-inset; the layer reaches back
+   across it to the scrollport's end edge, and the gutter counts it. The
+   margin follows the body's --dsh-chat-end-reserve-transition, as the
+   scrollport's padding does, so the layer's end edge stays put while the
+   inset animates. */
 .asideSlot {
   position: absolute;
   top: 0;
@@ -372,8 +377,13 @@
   left: 0;
   z-index: 9;
   height: 0;
+  margin-inline-end: calc(-1 * var(--dsh-chat-end-inset, 0px));
+  transition: margin-inline-end var(--dsh-chat-end-reserve-transition, 0s);
   pointer-events: none;
-  --dsh-chat-aside-gutter: max(0px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2));
+  --dsh-chat-aside-gutter: calc(
+    var(--dsh-chat-end-inset, 0px)
+    + max(0px, (100% - var(--dsh-chat-end-inset, 0px) - var(--dsh-chat-content-width, 100%)) / 2)
+  );
 }
 
 :global([data-conversation-scroll]) .asideSlot {

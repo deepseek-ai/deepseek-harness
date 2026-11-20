@@ -39,6 +39,8 @@
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
     - id: model-switch-compaction-driver
       name: '../model-switch-compaction/driver.mjs'
+      config:
+        switchAfterCalls: 1
 
 # Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
 - id: tool-fs

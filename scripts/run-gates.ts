@@ -27,6 +27,9 @@ export type Mode =
   | 'ci-snapshot'
   | 'ci-artifacts'
   | 'ci-consumers'
+  | 'ci-build'
+  | 'ci-consumers-prebuilt'
+  | 'ci-web-snapshot-prebuilt'
   | 'ci-windows-blocking'
   | 'ci-windows-complete'
   | 'ci-windows-observational-ready'
@@ -167,6 +170,9 @@ function parseMode(raw: string | undefined): Mode {
     case 'ci-snapshot':
     case 'ci-artifacts':
     case 'ci-consumers':
+    case 'ci-build':
+    case 'ci-consumers-prebuilt':
+    case 'ci-web-snapshot-prebuilt':
     case 'ci-windows-blocking':
     case 'ci-windows-complete':
     case 'ci-windows-observational-ready':
@@ -179,7 +185,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-build | ci-consumers-prebuilt | ci-web-snapshot-prebuilt | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -334,6 +340,12 @@ export function gatesForMode(selected: Mode): Gate[] {
       return ciArtifactGates()
     case 'ci-consumers':
       return ciConsumerGates()
+    case 'ci-build':
+      return ciBuildOnceGates()
+    case 'ci-consumers-prebuilt':
+      return ciPrebuiltConsumerGates()
+    case 'ci-web-snapshot-prebuilt':
+      return ciPrebuiltWebSnapshotGates()
     case 'ci-windows-blocking':
       return ciWindowsBlockingGates()
     case 'ci-windows-complete':
@@ -427,6 +439,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
     pnpmScript('empty-catch', 'verify-empty-catch', { label: 'no new silent catches' }),
+    pnpmScript('css-selectors', 'verify-css-selectors', { label: 'bucketed CSS selectors' }),
     pnpmScript('cordis-root', 'verify-cordis-root', { label: 'no new Cordis root reads' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
     pnpmScript('plugin-entry-exports', 'verify-plugin-entry-exports', { label: 'plugin entry exports' }),
@@ -545,9 +558,12 @@ function ciArtifactGates(): Gate[] {
 
 function ciConsumerGates(): Gate[] {
   const builtTree = ['build']
+  const playwrightInstall = ciPlaywrightInstallGate()
+  const browserTree = playwrightInstall === undefined ? builtTree : [...builtTree, playwrightInstall.id]
   // The HMR web test starts `dev:web`, which rewrites the shared `lib/` and
-  // `apps/web/dist/` trees. Let every build-artifact reader settle before that
-  // writer starts; `after` preserves the web diagnostic even if a reader fails.
+  // `apps/web/dist/` trees, and a browser pool beside the readers starves their
+  // timing-sensitive child processes of CPU. Let every build-artifact reader
+  // settle first; `after` preserves the web diagnostic even if a reader fails.
   const buildArtifactReaders = [
     'publint',
     'snapshot',
@@ -563,9 +579,11 @@ function ciConsumerGates(): Gate[] {
       env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
     }),
     pnpmScript('publint', 'publint', { needs: builtTree }),
-    snapshotGate(builtTree),
+    // test:snapshot includes the built-client apps/web/tests/*.snapshot.ts files, which launch Chromium.
+    snapshotGate(browserTree),
     expectedOutputGate(builtTree),
-    webSnapshotGate(builtTree, buildArtifactReaders),
+    ...playwrightInstall === undefined ? [] : [playwrightInstall],
+    webSnapshotGate(browserTree, buildArtifactReaders),
     pnpmScript('doc-typecheck', 'doc-typecheck:contracts-ready', {
       needs: builtTree,
       env: { DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' },
@@ -576,6 +594,72 @@ function ciConsumerGates(): Gate[] {
     }),
     builtBinSmokeGate(builtTree),
   ]
+}
+
+/**
+ * Install the web snapshot browsers beside the build instead of before the aggregate.
+ * `DSH_CI_PLAYWRIGHT_INSTALL` selects `with-deps` (ephemeral runners, which also install
+ * system packages through apt) or `browsers` (persistent hosts whose image owns those packages);
+ * unset leaves browser installation to the caller.
+ */
+function ciPlaywrightInstallGate(): Gate | undefined {
+  const raw = process.env.DSH_CI_PLAYWRIGHT_INSTALL
+  if (raw === undefined || raw === '') return undefined
+  if (raw !== 'with-deps' && raw !== 'browsers') {
+    throw new Error(`run-gates: DSH_CI_PLAYWRIGHT_INSTALL must be with-deps or browsers, got ${JSON.stringify(raw)}.`)
+  }
+  const args = ['--filter', '@deepseek-ai/dsh-web-frontend', 'exec', 'playwright', 'install',
+    ...raw === 'with-deps' ? ['--with-deps'] : [], 'chromium', 'webkit']
+  return {
+    id: 'playwright-install',
+    label: 'Playwright browsers',
+    displayCommand: `pnpm ${args.join(' ')}`,
+    ...pnpmInvocation(args),
+  }
+}
+
+/**
+ * Build-once CI lane: emit official client artifacts once and run the cheap
+ * readers beside the packing job; downstream jobs restore this output.
+ */
+function ciBuildOnceGates(): Gate[] {
+  return [
+    ciArtifactBuildGate(),
+    pnpmScript('publint', 'publint', { needs: ['build'] }),
+    pnpmScript('node-next-types', 'verify-node-next-types', {
+      label: 'node-next types',
+      needs: ['build'],
+    }),
+  ]
+}
+
+/**
+ * Artifact consumers on a checkout whose build output was restored from the
+ * `ci-build` lane, so no gate builds or waits for a build. Node compatibility
+ * reads only source and runs here, off the build job's critical path.
+ */
+function ciPrebuiltConsumerGates(): Gate[] {
+  return [
+    pnpmScript('node-compat', 'check:node-compat', {
+      label: 'Node compatibility',
+      env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
+    }),
+    // The web snapshot shards run the apps/web/tests/*.snapshot.ts adapters.
+    snapshotGate([], { skipWebAdapters: true }),
+    expectedOutputGate([]),
+    pnpmScript('doc-typecheck', 'doc-typecheck:contracts-ready', {
+      env: { DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' },
+    }),
+    builtBinSmokeGate([]),
+  ]
+}
+
+/**
+ * One web snapshot shard on a checkout with restored build output. The CI job
+ * installs the browsers itself, overlapped with the artifact download.
+ */
+function ciPrebuiltWebSnapshotGates(): Gate[] {
+  return [webSnapshotGate([])]
 }
 
 function webSnapshotGate(needs: string[], after?: string[]): Gate {
@@ -781,9 +865,11 @@ function ciUnitGates(): Gate[] {
 
 // Recorded-session adapters boot process scenarios in `lib` mode. Callers wait
 // either on `build` or on a validation gate that transitively owns that build.
-function snapshotGate(needs: string[] = ['build']): Gate {
+// `skipWebAdapters` leaves the browser-backed apps/web/tests adapters to a lane
+// that already runs them (vitest.snapshot.config.ts).
+function snapshotGate(needs: string[] = ['build'], options: { skipWebAdapters?: boolean } = {}): Gate {
   return pnpmScript('snapshot', 'test:snapshot', {
-    env: { DSH_EXAMPLE_MODE: 'lib' },
+    env: { DSH_EXAMPLE_MODE: 'lib', ...options.skipWebAdapters === true ? { DSH_SNAPSHOT_SKIP_WEB_ADAPTERS: '1' } : {} },
     needs,
   })
 }

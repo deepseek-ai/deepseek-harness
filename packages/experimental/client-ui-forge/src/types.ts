@@ -2,7 +2,10 @@
 
 import type {} from '@deepseek-ai/dsh-typert-protocol'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeCommit, ForgeDescription, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestSummary, ChangeRequestUpdate, ForgeCommit, ForgeDescription, ForgeFailure,
+  ForgeReadiness, ForgeRepository, ForgeViewerFilter,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -203,6 +206,60 @@ export type ForgeChangeRequestListState = Pick<
 export type ForgeChangeRequestStatesFrame =
   | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
+
+/** One list of the review page: the latest successful read of one viewer list on one host, and the latest failure. */
+export interface ForgeReviewList {
+  /** Change requests most recently updated first, from the latest successful read, or null before the first. */
+  readonly items: readonly ChangeRequestSummary[] | null
+  /** Size of the whole list the host reported with `items`; 0 before the first successful read. */
+  readonly total: number
+  /** Epoch milliseconds of the read `items` come from, or null before the first successful read. */
+  readonly fetchedAt: number | null
+  /** Why the latest read failed, or null when it succeeded or none settled yet. */
+  readonly failure: ForgeFailure | null
+}
+
+/** The review page's lists on one host of one provider. */
+export interface ForgeReviewHost {
+  /** Forge family of the provider. */
+  readonly forge: string
+  /** Lowercase host name. */
+  readonly host: string
+  /** Login of the signed-in user the latest successful read named, or null before one. */
+  readonly viewer: string | null
+  /** Each list the provider offers on the host; a list it does not offer is absent. */
+  readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>
+}
+
+/** Everything the review page lists, as one frame. */
+export interface ForgeReviewFrame {
+  /** Each host a provider lists change requests on, in registration and configuration order. */
+  readonly hosts: readonly ForgeReviewHost[]
+  /** Whether a read is in flight. */
+  readonly reading: boolean
+}
+
+/** The number the review page's navigation entry shows. */
+export interface ForgeReviewCountFrame {
+  /** Open change requests that ask the signed-in user for a review, summed over the hosts read, or null before any count. */
+  readonly reviewRequested: number | null
+}
+
+/** One change request the review page shows in full, with its latest polling result. */
+export interface ForgeReviewChangeRequest {
+  /** Web URL the page asked for. */
+  readonly url: string
+  /** Parsed reference. */
+  readonly ref: ChangeRequestRef
+  /** How readers name the change request's code host and its change requests, or null once its provider left. */
+  readonly forge: ForgeDescription | null
+  /** Latest polling result, or null before the first poll. */
+  readonly update: ChangeRequestUpdate | null
+  /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
+  readonly snapshot: ChangeRequestSnapshot | null
+  /** Number of review changes `forge/review-changed` announced for the change request since the panel host started. */
+  readonly reviewRevision: number
+}
 
 /** One bound change request in the panel state. */
 export interface ForgePanelChangeRequest extends SessionChangeRequest {
@@ -563,13 +620,22 @@ export interface Config {
    * `testPaths` and before the built-in rules.
    */
   interfacePaths?: string[]
-  /** Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit and update time. */
+  /**
+   * Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit
+   * and update time, and, counted apart, of viewed marks kept for later reads at the same head commit.
+   */
   maxCachedReviewBytes?: number
   /**
-   * Age in milliseconds at which review threads kept in memory are read from the code host again; a GitHub pull
-   * request's update time does not change when a thread is resolved.
+   * Age in milliseconds at which review threads and viewed marks kept in memory are read from the code host again; a
+   * GitHub pull request's update time does not change when a thread is resolved, and nothing announces a mark changed
+   * on the code host itself.
    */
   reviewRefreshMs?: number
+  /**
+   * Age in milliseconds past which the status of a change request is read at once when a Session's panel or the
+   * review page starts to show it.
+   */
+  statusMaxAgeMs?: number
   /** Deadline in milliseconds for one lens `classify` call. */
   lensTimeoutMs?: number
   /** Most UTF-8 bytes of file text one lens `classify` call may read. */
@@ -578,6 +644,14 @@ export interface Config {
   maxCachedLensBytes?: number
   /** Most line annotations a changes view shows in one file, across every annotation source. */
   maxAnnotationsPerFile?: number
+  /** Milliseconds between two reads of the review page's lists while the page is open. */
+  reviewListIntervalMs?: number
+  /** Milliseconds between two reads of the review page's navigation count while it is shown. */
+  reviewCountIntervalMs?: number
+  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  reviewMaxBackoffMs?: number
+  /** Most change requests one review page list shows, capped by each provider's own limit. */
+  reviewPageSize?: number
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -643,6 +717,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/viewed-failed': Record<string, never>
     /** The code host did not list the accounts a review can be requested from; the message says why. */
     'forgePanel/reviewers-failed': Record<string, never>
+    /** The code host did not provide a change request's description; the message says why. */
+    'forgePanel/description-failed': Record<string, never>
     /** The code host's provider cannot read review threads, so the changes view shows none. */
     'forgePanel/review-unsupported': Record<string, never>
     /** The code host did not provide the change request's review threads, or its status has not been read yet; the message says why. */

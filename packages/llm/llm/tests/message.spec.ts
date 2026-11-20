@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import {
+  type ContentBlock,
   type ToolCallId,
   boundContextSummary,
   CONTEXT_SUMMARY_MAX_CHARS,
@@ -52,6 +53,19 @@ describe('extractTextContent', () => {
       { type: 'text', text: '' },
     ], { separator: '\n' })).toBe('\n')
   })
+
+  it('trims each text block and omits blocks left empty when trim is set', () => {
+    const content: ContentBlock[] = [
+      { type: 'text', text: ' \talpha\n' },
+      { type: 'text', text: '' },
+      { type: 'reasoning', text: 'ignored' },
+      { type: 'text', text: ' \n' },
+      { type: 'text', text: 'β  γ \r\n' },
+    ]
+    expect(extractTextContent(content, { separator: '\n\n', trim: true })).toBe('alpha\n\nβ  γ')
+    expect(extractTextContent(content, { trim: true })).toBe('alphaβ  γ')
+    expect(extractTextContent([{ type: 'text', text: ' ' }], { separator: '\n\n', trim: true })).toBe('')
+  })
 })
 
 describe('message construction', () => {
@@ -72,7 +86,7 @@ describe('message construction', () => {
   })
 
   it('preserves system-prompt attribution on immutable system messages', () => {
-    const expectedSource: { kind: 'system-prompt' } = { kind: 'system-prompt' }
+    const expectedSource: import('@deepseek-ai/dsh-llm').SystemPromptMessageSource = { kind: 'system-prompt' }
     const message = createSystemMessage('rule')
     expectTypeOf(message.source).toEqualTypeOf(expectedSource)
     expect(message.role).toBe('system')

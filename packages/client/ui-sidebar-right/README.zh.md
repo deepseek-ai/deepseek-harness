@@ -47,7 +47,7 @@ kind: "package-reference"
 
 在 Windows Electron 中，`html[data-windows-titlebar]` 让全屏面板保持在顶栏下方及展开侧栏的右侧。框架的 `--dsh-windows-sidebar-width` 提供该缩进及最大宽度；`--dsh-windows-content-radius` 提供左上圆角。仅全屏面板为该圆角裁剪溢出内容。
 
-席位通过 `ctx.layout.openRightbar(track, fullscreen)` / `closeRightbar()` 报告呈现，框架不注入本包。宽屏切换全屏不改变中栏宽度；宽度拖拽区只在普通展开态显示。独立浮窗及 `float`/`dock` 操作保持可用。
+席位通过 `ctx.layout.openRightbar(track, fullscreen)` / `closeRightbar()` 报告呈现，框架不注入本包。宽屏切换全屏不改变中栏宽度；宽度拖拽区只在普通展开态显示。面板展开后，拖动只更新面板宽度，不向标签页内容传递滑动距离。即使分栏，收起时每个停靠项也按整个面板的宽度滑动。独立浮窗及 `float`/`dock` 操作保持可用。
 
 面板没有标题行。它的两个控件——形态切换与折叠按钮——搭在套件 chrome 席位上，位于右上格 tab 条的最末端，因此 tab 条就是面板的整条上边。每条 tab 条从左到右读作：在允许时带关闭按钮的 tab 胶囊，添加控件（只在该格没有引导 tab 时绘制；它通过 `ctx.sidebarRight.openTab` 在该格打开引导页），该格的分栏控件，以及右上格里的两个面板控件。窄格里只有 chip 让位；其后的控件从不收缩或被裁切。
 
@@ -92,7 +92,9 @@ tab 类型分两阶段注册，随包发布的引导类型走的正是别的包�
 <a id="ctxsidebarright"></a>
 ## `ctx.sidebarRight`
 
-`openResource(address, options?)` 与 `openTab(kind, options?)` 是导航控制器，进入该列的每条路都调用其中之一：会话区的文件链接与工具行的行号引用（`openResource(fileAddress, { params: { line } })`），tab 条的添加控件与引导入口框（`openTab`），文件树的行（`tab.actions.openResource`）。资源地址是 `dsh-resource://<type>/…` URI；不带 `options.kind` 时由注册表认领（glob 与 `canOpen`，最高档胜出），带它时由该 kind 生效的类型打开。页按 kind 命名；tab 记录在本包拼出、别处无人书写的地址下（`contract/seed.ts`）。两者以同一组步骤作为一条历史运行：已展示同一 (kind, contentId) 的资源 tab 被聚焦，不限所在分栏，除非 `revealIfOpened: false`；页 tab 始终只在目标分栏内去重，不受该选项影响；否则新 tab 取代 `options.replaceTab` 的位置（并关掉那个 tab，见下文），再退而落到 `options.paneId`，再退而落到活跃停靠格；活动格是浮窗时为第一个停靠格。面板展开，因为用户看不到的内容不算打开；新 tab 替换浮动 tab、或这次打开揭示的是浮窗中的 tab 时除外。揭示一个原本就在屏幕上的 tab（浮窗的活动 tab，或该列展开时停靠格的活动 tab）时，存放它的格发光提示一次，约 600ms，与由谁打开、tab 是什么类型无关，提供方无需做任何事。揭示需要切到后台 tab 或展开该列时不发光，因为这一变化本身已经可见。停靠格向内发光，位于其内容的吸顶栏（如代码块标题栏）之上；浮窗在自身阴影之上向外发光。浅色模式用强调色，深色模式用白色。再次揭示会重新开始发光，发光期间该格带有 `data-sidebar-right-flash`；减少动态效果时发光在同样时长内保持不变而不淡出。每次揭示只在其会话位于屏幕上时播放一次：隐藏该会话会结束进行中的发光，会话隐藏期间的揭示直接丢弃、不在切回时补播，之后挂载的侧栏也不会重放先前的揭示。随后 Tab 域记录这次导航——`params` 以 `navigation.params` 抵达正文，`revision` 递增——不进布局历史。`params` 按所开之物定型：某资源类型的查看器把自己那项并入 `SidebarRightResourceParamsMap`（文本预览声明 `{ line?: number }`）；接受参数的页类型按其 kind 并入 `SidebarRightTabParamsMap`；值约定为 JSON 形状，运行时不校验。`dsh-resource://` 之外的地址、无人认领的地址、或未注册的 kind 都会 throw：那是接线错误，不是用户错误。
+`openResource(address, options?)` 与 `openTab(kind, options?)` 分别打开资源和页面：会话区的文件链接与工具行的行号引用（`openResource(fileAddress, { params: { line } })`），tab 条的添加控件与引导入口框（`openTab`），文件树的行（`tab.actions.openResource`）。资源地址是 `dsh-resource://<type>/…` URI；不带 `options.kind` 时由注册表认领（glob 与 `canOpen`，最高档胜出），带它时由该 kind 生效的类型打开。页按 kind 命名；tab 记录在本包拼出、别处无人书写的地址下（`contract/seed.ts`）。两者以同一组步骤作为一条历史运行：已展示同一 (kind, contentId) 的资源 tab 被聚焦，不限所在分栏，除非 `revealIfOpened: false`；页 tab 始终只在目标分栏内去重，不受该选项影响；否则新 tab 取代 `options.replaceTab` 的位置（并关掉那个 tab，见下文），再退而落到 `options.paneId`，再退而落到活跃停靠格；活动格是浮窗时为第一个停靠格。面板展开，因为用户看不到的内容不算打开；新 tab 替换浮动 tab、或这次打开揭示的是浮窗中的 tab 时除外。揭示一个原本就在屏幕上的 tab（浮窗的活动 tab，或该列展开时停靠格的活动 tab）时，存放它的格发光提示一次，约 600ms，与由谁打开、tab 是什么类型无关，提供方无需做任何事。揭示需要切到后台 tab 或展开该列时不发光，因为这一变化本身已经可见。停靠格向内发光，位于其内容的吸顶栏（如代码块标题栏）之上；浮窗在自身阴影之上向外发光。浅色模式用强调色，深色模式用白色。再次揭示会重新开始发光，发光期间该格带有 `data-sidebar-right-flash`；减少动态效果时发光在同样时长内保持不变而不淡出。每次揭示只在其会话位于屏幕上时播放一次：隐藏该会话会结束进行中的发光，会话隐藏期间的揭示直接丢弃、不在切回时补播，之后挂载的侧栏也不会重放先前的揭示。随后 Tab 域记录这次导航——`params` 以 `navigation.params` 抵达正文，`revision` 递增——不进布局历史。`params` 按所开之物定型：某资源类型的查看器把自己那项并入 `SidebarRightResourceParamsMap`（文本预览声明 `{ line?: number }`）；接受参数的页类型按其 kind 并入 `SidebarRightTabParamsMap`；值约定为 JSON 形状，运行时不校验。`dsh-resource://` 之外的地址、无人认领的地址、或未注册的 kind 都会 throw：那是接线错误，不是用户错误。
+
+`openContent(kind, content, { key?, destination? })` 将正文作为临时导航参数传给已注册的标签。标签提供方在 `SidebarRightTabParamsMap` 中按 kind 声明正文类型。默认在侧栏打开，使用 `float` 可直接打开浮窗。同一会话及 kind 下复用 key 会更新已有标签，并将它移到指定位置。省略 key 则新开标签。切换会话时，已查看的正文标签保持挂载。刷新后关闭这类标签及其浮窗，恢复其他标签。
 
 `preferNewPane: true` 会先按普通的两格上限与空间规则尝试分割目标停靠格，无法分栏时回退到该格。`replaceTab` 优先并会禁用这项偏好。
 

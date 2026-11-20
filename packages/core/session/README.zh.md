@@ -41,6 +41,12 @@ ctx.sessions.get(sessionId)      // the live session
 ctx.sessions.list()              // every live session, in creation order
 ```
 
+### 校验日志与构建头部
+
+`validateSessionLog(header, events?, inheritedEventCount?, eventState?, projections?)` 执行构造 Session 时的全部检查，顺序和报错相同，但不构造 Session。不传 `eventState` 时它与 `Session.create()` 一致：先复制借入的事件和头部再校验；传 `detached` 或 `shared-frozen` 时它与 `Session.fromRestore()` 一致：就地校验并深度冻结头部，不复制事件。Session 标识取自 `header.id`，也不在内存中追加继承标记。
+
+`buildSessionHeader(id, meta?)` 根据调用方提供的 `SessionHeaderMeta` 字段构建 `SessionStore.prepare()` 使用的当前格式头部；`createdAt` 缺省为当前时间，`isSeeded` 缺省为 false。结果既不校验也不冻结。`needsInheritedSeedMarker(header, events, inheritedEventCount)` 报告带 seed 的日志在切点处是否缺少 `session/end-seed { inherited: true }`，这正是 Session 构造为借入 seed 追加该标记的条件；更早的祖先标记不算。
+
 ### 追加与派生
 
 `session.append(type, data, opts?)` 提交一个类型化事件。它在读取载荷字段前拒绝只读实例，为有效 JSON 创建快照并冻结，再次检查写入权限后提交并通知观察者。`session.deriveMessages()` 把日志投影为模型看到的 `Message[]`，采用增量且有缓存的方式：
@@ -51,7 +57,7 @@ session.append('user/message', { role: 'user', content: [{ type: 'text', text: '
 session.deriveMessages()         // the derived model history
 ```
 
-表层事件（`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）在类型化事件与追加输入中都必须带有 `surfaceOp`。替换操作仅接受 `{ op: 'replace', startSeq, endSeq }`，端点为包含边界的 `SessionSeq`，按当前 surface 顺序解释。assistant 消息会嵌入精确、紧凑的提供方流，并禁止 `sourceEventSeqs`。已知仅日志事件禁止这两个元数据字段，且从不产生消息。
+surface 事件（`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）在类型化事件与追加输入中都必须带有 `surfaceOp`。替换操作仅接受 `{ op: 'replace', startSeq, endSeq }`，端点为包含边界的 `SessionSeq`，按当前 surface 顺序解释。assistant 消息会嵌入精确、紧凑的提供方流，并禁止 `sourceEventSeqs`。已知仅日志事件禁止这两个元数据字段，且从不产生消息。
 
 `developer/message` 存储工具添加名称，以及指向更早 `request/header` 的 `headerSeq` 引用。仅在存在添加块时必须携带该引用，每个名称必须在所引用的请求头中恰好对应一个完整模式。移除块仅记录工具名称，不携带请求头引用。重启、fork 和 surface 替换保留历史请求头；较早添加的定义不由当前注册表或最新请求头决定。`sourceEventSeqs` 继续描述派生来源及被替换节点。
 
@@ -59,7 +65,7 @@ session.deriveMessages()         // the derived model history
 
 追加、seed/restore 与事件 adoption/snapshot 会拒绝任何 `header.system` 及恰好为空的可选请求头字段（`tools: []`、`adapterDefaults: {}`），而不规范化输入。工具结果的 `data.error` 仅在一等消息的 `isError === true` 时允许存在；失败标识仍是可选的。被拒绝的追加不会改变日志、派生状态或事件流。Adoption 校验事件局部元数据，但不校验所引用的历史或替换端点是否属于 surface。
 
-`system/message` 承载渲染后的系统提示词：第一条是 surface 第 0 号节点，准入依据已准备调用的能力，不具备能力的路由将非空渲染文本归并到首个系统节点，延续中的 `in-history` 序列则在缓存历史之后追加；空系统节点不投影为消息，因此清除提示词必须为所有生效的系统节点记录空内容替换，而非仅替换最新节点；当第 0 号节点是 `system/message` 时，surface 折叠拒绝覆盖它的替换，除非替换事件本身是恰好覆盖该节点的 `system/message`，而后续系统节点不受保护，压缩范围可以遮蔽它们（[决策](../../../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.zh.md)）。
+`system/message` 存储模型可见系统文本，包括带来源归属的准入，以及压缩后下一次模型尝试时重建的指令。可选来源元数据将规范段文本与来源关联通知区分开来；适配器将记录的内容块格式化为提供方请求。[system-prompt 包](../system-prompt/README.zh.md) 负责每个 Session 的比较与提示词组装。空内容系统节点不投影为消息。surface 折叠保护第 0 号节点的 `system/message` 不被替换，除非系统事件恰好替换该节点；后续系统节点可被压缩遮蔽。
 
 ### 读取日志
 
@@ -82,6 +88,8 @@ session.deriveMessages()         // the derived model history
 ### 派生会话的 fork
 
 `ctx.sessions.fork(source, boundary?, childSessionId?)` 从实时源会话复制包含切点的精确事件前缀（默认：最后一个事件）。`dsh-session/fork` 的 `buildForkSeed` 在复制事件之后放置继承标记，仅为开放步骤补缺失的错误工具结果，并以 `forked` 原因关闭步骤和轮次。已关闭的步骤与轮次保持原样，包括历史缺失结果。标记和结束事件属于子会话；`inheritedEventCount` 只统计复制的前缀。
+
+被拒绝的 fork 抛出带 `SessionForkErrorCode` 的 `SessionForkError`；两者都从包根入口导出。
 
 逻辑 `SessionHeader.isSeeded` 字段报告是否存在 fork 历史，而不公开位置整数。`Session.inheritedEventCount` 保留经过校验的精确 `SessionLogOffset`；`ownEvents()` 返回从该切点开始的事件，`isOwnSeq(seq)` 只接受已存在且由子会话拥有的位置。底层带 seed 构造必须显式提供 `seed` 与 `inheritedEventCount`，因为构造 seed 可以在继承前缀之后包含子会话自有的设置事件。
 
@@ -114,6 +122,7 @@ session.deriveMessages()         // the derived model history
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SessionStore` 服务、存储生命周期、`fork`、`flush` |
+| [`src/validation.ts`](src/validation.ts) | Session 构造与 `validateSessionLog` 共用的 Session 日志校验；头部构建 |
 | [`src/types.ts`](src/types.ts) | `SessionEventMap`、`SessionEvent`、`UserMessage`、`SessionHeader`、`TurnEndReasonMap` |
 | [`src/surface.ts`](src/surface.ts) | 有序 surface 投影、替换校验、`deriveEventMessage` |
 | [`src/request-header.ts`](src/request-header.ts) | `request/header` 折叠与重建 |
@@ -131,6 +140,8 @@ session.deriveMessages()         // the derived model history
 ### 派生历史
 
 `deriveMessages()` 缓存深度冻结的派生消息，每次调用返回新数组。surface 事件类型（`system/message`、`developer/message`、`user/message`、`assistant/message`、`tool/result`）提供记录的消息身份和内容，空内容的 system 和 developer 节点不派生消息。插件拥有的投影修改派生内容，不修改记录的消息。替换和投影决策使缓存失效。嵌入式 Assistant stream 与 `assistant/attempt` 事件只保留回放和诊断数据。普通提示与注入上下文在派生时不会按类型或来源自动添加包装。生产方负责记录内容中的所有框定格式。
+
+`surface.systemNodes` 按 surface 顺序提供当前系统节点序号及其日志内容数组是否为空。每次读取都会扫描当前 surface 节点，因此该列表反映实际被替换的位置；替换范围外的引用不会移除节点。
 
 ### 请求头
 

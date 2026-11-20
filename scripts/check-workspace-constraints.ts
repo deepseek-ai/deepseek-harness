@@ -218,6 +218,14 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The physical-key protocol is a public entry usable without the browser service.
   '@deepseek-ai/dsh-client-shortcuts': ['lib/protocol.js'],
+  // The Feishu entry skill travels with the package; the guides it indexes stay in lark-cli.
+  '@deepseek-ai/dsh-feishu': ['skills'],
+  // The WeCom plugin ships its entry skill; the upstream guides it indexes are downloaded at load.
+  '@deepseek-ai/dsh-wecom': ['skills'],
+  // The Tencent Meeting plugin ships its entry skill; the upstream guide it indexes is downloaded at load.
+  '@deepseek-ai/dsh-tencent-meeting': ['skills'],
+  // The DingTalk entry skill travels with the package; the plugin copies it beside the downloaded guides.
+  '@deepseek-ai/dsh-dingtalk': ['skills'],
   '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice': ['runtime/assets.json'],
   // Node profile configuration and process bootstraps have separate bundles.
   '@deepseek-ai/dsh-ptc-runtime-node': ['lib/configuration.js', 'lib/process.js', 'lib/persistent-process.js'],

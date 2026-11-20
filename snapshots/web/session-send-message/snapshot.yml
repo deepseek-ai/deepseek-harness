@@ -1,0 +1,10 @@
+version: 1
+scenario: session-send-message
+profile: web
+composition: web-session-control
+recording: authored
+header:
+  class: web-session-control
+  pin: true
+replay:
+  override: true

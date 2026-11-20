@@ -2,6 +2,7 @@ import type { HTMLAttributes } from 'react'
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { IconCloseOutlineRegular } from './icons/index.tsx'
+import { menuPopupSelector } from './useModalLayer.ts'
 import css from './ImageLightbox.module.css'
 
 /** Lightbox strings the owner resolves from its own locale namespace. */
@@ -41,7 +42,7 @@ export function ImageLightbox({ src, alt, labels, onClose, contextMenuProps }: {
     closeRef.current?.focus()
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
       // A portaled image menu owns Escape and Tab until it returns focus.
-      if (event.defaultPrevented || document.activeElement?.closest('[role="menu"]')) return
+      if (event.defaultPrevented || document.activeElement?.closest(menuPopupSelector)) return
       if (event.key === 'Escape') { event.stopPropagation(); onClose() }
       if (event.key === 'Tab') { event.preventDefault(); closeRef.current?.focus() }
     }

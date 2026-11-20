@@ -72,6 +72,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
     text: ({ scope }) => ctx.tools.get('read', scope) === undefined
       ? ''
       : 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
+    retirement: 'The read tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

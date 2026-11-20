@@ -56,31 +56,33 @@ export function inspectSystemPrompt(previous: SystemPromptState | undefined, eve
     retained.set(event.seq, position)
     replacements = retained
   }
-  const introduced: SystemPromptNode | undefined = event.type === 'system/message'
-    ? {
+  let introduced: SystemPromptNode | undefined
+  if (event.type === 'system/message') {
+    introduced = {
       seq: event.seq,
       time: event.time,
       turn: event.data.turn,
       step: event.data.step,
-      text: extractTextContent(event.data.message.content),
+      text: extractTextContent(event.data.message.content, { separator: '\n\n', trim: true }),
       update: op === 'append' && previous?.nodes.some(item => item.node.text !== '') === true,
     }
-    : undefined
+  }
   if (introduced !== undefined) {
     nodes = [...nodes, { position, node: introduced }].sort((a, b) => a.position - b.position)
   }
-  const surviving = nodes.findLast(item => item.node.text !== '')?.node
-  const effective = surviving === previous?.nodes.findLast(item => item.node.text !== '')?.node
-    ? previous?.effective
-    : introduced !== undefined && introduced === surviving
-      ? introduced
-      : {
-        seq: event.seq,
-        time: event.time,
-        turn: surviving?.turn ?? 0,
-        step: surviving?.step ?? 0,
-        text: surviving?.text ?? '',
-        update: false,
-      }
+  const nonEmpty = nodes.filter(item => item.node.text !== '')
+  const surviving = nonEmpty.at(-1)?.node
+  const text = nonEmpty.map(item => item.node.text).join('\n\n')
+  let effective = previous?.effective
+  if (effective?.text !== text && (effective !== undefined || text !== '')) {
+    effective = {
+      seq: event.seq,
+      time: event.time,
+      turn: surviving?.turn ?? 0,
+      step: surviving?.step ?? 0,
+      text,
+      update: introduced?.update === true,
+    }
+  }
   return { firstSeq, uncertain, nodes, replacements, effective, introduced }
 }

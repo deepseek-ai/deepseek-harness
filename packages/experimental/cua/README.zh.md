@@ -41,6 +41,8 @@ kind: "package-reference"
 
 使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。macOS 和 Windows 共用的原始 `getState` 结果可返回 `hasUnreadableElements: true`，表示本次树中有未能读到的元素。其他情况下可省略该字段。节点数或深度达到上限时，由 `truncated` 单独标记。
 
+通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
+
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
 通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
@@ -51,7 +53,7 @@ kind: "package-reference"
 
 动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
-支持系统指针的提供方在 `mouseMove`、`drag` 和 `toggleMouse` 之间共用会话鼠标授权。每次操作系统鼠标都要显式传 `{ useSystemPointer: true }`。
+支持系统输入的提供方允许 `mouseMove`、`toggleMouse`、`click`、`drag`、`pressKey` 和 `sendKeyEvent` 传入 `useSystemInput`。`true` 请求系统键鼠输入，省略或传 `false` 保留提供方的默认方式。`pressKey(key, modifiers, options)` 和 `sendKeyEvent(key, direction, options)` 的选项是第三个参数。
 
 要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
 
@@ -82,7 +84,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-提供方声明 `systemPointer: true` 后，`mouseMove`、`drag` 和 `toggleMouse` 均支持显式传入 `useSystemPointer: true`，三者共用一次会话授权。CUA 负责工具参数校验、授权提示和子代理限制，在检查应用访问权限及本次操作的授权后调用提供方。提供方负责说明各自的默认输入方式。
+声明 `systemInput: true` 的提供方必须支持上述六个方法的显式系统输入，包括系统点击和拖动期间的键盘修饰键。共通层使用 `requireSystemInputApproval` 控制会话授权，校验参数并拒绝子任务请求系统输入，再调用提供方。未声明此能力的提供方拒绝该选项，不接收新增原生参数。
 
 权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 
@@ -144,7 +146,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### 模型可见内容
 
-默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 程序只绑定 `tools.cua`，普通工具仍可直接调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
+默认 preset 配置下，PTC 通过已有 `run_code` 工具获得 `cua`，其他 Agent 无论是否组合 preset 都获得 `cua_run_code`。其描述说明：“The global cua object is ready to use; retain application and window objects across calls.” 模型指引介绍对象 API。PTC 指引包含桥接初始化模板：持久模式初始化一次，非持久模式在每次程序开始时初始化。程序绑定 `tools.cua` 用于分派；普通工具在 `cua_run_code` 外调用。调用和观察使用同一套应用与窗口接口，进入正常 Session 历史。Web 卡片显示程序、嵌套调用和截图。平台指引见 [macOS 提供方](../cua-macos/README.zh.md#model-experience)。
 
 #### Token 影响
 

@@ -6,6 +6,7 @@
  * child instance.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
 import type { Transport } from '@modelcontextprotocol/client'
@@ -150,6 +151,7 @@ async function mountWorld(options?: {
   managerFiber: Fiber
 }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   let credentials: MemoryCredentials | undefined

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin do Tencent Meeting",
+    "description": "Use reuniões, gravações, atas e relatórios de reunião do Tencent Meeting nas conversas.",
+    "detail": "docs/DETAIL.md"
+  }
+}

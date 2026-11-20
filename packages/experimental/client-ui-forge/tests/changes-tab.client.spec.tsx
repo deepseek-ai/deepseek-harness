@@ -1554,6 +1554,19 @@ describe('ChangesTab change requests', () => {
     expect(within(failed.view.container).getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${en['diff.viewInBrowser']}`)
   })
 
+  it('waits for the first status of a change request whose entry shows a snapshot kept from an earlier panel stream', async () => {
+    const m = mount({ source, state: ready({ changeRequests: [{ ...entry(7, null), snapshot: snapshot(7) }] }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).not.toHaveBeenCalled()
+    expect(m.faces.changeRequestReview).not.toHaveBeenCalled()
+    expect(reading(m.view)).toBe(true)
+
+    act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7))] }), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestDiff).toHaveBeenCalledOnce()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledOnce()
+  })
+
   it('names a change request without a snapshot by its URL and the number the URL ends in', async () => {
     const m = mount({ source, state: ready() })
     expect(m.view.getByRole('img', { name: 'Change request state: Unknown' })).toBeTruthy()
@@ -2127,7 +2140,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
       faces.setFileViewed.mockReturnValueOnce(saved.promise)
     } })
     await settle()
-    expect(m.faces.changeRequestViewed).toHaveBeenCalledWith(URL7, HEAD, expect.any(AbortSignal))
+    expect(m.faces.changeRequestViewed).toHaveBeenCalledWith(URL7, HEAD, false, expect.any(AbortSignal))
     expect(marks(m)).toEqual([['docs/gone.txt', 'unviewed', 'open'], ['docs/notes.txt', 'changed', 'open'], ['src/app.ts', 'viewed', 'closed']])
     expect(m.view.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('1 / 3 viewed')
 
@@ -2209,6 +2222,27 @@ describe('ChangesTab viewed marks the host keeps', () => {
     expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
   })
 
+  it('skips the marks the host keeps for the read a refresh starts, until that read finished', async () => {
+    const refreshed = Promise.withResolvers<ReturnType<typeof hosted>>()
+    const m = mount({ source, setup: (faces) => { faces.changeRequestViewed.mockResolvedValue(hosted({})) } })
+    await settle()
+    const fresh = (): boolean[] => m.faces.changeRequestViewed.mock.calls.map(call => call[2])
+    expect(fresh()).toEqual([false])
+
+    m.faces.changeRequestViewed.mockReturnValueOnce(refreshed.promise)
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    // A review change that arrives during the refresh starts the read again, which still skips the kept marks.
+    act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7), { reviewRevision: 1 })] }), disconnected: false }) })
+    await settle()
+    expect(fresh()).toEqual([false, true, true])
+
+    await act(async () => { refreshed.resolve(hosted({})); await Promise.resolve() })
+    act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, snapshot(7), { reviewRevision: 2 })] }), disconnected: false }) })
+    await settle()
+    expect(fresh()).toEqual([false, true, true, false])
+  })
+
   it('keeps the marks of chosen commits in the browser without reading the host', async () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' })) } })
     await settle()
@@ -2285,7 +2319,7 @@ describe('ChangesTab viewed marks the host keeps', () => {
     const status = { ...polled, update: { ...polled.update!, fetchedAt: 2 } }
     act(() => { m.panel.set({ state: ready({ changeRequests: [status] }), disconnected: false }) })
     await settle()
-    expect(m.faces.changeRequestViewed).toHaveBeenLastCalledWith(URL7, moved, expect.any(AbortSignal))
+    expect(m.faces.changeRequestViewed).toHaveBeenLastCalledWith(URL7, moved, false, expect.any(AbortSignal))
     expect(marks(m)[2]?.[1]).toBe('unviewed')
     expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
     // A write at the new head is in flight when the earlier one settles, which leaves it and its lock alone.

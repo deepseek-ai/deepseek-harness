@@ -157,15 +157,16 @@ export function apply(ctx: ClientContext): void {
         if (value.fileKind === 'directory' && action === 'drill') {
           return { text: value.mention, continue: true }
         }
+        const mention = absoluteMention(value.mention, sessionDirectory(sessions, session.sessionId))
         // The Host has just listed this path, so its sent echo renders as a chip without a stat.
-        presence.confirm(session.sessionId, mentionPath(value.mention))
+        presence.confirm(session.sessionId, mentionPath(mention))
         return {
           insert: {
             source: 'reference',
-            ref: value.mention,
+            ref: mention,
             label: value.fileKind === 'directory' ? `${value.label}/` : value.label,
             appearance: value.fileKind === 'directory' ? 'folder' : 'file',
-            clipboardText: value.mention,
+            clipboardText: mention,
           },
         }
       }
@@ -198,6 +199,20 @@ export function apply(ctx: ClientContext): void {
 }
 
 type Translate = (key: ReferenceKey, params?: Record<string, unknown>) => string
+
+/**
+ * Spell a listed mention by its absolute path, so the sent text names the same file after the Session's directory moves.
+ * @param mention - the listed `@path` spelling, relative to the Session's directory.
+ * @param directory - the Session's directory, when known.
+ * @returns the absolute spelling; the listed one when the path is already absolute, no directory is known, or the
+ *   absolute path cannot be written as a mention.
+ */
+function absoluteMention(mention: string, directory: string | undefined): string {
+  const listed = mentionPath(mention)
+  const path = resolveWorkspacePath(directory, listed)
+  if (path === listed) return mention
+  return formatFileMention({ path, kind: 'file' }, mention.startsWith('@"')) ?? mention
+}
 
 type ReferenceCandidateValue =
   | { kind: 'file'; fileKind: FileReferenceCandidate['kind']; label: string; mention: string }

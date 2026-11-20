@@ -56,15 +56,15 @@ async query( platform: CordisInspectPlatform, providerId: string, methodName: st
 
 /**
  * Accept the first valid Client response for a pending query.
- * @param agent - Agent whose Session owns the query.
+ * @param sessionId - Session identity recorded by the pending query, including subagent Sessions.
  * @param requestId - Pending Client query identity.
  * @param resolution - Client provider result or failure.
  * @returns acknowledgement with accepted true only for a success that settles the query; only the first failure diagnostic is retained.
  */
-resolveClientQuery( agent: Agent, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
+resolveClientQuery( sessionId: SessionId, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
 ```
 
-Types: [Agent](core.zh.md)
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/extensions/cordis-host-runner/src/inspect-registry.ts`](../../packages/extensions/cordis-host-runner/src/inspect-registry.ts)
 
@@ -173,13 +173,13 @@ async stop(agent: Agent, pluginId: CordisDynamicPluginId): Promise<DynamicCordis
 
 /**
  * Submit a Client inspect result or failure for a pending query.
- * @param agent - Session that owns the query.
+ * @param agentId - Session identity that owns the pending query; answering does not resolve or resume an Agent.
  * @param requestId - exact pending query identity.
  * @param resolution - provider result or structured refusal.
  * @returns acknowledgement with accepted true only for a valid success that settles the query;
  * pending-query failures return { accepted: false } and retain only the first diagnostic.
  */
-@Remote('resolveInspectQuery') resolveInspectQuery( agent: Agent, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
+@Remote({ name: 'resolveInspectQuery', resources: { session: agentId => agentId } }) resolveInspectQuery( agentId: SessionId, requestId: CordisInspectRequestId, resolution: CordisInspectQueryResolution, ): CordisInspectResolveAck
 
 /**
  * Frame-wide inventory, grouped as one row per stable Plugin.
@@ -257,7 +257,7 @@ inspectPackage( agent: Agent, pluginId: CordisDynamicPluginId, packageId: Cordis
 @Remote('invoke') async invoke( pluginId: CordisDynamicPluginId, pluginRunId: CordisDynamicPluginRunId, method: string, args: JsonValue, ): Promise<DynamicCordisInvokeResult>
 ```
 
-Types: [Agent](core.zh.md)
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/extensions/cordis-host-runner/src/index.ts`](../../packages/extensions/cordis-host-runner/src/index.ts)
 

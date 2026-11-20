@@ -207,8 +207,8 @@ describe('WebSearchCard billing', () => {
 describe('WebSearchCard', () => {
   it('offers legacy search in both locales and renders its own settings', () => {
     const { actions } = renderPage(legacy())
-    expect(searchMenu().textContent).toBe('DeepSeek (legacy)')
-    expect(zh.providerLegacy).toBe('DeepSeek（旧版）')
+    expect(searchMenu().textContent).toBe('DeepSeek server-side search')
+    expect(zh.providerLegacy).toBe('DeepSeek 服务端搜索')
     expect(screen.queryByLabelText(en.count)).toBeNull()
     fireEvent.change(screen.getByLabelText(en.credential), { target: { value: 'new-key' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://messages.test/v1' } })
@@ -393,6 +393,27 @@ describe('WebSearchCard', () => {
     fireEvent.click(fetchMenu())
     fireEvent.click(screen.getByRole('menuitem', { name: en.providerAuto }))
     expect(actions.selectProvider).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains automatic Search selection with the guide link, and shows no provider panel under it', () => {
+    const base = shipped()
+    renderPage({ ...base, search: { ...base.search, selected: '', kind: 'none', auto: true } })
+    expect(searchMenu().textContent).toBe(en.providerAuto)
+    expect(screen.getByText(en.searchAutoHint)).toBeTruthy()
+    expect(screen.getByRole('link', { name: en.searchGuide }).getAttribute('href')).toBe(en.searchGuideUrl)
+    expect(screen.queryByLabelText(en.count)).toBeNull()
+  })
+
+  it('does not explain automatic Search selection while a provider is selected or under automatic Fetch selection', () => {
+    const base = shipped()
+    renderPage({
+      ...base,
+      search: { ...base.search, selected: 'deepseek-official', kind: 'none', auto: true },
+      fetch: { ...base.fetch, selected: '', kind: 'none', auto: true },
+    })
+    expect(fetchMenu().textContent).toBe(en.providerAuto)
+    expect(screen.queryByText(en.searchAutoHint)).toBeNull()
+    expect(screen.queryByRole('link', { name: en.searchGuide })).toBeNull()
   })
 
   it('reports a failed provider list read in each section and retries it', () => {

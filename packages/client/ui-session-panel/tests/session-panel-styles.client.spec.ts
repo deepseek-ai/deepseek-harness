@@ -31,10 +31,12 @@ const px = (value: string | undefined): number => {
 }
 
 describe('SessionPanel.module.css docking geometry', () => {
-  const metrics = declarationsOf('.panel, .dockProbe')
+  const metrics = declarationsOf(':global([data-conversation-content]), .panel, .dockProbe')
   const clear = px(metrics['--panel-clear'])
   const edge = px(metrics['--panel-edge'])
   const minWidth = px(metrics['--panel-min-width'])
+  /** The body's reserve step, evaluated: clamped to 0..1px. */
+  const reserveRoom = (reserveMax: number): number => Math.min(1, Math.max(0, (reserveMax - clear - edge - minWidth) * 10000000 + 1))
 
   it('derives the docked width and the dock probe from one set of metrics', () => {
     expect([clear, edge, minWidth]).toEqual([40, 8, 300])
@@ -45,20 +47,52 @@ describe('SessionPanel.module.css docking geometry', () => {
     )
     const probe = declarationsOf('.dockProbe')
     expect(probe['width']).toBe(
-      'calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px)',
+      'max(calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px),'
+      + ' var(--dsh-session-panel-reserve-room))',
     )
     expect(probe['max-width']).toBe('1px')
   })
 
+  it('derives the reserve step on the Conversation body, where the non-inherited maximum is readable', () => {
+    expect(declarationsOf(':global([data-conversation-content])')).toEqual({
+      '--dsh-session-panel-reserve-room': 'clamp(0px,'
+        + ' calc((var(--dsh-chat-end-reserve-max, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width)) * 10000000 + 1px),'
+        + ' 1px)',
+    })
+    expect(declarationsOf(":global([data-slot='conversation.chat.flow'])")['--dsh-session-panel-reserve-room']).toBe('initial')
+    // The aside inherits the computed step when it flips; the message rows keep the initial value.
+    expect(css.replace(/\s+/g, ' ')).toContain(
+      "@property --dsh-session-panel-reserve-room { syntax: '<length>'; inherits: true; initial-value: 0px; }",
+    )
+  })
+
   it('makes the probe 1px wide exactly from the gutter that holds the panel at its minimum width', () => {
     // The declarations above, evaluated: a width below 0 is used as 0, and max-width caps the probe at 1px.
-    const probeWidth = (gutter: number): number => Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1))
+    const probeWidth = (gutter: number, reserveMax = 0): number =>
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, reserveRoom(reserveMax)))
     const dockedWidth = (gutter: number): number => Math.min(360, Math.max(minWidth, gutter - clear - edge))
     expect([probeWidth(0), probeWidth(347), probeWidth(347.5), probeWidth(348), probeWidth(900)]).toEqual([0, 0, 0.5, 1, 1])
     // At the first gutter that docks, the panel is at its minimum width and keeps both clearances.
     expect(dockedWidth(348)).toBe(minWidth)
     expect(348 - dockedWidth(348) - edge).toBe(clear)
     expect([dockedWidth(377), dockedWidth(500)]).toEqual([329, 360])
+  })
+
+  it('gives the probe room as well from the largest end reserve that covers the gutter, whatever the gutter is', () => {
+    const probeWidth = (gutter: number, reserveMax: number): number =>
+      Math.min(1, Math.max(0, gutter - clear - edge - minWidth + 1, reserveRoom(reserveMax)))
+    // A 260px gutter holds no panel, and the transcript can leave 348px: room. This term is a step at 348px, as the
+    // body's end inset is, so the probe has room exactly where the body makes it.
+    expect([probeWidth(260, 347), probeWidth(260, 347.96), probeWidth(260, 348), probeWidth(260, 900)]).toEqual([0, 0, 1, 1])
+    // The same answer once the transcript has made the 348px gutter, so making room does not change the decision.
+    expect(probeWidth(348, 348)).toBe(1)
+    // An embedded Chat View's body gives no reserve: only its gutter counts.
+    expect([probeWidth(347, 0), probeWidth(348, 0)]).toEqual([0, 1])
+  })
+
+  it('asks the Conversation body for exactly the gutter that docks the panel while the probe carries the mark', () => {
+    const request = declarationsOf(':global([data-conversation-content]):has(.dockProbe[data-session-panel-reserve])')
+    expect(request).toEqual({ '--dsh-chat-end-reserve': 'calc(var(--panel-clear) + var(--panel-edge) + var(--panel-min-width))' })
   })
 
   it('keeps the probe out of sight, out of the layout flow, and away from the pointer', () => {
@@ -69,6 +103,73 @@ describe('SessionPanel.module.css docking geometry', () => {
 
   it('floats the overlay narrower than the docked panel, at the same edge inset', () => {
     expect(declarationsOf(".panel[data-session-panel='overlay']")['width']).toBe('min(280px, calc(100% - 2 * var(--panel-edge)))')
+  })
+})
+
+describe('SessionPanel.module.css section reordering', () => {
+  it('gives a draggable title row the grab cursor and lays the handle over its end, on the More column, without taking room', () => {
+    expect(declarationsOf('.head')).toMatchObject({ position: 'relative', cursor: 'var(--section-head-cursor)' })
+    // Out of the row's flow: 2px in and 24px wide puts its center 14px from the row's end, the rows' More column.
+    expect(declarationsOf('.grip')).toMatchObject({
+      'position': 'absolute', 'top': '0', 'right': '2px', 'width': '24px', 'height': '24px',
+      'color': 'var(--dsw-alias-label-tertiary)', 'opacity': '0',
+    })
+    // A mark over the row's end: presses reach the title row, and at rest the trailing content, through it.
+    expect(declarationsOf('.grip')['pointer-events']).toBe('none')
+  })
+
+  it('shows the handle in place of the trailing content on title-row hover and during a drag', () => {
+    expect(declarationsOf('.section[data-dragging] .grip')).toEqual({ opacity: '1' })
+    // Hidden, not removed: the trailing content keeps its box, so the title beside it does not move.
+    expect(declarationsOf('.section[data-dragging] > .head > .actions')).toEqual({ visibility: 'hidden' })
+    // The pointer rules stay inside the hover media query, so a touch that latches hover shows no handle.
+    // A title row without a handle, Environment's, keeps its trailing content on hover.
+    const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
+    expect(hover).toMatch(/\.head:hover > \.grip \{\s*opacity: var\(--section-grip-opacity\);/)
+    expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: var\(--section-trailing-visibility\);/)
+  })
+
+  it('offers the drag only on a shown section with a handle that has another such section before or after it', () => {
+    expect(declarationsOf('.section')).toMatchObject({
+      '--section-head-cursor': 'auto', '--section-grip-opacity': '0', '--section-trailing-visibility': 'visible',
+    })
+    const movable = '.section:has(> .head > .grip)'
+      + ':not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))'
+    // The selector list holds commas of its own, so the rule is read from the stylesheet with its whitespace collapsed.
+    const flat = css.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+    expect(flat).toContain(
+      `.section:nth-child(n + 2 of ${movable}), .section:nth-last-child(n + 2 of ${movable}) {`
+      + ' --section-head-cursor: grab; --section-grip-opacity: 1; --section-trailing-visibility: hidden; }',
+    )
+  })
+
+  it('plays the entrance and the exit only on a panel that carries the mark, and moves the transcript over the same time and curve', () => {
+    const motion = '160ms cubic-bezier(0.4, 0, 0.2, 1)'
+    expect(declarationsOf('.panel')['animation']).toBeUndefined()
+    expect(declarationsOf(".panel[data-session-panel-motion='enter']")).toEqual({ animation: `dsh-session-panel-enter ${motion}` })
+    // The exit holds its last frame until the panel is removed, and a leaving panel takes no presses.
+    expect(declarationsOf(".panel[data-session-panel-motion='exit']")).toEqual({
+      'animation': `dsh-session-panel-exit ${motion} forwards`, 'pointer-events': 'none',
+    })
+    expect(declarationsOf(':global([data-conversation-content]):has(.dockProbe[data-session-panel-moving])'))
+      .toEqual({ '--dsh-chat-end-reserve-transition': motion })
+    // The two keyframes mirror each other: transparent at the scrollport's end edge, the panel's own edge inset away,
+    // so the slide never puts the panel past that edge.
+    const frames = (name: string): string => (new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '').replace(/\s+/g, ' ').trim()
+    expect(frames('dsh-session-panel-enter'))
+      .toBe('from { opacity: 0; transform: translateX(var(--panel-edge)); } to { opacity: 1; transform: translateX(0); }')
+    expect(frames('dsh-session-panel-exit'))
+      .toBe('from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(var(--panel-edge)); }')
+  })
+
+  it('dims the dragged section and draws the landing line on the edge of the section under the pointer', () => {
+    expect(declarationsOf('.section')['position']).toBe('relative')
+    expect(declarationsOf('.section[data-dragging]')).toEqual({ opacity: '0.5' })
+    expect(declarationsOf('.section[data-drop-target]::after')).toMatchObject({
+      'position': 'absolute', 'height': '2px', 'background': 'var(--dsw-alias-state-business-primary)', 'pointer-events': 'none',
+    })
+    expect(declarationsOf(".section[data-drop-target='before']::after")).toEqual({ top: '-1px' })
+    expect(declarationsOf(".section[data-drop-target='after']::after")).toEqual({ bottom: '-2px' })
   })
 })
 
@@ -129,7 +230,7 @@ describe('SessionPanel.module.css row rules', () => {
     expect(css).not.toMatch(/:has\(\[aria-expanded='true'\]\)\)\s*\{\s*background/)
     expect(row("[data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])")['opacity']).toBe('1')
     // Hover rules stay inside the hover media query, where the menu hides until the row is hovered or focused.
-    const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+    const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
     expect(hover).toContain(`.panel :where(${interactive}:hover)`)
     expect(hover).toMatch(/\[data-row-part='menu'\]\) \{\s*opacity: 0;/)
     expect(css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, '')).not.toContain(':hover')

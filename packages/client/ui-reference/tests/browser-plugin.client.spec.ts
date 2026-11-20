@@ -700,6 +700,49 @@ describe('pick and codec', () => {
     expect(stat).not.toHaveBeenCalled()
   })
 
+  it('writes settled picks by absolute path once the Session directory is known; a drill keeps the listed text', async () => {
+    const stat = vi.fn<PathStat>(() => new Promise(() => {}))
+    const { ctx, source, sessions } = await bench(undefined, undefined, {}, {}, stat)
+    await sessions.updateSummary(session.sessionId, { cwd: '/workspace' })
+    await sessions.setProjection(session.sessionId, 'workingDirectory', '/workspace/.agents/worktrees/w')
+    const [directory, file] = await source.candidates(session, request(''))
+    expect(pick(source, directory!)).toEqual({
+      insert: {
+        source: 'reference',
+        ref: '@/workspace/.agents/worktrees/w/src/',
+        label: 'src/',
+        appearance: 'folder',
+        clipboardText: '@/workspace/.agents/worktrees/w/src/',
+      },
+    })
+    expect(pick(source, file!)).toEqual({
+      insert: {
+        source: 'reference',
+        ref: '@"/workspace/.agents/worktrees/w/docs/a b.md"',
+        label: 'a b.md',
+        appearance: 'file',
+        clipboardText: '@"/workspace/.agents/worktrees/w/docs/a b.md"',
+      },
+    })
+    expect(drill(source, directory!)).toEqual({ text: '@src/', continue: true })
+    // A settled quoted folder closes the quote that its listed spelling leaves open for a descent.
+    const [quotedDirectory] = await source.candidates(session, request('', { quoted: true }))
+    expect(pick(source, quotedDirectory!)).toMatchObject({ insert: { ref: '@"/workspace/.agents/worktrees/w/src/"' } })
+    // The sent echo carries the absolute path, so that path is the one confirmed.
+    expect(injectedPresence(ctx, 'folder')(session.sessionId).keyedHooks
+      .pathPresence('/workspace/.agents/worktrees/w/src/').getSnapshot()).toBe('present')
+    expect(injectedPresence(ctx, 'file')(session.sessionId).keyedHooks
+      .pathPresence('/workspace/.agents/worktrees/w/docs/a b.md').getSnapshot()).toBe('present')
+    expect(stat).not.toHaveBeenCalled()
+  })
+
+  it('keeps the listed spelling when the absolute path cannot be written as a mention', async () => {
+    const { source, sessions } = await bench()
+    await sessions.updateSummary(session.sessionId, { cwd: '/work"space' })
+    const [directory] = await source.candidates(session, request(''))
+    expect(pick(source, directory!)).toMatchObject({ insert: { ref: '@src/', clipboardText: '@src/' } })
+  })
+
   it('ignores candidates that do not carry a source-owned value', async () => {
     const { source } = await bench()
     expect(pick(source, { name: 'foreign candidate' })).toBeUndefined()

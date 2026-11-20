@@ -81,6 +81,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     screenRecording = locked == false && WindowCapture.IsSupported },
                     sessionLocked = locked };
             }
+            if (request.Method == "getActionSchema") return PatternActions.Schema(String(parameters, "action"));
             if (request.Method is "requestPermission" or "openPermissionSettings")
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
             DesktopSession.RequireInteractive();

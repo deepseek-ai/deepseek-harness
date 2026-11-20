@@ -35,3 +35,17 @@ export function formatAgo(iso: string, now: number, t: Translate): string | unde
   const { unit, n } = relativeTime(at, now)
   return t(`time.${unit}`, { n })
 }
+
+/**
+ * Format how long ago an ISO time was in the compact form a one-line list row shows, such as 5分钟 or 2d.
+ * @param iso - ISO 8601 time.
+ * @param now - current epoch milliseconds.
+ * @param t - forge panel copy.
+ * @returns the label, or undefined for an unparsable time.
+ */
+export function formatShortAgo(iso: string, now: number, t: Translate): string | undefined {
+  const at = Date.parse(iso)
+  if (!Number.isFinite(at)) return undefined
+  const { unit, n } = relativeTime(at, now)
+  return t(`time.short.${unit}`, { n })
+}

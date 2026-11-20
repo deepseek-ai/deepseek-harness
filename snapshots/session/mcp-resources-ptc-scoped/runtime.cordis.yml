@@ -1,0 +1,4 @@
+# Replays the mcp-resources-ptc Session with the default scoped REPL.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

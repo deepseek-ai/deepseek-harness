@@ -14,7 +14,7 @@ Status: implemented
 
 ### 协议选择与部署
 
-两个 API 注册为 `deepseek-search-api` 和 `deepseek-fetch-api`；Messages 搜索仍独立注册为 `deepseek-official`。Web 服务通过 `web.searchProvider` 和 `web.fetchProvider` 选择各个提供方，「网页搜索与获取」页上的 Search 和 Fetch 下拉框分别设置这两项；内置组合选择 Search API 与本地 HTTP 抓取，见[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)。已保存的选择从下一次操作起生效，因为 Web 服务在每次操作时读取两项选择。每次操作解析一份包含端点和凭据的设置快照。两个 API 读取 `web-deepseek-api` namespace，每个能力各自解析端点与凭据。
+两个 API 注册为 `deepseek-search-api` 和 `deepseek-fetch-api`；Messages 搜索仍独立注册为 `deepseek-official`。Web 服务通过 `web.searchProvider` 和 `web.fetchProvider` 选择各个提供方，「网页搜索与获取」页上的 Search 和 Fetch 下拉框分别设置这两项；内置组合选择本地 HTTP 抓取，不选择搜索提供方，此时 DeepSeek 模型路由之外的搜索使用 Search API，见[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)。已保存的选择从下一次操作起生效，因为 Web 服务在每次操作时读取两项选择。每次操作解析一份包含端点和凭据的设置快照。两个 API 读取 `web-deepseek-api` namespace，每个能力各自解析端点与凭据。
 
 直接检索在 API 基础地址后追加 `/search` 或 `/fetch`。没有在 YAML 中单独设置端点字段的能力，使用会话的 DeepSeek 模型路由基础地址的 origin 加 `/v1/tools`，公网部署即指南中的 `https://api.deepseek.com/v1/tools`；该推导及每次操作发送的凭据由[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责。已验证的开发地址为 `http://api-dev.deepseek.com:8031/api/v1/tools`；其前缀不同，程序不会根据主机名推断，此类部署需在 `searchBaseURL` 或 `fetchBaseURL` 中填写完整基础地址。基础地址无法解析时，该能力的提供方不可用。
 
@@ -36,7 +36,7 @@ HTTP 提供方继续负责自身的 URL 校验和资源限制。选择 DeepSeek 
 
 ### 默认值迁移
 
-内置组合选择 `deepseek-search-api`；[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责这项默认值及其不回退规则。API 密钥和账号 token 都能访问公网路由。位于没有 `/v1/tools` 路由的网关之后的部署，需把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `web.searchProvider: deepseek-official` 会选中 Messages 搜索，其他已保存的选择保持其提供方。
+内置组合不固定搜索提供方：为 DeepSeek 模型路由上的模型请求发起的搜索运行 Messages 搜索，其他路由上的搜索运行 `deepseek-search-api`；[选择决策](../architecture/2026-10-29-web-provider-selection.zh.md)负责这项默认值及其不回退规则。API 密钥和账号 token 都能访问公网路由。位于没有 `/v1/tools` 路由的网关之后的部署，需把 `searchBaseURL` 设为提供这些路由的基础地址。已保存的 `web.searchProvider: deepseek-official` 会选中 Messages 搜索，其他已保存的选择保持其提供方。
 
 ### 旧版 Messages 搜索
 
@@ -48,7 +48,7 @@ HTTP 提供方继续负责自身的 URL 校验和资源限制。选择 DeepSeek 
 
 **复用 Messages 地址或推断路由前缀。** 协议与部署前缀不同。分别保存基础地址可保留现有配置，避免把有效请求发往错误路由。
 
-**要求显式填写 Search API 基础地址。** Search API 是内置的搜索默认值，空默认值会让它在每位用户填写一个 DeepSeek 模型路由已经确定的地址之前都不可用。其他部署仍可设置自己的基础地址。
+**要求显式填写 Search API 基础地址。** Search API 是 DeepSeek 模型路由之外内置的搜索默认值，空默认值会让它在每位用户填写一个 DeepSeek 模型路由已经确定的地址之前都不可用。其他部署仍可设置自己的基础地址。
 
 **把两个 API 放在 Messages 提供方内部，由提供方自己的开关切换。** Messages 提供方内的开关无法改变抓取路由，因此除非用户另外修改 `web.fetchProvider`，`web_fetch` 仍会走 HTTP；它还会把两个 API 的生命周期绑在 Messages 搜索上。独立注册让 Web 服务通过现有的提供方选择机制选择各个提供方，不会把任一 API 与 Messages 提供方绑定。
 

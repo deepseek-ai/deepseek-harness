@@ -88,11 +88,15 @@ export function apply(ctx: Context, config: Config): void {
 - `set` 是 `scripts/upstream-skills-digest.ts` 输出的固定信息。
 - `skillsDir` 是插件自己的可选配置字段：一个已按仓库路径存放保留文件的目录。设置后不下载，路径不是目录时 `register` 抛出异常。
 
-返回的句柄供插件的账号视图和检查使用。`directory` 是 `skillsDir`，或 `$DSH_HOME/cache/<name>/skills-<摘要前 16 位>`。下载进行中时 `state` 为 `downloading`，否则这个目录存在时为 `installed`，不存在时为 `failed`。`watch(listener)` 报告每次下载的开始和结束；`retry()` 在失败后开始新的下载，并立即返回。插件在账号旁显示这个状态，并在检查中调用 `retry()` 而不等待，因此下载再慢也不会占住账号操作。下载失败会记为警告。`dispose()` 在插件卸载之前撤回注册。以 [`src/index.ts`](src/index.ts) 和 [`src/types.ts`](src/types.ts) 中的约定为准。
+返回的句柄供插件的账号视图和检查使用。`directory` 是 `skillsDir`；没有设置时，在 profile 中是 `$DSH_HOME/cache/<name>/<profile>/skills-<摘要前 16 位>`，没有 profile 时是 `$DSH_HOME/cache/<name>/skills-<摘要前 16 位>`。下载进行中时 `state` 为 `downloading`，否则这个目录存在时为 `installed`，不存在时为 `failed`。`watch(listener)` 报告每次下载的开始和结束；`retry()` 在失败后开始新的下载，并立即返回。插件在账号旁显示这个状态，并在检查中调用 `retry()` 而不等待，因此下载再慢也不会占住账号操作。下载失败会记为警告。`dispose()` 在插件卸载之前撤回注册。以 [`src/index.ts`](src/index.ts) 和 [`src/types.ts`](src/types.ts) 中的约定为准。
 
 ### 保留的文件与校验
 
 Service 按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<repository>/tar.gz/<commit>`。某个前缀返回错误状态或空响应体、没有在 `skillsTimeoutMs` 内送达完整归档、发来损坏的归档，或发来的文件与固定信息不符时，记录该前缀并尝试下一个；卸载插件则立即停止。Service 保留 `directory` 下除 `exclude` 列出的路径之外的所有普通文件，以及 `license`，并保持它们的仓库路径。以下归档会被拒绝：任一条目的路径含空段、`.`、`..` 或反斜杠；条目不在唯一的顶层目录下；保留的路径是链接或出现两次；保留的文件超过 `bytes`；没有许可证文件。Windows 上 node-tar 在 Service 读取路径之前已把反斜杠转成 `/`，因此改为检查它分开的各段。摘要按路径顺序对每个保留文件的路径、字节长度和内容做哈希，因为 GitHub 保证提交归档里的文件不变，但不保证压缩后的字节不变。校验通过的文件先写入同级的暂存目录，再改名为句柄的 `directory`；另一个进程（例如与 Web 同时运行的桌面端）先发布的目录会被保留。
+
+### 替换旧的固定提交
+
+每个由 `dsh` 启动的 profile 为每个插件的文件保留自己的目录 `$DSH_HOME/cache/<name>/<profile>`，这个 profile 的各个进程共用它。一次注册只删除一次该目录下其他固定提交的目录，时机是它自己的固定提交第一次在那里就位时：加载时已在位，或下载完成后。因此插件更新换了固定提交之后只留下一份，新的固定提交发布之前，旧的保持不动。删除在后台进行，`register` 和下载的结束都不等待它；无法删除的目录记为警告，留到之后的加载时再删。由于一次注册只删除一次，某个进程的固定提交被同一 profile 的另一个进程删除后，它在下一次检查时重新下载，并保留那个进程的固定提交；这种情况见[已知限制](#known-limitations-and-deferred-work)。不是由 `dsh` 启动的组合没有 profile：它的固定提交都留在可能被多个安装共用的 `$DSH_HOME/cache/<name>` 中，一个也不删除。配置的 `skillsDir` 及其同级目录从不删除。
 
 ### 固定提交
 
@@ -143,7 +147,10 @@ Service 按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<reposito
 <a id="known-limitations-and-deferred-work"></a>
 
 - 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，入口技能不会列出，插件显示 `failed` 状态。
-- 插件改为固定其他提交后，以及插件卸载后，已发布的目录仍留在 `$DSH_HOME/cache/<name>` 中，没有任何清理。进程在写入下载内容时退出，也会在那里留下它的暂存目录 `.skills-<摘要>-<uuid>`。
+- 每个加载该插件的 profile 都各自下载一份固定提交。
+- 同一个 profile 的多个进程可以同时运行同一插件的不同版本，例如一个在插件更新之前启动，另一个在更新之后启动。后启动的进程会删除先启动的进程正在读取的固定提交：先启动的进程不再列出入口技能，其中的 Agent 也打不开子指南，直到它下一次检查重新下载完成。此后两个固定提交都保留，直到这个 profile 的某个进程再次加载该插件。
+- 移除插件后，它的固定提交仍留在缓存中。进程在写入下载内容时退出，也会在那里留下它的暂存目录 `.skills-<摘要>-<uuid>`。两者都不会被删除。
+- 没有 profile 时，插件改为固定其他提交后，所有固定提交都留在 `$DSH_HOME/cache/<name>` 中。
 - 只检查已发布的目录是否存在。目录里的文件被删除或改动后，入口技能仍会基于这些文件列出；删除该目录后，下一次检查或加载会重新下载固定的提交。
 - 不保留文件权限，上游脚本不可直接执行；目前的上游子指南都通过 `python3` 运行脚本。
 - 实验性 Web 预览把 Host 插件运行在浏览器 worker 中：服务可以加载，但 node-tar 无法加载，因此那里的每次下载都会失败。

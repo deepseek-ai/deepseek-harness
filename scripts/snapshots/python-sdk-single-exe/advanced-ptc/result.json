@@ -18,7 +18,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -78,10 +79,68 @@
             {
               "type": "text",
               "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
             }
           ],
           "source": {
-            "kind": "system-prompt"
+            "kind": "system-prompt",
+            "sections": [
+              {
+                "name": "harness:identity",
+                "order": -1000,
+                "state": "active",
+                "contentIndex": 0
+              },
+              {
+                "name": "tools:ptc-only",
+                "order": 800,
+                "state": "active",
+                "contentIndex": 1
+              },
+              {
+                "name": "tool:jobs",
+                "order": 1600,
+                "state": "active",
+                "contentIndex": 2
+              },
+              {
+                "name": "tool:workflow",
+                "order": 2600,
+                "state": "active",
+                "contentIndex": 3
+              },
+              {
+                "name": "tool:subagent",
+                "order": 2800,
+                "state": "active",
+                "contentIndex": 4
+              },
+              {
+                "name": "tools:sdk",
+                "order": 5000,
+                "state": "active",
+                "contentIndex": 5
+              }
+            ]
           },
           "id": "{{messageId}}"
         }
@@ -119,7 +178,8 @@
           }
         ],
         "source": {
-          "kind": "user"
+          "kind": "user",
+          "clientTimeZone": "UTC"
         },
         "role": "user",
         "id": "{{messageId}}"
@@ -1033,7 +1093,8 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "user",
+                  "clientTimeZone": "UTC"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -1130,10 +1191,68 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tools:ptc-only",
+                    "order": 800,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 3
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 4
+                  },
+                  {
+                    "name": "tools:sdk",
+                    "order": 5000,
+                    "state": "active",
+                    "contentIndex": 5
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -1183,7 +1302,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
