@@ -229,60 +229,66 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
 
   return (
     <div className={styles['editor']}>
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customRoute')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={route}
-          placeholder="acme-gateway"
-          aria-label={t('customRoute')}
-          disabled={profileDisabled}
-          onChange={(event) => { setRoute(event.target.value) }}
-        />
+      {/* The two names of the route sit side by side, as do the protocol and
+          the endpoint whose example it decides; a narrow card stacks each pair. */}
+      <div className={styles['fieldPair']}>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customRoute')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={route}
+            placeholder="acme-gateway"
+            aria-label={t('customRoute')}
+            disabled={profileDisabled}
+            onChange={(event) => { setRoute(event.target.value) }}
+          />
+          {/* A rejected id reads as a fault, not as guidance — the same split the
+              key field below already makes between its failure and its hint. */}
+          {routeInvalid || routeTaken
+            ? <p className={styles['error']}>{t(routeInvalid ? 'customRouteInvalid' : 'customRouteTaken')}</p>
+            : <p className={styles['advancedHint']}>{t('customRouteHint')}</p>}
+        </div>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={displayName}
+            placeholder={route.length === 0 ? t('customDisplayName') : route}
+            aria-label={t('customDisplayName')}
+            disabled={profileDisabled}
+            onChange={(event) => { setDisplayName(event.target.value) }}
+          />
+        </div>
       </div>
-      {/* A rejected id reads as a fault, not as guidance — the same split the
-          key field below already makes between its failure and its hint. */}
-      {routeInvalid || routeTaken
-        ? <p className={styles['error']}>{t(routeInvalid ? 'customRouteInvalid' : 'customRouteTaken')}</p>
-        : <p className={styles['advancedHint']}>{t('customRouteHint')}</p>}
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={displayName}
-          placeholder={route.length === 0 ? t('customDisplayName') : route}
-          aria-label={t('customDisplayName')}
-          disabled={profileDisabled}
-          onChange={(event) => { setDisplayName(event.target.value) }}
-        />
-      </div>
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={baseURL}
-          placeholder={t(BASE_URL_PLACEHOLDERS[protocol] ?? 'customBaseUrlPlaceholder')}
-          aria-label={t('baseUrl')}
-          aria-invalid={baseUrlInvalid}
-          disabled={profileDisabled}
-          onChange={(event) => { setBaseURL(event.target.value) }}
-        />
-      </div>
-      {baseUrlInvalid ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p> : null}
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customApi')}</span>
-        <select
-          className={`${styles['input']} ${styles['selectInput']}`}
-          value={protocol}
-          aria-label={t('customApi')}
-          disabled={profileDisabled}
-          onChange={(event) => { setProtocol(event.target.value) }}
-        >
-          {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
-        </select>
+      <div className={styles['fieldPair']}>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customApi')}</span>
+          <select
+            className={`${styles['input']} ${styles['selectInput']}`}
+            value={protocol}
+            aria-label={t('customApi')}
+            disabled={profileDisabled}
+            onChange={(event) => { setProtocol(event.target.value) }}
+          >
+            {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
+          </select>
+        </div>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={baseURL}
+            placeholder={t(BASE_URL_PLACEHOLDERS[protocol] ?? 'customBaseUrlPlaceholder')}
+            aria-label={t('baseUrl')}
+            aria-invalid={baseUrlInvalid}
+            disabled={profileDisabled}
+            onChange={(event) => { setBaseURL(event.target.value) }}
+          />
+          {baseUrlInvalid ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p> : null}
+        </div>
       </div>
       <div className={styles['field']}>
         <span className={styles['fieldLabel']}>{t('keyInput')}</span>
@@ -306,6 +312,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
       <ModelListEditor
         models={models}
         onChange={setModels}
+        collapsible={false}
         reasoningLevels={reasoning.levels}
         reasoningLevelsOnly={reasoning.levelsOnly}
         probe={{
@@ -322,19 +329,21 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         disabled={profileDisabled}
         onBusyChange={setListBusy}
       />
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
-      {/* Only the gates with something to say render; the route-id gate has its
-          own field-level hint, so its blocked state would print an empty line. */}
-      {hint === undefined ? null : <p className={styles['advancedHint']}>{hint}</p>}
       <EditorFooter
         t={t}
         busy={busy}
+        sticky
         submitDisabled={disabled || !ready}
         submitLabelKey="create"
         submitBusyLabelKey="creating"
         onCancel={() => { props.onClose(committed) }}
         onSubmit={() => { void create() }}
-      />
+      >
+        {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
+        {/* Only the gates with something to say render; the route-id gate has its
+            own field-level hint, so its blocked state would print an empty line. */}
+        {hint === undefined ? null : <p className={styles['advancedHint']}>{hint}</p>}
+      </EditorFooter>
     </div>
   )
 }

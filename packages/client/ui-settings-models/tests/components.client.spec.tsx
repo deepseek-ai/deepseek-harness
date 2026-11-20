@@ -37,9 +37,27 @@ const openaiCopy = (template: string): string => providerCopy(template, OPENAI_T
 const DEEPSEEK_TARGET = { provider: 'deepseek-official', displayName: 'DeepSeek' }
 const deepSeekCopy = (template: string): string => providerCopy(template, DEEPSEEK_TARGET)
 
-/** Open one row's capacity disclosure (1-based, as the labels read). */
+/** One model row's fold button (1-based, as the labels read). */
+function rowToggle(position: number): HTMLElement {
+  return screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`)
+}
+
+/** Unfold one model row, where its fields live; a row that is already unfolded stays so. */
 function expandRow(position: number): void {
-  fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`))
+  const toggle = rowToggle(position)
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle)
+}
+
+/** The model ID each folded row names in its text, in row order. */
+function foldedModelIds(): (string | null)[] {
+  return [...document.querySelectorAll('[data-row-key] [class*="modelSummaryId"]')].map(id => id.textContent)
+}
+
+/** The footer of the one editor card on the page, found by its commit label: its notes and its two actions. */
+function editorFooter(submitLabel: string = en.apply): HTMLElement {
+  const footer = screen.getByText(submitLabel).closest<HTMLElement>('[class*="editorFooter"]')
+  if (footer === null) throw new Error('the editor card has no footer')
+  return footer
 }
 
 /** The capacity inputs of every open row, in row order. */
@@ -367,8 +385,9 @@ describe('ModelsSection', () => {
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))
     await mountFace(scripted)
     const edit = screen.getByRole('button', { name: openaiCopy(en.editProvider) })
-    fireEvent.click(edit)
+    // The open row drops its Edit button, so the row is found before the click.
     const row = within(edit.closest('li')!)
+    fireEvent.click(edit)
     expect(row.getByText(en.keyFallbackUnchecked)).toBeTruthy()
     expect(row.queryByText(en.keyFallbackMissing.replace('{hint}', 'OPENAI_API_KEY'))).toBeNull()
   })
@@ -499,10 +518,13 @@ describe('ModelsSection', () => {
     fireEvent.change(key, { target: { value: 'sk-unsaved-draft' } })
     act(() => { controller.store.update((state) => { state.status = 'loading' }) })
     expect((key as HTMLInputElement).value).toBe('sk-unsaved-draft')
-    expect((edit as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(edit)
+    // The open row offers no Edit, and no other row opens over the draft until the refresh lands.
+    expect(screen.queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.editProvider) }).disabled).toBe(true)
+    // The card's own Cancel still dismisses it during the refresh.
+    fireEvent.click(screen.getByText(en.cancel))
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
-    expect((edit as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: deepSeekCopy(en.editProvider) }).disabled).toBe(true)
   })
 
   it('checks current readiness before adding or starting removal from rendered rows', async () => {
@@ -737,8 +759,11 @@ describe('ModelsSection', () => {
     expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
     expect(configured.className).toContain('credentialDotConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
+    // A missing key is worded beside its dot; the dot alone carries no name.
+    const missing = screen.getByText(en.credentialMissing)
     expect(missing.closest('li')?.textContent).toContain('DeepSeek')
+    expect(missing.querySelector('[aria-hidden="true"]')?.className).toContain('credentialDotMissing')
+    expect(screen.queryByRole('img', { name: en.credentialMissing })).toBeNull()
     // The card is still one click away.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
@@ -760,12 +785,13 @@ describe('ModelsSection', () => {
       renderSlot={() => null}
     />)
 
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.getAttribute('title')).toBe(en.credentialMissing)
-    expect(missing.className).toContain('credentialDotMissing')
+    const missing = screen.getByText(en.credentialMissing)
+    expect(missing.querySelector('[aria-hidden="true"]')?.className).toContain('credentialDotMissing')
     expect(missing.closest('li')?.textContent).toContain('openai')
     expect(screen.queryByRole('img', { name: en.credentialConfigured })).toBeNull()
-    expect(screen.getByText('zombie').closest('li')?.querySelector('[role="img"]')).toBeNull()
+    const unmarked = screen.getByText('zombie').closest('li')
+    expect(unmarked?.querySelector('[role="img"]')).toBeNull()
+    expect(unmarked?.textContent).not.toContain(en.credentialMissing)
   })
 
   it('turns the setup card into a row once the credential reports configured', async () => {
@@ -884,7 +910,10 @@ describe('ModelsSection', () => {
     expect(save.disabled).toBe(true)
     expect(screen.getByText(en.onboardingLater)).toBeTruthy()
     expect(screen.queryByText(en.customized)).toBeNull()
+    expect(screen.queryByText(en.models)).toBeNull()
     expect(screen.queryByLabelText(en.baseUrl)).toBeNull()
+    // A form this short never scrolls its actions out of view, so its footer does not stick.
+    expect(editorFooter(en.onboardingSave).className).not.toContain('editorFooterSticky')
 
     fireEvent.change(key, { target: { value: '   ' } })
     expect(screen.getByText(en.keyRequired)).toBeTruthy()
@@ -934,17 +963,21 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    // An inherited list carries no state text and nothing to restore, and its
+    // rows read as text until one is unfolded.
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(screen.queryByText(en.resetModels)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    expect(screen.queryByLabelText(new RegExp(en.modelId))).toBeNull()
 
     fireEvent.click(screen.getByText(en.addModel))
-    const ids = screen.getAllByLabelText(new RegExp(en.modelId))
-    const names = screen.getAllByLabelText(new RegExp(en.modelName))
-    expandRow(3)
-    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'private-preview' } })
-    fireEvent.change(names[2] as HTMLInputElement, { target: { value: 'Private Preview' } })
+    // The row without an ID joins unfolded, since only its fields can name it;
+    // the named rows stay folded.
+    expect(rowToggle(3).getAttribute('aria-expanded')).toBe('true')
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 3`), { target: { value: 'private-preview' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 3`), { target: { value: 'Private Preview' } })
     // Only row 3 is open, so its capacity is addressed by its own label.
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 3`), { target: { value: '131072' } })
     fireEvent.click(within(screen.getByRole('group', { name: `${en.modelInputTypes} 3` })).getByRole('checkbox', { name: en.modelInputImage }))
@@ -994,6 +1027,7 @@ describe('ModelsSection', () => {
     expect(screen.getByText(en.deepSeekEndpointHint)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-messages-test' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://messages.example/anthropic' } })
+    expandRow(1)
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Messages Flash' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'sk-messages-test') })
@@ -1012,13 +1046,14 @@ describe('ModelsSection', () => {
 
   it('rejects duplicate DeepSeek model ids before writing', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     fireEvent.click(screen.getByText(en.addModel))
-    const ids = screen.getAllByLabelText(new RegExp(en.modelId))
-    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'deepseek-v4-flash' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 3`), { target: { value: 'deepseek-v4-flash' } })
     fireEvent.click(screen.getByText(en.apply))
 
-    await screen.findByText(`Model 3: ${en.modelIdDuplicate}`)
+    // The note sits in the footer that stays in view, beside the Apply it explains.
+    const note = await screen.findByText(`Model 3: ${en.modelIdDuplicate}`)
+    expect(editorFooter().contains(note)).toBe(true)
+    expect(editorFooter().className).toContain('editorFooterSticky')
     expect(mutate).not.toHaveBeenCalled()
   })
 
@@ -1084,7 +1119,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1122,7 +1156,6 @@ describe('ModelsSection', () => {
 
   it('keeps unreadable context-window text on screen and refuses the write', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1169,15 +1202,15 @@ describe('ModelsSection', () => {
       readOnly={false}
       onClose={() => {}}
     />)
-    fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(['user-only-model'])
+    expect(foldedModelIds()).toEqual(['user-only-model'])
 
     fireEvent.click(screen.getByText(en.resetModels))
 
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
+    // An inherited list has no state to name and nothing to restore.
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(screen.queryByText(en.resetModels)).toBeNull()
+    expect(foldedModelIds())
       .toEqual(base === undefined ? ['deepseek-v4-flash', 'deepseek-v4-pro'] : ['pinned-by-deployment'])
   })
 
@@ -1186,7 +1219,6 @@ describe('ModelsSection', () => {
     // the first, which then fell back to rendering its stored NaN as `NaN` —
     // losing the text the user was told they could still correct.
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1200,16 +1232,16 @@ describe('ModelsSection', () => {
 
   it('re-keys the typed text around a removed row', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     const windows = (): HTMLInputElement[] => capacityInputs(en.contextWindow)
     const removeRow = (at: number): void => {
       fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[at] as HTMLElement)
     }
-    // Three rows, with text parked on the outer two.
+    // Three rows, with text parked on the outer two. The added row has no ID
+    // yet and is already unfolded.
     fireEvent.click(screen.getByText(en.addModel))
     expandRow(1)
     expandRow(2)
-    expandRow(3)
+    expect(rowToggle(3).getAttribute('aria-expanded')).toBe('true')
     fireEvent.change(windows()[0] as HTMLInputElement, { target: { value: 'top text' } })
     fireEvent.blur(windows()[0] as HTMLInputElement)
     fireEvent.change(windows()[2] as HTMLInputElement, { target: { value: 'bottom text' } })
@@ -1236,7 +1268,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     const windows = capacityInputs(en.contextWindow)
     fireEvent.change(windows[0] as HTMLInputElement, { target: { value: 'garbage' } })
@@ -1259,7 +1290,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     // The profile's own cap is the placeholder both rows inherit.
@@ -1272,9 +1302,10 @@ describe('ModelsSection', () => {
     // Dropping the row above carries the cap text down with its own row.
     fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[0] as HTMLElement)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).value).toBe('64K')
-    // The disclosure closes on a second press.
-    expandRow(1)
+    // A second press folds the row back to its text.
+    fireEvent.click(rowToggle(1))
     expect(screen.queryByLabelText(`${en.maxTokens} 1`)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-pro'])
 
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -1291,14 +1322,14 @@ describe('ModelsSection', () => {
 
   it('settles a pasted id and refuses whitespace that would never match', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
-    const ids = screen.getAllByLabelText<HTMLInputElement>(new RegExp(en.modelId))
-    fireEvent.change(ids[0] as HTMLInputElement, { target: { value: '  deepseek-v4-flash  ' } })
-    fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    expandRow(1)
+    const id = screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`)
+    fireEvent.change(id, { target: { value: '  deepseek-v4-flash  ' } })
+    fireEvent.blur(id)
+    expect(id.value).toBe('deepseek-v4-flash')
     // A settled id needs no second trim.
-    fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    fireEvent.blur(id)
+    expect(id.value).toBe('deepseek-v4-flash')
 
     // An id that is only whitespace is as absent as an empty one, and a padded
     // id is a duplicate of its trimmed twin.
@@ -1318,8 +1349,13 @@ describe('ModelsSection', () => {
       onChange={vi.fn()}
       onReset={vi.fn()}
     />)
+    // A folded row without an ID reads as the field's own name, marked as a
+    // stand-in; pressing the text unfolds the row as its button does.
+    const unnamed = screen.getByText(en.modelId)
+    expect(unnamed.hasAttribute('data-unnamed')).toBe(true)
+    fireEvent.click(unnamed)
+    expect(rowToggle(1).getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('')
-    expandRow(1)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 1`).placeholder)
       .toBe(en.contextWindowPlaceholder)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).placeholder)
@@ -1330,15 +1366,17 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[0] as HTMLElement)
     fireEvent.click(screen.getByLabelText(new RegExp(en.removeModel)))
     expect(screen.getByText(en.modelsEmpty)).toBeTruthy()
+    expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
     fireEvent.click(screen.getByText(en.resetModels))
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
+    expect(screen.queryByText(en.modelsEmpty)).toBeNull()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
 
-    const names = screen.getAllByLabelText(new RegExp(en.modelName))
     expandRow(1)
+    const names = screen.getAllByLabelText(new RegExp(en.modelName))
     const windows = capacityInputs(en.contextWindow)
     fireEvent.change(names[0] as HTMLInputElement, { target: { value: '' } })
     fireEvent.change(windows[0] as HTMLInputElement, { target: { value: '' } })
@@ -1746,18 +1784,105 @@ describe('ModelsSection', () => {
     expect(screen.getByText<HTMLButtonElement>(en.add).disabled).toBe(true)
   })
 
-  it('toggles the row editor closed on a second edit click and on cancel', async () => {
+  it('makes an open row the editing surface under its own name, closed by its own cancel', async () => {
     const { mutate } = await mountSection()
-    const edit = screen.getByRole('button', { name: openaiCopy(en.editProvider) })
-    fireEvent.click(edit)
-    await waitFor(() => { expect(screen.queryAllByLabelText(en.keyInput).length).toBe(1) })
-    fireEvent.click(edit)
-    expect(screen.queryAllByLabelText(en.keyInput)).toHaveLength(0)
-    fireEvent.click(edit)
-    await waitFor(() => { expect(screen.queryAllByLabelText(en.keyInput).length).toBe(1) })
-    fireEvent.click(screen.getByText(en.cancel))
-    expect(screen.queryAllByLabelText(en.keyInput)).toHaveLength(0)
+    const row = screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }).closest('li')!
+    expect(row.className).not.toContain('rowCardOpen')
+    expect(within(row).queryByText('deepseek-official')).toBeNull()
+
+    fireEvent.click(within(row).getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    // The row head names the card and the route id its settings are stored
+    // under, so the editor adds no title of its own and the row no second Edit.
+    expect(row.className).toContain('rowCardOpen')
+    expect(within(row).getAllByText('DeepSeek')).toHaveLength(1)
+    expect(within(row).getByText('deepseek-official').className).toContain('editorRoute')
+    expect(within(row).getByLabelText(en.keyInput)).toBeTruthy()
+    expect(within(row).queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
+
+    fireEvent.click(within(row).getByText(en.cancel))
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(row.className).not.toContain('rowCardOpen')
+    expect(within(row).queryByText('deepseek-official')).toBeNull()
+    expect(within(row).getByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeTruthy()
     expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('names an open row once when its route id is its name, and keeps its remove action', async () => {
+    await mountSection()
+    const row = screen.getByRole('button', { name: openaiCopy(en.editProvider) }).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: openaiCopy(en.editProvider) }))
+    expect(within(row).getByLabelText(en.keyInput)).toBeTruthy()
+    expect(within(row).getAllByText('openai')).toHaveLength(1)
+    expect(within(row).queryByRole('button', { name: openaiCopy(en.editProvider) })).toBeNull()
+    expect(within(row).getByRole('button', { name: openaiCopy(en.removeProvider) })).toBeTruthy()
+  })
+
+  it('folds the model list and the advanced settings without discarding what they hold', async () => {
+    await mountDeepSeekCard()
+    const models = screen.getByRole('button', { name: en.models })
+    const advanced = screen.getByRole('button', { name: en.customized })
+    // The list starts in view. The advanced fields start folded: mounted, but
+    // out of reach of the pointer, the keyboard and assistive technology.
+    expect(models.getAttribute('aria-expanded')).toBe('true')
+    expect(advanced.getAttribute('aria-expanded')).toBe('false')
+    const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
+    expect(screen.queryByRole('textbox', { name: en.baseUrl })).toBeNull()
+
+    fireEvent.click(advanced)
+    expect(advanced.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('textbox', { name: en.baseUrl })).toBe(url)
+    fireEvent.change(url, { target: { value: 'https://kept.example' } })
+    fireEvent.click(advanced)
+    expect(advanced.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox', { name: en.baseUrl })).toBeNull()
+    expect(url.value).toBe('https://kept.example')
+
+    // An unfolded row and its typed text stay as they were under a folded list.
+    expandRow(1)
+    fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: 'half typed' } })
+    fireEvent.click(models)
+    expect(models.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox', { name: `${en.contextWindow} 1` })).toBeNull()
+    expect(screen.queryByRole('button', { name: en.addModel })).toBeNull()
+    fireEvent.click(models)
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: `${en.contextWindow} 1` }).value).toBe('half typed')
+    expect(screen.getByRole('button', { name: en.addModel })).toBeTruthy()
+  })
+
+  it('keeps the model list of the create card in view under a heading that does not fold', async () => {
+    await mountSection()
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
+    fireEvent.click(screen.getByRole('tab', { name: en.addCustom }))
+    const panel = within(screen.getByRole('tabpanel', { name: en.addCustom }))
+    const list = within(panel.getByRole('region', { name: en.models }))
+    expect(list.getByText(en.models)).toBeTruthy()
+    expect(list.queryByRole('button', { name: en.models })).toBeNull()
+    expect(list.getByRole('button', { name: en.addModel })).toBeTruthy()
+  })
+
+  it('seats the provider-card extension above the editor in the setup card and the add card', async () => {
+    const { view, controller, face } = await mountFirstRun()
+    view.unmount()
+    render(<ModelsSection
+      controller={controller}
+      useSnapshot={bindSnapshotSelector(controller.store)}
+      operations={operationsWith(face)}
+      schema={settingsSchema}
+      t={t}
+      renderSlot={name => name === 'settings.models.provider-card' ? <span data-testid="provider-card-seat" /> : null}
+    />)
+    const precedes = (first: Element, second: Element): boolean =>
+      (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+
+    const setupKey = screen.getByLabelText(en.keyInput)
+    expect(precedes(within(setupKey.closest('li')!).getByTestId('provider-card-seat'), setupKey)).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
+    const panel = within(screen.getByRole('tabpanel', { name: en.addCatalog }))
+    const seat = panel.getByTestId('provider-card-seat')
+    // Below the provider it describes, above the fields that edit it.
+    expect(precedes(panel.getByLabelText(en.provider), seat)).toBe(true)
+    expect(precedes(seat, panel.getByLabelText(en.keyInput))).toBe(true)
   })
 
   it('opens the add card on the catalog mode with both modes offered', async () => {
@@ -2043,10 +2168,10 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getAllByText(en.cancel)[0] as HTMLElement)
     // The add card kept its draft…
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
-    // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
+    // …and DeepSeek collapsed to an ordinary row that words its missing key.
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
-    expect(screen.getAllByRole('img', { name: en.credentialMissing })
-      .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
+    expect(screen.getAllByText(en.credentialMissing)
+      .some(mark => mark.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)

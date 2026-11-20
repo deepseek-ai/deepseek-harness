@@ -7,6 +7,7 @@
 
 import type { ReactNode } from 'react'
 import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { FoldSection } from './FoldSection.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
 import { useModelRows } from './useModelRows.ts'
@@ -195,27 +196,20 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   })
 
   return (
-    <section className={styles['modelCatalog']} aria-label={props.t('models')}>
-      <div className={styles['modelListHead']}>
-        <div className={styles['modelCatalogHeading']}>
-          <span className={styles['modelCatalogTitle']}>{props.t('models')}</span>
-          <span className={styles['modelCatalogMeta']}>
-            {props.overridden ? props.t('modelsCustomized') : props.t('modelsInherited')}
-          </span>
-        </div>
-        {props.overridden
-          ? (
-            <button
-              type="button"
-              className={styles['linkButton']}
-              disabled={props.disabled}
-              onClick={reset}
-            >
+    <FoldSection
+      title={props.t('models')}
+      defaultOpen
+      status={props.overridden
+        ? (
+          <>
+            <span className={styles['foldMeta']}>{props.t('modelsCustomized')}</span>
+            <button type="button" className={styles['textAction']} disabled={props.disabled} onClick={reset}>
               {props.t('resetModels')}
             </button>
-          )
-          : null}
-      </div>
+          </>
+        )
+        : undefined}
+    >
       <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
         {props.models.length === 0 ? <p className={styles['modelEmpty']}>{props.t('modelsEmpty')}</p> : null}
         {rowState.rows.map(({ model, key, expanded, order }, index) => (
@@ -251,6 +245,6 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
         <IconPlusOutlineRegular size={14} />
         {props.t('addModel')}
       </button>
-    </section>
+    </FoldSection>
   )
 }

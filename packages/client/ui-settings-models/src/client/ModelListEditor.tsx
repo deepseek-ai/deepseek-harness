@@ -26,6 +26,7 @@ import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import { FoldSection } from './FoldSection.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
 import { useModelRows } from './useModelRows.ts'
@@ -86,6 +87,8 @@ export interface ModelListEditorProps {
   defaultInput?: readonly string[] | undefined
   /** Whether the user layer currently owns the whole array; absent on a create. */
   overridden?: boolean
+  /** Whether the heading folds the list; a card that requires a model passes `false`. */
+  collapsible?: boolean
   /** Replace the drafted rows. */
   onChange: (models: ModelDraft[]) => void
   /** Remove the user-owned array and return to inheritance; absent on a create. */
@@ -310,33 +313,29 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   // draft with neither has nothing to ask about.
   const askable = probe.provider !== undefined || (probe.baseURL !== undefined && probe.baseURL.length > 0)
   return (
-    <section className={styles['modelCatalog']} aria-label={t('models')}>
-      <div className={styles['modelListHead']}>
-        <div className={styles['modelCatalogHeading']}>
-          <span className={styles['modelCatalogTitle']}>{t('models')}</span>
-          {props.overridden === undefined
-            ? null
-            : (
-              <span className={styles['modelCatalogMeta']}>
-                {props.overridden ? t('modelsCustomized') : t('modelsInherited')}
-              </span>
-            )}
-        </div>
-        {props.overridden === true && props.onReset !== undefined
-          ? (
+    <FoldSection
+      title={t('models')}
+      defaultOpen
+      {...props.collapsible === false ? { collapsible: false } : {}}
+      status={props.overridden === true && props.onReset !== undefined
+        ? (
+          <>
+            <span className={styles['foldMeta']}>{t('modelsCustomized')}</span>
             <button
               type="button"
-              className={styles['linkButton']}
+              className={styles['textAction']}
               disabled={disabled}
               onClick={() => { rowState.reset(); props.onReset?.() }}
             >
               {t('resetModels')}
             </button>
-          )
-          : null}
-        <button
-          type="button"
-          className={styles['linkButton']}
+          </>
+        )
+        : undefined}
+      actions={(
+        <Button
+          variant="outline"
+          size="sm"
           disabled={disabled || busy || !askable || props.probeBlocked !== undefined}
           title={props.probeBlocked !== undefined
             ? t(props.probeBlocked)
@@ -344,9 +343,15 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           onClick={() => { void fetchModels() }}
         >
           {busy ? t('fetching') : t('fetchModels')}
-        </button>
-      </div>
-      {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
+        </Button>
+      )}
+    >
+      {/* An installed catalog route with no list of its own serves the whole
+          catalog; a route the adapter does not ship has nothing to inherit,
+          and its card names the missing model beside its actions. */}
+      {models.length === 0 && catalogProvider !== undefined
+        ? <p className={styles['modelEmpty']}>{t('modelsInherited')}</p>
+        : null}
       <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
         {rowState.rows.map(({ model, key, expanded, order }, index) => (
           <ModelRow
@@ -453,6 +458,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             </ul>
           )}
       </Modal>
-    </section>
+    </FoldSection>
   )
 }

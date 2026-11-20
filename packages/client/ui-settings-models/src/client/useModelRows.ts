@@ -1,4 +1,4 @@
-/** Local model-row identities, disclosures, capacity text, and draft ordering. */
+/** Local model-row identities, disclosures, capacity text, and drag ordering. */
 
 import { useRef, useState } from 'react'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
@@ -22,7 +22,6 @@ export interface ModelRowOrder {
   onOver: (half: 'before' | 'after') => void
   onLeave: () => void
   onDrop: (half: 'before' | 'after') => void
-  onMove: (offset: -1 | 1) => void
 }
 
 interface ModelRows {
@@ -34,12 +33,19 @@ interface ModelRows {
 }
 
 /** One editor-local identity; editing a model ID never replaces its controls. */
-function createRow(key: number): RowState {
-  return { key, expanded: false, editing: new Map() }
+function createRow(key: number, expanded = false): RowState {
+  return { key, expanded, editing: new Map() }
+}
+
+/** Whether a draft row has no model ID yet, which only its unfolded fields can supply. */
+function unnamed(model: DeepSeekModelDraft): boolean {
+  const id = model['id']
+  return typeof id !== 'string' || id.length === 0
 }
 
 /**
- * Keep row state with its model through draft moves and removals.
+ * Keep row state with its model through draft moves and removals. A row that
+ * joins the draft without a model ID starts unfolded; every other row starts folded.
  * @param models - current draft array, owned by the provider card.
  * @param onChange - replaces only that card's draft array.
  * @param disabled - prevents reordering while the card cannot be edited.
@@ -52,13 +58,13 @@ export function useModelRows(
   const [stored, setRows] = useState(() => models.map(() => createRow(nextKey.current++)))
   const [dragged, setDragged] = useState<number>()
   const [target, setTarget] = useState<{ key: number; half: 'before' | 'after' }>()
-  const entries = models.map((model, index) => ({ model, state: stored[index] ?? createRow(nextKey.current++) }))
+  const entries = models.map((model, index) => ({ model, state: stored[index] ?? createRow(nextKey.current++, unnamed(model)) }))
   const rows = entries.map(entry => entry.state)
   if (stored.length !== models.length) setRows(rows)
 
   const endDrag = (): void => { setDragged(undefined); setTarget(undefined) }
   const move = (from: number, to: number): void => {
-    if (disabled || from === to || from < 0 || to < 0 || to >= models.length) return
+    if (disabled || from === to || from < 0) return
     const order = [...entries]
     const moved = order.splice(from, 1)
     order.splice(to, 0, ...moved)
@@ -86,7 +92,6 @@ export function useModelRows(
           move(from, insertion > from ? insertion - 1 : insertion)
           endDrag()
         },
-        onMove: (offset: -1 | 1): void => { move(index, index + offset) },
       },
     })),
     toggle: (index: number): void => {

@@ -223,14 +223,25 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   return { ...scripted, controller }
 }
 
-/** Open the editor of one configured row and expand its customized fold. */
-function openEditor(provider: string): void {
+/** Unfold every folded model row, so its fields are on the page. */
+function unfoldModels(): void {
+  for (const toggle of screen.queryAllByRole('button', { name: new RegExp(`^${en.modelAdvanced} \\d+$`) })) {
+    if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle)
+  }
+}
+
+/** Open the editor of one configured row as it first appears: advanced settings and stored model rows folded. */
+function openRow(provider: string): void {
   const row = screen.getByText(provider).closest('li')
   if (row === null) throw new Error(`no row for ${provider}`)
   fireEvent.click(within_(row, en.edit))
-  const summary = document.querySelector('summary')
-  if (summary === null) throw new Error('no customized fold')
-  fireEvent.click(summary)
+}
+
+/** Open the editor of one configured row with its advanced fold and every model row unfolded. */
+function openEditor(provider: string): void {
+  openRow(provider)
+  fireEvent.click(screen.getByRole('button', { name: en.customized }))
+  unfoldModels()
 }
 
 /** Open the add card from the section and switch it to the custom-API mode. */
@@ -239,9 +250,31 @@ function openCustomMode(): void {
   fireEvent.click(screen.getByRole('tab', { name: en.addCustom }))
 }
 
-/** Open one model row's advanced fold, where the capacities live. */
+/** Unfold one model row, where its fields live; a row that is already unfolded stays so. */
 function expandModel(index: number): void {
-  fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${index}`))
+  const toggle = screen.getByLabelText(`${en.modelAdvanced} ${index}`)
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle)
+}
+
+/** The row of one model, folded or unfolded. */
+function modelRow(index: number): HTMLElement {
+  const row = screen.getByLabelText(`${en.modelAdvanced} ${index}`).closest<HTMLElement>('[data-row-key]')
+  if (row === null) throw new Error(`no model row ${index}`)
+  return row
+}
+
+/** The labels of the fields on the page, in document order, leaving out those inside a folded section. */
+function shownFields(): (string | null)[] {
+  return [...document.querySelectorAll('input,select')]
+    .filter(el => el.closest('[hidden]') === null)
+    .map(el => el.getAttribute('aria-label'))
+}
+
+/** The notes-and-actions row holding the button `label`. */
+function footerOf(label: string): HTMLElement {
+  const footer = buttonNamed(label).closest<HTMLElement>('[class*="editorFooter"]')
+  if (footer === null) throw new Error(`"${label}" is outside a footer`)
+  return footer
 }
 
 /** The button carrying `label`, typed so its disabled/title state is readable. */
@@ -338,7 +371,8 @@ describe('model list editing', () => {
 
     // The create card refuses this in place; an edited route must not have to
     // learn it from the host's refusal instead.
-    expect(screen.getByText(`${en.model} 2: ${en.modelIdDuplicate}`)).toBeTruthy()
+    // The reason sits beside the action it disables.
+    expect(footerOf(en.apply).contains(screen.getByText(`${en.model} 2: ${en.modelIdDuplicate}`))).toBe(true)
     expect(buttonNamed(en.apply).disabled).toBe(true)
     expect(mutate).not.toHaveBeenCalled()
   })
@@ -430,7 +464,58 @@ describe('model list editing', () => {
     // The user layer names no models, so the list belongs to the adapter and
     // says so; taking it over is an explicit act, not a side effect of opening.
     expect(screen.getByText(en.modelsInherited)).toBeTruthy()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
     expect(screen.queryByText(en.resetModels)).toBeNull()
+
+    // A first row makes the list the user's, which the heading row then states
+    // beside the action that hands it back.
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expect(screen.queryByText(en.modelsInherited)).toBeNull()
+    expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.resetModels }))
+    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+  })
+
+  it('says nothing under the empty list of a route with no catalog to inherit', async () => {
+    await mountSection({
+      providers: { 'acme-gateway': { api: 'openai-completions', baseURL: 'https://gateway.acme.example/v1' } },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    expect(screen.getByRole('button', { name: en.addModel })).toBeTruthy()
+    expect(screen.queryByText(en.modelsInherited)).toBeNull()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+  })
+
+  it('opens with the model list in view and the advanced settings folded', async () => {
+    await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept' }] } },
+    })
+    openRow('openai')
+
+    const models = screen.getByRole('button', { name: en.models })
+    const advanced = screen.getByRole('button', { name: en.customized })
+    expect(models.getAttribute('aria-expanded')).toBe('true')
+    expect(advanced.getAttribute('aria-expanded')).toBe('false')
+    expect(shownFields()).toEqual([en.keyInput])
+    expect(screen.queryByRole('textbox', { name: en.baseUrl })).toBeNull()
+
+    fireEvent.click(advanced)
+    expect(advanced.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: en.baseUrl }).value).toBe('https://proxy.example/v1')
+
+    // Folding the list hides its rows and keeps the heading row's actions; an
+    // unfolded row is still unfolded when the list comes back.
+    expandModel(1)
+    fireEvent.click(models)
+    expect(models.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: en.addModel })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: `${en.modelId} 1` })).toBeNull()
+    expect(screen.getByRole('button', { name: en.fetchModels })).toBeTruthy()
+    fireEvent.click(models)
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: `${en.modelId} 1` }).value).toBe('kept')
   })
 
 
@@ -443,18 +528,19 @@ describe('model list editing', () => {
         },
       },
     })
-    openEditor('openai')
+    openRow('openai')
 
     // Expansion is keyed by position, so removing an earlier row shifts the
     // rest down; without reindexing, row 3 would inherit row 2's open state.
     expandModel(2)
     fireEvent.click(screen.getByLabelText(`${en.removeModel} 1`))
 
-    // 'second' now sits at position 1 and keeps its capacities open; 'third'
+    // 'second' now sits at position 1 and keeps its fields open; 'third'
     // moved to position 2 and stays folded.
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('second')
     expect(screen.queryByLabelText(`${en.contextWindow} 1`)).not.toBeNull()
-    expect(screen.queryByLabelText(`${en.contextWindow} 2`)).toBeNull()
+    expect(modelRow(2).textContent).toBe('third')
+    expect(modelRow(2).querySelector('input')).toBeNull()
   })
 
   it('leaves an earlier row expanded and forgets the removed row\u2019s own state', async () => {
@@ -466,7 +552,7 @@ describe('model list editing', () => {
         },
       },
     })
-    openEditor('openai')
+    openRow('openai')
 
     // A row before the removal keeps its own position and stays open.
     expandModel(1)
@@ -477,8 +563,8 @@ describe('model list editing', () => {
     // Removing the expanded row itself drops that state rather than handing it
     // to whichever row slides into the position.
     fireEvent.click(screen.getByLabelText(`${en.removeModel} 1`))
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('third')
-    expect(screen.queryByLabelText(`${en.contextWindow} 1`)).toBeNull()
+    expect(modelRow(1).textContent).toBe('third')
+    expect(modelRow(1).querySelector('input')).toBeNull()
   })
 
   it('separates emptying the list from restoring the adapter defaults', async () => {
@@ -635,16 +721,19 @@ describe('endpoint interrogation', () => {
     openEditor('openai')
 
     fireEvent.click(screen.getByText(en.fetchModels))
-    await screen.findByText(en.fetchTitle)
+    const dialog = await screen.findByRole('dialog')
     expect(screen.queryByRole('checkbox', { name: 'Fresh' })).toBeNull()
-    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     expect(boxes.map(box => box.checked)).toEqual([true, false])
     fireEvent.click(screen.getByRole<HTMLInputElement>('checkbox', { name: 'fresh' }))
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
+    // An adopted model joins the list folded, named by its ID and display name.
+    expect(modelRow(2).textContent).toBe('freshFresh')
+    expect(modelRow(2).querySelector('input')).toBeNull()
+    expandModel(2)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelName} 2`).value).toBe('Fresh')
-    expandModel(2)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 2`).value).toBe('4096')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 2`).value).toBe('2048')
 
@@ -695,7 +784,7 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'b' } })
     await act(async () => { reply.resolve(ok([{ id: 'a' }, { id: 'b' }, { id: 'c' }])) })
-    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const boxes = [...screen.getByRole('dialog').querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     expect(boxes.map(box => box.checked)).toEqual([true, true, false])
     fireEvent.click(screen.getByText(en.fetchAdopt))
     fireEvent.click(screen.getByText(en.apply))
@@ -724,8 +813,8 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'c' }))
     expect(adopt.disabled).toBe(false)
     fireEvent.click(adopt)
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('c')
-    expect(screen.queryByLabelText(`${en.modelId} 2`)).toBeNull()
+    expect(modelRow(1).textContent).toBe('c')
+    expect(screen.queryByLabelText(`${en.modelAdvanced} 2`)).toBeNull()
   })
 
   it('lists a repeated candidate id once and starts it checked beside a blank row', async () => {
@@ -738,9 +827,10 @@ describe('endpoint interrogation', () => {
     await screen.findByText(en.fetchTitle)
     expect(screen.getAllByRole<HTMLInputElement>('checkbox', { name: 'x' }).map(box => box.checked)).toEqual([true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
+    // The blank row keeps its fields open; the adopted model joins it folded.
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('')
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('x')
-    expect(screen.queryByLabelText(`${en.modelId} 3`)).toBeNull()
+    expect(modelRow(2).textContent).toBe('x')
+    expect(screen.queryByLabelText(`${en.modelAdvanced} 3`)).toBeNull()
   })
 
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
@@ -803,18 +893,55 @@ describe('endpoint interrogation', () => {
     })
   })
 
-  it('folds a row\u2019s capacities away until they are asked for', async () => {
+  it('shows a stored row as text until its fields are asked for', async () => {
     await mountSection({
-      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'only' }] } },
+      providers: {
+        openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'only', name: 'Only model' }, { id: 'bare' }] },
+      },
     })
-    openEditor('openai')
+    openRow('openai')
 
-    // The row shows what identifies a model; capacities are the exception.
-    expect(screen.queryByLabelText(`${en.contextWindow} 1`)).toBeNull()
-    expandModel(1)
+    // A folded row names its model and carries no field; a model without a
+    // display name is named by its ID alone.
+    const toggle = screen.getByLabelText(`${en.modelAdvanced} 1`)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(modelRow(1).textContent).toBe('onlyOnly model')
+    expect(modelRow(2).textContent).toBe('bare')
+    expect(screen.getByRole('region', { name: en.models }).querySelector('input')).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('only')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelName} 1`).value).toBe('Only model')
     expect(screen.getByLabelText(`${en.contextWindow} 1`)).toBeTruthy()
-    expandModel(1)
-    expect(screen.queryByLabelText(`${en.contextWindow} 1`)).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(modelRow(1).querySelector('input')).toBeNull()
+
+    // The text unfolds the row too.
+    fireEvent.click(screen.getByText('Only model'))
+    expect(screen.getByLabelText(`${en.contextWindow} 1`)).toBeTruthy()
+    expect(modelRow(2).querySelector('input')).toBeNull()
+  })
+
+  it('unfolds a newly added row and leaves the stored rows folded', async () => {
+    await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept' }] } },
+    })
+    openRow('openai')
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+
+    // A row without a model ID has nothing to show as text, so its fields open.
+    expect(screen.getByLabelText(`${en.modelAdvanced} 2`).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('')
+    expect(screen.getByLabelText(`${en.contextWindow} 2`)).toBeTruthy()
+    expect(modelRow(1).textContent).toBe('kept')
+    expect(modelRow(1).querySelector('input')).toBeNull()
+
+    // Naming the model does not fold the row being typed in.
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'fresh' } })
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
   })
 
   it('closes the picker without adopting anything on cancel', async () => {
@@ -1030,20 +1157,18 @@ describe('hand-declared providers', () => {
     // control could only be set to a value some of them reject — which would
     // take the whole provider out of the picker. The composer's model picker
     // owns the choice, and a switch there records provider+model+effort together.
-    const fields = () => [...document.querySelectorAll('input,select')]
-      .map(el => el.getAttribute('aria-label')).filter(Boolean)
-
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.keyInput])
+    // The two names of the route come first, then the protocol beside the
+    // endpoint whose example it decides.
+    expect(shownFields()).toEqual([en.customRoute, en.customDisplayName, en.customApi, en.baseUrl, en.keyInput])
     cleanup()
 
     // A shipped route's models each carry their own protocol, so its editor
     // offers no route-level protocol to override them with.
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
-    fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl])
+    expect(shownFields()).toEqual([en.keyInput, en.baseUrl])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -1053,7 +1178,7 @@ describe('hand-declared providers', () => {
       declaredRoutes: ['acme-gateway'],
     })
     openEditor('acme-gateway')
-    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
+    expect(shownFields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
   })
 
   it('requires a key before a keyless declared route switches to the Gemini protocol', async () => {
@@ -1434,10 +1559,11 @@ describe('hand-declared providers', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
 
-    // Endpoint first: the gate names the one thing standing in the way.
-    expect(screen.getByText(en.customNeedsBaseUrl)).toBeTruthy()
+    // Endpoint first: the gate names the one thing standing in the way,
+    // beside the action it blocks.
+    expect(footerOf(en.create).contains(screen.getByText(en.customNeedsBaseUrl))).toBe(true)
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
-    expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
+    expect(footerOf(en.create).contains(screen.getByText(en.customNeedsModels))).toBe(true)
 
     // Satisfied: the shared line disappears rather than rendering empty.
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
@@ -1445,6 +1571,21 @@ describe('hand-declared providers', () => {
     expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
     expect(buttonNamed(en.create).disabled).toBe(false)
+  })
+
+  it('keeps the required model list in view and leaves the missing model to the line beside the actions', () => {
+    mountCard()
+
+    // A provider cannot be created without a model, so the heading does not fold the list.
+    const models = screen.getByRole('region', { name: en.models })
+    expect(screen.queryByRole('button', { name: en.models })).toBeNull()
+    expect(within(models).getByRole('button', { name: en.addModel })).toBeTruthy()
+    expect(within(models).getByRole('button', { name: en.fetchModels })).toBeTruthy()
+
+    // The empty list has no catalog to fall back on and no owner to restore.
+    expect(models.querySelector('p')).toBeNull()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(screen.queryByText(en.resetModels)).toBeNull()
   })
 
   it('refuses to create while a capacity is unreadable', () => {
@@ -1696,8 +1837,8 @@ describe('hand-declared providers', () => {
   it('offers a Gemini model only the levels the protocol accepts', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
+    // The row just added is unfolded, so its reasoning control is on the page.
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
     fireEvent.click(screen.getByRole('switch', { name: `${en.modelReasoning} 1` }))
 
     const level = screen.getByRole<HTMLSelectElement>('combobox', { name: `${en.modelReasoningLevel} 1` })

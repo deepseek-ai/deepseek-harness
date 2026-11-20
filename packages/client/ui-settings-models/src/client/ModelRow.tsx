@@ -1,9 +1,12 @@
-/** Shared model fields and actions for both adapter catalog editors. */
+/**
+ * One model of either adapter catalog editor. A folded row is a line of text
+ * that names the model and is the drag source for reordering; unfolding it
+ * replaces the text with the fields, and an unfolded row is not dragged.
+ */
 
 import type { DragEvent, ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragHandleOutlineRegular,
-  IconTrashOutlineRegular, Tooltip, useRowDragPreview,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconTrashOutlineRegular, useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
@@ -50,14 +53,22 @@ function rowHalf(event: DragEvent<HTMLElement>): 'before' | 'after' {
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+/** A row's text field, or the empty string while unset or not a string. */
+function textOf(model: DeepSeekModelDraft, field: 'id' | 'name'): string {
+  const value = model[field]
+  return typeof value === 'string' ? value : ''
+}
+
 /**
- * Render model fields with the display name in the expanded area of narrow rows.
+ * Render one model row, folded or unfolded.
  * @param props - drafted fields and their owning editor's actions.
  * @returns one expandable model entry.
  */
 export function ModelRow(props: ModelRowProps): ReactNode {
   const { model, position, t, disabled } = props
   const preview = useRowDragPreview(styles['modelDragPreview'] as string)
+  // Only a folded row moves: its text carries no caret or selection for a drag to interrupt.
+  const draggable = !props.expanded && !disabled
   const modelField = (field: 'id' | 'name') => (
     <label className={`${styles['modelField']} ${field === 'name' ? styles['modelName'] : ''}`}>
       {field === 'name'
@@ -66,11 +77,10 @@ export function ModelRow(props: ModelRowProps): ReactNode {
       <input
         className={styles['input']}
         type="text"
-        value={typeof model[field] === 'string' ? model[field] : ''}
+        value={textOf(model, field)}
         placeholder={t(field === 'id' ? 'modelId' : 'modelName')}
         aria-label={`${t(field === 'id' ? 'modelId' : 'modelName')} ${String(position)}`}
         disabled={disabled}
-        onFocus={field === 'name' && !props.expanded ? props.onToggle : undefined}
         onChange={(event) => {
           const value = event.target.value
           props.onFieldChange(field, field === 'name' && value === '' ? undefined : value)
@@ -79,12 +89,24 @@ export function ModelRow(props: ModelRowProps): ReactNode {
       />
     </label>
   )
+  const id = textOf(model, 'id')
+  const name = textOf(model, 'name')
   return (
     <div
       className={styles['modelEntry']}
       data-row-key={props.rowKey}
       data-dragging={props.order.dragging || undefined}
       data-drop-target={props.order.dragging ? undefined : props.order.target}
+      draggable={draggable || undefined}
+      onDragStart={draggable
+        ? (event) => {
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('application/x-dsh-model-order', String(position))
+          props.order.onStart()
+          preview.start(event)
+        }
+        : undefined}
+      onDragEnd={() => { if (preview.clear()) props.order.onEnd() }}
       onDragOver={(event) => {
         if (!props.order.canDrop) return
         event.preventDefault()
@@ -102,33 +124,23 @@ export function ModelRow(props: ModelRowProps): ReactNode {
       }}
     >
       <div className={styles['modelRow']} data-expanded={props.expanded || undefined}>
-        <Tooltip label={t('reorderModelHelp')} portal>
-          <button
-            type="button"
-            className={`${styles['iconButton']} ${styles['modelDragHandle']}`}
-            aria-label={`${t('reorderModel')} ${String(position)}`}
-            aria-keyshortcuts="ArrowUp ArrowDown"
-            aria-description={t('reorderModelHelp')}
-            disabled={disabled}
-            draggable={!disabled}
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData('application/x-dsh-model-order', String(position))
-              props.order.onStart()
-              preview.start(event, event.currentTarget.closest('[data-row-key]') as HTMLElement)
-            }}
-            onDragEnd={() => { if (preview.clear()) props.order.onEnd() }}
-            onKeyDown={(event) => {
-              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-              event.preventDefault()
-              event.stopPropagation()
-              props.order.onMove(event.key === 'ArrowUp' ? -1 : 1)
-            }}
-          >
-            <IconDragHandleOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        {modelField('id')}
+        {props.expanded
+          ? (
+            <>
+              {modelField('id')}
+              {modelField('name')}
+            </>
+          )
+          : (
+            // A pointer shortcut for the button beside it, which is the control
+            // keyboards and assistive technology unfold the row through.
+            <div className={styles['modelSummary']} onClick={props.onToggle}>
+              <span className={styles['modelSummaryId']} data-unnamed={id.length === 0 || undefined}>
+                {id.length === 0 ? t('modelId') : id}
+              </span>
+              {name.length === 0 ? null : <span className={styles['modelSummaryName']}>{name}</span>}
+            </div>
+          )}
         <button
           type="button"
           className={styles['iconButton']}
@@ -149,7 +161,6 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         >
           <IconTrashOutlineRegular size={14} />
         </button>
-        {modelField('name')}
         {props.expanded
           ? (
             <div className={styles['modelAdvanced']}>

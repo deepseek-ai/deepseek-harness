@@ -59,7 +59,8 @@ function piAiNamespace(): SettingsNamespaceView {
   }
 }
 
-function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
+/** Render the editor as it first appears, with its advanced settings folded. */
+function mount(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   const writeSettings = vi.fn<ModelsOperations['writeSettings']>(() => Promise.resolve({ kind: 'written', view: namespace }))
   const operations: ModelsOperations = {
     storeCredential: vi.fn(() => Promise.resolve(undefined)),
@@ -71,6 +72,13 @@ function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   render(<ProviderEditor provider="route" displayName="Route" namespace={namespace} schema={settingsSchema}
     settingsPath={settingsPath} operations={operations} t={key => en[key]} readOnly={false} onClose={onClose} />)
   return { writeSettings, onClose }
+}
+
+/** Render the editor and unfold its advanced settings, where the retry fields live. */
+function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
+  const mounted = mount(namespace, settingsPath)
+  fireEvent.click(screen.getByRole('button', { name: en.customized }))
+  return mounted
 }
 
 const mode = () => screen.getByRole<HTMLSelectElement>('combobox', { name: en.retryPolicy })
@@ -143,13 +151,25 @@ describe('retry policy fields', () => {
     expect(apply().disabled).toBe(false)
   })
 
-  it('explains a refused stored policy beside the fields, or outside the fold while it is closed', async () => {
-    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } }))
+  it('explains a refused stored policy beside the actions while the fold is closed, and beside the fields once it opens', () => {
+    mount(deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } }))
+    const failure = () => document.getElementById('route-retry-failure')
+    const advanced = screen.getByRole('region', { name: en.customized })
+    const footer = apply().closest('[class*="editorFooter"]')
+
+    // The fields are folded away, so the reason Apply is disabled sits next to it.
     expect(apply().disabled).toBe(true)
+    expect(screen.queryByRole('combobox', { name: en.retryPolicy })).toBeNull()
+    expect(failure()?.textContent).not.toBe('')
+    expect(footer?.contains(failure())).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: en.customized }))
     expect(mode().getAttribute('aria-describedby')).toBe('route-retry-failure')
-    expect(document.getElementById('route-retry-failure')?.closest('details')).toBeNull()
-    fireEvent.click(screen.getByText(en.customized))
-    await waitFor(() => { expect(document.getElementById('route-retry-failure')?.closest('details')).not.toBeNull() })
+    expect(advanced.contains(failure())).toBe(true)
+    expect(footer?.contains(failure())).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: en.customized }))
+    expect(footer?.contains(failure())).toBe(true)
   })
 
   it.each([
@@ -234,7 +254,10 @@ describe('retry policy fields', () => {
 
   it('offers no retry fields on a namespace without a curated editor', () => {
     const namespace = deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } })
-    setup({ ...namespace, ns: 'llm-plain' })
+    mount({ ...namespace, ns: 'llm-plain' })
+    // Such a card has no advanced settings to unfold, only the pointer to `cordis.patch.yml`.
+    expect(screen.getByText(`${en.advancedHint} (llm-plain)`)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: en.customized })).toBeNull()
     expect(screen.queryByRole('group', { name: en.retryPolicy })).toBeNull()
     expect(document.getElementById('route-retry-failure')).toBeNull()
   })
