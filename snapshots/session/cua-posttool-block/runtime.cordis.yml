@@ -3,9 +3,8 @@
     - id: computer-use
       name: '@deepseek-ai/dsh-computer-use'
     - id: cua-run-code-fixture
-      name: '../cua-run-code/provider.mjs'
+      name: './provider.mjs'
       config:
-        confirmReleaseAtTurnEnd: true
         allowedApps:
           - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             name: Fixture
