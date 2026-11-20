@@ -11,8 +11,6 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
@@ -23,12 +21,9 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
 import { expectNoRenderContext } from './fixtures/real-office.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-interface ToolCall { tool: string; args: Record<string, unknown> }
-
 const contexts: Context[] = []
 /** The `office` skill's advertised resource directory. */
 const resourceBase = fileURLToPath(new URL('../assets/office/', import.meta.url)).replace(/[\\/]$/u, '').split(sep).join('/')
-const office: ToolCall = { tool: 'skill', args: { name: 'office' } }
 afterEach(async () => { for (const ctx of contexts.splice(0)) await ctx.fiber.dispose() })
 
 class SkillProgram extends PtcRuntime {
@@ -36,14 +31,13 @@ class SkillProgram extends PtcRuntime {
   readonly isolation = 'fixture'
   resolve(request: PtcRunRequest): PtcRunSpec { return { ...request, cwd: process.cwd(), timeoutMs: 120_000 } }
   async run(request: PtcRunSpec) {
-    const { tool, args } = JSON.parse(request.program) as ToolCall
-    const resolved = await request.bindings[0]!.functions[tool]!(args)
+    const resolved = await request.bindings[0]!.functions.skill!({ name: request.program })
     const value = resolved instanceof PtcInspectableValue ? resolved.value : resolved
     return { output: [{ type: 'text' as const, text: JSON.stringify(value) }] }
   }
 }
 
-async function setup(mode: 'native' | 'ptc', calls: ToolCall[]) {
+async function setup(mode: 'native' | 'ptc', skills: string[]) {
   const ctx = new Context()
   contexts.push(ctx)
   provideWorkingDirectoryFixture(ctx)
@@ -57,14 +51,12 @@ async function setup(mode: 'native' | 'ptc', calls: ToolCall[]) {
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ToolSkill)
-  await ctx.plugin(LocalFileSystem, { cwd: '/' })
-  await ctx.plugin(ToolFs)
   await ctx.plugin(SkillOffice)
   if (mode === 'ptc') await ctx.plugin(SkillProgram)
   const adapter = new MockAdapter([
-    ...calls.map((call, index) => mode === 'native'
-      ? toolCallResponse(`call-${index}`, call.tool, call.args)
-      : toolCallResponse(`call-${index}`, 'run_code', { code: JSON.stringify(call), description: 'Load task instructions' })),
+    ...skills.map((name, index) => mode === 'native'
+      ? toolCallResponse(`call-${index}`, 'skill', { name })
+      : toolCallResponse(`call-${index}`, 'run_code', { code: name, description: 'Load task instructions' })),
     textResponse('Done.'), textResponse('Continued.'), textResponse('Fork continued.'),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -78,7 +70,7 @@ async function send(agent: Agent, text = 'Continue the task'): Promise<void> {
 }
 
 it.each(['native', 'ptc'] as const)('loads the office skill in %s; resume and fork retain its instructions', async (mode) => {
-  const { ctx, agent, adapter } = await setup(mode, [office])
+  const { ctx, agent, adapter } = await setup(mode, ['office'])
   await send(agent, 'Edit the Word document text.')
   expect(adapter.requests).toHaveLength(2)
   const requests = adapter.requests.map(request => JSON.stringify(request))
@@ -108,7 +100,7 @@ it.each(['native', 'ptc'] as const)('loads the office skill in %s; resume and fo
 })
 
 it('routes standalone operations to dedicated Office tools', async () => {
-  const { agent, adapter } = await setup('native', [office])
+  const { agent, adapter } = await setup('native', ['office'])
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
   expect(loaded).toContain('# Office tasks')
@@ -127,7 +119,7 @@ it('injects an explicitly invoked office skill into the first request', async ()
 })
 
 it.each(['native', 'ptc'] as const)('accepts loaded instructions without a render call as a non-rendering context in %s', async (mode) => {
-  const { agent } = await setup(mode, [office])
+  const { agent } = await setup(mode, ['office'])
   await send(agent, 'Edit the Office files without visual inspection.')
   const events = agent.session.snapshotEvents()
   expect(JSON.stringify(events)).toContain('# Office tasks')
