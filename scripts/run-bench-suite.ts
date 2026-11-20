@@ -1,5 +1,6 @@
 /** Run the benchmark suite in the two phases its measurements tolerate. */
 import { resolve } from 'node:path'
+import type { BenchPhase, BenchReportPhase } from './bench-phase.ts'
 import { runPnpmCommand } from './compile-referenced-projects.ts'
 
 /**
@@ -26,12 +27,14 @@ const CONFIG = ['--config', 'vitest.bench.config.ts'] as const
 /**
  * Run one phase of the suite.
  * @param root - Repository root containing the Vitest configuration.
- * @param phase - `first` clears the report and runs the CPU cases two at a time;
- *   `last` runs the browser cases one at a time and renders the report.
+ * @param phase - `first` runs the CPU cases two at a time; `last` runs the
+ *   browser cases one at a time.
+ * @param reportPhase - report ownership: by default `first` clears the report and
+ *   `last` renders it; `all` lets a phase that runs alone on its runner do both.
  * @throws If the phase fails.
  */
-export function runBenchPhase(root: string, phase: 'first' | 'last'): void {
-  process.env.DSH_BENCH_REPORT_PHASE = phase
+export function runBenchPhase(root: string, phase: BenchPhase, reportPhase: BenchReportPhase = phase): void {
+  process.env.DSH_BENCH_REPORT_PHASE = reportPhase
   try {
     if (phase === 'first') {
       runPnpmCommand(root, [

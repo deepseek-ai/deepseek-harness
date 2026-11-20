@@ -214,7 +214,7 @@ if (pluginName === 'ui-attachment') { /* business branch inside the manager */ }
 pnpm run test:bench
 ```
 
-包内诊断留在包旁边、用 `.perf.ts` 后缀，不进 `test:bench`。CI 门禁是 `pnpm run check:ci:bench`（作业 `node 24 / benchmarks`），产出 scaled report——该门禁只是**报警**，不是通过依据：出现退化时重跑对应场景并本地分段 profile，定位是哪一段变慢、哪次变更引入。内存留存类结论用 `pnpm run test:bench:memory 4g|8g`，它会在无 swap 的 cgroup 里以不变预算重跑其列出的文件。
+包内诊断留在包旁边、用 `.perf.ts` 后缀，不进 `test:bench`。CI 门禁是两个阶段作业 `node 24 / benchmarks 1/2` 与 `2/2`（`pnpm run check:ci:bench-prebuilt`），由 `node 24 / benchmark report` 汇总两者产出 scaled report——该门禁只是**报警**，不是通过依据：出现退化时重跑对应场景并本地分段 profile，定位是哪一段变慢、哪次变更引入。内存留存类结论用 `pnpm run test:bench:memory 4g|8g`，它会在无 swap 的 cgroup 里以不变预算重跑其列出的文件。
 
 边界：不触碰运行路径的改动——注释、文档、仅测试代码——不需要测量；生产性能代码不是可以顺手删掉的 benchmark instrumentation（`performance.now()`、`scheduler.yield()` 属于生产 decode/encode 分片调度的一部分）。架构调整确实要付出性能代价时，写明实测代价与理由，并由对应领域专家确认；「分层需要」不是自助理由。命令、数字、环境与输入规模都要落账，以便返工时重建同一基线。
 

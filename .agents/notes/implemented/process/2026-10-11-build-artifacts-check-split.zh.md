@@ -55,7 +55,8 @@ Status: implemented
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | 无 |
 | `e2e.yml`、`release.yml` 的 PR 演练 | `pnpm run build:artifacts --profile official` | 无 |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | 无 |
-| CI node 24 / benchmarks | `run-ci-bench.ts`（`tsc -b --noCheck`） | 无 |
+| CI node 24 / benchmarks 1/2 与 2/2 | 无：恢复 `node 24 / build` 产物，只打包 `benchmarks/.dsh-build/` worker | 无 |
+| `check:ci:bench` | `run-ci-bench.ts`（`tsc -b --noCheck`） | 无 |
 | `release-vendor.yml` 的 PR 演练 | `compile-referenced-projects.ts host-libraries` | 无 |
 | `release-vendor.yml` 的非 PR 分支、`release-vendor-publish.yml` | `build:lib:host` | 仅 Host 聚合根程序 |
 

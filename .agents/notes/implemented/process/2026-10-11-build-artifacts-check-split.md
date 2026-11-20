@@ -55,7 +55,8 @@ Each command does only its own job.
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | None |
 | PR rehearsals in `e2e.yml` and `release.yml` | `pnpm run build:artifacts --profile official` | None |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | None |
-| CI node 24 / benchmarks | `run-ci-bench.ts` (`tsc -b --noCheck`) | None |
+| CI node 24 / benchmarks 1/2 and 2/2 | None: they restore the `node 24 / build` output and bundle only `benchmarks/.dsh-build/` workers | None |
+| `check:ci:bench` | `run-ci-bench.ts` (`tsc -b --noCheck`) | None |
 | PR rehearsal in `release-vendor.yml` | `compile-referenced-projects.ts host-libraries` | None |
 | Non-PR branch of `release-vendor.yml`, `release-vendor-publish.yml` | `build:lib:host` | Host aggregate root program only |
 
