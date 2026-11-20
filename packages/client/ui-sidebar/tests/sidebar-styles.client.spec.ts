@@ -101,13 +101,25 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.root.collapsed')?.get('padding')).toBe('18px 10px 6px')
   })
 
-  it('keeps macOS glass control fills and the hidden scroll fade out of window fullscreen', () => {
+  it('fades macOS control colors and the scroll fade between windowed and fullscreen materials', () => {
+    const darwin = ":global([data-platform='darwin'])"
     const windowed = ":global([data-platform='darwin']:not([data-fullscreen]))"
     const root = ":where(.root:not([role='dialog']))"
     expect(declarations(`${windowed} ${root} .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-fill)')
     expect(declarations(`${windowed} ${root}.collapsed .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-collapsed-fill)')
-    expect(declarations(`${windowed} .scrollFade`)?.get('display')).toBe('none')
-    expect(declaredSelectors().filter(selector => /\.newSession\b|\.scrollFade/u.test(selector) && selector.includes("[data-platform='darwin']") && !selector.startsWith(windowed))).toEqual([])
+    expect(declarations(`${darwin} ${root} .newSession`)?.get('transition')).toBe(
+      'background-color var(--ds-transition-duration) var(--ds-ease-in-out)',
+    )
+    expect(declarations(`${darwin} .scrollFade`)?.get('transition')).toBe(
+      'opacity var(--ds-transition-duration) var(--ds-ease-in-out)',
+    )
+    expect(declarations(`${darwin} .scrollFade`)?.get('opacity')).toBe('1')
+    expect(declarations(`${windowed} .scrollFade`)?.get('opacity')).toBe('0')
+    expect(declarations(`${windowed} .scrollFade`)?.has('display')).toBe(false)
+    expect(declarations('.collapsed .scrollFade')?.get('display')).toBe('none')
+    expect(reducedMotion()).toContain(`${darwin} ${root} .newSession`)
+    expect(reducedMotion()).toContain(`${darwin} .scrollFade`)
+    expect(reducedMotion()).toContain('transition: none;')
   })
 
   it('moves the upper controls while the settings seat only fades', () => {

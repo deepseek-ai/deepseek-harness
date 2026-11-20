@@ -124,12 +124,11 @@
   border-right: none;
 }
 
-/* A blue wash over the top of the translucent tint, gone by a third of the
-   column, and a faint blue-grey-violet rising through the bottom third.
-   Every layer stays transparent so vibrancy shows; ui-theme sets each
-   palette's wash strength and tint. Window fullscreen keeps the Web sidebar
-   fill instead. */
-:global([data-platform='darwin']:not([data-fullscreen])) .frame:not([data-sidebar-drawer]) .sidebarCol {
+/* The glass backing stays mounted beneath the fullscreen fill, so only the
+   material fades; sidebar content and the centre divider retain their opacity. */
+:global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
+  position: relative;
+  isolation: isolate;
   background:
     linear-gradient(
       to bottom,
@@ -141,11 +140,32 @@
     var(--dsw-specific-sidebar-tint);
 }
 
+:global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--dsw-specific-sidebar-fill);
+  opacity: 0;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+:global([data-platform='darwin'][data-fullscreen]) .frame:not([data-sidebar-drawer]) .sidebarCol::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol::before {
+    transition: none;
+  }
+}
+
 /* macOS Reduce Transparency: the OS flattens the window's vibrancy layer to a
    solid grey, so the thin tint and washes read washed-out over it. Replace
    them with a 90%-opaque fill of the same token in both themes. */
 @media (prefers-reduced-transparency: reduce) {
-  :global([data-platform='darwin']:not([data-fullscreen])) .frame:not([data-sidebar-drawer]) .sidebarCol {
+  :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
     background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent);
   }
 }
