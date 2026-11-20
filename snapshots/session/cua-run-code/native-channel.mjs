@@ -57,7 +57,7 @@ export function createNativeFixture(selectorPid) {
         const key = params.key ?? params.mouseButton
         const index = held.findIndex(press => press.connection === connection && press.taskId === params.taskId && press.key === key)
         if (params.direction === 'down' && index < 0) held.push({ connection, taskId: params.taskId, key, appHandle: params.appHandle,
-            kind: method === 'sendKeyEvent' ? 'key' : 'mouse', windowId: params.windowId, mode: params.useSystemPointer ? 'system' : 'window' })
+            kind: method === 'sendKeyEvent' ? 'key' : 'mouse', windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' })
         if (params.direction === 'up') {
           if (index < 0) throw new Error('Input was not held by this task')
           held.splice(index, 1)

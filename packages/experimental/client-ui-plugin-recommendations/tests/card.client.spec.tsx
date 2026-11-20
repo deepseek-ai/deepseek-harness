@@ -94,7 +94,6 @@ it.each([
   [{ phase: 'enabled', data: { application: 'restart-required' } }, zh['restart-required']],
   [{ phase: 'already-enabled' }, zh['already-enabled']],
   [{ phase: 'dismissed' }, zh.dismissed],
-  [{ phase: 'replaced' }, zh.replaced],
 ] as const)('shows the settled %j state without actions', async (decision, copy) => {
   await shown(props(decision))
   expect(screen.getByRole('status').textContent).toBe(copy)

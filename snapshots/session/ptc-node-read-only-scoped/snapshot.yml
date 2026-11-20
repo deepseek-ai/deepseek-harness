@@ -1,0 +1,17 @@
+version: 1
+scenario: ptc-node-read-only-scoped
+profile: headless
+composition: ptc-node-read-only
+recording: authored
+header:
+  class: ptc-node-read-only-scoped
+  pin: true
+  systemPromptSource: ptc-persistent
+  toolSchemasSource: ptc-persistent-scoped
+replay:
+  override: true
+platform: posix
+permission: read-only
+workspace:
+  final: true
+  parent: outside-temp

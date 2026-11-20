@@ -18,7 +18,7 @@ Five habits cover most of what follows, and each page is their application to on
 |---|---|
 | Package exports, package shape, build faces, dependency declarations | [package-surface.md](package-surface.md) |
 | Remote services, `@Remote` methods, API dispatch, business ownership at the API layer | [remote-and-api.md](remote-and-api.md) |
-| Client components, slots, stores, hooks, effects | [client-components.md](client-components.md) |
+| Client components, slots, stores, hooks, effects, stylesheet selectors | [client-components.md](client-components.md) |
 | Session reads, retention, conversation nodes, renderers | [conversation-and-session.md](conversation-and-session.md) |
 | Timing, state representation, shared ownership, decentralization, refactors, migrations, performance evidence, disposal, callbacks, subprocesses | [general.md](general.md) |
 

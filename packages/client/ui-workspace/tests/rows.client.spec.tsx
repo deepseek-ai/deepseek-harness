@@ -155,6 +155,11 @@ describe('Workspace and Session hover handoff', () => {
   })
 })
 
+/** jsdom lacks DragEvent — fireEvent builds no dataTransfer, which a Session row reads at drag end. */
+function dragEnd(row: Element, dropEffect: DataTransfer['dropEffect'] = 'none'): void {
+  fireEvent.dragEnd(row, { dataTransfer: { dropEffect } })
+}
+
 const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), setDragImage: vi.fn() }
 
 /** jsdom lacks DragEvent — the fireEvent fallback drops clientY, so pin it on the built event. */
@@ -172,7 +177,7 @@ describe('native row drag previews', () => {
       ? <ProjectRowItem group={{
         key: 'workspace', workspaceId: wid('workspace'), cwd: '/workspace', createdAt: 0,
         label: 'Draggable row', sessionCount: 0, expanded: true, containsCurrent: false, sessions: [],
-      }} onToggle={vi.fn()} onCreate={vi.fn()} drag={drag} t={t} />
+      }} onToggle={vi.fn()} onCreate={vi.fn()} drag={{ start: drag.start, end: () => { drag.end(false) } }} t={t} />
       : <SessionNodeItem node={{
         id: sid('session'), title: 'Draggable row', blank: false, running: false,
         runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: false,
@@ -196,11 +201,11 @@ describe('native row drag previews', () => {
   it.each(['workspace', 'session'] as const)('uses an inert offscreen %s copy without changing the source row', (kind) => {
     const { row, drag, transfer, start } = fixture(kind)
     const originalStyle = row.getAttribute('style')
-    fireEvent.dragEnd(row)
+    dragEnd(row)
     expect(drag.end).not.toHaveBeenCalled()
     const image = start()
     expect(transfer.setDragImage).toHaveBeenCalledWith(image, 65, 12)
-    expect(transfer.effectAllowed).toBe('move')
+    expect(transfer.effectAllowed).toBe(kind === 'session' ? 'copyMove' : 'move')
     expect(transfer.setData).toHaveBeenCalledWith('text/plain', kind)
     expect(drag.start).toHaveBeenCalledOnce()
     expect(image.parentElement).toBe(document.body)
@@ -229,7 +234,7 @@ describe('native row drag previews', () => {
     expect(vi.mocked(drag.start).mock.invocationCallOrder[0])
       .toBeLessThan(transfer.setDragImage.mock.invocationCallOrder[0]!)
     expect(image.isConnected).toBe(false)
-    fireEvent.dragEnd(screen.getByRole('treeitem'))
+    dragEnd(screen.getByRole('treeitem'))
     expect(drag.end).toHaveBeenCalledOnce()
   })
 
@@ -241,7 +246,7 @@ describe('native row drag previews', () => {
       runningSubagentCount: 0, completed: false, failed: false, updatedAt: 0, pinned: false, archived: true,
     }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     expect(row.getAttribute('draggable')).toBe('false')
-    fireEvent.dragEnd(row)
+    dragEnd(row)
     expect(image.isConnected).toBe(false)
     expect(drag.end).toHaveBeenCalledOnce()
   })
@@ -252,7 +257,7 @@ describe('native row drag previews', () => {
     const second = start()
     expect(first.isConnected).toBe(false)
     expect(second.isConnected).toBe(true)
-    fireEvent.dragEnd(row)
+    dragEnd(row)
     expect(second.isConnected).toBe(false)
     expect(drag.end).toHaveBeenCalledOnce()
     const third = start()
@@ -668,7 +673,14 @@ describe('workspace browser rows', () => {
       onRenameRequest={onRenameRequest} useSessionAccess={useSessionAccess} t={t} />)
     expect(useSessionAccess).toHaveBeenCalledWith(sid('s1'), 'session/rename')
     expect(useSessionAccess).toHaveBeenCalledWith(sid('s1'), 'workspace/insertSessionBefore')
-    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('false')
+    // Without reorder access the row still drags its Session to other drop targets, as a copy only.
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
+    const transfer = { effectAllowed: '', setData: vi.fn(), setDragImage: vi.fn() }
+    fireEvent.dragStart(screen.getByRole('treeitem'), { dataTransfer: transfer })
+    expect(transfer.effectAllowed).toBe('copy')
+    expect(transfer.setData.mock.calls).toEqual([['application/x-dsh-session', 's1']])
+    expect(drag.start).not.toHaveBeenCalled()
+    dragEnd(screen.getByRole('treeitem'))
     fireEvent.doubleClick(screen.getByText('One'))
     expect(onRenameRequest).not.toHaveBeenCalled()
 
@@ -1178,8 +1190,12 @@ describe('workspace browser rows', () => {
     fireEvent.drop(row, { dataTransfer })
     expect(inactive.hover).not.toHaveBeenCalled()
     expect(inactive.drop).not.toHaveBeenCalled()
-    fireEvent.dragEnd(row)
-    expect(inactive.end).toHaveBeenCalledOnce()
+    dragEnd(row)
+    expect(inactive.end).toHaveBeenCalledExactlyOnceWith(false)
+    // A copy accepted by another drop target tells the owner to discard the marker.
+    fireEvent.dragStart(row, { dataTransfer })
+    dragEnd(row, 'copy')
+    expect(inactive.end).toHaveBeenLastCalledWith(true)
 
     const active = dragProps({ active: true, marker: 'before' })
     rerender(
@@ -1226,8 +1242,8 @@ describe('workspace browser rows', () => {
     }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.getAttribute('draggable')).toBe('false')
-    fireEvent.dragEnd(row.firstElementChild!)
-    fireEvent.dragEnd(row)
+    dragEnd(row.firstElementChild!)
+    dragEnd(row)
     expect(drag.end).not.toHaveBeenCalled()
   })
 

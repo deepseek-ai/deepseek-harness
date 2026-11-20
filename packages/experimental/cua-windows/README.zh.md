@@ -80,7 +80,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
-- 悬停、点击、滚动和拖拽使用系统指针。`requireSystemPointerApproval` 不会为 Windows 操作弹出单独的指针授权提示。
+- 悬停、点击、滚动和拖拽使用系统指针。`requireSystemInputApproval` 不会为 Windows 操作弹出单独的指针授权提示。
 - 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。
 - Windows 通过桌面派发输入。焦点变化或原窗口关闭后，确认释放表示桌面接受了 up，原窗口可能收不到该事件。若桌面不可用或无法确认释放，本任务不能继续使用 CUA。请先检查桌面，再开始新任务。
 - 清理完整动作内的临时输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。

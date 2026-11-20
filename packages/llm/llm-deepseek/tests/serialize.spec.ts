@@ -498,6 +498,15 @@ describe('Messages images', () => {
   // Only the read operation is consumed by image preparation; the transport is mocked, not durable content.
   const attachments = requestImageStore(async () => version)
   const signal = new AbortController().signal
+  it('does not start the next Files candidate when the first image read fails', async () => {
+    const second = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`) }
+    const failure = new Error('cannot read first image')
+    const read = vi.fn(async (_attachment: ImageAttachmentRef) => { throw failure })
+    const history = [result('a', [image, { type: 'image', attachment: second }])]
+    await expect(prepareImages(history, connection, model, requestImageStore(read), access, signal)).rejects.toBe(failure)
+    expect(read.mock.calls.map(([attachment]) => attachment.attachmentId)).toEqual([ref.attachmentId])
+  })
+
   it('keeps image bytes inside tool results and deduplicates normalization', async () => {
     const history = [assistant([call()]), result('a', [image, image])]
     const prepared = await prepareImages(history, connection, model, attachments, access, signal)

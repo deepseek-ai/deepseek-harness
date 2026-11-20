@@ -62,10 +62,11 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `screenshotTarget` | 未设置 | 截图使用的固定 `{ longEdge, maxBytes }` 请求图片目标。未设置时按 Agent 的模型路由解析，该路由未声明图片输入时拒绝截图。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
-| `requireSystemPointerApproval` | `true` | 主任务首次请求移动系统指针、拖动或操作系统鼠标键时询问用户。 |
+| `requireSystemInputApproval` | `true` | 主任务首次请求系统键盘或鼠标输入时询问用户。 |
 | `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
+| `recentActivityWindowMs` | `60000` | 近期活动的回看时长，单位为毫秒。设置 `recentActivityWindowMs: "off"` 可关闭此连接的活动检测和提醒。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
 | `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
@@ -78,6 +79,10 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
+
+模型读取窗口辅助功能树或截图后，其他输入可能已改变窗口。插件在下一次模型请求前提醒 Agent。检查范围从最近一次成功读取开始采样时算起，且限于配置的回看时长。每个窗口最多提醒一次，直到 Agent 再次使用该窗口。本轮结束或连接断开时停止关注。
+
+外部输入监听器只订阅鼠标按下和滚动事件。对于关注的窗口，helper 在内存中分别保留其他 Agent 和外部输入最近一次活动的时间。发给模型并写入 Session 日志的活动提醒只包含窗口 ID、来源和距今时间。监听器不记录按键、输入文本、鼠标坐标或滚动距离。
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
@@ -121,11 +126,13 @@ inspect(await window.getScreenshot())
 
 `getWindow` 不发送原生请求；截图和指针输入会拒绝已关闭或属于其他应用的窗口。元素操作前须显式读取 `getAccessibilityTree()`。截图不要求 AX 读取成功。所有坐标输入（包括相对坐标）都要求先成功读取覆盖该窗口的 AX 或取得截图；绝对像素坐标要求已交付的截图。仅当窗口和 sheet 发现过程未遇到不可读元素时，已确认归属但没有 AX 界面的窗口才返回空快照。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择。读取任一窗口都会替换该快照；元素操作使用最新快照 ID，因此应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。局部 AX 节点失效时会成功返回带明确不可用分支标记的部分快照；原始状态包含 `hasUnreadableElements: true`。这些分支没有元素 ID，内容未知，应通过截图查看。致命观察错误不发布快照。处理错误前请参阅[原生观察与错误语义](native/README.zh.md#observation-and-input)；不要自动重复此前的输入。窗口对象负责截图和指针输入。键盘方法保留在 `app` 上，因为输入跟随应用的当前焦点。
 
-普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemPointer: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemPointer: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
+普通 `mouseMove(target)` 默认通过辅助功能悬停。如果目标或其祖先没有同时声明 `AXShowAlternateUI` 和 `AXShowDefaultUI`，则返回 `HOVER_UNAVAILABLE`，不会弹窗。只有任务确实需要移动用户的鼠标时，主任务才调用 `win.mouseMove(target, { useSystemInput: true })`。用户允许后，Host 重新检查窗口和目标位置，再执行本次移动。每次移动系统指针都要显式传 `useSystemInput: true`。省略参数或传 `false` 时使用辅助功能悬停。拒绝时不派发输入。会话记住此次选择，直到关闭会话或重启 DSH。
 
-`win.toggleMouse(button, direction)` 默认向窗口发送当前鼠标位置的事件。按下时必须命中选定的前台窗口。需要系统按钮状态时，在 `down` 上传入 `{ useSystemPointer: true }`，沿用拖动审批。`up` 始终使用保存的输入方式和窗口，即使焦点改变或窗口关闭也如此。原进程退出后，系统按钮清理仍在当前鼠标位置释放；定向释放会检查保存的进程身份，跳过已退出或复用的 PID。
+`win.toggleMouse(button, direction)` 默认向窗口发送当前鼠标位置的事件。按下时必须命中选定的前台窗口。需要系统按钮状态时，在 `down` 上传入 `{ useSystemInput: true }`，沿用拖动审批。`up` 始终使用保存的输入方式和窗口，即使焦点改变或窗口关闭也如此。原进程退出后，系统按钮清理仍在当前鼠标位置释放；定向释放会检查保存的进程身份，跳过已退出或复用的 PID。
 
-默认拖动向目标窗口发送鼠标事件。需要系统鼠标按键状态的控件可使用 `win.drag(from, to, { useSystemPointer: true })`。该操作与系统指针移动共用会话授权，起点和拖动路径必须位于可接收输入的前台窗口内。取消或失去目标窗口时，helper 在最后投递的位置释放鼠标键。
+默认拖动向目标窗口发送鼠标事件。需要系统鼠标按键状态的控件可使用 `win.drag(from, to, { useSystemInput: true })`。该操作与系统指针移动共用会话授权，起点和拖动路径必须位于可接收输入的前台窗口内。取消或失去目标窗口时，helper 在最后投递的位置释放鼠标键。
+
+`useSystemInput` 在 `mouseMove`、`toggleMouse`、`click`、`drag`、`pressKey` 和 `sendKeyEvent` 上选择本次输入方式。省略或传 `false` 保留辅助功能或进程定向输入。`true` 使用系统键鼠队列，要求目标应用处于前台；系统鼠标操作还检查目标窗口未被遮挡。系统点击和拖动先按下所需修饰键，再发送鼠标事件，最后先释放鼠标、再反序释放修饰键；取消也执行释放。已按住的系统键返回 `INPUT_BUSY`，不会由新操作释放。`pressKey` 的选项为第三个参数；`sendKeyEvent` 的按下和松开需选择相同输入方式，松开仍可在失焦后完成。`typeText`、`paste`、`scroll` 和 AX 动作保持固定输入方式。
 
 `paste(text, { format: "text" | "html" })` 临时提供指定格式的剪贴板内容，并调用应用已启用的标准 Paste 菜单命令。临时格式保留到剪贴板读取方请求其数据，然后只在仍持有剪贴板时恢复保存的全部原格式，保留期间产生的新复制内容。粘贴操作共用跨进程锁，取消会等待辅助进程清理。强制终止进程可能阻止恢复。应用不支持 Paste 命令时明确失败，不自动改成逐字输入；`typeText` 仍单独提供按键事件输入。
 
@@ -199,7 +206,7 @@ Signatures show resolved return values after await. ActionResult = { dispatched:
 Supported modifier names depend on the platform and the operation; see the platform guidance.
 
 Setup and discovery:
-- cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
+- cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
 - cua.listApps() -> { id: string, displayName: string, isRunning: boolean, pid?: number }[] — list applications the provider exposes for selection with their current running state; pass the returned id unchanged to cua.getApp. Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.
 - cua.findApps(query: string) -> { id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[] — search installed applications, including stopped matches. Running installation matches include their process ID. Stopped matches have no pid.
 - cua.getState() -> { apps: { id: string, displayName: string, isRunning: boolean, pid?: number }[], browsers: [] } — summarize the same provider discovery; this is not an accessibility observation.
@@ -227,14 +234,14 @@ Use an explicit window for screenshots.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
 
 ## Simulated mouse
-Leave useSystemPointer unset for ordinary mouseMove, drag, and toggleMouse calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request the system pointer only when the user explicitly asks for it or the intended effect requires it.
+Leave useSystemInput unset for ordinary mouseMove, toggleMouse, click, drag, pressKey, and sendKeyEvent calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request system input only when the user explicitly asks for it or the intended effect requires it.
 
 Use an explicit window for pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
-- mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. With useSystemPointer omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
-- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemPointer?: boolean }) -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Send 'up' to release a held button immediately. Press over the selected foreground window. By default the window receives the events, even a release outside it, and the system button stays up. For a system hold, pass useSystemPointer: true on down. Up uses the input route and window saved by down. Physical moves can then drag, including your own mouse movements.
-- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.
+- mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemInput?: boolean }) -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration. With useSystemInput omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.
+- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemInput?: boolean }) -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Send 'up' to release a held button immediately. Press over the selected foreground window. By default the window receives the events, even a release outside it, and the system button stays up. For a system hold, pass useSystemInput: true on down. Up uses the input route and window saved by down. Physical moves can then drag, including your own mouse movements.
+- click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean, useSystemInput?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press. click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. With useSystemInput: true, the system pointer moves to the target and keyboard modifiers are pressed around the click, including release on cancellation. Verify the expected effect before typing or retrying.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
-- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean, useSystemPointer?: boolean }) -> ActionResult — drag between two points of one window. Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control. An explicit system drag shares the session decision with mouseMove and holds the chosen button along the path in the unobscured foreground window.
+- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean, useSystemInput?: boolean }) -> ActionResult — drag between two points of one window. Omitting useSystemInput or passing false directs the drag to the window without asking for mouse control. System input requires an unobscured foreground target, presses the requested keyboard modifiers, and releases the mouse button before those modifiers, including on cancellation.
 
 A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current accessibility observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then explicitly activate the target and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
 
@@ -242,14 +249,16 @@ A string target is an element id; coordinate targets are [x, y] and are pixels i
 Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
-- pressKey(key: string, modifiers?: Modifier[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier. For example W down, D down, D up, W up. A repeated 'down' for an ordinary held key sends one repeat without adding another hold.
+- pressKey(key: string, modifiers?: Modifier[], options?: { useSystemInput?: boolean }) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string. System input requires the selected foreground application and sends modifiers and the main key through the system keyboard queue, then releases them in reverse order.
+- sendKeyEvent(key: string, direction: 'down' | 'up', options?: { useSystemInput?: boolean }) -> ActionResult — send one key-down or key-up event; key accepts a single key name, including a modifier. For example W down, D down, D up, W up. A repeated 'down' for an ordinary held key sends one repeat without adding another hold. System down requires the selected foreground app; use the same useSystemInput value for explicit key up.
 
-Explicit downs from sendKeyEvent and toggleMouse remain held across programs and turns until an explicit up releases them at their original recipient. After a successful run_code or cua_run_code, a system reminder lists any remaining keys and mouse buttons, their targets and input modes. No reminder is added when none remain. Program failure, a received cancellation, connection closure, and disposal release owned inputs together in reverse dispatch order. A client pause between completed MCP calls is not observable by the server, so held input can remain pressed. pressKey, typeText, click, and complete drag release their own inputs within the operation.
+Explicit downs from sendKeyEvent and toggleMouse remain held across programs and turns until an explicit up releases them through the same target. After a successful run_code or cua_run_code, a system reminder lists any remaining keys and mouse buttons, their targets and input modes. No reminder is added when none remain. Program failure, a received cancellation, connection closure, and disposal release owned inputs together in reverse dispatch order. After a DSH stop, the next CUA operation waits for any pending cleanup. A client pause between completed MCP calls is not observable by the server, so held input can remain pressed. pressKey, typeText, click, and complete drag release their own inputs within the operation.
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
-Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system mouse control.
+Recent activity notices identify when another agent or external input was last detected on a window you observed. You may continue using the window. Recheck its state if your next action depends on what you saw.
+
+Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 ```
 
 #### Token 影响
@@ -261,6 +270,8 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 工具结果追加到 Session 历史。修改插件配置或工具呈现方式可能改变请求前缀；保留应用对象不会改变已有历史。
 
 ## 已知限制与后续工作
+
+外部输入监听只覆盖 session 事件流；PID 定向后台输入和仅通过 AX 执行的自动化可能不可见。监听依赖 macOS 输入监控或辅助功能权限，监听不可用不阻止应用操作。缺少活动提示不能证明无人操作。
 
 读取较大的树仍受原生操作超时（`timeoutMs`）、单次 AX 调用超时（`axTimeoutMs`）和响应大小限制（`maxResponseBytes`）约束。
 
@@ -275,7 +286,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 - 元素 ID 只对应用当前的辅助功能快照有效；之后的读取会替换它们。截图和指针输入都要求显式的窗口对象。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
-- 系统鼠标拖动的每一步都必须命中所选窗口。同一应用中拦截鼠标的弹窗也会中断手势。检查窗口和投递事件的耗时会计入实际拖动时间。修饰键记录在鼠标事件上。读取系统键盘状态的应用可能无法识别这些修饰键。
+- 系统鼠标拖动的每一步都必须命中所选窗口。同一应用中拦截鼠标的弹窗也会中断手势。检查窗口和投递事件的耗时会计入实际拖动时间。默认路径只在鼠标事件上记录修饰键，读取系统键盘状态的应用可能无法识别；`useSystemInput: true` 会发送系统键盘按下和松开事件。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
 - 源码构建默认使用 `ad-hoc`，二进制变化后可能需要重新授权。[开发者固定身份](../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)保存在 DSH home 之外；删除 DSH home 只删除选择它的配置，不删除证书和私钥。正式分发应以固定 Developer ID 签名并完成公证；构建命令支持 `--identity` 指定签名身份，安装版保留分发时的签名。[权限页面](../cua/README.zh.md)提供 helper 授权入口和目标应用许可撤销。

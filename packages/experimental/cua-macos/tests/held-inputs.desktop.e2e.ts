@@ -65,8 +65,8 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       const initial = await observe()
       const pad = initial.pad
       const programs = [
-        `var app = await cua.getApp(${JSON.stringify(String(initial.pid))}); await app.activate(); var win = await app.getWindow(${JSON.stringify(initial.windowId)}); await win.getAccessibilityTree(); var bounds = (await app.getWindows()).find(w => w.windowId === win.windowId).bounds; await win.mouseMove([Math.round(${pad[0] + 80} / bounds.width * 999), Math.round(${pad[1] + 70} / bounds.height * 999)], { relative: true, useSystemPointer: true }); await app.sendKeyEvent('a', 'down')`,
-        `await win.toggleMouse('left', 'down', { useSystemPointer: true }); await app.sendKeyEvent('w', 'down'); ${ending === 'tool-stop' ? 'await new Promise(() => {})' : ''}`,
+        `var app = await cua.getApp(${JSON.stringify(String(initial.pid))}); await app.activate(); var win = await app.getWindow(${JSON.stringify(initial.windowId)}); await win.getAccessibilityTree(); var bounds = (await app.getWindows()).find(w => w.windowId === win.windowId).bounds; await win.mouseMove([Math.round(${pad[0] + 80} / bounds.width * 999), Math.round(${pad[1] + 70} / bounds.height * 999)], { relative: true, useSystemInput: true }); await app.sendKeyEvent('a', 'down')`,
+        `await win.toggleMouse('left', 'down', { useSystemInput: true }); await app.sendKeyEvent('w', 'down'); ${ending === 'tool-stop' ? 'await new Promise(() => {})' : ''}`,
       ]
       const thinking: PromiseWithResolvers<void> = Promise.withResolvers()
       class Model extends LlmAdapter {
@@ -96,7 +96,7 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       await ctx.plugin(ComputerUse)
       await ctx.plugin(UserQuestions)
       ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-      await ctx.plugin(Provider, { helperPath, requireSystemPointerApproval: false })
+      await ctx.plugin(Provider, { helperPath, requireSystemInputApproval: false })
       const permissions = await ctx.cuaAccess.systemStatus()
       if (permissions.platform !== 'darwin') throw new Error('Expected macOS permission metadata')
       const sourcePid = permissions.helper.pid
@@ -119,7 +119,7 @@ it.skipIf(process.platform !== 'darwin' || helperPath === undefined).each(['comp
       if (ending === 'completed') {
         await expect.poll(async () => (await received()).map(event => event.type), { timeout: 30_000 }).toEqual([10, 1, 10])
         expect(JSON.stringify(handle.agent.session.snapshotEvents())).toContain('CUA inputs are still held')
-        programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up', { useSystemPointer: true }); await app.sendKeyEvent('a', 'up')"
+        programs[3] = "await app.sendKeyEvent('w', 'up'); await win.toggleMouse('left', 'up', { useSystemInput: true }); await app.sendKeyEvent('a', 'up')"
         handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Release held input' }], source: { kind: 'user' } }))
         await handle.agent.whenIdle()
       }

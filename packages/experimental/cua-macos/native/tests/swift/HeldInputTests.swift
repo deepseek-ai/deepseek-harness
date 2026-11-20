@@ -13,33 +13,37 @@ private func pointer(_ type: CGEventType) throws -> CGEvent {
     return event
 }
 
-@Test(arguments: [false, true])
-func mixedInputsReleaseInDispatchOrder(_ system: Bool) throws {
+@Test(arguments: [false, true], [false, true])
+func mixedInputsReleaseInDispatchOrder(_ system: Bool, _ systemKey: Bool) throws {
     let held = HeldInputs()
     let connection = UUID()
     let target = try NativePlatform.identity(getpid())
     let owner = HeldInputs.Owner(connection: connection, task: task, app: "editor")
     let route = WindowRoute(owner: target, windowID: 7, bounds: .init(x: 0, y: 0, width: 100, height: 100))
     var events: [String] = []
+    let keyboard = SystemKeyboardInput(post: { event in
+        events.append("hid:\(event.getIntegerValueField(.keyboardEventKeycode)):\(event.type.rawValue)")
+    }, keyState: { _ in false }, foreground: { target.pid })
     let input = KeyboardInput(post: { event, pid in
         #expect(pid == target.pid)
         events.append("key:\(event.getIntegerValueField(.keyboardEventKeycode)):\(event.type.rawValue)")
-    }, textEventInterval: 0, held: held, connection: connection)
+    }, textEventInterval: 0, held: held, connection: connection, system: keyboard)
     try input.keyDown("shift", app: "editor", task: task, recipient: { target })
     try held.pointerDown(owner: owner, route: route, button: .left, system: system,
                          down: pointer(.leftMouseDown), up: pointer(.leftMouseUp), post: { events.append("mouse:\($0.type.rawValue)") })
-    try input.keyDown("w", app: "editor", task: task, recipient: { target })
+    try input.keyDown("w", app: "editor", task: task, useSystemInput: systemKey, recipient: { target })
     let state = try held.held(connection: connection, task: task)
     #expect(state == .array([
         .object(["kind": .string("key"), "key": .string("shift"), "appHandle": .string("editor"), "mode": .string("application")]),
         .object(["kind": .string("mouse"), "button": .string("left"), "appHandle": .string("editor"), "windowId": .string("7"), "mode": .string(system ? "system" : "window")]),
-        .object(["kind": .string("key"), "key": .string("w"), "appHandle": .string("editor"), "mode": .string("application")]),
+        .object(["kind": .string("key"), "key": .string("w"), "appHandle": .string("editor"), "mode": .string(systemKey ? "system" : "application")]),
     ]))
     #expect(try held.held(connection: UUID(), task: task) == .array([]))
     try held.release(connection: connection, task: task)
     #expect(try held.held(connection: connection, task: task) == .array([]))
     try held.release(connection: connection, task: task)
-    #expect(events == ["key:56:12", "mouse:1", "key:13:10", "key:13:11", "mouse:2", "key:56:12"])
+    let wRoute = systemKey ? "hid" : "key"
+    #expect(events == ["key:56:12", "mouse:1", "\(wRoute):13:10", "\(wRoute):13:11", "mouse:2", "key:56:12"])
 }
 
 @Test func explicitReleaseRepeatAndRepressKeepOnlyTheLatestPress() throws {

@@ -51,7 +51,9 @@
   margin-top: 8px;
 }
 
-.markdown :where(h4, h5, h6):has(+ :where(ul, ol)) {
+.markdown :where(h4):has(+ :where(ul, ol)),
+.markdown :where(h5):has(+ :where(ul, ol)),
+.markdown :where(h6):has(+ :where(ul, ol)) {
   margin-bottom: 8px;
 }
 
@@ -422,7 +424,7 @@
   color: inherit;
 }
 
-.compact :global(.md-code-block) > :has(> [data-code-block-banner]) {
+.compact :global(.md-code-block) > div:has(> [data-code-block-banner]) {
   position: static;
   z-index: auto;
 }
@@ -458,7 +460,15 @@
 }
 
 /* Keep KaTeX's inline baseline and scroll the containing block only when needed. */
-.compact :is(p, h1, h2, h3, h4, h5, h6, ul, ol):has(:global(.katex)) {
+.compact p:has(:global(.katex)),
+.compact h1:has(:global(.katex)),
+.compact h2:has(:global(.katex)),
+.compact h3:has(:global(.katex)),
+.compact h4:has(:global(.katex)),
+.compact h5:has(:global(.katex)),
+.compact h6:has(:global(.katex)),
+.compact ul:has(:global(.katex)),
+.compact ol:has(:global(.katex)) {
   overflow-x: auto;
   overflow-y: hidden;
   /* KaTeX descenders can paint one pixel below a fractional line-box edge. */

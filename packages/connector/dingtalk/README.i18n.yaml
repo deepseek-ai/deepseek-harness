@@ -1,0 +1,88 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/dingtalk/README.md
+/:
+  en: 01bcdf13f44a048e
+  zh: 3e03f91a092e6300
+/deepseek-ai-dsh-dingtalk:
+  en: 5dc926b329defff4
+  zh: 79cd822afca4f832
+/deepseek-ai-dsh-dingtalk/summary:
+  en: 83dcecf4eadcb0dd
+  zh: e5ce368d52efdaea
+/deepseek-ai-dsh-dingtalk/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-dingtalk/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-dingtalk/use-this-package/install-into-a-profile:
+  en: bb99e185b2e7d3c6
+  zh: 349aa38b81ee2867
+/deepseek-ai-dsh-dingtalk/use-this-package/what-you-get:
+  en: 6ae1c6cfc0b6cd5d
+  zh: 21ccf1e0f9312a4f
+/deepseek-ai-dsh-dingtalk/use-this-package/account-operations:
+  en: 265eb53ad3bce84f
+  zh: bbd01a50493bfa18
+/deepseek-ai-dsh-dingtalk/use-this-package/configure:
+  en: f97716c608f5d992
+  zh: 97909644448a4523
+/deepseek-ai-dsh-dingtalk/understand-the-implementation:
+  en: e163577da5bd714e
+  zh: 4af436cf6e1de313
+/deepseek-ai-dsh-dingtalk/further-exploration:
+  en: 6168b422ce45d808
+  zh: a6cb0e594ca78132
+/deepseek-ai-dsh-dingtalk/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: e99e8d5639c268d9
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 54a4339eb76f9ed6
+  zh: 5abdee68c500f37b
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/token-effect:
+  en: 7448b8025cac4857
+  zh: dddee8822f9354fd
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: c755079b7e47e8a7
+  zh: d76f6f3e2679f9f3
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 698bcd0773a8f094
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/what-the-model-sees:
+  en: 63dce0aac5010c9f
+  zh: bdd3d884922f766c
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/token-effect:
+  en: 3c0c41cf49dd46a4
+  zh: ea0891d94a567606
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: d32b51405eabddc4
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees:
+  en: 5d6aa3510d09180e
+  zh: ab964b64eb16d123
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/token-effect:
+  en: 9f6cf4e3a33996fe
+  zh: fb5f8830b63783d2
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/kv-cache-effect:
+  en: 2cd0ec39868022b9
+  zh: 21eaed1a363a3416
+/deepseek-ai-dsh-dingtalk/known-limitations-and-deferred-work:
+  en: c6c0e176e9e0a36b
+  zh: 615ba9ef9f7e8a72
+/deepseek-ai-dsh-dingtalk/known-limitations-and-deferred-work/dev-note:
+  en: 7267122aef746a1c
+  zh: a5f28e38bd85d44f

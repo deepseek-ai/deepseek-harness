@@ -21,7 +21,7 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
-import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -42,6 +42,15 @@ import * as CordisInspectProviders from '@deepseek-ai/dsh-tool-cordis/host'
 const PERSONA = 'You are a coding agent. You work by writing TypeScript programs for run_code: '
   + 'batch related tool work into one program and inspect ONLY the findings that matter.'
 const WORKSPACE_PROBE = 'dragonfruit-8675309'
+
+/** Node runtime program formats the keyless cases run under; their programs end with inspect, so both formats accept them unchanged. */
+const PTC_MODES = [
+  { mode: 'per-call', config: { executionMode: 'per-call' } },
+  { mode: 'scoped REPL', config: { executionMode: 'persistent-in-memory', replScoped: true } },
+] as const satisfies readonly { mode: string; config: NodeRuntimeConfig }[]
+type PtcMode = typeof PTC_MODES[number]
+/** The with-key model cases keep function-body programs. */
+const PER_CALL: PtcMode = PTC_MODES[0]
 
 let ctx: Context | undefined
 let workdir: string | undefined
@@ -70,7 +79,7 @@ async function ptcModeHarness(cwd: string): Promise<Context> {
   await harness.plugin(BashEnvPlugin)
   await harness.plugin(LocalBashExecutor, { cwd, timeoutMs: 30_000 })
   await harness.plugin(ToolBash)
-  await mountRuntime(harness)
+  await mountRuntime(harness, PER_CALL)
   return harness
 }
 
@@ -87,7 +96,7 @@ async function workspacePtcModeHarness(): Promise<Context> {
   await harness.plugin(AgentLoop, { agents: [] })
   await harness.plugin(DeepSeekAuth)
   await harness.plugin(LlmDeepSeek, { models: [{ id: 'deepseek-v4-flash' }] })
-  await mountRuntime(harness)
+  await mountRuntime(harness, PER_CALL)
   return harness
 }
 
@@ -123,7 +132,7 @@ function completion(result: ToolExecutionResult): unknown {
   return JSON.parse(text)
 }
 
-async function mountRuntime(harness: Context): Promise<void> {
+async function mountRuntime(harness: Context, mode: PtcMode): Promise<void> {
   onTestFinished(async () => { await harness.fiber.dispose() })
   if (!harness.get('sessions')) await harness.plugin(SessionStore)
   if (!harness.get('fs')) await harness.plugin(LocalFileSystem)
@@ -131,20 +140,20 @@ async function mountRuntime(harness: Context): Promise<void> {
   if (!harness.get('sandbox')) await harness.plugin(Sandbox, {})
   if (!harness.get('sessionProjections')) await harness.plugin(SessionProjectionRegistry)
   if (!harness.get('sandboxPolicy')) await harness.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-  await harness.plugin(NodeRuntime, {})
+  await harness.plugin(NodeRuntime, mode.config)
 }
 
 /** Keyless real-process harness for direct typed-binding acceptance tests. */
-async function typedPtcModeHarness(): Promise<Context> {
+async function typedPtcModeHarness(mode: PtcMode): Promise<Context> {
   const harness = new Context()
   await mountAgentLoopTestDependencies(harness, { workingDirectory: true, tools: { mode: 'ptc' } })
-  await mountRuntime(harness)
+  await mountRuntime(harness, mode)
   return harness
 }
 
 /** Keyless real-process harness with the task-owned bash lifecycle. */
-async function backgroundPtcModeHarness(cwd: string): Promise<Context> {
-  const harness = await typedPtcModeHarness()
+async function backgroundPtcModeHarness(mode: PtcMode, cwd: string): Promise<Context> {
+  const harness = await typedPtcModeHarness(mode)
   await harness.plugin(LocalJobRegistry)
   await harness.plugin(ToolJobs, {})
   if (harness.get('subprocess') === undefined) await harness.plugin(LocalSubprocessRuntime)
@@ -154,12 +163,12 @@ async function backgroundPtcModeHarness(cwd: string): Promise<Context> {
   return harness
 }
 
-describe('PTC mode typed values: keyless real-process contracts', () => {
+describe.each(PTC_MODES)('PTC mode typed values ($mode): keyless real-process contracts', (mode) => {
   it('returns formatted read content from inspect through the real outer run_code result', async () => {
     workdir = await realpath(await mkdtemp(join(tmpdir(), 'dsh-ptc-inspect-read-')))
     const path = join(workdir, 'a.txt')
     await writeFile(path, 'alpha\nbeta\n')
-    ctx = await typedPtcModeHarness()
+    ctx = await typedPtcModeHarness(mode)
     await ctx.plugin(ToolFs)
 
     const formatted = `<path>${path}</path>\n<type>file</type>\n<content>\n1: alpha\n2: beta\n\n(End of file - total 2 lines)\n</content>`
@@ -179,7 +188,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
   })
 
   it.each(['renderer', 'policy'])('keeps an empty %s output silent while preserving program data', async (source) => {
-    ctx = await typedPtcModeHarness()
+    ctx = await typedPtcModeHarness(mode)
     ctx.tools.register(defineTool({
       name: 'silent_result', description: 'Return data without display text.', parameters: {},
       output: {
@@ -200,7 +209,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
   })
 
   it('crosses a large intermediate value intact and exposes only typed tool failure fields', async () => {
-    ctx = await typedPtcModeHarness()
+    ctx = await typedPtcModeHarness(mode)
     ctx.tools.register(defineTool({
       name: 'large_value',
       description: 'Return a large canonical string.',
@@ -254,7 +263,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
 
   it('returns a background job id, settles the outer run, and polls that id to completion', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-background-'))
-    ctx = await backgroundPtcModeHarness(workdir)
+    ctx = await backgroundPtcModeHarness(mode, workdir)
 
     const jobId = completion(await runCode(ctx, `
       const started = await tools.bash({
@@ -277,7 +286,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
 
   it('pre-abort spawns nothing; post-publication abort leaves job_kill as the cancellation owner', { timeout: 15_000, retry: 0 }, async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-task-cancel-'))
-    ctx = await backgroundPtcModeHarness(workdir)
+    ctx = await backgroundPtcModeHarness(mode, workdir)
 
     const pre = new AbortController()
     pre.abort('pre-aborted')
@@ -327,7 +336,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
 
   it('keeps foreground bash coupled to the outer signal', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-foreground-cancel-'))
-    ctx = await backgroundPtcModeHarness(workdir)
+    ctx = await backgroundPtcModeHarness(mode, workdir)
     const controller = new AbortController()
     const startedAt = Date.now()
     const pending = runCode(ctx, `
@@ -341,7 +350,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
   }, 15_000)
 
   it('uses runtime inspection results directly through PTC', async () => {
-    ctx = await typedPtcModeHarness()
+    ctx = await typedPtcModeHarness(mode)
     await ctx.plugin(CordisHostRunner)
     await ctx.plugin(CordisInspectProviders)
     await ctx.plugin(ToolCordis)

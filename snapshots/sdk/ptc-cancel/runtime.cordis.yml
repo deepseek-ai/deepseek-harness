@@ -1,5 +1,8 @@
 - insert:
     - id: ptc-runtime
       name: '@deepseek-ai/dsh-ptc-runtime-node'
+      # Recorded programs are async function bodies.
+      config:
+        executionMode: per-call
     - id: ptc-cancel-fixture
       name: './cancel.mjs'

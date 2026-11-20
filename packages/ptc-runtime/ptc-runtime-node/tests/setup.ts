@@ -10,7 +10,10 @@ import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import NodeRuntime from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 
-export async function mountRuntime(ctx: Context, config: Config = {}, policy: { mode?: SandboxMode; workspaceRoot?: string } = {}) {
+type Policy = { mode?: SandboxMode; workspaceRoot?: string }
+
+/** Mount the provider with its exact configuration, without the per-call default that `mountRuntime` adds. */
+export async function mountConfiguredRuntime(ctx: Context, config: Config, policy: Policy = {}) {
   onTestFinished(async () => { await ctx.fiber.dispose() })
   if (!ctx.get('sessions')) await ctx.plugin(SessionStore)
   if (!ctx.get('fs')) await ctx.plugin(FileSystem)
@@ -20,4 +23,9 @@ export async function mountRuntime(ctx: Context, config: Config = {}, policy: { 
   if (!ctx.get('sandboxPolicy')) await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access', ...policy })
   const fiber = await ctx.plugin(NodeRuntime, config)
   return { runtime: ctx.ptcRuntime as NodeRuntime, fiber }
+}
+
+/** Mount the provider; suites exercise function bodies unless the configuration names an execution mode. */
+export async function mountRuntime(ctx: Context, config: Config = {}, policy: Policy = {}) {
+  return mountConfiguredRuntime(ctx, { executionMode: 'per-call', ...config }, policy)
 }

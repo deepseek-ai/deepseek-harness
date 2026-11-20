@@ -14,10 +14,10 @@ vi.mock('@deepseek-ai/dsh-cua', async importOriginal => ({
 }))
 vi.mock('../src/shared-native.ts', () => ({ createSharedNativeChannel: vi.fn() }))
 
-it('forwards native limits to each channel', async () => {
+it.each([1001, 'off'] as const)('forwards activity setting %s to each channel and its guidance', async (lookback) => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  const config = Config({ helperPath: resolve('fixture-helper') })
+  const config = Config({ helperPath: resolve('fixture-helper'), recentActivityWindowMs: lookback })
   const channel: NativeChannel = {
     stdin: new PassThrough(), stdout: new PassThrough(), done: Promise.resolve(),
     close() {}, waitForClose: async () => {},
@@ -32,5 +32,8 @@ it('forwards native limits to each channel', async () => {
   const owner = { subprocess: { spawn: vi.fn() } }
   const native = { ...config, helperPath: resolve('fixture-helper'), cwd: process.cwd() }
   expect(backend.createChannel(owner, native)).toBe(channel)
-  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native)
+  expect(createSharedNativeChannel).toHaveBeenCalledExactlyOnceWith(owner, native, lookback)
+  for (const mode of ['raw', 'standalone'] as const) {
+    expect(backend.getGuidance(mode).includes('Recent activity notices')).toBe(lookback !== 'off')
+  }
 })

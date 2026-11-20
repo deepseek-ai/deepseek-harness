@@ -3,7 +3,7 @@ import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ActionCardId } from '@deepseek-ai/dsh-action-cards'
-import { fixture, cardId, proposal, recordCard, ACTION } from './fixture.ts'
+import { fixture, cardId, proposal, recordCard } from './fixture.ts'
 import * as CreationRecommendations from '../src/index.ts'
 
 async function prepare(
@@ -49,10 +49,12 @@ it('reports the latest card status on the next request without waking the conver
   expect(inject).not.toHaveBeenCalled()
 })
 
-it('retains undelivered page status across a plugin reload and Session reopen', async () => {
+it('restores an open proposal and a later dismissal across a plugin reload and Session reopen', async () => {
   const f = await fixture()
   await f.propose()
-  await f.act('dismiss')
+  f.agent.session.append('turn/start', { turn: 2 })
+  const later = await f.propose('card-creation-2', { ...proposal, title: 'Checklist' })
+  await f.act('dismiss', 'page', undefined, f.agent, later)
   await f.fiber.dispose()
   await f.ctx.plugin(CreationRecommendations)
   await f.agentHandle.dispose()
@@ -63,6 +65,10 @@ it('retains undelivered page status across a plugin reload and Session reopen', 
   expect(JSON.stringify(decision.messages[0]!.content)).toContain('dismissed')
   enter(reopened.agent, decision)
   expect(await prepare(f, reopened.agent)).toEqual({ kind: 'enter', messages: [] })
+  expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({ status: 'accepted' })
+  await f.entered.promise
+  await f.act('cancel', 'page', undefined, reopened.agent)
+  expect(f.cardOf(later, reopened.agent)?.phase).toBe('dismissed')
 })
 
 it('keeps a later state update pending when an earlier status message enters the log', async () => {
@@ -101,31 +107,6 @@ it('reports installed and removed outcomes, including application errors, withou
   expect(JSON.stringify(failedApplication.messages[0]!.content)).toContain('failed')
   expect(JSON.stringify(failedApplication.messages[0]!.content)).not.toContain(cardId)
   expect(f.startActivation).toHaveBeenCalledOnce()
-})
-
-it('keeps an unstarted proposal across later human messages and lets the next proposal replace it', async () => {
-  const f = await fixture()
-  await f.propose()
-  const human = createUserMessage({ content: [{ type: 'text', text: 'Let us discuss something else.' }], source: { kind: 'user' } })
-  f.agent.session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [human] })
-  f.agent.session.append('user/message', human, { surfaceOp: 'append' })
-  expect(f.current()).toBeUndefined()
-  expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
-  f.agent.session.append('turn/start', { turn: 2 })
-  await f.propose('card-creation-2', { ...proposal, title: 'Checklist' })
-  expect(f.current()).toEqual({ cardId, phase: 'replaced' })
-  // Replacement is the model's own choice, so no status notice is queued for it.
-  expect(await prepare(f)).toEqual({ kind: 'enter', messages: [] })
-  expect(await f.act('create')).toEqual({
-    status: 'settled', decision: { cardId, action: ACTION, phase: 'replaced' },
-  })
-  await f.agentHandle.dispose()
-  const reopened = await f.ctx.agents.create({ sessionId: f.agent.id, seed: [...f.events] })
-  expect(await f.act('create', 'page', undefined, reopened.agent)).toEqual({
-    status: 'settled', decision: { cardId, action: ACTION, phase: 'replaced' },
-  })
-  expect(f.startActivation).not.toHaveBeenCalled()
-  expect(f.manager.installBundle).not.toHaveBeenCalled()
 })
 
 it('keeps accepted work and its retry available across later user messages', async () => {

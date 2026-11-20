@@ -123,13 +123,19 @@ export function ConversationSessionHeader({
   useLayoutEffect(() => {
     const row = tabRow.current
     if (row === null || !hasEntryActions) return
-    const updateLimit = (): void => {
-      setVisibleViewLimit(Math.max(1, Math.floor((row.clientWidth - 48) / 120)))
+    const updateLimit = (width: number): void => {
+      setVisibleViewLimit(Math.max(1, Math.floor((width - 48) / 120)))
     }
-    updateLimit()
+    updateLimit(row.clientWidth)
     if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(updateLimit)
-    observer.observe(row)
+    // The row has padding but no border or scrollbar. Its delivered border-box width,
+    // rounded like clientWidth, preserves the tab thresholds without forcing layout again.
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        for (const size of entry.borderBoxSize) updateLimit(Math.round(size.inlineSize))
+      }
+    })
+    observer.observe(row, { box: 'border-box' })
     return () => { observer.disconnect() }
   }, [showTabs, hasEntryActions])
   const { visibleTabs, moreTabs } = useMemo(() => {

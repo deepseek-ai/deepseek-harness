@@ -5,6 +5,7 @@
     - button "模型"
     - button "插件管理"
     - button "Agent 预设"
+    - button "远程连接"
   - button "打开配置文件"
   - button "关闭"
   - heading "模型" [level=2]
@@ -61,6 +62,10 @@
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - group "推理等级 1":
+            - text: 推理等级
+            - button "推理等级说明": "?"
+            - switch "推理等级 1"
           - button "添加模型"
       - button "取消"
       - button "保存"

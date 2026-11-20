@@ -1,0 +1,11 @@
+version: 1
+scenario: cua-ptc-scoped
+profile: headless
+composition: cua-ptc
+recording: authored
+header:
+  class: cua-ptc-scoped
+  pin: true
+  toolSchemasSource: ptc-scoped-repl
+platform: posix
+permission: danger-full-access

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { expect, onTestFinished, vi } from 'vitest'
+import { expect, onTestFinished, TestRunner, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { appendPluginRecord, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -106,7 +106,8 @@ export async function fixture(initial?: PageCardState) {
     const spec = await entered.promise
     await writeBundle(spec.cwd!, current()!.bundleName!)
     result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
-    await vi.waitFor(() => { expect(current()?.phase).toBe('installed') })
+    // Bundle validation and the profile copy perform real filesystem I/O within the test's lane budget.
+    await vi.waitFor(() => { expect(current()?.phase).toBe('installed') }, { timeout: TestRunner.getCurrentTest()!.timeout })
     return spec
   }
   return { ctx, agent, agentHandle, harness, directory, manager, bundles, startActivation, dispose, result, entered,

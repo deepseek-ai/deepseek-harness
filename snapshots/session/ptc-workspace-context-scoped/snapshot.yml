@@ -1,0 +1,13 @@
+version: 1
+scenario: ptc-workspace-context-scoped
+profile: headless
+composition: ptc-workspace-context
+recording: authored
+header:
+  class: ptc-workspace-context-scoped
+  pin: true
+  systemPromptSource: ptc-turn-scoped
+  toolSchemasSource: ptc-turn-scoped
+replay:
+  override: true
+# Replays the ptc-workspace-context programs as scoped REPL statements.

@@ -10,7 +10,7 @@ final class HeldInputs: @unchecked Sendable {
         let app: String
     }
     enum Mode: Equatable {
-        case keyboard(CGKeyCode, CGEventFlags, String)
+        case keyboard(CGKeyCode, CGEventFlags, String, system: Bool)
         case windowPointer(CGMouseButton, UInt32)
         case systemPointer(CGMouseButton, UInt32)
     }
@@ -25,10 +25,17 @@ final class HeldInputs: @unchecked Sendable {
     private let lock = NSLock()
     private var pressed: [Press] = []
 
-    func snapshot(pid: Int32) -> [CGKeyCode: CGEventFlags] {
+    private let systemFlags: () -> CGEventFlags
+
+    init(systemFlags: @escaping () -> CGEventFlags = { CGEventSource.flagsState(.combinedSessionState) }) {
+        self.systemFlags = systemFlags
+    }
+
+    func snapshot(pid: Int32, system: Bool = false) -> [CGKeyCode: CGEventFlags] {
         lock.withLock {
             Dictionary(uniqueKeysWithValues: pressed.compactMap {
-                guard $0.recipient.pid == pid, case .keyboard(let code, let flag, _) = $0.mode else { return nil }
+                guard case .keyboard(let code, let flag, _, let viaSystem) = $0.mode, viaSystem == system,
+                      system || $0.recipient.pid == pid else { return nil }
                 return (code, flag)
             })
         }
@@ -43,36 +50,38 @@ final class HeldInputs: @unchecked Sendable {
     }
 
     /// Repeats retain the original recipient and do not change the cleanup order.
-    func repeatIfHeld(owner: Owner, name: String, code: CGKeyCode, down: CGEvent, post: (CGEvent, Int32) -> Void) throws -> Bool {
+    func repeatIfHeld(owner: Owner, name: String, code: CGKeyCode, down: CGEvent, system: Bool = false) throws -> Bool {
         try lock.withLock {
             guard let key = pressed.first(where: { $0.owner == owner && $0.mode.keyCode == code }) else { return false }
-            guard case .keyboard(_, let flag, _) = key.mode, flag.isEmpty, down.type == .keyDown else {
+            guard key.mode.isSystem == system else { throw RequestParameters.invalid("Match useSystemInput to the held key") }
+            guard case .keyboard(_, let flag, _, _) = key.mode, flag.isEmpty, down.type == .keyDown else {
                 throw RequestParameters.invalid("Modifier '\(name)' is already held. Send 'up' to release it.")
             }
             try NativePlatform.verify(key.recipient)
-            down.flags = flags(for: key.recipient)
+            down.flags = flags(for: key.recipient, system: system)
             down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
-            post(down, key.recipient.pid)
+            key.post(down)
             return true
         }
     }
 
     func keyDown(owner: Owner, recipient: ProcessIdentity, name: String, code: CGKeyCode, flag: CGEventFlags,
-                 down: CGEvent, up: CGEvent, post: @escaping (CGEvent, Int32) -> Void) throws {
+                 down: CGEvent, up: CGEvent, system: Bool = false, post: @escaping (CGEvent) -> Void) throws {
         try lock.withLock {
-            if let key = pressed.first(where: { $0.mode.keyCode == code && $0.recipient.pid == recipient.pid }) {
+            if let key = pressed.first(where: { $0.mode.keyCode == code && (($0.mode.isSystem && system) || $0.recipient.pid == recipient.pid) }) {
                 throw conflict(name, holder: key.owner, caller: owner)
             }
-            pressed.append(Press(owner: owner, recipient: recipient, mode: .keyboard(code, flag, name), up: up,
-                                 post: { post($0, recipient.pid) }, prepareRelease: nil))
-            down.flags = flags(for: recipient)
-            post(down, recipient.pid)
+            pressed.append(Press(owner: owner, recipient: recipient, mode: .keyboard(code, flag, name, system: system), up: up,
+                                 post: post, prepareRelease: nil))
+            down.flags = flags(for: recipient, system: system)
+            post(down)
         }
     }
 
-    private func flags(for recipient: ProcessIdentity) -> CGEventFlags {
-        pressed.reduce(into: CGEventFlags()) {
-            if $1.recipient == recipient, case .keyboard(_, let flag, _) = $1.mode { $0.formUnion(flag) }
+    private func flags(for recipient: ProcessIdentity, system: Bool, releasing: CGEventFlags = []) -> CGEventFlags {
+        pressed.reduce(into: system ? systemFlags().subtracting(releasing) : CGEventFlags()) {
+            if case .keyboard(_, let flag, _, let viaSystem) = $1.mode, system == viaSystem,
+               system || $1.recipient == recipient { $0.formUnion(flag) }
         }
     }
 
@@ -81,7 +90,7 @@ final class HeldInputs: @unchecked Sendable {
         let press = pressed[index]
         if case .systemPointer = press.mode {
             if let point = CGEvent(source: nil)?.location { press.up.location = point }
-        } else {
+        } else if !press.mode.isSystem {
             do { try NativePlatform.verify(press.recipient) }
             catch let error as NativeFailure where error.code == "STALE_APP" || error.code == "APP_UNAVAILABLE" {
                 pressed.remove(at: index)
@@ -90,14 +99,17 @@ final class HeldInputs: @unchecked Sendable {
         }
         try press.prepareRelease?(press.up)
         pressed.remove(at: index)
-        if case .keyboard = press.mode { press.up.flags = flags(for: press.recipient) }
+        if case .keyboard(_, let flag, _, let system) = press.mode {
+            press.up.flags = flags(for: press.recipient, system: system, releasing: flag)
+        }
         press.post(press.up)
         return true
     }
 
-    func keyUp(owner: Owner, name: String, code: CGKeyCode, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+    func keyUp(owner: Owner, name: String, code: CGKeyCode, system: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
         let dispatched = try lock.withLock { () throws -> Bool? in
             guard let index = pressed.firstIndex(where: { $0.owner == owner && $0.mode.keyCode == code }) else { return nil }
+            guard pressed[index].mode.isSystem == system else { throw RequestParameters.invalid("Match useSystemInput to the held key") }
             return try release(at: index)
         }
         if let dispatched { return dispatched }
@@ -171,10 +183,10 @@ final class HeldInputs: @unchecked Sendable {
     private func record(_ press: Press) -> JSONValue {
         var record: [String: JSONValue] = ["appHandle": .string(press.owner.app)]
         switch press.mode {
-        case .keyboard(_, _, let name):
+        case .keyboard(_, _, let name, let system):
             record["kind"] = .string("key")
             record["key"] = .string(name)
-            record["mode"] = .string("application")
+            record["mode"] = .string(system ? "system" : "application")
         case .windowPointer(let button, let window), .systemPointer(let button, let window):
             record["kind"] = .string("mouse")
             record["button"] = .string(button == .left ? "left" : button == .right ? "right" : "middle")
@@ -191,7 +203,7 @@ final class HeldInputs: @unchecked Sendable {
             for index in pressed.indices.reversed() {
                 let press = pressed[index]
                 guard press.owner.connection == connection, press.owner.task == task else { continue }
-                if case .systemPointer = press.mode { continue }
+                if press.mode.isSystem { continue }
                 do { try NativePlatform.verify(press.recipient) }
                 catch let error as NativeFailure where error.code == "STALE_APP" || error.code == "APP_UNAVAILABLE" {
                     pressed.remove(at: index)
@@ -226,7 +238,14 @@ final class HeldInputs: @unchecked Sendable {
 }
 
 private extension HeldInputs.Mode {
-    var keyCode: CGKeyCode? { if case .keyboard(let code, _, _) = self { return code }; return nil }
+    var isSystem: Bool {
+        switch self {
+        case .keyboard(_, _, _, let system): return system
+        case .systemPointer: return true
+        case .windowPointer: return false
+        }
+    }
+    var keyCode: CGKeyCode? { if case .keyboard(let code, _, _, _) = self { return code }; return nil }
     var pointer: CGMouseButton? {
         switch self { case .keyboard: return nil; case .windowPointer(let button, _), .systemPointer(let button, _): return button }
     }

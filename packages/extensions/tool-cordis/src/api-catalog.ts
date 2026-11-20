@@ -97,7 +97,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'record(agent: Agent, decision: ActionCardDecision): void',
         description: 'Record a card decision in the Session log; the next model request reports it.',
         parameters: [{ name: 'agent', description: 'agent whose Session owns the card.' }, { name: 'decision', description: 'the card\'s new state.' }],
-        throws: ['when no kind ever registered the decision\'s action with this service, or its phase is one the projection derives.'],
+        throws: ['when no kind ever registered the decision\'s action with this service.'],
       },
       {
         signature: 'view(session: Session): ActionCardView',
@@ -510,8 +510,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'readImageRequest( ref: ImageAttachmentRef, target: ImageRequestTarget, signal?: AbortSignal, ): Promise<RequestImageAttachment>',
         description: 'Generate or read one deterministic model-request version from the stored normalized image.',
-        parameters: [{ name: 'ref', description: 'durable provider-independent normalized attachment reference.' }, { name: 'target', description: 'route-chosen dimensions and byte target; an unmet byte target yields the smallest ladder output.' }, { name: 'signal', description: 'optional cancellation.' }],
-        returns: 'request bytes and the cache/upload identity covering every transform input.',
+        parameters: [{ name: 'ref', description: 'durable provider-independent normalized attachment reference.' }, { name: 'target', description: 'route-chosen maximum dimensions, hard byte limit, and preferred byte target.' }, { name: 'signal', description: 'optional cancellation.' }],
+        returns: 'request bytes within the hard limit, actual encoded dimensions, and a cache/upload identity covering every transform input.',
       },
     ],
   },
@@ -2518,7 +2518,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget',
         description: 'Resolve the image projection for an exact registered model route.',
         parameters: [{ name: 'provider', description: 'registered provider route.' }, { name: 'model', description: 'exact model id.' }, { name: 'image', description: 'normalized image reference.' }],
-        returns: 'dimensions and byte target used by the adapter\'s request serializer.',
+        returns: 'maximum dimensions and byte budgets used by the request serializer; readImageRequest returns the actual encoded dimensions.',
       },
       {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
@@ -3184,6 +3184,49 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream the calling Peer\'s access snapshot: one baseline, then `upsert` and `remove` frames after each `invalidate()` and each policy registration or removal that changes a grant. The owner receives only `{ owner: true }`. The generation ends when `signal` aborts or this service unloads, so a reloaded service starts every reader from a fresh baseline.',
         parameters: [{ name: 'signal', description: 'generation cancellation.' }],
         returns: 'the access frames of one generation.',
+      },
+    ],
+  },
+  {
+    key: 'remoteConnection',
+    summary: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
+    description: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
+    methods: [
+      {
+        signature: '@Remote status(id: RemoteLoginId | null): RemoteConnectionStatus',
+        description: 'Read prerequisites and the state of one invitation without disclosing its credential.',
+        parameters: [{ name: 'id', description: 'invitation to inspect, or null to inspect only deployment prerequisites.' }],
+        returns: 'deployment availability and invitation state, with the polling interval.',
+      },
+      {
+        signature: '@Remote create(): RemoteLoginTicket',
+        description: 'Authorize a new browser by generating a one-use login invitation; replaces any older invitation.',
+        parameters: [],
+        returns: 'the invitation credential and its fixed expiry.',
+      },
+      {
+        signature: '@Remote loginUrl(): string',
+        description: 'Read the advertised URL carrying the process launch token; QR invitations are unchanged.',
+        parameters: [],
+        returns: 'owner-only login URL, reusable until the Host process restarts; never persist or log it.',
+      },
+      {
+        signature: '@Remote cancel(id: RemoteLoginId): RemoteLoginState',
+        description: 'Cancel an unused invitation; this never revokes a browser session already issued.',
+        parameters: [{ name: 'id', description: 'invitation being cancelled; an older ID cannot cancel a replacement.' }],
+        returns: 'the invitation\'s final state, including used when a redemption won the race.',
+      },
+      {
+        signature: '@Remote pairingRequests(signal: AbortSignal): PairingRequestsValue',
+        description: 'Read pending requests without the credentials used to collect their sessions.',
+        parameters: [{ name: 'signal', description: 'current Remote call\'s cancellation.' }],
+        returns: 'pending codes and the deployment\'s refresh interval.',
+      },
+      {
+        signature: '@Remote decidePairing(id: PairingRequestId, decision: PairingDecision, signal: AbortSignal): PairingDecisionResult',
+        description: 'Approve or deny one displayed code; the first decision is retained across retries.',
+        parameters: [{ name: 'id', description: 'request selected after comparing its code with the applicant\'s screen.' }, { name: 'decision', description: 'allow or deny full owner access for the requesting browser.' }, { name: 'signal', description: 'current Remote call\'s cancellation before the decision commits.' }],
+        returns: 'committed decision, or unavailable after cancellation, expiry, or collection.',
       },
     ],
   },
@@ -7183,7 +7226,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateSessionOptions',
-    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: SessionHeaderMeta;\n}',
   },
   {
     name: 'CreateShareRequest',
@@ -8039,7 +8082,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImageRequestTarget',
-    declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxBytes: number;\n}',
+    declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxImageBytes: number;\n    imageTargetBytes: number;\n}',
   },
   {
     name: 'ImageUploadValue',
@@ -8890,6 +8933,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PaidTranslationSpec extends TranslationSpecFields {\n    readonly provider: PaidTranslationProvider;\n    readonly sessionId: SessionId;\n}',
   },
   {
+    name: 'PairingDecision',
+    declaration: 'export type PairingDecision = \'allow\' | \'deny\';',
+  },
+  {
+    name: 'PairingDecisionResult',
+    declaration: 'export type PairingDecisionResult = \'approved\' | \'denied\' | \'unavailable\';',
+  },
+  {
+    name: 'PairingRequestId',
+    declaration: 'export type PairingRequestId = Branded<\'PairingRequestId\'>;',
+  },
+  {
+    name: 'PairingRequestsValue',
+    declaration: 'export interface PairingRequestsValue {\n    readonly requests: readonly PendingPairingRequest[];\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
     name: 'PaneOpenArgs',
     declaration: 'export interface PaneOpenArgs {\n    id: string;\n    title?: string;\n    focus?: true;\n    closeOnEscape?: true;\n    holdToasts?: true;\n    rows?: number;\n    columns?: number;\n}',
   },
@@ -8916,6 +8975,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PendingModule',
     declaration: 'export interface PendingModule {\n    url: string;\n    reason: \'host-module\' | \'unmanaged-plugin\' | \'module-comparison\';\n}',
+  },
+  {
+    name: 'PendingPairingRequest',
+    declaration: 'export interface PendingPairingRequest {\n    readonly id: PairingRequestId;\n    readonly code: string;\n    readonly authority: string;\n    readonly sourceIp: string | null;\n    readonly expiresInMs: number;\n}',
   },
   {
     name: 'PendingRemoteEventInfo',
@@ -9370,6 +9433,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
   },
   {
+    name: 'RemoteConnectionStatus',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
+    name: 'RemoteConnectionUnavailable',
+    declaration: 'export type RemoteConnectionUnavailable = \'unreachable-host\' | \'untrusted-host\';',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {\n    readonly isDSHRemoteError: true;\n    constructor(override readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -9388,6 +9459,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RemoteEventHostInfo',
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+  },
+  {
+    name: 'RemoteLoginId',
+    declaration: 'export type RemoteLoginId = Branded<\'remote-login-id\'>;',
+  },
+  {
+    name: 'RemoteLoginState',
+    declaration: 'export type RemoteLoginState = \'none\' | \'pending\' | \'used\' | \'expired\' | \'cancelled\' | \'replaced\';',
+  },
+  {
+    name: 'RemoteLoginTicket',
+    declaration: 'export interface RemoteLoginTicket {\n    readonly id: RemoteLoginId;\n    readonly url: string;\n    readonly lifetimeMs: number;\n}',
   },
   {
     name: 'RemoteStream',
@@ -9924,6 +10007,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionHeader',
     declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+  },
+  {
+    name: 'SessionHeaderMeta',
+    declaration: 'export interface SessionHeaderMeta {\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly createdAt?: number;\n    readonly isSeeded?: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionHistoryRecord',

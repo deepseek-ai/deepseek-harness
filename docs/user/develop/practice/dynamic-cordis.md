@@ -2,7 +2,7 @@
 
 English | [中文](dynamic-cordis.zh.md)
 
-Standard and Creator modes provide [Plugin Manager](../../../../packages/boot/plugin-manager/README.md) and read-only [runtime inspection](../../../../packages/extensions/tool-cordis/README.md). Plugin configuration belongs to the current profile, affects its sessions, and survives process restarts.
+Standard, PTC, and Creator modes provide [Plugin Manager](../../../../packages/boot/plugin-manager/README.md); Standard and Creator also provide read-only [runtime inspection](../../../../packages/extensions/tool-cordis/README.md). Plugin configuration belongs to the current profile, affects its sessions, and survives process restarts.
 
 ## Connect an MCP server
 
