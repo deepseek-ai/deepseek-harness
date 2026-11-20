@@ -16,6 +16,7 @@
     "apps/web/tests/remote-connection-fixture.ts",
     "apps/web/tests/home-whale.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
+    "apps/web/tests/sidebar-fullscreen.e2e.ts",
     "apps/web/tests/session-panel-layout.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/cordis-inspect-subagent.e2e.ts",
