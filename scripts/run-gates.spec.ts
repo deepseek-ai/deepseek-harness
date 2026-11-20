@@ -16,6 +16,7 @@ import {
   taskkillArgs,
   type Gate,
   type GateResult,
+  type Mode,
 } from './run-gates.ts'
 
 // Graph fixtures select their own browser pool instead of inheriting the CI
@@ -254,6 +255,9 @@ describe('gate graph validation', () => {
     'ci-snapshot',
     'ci-artifacts',
     'ci-consumers',
+    'ci-build',
+    'ci-consumers-prebuilt',
+    'ci-web-snapshot-prebuilt',
     'ci-windows-blocking',
     'ci-windows-complete',
     'ci-windows-observational-ready',
@@ -884,6 +888,55 @@ describe('Typert contract preparation', () => {
     expect(needsOf('snapshot')).toEqual(['build', 'playwright-install'])
     expect(needsOf('web-snapshot')).toEqual(['build', 'playwright-install'])
     expect(needsOf('expected-output')).toEqual(['build'])
+  })
+
+  it('starts web snapshots after the build-artifact readers', () => {
+    vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', '16')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers')).find(item => item.id === 'web-snapshot')
+
+    expect(subject?.after).toEqual(['publint', 'snapshot', 'expected-output', 'doc-typecheck', 'node-next-types', 'built-bin-smoke'])
+  })
+
+  it('builds once and runs only the cheap readers in the build lane', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-build'))
+
+    expect(subject.map(item => [item.id, item.needs ?? []])).toEqual([
+      ['build', []],
+      ['publint', ['build']],
+      ['node-next-types', ['build']],
+    ])
+    expect(subject[0]).toMatchObject({ displayCommand: 'pnpm run build:artifacts', env: { DSH_BUILD_CLIENT_PROFILE: 'official' } })
+  })
+
+  it('runs restored-artifact consumers without a build or browsers', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers-prebuilt'))
+
+    expect(subject.map(item => [item.id, item.needs ?? [], item.after ?? []])).toEqual([
+      ['node-compat', [], []],
+      ['snapshot', [], []],
+      ['expected-output', [], []],
+      ['doc-typecheck', [], []],
+      ['built-bin-smoke', [], []],
+    ])
+    expect(subject.find(item => item.id === 'doc-typecheck')?.env).toMatchObject({ DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' })
+  })
+
+  it('leaves the web snapshot adapters to the web shards only in the restored-artifact consumers', () => {
+    const snapshotEnv = (mode: Mode) => withPnpmEntrypoint(() => gatesForMode(mode)).find(item => item.id === 'snapshot')?.env
+
+    expect(snapshotEnv('ci-consumers-prebuilt')).toEqual({ DSH_EXAMPLE_MODE: 'lib', DSH_SNAPSHOT_SKIP_WEB_ADAPTERS: '1' })
+    for (const mode of ['ci-primary', 'check-all', 'ci-snapshot', 'ci-linux-primary', 'ci-consumers'] as const) {
+      expect(snapshotEnv(mode), mode).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
+    }
+  })
+
+  it('runs one restored-artifact web snapshot shard without installing browsers', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-web-snapshot-prebuilt'))
+
+    expect(subject.map(item => [item.id, item.needs ?? [], item.after ?? []])).toEqual([['web-snapshot', [], []]])
   })
 
   it('rejects an unknown Playwright install mode', () => {

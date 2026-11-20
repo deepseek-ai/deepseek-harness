@@ -50,7 +50,7 @@ Status: implemented
 | `typecheck`（pre-push hook 运行它） | `build.ts --scope typecheck`：host-typert（只读源码的 Typert 生成 `generate-typert.ts`）→ 包编译，各 face 包编译后运行 `tsc -b tsconfig.{host,client}.json`；不含任何 bundle | 有 |
 | `dev:web`（[`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)）、`dev:desktop`（`apps/desktop/scripts/dev.ts`） | `build:artifacts` | 启动前无；`dev:web` 启动后的 `tsc -b tsconfig.client.json --watch` 持续检查 Client 聚合根程序 |
 | `lint`、`lint:fix`、`doc-typecheck` 与 CI 的 Typert contracts gate 的前置步骤 | 仅源码 Typert 生成后进行 Host 包编译（`compile-referenced-projects.ts host-contracts`），不含任何 bundle | 无 |
-| CI node 24 / snapshots and artifacts（`check:ci:consumers`）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
+| CI node 24 / build（`check:ci:build`，`node 24 / snapshots and artifacts`（`check:ci:consumers-prebuilt`）与 `node 24 / web snapshots <shard>/2` 恢复并消费其产物）、windows node 24 / build & observational（`check:ci:windows-blocking`） | `build` | 有，两个必需 lane |
 | CI node-compat 24.9 | `build:artifacts`（经 run-gates） | 无 |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | 无 |
 | `e2e.yml`、`release.yml` 的 PR 演练 | `pnpm run build:artifacts --profile official` | 无 |
