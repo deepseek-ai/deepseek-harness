@@ -466,6 +466,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
     locale: NS,
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
+      'conversation.input.placeholder': { kind: 'chain', scope: 'session', inline: true },
       'conversation.input.overlay': { kind: 'list', scope: 'session' },
       'conversation.input.permission': { kind: 'single', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },

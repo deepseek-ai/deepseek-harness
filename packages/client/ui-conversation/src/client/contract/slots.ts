@@ -335,6 +335,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe'; owner: ComposerBarOwnerProps }
     /**
+     * Select by Session id to show noninteractive inline guidance in the built-in empty editor.
+     * Its text names the textbox. When every selector declines, the editor shows its built-in prompt.
+     */
+    'conversation.input.placeholder': {
+      kind: 'chain'
+      scope: 'session'
+      inline: true
+      owner: InputPlaceholderOwnerProps
+    }
+    /**
      * Optional draft-attachment rail and drop target; fixed overlays must portal to the document
      * body because the docked composer contains them.
      */
@@ -657,11 +667,11 @@ export interface InputActivityOwnerProps extends InputControlOwnerProps {
   onActiveChange: (active: boolean) => void
 }
 
-/** Full props of the resident composer bar. */
+/** Props supplied to the built-in resident composer bar. */
 export type ComposerBarProps =
   PropsRuntime<'conversation.composer.bar'>
   & PropsRenderSlots<
-    | 'conversation.input.attachments' | 'conversation.input.overlay'
+    | 'conversation.input.attachments' | 'conversation.input.placeholder' | 'conversation.input.overlay'
     | 'conversation.input.permission'
     | 'conversation.input.left' | 'conversation.input.plan'
     | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
@@ -669,6 +679,12 @@ export type ComposerBarProps =
   >
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>
+
+/** Owner data for the built-in editor's placeholder selectors. */
+export interface InputPlaceholderOwnerProps {
+  /** Session displayed by this editor. */
+  readonly sessionId: SessionId
+}
 
 /** Owner values used to elect a composer takeover. */
 export interface ComposerChainProps {

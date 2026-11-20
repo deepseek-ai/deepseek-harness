@@ -47,7 +47,7 @@ export const InputBar = memo(function InputBar({
   useSession, useInput, inputActions, keyboard, addFiles, removeAttachment, resolveDraftAttachments,
   retryFileUpload, registerFileIntake,
   toggleCommandMenu, stop, retry, t,
-  renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
+  renderSlot, renderSlotChain, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
   useAccess,
   useProjection, sessionId, variant, occurrence, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
@@ -494,6 +494,8 @@ export const InputBar = memo(function InputBar({
           editorDisabled={editorDisabled}
           phase={input?.phase ?? 'inert'}
           placeholderText={placeholderText}
+          placeholderSessionId={editable && !canSteerQueue ? sessionId : undefined}
+          renderSlotChain={renderSlotChain}
           ariaLabel={workspaceTrigger ? t('hero.chooseWorkspace') : placeholderText}
           workspaceTrigger={workspaceTrigger}
           workspacePickerOpen={workspacePickerOpen}

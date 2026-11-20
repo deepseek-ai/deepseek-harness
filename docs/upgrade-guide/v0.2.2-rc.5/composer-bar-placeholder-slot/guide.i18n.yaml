@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/composer-bar-placeholder-slot/guide.md
+/:
+  en: 173c515498e7b371
+  zh: 033eee00d419ce1b
+/composer-bar-props-require-a-placeholder-renderer:
+  en: 4d6c99579d07b5ce
+  zh: e922b7d8c73cbf6f
+/composer-bar-props-require-a-placeholder-renderer/change:
+  en: fa611f5d3749d20b
+  zh: 1d32a73e54bb8c42
+/composer-bar-props-require-a-placeholder-renderer/migration:
+  en: 6f543e4b2bc60c76
+  zh: eae15e765a8a248b

@@ -21,8 +21,37 @@ async function fixture(enabled: boolean) {
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)
   await page.goto(scaffold.authenticatedUrl)
-  return { scaffold, page, tripwire }
+  return { scaffold, browser, page, tripwire }
 }
+
+it('renders an inline command hint and restores the built-in placeholder when the plugin unloads', async () => {
+  const { scaffold, browser, page, tripwire } = await fixture(true)
+  await connectFreshWorkspace(page, scaffold.workspaceCwd)
+  const input = page.getByRole('textbox', { name: '/ to browse commands', exact: true })
+  const placeholder = page.locator('[data-composer-placeholder]')
+  await input.waitFor()
+  expect(await placeholder.locator('kbd').innerText()).toBe('/')
+  expect((await input.innerText()).trim()).toBe('')
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/input-plugin-placeholder.expected.md', import.meta.url)),
+    await captureStableAria(page, '[data-composer-input]', scaffold.workspaceCwd), webSnapshotMode())
+
+  await input.focus()
+  const editor = page.locator('[data-composer-input]')
+  await editor.dispatchEvent('compositionstart')
+  await placeholder.waitFor({ state: 'hidden' })
+  await editor.dispatchEvent('compositionend', { data: '' })
+  await placeholder.waitFor({ state: 'visible' })
+
+  const plugins = await newEnglishPage(browser)
+  await plugins.goto(scaffold.authenticatedUrl)
+  await plugins.getByRole('button', { name: 'Plugins', exact: true }).click()
+  await plugins.getByRole('switch', { name: 'Enable @fixture/input-extension', exact: true, checked: true }).click()
+  const homePrompt = 'Describe what you want to build, / commands, @ files or sessions'
+  await page.getByRole('textbox', { name: homePrompt, exact: true }).waitFor()
+  expect(await placeholder.innerText()).toBe(homePrompt)
+  expect(await placeholder.locator('kbd').count()).toBe(0)
+  expect(tripwire.pageErrors).toEqual([])
+})
 
 it('expands an input activity and inserts one undoable result without overwriting subsequent edits', async () => {
   const { scaffold, page, tripwire } = await fixture(true)
