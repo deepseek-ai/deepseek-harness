@@ -88,7 +88,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'skillProvider(candidate: SkillCandidate, get: SkillProvider[\'get\']): (control: SkillProviderControl) => SkillProvider',
-        description: 'Build a kind\'s skill provider, whose catalog lists the skill while `enabled` is on, except to a fresh subagent.',
+        description: 'Build a kind\'s skill provider. It lists the skill while recommendations are enabled.',
         parameters: [{ name: 'candidate', description: 'the skill\'s catalog entry.' }, { name: 'get', description: 'loads the skill\'s definition.' }],
         returns: 'the factory the kind passes to `ctx.skills.registerProvider`.',
       },
@@ -10608,7 +10608,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SkillProvider',
-    declaration: 'export interface SkillProvider {\n    readonly name: string;\n    readonly list: (options: SkillViewOptions) => Promise<readonly SkillCandidate[] | SkillProviderObservation>;\n    readonly get: (candidate: SkillCandidate, options: SkillLookupOptions) => Promise<SkillDefinition | undefined>;\n}',
+    declaration: 'export interface SkillProvider {\n    readonly name: string;\n    readonly list: (options: SkillLookupOptions) => Promise<readonly SkillCandidate[] | SkillProviderObservation>;\n    readonly get: (candidate: SkillCandidate, options: SkillLookupOptions) => Promise<SkillDefinition | undefined>;\n}',
   },
   {
     name: 'SkillProviderControl',

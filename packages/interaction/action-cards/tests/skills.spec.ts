@@ -1,11 +1,8 @@
-/** The user switch and the viewing Agent decide whether a kind's skill is listed and loadable. */
+/** The user switch decides whether a kind's skill is listed and loadable. */
 import { expect, it } from 'vitest'
 import { createVolatile, updateVolatile } from '@deepseek-ai/cosmokit'
 import type { Context } from '@deepseek-ai/cordis'
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { SessionLogOffset, type SessionId } from '@deepseek-ai/dsh-session'
 import Skills, { BUNDLED_SKILL_RANK } from '@deepseek-ai/dsh-skill'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Config } from '../src/index.ts'
 import { fixture } from './fixture.ts'
 
@@ -41,19 +38,4 @@ it('lists a card skill only while the user switch is on, for its registrant\'s l
   expect(await listed()).toBe(false)
   switchCards(false)
   expect(await listed()).toBe(false)
-})
-
-it('leaves a card skill out of a fresh subagent and keeps it in a fork, whose inherited catalog already names it', async () => {
-  const f = await fixture()
-  await mountCardSkill(f)
-  const meta = { parentSession: f.agent.id, origin: 'subagent' } as const
-  const { agent: fresh } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cards-fresh'), meta })
-  const seed = f.agent.session.snapshotEvents()
-  const { agent: fork } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cards-fork'), seed,
-    inheritedEventCount: SessionLogOffset(seed.length), meta: { ...meta, isSeeded: true } })
-  const listed = async (scope: Agent) => (await f.ctx.skills.list({ scope })).some(skill => skill.name === cardSkill.name)
-  expect(await listed(f.agent)).toBe(true)
-  expect(await listed(fork)).toBe(true)
-  expect(await listed(fresh)).toBe(false)
-  expect(await f.ctx.skills.get(cardSkill.name, { scope: fresh })).toBeUndefined()
 })

@@ -120,20 +120,3 @@ it.skipIf(webSnapshotMode() === 'record')('persists the card switch, and later r
   expect(catalogCardSkills(server.requests[3]!.body)).toEqual(CARD_SKILLS)
   expect(server.requests.map(request => request.outcome)).toEqual(['completed', 'completed', 'completed', 'completed'])
 })
-
-it.skipIf(webSnapshotMode() === 'record')('keeps card skills out of a fresh subagent while its parent lists them', async () => {
-  const childPrompt = 'Reply with done.'
-  const server = await startMockLlmServer({
-    sequence: ['tool_call_success', 'success', 'success', 'success'], successText: 'CARD_SUBAGENT_DONE',
-    toolName: 'subagent', toolArguments: JSON.stringify({ description: 'Check notes', prompt: childPrompt }),
-  })
-  onTestFinished(() => server.close())
-  const { send } = await openClient(server)
-  await send('parent-marker')
-  const childRequest = () => server.requests.find(request => requestTexts(request.body).some(text => text.includes(childPrompt)))
-  await expect.poll(() => childRequest() !== undefined).toBe(true)
-  const child = childRequest()!
-  expect(catalogCardSkills(server.requests[0]!.body)).toEqual(CARD_SKILLS)
-  expect(declaredTools(child.body)).toContain('skill')
-  expect(CARD_SKILLS.filter(name => requestTexts(child.body).some(text => text.includes(name)))).toEqual([])
-})

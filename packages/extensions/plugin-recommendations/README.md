@@ -73,7 +73,7 @@ The existing `skill` tool loads `official-plugins` when the user asks how to do 
 
 #### Token effect
 
-While enabled, requests of the main conversation and of forked subagents carry only the 495-character catalog entry, within the skill catalog's 500-character limit. A skill load appends a body of about 7.5K characters: a 3.0K-character policy plus the catalog, about 4.4K characters for 16 eligible plugins with English titles and descriptions only, growing with their number. A recommendation needs one skill load, and the `action-card` block in its final answer is part of that answer; the replayed block is 237 characters, about 59 tokens at four characters per token. A changed card appends one short status notice to the next request.
+With recommendations enabled, the skill catalog contains one 495-character entry, within its 500-character limit. The Creator preset excludes this entry. A skill load appends a body of about 7.5K characters: a 3.0K-character policy plus the catalog, about 4.4K characters for 16 eligible plugins with English titles and descriptions only, growing with their number. A recommendation needs one skill load, and the `action-card` block in its final answer is part of that answer; the replayed block is 237 characters, about 59 tokens at four characters per token. A changed card appends one short status notice to the next request.
 
 #### KV Cache effect
 

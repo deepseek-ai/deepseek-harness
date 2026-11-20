@@ -101,7 +101,7 @@ The existing `skill` tool loads `personalized-pages` for an explicit interface r
 
 #### Token effect
 
-While enabled, requests of the main conversation and of forked subagents carry the Skill catalog entry; a fresh subagent's requests do not. Full planning policy, handoff examples and the current official-plugin catalog load through `skill` when needed. The loaded body has about 11.6K characters: 6.5K of policy plus 5.1K of catalog text for 19 official plugins with English titles and descriptions only, growing with their number. A creation recommendation needs one skill load, and its `action-card` block ends the final answer. Only an accepted creation spends a background Creator run. The card's information button explains potentially long generation and substantial token use; reading it starts no work.
+With recommendations enabled, the skill catalog contains one page-planning entry. The Creator preset excludes it. Full planning policy, handoff examples and the current official-plugin catalog load through `skill` when needed. The loaded body has about 11.6K characters: 6.5K of policy plus 5.1K of catalog text for 19 official plugins with English titles and descriptions only, growing with their number. A creation recommendation needs one skill load, and its `action-card` block ends the final answer. Only an accepted creation spends a background Creator run. The card's information button explains potentially long generation and substantial token use; reading it starts no work.
 
 #### KV Cache effect
 

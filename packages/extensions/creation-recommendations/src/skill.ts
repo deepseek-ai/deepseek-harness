@@ -1,5 +1,6 @@
 /** On-demand page planning with an English plugin catalog for duplicate checks. */
 import { readFile } from 'node:fs/promises'
+import { bundleCatalogEntry } from '@deepseek-ai/dsh-plugin-manager/catalog'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 
@@ -23,14 +24,7 @@ export function registerCreationSkill(ctx: Context): void {
     return {
       ...summary,
       content: instructions + '\n## Existing capabilities to check against this page plan\n\n'
-        + JSON.stringify(bundles.filter(bundle => bundle.official).map((bundle) => {
-          const title = bundle.meta?.title ?? bundle.name
-          const description = bundle.meta?.description ?? bundle.description ?? ''
-          return {
-            name: bundle.name, title: typeof title === 'string' ? title : title.en,
-            description: typeof description === 'string' ? description : description.en, enabled: bundle.enabled,
-          }
-        })),
+        + JSON.stringify(bundles.filter(bundle => bundle.official).map(bundleCatalogEntry)),
     }
   }))
 }

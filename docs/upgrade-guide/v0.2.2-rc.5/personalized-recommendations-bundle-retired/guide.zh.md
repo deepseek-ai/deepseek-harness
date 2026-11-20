@@ -22,4 +22,4 @@ description: "“个性化推荐”可选 bundle 已移除；Web 组合自行挂
 1. 启动升级后的 profile 前，检查 `$DSH_HOME/profiles/<name>/cordis.patch.yml` 和所有 `--patch` overlay 中针对上述六个行 id 的覆盖项。如需恢复全部组件，并通过通用设置的总开关控制推荐，移除其中旧的 `disabled: true` 字段。只有覆盖项仅含 `id`、可选的 `name` 和 `disabled` 时，才删除整个覆盖项；否则保留其他字段及 `config`。
 2. 恢复组件后如需继续关闭推荐，在已有 `action-cards` 覆盖项中设置 `config.enabled: false`；没有该覆盖项时，再向 profile 的 `cordis.patch.yml` 加入 `- {id: action-cards, config: {enabled: false}}`。启动后，“设置 → 通用设置 → 个性化推荐”控制的就是这个值。
 3. 用每个受影响的 profile 启动一次 `dsh`，自动移除已退役的 bundle 选项。由其他工具写入的 profile 目录需要自行从 `dsh.profile.bundles` 删除该条目。
-4. 确认：`dsh.profile.bundles` 不再列出该 bundle，插件管理页不再显示异常的“个性化推荐”条目，且“通用设置”中显示“个性化推荐”开关。六个组件均已启用且总开关开启时，新主对话能加载 `official-plugins` 和 `personalized-pages` 两个 Skill。
+4. 确认：`dsh.profile.bundles` 不再列出该 bundle，插件管理页不再显示异常的“个性化推荐”条目，且“通用设置”中显示“个性化推荐”开关。六个组件均已启用且总开关开启时，新建的普通模式对话能加载 `official-plugins` 和 `personalized-pages` 两个 Skill。

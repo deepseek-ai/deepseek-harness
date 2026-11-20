@@ -46,6 +46,7 @@ agent 可以在会话期间发现并加载 skill。当 `skill` 工具可见时�
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `catalogDescriptionMaxLength` | `500` | 会话目录中渲染的规范化描述最大长度；最小为 3 |
+| `excludedSkills` | `[]` | 此工具按确切名称排除的 Skill，对会话目录、按名加载和用户的 `/name` 调用均生效 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-skill)是每个受支持字段的穷尽式真源。
 

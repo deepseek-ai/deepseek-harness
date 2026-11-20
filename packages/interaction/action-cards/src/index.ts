@@ -7,7 +7,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type Session } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import type { SkillCandidate, SkillProvider, SkillProviderControl, SkillViewOptions } from '@deepseek-ai/dsh-skill'
+import type { SkillCandidate, SkillProvider, SkillProviderControl } from '@deepseek-ai/dsh-skill'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -168,19 +168,6 @@ export class ActionCards extends TypertRemoteService {
     return this.ctx.agents.get(agent.id) === agent && agent.session.header.origin !== 'subagent'
   }
 
-  /**
-   * Whether a `skillProvider` catalog for this viewer lists its skill: never while `enabled` is off, and otherwise for every
-   * viewer except a fresh subagent, which can show no card. A viewer that is not a live Agent, such as the global layer,
-   * lists it; a fork keeps it, because its inherited catalog already names the skill and removing it would only add a
-   * replacement catalog.
-   */
-  private offersSkills(scope: SkillViewOptions['scope']): boolean {
-    if (!this.config.enabled.get()) return false
-    const agent = this.ctx.agents.list().find(candidate => candidate === scope)
-    if (agent === undefined) return true
-    return agent.session.header.origin !== 'subagent' || agent.session.header.isSeeded
-  }
-
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(actionCardProjection)
     this.ctx.on('loader/volatile-update', () => { for (const control of this.skillControls) control.invalidate() })
@@ -211,7 +198,7 @@ export class ActionCards extends TypertRemoteService {
   }
 
   /**
-   * Build a kind's skill provider, whose catalog lists the skill while `enabled` is on, except to a fresh subagent.
+   * Build a kind's skill provider. It lists the skill while recommendations are enabled.
    * @param candidate - the skill's catalog entry.
    * @param get - loads the skill's definition.
    * @returns the factory the kind passes to `ctx.skills.registerProvider`.
@@ -220,7 +207,7 @@ export class ActionCards extends TypertRemoteService {
     return (control) => {
       this.skillControls.add(control)
       control.signal.addEventListener('abort', () => { this.skillControls.delete(control) })
-      return { name: candidate.provider, list: ({ scope }) => Promise.resolve(this.offersSkills(scope) ? [candidate] : []), get }
+      return { name: candidate.provider, list: () => Promise.resolve(this.config.enabled.get() ? [candidate] : []), get }
     }
   }
 

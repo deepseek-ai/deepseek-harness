@@ -22,6 +22,10 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
+    "./catalog": {
+      "types": "./lib/types/catalog.d.ts",
+      "default": "./lib/types/catalog.js"
+    },
     "./registry": {
       "types": "./lib/types/registry.d.ts",
       "default": "./lib/types/registry.js"

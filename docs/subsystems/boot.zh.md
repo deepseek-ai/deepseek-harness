@@ -77,7 +77,7 @@ Kind registry, skill switch, Session projection, user actions and status notices
 
 ```ts cordis-catalog
 /**
- * Build a kind's skill provider, whose catalog lists the skill while `enabled` is on, except to a fresh subagent.
+ * Build a kind's skill provider. It lists the skill while recommendations are enabled.
  * @param candidate - the skill's catalog entry.
  * @param get - loads the skill's definition.
  * @returns the factory the kind passes to `ctx.skills.registerProvider`.

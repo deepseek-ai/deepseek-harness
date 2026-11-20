@@ -1,5 +1,6 @@
 /** On-demand official-plugin catalog for explicit product-use needs. */
 import { readFile } from 'node:fs/promises'
+import { bundleCatalogEntry } from '@deepseek-ai/dsh-plugin-manager/catalog'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
@@ -11,18 +12,6 @@ import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
 export function eligible(bundle: BundleInfo): boolean {
   return bundle.official && bundle.optional && bundle.availability !== 'missing'
     && bundle.readOnlyReason === undefined && bundle.error === undefined
-}
-
-/** The eligible plugins as the skill lists them: name, English title and description, and selection. */
-function catalogOf(bundles: readonly BundleInfo[]): string {
-  return JSON.stringify(bundles.filter(eligible).map((bundle) => {
-    const title = bundle.meta?.title ?? bundle.name
-    const description = bundle.meta?.description ?? bundle.description ?? ''
-    return {
-      name: bundle.name, title: typeof title === 'string' ? title : title.en,
-      description: typeof description === 'string' ? description : description.en, enabled: bundle.enabled,
-    }
-  }))
 }
 
 /** Register the official-plugins skill behind the card switch, without adding a model tool or a system-prompt section.
@@ -37,7 +26,7 @@ export function registerOfficialPluginsSkill(ctx: Context): void {
   }
   ctx.skills.registerProvider(ctx.actionCards.skillProvider(candidate, async (_candidate, { signal }) => {
     const policy = await readFile(new URL('../skills/official-plugins.md', import.meta.url), { encoding: 'utf8', signal })
-    const catalog = catalogOf(await ctx.pluginManager.listBundles())
+    const catalog = JSON.stringify((await ctx.pluginManager.listBundles()).filter(eligible).map(bundleCatalogEntry))
     signal?.throwIfAborted()
     const { rank: _rank, locator: _locator, ...entry } = candidate
     return { ...entry, content: `${policy}\n## Official plugins\n\n${catalog}` }
