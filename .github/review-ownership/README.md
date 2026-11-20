@@ -114,7 +114,7 @@ Run `pnpm run test:approval-policy` for policy parsing, effective review decisio
 
 ## Dev Note
 
-[Weighted approval status gate and decision label](../../.agents/notes/archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the legacy status requirement and the measured check-run association.
+[Weighted approval status gate and decision label](../../.agents/notes/archived/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md) records the original check-run association measurements. [Legacy status publisher](#legacy-status-publisher) describes current behavior and credential requirements.
 
 [Weighted approval machine review pilot](../../.agents/notes/implemented/process/2026-11-18-weighted-approval-as-review.md) records the staged rollout, the machine account, and the required review team.
 

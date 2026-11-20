@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-分阶段上线期间保留 commit status 要求。旧版 `weighted-approval` workflow 继续在既有路径发布 `weighted approval` commit status 和 `weighted approval decision` check run，处于启用状态的 ruleset 20925054 继续要求该 status 和一个 approving review。机器账号的 review 可以满足这一 review 数量要求，但无法满足该 status；低于加权阈值的拉取请求仍被该 status 阻塞。旧版 publisher 仍是委托的人类 review dismissal 和 review request 的唯一写入者。
+分阶段上线期间保留 commit status 要求。旧版 `weighted-approval` workflow 继续在既有路径发布 `weighted approval` commit status 和 `weighted approval decision` check run，处于启用状态的 ruleset 20925054 继续要求该 status 和一个 approving review。机器账号的 review 可以满足这一 review 数量要求，但无法满足该 status；低于加权阈值的拉取请求仍被该 status 阻塞。status 由 job token 发布；决定标签优先使用配置的 App slug 所属的 check run。签发 App token 失败时，标签改用 job token；标签失败不会移除必填 status。旧版 publisher 仍是委托的人类 review dismissal 和 review request 的唯一写入者。
 
 第二个 workflow `weighted-approval-machine` 以机器账号 `deepseek-ai-harness`（用户 ID 359032549）发布同一决定，形式为原生 review。它复用评分策略，以及无权限的 `weighted-approval-review-event` workflow 转交路径。它只写自己的评论、approving review 和对该 approval 的 dismissal；它读取评分所需的其它 review、评论、权限和历史。它从不 dismiss 人类 review，也不发起 review request。
 
@@ -55,6 +55,6 @@ Status: implemented
 
 并存期间，处于启用状态的单个 approving review 要求可以由机器账号的 review 满足，而低于加权阈值的拉取请求仍被必填 status 阻塞。在 ruleset 27532727 和团队要求启用之前，它们不增加强制执行。评分失败会尝试 dismiss 试点的 approval，但 setup、凭据或 API 失败以及未送达的事件可能留下较早的 approval；发布后的 push 也可能让较早提交的 approval 保留到下一次评估。reviewer 必须检查被评审的提交。
 
-机器账号需要对仓库的写权限，其 PAT 必须轮换并保存为 `secrets.DSH_APPROVAL_BOT_TOKEN`；这比它替换的 App 安装有更宽的访问权限。GitHub 会拒绝机器账号对自己创建的拉取请求提交 approval。启用单成员团队要求后，人类 approval 无法满足该团队要求，因此机器账号创建的拉取请求不得以受覆盖的 ref 为目标。
+机器账号需要对仓库的写权限，其 PAT 必须轮换并保存为 `secrets.DSH_APPROVAL_BOT_TOKEN`；这比旧版 check-run 标签所用的 App 安装有更宽的访问权限。GitHub 会拒绝机器账号对自己创建的拉取请求提交 approval。启用单成员团队要求后，人类 approval 无法满足该团队要求，因此机器账号创建的拉取请求不得以受覆盖的 ref 为目标。
 
 团队要求生效后，机器账号的 approval 成为强制要求，加权分数决定每个拉取请求能否合并；任何有写权限的人类 approval 都不再单独满足要求。退役 status 后，后续 `pull_request_target` 运行不再出现 `Expected` 故障。旧版 publisher 的 job 不再是必填检查；试点评估失败会作为失败的 run 出现，但不会阻塞已有 required team approval 的合并。
