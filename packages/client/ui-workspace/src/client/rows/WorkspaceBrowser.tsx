@@ -34,8 +34,8 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { ArchivedFilter, GroupNode, SessionNode, SessionOrderBy, SessionRowState } from '../tree.ts'
 import {
-  deriveFlat, deriveGroups, deriveSearchResults, mainSessionId, orderByRecency, sessionSearchIndex, owningGroupKey, owningParentFolder,
-  pinCurrentBlank, reconcileManualOrder, sessionMemberIds, UNGROUPED_KEY,
+  currentRowSessionId, deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey,
+  owningParentFolder, pinCurrentBlank, reconcileManualOrder, sessionMemberIds, UNGROUPED_KEY,
 } from '../tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY, type SessionGroupBy } from '../stores.ts'
@@ -326,7 +326,7 @@ function SessionTree({
   const statuses = useSessionStatus(s => s)
   const current = panelActive
     ? undefined
-    : mainSessionId(list)
+    : currentRowSessionId(list)
   const revealGroup = revealSessionId === undefined || !workspaceReady
     ? undefined
     : owningGroupKey(workspaces, revealSessionId)
@@ -712,7 +712,7 @@ function FlatList({
   useNativeDragAcceptance(drag !== null)
   const currentId = panelActive
     ? undefined
-    : mainSessionId(list)
+    : currentRowSessionId(list)
   const commitDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (dropCommitted.current) return
     dropCommitted.current = true
@@ -852,7 +852,7 @@ function SearchResults({
   const pending = currentRemote.status === 'loading'
   const currentId = panelActive
     ? undefined
-    : mainSessionId(list)
+    : currentRowSessionId(list)
 
   return (
     <div className={clsx(css.treeBody, css.wide)}>
@@ -980,8 +980,8 @@ export function WorkspaceBrowser({
   }
   const leaveArchivedOnly = (): void => { actions.setArchivedFilter('default') }
   const workspaceReady = workspacePhase === 'ready' && workspaceStreamState !== 'loading'
-  const mainId = mainSessionId(list)
-  const currentBlank = mainId !== undefined && list.byId[mainId]?.blank === true ? mainId : undefined
+  const currentRowId = currentRowSessionId(list)
+  const currentBlank = currentRowId !== undefined && list.byId[currentRowId]?.blank === true ? currentRowId : undefined
   const ungroupedMemberIds = useMemo(() => {
     const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
     return list.ids.filter(id => list.byId[id] !== undefined && !accounted.has(id))

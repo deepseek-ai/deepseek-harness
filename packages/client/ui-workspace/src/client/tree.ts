@@ -43,7 +43,7 @@ type SessionStatuses = SessionStatusSnapshot
  * @returns the viewed Session, or, for a subagent Session, the first non-subagent ancestor reached through `list`;
  *   a missing parent or a lineage cycle stops at the last subagent Session reached.
  */
-export function mainSessionId(list: SessionListState): SessionId | undefined {
+export function currentRowSessionId(list: SessionListState): SessionId | undefined {
   let session = Object.values(list.byId).find(row => (row.retainedBy.mainView ?? 0) > 0)
   const seen = new Set<SessionId>()
   while (session?.origin === 'subagent' && session.parentId !== undefined && !seen.has(session.id)) {
@@ -348,7 +348,7 @@ function groupByWorkspace(
   archivedFilter: ArchivedFilter,
   ungroupedOrder: readonly string[] | undefined,
 ): Group[] {
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
   for (const workspace of workspaces) {
@@ -457,7 +457,7 @@ export function deriveGroups(
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   const currentGroup = current === undefined
     ? undefined
     : owningGroupKey(workspaces, current)
@@ -504,7 +504,7 @@ export function visibleSessionIds(
   archivedFilter: ArchivedFilter,
 ): SessionId[] {
   const archived = new Set(archivedSessionIds)
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   return list.ids.filter((id) => {
     const s = list.byId[id]
     return s !== undefined && sessionVisible(s, current, archived, archivedFilter)
@@ -528,7 +528,7 @@ export function deriveFlat(
 ): SessionNode[] {
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   const members = sessionIds.flatMap((id) => {
     const session = list.byId[id]
     return session !== undefined && sessionVisible(session, current, archived, rowState.archivedFilter)
@@ -569,7 +569,7 @@ export function sessionSearchIndex(
   previous?: TextSearchIndex<SessionSummary>,
 ): TextSearchIndex<SessionSummary> {
   const archived = new Set(archivedSessionIds)
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   const labelOf = workspaceLabels(workspaces)
   const visible = list.ids.filter((id) => {
     const summary = list.byId[id]
@@ -609,7 +609,7 @@ export function deriveSearchResults(
 ): SearchResultSet {
   if (query.trim() === '') return { items: [], hasMore: false }
   const archived = new Set(archivedSessionIds)
-  const current = mainSessionId(list)
+  const current = currentRowSessionId(list)
   const labelOf = workspaceLabels(workspaces)
   const contentBySession = new Map<SessionId, SessionSearchResultItem>()
   for (const item of content.items) {
