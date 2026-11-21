@@ -2,7 +2,7 @@
  * Output renderer registry: drives the renderer named by `spec.output` for each `im/activity` turn of a session that
  * may publish (per-turn {@link ImOutputIO} with quote/thread from the trigger, attributed sends); re-emits
  * `interaction/button`, `interaction/select` and `interaction/check` in admitted chats as `im/button`, `im/select` and
- * `im/check`, routing `dsh:stop:<id>` to `sessions.stop`.
+ * `im/check`. What a control does is up to the plugin that rendered it (a renderer's stop button stops its session).
  *
  * Target chat per turn ({@link targetOf}): the trigger's chat when the session holds a writable binding for it (that
  * binding's thread), else the writable home binding. A trigger of another chat is not quoted.
@@ -22,14 +22,11 @@ import {
   ImChatKey, ImMessageKey,
   type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImCheckEvent,
   type ImHistory, type ImMessage, type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImReactionEvent,
-  type ImSelectEvent, type ImSendOptions, type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
+  type ImSelectEvent, type ImSendOptions, type ImSendResult, type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { allows, admitsChat } from './intake.ts'
 import type { ImSender } from './send.ts'
-
-/** Button id prefix the core routes to `sessions.stop`. */
-export const STOP_BUTTON_PREFIX = 'dsh:stop:'
 
 /** Reserved `spec.output` value that names no renderer: nothing is published unless the agent calls `im_send`. */
 export const NO_OUTPUT = 'none'
@@ -43,7 +40,6 @@ export interface ImOutputHost {
   /** The configured admission rule of a chat, whose `users` allowlist gates button clicks. */
   source(id: string): ImSourceConfig | undefined
   readonly history: Pick<ImHistory, 'get'>
-  readonly sessions: Pick<ImSessions, 'get' | 'stop'>
 }
 
 /** What the registry needs: the host slice a rendered turn reads and the sender it publishes through. */
@@ -81,9 +77,11 @@ export class ImOutputRegistry implements ImOutputs {
   start(): void {
     this.ctx.on('im/activity', (activity, change) => { this.activity(activity, change) })
     this.ctx.on('interaction/button', (session) => {
-      void this.button(session).catch((error: unknown) => {
+      try {
+        this.button(session)
+      } catch (error: unknown) {
         this.ctx.logger.warn('IM button click was not handled: %s', String(error))
-      })
+      }
     })
     this.ctx.on('interaction/select', (session) => {
       this.guarded('select', () => { this.select(session) })
@@ -131,7 +129,7 @@ export class ImOutputRegistry implements ImOutputs {
    * `interaction/button` listener body (exposed for tests).
    * @param session - the core interaction session whose button was clicked.
    */
-  async button(session: Session): Promise<void> {
+  button(session: Session): void {
     const button = session.button
     if (button === undefined) return
     const context = this.interaction(button)
@@ -150,8 +148,6 @@ export class ImOutputRegistry implements ImOutputs {
       ...context.session === undefined ? {} : { session: context.session },
     }
     this.ctx.emit('im/button', event)
-    if (!button.id.startsWith(STOP_BUTTON_PREFIX)) return
-    await this.stop(context.chat, button.id.slice(STOP_BUTTON_PREFIX.length))
   }
 
   /**
@@ -392,17 +388,6 @@ export class ImOutputRegistry implements ImOutputs {
       stream: (streamOptions?: StreamOptions): Promise<MessageStream> =>
         this.deps.sender.stream(chat, { ...sendOptions(), ...streamOptions }),
       send: (content: Fragment): Promise<ImSendResult> => this.deps.sender.send(chat, content, sendOptions()),
-    }
-  }
-
-  /** `dsh:stop:<sessionId>`: cancel the running turn of a session bound to the chat the button lives in. */
-  private async stop(chat: ImChat, target: string): Promise<void> {
-    const record = this.deps.im.sessions.get(target)
-    if (record === undefined || !record.bindings.some(binding => binding.chat === chat.key)) return
-    try {
-      await this.deps.im.sessions.stop(record.sessionId)
-    } catch (error: unknown) {
-      this.ctx.logger.warn('IM stop button could not stop session %s: %s', record.sessionId, error)
     }
   }
 }

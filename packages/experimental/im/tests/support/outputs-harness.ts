@@ -224,10 +224,6 @@ export class OutputsHarness {
   readonly hosted = new Map<string, ImSessionRecord>()
   /** Configured admission rules by id (`source`); a click must pass the rule's `users`. */
   readonly sources = new Map<string, ImSourceConfig>()
-  /** Sessions the stop route cancelled. */
-  readonly stopped: SessionId[] = []
-  /** Every `sessions.stop()` call rejects. */
-  stopFails = false
 
   constructor() {
     this.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all' })
@@ -235,14 +231,6 @@ export class OutputsHarness {
       chat: (key: ImChatKey): ImChat | undefined => this.chats.get(key),
       source: (id: string): ImSourceConfig | undefined => this.sources.get(id),
       history: { get: (key: ImMessageKey) => this.messages.get(key) },
-      sessions: {
-        get: (target: string | SessionId) => this.hosted.get(target),
-        stop: async (target: string | SessionId): Promise<boolean> => {
-          if (this.stopFails) throw new Error('stop offline')
-          this.stopped.push(target as SessionId)
-          return true
-        },
-      },
     } satisfies ImOutputDeps['im']
     this.registry = new ImOutputRegistry(this.ctx, { im, sender: this.sender })
     this.ctx.on('im/button', (event) => { this.buttons.push(event) })

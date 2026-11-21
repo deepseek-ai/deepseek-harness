@@ -115,7 +115,7 @@ kind: "package-reference"
 
 对于托管会话的每一个轮次，活动跟踪器维护一份 `ImActivity` 快照，包含轮次号、状态（`running`、`done`、`cancelled`、`error`）、触发消息，以及按顺序累积的 `segments`（助手 `text`、`reasoning` 以及带有限长度参数和结果预览的 `tool` 调用）。每次更新都会发出带变更类型（`start`、`delta`、`tool`、`end`）的 `im/activity` 事件。
 
-若会话在 `output` 中指定了某个已挂载插件注册的渲染器，`ctx.im.outputs` 会在轮次开始时调用 `renderer.begin(activity, io)`，在后续变化时调用 `update(activity, change)`，在结束时调用一次 `end(activity)`。当会话对触发消息所在聊天拥有可写绑定时，渲染目标为该聊天（及该绑定限定的线程），否则回退到可写的 `home` 绑定；若两者都不可写，则不渲染任何输出。当 `output` 为默认的 `'none'` 时，不运行任何渲染器，agent 仅在主动调用 `im_send`、`im_reply` 或 `im_send_file` 时才向聊天发消息。此外，`ctx.im.outputs` 会将已接纳聊天中的按钮点击转发为 `im/button` 事件、把 `<select>` 的选项选择转发为 `im/select` 事件、把勾选框的切换转发为 `im/check` 事件，并将 `dsh:stop:<sessionId>` 按钮点击路由到 `sessions.stop`。
+若会话在 `output` 中指定了某个已挂载插件注册的渲染器，`ctx.im.outputs` 会在轮次开始时调用 `renderer.begin(activity, io)`，在后续变化时调用 `update(activity, change)`，在结束时调用一次 `end(activity)`。当会话对触发消息所在聊天拥有可写绑定时，渲染目标为该聊天（及该绑定限定的线程），否则回退到可写的 `home` 绑定；若两者都不可写，则不渲染任何输出。当 `output` 为默认的 `'none'` 时，不运行任何渲染器，agent 仅在主动调用 `im_send`、`im_reply` 或 `im_send_file` 时才向聊天发消息。此外，`ctx.im.outputs` 会将已接纳聊天中的按钮点击转发为 `im/button` 事件、把 `<select>` 的选项选择转发为 `im/select` 事件、把勾选框的切换转发为 `im/check` 事件；控件的行为由渲染它的插件自行处理。
 
 ### IM 工具
 

@@ -8,7 +8,6 @@ import {
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { sessionIdOf } from '../src/hosting.ts'
-import { STOP_BUTTON_PREFIX } from '../src/outputs.ts'
 import { IM_TOOLS } from '../src/tools.ts'
 import { errorValue, imReadFileParameters, imReadImageParameters, imSendParameters } from '../src/schema.ts'
 
@@ -60,7 +59,6 @@ describe('dsh-im contracts', () => {
   })
 
   it('exposes the constants plugins rely on', () => {
-    expect(STOP_BUTTON_PREFIX).toBe('dsh:stop:')
     expect(IM_TOOLS).toEqual([
       'im_read', 'im_history', 'im_members', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
     ])

@@ -143,7 +143,7 @@ export type ImEventDelivery = Omit<ImDelivery, 'id' | 'content'> & { id?: string
 
 /** A button click in an admitted chat (`button[type=action]`), re-emitted by the core as `im/button`. */
 export interface ImButtonEvent {
-  /** `button.id` as rendered, e.g. `dsh:stop:<sessionId>`. */
+  /** `button.id` as rendered by the plugin that published the control. */
   readonly id: string
   readonly data?: unknown
   /** Values of the `<form>` a submit button stood in, keyed by control name. */
@@ -230,6 +230,14 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'im/stored'(message: ImMessage): void
+    /**
+     * One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace
+     * `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.
+     * @param outgoing - the mutable draft: chat, caller options, the caller's original content and the current content.
+     * @param next - the rest of the waterfall.
+     * @mode waterfall
+     */
+    'im/before-send'(outgoing: ImOutgoing, next: () => Promise<void>): Promise<void>
     /**
      * A button of a published message was clicked, with the chat, sender and producing session.
      * @param event - the click, its message and the raw platform interaction.
@@ -585,6 +593,22 @@ export interface ImSendResult {
   error?: string
   /** Stored own message (when confirmed/partial). */
   message?: ImMessage
+  /** An `im/before-send` listener dropped the publication (`status` is `failed`, `error` carries its reason). */
+  dropped?: true
+}
+
+/** The mutable draft of one publication the `im/before-send` waterfall passes along. */
+export interface ImOutgoing {
+  /** Target chat. */
+  readonly chat: ImChatKey
+  /** The caller's options: session, quote, thread, operation id. */
+  readonly options: Readonly<ImSendOptions>
+  /** The caller's content, untouched by earlier listeners. */
+  readonly original: Fragment
+  /** What will be published; a listener replaces it to rewrite the message. */
+  content: Fragment
+  /** Set to a reason to publish nothing. */
+  drop?: string
 }
 
 /** Read side of the message store, addressed by the per-chat sequence number (`ctx.im.history`). */

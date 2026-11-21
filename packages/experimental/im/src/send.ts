@@ -24,6 +24,10 @@
  *   cannot be replayed: an operation id that already opened one is a `conflict` whatever its content.
  * - **Own messages.** The first stored platform message of each publication is attributed to the sending session
  *   (`sessionOf`, button routing) and named in the receipt, so a later button click can find its owner.
+ * - **Rewrites.** `send()` runs the `im/before-send` waterfall on the caller's content (before the reply envelope) once
+ *   the grants check passed: a listener may replace `content` or set `drop` (the result is then `failed` with
+ *   `dropped: true`). With an operation id it runs after the replay check, so a replay never rewrites again, and the
+ *   receipt digest covers the caller's content, not the rewrite. Streams are not rewritten.
  * - **Streams.** `stream()` runs the same grants check; with an operation id the receipt starts `pending` and settles
  *   with the stream's own outcome, and the platform stream is opened only after that receipt is reserved. A reply
  *   quote is applied to every state the caller publishes.
@@ -38,8 +42,8 @@ import {
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import {
-  ImChatKey, ImMessageKey, splitKey, type ImConfig, type ImMessage, type ImSendOptions, type ImSendResult,
-  type ImSessionRecord, type ImSessions,
+  ImChatKey, ImMessageKey, splitKey, type ImConfig, type ImMessage, type ImOutgoing, type ImSendOptions,
+  type ImSendResult, type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { admitsChat } from './intake.ts'
@@ -112,6 +116,9 @@ const REFUSED = 'The chat platform refused the publication: '
 /** Deadline passed (or cancellation after dispatch): the message may or may not have reached the chat. */
 const TIMEOUT = 'The IM publication did not finish in time; the message may or may not have reached the chat.'
 
+/** Prefix of the outcome of a publication an `im/before-send` listener dropped. */
+const DROPPED = 'The publication was dropped before dispatch; no message was sent: '
+
 /**
  * Outbound sender of one IM host.
  *
@@ -173,17 +180,40 @@ export class ImSender {
   private async publishNow(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImSendResult> {
     const confinedThread = this.grant(chat, options.session, options)
     const target = this.target(chat, confinedThread === undefined ? options : { ...options, thread: confinedThread })
-    const quoted = withQuote(content, this.quoteId(chat, options.quote))
+    const quoteId = this.quoteId(chat, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      const result = await this.track(this.dispatch(this.botOf(chat), target, quoted, options))
-      if (result.status !== 'confirmed') {
+      const result = await this.track(this.prepared(chat, content, options).then(draft => draft.drop === undefined
+        ? this.dispatch(this.botOf(chat), target, withQuote(draft.content, quoteId), options)
+        : dropped(draft.drop)))
+      if (result.status !== 'confirmed' && result.dropped !== true) {
         this.ctx.logger.warn('IM publication to %s of session %s was not confirmed (%s): %s',
           chat, options.session ?? '-', result.status, result.error)
       }
       return result
     }
-    return this.serial(id, () => this.publish(id, chat, target, quoted, options))
+    return this.serial(id, () => this.publish(id, chat, target, content, quoteId, options))
+  }
+
+  /**
+   * Run the `im/before-send` waterfall over one publication: listeners may rewrite `content` or set `drop`.
+   *
+   * A listener that throws is logged and skipped as if it had passed the draft on unchanged: a broken rewriter must
+   * never cost the agent its message.
+   * @param chat - admitted chat key.
+   * @param content - the caller's content, before the reply envelope.
+   * @param options - caller options (read-only to listeners).
+   * @returns the settled draft.
+   */
+  private async prepared(chat: ImChatKey, content: Fragment, options: ImSendOptions): Promise<ImOutgoing> {
+    const draft: ImOutgoing = { chat, content, options, original: content }
+    try {
+      await this.ctx.waterfall('im/before-send', draft, async () => {})
+    } catch (error) {
+      this.ctx.logger.warn('IM before-send listener failed for %s; sending as is: %s', chat, messageOf(error))
+      return { chat, content, options, original: content }
+    }
+    return draft
   }
 
   /**
@@ -353,14 +383,17 @@ export class ImSender {
    * @param id - operation id (unique per intended publication).
    * @param chat - admitted chat key.
    * @param target - resolved target.
-   * @param content - content with its reply envelope applied.
+   * @param content - the caller's content; the digest covers it before `im/before-send` rewrites it, so a replay of
+   *   the same request matches whatever a rewriter made of it the first time.
+   * @param quoteId - platform id of the quoted message, wrapped around the content after the rewrite.
    * @param options - caller options.
    * @returns the live outcome, or the recorded one when this call replays the operation.
    */
   private async publish(
-    id: string, chat: ImChatKey, target: Target, content: Fragment, options: ImSendOptions,
+    id: string, chat: ImChatKey, target: Target, content: Fragment, quoteId: string | undefined,
+    options: ImSendOptions,
   ): Promise<ImSendResult> {
-    const digest = fingerprint(content, options)
+    const digest = fingerprint(withQuote(content, quoteId), options)
     const previous = this.receipts.get(id)
     if (previous !== undefined) {
       if (previous.digest !== digest || previous.chat !== chat) {
@@ -374,7 +407,10 @@ export class ImSender {
       digest, status: 'pending', createdAt: Date.now(),
     }
     await this.reservePending(id, pending)
-    const result = await this.dispatch(bot, target, content, options)
+    const draft = await this.prepared(chat, content, options)
+    const result = draft.drop === undefined
+      ? await this.dispatch(bot, target, withQuote(draft.content, quoteId), options)
+      : dropped(draft.drop)
     try {
       await this.settle(id, pending, result)
     } catch (error) {
@@ -739,4 +775,13 @@ function fingerprint(content: Fragment | undefined, options: ImSendOptions): str
 /** The text of one thrown value, for a receipt a human reads. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Outcome of a publication an `im/before-send` listener dropped: nothing reached the platform.
+ * @param reason - the listener's reason, shown to the caller.
+ * @returns a `failed` result marked `dropped`.
+ */
+function dropped(reason: string): ImSendResult {
+  return { status: 'failed', dropped: true, error: `${DROPPED}${reason}` }
 }

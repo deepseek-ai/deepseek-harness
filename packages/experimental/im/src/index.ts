@@ -33,6 +33,8 @@ import { ImStore, inputBytes } from './store.ts'
 import { applyTools } from './tools.ts'
 
 export type * from './api.ts'
+export { ImChatKey, ImMessageKey, ImSourceId, splitKey } from './api.ts'
+export { operationId } from './send.ts'
 export { ImError } from './error.ts'
 export type { ImMediaFileItem, ImMediaItem, ImMediaKind, ImMediaRef } from './media.ts'
 

@@ -266,6 +266,65 @@ describe('ImSender.send', () => {
     expect(bot.operations[1]?.target?.thread).toBe('t1')
   })
 
+  it('lets im/before-send rewrite the content inside the reply envelope', async () => {
+    const { ctx, stub, sender, store } = await boot()
+    await store.put(inboundDraft(ImMessageKey('stub:bot', 'm9'), undefined, STUB_CHAT), 'none')
+    const seen: { original: unknown; options: unknown }[] = []
+    ctx.on('im/before-send', async (outgoing, next) => {
+      seen.push({ original: outgoing.original, options: outgoing.options })
+      outgoing.content = h.text('polished')
+      await next()
+    })
+    const result = await sender.send(STUB_CHAT, h.text('raw'), { quote: ImMessageKey('stub:bot', 'm9') })
+    expect(result.status).toBe('confirmed')
+    expect(seen).toEqual([{ original: h.text('raw'), options: { quote: ImMessageKey('stub:bot', 'm9') } }])
+    expect(JSON.stringify(stub.sends[0]?.content)).toContain('polished')
+    expect(JSON.stringify(stub.sends[0]?.content)).not.toContain('raw')
+    expect(JSON.stringify(stub.sends[0]?.content)).toContain('"quote"')
+  })
+
+  it('publishes nothing when im/before-send drops the message, and records the drop', async () => {
+    const { ctx, stub, sender, pool } = await boot()
+    ctx.on('im/before-send', async (outgoing, next) => {
+      outgoing.drop = 'too similar'
+      await next()
+    })
+    const result = await sender.send(STUB_CHAT, h.text('again'), { operationId: 'op-drop' })
+    expect(result).toMatchObject({ status: 'failed', dropped: true })
+    expect(result.error).toMatch(/too similar/)
+    expect(stub.sends).toHaveLength(0)
+    expect(receiptsOf(pool).get('op-drop')).toMatchObject({ status: 'failed' })
+  })
+
+  it('does not rewrite a replayed operation and keeps the caller digest', async () => {
+    const { ctx, stub, sender } = await boot()
+    let calls = 0
+    ctx.on('im/before-send', async (outgoing, next) => {
+      calls += 1
+      outgoing.content = h.text(`variant ${calls}`)
+      await next()
+    })
+    await sender.send(STUB_CHAT, h.text('hello'), { operationId: 'op-rw' })
+    const replay = await sender.send(STUB_CHAT, h.text('hello'), { operationId: 'op-rw' })
+    expect(replay.status).toBe('confirmed')
+    expect(calls).toBe(1)
+    expect(stub.sends).toHaveLength(1)
+  })
+
+  it('sends the original content when an im/before-send listener throws', async () => {
+    const { ctx, stub, sender } = await boot()
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    ctx.on('im/before-send', async (outgoing) => {
+      outgoing.content = h.text('half done')
+      throw new Error('rewriter offline')
+    })
+    const result = await sender.send(STUB_CHAT, h.text('hello'))
+    expect(result.status).toBe('confirmed')
+    expect(JSON.stringify(stub.sends[0]?.content)).toContain('hello')
+    expect(warn.mock.calls.some(([fmt]) => String(fmt).includes('before-send'))).toBe(true)
+    warn.mockRestore()
+  })
+
   it('keeps a publication in the thread the session answered in', async () => {
     const { bot, sender, sessions, store } = await boot()
     const task = sessions.add('task', [{ chat: CHAT, writable: true, home: true }])

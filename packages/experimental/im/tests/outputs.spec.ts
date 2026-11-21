@@ -12,7 +12,7 @@ import {
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
-import { ImOutputRegistry, NO_OUTPUT, STOP_BUTTON_PREFIX, type ImOutputDeps } from '../src/outputs.ts'
+import { ImOutputRegistry, NO_OUTPUT, type ImOutputDeps } from '../src/outputs.ts'
 import { ImSender } from '../src/send.ts'
 import { ImStore } from '../src/store.ts'
 import {
@@ -310,7 +310,6 @@ describe('ImOutputRegistry buttons', () => {
       session: hosted.sessionId,
       time: 1000,
     })
-    expect(harness.stopped).toEqual([])
   })
 
   it('catches and logs a thrown listener failure from interaction/button and interaction/select', async () => {
@@ -330,44 +329,41 @@ describe('ImOutputRegistry buttons', () => {
 
   it('ignores a click from a sender the admitting source does not allow', async () => {
     const harness = booted()
-    const hosted = harness.host({ output: 'probe' })
+    harness.host({ output: 'probe' })
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
 
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    await harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
-    expect(harness.stopped).toEqual([])
 
     // The sender the rule admits reaches the host again.
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
-    expect(harness.stopped).toEqual([hosted.sessionId])
+    await harness.registry.button(click('dsh:plain'))
+    expect(harness.buttons).toHaveLength(1)
   })
 
   it('refuses an interaction whose admitting source was removed', async () => {
     const harness = booted()
-    const hosted = harness.host({ output: 'probe' })
+    harness.host({ output: 'probe' })
     // The chat record outlives the rule in `im_messages`; the click must not fall through to "no allowlist".
     harness.sources.delete('team')
 
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    await harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
-    expect(harness.stopped).toEqual([])
   })
 
   it('refuses an interaction of a chat the rule no longer lists', async () => {
     const harness = booted()
-    const hosted = harness.host({ output: 'probe' })
+    harness.host({ output: 'probe' })
     // The rule survives while its `chats` list names another chat, which is how an operator narrows one source. The
     // record stays in `im_messages`, but the old chat's members must not keep pressing the session's controls.
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: ['elsewhere'] })
 
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    await harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
-    expect(harness.stopped).toEqual([])
 
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: [chatOf().ref.id] })
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
-    expect(harness.stopped).toEqual([hosted.sessionId])
+    await harness.registry.button(click('dsh:plain'))
+    expect(harness.buttons).toHaveLength(1)
   })
 
   it('keeps a click without a stored message unattributed and ignores foreign chats', async () => {
@@ -403,27 +399,6 @@ describe('ImOutputRegistry buttons', () => {
     expect(harness.buttons[0]?.session).toBeUndefined()
   })
 
-  it('routes the stop button of a bound session to sessions.stop', async () => {
-    const harness = booted()
-    const hosted = harness.host({ output: 'probe' })
-    const elsewhere = harness.host({
-      sessionId: SessionId('im-elsewhere'), key: 'conv:elsewhere',
-      bindings: [{ chat: ImChatKey(BOT.id, 'other'), writable: true, home: true }],
-    })
-
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
-    expect(harness.stopped).toEqual([hosted.sessionId])
-
-    // Not a session this host knows, or not one bound to the chat the button lives in.
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}nope`))
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${elsewhere.sessionId}`))
-    expect(harness.stopped).toEqual([hosted.sessionId])
-
-    // A failing stop is reported, never thrown at the platform.
-    harness.stopFails = true
-    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
-    expect(harness.stopped).toEqual([hosted.sessionId])
-  })
 })
 
 describe('ImOutputRegistry selects', () => {
@@ -614,7 +589,6 @@ describe('ImOutputRegistry referrers', () => {
         chat: (key: ImChatKey) => (key === chat.key ? chat : undefined),
         source: () => undefined,
         history: store,
-        sessions,
       } satisfies ImOutputDeps['im'],
       sender,
     })
