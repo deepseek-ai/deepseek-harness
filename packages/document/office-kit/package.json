@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-office-kit",
   "description": "Shared Office rendering, conversion, and recalculation with bounded queues and caching",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },
