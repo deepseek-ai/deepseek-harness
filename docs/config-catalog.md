@@ -3862,20 +3862,20 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:34`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:33`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Configuration after schema defaults apply. */
 export interface ResolvedConfig extends Config {
-  /** Python environment named in the Python authoring and verification skills. */
+  /** Python environment named at the end of the `office` skill. */
   pythonEnvironment: PythonEnvironment
 }
 
 /** Office skill resources and Python environment. */
 export interface Config {
-  /** Absolute assets directory containing skill folders; defaults to packaged assets. */
+  /** Absolute assets directory containing the `office` skill folder; defaults to packaged assets. */
   assetRoot?: string
-  /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
+  /** Python environment named at the end of the `office` skill. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
 

@@ -18,7 +18,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as ToolOffice from '../src/index.ts'
 
 const NAMES = ['office_convert', 'office_recalculate', 'office_render']
-const SKILLS = ['office', 'office-docx', 'office-xlsx', 'office-pptx']
+const SKILLS = ['office']
 const signal = new AbortController().signal
 
 function response(name?: string, args: object = {}): StreamChunk[] {
@@ -75,7 +75,7 @@ async function harness(script: StreamChunk[][] = [], options: {
   if (options.root !== undefined) await ctx.plugin(JsonlPersistence, { root: options.root, compression: 'none' })
   const loop = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(SkillRegistry)
-  for (const name of [...SKILLS, 'other', 'custom-office']) ctx.skills.register({ name, source: 'runtime', description: name, content: `${name} instructions` })
+  for (const name of [...SKILLS, 'office-docx', 'other', 'custom-office']) ctx.skills.register({ name, source: 'runtime', description: name, content: `${name} instructions` })
   if (!options.officeFirst) await ctx.plugin(ToolSkill)
   const fiber = await ctx.plugin(ToolOffice, options.skills === undefined ? {} : { activationSkills: options.skills })
   if (options.officeFirst) await ctx.plugin(ToolSkill)
@@ -139,8 +139,8 @@ describe('Office skill admission', () => {
   })
 
   it.each([false, true])('marks committed user skill injections independently of plugin order (officeFirst=%s)', async (officeFirst) => {
-    const { agent, adapter } = await harness([response('skill', { name: 'office' }), response()], { officeFirst })
-    await turn(agent, '/office-docx')
+    const { agent, adapter } = await harness([response('skill', { name: 'other' }), response()], { officeFirst })
+    await turn(agent, '/office')
     expect(names(adapter.requests[0])).toEqual([])
     expect(names(adapter.requests[1])).toEqual(NAMES)
     expect(agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toBe(true)
@@ -168,9 +168,9 @@ describe('Office skill admission', () => {
     expect(await admitted(ctx, other)).toEqual([])
   })
 
-  it('does not activate for user invocation of a non-Office skill', async () => {
+  it.each(['other', 'office-docx'])('does not activate for user invocation of the unlisted skill %s', async (name) => {
     const { ctx, agent } = await harness([response()])
-    await turn(agent, '/other')
+    await turn(agent, `/${name}`)
     expect(await admitted(ctx, agent)).toEqual([])
   })
 

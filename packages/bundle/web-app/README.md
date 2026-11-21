@@ -205,15 +205,15 @@ None; the plugin contributes no system-prompt text.
 
 #### What the model sees
 
-The skill catalog lists the Office router and three Office authoring skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+The skill catalog lists the `office` skill in every profile; it gives concise inline guidance for Word, PowerPoint, and Excel pitfalls and for the Office tools. The loaded skill ends with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
 
 #### Token effect
 
-The four catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+One catalog summary in each initial catalog; the skill body only when the model loads it.
 
 #### KV Cache effect
 
-While resources and configuration stay unchanged, the built-in Office summaries and Python environment sections stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
+While resources and configuration stay unchanged, the built-in Office summary and Python environment section stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
 
 ## Known Limitations and Deferred Work
 
