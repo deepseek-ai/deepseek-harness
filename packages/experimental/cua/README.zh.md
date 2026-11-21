@@ -91,6 +91,10 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 <details>
 <summary>共享执行与平台职责</summary>
 
+实现 `CuaBackend.heldInputState` 的提供方通过 `getHeldInputs({})` 返回当前连接的持有记录，通过 `releaseHeldInputs({})` 释放这些输入并返回结果。原生记录负责保存实际按键或按钮、目标、进程身份和输入方式。成功结束的 `run_code` 和 `cua_run_code` 查询这些记录，仍有输入按住时添加 system reminder；DSH 和 MCP 的正常程序结束和回合结束均保持输入。DSH 通过已记录的额外上下文传递提醒，MCP 通过工具响应传递。macOS 和 Windows 都实现了这套协议。能力方法列表保持静态。
+
+每个 Agent 使用独立的原生输入连接，多个程序和回合可以复用这条连接。DSH 收到停止请求或模型报错时启动清理。原生释放尚未确认时，Agent 可以结束回合，`whenIdle()` 也可以返回。后续 CUA 调用等待清理结果。程序执行成功后，如果最终工具结果失败，CUA 立即清理这次调用所属的输入。原工具错误可以先返回，清理失败会另行报告。确认释放后，DSH 为模型记录释放提醒，并撤销仍在队列中的旧持有提醒。清理失败会通过 `agent/error` 单独报告，并禁用该任务后续的 CUA 操作。程序失败或取消、执行中的 MCP 请求收到取消、环境重置、连接关闭和提供方卸载，各自等待清理完成。
+
 [授权存储](src/permission-store.ts)复用 `storageDomain` 和配置的后端。默认 JSON 后端写入 `$DSH_HOME/storages/cua_permissions_<sha256>.json`，摘要对应 profile 的真实目录。每次授权检查在 profile 文件锁内打开并读取最新状态，随后关闭存储域；原生操作使用单独的应用锁。撤销会等待其他进程已获准执行的操作结束；撤销完成后，各进程都拒绝旧句柄。不同电脑或 PID 命名空间不能共享这把锁。
 
 旧 `allowedApps` 只在首次访问存储时导入，迁移后不再应用。确认权限页显示正确后，可以删除旧配置。授权、拒绝和允许再次询问均持久化，页面仍不显示仅对某个会话生效的许可。没有 profile 的独立组合只保留进程内决定；有 profile 但缺少域存储的组合会拒绝授权操作。
@@ -99,7 +103,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入从 Node 提供方的 `resolvePersistentExecution` 辅助函数获取执行设置，再用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。CUA 将 Node 提供方声明为 peer 依赖，使这些设置与已安装的提供方版本一致。此设置独立于系统权限和应用授权。
 
-提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
+提供方将准备好的 helper、连接工厂、指引回调和启动能力传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。提供方可通过 `windowRead` 获取窗口读取所用的授权连接，并在读取成功后接收原生回复。平台读取 helper 缓存的窗口活动时，会在查询前后核对应用授权，无须等待正在执行的桌面操作。
 
 提供方实现 `CuaBackend.getGuidance(kind)`，其中 `kind: 'raw' | 'standalone'`，分别返回原始 `cua` 调用和 `cua_run_code` 程序的操作指引；两种形态可以返回相同文本。共享 CUA 为两份结果统一补充对应能力的权限指引、配置的 AX 读取默认值和最大点击按住时长。
 

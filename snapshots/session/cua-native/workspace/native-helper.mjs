@@ -119,8 +119,11 @@ function createApplicationState(socket, record, application, captureBroker, conn
     [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
+  const activityFile = new URL('./fixture-activity.json', import.meta.url)
+  const activity = existsSync(activityFile) ? JSON.parse(readFileSync(activityFile, 'utf8')) : undefined
+  const pendingActivity = new Set(activity ?? [])
   const snapshots = new Map()
-  const heldKeys = new Map()
+  const heldInputs = new Map()
   const observedWindows = new Set()
   let acquired = false
   let generation = 0
@@ -132,7 +135,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
-    if (method === 'releaseHeldKeys') { heldKeys.delete(params.runId); return { dispatched: true } }
+    if (method === 'getHeldInputs') return [...heldInputs.values()]
+    if (method === 'releaseHeldInputs') {
+      const released = [...heldInputs.values()].reverse()
+      heldInputs.clear()
+      return released
+    }
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
@@ -280,16 +288,31 @@ function createApplicationState(socket, record, application, captureBroker, conn
       application.value += params.text
       return { dispatched: true }
     }
-    if (method === 'sendKeyEvent') {
-      const keys = heldKeys.get(params.runId) ?? new Set()
-      if (params.direction === 'down') keys.add(params.key)
-      else if (!keys.delete(params.key)) refuse('INVALID_ARGUMENT', 'Key was not held by this program')
-      heldKeys.set(params.runId, keys)
+    if (method === 'sendKeyEvent' || method === 'toggleMouse') {
+      const input = method === 'sendKeyEvent'
+        ? { kind: 'key', key: params.key, appHandle: params.appHandle, mode: params.useSystemInput ? 'system' : 'application' }
+        : { kind: 'mouse', button: params.mouseButton, appHandle: params.appHandle, windowId: params.windowId, mode: params.useSystemInput ? 'system' : 'window' }
+      const id = JSON.stringify([params.appHandle, params.windowId, method, params.key ?? params.mouseButton])
+      if (params.direction === 'down') heldInputs.set(id, input)
+      else if (!heldInputs.delete(id)) refuse('INVALID_ARGUMENT', 'Input was not held by this connection')
       return { dispatched: true }
     }
     if (method === 'typeText') application.value += params.text
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
     return { dispatched: true }
   }
-  return call
+  return (requestId, method, params) => {
+    if (method === 'clearWindowActivity') {
+      pendingActivity.clear()
+      return null
+    }
+    if (method === 'takeWindowActivity') {
+      const rows = [...pendingActivity].filter(row => observedWindows.has(row.windowId) && row.windowId in params.observations)
+      for (const row of rows) pendingActivity.delete(row)
+      return rows
+    }
+    const result = call(requestId, method, params)
+    return result && params.windowId && (method === 'getState' || method === 'screenshot')
+      ? { ...result, activityObservedAt: '1' } : result
+  }
 }

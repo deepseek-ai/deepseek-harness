@@ -265,6 +265,7 @@ describe('viewer session plugin', () => {
           const editor = render(createElement(DraftEditor, {
             classNames: {}, editor: null, scrollRef: createRef<HTMLDivElement>(), editable: false,
             editorDisabled: true, phase: 'inert', placeholderText: reason, ariaLabel: reason,
+            placeholderSessionId: undefined, renderSlotChain: (_key, _owner, options) => options?.fallback,
             workspaceTrigger: false, workspacePickerOpen: false, onWorkspaceKeyDown: () => {},
             hint: null, showPlaceholder: true,
           }))

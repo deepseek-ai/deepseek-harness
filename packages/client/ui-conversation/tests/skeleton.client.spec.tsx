@@ -332,6 +332,7 @@ function mount(
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
           stop={stop}
           t={t}
+          renderSlotChain={(_key, _owner, options) => options?.fallback}
           renderSlot={((key: string, seatOwner: object) => {
             // The bar's own seats: recorded so a case can assert what share
             // each tool-row control received.

@@ -56,7 +56,7 @@ export interface Config {
 /** Validated activation skills and render bounds. */
 export const Config: z<Partial<Config>, Config> = z.object({
   activationSkills: z.array(z.string().pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)).min(1)
-    .default(['office', 'office-docx', 'office-xlsx', 'office-pptx']),
+    .default(['office']),
   maxImages: z.natural().min(1).max(10_000).default(20),
   maxImagePixels: z.natural().min(1).max(16_777_216).default(8_388_608),
   maxImageDimension: z.natural().min(1).max(16_777_216).default(8192),

@@ -39,9 +39,12 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
     "@deepseek-ai/dsh-agent-preset": "workspace:*",
     "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "@deepseek-ai/dsh-creation-recommendations": "workspace:*",
     "@deepseek-ai/dsh-office-kit": "workspace:*",
+    "@deepseek-ai/dsh-plugin-recommendations": "workspace:*",
     "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:*",
     "@deepseek-ai/dsh-tool-office": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",

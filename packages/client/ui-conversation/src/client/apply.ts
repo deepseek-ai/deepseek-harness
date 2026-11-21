@@ -21,6 +21,7 @@ import { UserText, PlainUserText, SessionReference } from './user-text/UserText.
 import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
 import type { ViewTab } from './contract/views.ts'
+import { inputBarChildren } from './contract/slots.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected, ConversationShellInjected,
   ConversationSessionInjected, DraftFileUploads, UserTextInjected,
@@ -464,17 +465,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
   const registerComposerBar = () => slots.register({
     name: 'conversation.composer.bar',
     locale: NS,
-    children: {
-      'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
-      'conversation.input.overlay': { kind: 'list', scope: 'session' },
-      'conversation.input.permission': { kind: 'single', scope: 'session' },
-      'conversation.input.left': { kind: 'list', scope: 'session' },
-      'conversation.input.plan': { kind: 'single', scope: 'session' },
-      'conversation.input.right': { kind: 'list', scope: 'session' },
-      'conversation.input.model': { kind: 'single', scope: 'session' },
-      'conversation.input.activity': { kind: 'single', scope: 'session' },
-      'conversation.composer.dock': { kind: 'list', scope: 'session' },
-    },
+    children: inputBarChildren,
     inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
       if (sessionId === undefined) {
         return {

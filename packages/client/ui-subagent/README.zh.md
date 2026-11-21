@@ -29,6 +29,8 @@ kind: "package-reference"
 
 本包注册 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` 资源与 builtin Sidebar tab 类型。资源直接根据地址保留 child 的 `SessionReference`，不刷新 parent 目录，并在 tab 记录关闭时释放 reference。tab 通过 `sidebar.chat.conversation` 渲染共享 `conversation.content` Factory，把局部 View 固定为 Chat，并省略主 Conversation 的 Header 与宽度控制。在空白 child 的 Hero 中选择工作区时，与主 Conversation 一样，把该工作区的空白 Session 打开为主 Session，并把草稿移过去。
 
+从会话列表拖拽根 Session 行时，如果屏幕上正显示另一个 Session，会显示放置目标。右侧侧边栏打开时，每个分栏各由一个放置目标覆盖，分栏之间的分割线和聊天区域保持可见；在某个分栏上放下时，会在该分栏中打开该 Session。侧边栏收起时，一个放置目标覆盖侧边栏打开时所占的区域，且始终位于该行被拖出的导航栏或窄窗口抽屉的右侧；侧边栏放不下时，该放置目标覆盖该栏右侧的整个区域。每个放置目标只绘制其卡片，卡片四边各内缩 8px，因此侧边栏的左边框和分栏之间的分割线保持可见；有多个分栏时，只有指针下方的放置目标显示其卡片。放置目标显示在抽屉遮罩之上。在此放下后，会在屏幕上那个 Session 的 Sidebar 中把被拖拽的 Session 打开为 `dsh-resource://subagentchat/session/<id>`（不带查询参数的地址）；如果已有 tab 显示该 Session，则改为显示该 tab。其 Conversation 与主 Conversation 一样接受后续提示词，该 tab 随屏幕上那个 Session 的浏览器本地 Sidebar 布局保存。tab 标题为该 Session 的显示标题。
+
 分栏的标题控件（`conversation.session.panel.section.actions`，键为 `subagents`）显示直接成员进度：依次为已完成、进行中、未运行和外部任务数量；省略零值，分隔符与输入区任务列表一致。外部任务不计入运行中或已完成数量。分栏把运行中的子智能体排在最前，最近开始的在前，然后是其余的，最近更新的在前。它只显示五行，然后是会话面板的收起控件「显示其余 {count} 个」，点击后显示其余的行并变为「收起」；只有能收起两行及以上时列表才收起，这个选择在 Session 内保持，隐藏后再次显示面板也不变；展开某个分支后，该分支自己的行全部显示。会话没有子智能体且目录读取未失败时，分栏连同标题一起隐藏。直接子智能体运行中且面板未显示时，面板开关上的蓝点（`conversation.session.panel.indicator`）会提示这一状态，并向辅助技术说明数量；外部任务不计入。会话面板负责分栏滚动，目录树不单独滚动。面包屑切换器菜单宽度为 360px，外层内边距为 6px，并受布局视口可用宽度约束，仅菜单本身滚动。在兼容 WebKit 的浏览器中，其原生 5px 滚动条位于右侧 6px 内边距内，轨道两端内缩，并保留稳定的滚动条空间，使内容在需要滚动时保持原有宽度。其他浏览器保留标准原生滚动条。
 
 面包屑切换器菜单只显示导航。

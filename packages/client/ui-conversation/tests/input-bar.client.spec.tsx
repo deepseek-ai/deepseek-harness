@@ -14,7 +14,7 @@ import './control-row-dom.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { $getRoot, $isTextNode } from 'lexical'
 import {
@@ -32,6 +32,7 @@ import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerFileIntake, DraftFileUploads, InputActivityOwnerProps,
+  InputPlaceholderOwnerProps,
 } from '../src/client/contract/slots.ts'
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
@@ -99,6 +100,7 @@ interface BenchOptions {
   occurrence?: 'main' | 'embedded'
   registerFileIntake?: ComposerFileIntake
   placeholder?: string
+  renderSlotChain?: InputBarProps['renderSlotChain']
   t?: InputBarProps['t']
   accessory?: React.ReactNode
   overlay?: React.ReactNode
@@ -233,6 +235,7 @@ function bench(over?: BenchOptions) {
     // Mirrors the real lookup chain (conversation namespace, then common).
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,
+    renderSlotChain: over?.renderSlotChain ?? ((_key, _owner, options) => options?.fallback),
     variant: over?.variant ?? 'composer',
     occurrence: over?.occurrence ?? 'main',
     ...(over?.inert === true ? { disabled: true } : {}),
@@ -466,6 +469,55 @@ describe('composer focus handoff', () => {
 })
 
 describe('composer placeholder visibility', () => {
+  const reviewHint: InputBarProps['renderSlotChain'] = (_key, owner, options) =>
+    (owner as InputPlaceholderOwnerProps).sessionId === SID ? <span>Review <kbd>@</kbd> files</span> : options?.fallback
+
+  it('names each empty editor from its own Session hint and restores its name after typing', () => {
+    const options = { plan: { active: true, pending: false }, renderSlotChain: reviewHint }
+    const first = bench(options)
+    const second = bench(options)
+    second.view.rerender(<InputBar {...second.props} sessionId={'s2' as SessionId} />)
+
+    expect(first.view.getByRole('textbox', { name: 'Review @ files' })).toBe(first.textarea)
+    expect(second.view.getByRole('textbox', { name: zh['placeholder.plan'] })).toBe(second.textarea)
+    expect(first.view.container.querySelector('[data-composer-placeholder] kbd')?.textContent).toBe('@')
+    writeDraft(first.shell, 'My draft')
+    expect(first.view.container.querySelector('[data-composer-placeholder]')).toBeNull()
+    expect(within(first.view.container).getByRole('textbox', { name: zh['placeholder.plan'] })).toBe(first.textarea)
+    writeDraft(first.shell, '')
+    expect(first.view.getByRole('textbox', { name: 'Review @ files' })).toBe(first.textarea)
+  })
+
+  it('restores the hint when the last attachment leaves an empty draft', () => {
+    const id = 'image' as DraftAttachmentId
+    const { view, shell, textarea } = bench({
+      renderSlotChain: reviewHint,
+      attachments: [{ kind: 'image', id, file: new File([], 'x.png'), previewUrl: 'blob:test' }],
+    })
+    expect(view.container.querySelector('[data-composer-placeholder]')).toBeNull()
+    act(() => { shell.removeAttachment(id) })
+    expect(view.getByRole('textbox', { name: 'Review @ files' })).toBe(textarea)
+  })
+
+  it.each([
+    {
+      state: 'Workspace picker',
+      options: { inert: true, onRequestWorkspace: () => {}, placeholder: zh['placeholder.workspace'] },
+      text: zh['placeholder.workspace'], name: zh['hero.chooseWorkspace'],
+    },
+    {
+      state: 'composer block',
+      options: { blocked: { reason: 'Select a model' }, placeholder: 'Select a model' },
+      text: 'Select a model',
+    },
+    { state: 'unavailable Session', options: { disabled: true }, text: zh['placeholder.unavailable'] },
+    { state: 'queued messages', options: { running: true, queue: [row('pending')] }, text: zh['placeholder.steerQueue'] },
+  ])('keeps the $state guidance when a plugin supplies a hint', ({ options, text, name }) => {
+    const { view, textarea } = bench({ ...options, renderSlotChain: reviewHint })
+    expect(view.container.querySelector('[data-composer-placeholder]')?.textContent).toBe(text)
+    expect(view.getByRole('textbox', { name: name ?? text })).toBe(textarea)
+  })
+
   it.each([' ', '   ', '\t', '\n'])('hides for whitespace %j and returns after deletion', async (draft) => {
     const { view, shell, textarea, button, sink, props } = bench()
     const placeholder = () => view.container.querySelector('[data-composer-placeholder]')

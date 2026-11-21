@@ -56,9 +56,9 @@
     "packages/client/*/tests/**/*.host.ts"
   ],
   "references": [
-    { "path": "./packages/experimental/client-ui-action-cards" },
-    { "path": "./packages/experimental/client-ui-creation-recommendations" },
-    { "path": "./packages/experimental/client-ui-plugin-recommendations" },
+    { "path": "./packages/client/ui-action-cards" },
+    { "path": "./packages/client/ui-creation-recommendations" },
+    { "path": "./packages/client/ui-plugin-recommendations" },
     { "path": "./packages/client/ui-file-drag" },
     { "path": "./packages/session/message-quotes" },
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.client.json" },

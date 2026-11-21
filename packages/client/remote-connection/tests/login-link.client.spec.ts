@@ -96,11 +96,11 @@ it('copies the clean address directly before any credential has loaded', async (
   await controller.dispose()
 })
 
-it.each(['rejection', 'refusal'] as const)('copies the clean address after credential-read %s', async (outcome) => {
-  const address = 'https://host.example/app/'
+it.each(['rejection', 'missing Token provider'] as const)('copies the clean loopback address after credential-read %s', async (outcome) => {
+  const address = 'http://127.0.0.1:5432/'
   const { remote, write, controller, state } = setup(() => address)
   if (outcome === 'rejection') remote.loginUrl.mockRejectedValueOnce(new Error('connection unavailable'))
-  else remote.loginUrl.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'unavailable', {}) })
+  else remote.loginUrl.mockResolvedValueOnce({ ok: false, error: new RemoteError('remote-connection/token-unavailable', 'Token login is disabled', {}) })
   await controller.load()
   expect(state()).toMatchObject({ phase: 'error', url: null, copied: false })
   const copying = controller.copy()
@@ -171,6 +171,23 @@ it('does not attribute a plain-address copy to a credential that loads afterward
   reading.resolve({ ok: true, value: url })
   await loading
   expect(state()).toMatchObject({ phase: 'ready', url, copied: false, notice: 'linkCopied' })
+})
+
+it('withdraws the old link before a pending clipboard write finishes on another deployment', async () => {
+  const { remote, write, controller, state } = setup()
+  await controller.load()
+  const writing = Promise.withResolvers<boolean>()
+  write.mockReturnValueOnce(writing.promise)
+  const copying = controller.copy()
+  controller.invalidate()
+  expect(state()).toMatchObject({ url: null, copied: false, phase: 'copying' })
+  const next = 'http://127.0.0.1/?token=local'
+  remote.loginUrl.mockResolvedValueOnce({ ok: true, value: next })
+  const loading = controller.load()
+  writing.resolve(true)
+  await Promise.all([copying, loading])
+  expect(state()).toMatchObject({ url: next, copied: false })
+  await controller.dispose()
 })
 
 it('shares a copy reentered while its busy state is published', async () => {
@@ -251,7 +268,7 @@ it.each(['response', 'failure'] as const)('discards a login-link %s arriving aft
   await Promise.all([loading, disposal])
   expect(disposed).toBe(true)
   expect(state()).toMatchObject({ url: null, copied: false, notice: null })
-  await controller.refresh()
+  await controller.load()
   expect(remote.loginUrl).toHaveBeenCalledOnce()
 })
 
@@ -260,24 +277,26 @@ it('resets copy success for a changed URL and preserves it for the same URL', as
   await controller.load()
   await controller.copy()
   remote.loginUrl.mockResolvedValue({ ok: true, value: `${url}-new` })
-  await controller.refresh()
+  await controller.load()
   expect(state()).toMatchObject({ url: `${url}-new`, copied: false, notice: null })
   await controller.copy()
-  await controller.refresh()
+  await controller.load()
   expect(state()).toMatchObject({ url: `${url}-new`, copied: true, notice: null })
   await controller.dispose()
 })
 
-it('reads the current connection after a reset overlaps an earlier read', async () => {
+it.each(['success', 'failure'] as const)('ignores a late credential %s after the deployment changes', async (outcome) => {
   const { remote, controller, state } = setup()
-  let finish!: (result: Awaited<ReturnType<RemoteConnectionApi['loginUrl']>>) => void
-  remote.loginUrl.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
-  const loading = controller.load()
-  const refresh = controller.refresh()
-  remote.loginUrl.mockResolvedValueOnce({ ok: true, value: `${url}-new` })
-  finish({ ok: true, value: url })
-  await Promise.all([loading, refresh])
-  expect(remote.loginUrl).toHaveBeenCalledTimes(2)
-  expect(state()).toMatchObject({ url: `${url}-new`, copied: false, notice: null })
+  const previous = Promise.withResolvers<Awaited<ReturnType<RemoteConnectionApi['loginUrl']>>>()
+  remote.loginUrl.mockReturnValueOnce(previous.promise)
+  const oldRead = controller.load()
+  controller.invalidate()
+  const local = 'http://127.0.0.1/?token=local'
+  remote.loginUrl.mockResolvedValueOnce({ ok: true, value: local })
+  await controller.load()
+  if (outcome === 'success') previous.resolve({ ok: true, value: url })
+  else previous.reject(new Error('previous connection closed'))
+  await oldRead
+  expect(state()).toMatchObject({ url: local, phase: 'ready', copied: false })
   await controller.dispose()
 })

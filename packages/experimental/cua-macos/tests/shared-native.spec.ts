@@ -134,7 +134,7 @@ async function fixture(options: {
     maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
   }
   function open(): NativeChannel {
-    const channel = createSharedNativeChannel({ subprocess: { spawn } }, config)
+    const channel = createSharedNativeChannel({ subprocess: { spawn } }, config, 60_000)
     channels.push(channel)
     return channel
   }
@@ -187,7 +187,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     // oxlint-disable-next-line typescript/unbound-method -- Fixture termination methods are spies inspected without invocation.
     for (const handle of f.handles) expect(handle.terminate).not.toHaveBeenCalled()
     const limits = {
-      axTimeoutMs: 3000, timeoutMs: 30000, screenshotTimeoutMs: 5000, graceMs: 1000,
+      axTimeoutMs: 3000, timeoutMs: 30000, screenshotTimeoutMs: 5000, graceMs: 1000, recentActivityWindowMs: 60000,
       maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
     }
     expect(f.hellos).toHaveLength(2)

@@ -36,7 +36,7 @@ it('rejects relative overrides before installing a native provider', async () =>
   await expect(apply(owner(), Config({ helperPath: 'relative.exe' }))).rejects.toThrow('must be absolute')
   expect(native.install).not.toHaveBeenCalled()
 })
-it('uses an absolute fixture without compiling and disposes the Host runtime', async () => {
+it('provides the Host runtime cleanup to CUA when using an absolute helper override', async () => {
   const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
@@ -51,13 +51,14 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.capabilities.methods).toContain('getActionSchema')
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
-  expect(backend.sendKeyEvent).toBeUndefined()
+  expect(backend.heldInputState).toBe(true)
+  expect(GUIDANCE).toContain('Key and mouse holds use desktop input.')
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
   const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }
   expect(backend.createChannel(ctx, options)).toBe(channel)
   expect(native.connect).toHaveBeenCalledWith(options)
-  await ctx.fiber.dispose()
+  await backend.disposeNative?.()
   expect(native.dispose).toHaveBeenCalledOnce()
 })
 it('prepares before installation and aborts the completed preparation scope on unload', async () => {

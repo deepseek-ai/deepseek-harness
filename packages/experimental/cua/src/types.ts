@@ -1,9 +1,17 @@
 /** Native application objects independent of evaluator ownership and persistence. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
 import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'cua-held-inputs': { kind: 'cua-held-inputs' } & Extract<ContextFormed, { form: 'notice' }>
+    'cua-inputs-released': { kind: 'cua-inputs-released' } & Extract<ContextFormed, { form: 'notice' }>
+  }
+}
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -181,10 +189,12 @@ export interface CuaSurface {
   pressKey(key: string, modifiers?: string[], options?: CuaSystemInputOptions): Promise<CuaActionResult>
   /**
    * Send one key-down or key-up event at the current input focus.
-   * Does not send the opposite event.
+   * Explicit downs persist across programs and turns; successful programs remind about remaining holds.
+   * MCP client pauses between completed calls do not notify the provider and leave held input unchanged.
+   * Program failure, cancellation, connection closure and disposal release owned input on supported providers.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Platform-defined key name; modifier keys may themselves be targets.
-   * @param direction - Explicit event direction; the opposite event is never sent implicitly.
+   * @param direction - Down establishes a hold; up immediately releases owned input through its original input route.
    * @param options - Input selection, matching the corresponding down or up; omitted uses the provider default.
    * @returns Whether the provider successfully executed the requested operation.
    */
@@ -217,7 +227,8 @@ export interface CuaWindow extends CuaSurface {
     options?: CuaCoordinateOptions & CuaSystemInputOptions): Promise<CuaHoverResult>
   /**
    * Send one mouse-button down or up event without moving the pointer.
-   * Does not send the opposite event; callers explicitly release a pressed button.
+   * Uses the same held-input lifecycle as {@link CuaSurface.sendKeyEvent}; up uses the saved window and input route.
+   * Error and cancellation cleanup releases keys and buttons together in reverse dispatch order.
    * @param mouseButton - Mouse button to press or release.
    * @param direction - Explicit event direction.
    * @param options - Request a system button on a provider reporting systemInput.
@@ -271,8 +282,8 @@ export interface CuaApp extends CuaSurface {
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
   /**
-   * Inspect permissions without requesting them.
-   * @returns reported native capabilities.
+   * Inspect permissions and the provider’s supported methods without requesting access.
+   * @returns Reported native capabilities.
    */
   getCapabilities(): Promise<CuaCapabilities>
   /**

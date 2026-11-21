@@ -81,15 +81,17 @@ actor AXWorker {
     private let maxClickHoldMs: Int
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
-    private let heldKeys: HeldKeys
+    private let connectionID: UUID
+    private let heldInputs: HeldInputs
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldKeys: HeldKeys = HeldKeys(),
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldInputs: HeldInputs = HeldInputs(), connectionID: UUID = UUID(),
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
-        self.heldKeys = heldKeys
+        self.heldInputs = heldInputs
+        self.connectionID = connectionID
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
@@ -119,8 +121,8 @@ actor AXWorker {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
         let latch = cancellation
-        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldKeys, checkCancellation: { try latch.check() })
-        let mouse = WindowPointerInput(poster: poster, checkCancellation: { try latch.check() })
+        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldInputs, connection: connectionID, checkCancellation: { try latch.check() })
+        let mouse = WindowPointerInput(poster: poster, held: heldInputs, checkCancellation: { try latch.check() })
         keyboard = key; pointer = mouse
         return (key, mouse)
     }
@@ -141,6 +143,17 @@ actor AXWorker {
         do { try NativePlatform.verify(identity) }
         catch { forget(handle); throw error }
         return identity
+    }
+    /// Advisory lookup leaves target validation and error ordering to the requested operation.
+    func activityTarget(_ params: RequestParameters) -> ActivityTarget? {
+        guard !closed, let handle = params.values["appHandle"]?.string,
+              case .running(let identity)? = targets[handle] else { return nil }
+        let window = params.values["windowId"]?.string.flatMap(UInt32.init)
+        let scope = snapshots.values.first {
+            $0.scope.appHandle == handle && $0.id == params.values["snapshotId"]?.string
+        }
+        guard let id = window ?? scope?.scope.windowID else { return nil }
+        return ActivityTarget(process: identity, windowID: id)
     }
     private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
@@ -199,17 +212,13 @@ actor AXWorker {
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
-        if method == "releaseHeldKeys" {
-            try keyboard?.releaseHeldKeys(run: params.string("runId"))
-            return .result(Self.actionResult)
-        }
         if method == "getActionSchema" {
             return .result(try ActionSchema.parameter(action: params.string("action")))
         }
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId"), useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
                 return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
@@ -352,7 +361,7 @@ actor AXWorker {
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
             let system = try params.optionalBoolean("useSystemInput") ?? false
-            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId"), useSystemInput: system) {
+            try inputs().0.keyDown(params.string("key"), app: handle, useSystemInput: system) {
                 if system { return identity }
                 return try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
@@ -378,22 +387,16 @@ actor AXWorker {
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
         case "toggleMouse":
             let id = try params.windowID()
-            let isDown = try params.string("direction") == "down"
-            let window: WindowInfo
-            if isDown {
-                guard NativePlatform.frontPID() == identity.pid else {
-                    throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Activate the selected application before pressing a mouse button")
-                }
-                window = try ax().coordinateWindow(identity, id, budget: &recovery).window
-            } else {
-                window = try NativePlatform.ownedWindow(identity.pid, id)
+            guard NativePlatform.frontPID() == identity.pid else {
+                throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Activate the selected application before pressing a mouse button")
             }
+            let window = try ax().coordinateWindow(identity, id, budget: &recovery).window
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
             if try params.optionalBoolean("useSystemInput") == true {
                 return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
             }
-            try await inputs().1.toggleMouse(in: route,
-                                             button: params.string("mouseButton"), isDown: isDown)
+            try await inputs().1.mouseDown(owner: .init(connection: connectionID, app: handle),
+                                          in: route, button: params.string("mouseButton"))
         case "click", "mouseMove":
             let useSystemInput = try params.optionalBoolean("useSystemInput") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
@@ -547,8 +550,6 @@ actor AXWorker {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
     func shutdown() {
-        do { try keyboard?.releaseHeldKeys() }
-        catch { fputs("Could not release held keys on disconnect: \(error)\n", stderr) }
         closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll()
         access = nil; keyboard = nil; pointer = nil
     }

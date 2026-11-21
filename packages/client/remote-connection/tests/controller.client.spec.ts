@@ -5,7 +5,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteConnectionStatus, RemoteLoginId, RemoteLoginTicket, RemoteLoginState } from '../src/types.ts'
 import { RemoteConnectionController, type RemoteConnectionApi } from '../src/client/remote-connection-controller.ts'
 
-const deployment: RemoteConnectionStatus = { url: 'https://host.example/app/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 }
+const deployment: RemoteConnectionStatus = { url: 'https://host.example/app/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 }
 const ticket: RemoteLoginTicket = { id: 'invitation-a' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private-a', lifetimeMs: 10_000 }
 const failure = { ok: false as const, error: new RemoteError('gateway/internal', 'unavailable', {}) }
 const controllers: RemoteConnectionController[] = []
@@ -101,6 +101,22 @@ describe('Remote connection invitation state', () => {
     pending.resolve({ ok: true, value: next })
     await replacement
     expect(state()).toMatchObject({ phase: 'pending', ticket: next, retainDetails: false, remainingSeconds: 20 })
+  })
+
+  it('rechecks the login address after reconnecting during an outstanding QR creation', async () => {
+    const { remote, controller, state } = setup()
+    await controller.load()
+    const creating = deferred<RemoteResult<RemoteLoginTicket>>()
+    remote.create.mockReturnValueOnce(creating.promise)
+    const creation = controller.create()
+    const reconnect = controller.reconnect()
+    expect(state().deployment).toBeNull()
+    expect(remote.status).toHaveBeenCalledOnce()
+    const loopback = { ...deployment, url: 'http://127.0.0.1/', availability: 'unreachable-host' as const }
+    remote.status.mockResolvedValueOnce({ ok: true, value: loopback })
+    creating.resolve({ ok: true, value: ticket })
+    await Promise.all([creation, reconnect])
+    expect(state()).toMatchObject({ deployment: loopback, ticket: null })
   })
 
   it('expires the code even while a status request is stalled, and ignores its late answer', async () => {

@@ -1,0 +1,3 @@
+- insert:
+    - id: demo-composer-review-session
+      name: '@fixture/composer-review-session'

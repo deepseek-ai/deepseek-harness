@@ -141,6 +141,7 @@
     "tests/draft-initialization.e2e.ts",
     "tests/settings-chrome.e2e.ts",
     "tests/session-log-upload.e2e.ts",
+    "tests/action-cards-setting.e2e.ts",
     "tests/caption-overlays.e2e.ts",
     "tests/settings-appearance.e2e.ts",
     "tests/menu-material.e2e.ts",

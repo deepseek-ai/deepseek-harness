@@ -9,7 +9,7 @@ import type {
   MaybeSnapshotSelectorHook, ObservableSnapshot, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-store'
 import type {
-  FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
+  ChildrenDecl, FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
   InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -335,6 +335,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe'; owner: ComposerBarOwnerProps }
     /**
+     * Select by Session id to show noninteractive inline guidance in the built-in empty editor.
+     * Its text names the textbox. When every selector declines, the editor shows its built-in prompt.
+     */
+    'conversation.input.placeholder': {
+      kind: 'chain'
+      scope: 'session'
+      inline: true
+      owner: InputPlaceholderOwnerProps
+    }
+    /**
      * Optional draft-attachment rail and drop target; fixed overlays must portal to the document
      * body because the docked composer contains them.
      */
@@ -657,18 +667,37 @@ export interface InputActivityOwnerProps extends InputControlOwnerProps {
   onActiveChange: (active: boolean) => void
 }
 
-/** Full props of the resident composer bar. */
-export type ComposerBarProps =
+/** Adding a key here changes the default render keys for plugins using ComposerBarProps. */
+const baseComposerChildren = {
+  'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
+  'conversation.input.overlay': { kind: 'list', scope: 'session' },
+  'conversation.input.permission': { kind: 'single', scope: 'session' },
+  'conversation.input.left': { kind: 'list', scope: 'session' },
+  'conversation.input.plan': { kind: 'single', scope: 'session' },
+  'conversation.input.right': { kind: 'list', scope: 'session' },
+  'conversation.input.model': { kind: 'single', scope: 'session' },
+  'conversation.input.activity': { kind: 'single', scope: 'session' },
+  'conversation.composer.dock': { kind: 'list', scope: 'session' },
+} as const satisfies ChildrenDecl
+
+/** Child slots owned by the built-in input bar. */
+export const inputBarChildren = {
+  ...baseComposerChildren,
+  'conversation.input.placeholder': { kind: 'chain', scope: 'session', inline: true },
+} as const satisfies ChildrenDecl
+
+/** Composer bar props for a registration's child keys. The default preserves the original child slots. */
+export type ComposerBarProps<K extends keyof ChildrenDecl = keyof typeof baseComposerChildren> =
   PropsRuntime<'conversation.composer.bar'>
-  & PropsRenderSlots<
-    | 'conversation.input.attachments' | 'conversation.input.overlay'
-    | 'conversation.input.permission'
-    | 'conversation.input.left' | 'conversation.input.plan'
-    | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
-    | 'conversation.composer.dock'
-  >
+  & PropsRenderSlots<K>
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>
+
+/** Owner data for the built-in editor's placeholder selectors. */
+export interface InputPlaceholderOwnerProps {
+  /** Session displayed by this editor. */
+  readonly sessionId: SessionId
+}
 
 /** Owner values used to elect a composer takeover. */
 export interface ComposerChainProps {

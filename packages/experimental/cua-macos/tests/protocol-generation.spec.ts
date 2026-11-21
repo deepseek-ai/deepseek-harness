@@ -12,6 +12,14 @@ describe('native protocol generation', () => {
     expect(await readFile(new URL('../native/Sources/CuaNative/NativeProtocol.generated.swift', import.meta.url), 'utf8')).toBe(generated.swift)
   })
 
+  it('uses the requesting connection for held-input queries and cleanup', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    for (const method of ['getHeldInputs', 'releaseHeldInputs']) {
+      expect(validate({ id: 'held', method, params: {} })).toBe(true)
+      expect(validate({ id: 'foreign', method, params: { taskId: 'other' } })).toBe(false)
+    }
+  })
+
   it('resolves recursive JSON arguments in the complete native request schema', () => {
     const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
     const target = { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' }
@@ -74,7 +82,10 @@ describe('native protocol generation', () => {
     { method: 'paste', params: { appHandle: 'app', text: 'text', pasteReadTimeoutMs: 1000 } },
     { method: 'mouseMove', params: { appHandle: 'app', windowId: '1', x: 0, y: 0, allowSystemPointer: true } },
     { method: 'findApps', params: { query: 'Editor', maxAppMatches: 1 } },
-    { method: 'releaseHeldKeys', params: { runId: 'execution' } },
+    { method: 'getHeldInputs', params: {} },
+    { method: 'releaseHeldInputs', params: {} },
+    { method: 'takeWindowActivity', params: { appHandle: 'app', observations: { '7': '123' } } },
+    { method: 'clearWindowActivity', params: {} },
     { method: 'launchApp', params: { appHandle: 'pending' } },
     { method: 'applicationIcons', params: { paths: ['/Applications/Fixture.app'] } },
     { method: 'permissionStatus', params: {} },

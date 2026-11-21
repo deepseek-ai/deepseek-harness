@@ -154,14 +154,22 @@ Host control over the dedicated `cua_run_code` environments; registered as `ctx.
  * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
  * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
  * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
- * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+ * connection, and the desktop applications themselves are unaffected. Held input is released. The runtime rejects that Agent's
  * programs until the release settles, so the caller holds them back; after a failed release it rejects them
  * until a later release succeeds. Resolves when no environment exists.
  * @param agent - Agent whose `cua_run_code` state owner is released.
- * @returns Completion after the process has exited and its output has drained.
- * @throws When the process cleanup fails.
+ * @returns Completion after the process has exited, its output has drained, and held-input cleanup has settled.
+ * @throws When environment or input cleanup fails, reporting both causes if both fail.
  */
 release(agent: Agent): Promise<void>
+
+/**
+ * Release the Agent's tracked input while retaining its program variables and application grants.
+ * Providers without held-input state support retain their existing cancellation behavior.
+ * @param agent - Owner of the input to release.
+ * @returns Completion after native acknowledgement, or rejection when cleanup is unconfirmed.
+ */
+releaseInputs(agent: Agent): Promise<void>
 
 /**
  * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
