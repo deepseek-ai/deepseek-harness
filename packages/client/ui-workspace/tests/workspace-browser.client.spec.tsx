@@ -950,6 +950,18 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByText('session-60')).toBeTruthy()
   })
 
+  it('selects the parent row while the main view shows its subagent Session', () => {
+    const child = summary('child', 0, { origin: 'subagent', parentId: sid('parent') })
+    mount({
+      useSessions: hook(sessionState([summary('parent', 2), summary('other', 1), child], { main: child.id })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['parent', 'other'])])),
+    })
+    const selected = (name: string) => screen.getByText(name).closest('[role="treeitem"]')?.getAttribute('aria-selected')
+    expect(selected('parent')).toBe('true')
+    expect(selected('other')).toBe('false')
+    expect(screen.queryByText('child')).toBeNull()
+  })
+
   it('covers the current session and a parent with a running child', () => {
     const items = Array.from({ length: 9 }, (_, index) => summary(`session-${index + 1}`, 9 - index))
     const child = summary('child', 0, { origin: 'subagent', running: true })

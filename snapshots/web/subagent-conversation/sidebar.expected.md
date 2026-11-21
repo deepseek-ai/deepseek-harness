@@ -1,3 +1,3 @@
 - tree "Sessions":
   - treeitem "workspace" [expanded]
-  - treeitem "Ask a research subagent to now"
+  - treeitem "Ask a research subagent to now" [selected]
