@@ -80,9 +80,9 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它把 `lark-cli` 的路径和账号注册到 `ctx.cliAccounts`，注册 skill 提供方，并在 `lark-cli` 缺失时发起一次检查，使没有浏览器的会话也能得到 CLI 和 skill；设置了 `binDir` 时，它要求加载时那里有可执行的 `lark-cli`（Windows 上为 `lark-cli.exe`）。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli`，通过 `ctx.subprocess` 运行 `@larksuite/cli` 的安装脚本来下载缺失的可执行文件，并解析账号命令的 JSON 输出。脚本退出后可执行文件就位即为下载成功，与退出码无关，因为运行同一脚本的另一个进程可能已经把它放好。[CLI 账号 Service](../cli-account/README.zh.md) 在 `lark-cli` 已安装期间于运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，一次执行一个账号操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用飞书的命令完成每个操作，在检查的第一条命令之前下载缺失的 `lark-cli`，并从命令输出行中读取配置与登录链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它把 `lark-cli` 的路径和账号注册到 `ctx.cliAccounts`，把下载缺失的 `lark-cli` 声明为这次注册的 [`prepare` 步骤](../cli-account/README.zh.md#prepare-before-a-check)，注册 skill 提供方，并在 `lark-cli` 缺失时发起一次检查，使没有浏览器的会话也能得到 CLI 和 skill；设置了 `binDir` 时，它要求加载时那里有可执行的 `lark-cli`（Windows 上为 `lark-cli.exe`）。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli`，通过 `ctx.subprocess` 运行 `@larksuite/cli` 的安装脚本来下载缺失的可执行文件，并解析账号命令的 JSON 输出。脚本退出后可执行文件就位即为下载成功，与退出码无关，因为运行同一脚本的另一个进程可能已经把它放好。[CLI 账号 Service](../cli-account/README.zh.md) 在 `lark-cli` 已安装期间于运行时上下文中把这个路径告诉模型，在它缺失时于检查的第一条命令之前运行 `prepare` 步骤，按同一路径运行每条命令，一次执行一个账号操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用飞书的命令完成每个操作，并从命令输出行中读取配置与登录链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
 
-[`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。[`src/skills.ts`](src/skills.ts) 在插件加载时读取一次入口，并把它作为 `feishu` 提供方的唯一 skill 列出，资源基址为 opaque 类型，因此目录列出入口、加载返回该文件时都不运行 CLI。它只在 `lark-cli` 已安装期间列出入口；下载完成时插件会使目录失效，因为目录可能已经在没有该入口时列出过。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
+[`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。[`src/skills.ts`](src/skills.ts) 在插件加载时读取一次入口，并把它作为 `feishu` 提供方的唯一 skill 列出，资源基址为 opaque 类型，因此目录列出入口、加载返回该文件时都不运行 CLI。它只在 `lark-cli` 已安装期间列出入口。目录会缓存列出的结果，因此在没有该入口时列出过之后，插件会在 `lark-cli` 就位后使目录失效一次。插件在每次下载尝试之后和每次账号操作之前检查这一点，因为被取消或失败的安装脚本可能已经复制了二进制，用户也可以在 DSH 之外运行该脚本。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
 
 </details>
 
@@ -120,7 +120,7 @@ Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base,
 
 #### KV Cache 影响
 
-该条目固定不变。加载或卸载插件、或目录列出之后下载完成，都会改变目录，目录作为新消息重新发布，不改动更早的上下文。
+该条目固定不变。加载或卸载插件、或目录列出之后 `lark-cli` 才安装好，都会改变目录，目录作为新消息重新发布，不改动更早的上下文。
 
 ### 已加载的 skill 正文
 
@@ -172,7 +172,7 @@ Feishu CLI: run `lark-cli` by its absolute path with the call operator, & '<binD
 - 登录从 `lark-cli auth login --json` 的事件中读取设备授权链接和完成结果；CLI 版本改变这些事件时，连接以可重试的结果失败。
 - 入口的子指南索引对应 `lark-cli` 1.0.97；固定到另一个 `@larksuite/cli` 版本时，需要对照该版本的 `lark-cli skills list` 检查索引。
 - 在文件沙箱下，普通命令中的 token 刷新可能被拒绝，此时需要单条命令审批。
-- 没有运行 `@larksuite/cli` 安装脚本的安装，在第一次检查时需要 `curl`、`tar`（Windows 上为 PowerShell），以及到 GitHub 或 npm 镜像的网络；下载成功之前没有 `feishu` skill 和 CLI 路径。页面不显示进度。进程在下载期间退出（例如一次性的 headless 运行）会停止下载，下一个进程重新开始。这样停止或被取消的下载，会把脚本的 `lark-cli-*` 目录（连同未下完的归档）留在系统临时目录中。
+- 没有运行 `@larksuite/cli` 安装脚本的安装，在第一次检查时需要 `curl`、`tar`（Windows 上为 PowerShell），以及到 GitHub 或 npm 镜像的网络；下载成功之前没有 `feishu` skill 和 CLI 路径。插件已加载期间用户在 DSH 之外安装 `lark-cli` 时，运行时上下文会先于目录给出它的路径，`feishu` skill 要到下一次账号操作（例如插件页的**重试**）才进入目录。页面不显示进度。进程在下载期间退出（例如一次性的 headless 运行）会停止下载，下一个进程重新开始。这样停止或被取消的下载，会把脚本的 `lark-cli-*` 目录（连同未下完的归档）留在系统临时目录中。
 - 安装脚本把二进制复制到该包的 `bin` 目录时不经过重命名。进程在复制期间被停止可能留下不完整的文件，而它会被当作已安装；删除这个 `bin` 目录后，下一次检查会重新下载。
 
 <a id="dev-note"></a>

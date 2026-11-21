@@ -1,13 +1,10 @@
-/**
- * Check, connection, and sign-out of the CLI's default Feishu account, as the operations `ctx.cliAccounts` runs; a
- * check downloads a missing lark-cli first.
- */
+/** Check, connection, and sign-out of the CLI's default Feishu account, as the operations `ctx.cliAccounts` runs. */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
 import type { CliOperationControl } from '@deepseek-ai/dsh-cli-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { parseJson, type LarkCli } from './cli.ts'
+import { parseJson } from './cli.ts'
 import type { FeishuAccountState, FeishuAppId, FeishuCommand, FeishuOperationKind, FeishuPhase } from './types.ts'
 
 const NotConfigured = z.object({ ok: z.literal(false), error: z.object({ subtype: z.literal('not_configured') }) })
@@ -28,49 +25,32 @@ type Control = CliOperationControl<FeishuAccountState, FeishuPhase, FeishuComman
 
 interface Check { account: FeishuAccountState; openId?: string | undefined }
 
-/** The lark-cli installation a `check` operation completes before its first command. */
-type Cli = Pick<LarkCli, 'installed' | 'install'>
-
 /**
- * Bind the Feishu account operations to the lark-cli installation.
- * @param cli - the managed lark-cli.
- * @returns the function that carries out one account operation with lark-cli and publishes the account each check
- *   observes; it throws when the download or a command fails, a command's output is not the expected JSON, or the
- *   account it leaves is not the one the operation set out to reach.
+ * Carry out one account operation with lark-cli and publish the account each check observes.
+ * @param kind - the requested operation.
+ * @param control - phase changes, link offers, command runs, and account updates for this operation.
+ * @param signal - aborts on cancellation and when the plugin unloads.
+ * @returns after the operation finishes.
+ * @throws when a command fails, its output is not the expected JSON, or the account it leaves is not the one the
+ *   operation set out to reach.
  */
-export function performWith(cli: Cli): (kind: FeishuOperationKind, control: Control, signal: AbortSignal) => Promise<void> {
-  return async (kind, control, signal) => {
-    switch (kind) {
-      case 'check':
-        await download(cli, control, signal)
-        await check(control, signal)
-        return
-      case 'link-app': return linkApp(control, signal)
-      case 'sign-in': return signIn(control, signal)
-      case 'sign-out': {
-        control.stage('signing-out')
-        const result = await control.run('auth-logout', ['auth', 'logout', '--json'], signal)
-        if (result.exitCode !== 0) throw new Error('feishu: auth logout failed')
-        await check(control, signal)
-        return
-      }
-      /* v8 ignore next -- closed operation kind union */
-      default: return assertNever(kind)
+export async function perform(kind: FeishuOperationKind, control: Control, signal: AbortSignal): Promise<void> {
+  switch (kind) {
+    case 'check':
+      await check(control, signal)
+      return
+    case 'link-app': return linkApp(control, signal)
+    case 'sign-in': return signIn(control, signal)
+    case 'sign-out': {
+      control.stage('signing-out')
+      const result = await control.run('auth-logout', ['auth', 'logout', '--json'], signal)
+      if (result.exitCode !== 0) throw new Error('feishu: auth logout failed')
+      await check(control, signal)
+      return
     }
+    /* v8 ignore next -- closed operation kind union */
+    default: return assertNever(kind)
   }
-}
-
-/** Download lark-cli while it is missing, a step the page may cancel; a download that does not finish publishes `not-installed`. */
-async function download(cli: Cli, control: Control, signal: AbortSignal): Promise<void> {
-  if (cli.installed()) return
-  control.stage('downloading')
-  try {
-    await cli.install(signal)
-  } catch (error) {
-    control.publish({ state: 'not-installed' })
-    throw error
-  }
-  control.stage('checking')
 }
 
 /**

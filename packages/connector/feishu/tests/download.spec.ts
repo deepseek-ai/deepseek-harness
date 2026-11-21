@@ -133,6 +133,7 @@ it('cancels the download from the page without a warning and leaves the retry', 
   const page = await load()
   const account = page.source
   const id = account.snapshot().operation!.id
+  expect(await skills()).toEqual([])
 
   await account.cancel(id)
 
@@ -141,6 +142,45 @@ it('cancels the download from the page without a warning and leaves the retry', 
   expect(host.subprocess.processes[0]?.terminated).toBe(true)
   expect(commands()).toEqual([INSTALLER])
   expect(warnings()).toEqual([])
+  expect(await skills()).toEqual([])
+})
+
+it('offers the skill once a cancelled download has left lark-cli in place, and the retry starts no download', async () => {
+  install = () => {}
+  const page = await load()
+  const account = page.source
+  const id = account.snapshot().operation!.id
+  expect(await skills()).toEqual([])
+
+  // The install script copied the binary and has not exited yet.
+  present = true
+  await account.cancel(id)
+
+  expect(account.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'cancelled' } })
+  expect(await skills()).toEqual(['feishu'])
+
+  const retry = await account.start('check')
+  await vi.waitFor(() => { expect(account.snapshot().result).toEqual({ id: retry, kind: 'check', outcome: 'succeeded' }) })
+  expect(account.snapshot().account).toEqual({ state: 'signed-out', appId: APP })
+  expect(commands()).toEqual([INSTALLER, STATUS])
+  expect(await skills()).toEqual(['feishu'])
+})
+
+it('offers the skill at the retry after lark-cli was installed outside the plugin\'s download, and starts no download', async () => {
+  install = (process) => { process.reply({ exitCode: 1 }) }
+  const page = await load()
+  const account = page.source
+  await settled(account)
+  expect(await skills()).toEqual([])
+
+  // The user ran the install script in a terminal.
+  present = true
+  const retry = await account.start('check')
+  await vi.waitFor(() => { expect(account.snapshot().result).toEqual({ id: retry, kind: 'check', outcome: 'succeeded' }) })
+
+  expect(account.snapshot().account).toEqual({ state: 'signed-out', appId: APP })
+  expect(commands()).toEqual([INSTALLER, STATUS])
+  expect(await skills()).toEqual(['feishu'])
 })
 
 it('stops the download when the plugin unloads', async () => {

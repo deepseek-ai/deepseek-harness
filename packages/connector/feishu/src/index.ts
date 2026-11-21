@@ -13,7 +13,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
-import { performWith } from './account.ts'
+import { perform } from './account.ts'
 import { LarkCli, PROGRAM } from './cli.ts'
 import { dictionaries, type FeishuTextKey } from './locales.ts'
 import { copy, FEISHU_PACKAGE, operations, presentAccount } from './presentation.ts'
@@ -51,27 +51,33 @@ export const Config: z<Config> = z.object({
  */
 export function apply(ctx: Context, config: Config): void {
   const cli = new LarkCli(config.binDir, ctx.subprocess, ctx.logger)
-  let listSkill: () => void
+  let skill: FeishuSkillProvider
   ctx.skills.registerProvider((control) => {
-    listSkill = control.invalidate
-    return new FeishuSkillProvider(ENTRY, () => cli.installed())
+    skill = new FeishuSkillProvider(ENTRY, () => cli.installed(), control.invalidate)
+    return skill
   })
   const account = ctx.cliAccounts.register<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuCommand, FeishuTextKey>({
     name,
     packageName: FEISHU_PACKAGE,
-    cli: { product: 'Feishu', program: PROGRAM, executable: cli.executable, ready: () => cli.installed() },
+    cli: { product: 'Feishu', program: PROGRAM, executable: cli.executable },
+    prepare: {
+      phase: 'downloading',
+      unprepared: { state: 'not-installed' },
+      ready: () => cli.installed(),
+      run: async (signal) => {
+        // A cancelled or failed install script may already have put lark-cli in place.
+        try { await cli.install(signal) } finally { skill.relist() }
+      },
+    },
     account: { state: 'unchecked' },
     check: 'check',
     cancellable: ['downloading', 'configuring', 'authorizing'],
     authorizationHosts: ['feishu.cn', 'larksuite.com'],
-    perform: performWith({
-      installed: () => cli.installed(),
-      install: async (signal) => {
-        await cli.install(signal)
-        // The skill catalog listed before the download has no `feishu` skill.
-        listSkill()
-      },
-    }),
+    perform: async (kind, control, signal) => {
+      // lark-cli may have been installed outside this plugin's download since the catalog was listed.
+      skill.relist()
+      await perform(kind, control, signal)
+    },
     dictionaries,
     operations,
     copy,
