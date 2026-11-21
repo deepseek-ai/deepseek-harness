@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-linear",
   "description": "Linear plugin: Linear's hosted MCP server, authorized through the shared MCP manager",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

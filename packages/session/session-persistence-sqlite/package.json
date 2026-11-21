@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-persistence-sqlite",
   "description": "SQLite Session event storage backend for the DeepSeek Harness",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },

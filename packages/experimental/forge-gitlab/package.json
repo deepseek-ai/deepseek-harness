@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-forge-gitlab",
   "description": "GitLab provider for the experimental forge registry, read and written through the GitLab CLI on the host",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },

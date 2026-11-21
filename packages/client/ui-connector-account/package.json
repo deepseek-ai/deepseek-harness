@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-connector-account",
   "description": "Connector account surfaces: the Host registry CLI app plugins and MCP connectors register their accounts with, and the Plugins page section, title tag, activation prompt, and notices it serves over one Remote",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },
