@@ -1,8 +1,9 @@
 /**
  * Connection supervisor: owns the MCP client/transport generations for one
  * plugin instance, keeps the harness tool registry in sync with the live
- * generation, and — when the connection drops — restarts the configured
- * server with bounded exponential backoff.
+ * generation, and — when the connection drops or the server no longer knows
+ * its Streamable HTTP session — restarts the configured server with bounded
+ * exponential backoff.
  *
  * One outage shares one attempt budget (`maxAttempts` consecutive failed
  * attempts, delays doubling from `initialDelayMs` up to `maxDelayMs`). A
@@ -22,7 +23,9 @@ import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-uti
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { withDeadline } from './deadline.ts'
-import { McpAuthorizationRequired, McpLocalError, mcpRequestError, McpToolError, oauthFailure } from './diagnostic.ts'
+import {
+  eventStreamRefused, McpAuthorizationRequired, McpLocalError, mcpRequestError, McpToolError, oauthFailure, sessionRejected,
+} from './diagnostic.ts'
 import type { McpOAuthCredentials, McpOAuthGrant } from './oauth-credentials.ts'
 import type { McpStatusCell } from './status.ts'
 import type { McpCloseResult } from './types.ts'
@@ -56,6 +59,9 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
 
 /** Default UTF-8 byte limit for attributed server instructions. */
 export const DEFAULT_MAX_INSTRUCTION_BYTES = 32_768
+
+/** What requests in flight report when the server no longer knows the session; none of them is sent again. */
+const SESSION_EXPIRED = 'MCP server session expired; this call returned no result and may not have run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.'
 
 /** Fully resolved reconnect policy captured at plugin load. */
 export type ResolvedReconnectPolicy = Readonly<Required<ReconnectConfig>>
@@ -257,10 +263,10 @@ export function startConnection(
     reconnectTimer.unref()
   }
 
-  function lost(record: Generation, error: string): void {
+  function lost(record: Generation, error: string, reason?: Error): void {
     if (!isCurrent(record)) return
     current = undefined
-    settling = close(record).then((confirmed) => {
+    settling = close(record, reason).then((confirmed) => {
       readiness.resolve({ error: new Error(error) })
       if (confirmed) scheduleReconnect(error, record.connectedAt)
     })
@@ -330,8 +336,20 @@ export function startConnection(
     client.onclose = () => {
       if (record.connectedAt !== undefined) lost(record, 'connection closed')
     }
-    if (oauth !== undefined) client.onerror = (error) => {
-      const failure = oauthFailure(error)
+    client.onerror = (error) => {
+      // Before startup completes, and on a connection without a session id, these statuses are ordinary answers.
+      if (record.connectedAt !== undefined && client.transport?.sessionId !== undefined) {
+        if (sessionRejected(error)) {
+          lost(record, 'server session expired', new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
+          return
+        }
+        if (eventStreamRefused(error)) {
+          // A ping the server rejects for its session reports through this handler; any other outcome changes nothing.
+          void record.wire.run(signal => client.ping({ signal, timeout: config.toolCallTimeoutMs })).catch(() => undefined)
+          return
+        }
+      }
+      const failure = oauth === undefined ? undefined : oauthFailure(error)
       if (failure === undefined) return
       // A committed grant replacement fails this generation's later requests with `binding` before the
       // pending credential check replaces the generation; that check owns recovery.
