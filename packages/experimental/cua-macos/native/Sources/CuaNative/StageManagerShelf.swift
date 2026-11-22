@@ -1,4 +1,5 @@
 // WindowManager exposes Stage Manager piles as accessibility buttons with member window IDs.
+import AppKit
 import ApplicationServices
 import Foundation
 
@@ -10,12 +11,12 @@ struct StageManagerShelf {
 
     private let manager: ProcessIdentity
 
-    static func current(_ catalog: ApplicationCatalogSnapshot) throws -> Self? {
+    @MainActor static func current() throws -> Self? {
         guard UserDefaults(suiteName: "com.apple.WindowManager")?.bool(forKey: "GloballyEnabled") == true else { return nil }
-        guard let process = catalog.applications.first(where: {
-            $0.bundleID == "com.apple.WindowManager" && $0.path == "/System/Library/CoreServices/WindowManager.app"
+        guard let process = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.WindowManager").first(where: {
+            !$0.isTerminated && $0.bundleURL?.path == "/System/Library/CoreServices/WindowManager.app"
         }) else { throw Self.unavailable("Stage Manager is enabled but its window list is unavailable.") }
-        return Self(manager: try NativePlatform.identity(process.pid))
+        return Self(manager: try NativePlatform.identity(process.processIdentifier))
     }
 
     func piles(_ access: AXAccess) throws -> [Pile] {
@@ -52,13 +53,14 @@ struct StageManagerShelf {
     func join(_ pile: Pile, windowID: UInt32, owner: ProcessIdentity, appScoped: Bool, originalPID: Int32, access: AXAccess) throws {
         try NativePlatform.verify(manager)
         try NativePlatform.verify(owner)
-        guard try windowIDs(pile.button, access) == pile.ids, pile.ids.contains(windowID),
-              try access.actions(pile.button).contains("AXAddToStage") else {
-            throw Self.unavailable("The Stage Manager pile changed or does not offer Add Window to Stage.")
-        }
         let owned = Set(NativePlatform.applicationWindows(owner.pid).map(\.windowID))
         guard Self.canAdd(windowID, members: pile.ids, owned: owned, appScoped: appScoped) else {
             throw Self.unavailable("The pile contains multiple windows and Stage Manager only offers to add its top window.")
+        }
+        var buttonPID: pid_t = 0
+        guard AXUIElementGetPid(pile.button, &buttonPID) == .success, buttonPID == manager.pid,
+              try access.actions(pile.button).contains("AXAddToStage"), try windowIDs(pile.button, access) == pile.ids else {
+            throw Self.unavailable("The Stage Manager pile changed or does not offer Add Window to Stage.")
         }
         guard NativePlatform.frontPID() == originalPID else { throw Self.unavailable("The active group changed before the window could be added.") }
         try access.perform(pile.button, "AXAddToStage")

@@ -251,6 +251,7 @@ private final class WindowRestoration {
             case .application:
                 dispatched = try await reopen(on: worker)
             case .shelf(let id):
+                targetID = id
                 targetID = try await joinStage(id, exact: !appScoped, on: worker)
                 dispatched = stageActionSent
             }

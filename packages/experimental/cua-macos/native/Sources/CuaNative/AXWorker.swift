@@ -328,8 +328,9 @@ actor AXWorker {
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
         case "show":
+            let shelf = try await StageManagerShelf.current()
             let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
-                                              axTimeout: axTimeout, sessionState: sessionState, shelf: StageManagerShelf.current(catalog))
+                                              axTimeout: axTimeout, sessionState: sessionState, shelf: shelf)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
             return .result(result)
