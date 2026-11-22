@@ -13,6 +13,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var focusOnRestore = false
     var minimizeRequested = false
     var keyLosses = 0
+    var becameKey = ContinuousClock.now
     var moved = false
     var controls: [DispatchSourceSignal] = []
     var stateObserver: Timer?
@@ -70,6 +71,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidResignActive(_ notification: Notification) { persist() }
     func applicationDidHide(_ notification: Notification) { persist() }
     func applicationDidUnhide(_ notification: Notification) { persist() }
+    func windowDidBecomeKey(_ notification: Notification) { becameKey = .now; persist() }
     func windowDidResignKey(_ notification: Notification) { keyLosses += 1; persist() }
     func windowDidMiniaturize(_ notification: Notification) { persist() }
     func windowDidDeminiaturize(_ notification: Notification) {
@@ -97,6 +99,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
             "hidden": NSApplication.shared.isHidden, "minimized": window.isMiniaturized,
             "active": NSApplication.shared.isActive, "key": window.isKeyWindow, "keyLosses": keyLosses,
+            "keySettled": window.isKeyWindow && becameKey.duration(to: .now) >= .seconds(NSAnimationContext.current.duration),
             "minimizeRequested": minimizeRequested, "focusOnRestore": focusOnRestore,
             "size": [window.frame.width, window.frame.height],
             "buttonPoint": [rect.midX, window.frame.height - rect.midY],

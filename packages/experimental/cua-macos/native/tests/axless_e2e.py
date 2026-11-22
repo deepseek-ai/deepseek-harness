@@ -149,13 +149,13 @@ def main():
 
                 def focus_foreground():
                     helper.call('activate', front_owner)
-                    return wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                    return wait_for_state(foreground_path, lambda s: s['active'] and s['key'] and s['keySettled'])
 
                 def check_show(before, selected, status):
                     result = helper.call('show', selected)
-                    assert result == {'dispatched': status == 'restored', 'status': status,
-                                      'windowId': window_id, 'foregroundChanged': False}, result
                     after = wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                    assert result == {'dispatched': status == 'restored', 'status': status,
+                                      'windowId': window_id, 'foregroundChanged': False}, (result, before, after)
                     if status != 'restored':
                         assert after['keyLosses'] == before['keyLosses'], after
                     return after

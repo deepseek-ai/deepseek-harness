@@ -56,7 +56,7 @@ extension AXWorker {
             return front != original.pid && front != owner.pid
         }
         var handoffPending = false
-        func restoreFocus() async throws {
+        func restoreFocus(on worker: isolated AXWorker) async throws {
             try NativePlatform.requireUnlocked(sessionState())
             var current = NativePlatform.foregroundAppWindow()
             let returningToOriginalApp = current.pid == owner.pid && original != owner
@@ -82,13 +82,13 @@ extension AXWorker {
                   try access.raiseForShow(originalAX) else { throw unavailable("The previous keyboard window could not be restored.") }
             guard try access.focusedWindowID(original.pid) == originalID else { throw unavailable("The previous keyboard window did not regain focus.") }
         }
-        func waitForDisplay() async throws -> Bool {
+        func waitForDisplay(on worker: isolated AXWorker) async throws -> Bool {
             let until = min(deadline, ContinuousClock.now + .seconds(animation))
             while try !visible() {
                 try cancellation.check()
                 try NativePlatform.requireUnlocked(sessionState())
                 if userSwitched() || ContinuousClock.now >= until { return false }
-                try await restoreFocus()
+                try await restoreFocus(on: self)
                 try await Task.sleep(for: .milliseconds(16))
             }
             return true
@@ -98,14 +98,14 @@ extension AXWorker {
         do {
             let hidden = try access.boolean(app, "AXHidden") == true
             var shown = false
-            if !hidden, try access.raiseForShow(window) { shown = try await waitForDisplay() }
+            if !hidden, try access.raiseForShow(window) { shown = try await waitForDisplay(on: self) }
             if !shown && !userSwitched() {
                 try checkTarget()
                 if hidden, try access.writable(app, "AXHidden") == true { try access.setAttribute(app, "AXHidden", .bool(false)) }
                 if try access.boolean(window, "AXMinimized") == true, try access.writable(window, "AXMinimized") == true {
                     try access.setAttribute(window, "AXMinimized", .bool(false))
                 }
-                shown = try await waitForDisplay()
+                shown = try await waitForDisplay(on: self)
             }
             if !shown && !userSwitched() {
                 try checkTarget()
@@ -123,13 +123,13 @@ extension AXWorker {
             repeat {
                 try cancellation.check()
                 if userSwitched() { break }
-                try await restoreFocus()
+                try await restoreFocus(on: self)
                 if ContinuousClock.now >= settleBy { break }
                 try await Task.sleep(for: .milliseconds(16))
             } while true
             guard try visible() else { throw unavailable("The selected window is not confirmed visible after restoration.") }
         } catch {
-            if !handoffPending { try await restoreFocus() }
+            if !handoffPending { try await restoreFocus(on: self) }
             throw error
         }
         return result(id, status: "restored", dispatched: true, changed: foregroundChange())
