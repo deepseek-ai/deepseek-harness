@@ -68,6 +68,13 @@ struct ApplicationCatalogSnapshot: Sendable {
         }
         return true
     }
+    static func unhideForShow(_ owner: ProcessIdentity) throws {
+        try NativePlatform.verify(owner)
+        guard let app = NSRunningApplication(processIdentifier: owner.pid), !app.isTerminated else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "The application exited before it could be shown.")
+        }
+        if app.isHidden { app.unhide() }
+    }
     static var animationDuration: Double { NSAnimationContext.current.duration }
     static func activateForShow(_ target: ProcessIdentity, whileUsing original: ProcessIdentity) throws {
         guard let pid = NativePlatform.frontPID(), pid == original.pid || pid == target.pid else { return }
@@ -186,10 +193,13 @@ enum NativePlatform {
     /// A background window can be ordered above another app's windows without becoming its keyboard target.
     static func foregroundAppWindow() -> (pid: Int32?, windowID: UInt32?) {
         let pid = frontPID()
+        return (pid, pid.flatMap(topVisibleWindow))
+    }
+    static func topVisibleWindow(_ pid: Int32) -> UInt32? {
         let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
         let top = rows?.first { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid &&
             ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }
-        return (pid, (top?[kCGWindowNumber as String] as? NSNumber)?.uint32Value)
+        return (top?[kCGWindowNumber as String] as? NSNumber)?.uint32Value
     }
     /// AppKit excludes input-transparent windows and transparent regions, including system overlays.
     @MainActor static func mouseWindow(at quartzPoint: CGPoint) -> Int {

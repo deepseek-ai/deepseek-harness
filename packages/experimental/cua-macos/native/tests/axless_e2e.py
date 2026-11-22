@@ -154,8 +154,7 @@ def main():
                 def check_show(before, selected, status):
                     result = helper.call('show', selected)
                     after = wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
-                    assert result == {'dispatched': status == 'restored', 'status': status,
-                                      'windowId': window_id, 'foregroundChanged': False}, (result, before, after)
+                    assert result == {'dispatched': status == 'restored', 'windowId': window_id, 'foregroundChanged': False}, (result, before, after)
                     if status != 'restored':
                         assert after['keyLosses'] == before['keyLosses'], after
                     return after
@@ -164,8 +163,8 @@ def main():
                 check_show(before, target, 'already_visible')
                 os.kill(fixture, signal.SIGALRM)
                 wait_state(lambda s: s['hidden'], 'fixture did not hide')
-                check_show(before, owner, 'unchanged')
-                assert json.loads(state_path.read_text())['hidden']
+                check_show(before, owner, 'restored')
+                wait_state(lambda s: not s['hidden'], 'hidden application remained hidden')
 
                 helper.call('activate', owner)
                 wait_state(lambda s: s['active'] and s['key'], 'target did not regain keyboard focus')
@@ -175,8 +174,8 @@ def main():
                 before = focus_foreground()
                 windows = helper.call('listWindows', owner)
                 on_screen = next(w['isOnScreen'] for w in windows if w['windowId'] == window_id)
-                status = 'restored' if state['minimized'] else ('already_visible' if on_screen else 'unchanged')
-                foreground_after = check_show(before, target, status)
+                status = 'already_visible' if on_screen and not state['minimized'] else 'restored'
+                foreground_after = check_show(before, owner if state['minimized'] else target, status)
                 after = wait_state(lambda s: not s['minimized'], 'target remained minimized')
                 assert after['size'] == state['size'], after
                 if status == 'restored':
@@ -191,6 +190,24 @@ def main():
                     after = check_show(before, target, 'restored')
                     assert after['keyLosses'] > before['keyLosses'], 'target did not exercise the focus handoff'
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')
+                before_close = json.loads(state_path.read_text())['reopened']
+                os.kill(fixture, signal.SIGINFO)
+                wait_state(lambda s: s['closed'], 'target did not close its main window')
+                focus_foreground()
+                stale = helper.call('show', target, 'WINDOW_UNAVAILABLE')
+                assert 'app.show()' in stale['message'], stale
+                closed = json.loads(state_path.read_text())
+                assert closed['closed'] and closed['reopened'] == before_close, closed
+                opened = helper.call('show', owner)
+                new = wait_state(lambda s: not s['closed'] and s.get('windowId') != window_id,
+                                 'reopen did not replace the closed window')
+                assert opened == {'dispatched': True,
+                                  'windowId': new['windowId'], 'foregroundChanged': False}, opened
+                assert new['reopened'] == before_close + 1 and new['pid'] == fixture, new
+                wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                assert helper.call('show', owner) == {'dispatched': False, 'windowId': new['windowId'], 'foregroundChanged': False}
+                helper.call('show', target, 'WINDOW_UNAVAILABLE')
+                assert json.loads(state_path.read_text())['reopened'] == new['reopened']
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
             finally:

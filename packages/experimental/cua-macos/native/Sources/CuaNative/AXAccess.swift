@@ -236,35 +236,41 @@ final class AXAccess {
         guard let focused = try element(AXUIElementCreateApplication(pid), "AXFocusedWindow") else { return nil }
         return try windowID(focused)
     }
-    /// Resolve the window before changing application visibility or keyboard focus.
+    /// App-scoped show can reopen the app. A window-scoped request can only display its original WindowServer ID.
     func selectWindowForShow(_ requested: UInt32?, owner: ProcessIdentity) throws -> WindowForShow {
         let app = AXUIElementCreateApplication(owner.pid)
         let windows = try children(app, "AXWindows")
-        let selected: AXUIElement
+        let observed = NativePlatform.applicationWindows(owner.pid)
         if let requested {
-            let owned = try NativePlatform.ownedWindow(owner.pid, requested)
-            guard let match = try windows.first(where: { try windowID($0) == requested }) else {
-                if owned.isOnScreen { return .unchanged(requested, visible: true) }
-                throw Self.backgroundRestoreUnavailable("macOS did not expose the selected window for background restoration.")
+            let missing = NativeFailure(code: "WINDOW_UNAVAILABLE",
+                message: "The selected window is no longer available. Use app.show() to reopen the app, then select a current window from app.getWindows().")
+            guard let owned = observed.first(where: { $0.windowID == requested }) else { throw missing }
+            if let match = try windows.first(where: { try windowID($0) == requested }) {
+                let minimized = try boolean(match, "AXMinimized")
+                if owned.isOnScreen && minimized != true { return .visible(requested) }
+                guard minimized != nil else { throw missing }
+                return .needs(.window(requested, match))
             }
-            selected = match
-        } else {
-            guard let window = try element(app, "AXFocusedWindow") ?? element(app, "AXMainWindow") ?? (windows.count == 1 ? windows[0] : nil) else {
-                if windows.isEmpty { return .unchanged(nil, visible: false) }
-                throw NativeFailure(code: "AMBIGUOUS_WINDOW", message: "Select a window from app.getWindows() before calling show()")
-            }
-            selected = window
+            guard owned.isOnScreen else { throw missing }
+            return .visible(requested)
         }
-        guard let minimized = try boolean(selected, "AXMinimized") else {
-            throw Self.backgroundRestoreUnavailable("macOS did not report whether the window is minimized.")
+
+        let focused = try element(app, "AXFocusedWindow")
+        let main = try element(app, "AXMainWindow")
+        var seen = Set<UInt32>()
+        var minimized: (UInt32, AXUIElement)?
+        for window in [focused, main].compactMap({ $0 }) + windows {
+            guard let id = try windowID(window), seen.insert(id).inserted,
+                  let owned = observed.first(where: { $0.windowID == id && $0.layer == 0 }) else { continue }
+            let state = try boolean(window, "AXMinimized")
+            if owned.isOnScreen && state != true { return .visible(id) }
+            if minimized == nil && state == true && owned.onCurrentSpace == true { minimized = (id, window) }
         }
-        let id = try windowID(selected)
-        guard minimized else {
-            let visible = try id.map { try NativePlatform.ownedWindow(owner.pid, $0).isOnScreen } ?? false
-            return .unchanged(id, visible: visible)
+        if let other = observed.first(where: { $0.layer == 0 && $0.isOnScreen && !seen.contains($0.windowID) }) {
+            return .visible(other.windowID)
         }
-        guard let id else { throw Self.backgroundRestoreUnavailable("The minimized window has no WindowServer ID.") }
-        return .minimized(id, selected)
+        if let (id, window) = minimized { return .needs(.window(id, window)) }
+        return .needs(.application)
     }
     /// An unsupported raise permits explicit deminimization. Other AX failures can have an unknown outcome.
     func raiseForShow(_ window: AXUIElement) throws -> Bool {
@@ -275,9 +281,6 @@ final class AXAccess {
         if status == .actionUnsupported || status == .notImplemented { return false }
         guard status == .success else { throw failure(status, "raise window") }
         return true
-    }
-    private static func backgroundRestoreUnavailable(_ reason: String) -> NativeFailure {
-        NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "\(reason) Call app.activate(), then inspect the window.")
     }
     func actions(_ element: AXUIElement, requireKnown: Bool = false) throws -> [String] {
         try prepare(element)

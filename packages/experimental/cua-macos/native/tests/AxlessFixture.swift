@@ -10,6 +10,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var hiddenAX = false
     var count = 0
     var resizeCount = 0
+    var closed = false
+    var reopened = 0
     var focusOnRestore = false
     var minimizeRequested = false
     var keyLosses = 0
@@ -19,7 +21,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var stateObserver: Timer?
 
     init(statePath: String) { self.statePath = statePath }
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func makeWindow() {
         window = NSWindow(contentRect: NSRect(x: 120, y: 120, width: 360, height: 180),
                           styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.delegate = self
@@ -31,9 +33,20 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         button.frame = NSRect(x: 40, y: 65, width: 280, height: 40)
         window.contentView!.addSubview(button)
         window.makeKeyAndOrderFront(nil)
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        reopened += 1
+        if closed { closed = false; makeWindow() }
+        persist()
+        return false
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func windowWillClose(_ notification: Notification) { closed = true; persist() }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        makeWindow()
         NSApplication.shared.activate(ignoringOtherApps: true)
         savedChildren = NSApplication.shared.accessibilityChildren()
-        for number in [SIGUSR1, SIGUSR2, SIGWINCH, SIGURG, SIGHUP, SIGALRM, SIGXCPU] {
+        for number in [SIGUSR1, SIGUSR2, SIGWINCH, SIGURG, SIGHUP, SIGALRM, SIGXCPU, SIGINFO] {
             signal(number, SIG_IGN)
             let control = DispatchSource.makeSignalSource(signal: number, queue: .main)
             control.setEventHandler { [weak self] in
@@ -44,6 +57,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self.resizeCount += 1
                     self.window.setContentSize(NSSize(width: 360 + 40 * self.resizeCount, height: 180 + 20 * self.resizeCount))
                     self.persist()
+                case SIGINFO: self.window.performClose(nil)
                 case SIGXCPU: self.focusOnRestore = true; self.persist()
                 case SIGHUP:
                     self.window.collectionBehavior = []
@@ -96,7 +110,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let data = try! JSONSerialization.data(withJSONObject: [
             "pid": ProcessInfo.processInfo.processIdentifier,
             "windowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
-            "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
+            "closed": closed, "reopened": reopened, "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
             "hidden": NSApplication.shared.isHidden, "minimized": window.isMiniaturized,
             "active": NSApplication.shared.isActive, "key": window.isKeyWindow, "keyLosses": keyLosses,
             "keySettled": window.isKeyWindow && becameKey.duration(to: .now) >= .seconds(NSAnimationContext.current.duration),

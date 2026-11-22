@@ -203,12 +203,7 @@ export const ActionResult = z.object({
 /** Hover reports whether the selected route moved the user's system pointer. */
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */
-export const ShowResult = ActionResult.extend({
-  windowId: windowId.nullable(),
-  foregroundChanged: z.boolean().nullable(),
-  /** macOS distinguishes a visible window from an unchanged hidden or absent window. */
-  status: z.enum(['already_visible', 'restored', 'unchanged']).optional(),
-})
+export const ShowResult = ActionResult.extend({ windowId: windowId.nullable(), foregroundChanged: z.boolean().nullable() })
 
 /** Bounded native PNG thumbnail for human presentation, excluded from model results and saved grants. */
 export const ApplicationIcon = z.string().max(65536).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/)
