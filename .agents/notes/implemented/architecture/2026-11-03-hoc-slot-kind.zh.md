@@ -66,7 +66,7 @@ Status: implemented
 - 增减一层会让其内部所有内容重新挂载，包括首页的输入框。
 - 所有非 hoc 的注册组件都会收到 `children: undefined`，会覆盖同名的 owner prop。
 - 每层在组件树中多一个组件和两个 error boundary；有层的 hoc 插槽另多一个 outlet 边界。
-- outlet 的 `[data-slot]` 元素位于 owner 与内容之间，owner 侧选择器不能假定内容是直接子元素。
+- 渲染器标记的是 slot 和[各层渲染 `children` 的位置](../../../../docs/subsystems/slots.zh.md#hoc-layers)，而不是层组件自己的元素。插件不必添加自己的包装元素，但结构选择器必须考虑这些 DOM 元素。
 - React 18 会在错误被重新抛出的位置重新采集组件栈，因此有层的 hoc 插槽之上的边界收到的内容错误，组件栈从 `HocOutletBoundary` 开始。
 - 层如果自己在 `children` 外包错误边界，捕获到的是内部的 `HocContentError`，而不是原始的内容错误。
 - frame 契约只在首页阶段成立：其他阶段根元素不参与层叠隔离，未经 portal 的 Conversation 浮层仍能盖住悬浮在中栏上方的 AppFrame 元素；首页阶段它们只在根元素内部比较层级。

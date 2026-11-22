@@ -35,6 +35,8 @@ This package is infrastructure: the web shell and the boot kernel are its only d
 
 A business plugin registers an ordinary Slot entry or a reusable Component Factory; the renderer binds the runtime's session and workspace observable sources into selector hooks at the render position. The plugin receives standard scope props through its derived Component props — it never imports the renderer or touches React internals. Every renderer-created Component can render a Factory occurrence, and a Factory can expose caller-selected local Components without sharing implementation values between packages.
 
+When a [hoc layer](../../../docs/subsystems/slots.md#hoc-layers) renders its React `children`, the renderer marks that position with `data-slot-children`. The plugin does not need to add its own wrapper or forward DOM attributes.
+
 -----
 
 <a id="understand-the-implementation"></a>

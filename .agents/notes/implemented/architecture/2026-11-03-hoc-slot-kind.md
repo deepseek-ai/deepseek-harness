@@ -66,7 +66,7 @@ Add a fifth kind: `hoc`.
 - Adding or removing a layer remounts everything inside it, including the composer on the home.
 - Every non-hoc registered Component receives `children: undefined`, which overrides any owner prop of that name.
 - Each layer adds one Component and two error boundaries to the tree; each hoc slot with layers adds one outlet boundary.
-- The outlet's `[data-slot]` element sits between the owner and its content, so owner selectors cannot assume the content is a direct child.
+- The renderer marks the slot and [where each layer renders `children`](../../../../docs/subsystems/slots.md#hoc-layers), not the layer's own markup. Plugins need no wrapper of their own, but structural selectors must account for those DOM elements.
 - React 18 recollects the component stack where an error is rethrown, so a content error reaching boundaries above a hoc slot with layers carries a component stack that starts at `HocOutletBoundary`.
 - A layer that wraps its `children` in its own error boundary catches the internal `HocContentError` rather than the original content error.
 - The frame contract holds only on the home: other phases leave the Conversation root out of the stacking order, so unportaled Conversation popovers still rise above AppFrame chrome that floats over the column, while on the home they stack only within the root.

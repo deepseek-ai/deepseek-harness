@@ -409,13 +409,14 @@ class HocContentError extends Error {
   }
 }
 
-/** Wrap the content inside one hoc layer: its errors leave as {@link HocContentError}. */
-class HocContentBoundary extends Component<{ children: ReactNode }> {
+/** The children outlet of one hoc layer. Errors from the inner content leave as {@link HocContentError}. */
+class HocContentBoundary extends Component<{ slotKey: string; anchor: SlotAnchorTag; children: ReactNode }> {
   static getDerivedStateFromError(error: unknown): never {
     throw error instanceof HocContentError ? error : new HocContentError(error)
   }
   override render(): ReactNode {
-    return this.props.children
+    const { anchor: Anchor, slotKey, children } = this.props
+    return <Anchor data-slot-children={slotKey} style={ANCHOR_STYLE}>{children}</Anchor>
   }
 }
 
@@ -1143,7 +1144,7 @@ function hocLayer(
   switch (spec.scope) {
     case 'session':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = <HocContentBoundary slotKey={slotKey} anchor={anchor}>{renderInner(owner, children)}</HocContentBoundary>
         return (
           <StrictSessionEntry
             slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}
@@ -1156,7 +1157,7 @@ function hocLayer(
       break
     case 'session-maybe':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = <HocContentBoundary slotKey={slotKey} anchor={anchor}>{renderInner(owner, children)}</HocContentBoundary>
         return (
           <SlotErrorBoundary slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}>
             <SessionMaybeEntry
@@ -1170,7 +1171,7 @@ function hocLayer(
       break
     case 'root':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = <HocContentBoundary slotKey={slotKey} anchor={anchor}>{renderInner(owner, children)}</HocContentBoundary>
         return (
           <SlotErrorBoundary slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}>
             <RootEntry
