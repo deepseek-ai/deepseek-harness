@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Голосовой ввод",
-    "description": "Диктуйте с облачным распознаванием DeepSeek после входа в аккаунт или скачайте локальную модель SenseVoice.",
+    "description": "Диктуйте с облачным распознаванием DeepSeek через аккаунт или ключ API DeepSeek или скачайте локальную модель SenseVoice.",
     "detail": "docs/DETAIL.md"
   }
 }

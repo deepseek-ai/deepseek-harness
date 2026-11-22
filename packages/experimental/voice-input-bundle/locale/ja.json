@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "音声入力",
-    "description": "DeepSeek にログインするとクラウド認識で音声入力できます。ローカルの SenseVoice モデルをダウンロードすることもできます。",
+    "description": "DeepSeek アカウントまたは API キーでクラウド認識を使って音声入力できます。ローカルの SenseVoice モデルをダウンロードすることもできます。",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Entrada de voz",
-    "description": "Dite com o reconhecimento na nuvem da DeepSeek após iniciar sessão, ou transfira o modelo local SenseVoice.",
+    "description": "Dite com o reconhecimento na nuvem da DeepSeek através de uma conta ou chave de API DeepSeek, ou transfira o modelo local SenseVoice.",
     "detail": "docs/DETAIL.md"
   }
 }

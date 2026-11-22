@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Voice input",
-    "description": "Dictate with DeepSeek cloud recognition after signing in, or download the local SenseVoice model.",
+    "description": "Dictate with DeepSeek cloud recognition through a DeepSeek account or API key, or download the local SenseVoice model.",
     "detail": "docs/DETAIL.md"
   }
 }

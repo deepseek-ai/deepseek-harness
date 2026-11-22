@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Saisie vocale",
-    "description": "Dictez avec la reconnaissance cloud DeepSeek après connexion, ou téléchargez le modèle local SenseVoice.",
+    "description": "Dictez avec la reconnaissance cloud DeepSeek via un compte ou une clé API DeepSeek, ou téléchargez le modèle local SenseVoice.",
     "detail": "docs/DETAIL.md"
   }
 }
