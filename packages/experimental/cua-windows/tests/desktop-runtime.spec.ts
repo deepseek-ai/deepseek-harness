@@ -119,7 +119,7 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const read = async (showDiff: boolean) => StateResult.parse(await client.request('getState', { ...params, showDiff }, signal))
     // Interrupt after the helper produces its baseline, before the client consumes the reply.
     const interrupted = new AbortController()
-    channel.stdout.prependOnceListener('data', () => interrupted.abort())
+    channel.stdout.prependOnceListener('data', () => { interrupted.abort() })
     await expect(client.request('getState', { ...params, showDiff: true }, interrupted.signal))
       .rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
     expect((await read(true)).tree).toMatch(/^- \[.+?\] Window\b/)
