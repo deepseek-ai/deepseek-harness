@@ -278,7 +278,7 @@
               "type": "boolean"
             },
             "showDiff": {
-              "description": "On macOS, start a numbered tree and return changes on subsequent comparable reads. Omitted or false returns the full tree. Windows does not implement true.",
+              "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
               "type": "boolean"
             },
             "maxElements": {
