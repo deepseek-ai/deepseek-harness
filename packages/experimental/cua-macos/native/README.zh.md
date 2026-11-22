@@ -80,7 +80,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
 | `listActions` | 先列出控件的完整原生动作名，再列出可写属性的 `Role.Attribute.Set`。`Role.Attribute.Set` 是属性写入的专用名称，角色和属性名必须非空且不含点号。只考虑控件报告为可写的属性。需要元素引用的属性，以及实际值类型无法编码的动态属性，都会省略。非连续文本选区可以使用系统定义的范围数组写入。 |
 | `getActionSchema` | 按完整动作名查询参数的 JSON Schema。原生动作无须参数。动作枚举、参数查询和写入共用属性定义。schema 说明参数类型、单位和必填字段。设置控件方向或排序方向时，传入的字符串必须与列出的取值大小写一致。文本控件接受字符串，滑块和步进控件可接受数字或字符串。未知属性按实际值类型处理，只凭动作名无法确定具体控件的取值范围。 |
-| `show` | `{dispatched: boolean, windowId, foregroundChanged}` 对未最小化的窗口返回 `dispatched: false`，包括台前调度中其他窗口组里的窗口。遇到已最小化的窗口时，调用会在修改前返回 `BACKGROUND_RESTORE_UNAVAILABLE`。使用 `app.activate()` 后，读取窗口状态，查看可用的前台恢复操作。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
+| `show` | 已显示且未最小化时，`status` 为 `already_visible`。未选中窗口或窗口未最小化但不在屏幕上时，为 `unchanged`。已确认目标窗口恢复且在屏幕上时，为 `restored`。优先通过 `AXRaise` 恢复，必要时可临时激活目标应用，目标取得焦点后会归还焦点。失败后先观察桌面，再发送输入。 |
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 

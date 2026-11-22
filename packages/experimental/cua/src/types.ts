@@ -107,7 +107,7 @@ export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaL
  */
 export interface CuaSurface {
   /**
-   * Request background restoration of the selected or default window. On macOS a minimized window requires explicit foreground access.
+   * Show the selected or default window. macOS first tries background restoration and returns focus after a temporary switch.
    * @returns Dispatch evidence, the selected window when available, and sampled foreground change; read fresh state before input.
    */
   show(): Promise<CuaShowResult>

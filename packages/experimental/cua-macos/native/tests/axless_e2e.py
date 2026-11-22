@@ -151,22 +151,19 @@ def main():
                     helper.call('activate', front_owner)
                     return wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
 
-                def check_show(before, selected, minimized=False):
-                    if minimized:
-                        failure = helper.call('show', selected, 'BACKGROUND_RESTORE_UNAVAILABLE')
-                        assert failure['message'] == ('The window is still minimized. Restoring it may take keyboard focus. '
-                                                      'Call app.activate(), then inspect the window.'), failure
-                    else:
-                        result = helper.call('show', selected)
-                        assert result == {'dispatched': False, 'windowId': window_id, 'foregroundChanged': False}, result
-                    after = json.loads(foreground_path.read_text())
-                    assert after['key'] and after['keyLosses'] == before['keyLosses'], after
+                def check_show(before, selected, status):
+                    result = helper.call('show', selected)
+                    assert result == {'dispatched': status == 'restored', 'status': status,
+                                      'windowId': window_id, 'foregroundChanged': False}, result
+                    after = wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                    if status != 'restored':
+                        assert after['keyLosses'] == before['keyLosses'], after
 
                 before = focus_foreground()
-                check_show(before, target)
+                check_show(before, target, 'already_visible')
                 os.kill(fixture, signal.SIGALRM)
                 wait_state(lambda s: s['hidden'], 'fixture did not hide')
-                check_show(before, owner)
+                check_show(before, owner, 'unchanged')
                 assert json.loads(state_path.read_text())['hidden']
 
                 helper.call('activate', owner)
@@ -175,9 +172,14 @@ def main():
                 state = wait_state(lambda s: s['minimizeRequested'] and (s['minimized'] or not s['active']),
                                    'target did not minimize or leave the active Stage Manager group')
                 before = focus_foreground()
-                check_show(before, target, state['minimized'])
+                windows = helper.call('listWindows', owner)
+                on_screen = next(w['isOnScreen'] for w in windows if w['windowId'] == window_id)
+                status = 'restored' if state['minimized'] else ('already_visible' if on_screen else 'unchanged')
+                check_show(before, target, status)
                 after = json.loads(state_path.read_text())
-                assert after['minimized'] == state['minimized'] and after['size'] == state['size'], after
+                assert not after['minimized'] and after['size'] == state['size'], after
+                if status == 'restored':
+                    check_show(before, target, 'already_visible')
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')

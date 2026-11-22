@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.1/cua-macos-show/guide.md
 /:
-  en: 531a4528dd9eb254
-  zh: ab6ce50b9079ba8e
-/foreground-access-for-minimized-macos-windows:
-  en: 4abaf25452ac3971
-  zh: ba586dbc6865ff80
-/foreground-access-for-minimized-macos-windows/change:
-  en: a2e7d9bffb72107e
-  zh: da377598dfd3638e
-/foreground-access-for-minimized-macos-windows/migration:
-  en: afb4d5fb023ee586
-  zh: f8ae0fbffe726eb4
+  en: f2b86eca3646a0b9
+  zh: 124794363fee63f6
+/restoring-minimized-macos-windows:
+  en: 5c54f2ada41c2397
+  zh: 809d2b800050394d
+/restoring-minimized-macos-windows/change:
+  en: ed821eabe0e8c1a0
+  zh: cf3116038b9aeae1
+/restoring-minimized-macos-windows/migration:
+  en: 5b4710a3ee8d6eb7
+  zh: f6d800e2624d1aef

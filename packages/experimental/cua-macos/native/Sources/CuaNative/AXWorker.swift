@@ -328,18 +328,11 @@ actor AXWorker {
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
         case "show":
-            let windowID = try params.optionalWindowID()
-            let beforePID = NativePlatform.frontPID()
-            let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let selected = try ax().windowForBackgroundShow(windowID, owner: identity)
+            let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
+                                              axTimeout: axTimeout, sessionState: sessionState)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
-            let afterPID = NativePlatform.frontPID()
-            let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
-                                                       afterPID: afterPID, afterWindow: afterWindow)
-            return .result(.object(["dispatched": .bool(false),
-                "windowId": selected.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
+            return .result(result)
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":

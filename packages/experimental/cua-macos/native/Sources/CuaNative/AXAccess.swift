@@ -236,21 +236,21 @@ final class AXAccess {
         guard let focused = try element(AXUIElementCreateApplication(pid), "AXFocusedWindow") else { return nil }
         return try windowID(focused)
     }
-    /// AppKit can activate a window asynchronously when AXMinimized is cleared.
-    func windowForBackgroundShow(_ requested: UInt32?, owner: ProcessIdentity) throws -> UInt32? {
+    /// Resolve the window before changing application visibility or keyboard focus.
+    func selectWindowForShow(_ requested: UInt32?, owner: ProcessIdentity) throws -> WindowForShow {
         let app = AXUIElementCreateApplication(owner.pid)
         let windows = try children(app, "AXWindows")
         let selected: AXUIElement
         if let requested {
             let owned = try NativePlatform.ownedWindow(owner.pid, requested)
             guard let match = try windows.first(where: { try windowID($0) == requested }) else {
-                if owned.isOnScreen { return requested }
+                if owned.isOnScreen { return .unchanged(requested, visible: true) }
                 throw Self.backgroundRestoreUnavailable("macOS did not expose the selected window for background restoration.")
             }
             selected = match
         } else {
             guard let window = try element(app, "AXFocusedWindow") ?? element(app, "AXMainWindow") ?? (windows.count == 1 ? windows[0] : nil) else {
-                if windows.isEmpty { return nil }
+                if windows.isEmpty { return .unchanged(nil, visible: false) }
                 throw NativeFailure(code: "AMBIGUOUS_WINDOW", message: "Select a window from app.getWindows() before calling show()")
             }
             selected = window
@@ -258,8 +258,23 @@ final class AXAccess {
         guard let minimized = try boolean(selected, "AXMinimized") else {
             throw Self.backgroundRestoreUnavailable("macOS did not report whether the window is minimized.")
         }
-        if minimized { throw Self.backgroundRestoreUnavailable("The window is still minimized. Restoring it may take keyboard focus.") }
-        return try windowID(selected)
+        let id = try windowID(selected)
+        guard minimized else {
+            let visible = try id.map { try NativePlatform.ownedWindow(owner.pid, $0).isOnScreen } ?? false
+            return .unchanged(id, visible: visible)
+        }
+        guard let id else { throw Self.backgroundRestoreUnavailable("The minimized window has no WindowServer ID.") }
+        return .minimized(id, selected)
+    }
+    /// An unsupported raise permits explicit deminimization. Other AX failures can have an unknown outcome.
+    func raiseForShow(_ window: AXUIElement) throws -> Bool {
+        guard try actions(window).contains("AXRaise") else { return false }
+        try requireEnabled(window)
+        try prepare(window)
+        let status = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        if status == .actionUnsupported || status == .notImplemented { return false }
+        guard status == .success else { throw failure(status, "raise window") }
+        return true
     }
     private static func backgroundRestoreUnavailable(_ reason: String) -> NativeFailure {
         NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "\(reason) Call app.activate(), then inspect the window.")

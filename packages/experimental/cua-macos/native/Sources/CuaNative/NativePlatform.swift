@@ -57,6 +57,17 @@ struct ApplicationCatalogSnapshot: Sendable {
                                                    from: .zero, operation: .copy, fraction: 1)
         return bitmap.representation(using: .png, properties: [:]).map { "data:image/png;base64," + $0.base64EncodedString() }
     }
+    /// Only return to the previous app while the application that took focus still owns it.
+    static func returnFocus(to previous: ProcessIdentity, from target: ProcessIdentity) throws {
+        try NativePlatform.verify(previous)
+        try NativePlatform.verify(target)
+        guard NativePlatform.frontPID() == target.pid else { return }
+        guard let app = NSRunningApplication(processIdentifier: previous.pid), !app.isHidden,
+              !app.isTerminated, app.activate(options: []) else {
+            throw NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "The previous application could not regain focus. Inspect the desktop before further input.")
+        }
+    }
+    static var animationDuration: Double { NSAnimationContext.current.duration }
     static func activate(_ identity: ProcessIdentity) throws {
         try NativePlatform.verify(identity)
         guard let app = NSRunningApplication(processIdentifier: identity.pid), !app.isTerminated else {
@@ -167,6 +178,14 @@ enum NativePlatform {
         }
     }
     static func frontPID() -> Int32? { WindowSpaces().frontPID() }
+    /// A background window can be ordered above another app's windows without becoming its keyboard target.
+    static func foregroundAppWindow() -> (pid: Int32?, windowID: UInt32?) {
+        let pid = frontPID()
+        let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        let top = rows?.first { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid &&
+            ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }
+        return (pid, (top?[kCGWindowNumber as String] as? NSNumber)?.uint32Value)
+    }
     /// AppKit excludes input-transparent windows and transparent regions, including system overlays.
     @MainActor static func mouseWindow(at quartzPoint: CGPoint) -> Int {
         let point = WindowGeometry.appKitPoint(quartzPoint, mainDisplayHeight: CGDisplayBounds(CGMainDisplayID()).height)

@@ -1,17 +1,17 @@
 ---
 kind: upgrade-guide
-description: "macOS CUA show() reports when restoring a window requires foreground access."
+description: "macOS CUA show() reports window visibility and returns focus after restoration."
 ---
 
-# Foreground access for minimized macOS windows
+# Restoring minimized macOS windows
 
 English | [中文](guide.zh.md)
 
 ## Change
 
-On macOS, `app.show()` and `window.show()` previously unhid the application even when the selected window was not minimized. They now leave such windows untouched and return `dispatched: false`. A minimized window returns `BACKGROUND_RESTORE_UNAVAILABLE` because clearing its minimized state can take keyboard focus.
+`app.show()` and `window.show()` used to unhide the application even when the window was not minimized. A visible window now returns `status: "already_visible"`. A minimized window is restored in the background when possible. If it takes keyboard focus, the helper returns focus to the previous window. Switching to a third application takes precedence.
 
 ## Migration
 
-1. Use `app.activate()` when the task requires bringing a hidden application to the foreground.
-2. For background restoration, call `window.show()` on the selected window. If it returns `BACKGROUND_RESTORE_UNAVAILABLE`, call `app.activate()` when foreground access is appropriate, then inspect the selected window.
+1. Call `window.show()` when you need a specific window displayed. `status: "restored"` confirms that the same window is on screen and no longer minimized. After an error, inspect the window before sending input.
+2. Call `app.activate()` when the target application should keep keyboard focus.
