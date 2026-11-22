@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-upstream-skills",
   "description": "Host Service of CLI app plugins: each plugin registers its entry skill and a pinned directory of the vendor's GitHub repository, and the Service downloads that directory into the DSH cache and lists the entry skill over it",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

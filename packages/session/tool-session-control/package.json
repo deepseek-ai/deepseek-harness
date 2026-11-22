@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-session-control",
   "description": "Send model-authored messages to ordinary Web Sessions with acceptance receipts",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
