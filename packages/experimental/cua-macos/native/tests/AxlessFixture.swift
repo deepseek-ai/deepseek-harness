@@ -10,6 +10,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var hiddenAX = false
     var count = 0
     var resizeCount = 0
+    var focusOnRestore = false
     var minimizeRequested = false
     var keyLosses = 0
     var moved = false
@@ -31,7 +32,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
         savedChildren = NSApplication.shared.accessibilityChildren()
-        for number in [SIGUSR1, SIGUSR2, SIGWINCH, SIGURG, SIGHUP, SIGALRM] {
+        for number in [SIGUSR1, SIGUSR2, SIGWINCH, SIGURG, SIGHUP, SIGALRM, SIGXCPU] {
             signal(number, SIG_IGN)
             let control = DispatchSource.makeSignalSource(signal: number, queue: .main)
             control.setEventHandler { [weak self] in
@@ -42,6 +43,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self.resizeCount += 1
                     self.window.setContentSize(NSSize(width: 360 + 40 * self.resizeCount, height: 180 + 20 * self.resizeCount))
                     self.persist()
+                case SIGXCPU: self.focusOnRestore = true; self.persist()
                 case SIGHUP:
                     self.window.collectionBehavior = []
                     self.window.miniaturize(nil)
@@ -70,7 +72,13 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidUnhide(_ notification: Notification) { persist() }
     func windowDidResignKey(_ notification: Notification) { keyLosses += 1; persist() }
     func windowDidMiniaturize(_ notification: Notification) { persist() }
-    func windowDidDeminiaturize(_ notification: Notification) { persist() }
+    func windowDidDeminiaturize(_ notification: Notification) {
+        if focusOnRestore {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
+        persist()
+    }
     func setAXHidden(_ hidden: Bool) {
         let app = NSApplication.shared
         app.setAccessibilityChildren(hidden ? [] : savedChildren)
@@ -89,7 +97,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
             "hidden": NSApplication.shared.isHidden, "minimized": window.isMiniaturized,
             "active": NSApplication.shared.isActive, "key": window.isKeyWindow, "keyLosses": keyLosses,
-            "minimizeRequested": minimizeRequested,
+            "minimizeRequested": minimizeRequested, "focusOnRestore": focusOnRestore,
             "size": [window.frame.width, window.frame.height],
             "buttonPoint": [rect.midX, window.frame.height - rect.midY],
         ])

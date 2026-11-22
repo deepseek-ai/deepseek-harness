@@ -68,6 +68,10 @@ struct ApplicationCatalogSnapshot: Sendable {
         }
     }
     static var animationDuration: Double { NSAnimationContext.current.duration }
+    static func activateForShow(_ target: ProcessIdentity, whileUsing original: ProcessIdentity) throws {
+        guard let pid = NativePlatform.frontPID(), pid == original.pid || pid == target.pid else { return }
+        try activate(target)
+    }
     static func activate(_ identity: ProcessIdentity) throws {
         try NativePlatform.verify(identity)
         guard let app = NSRunningApplication(processIdentifier: identity.pid), !app.isTerminated else {

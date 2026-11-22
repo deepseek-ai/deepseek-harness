@@ -82,22 +82,35 @@ extension AXWorker {
                   try access.raiseForShow(originalAX) else { throw unavailable("The previous keyboard window could not be restored.") }
             guard try access.focusedWindowID(original.pid) == originalID else { throw unavailable("The previous keyboard window did not regain focus.") }
         }
+        func waitForDisplay() async throws -> Bool {
+            let until = min(deadline, ContinuousClock.now + .seconds(animation))
+            while try !visible() {
+                try cancellation.check()
+                try NativePlatform.requireUnlocked(sessionState())
+                if userSwitched() || ContinuousClock.now >= until { return false }
+                try await restoreFocus()
+                try await Task.sleep(for: .milliseconds(16))
+            }
+            return true
+        }
         try checkTarget()
         guard NativePlatform.foregroundAppWindow() == initial else { throw unavailable("The foreground changed before restoration.") }
         do {
             let hidden = try access.boolean(app, "AXHidden") == true
-            if !hidden { _ = try access.raiseForShow(window) }
-            if try !visible() && !userSwitched() {
+            var shown = false
+            if !hidden, try access.raiseForShow(window) { shown = try await waitForDisplay() }
+            if !shown && !userSwitched() {
                 try checkTarget()
-                if hidden { try access.setAttribute(app, "AXHidden", .bool(false)) }
+                if hidden, try access.writable(app, "AXHidden") == true { try access.setAttribute(app, "AXHidden", .bool(false)) }
                 if try access.boolean(window, "AXMinimized") == true, try access.writable(window, "AXMinimized") == true {
                     try access.setAttribute(window, "AXMinimized", .bool(false))
                 }
+                shown = try await waitForDisplay()
             }
-            if try !visible() && !userSwitched() {
+            if !shown && !userSwitched() {
                 try checkTarget()
-                try await ApplicationCatalog.activate(owner)
-                if try access.boolean(window, "AXMinimized") == true {
+                try await ApplicationCatalog.activateForShow(owner, whileUsing: original)
+                if !userSwitched(), try access.boolean(window, "AXMinimized") == true {
                     if try access.writable(window, "AXMinimized") == true {
                         try access.setAttribute(window, "AXMinimized", .bool(false))
                     } else if try !access.raiseForShow(window) {
@@ -108,7 +121,7 @@ extension AXWorker {
             // AppKit may deliver a foreground change during the restoration animation, after the AX request returns.
             let settleBy = min(deadline, ContinuousClock.now + .seconds(animation))
             repeat {
-                try checkTarget()
+                try cancellation.check()
                 if userSwitched() { break }
                 try await restoreFocus()
                 if ContinuousClock.now >= settleBy { break }

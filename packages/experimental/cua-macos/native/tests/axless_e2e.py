@@ -158,6 +158,7 @@ def main():
                     after = wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
                     if status != 'restored':
                         assert after['keyLosses'] == before['keyLosses'], after
+                    return after
 
                 before = focus_foreground()
                 check_show(before, target, 'already_visible')
@@ -175,11 +176,20 @@ def main():
                 windows = helper.call('listWindows', owner)
                 on_screen = next(w['isOnScreen'] for w in windows if w['windowId'] == window_id)
                 status = 'restored' if state['minimized'] else ('already_visible' if on_screen else 'unchanged')
-                check_show(before, target, status)
-                after = json.loads(state_path.read_text())
-                assert not after['minimized'] and after['size'] == state['size'], after
+                foreground_after = check_show(before, target, status)
+                after = wait_state(lambda s: not s['minimized'], 'target remained minimized')
+                assert after['size'] == state['size'], after
                 if status == 'restored':
-                    check_show(before, target, 'already_visible')
+                    check_show(foreground_after, target, 'already_visible')
+                    os.kill(fixture, signal.SIGXCPU)
+                    wait_state(lambda s: s['focusOnRestore'], 'target did not arm foreground restoration')
+                    helper.call('activate', owner)
+                    wait_state(lambda s: s['active'] and s['key'], 'target did not gain focus')
+                    os.kill(fixture, signal.SIGHUP)
+                    wait_state(lambda s: s['minimized'], 'target did not minimize')
+                    before = focus_foreground()
+                    after = check_show(before, target, 'restored')
+                    assert after['keyLosses'] > before['keyLosses'], 'target did not exercise the focus handoff'
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
