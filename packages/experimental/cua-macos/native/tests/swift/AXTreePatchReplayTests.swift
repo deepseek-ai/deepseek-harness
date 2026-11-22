@@ -184,3 +184,44 @@ private func readOptions() throws -> AXTreeReadOptions {
     _ = try AXTreeBaseline.observe(&last, options: options, previous: base, checkCancellation: {})
     #expect(try replay(last.tree, on: middle).map(\.id) == [2, 3, 1])
 }
+
+@Test func aNewBranchNeedsOnlyOneAnchorUntilItSkipsAnExistingSibling() throws {
+    let options = try readOptions()
+    let initial = [Visit(key: 1, depth: 0), Visit(key: 2, depth: 1)]
+    var first = try project(initial)
+    let base = try AXTreeBaseline.observe(&first, options: options, previous: nil, checkCancellation: {})
+    let shape = [initial[0], Visit(key: 3, depth: 1), Visit(key: 4, depth: 2), Visit(key: 5, depth: 2),
+                 Visit(key: 6, depth: 1), initial[1], Visit(key: 7, depth: 1)]
+    var after = try project(shape)
+    _ = try AXTreeBaseline.observe(&after, options: options, previous: base, checkCancellation: {})
+    let insertions = after.tree.split(separator: "\n").dropFirst()
+    #expect(insertions.map { $0.split(separator: " ")[0] } == ["+\t2^0", "+\t\t3", "+\t\t4", "+\t5", "+\t6>1"])
+    let result = try replay(after.tree, on: fullRows(first.tree))
+    #expect(result.map(\.id) == [0, 2, 3, 4, 5, 1, 6])
+    #expect(result.map(\.depth) == shape.map(\.depth))
+}
+
+@Test func aChangedMenuDisclosureReplacesTheEntireNumberedObservation() throws {
+    let options = try readOptions()
+    func withMenu(_ menu: Bool) throws -> AXProjection {
+        let window = AXUIElementCreateApplication(700), bar = AXUIElementCreateApplication(701)
+        return try AXTreeProjection.project(roots: AXObservedChildren(entries: [window]), focusedWindowID: nil,
+            windowScoped: true, maxElements: 100, maxDepth: 20, includeMenus: false, details: false, numbered: true,
+            checkCancellation: {}) { element in
+            let root = element == window
+            return AXReadNode(text: AXTextNode(index: nil, role: root ? "AXWindow" : "AXMenuBarItem",
+                title: root ? "App" : "Menu", value: nil, description: nil, actions: [], enabled: true, valueWritable: nil,
+                selectionWritable: nil, selected: nil, selectedRange: nil, selectedText: nil),
+                children: AXObservedChildren(entries: root && menu ? [bar] : []))
+        }
+    }
+    var original = try withMenu(false)
+    var base = try AXTreeBaseline.observe(&original, options: options, previous: nil, checkCancellation: {})
+    for menu in [true, false] {
+        var current = try withMenu(menu)
+        let expected = current.tree
+        base = try AXTreeBaseline.observe(&current, options: options, previous: base, checkCancellation: {})
+        #expect(current.tree == expected)
+        #expect(current.tree.contains("Menu contents omitted") == menu)
+    }
+}
