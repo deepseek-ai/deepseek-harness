@@ -57,8 +57,8 @@ interface PluginInvocation {
   args: string[]
 }
 
-/** The resolved `dsh` invocation. Help, version, and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation
+/** The resolved `dsh` invocation. Help and errors exit inside {@link parseDshArgs}. */
+export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation | { mode: 'version' }
 
 /** Launcher flags for profile boot and configuration dumps. */
 interface BootOptions {
@@ -136,8 +136,7 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
 }
 
 /**
- * Resolve argv into one invocation, or print and exit for help, version, or an
- * error.
+ * Resolve argv into one invocation, or print and exit for help or an error.
  * @param argv - arguments after the Node binary and script.
  * @param version - version string printed by `--version`.
  * @param manageDesktopProfile - permit Desktop's installed carrier to manage its reserved profile's plugins.
@@ -208,6 +207,9 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
       : argv
     program.parse(expanded, { from: 'user' })
   } catch (error) {
+    if (error instanceof CommanderError && error.code === 'commander.version' && error.exitCode === 0) {
+      return { mode: 'version' }
+    }
     return process.exit(error instanceof CommanderError ? error.exitCode : 1)
   }
   /* v8 ignore next -- an action resolves or Commander throws */

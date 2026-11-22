@@ -29,6 +29,8 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const invocation = parseDshArgs(process.argv.slice(2), version, manageDesktopProfile)
 
   switch (invocation.mode) {
+    case 'version':
+      return
     case 'profile': {
       const { runProfile } = await import('./profile-boot.ts')
       try {

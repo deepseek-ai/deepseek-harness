@@ -89,8 +89,15 @@ describe('parseDshArgs', () => {
     expect(exitCode(argv)).toBe(1)
   })
 
-  it.each(['-V', '--version'])('prints the launcher version for shorthand %s', (flag) => {
-    expect(exitCode(['custom', flag])).toBe(0)
+  it.each(['-V', '--version'])('prints the launcher version and returns for %s', (flag) => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('unexpected exit') })
+    for (const argv of [[flag], ['custom', flag], ['--profile', 'sdk', '--dump-default-config', flag]]) {
+      stdout.mockClear()
+      expect(parse(argv)).toEqual({ mode: 'version' })
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe('1.2.3\n')
+    }
+    expect(exit).not.toHaveBeenCalled()
     expect(parse(['custom', 'task', flag])).toMatchObject({ args: ['task', flag] })
   })
 
@@ -252,6 +259,5 @@ describe('parseDshArgs', () => {
     expect(exitCode(['--help'])).toBe(0)
     expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).not.toContain('help [command]')
     expect(exitCode(['-h'])).toBe(0)
-    expect(exitCode(['--version'])).toBe(0)
   })
 })
