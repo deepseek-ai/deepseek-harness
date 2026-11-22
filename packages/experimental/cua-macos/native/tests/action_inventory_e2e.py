@@ -32,13 +32,14 @@ def main():
         fixture.stdin.write('observe\n')
         fixture.stdin.flush()
         inventory = json.loads(line(fixture))
-        assert set(inventory) == {'audit-window', 'audit-custom', 'audit-disabled', 'audit-field', 'audit-slider'}, inventory
+        assert set(inventory) == {'audit-window', 'audit-custom', 'audit-disabled', 'audit-field', 'audit-slider', 'audit-editor', 'audit-check', 'audit-stepper'}, inventory
         for identifier, expected in sorted(inventory.items()):
             element = next(e for e in observed['elements'] if e['identifier'] == identifier)
             target = {**scope, 'snapshotId': observed['snapshotId'], 'elementId': element['elementId']}
             names = helper.call('listActions', target)
             native = [entry['name'] for entry in expected['native']]
-            setters = {attr: f"{element['role']}.{attr}.Set" for attr in expected['writable'] if attr not in expected['arrays']}
+            unsupported = set(expected['arrays']) - {'AXSelectedTextRanges'}
+            setters = {attr: f"{element['role']}.{attr}.Set" for attr in expected['writable'] if attr not in unsupported}
             assert names == native + list(setters.values()), (identifier, names, expected)
             schemas = {name: helper.call('getActionSchema', {'action': name}) for name in names}
             for name, schema in schemas.items():
@@ -57,11 +58,23 @@ def main():
                 assert schemas[setters['AXFocused']]['properties']['argument']['type'] == 'boolean'
                 assert schemas[setters['AXSelectedText']]['properties']['argument']['type'] == 'string'
                 assert schemas[setters['AXVisibleCharacterRange']]['properties']['argument']['required'] == ['location', 'length']
+            if identifier in {'audit-field', 'audit-editor'}:
+                assert schemas[setters['AXValue']]['properties']['argument']['type'] == 'string'
+            if identifier == 'audit-editor':
+                name = setters['AXSelectedTextRanges']
+                argument_schema = schemas[name]['properties']['argument']
+                assert argument_schema['type'] == 'array' and argument_schema['items']['required'] == ['location', 'length']
+                selected = [{'location': 0, 'length': 2}, {'location': 6, 'length': 3}]
+                assert helper.call('performAction', {**target, 'action': name, 'argument': selected})['dispatched']
+                helper.call('performAction', {**target, 'action': name, 'argument': selected[::-1]}, 'INVALID_ARGUMENT')
+                fixture.stdin.write('selections\n')
+                fixture.stdin.flush()
+                assert json.loads(line(fixture)) == [[0, 2], [6, 3]]
             if identifier == 'audit-slider':
                 name = setters['AXValue']
                 assert {item['type'] for item in schemas[name]['properties']['argument']['oneOf']} == {'number', 'string'}
                 assert helper.call('performAction', {**target, 'action': name, 'argument': 7})['dispatched']
-            print(f"{identifier}: {len(native)} native actions, {len(setters)} setters, excluded arrays: {expected['arrays']}")
+            print(f"{identifier}: {len(native)} native actions, {len(setters)} setters, excluded arrays: {sorted(unsupported)}")
         refreshed = helper.call('getState', {**scope, 'maxElements': 100, 'maxDepth': 12, 'details': True})
         slider = next(item for item in refreshed['elements'] if item['identifier'] == 'audit-slider')
         assert float(slider['value']) == 7, slider['value']

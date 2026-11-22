@@ -57,7 +57,7 @@ func inspect(_ element: AXUIElement, depth: Int, into inventory: inout [String: 
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
 let state = URL(fileURLWithPath: CommandLine.arguments[1])
-let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 350, height: 260),
+let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 350, height: 410),
                       styleMask: [.titled], backing: .buffered, defer: false)
 window.title = "Action inventory"
 window.setAccessibilityIdentifier("audit-window")
@@ -65,7 +65,11 @@ let custom = ActionButton()
 let targets = ["first", "second"].map { ActionTarget($0, state) }
 custom.custom = targets.map { NSAccessibilityCustomAction(name: "Mark", target: $0, selector: #selector(ActionTarget.mark(_:))) }
 let disabled = NSButton(title: "Disabled", target: nil, action: nil)
-let controls: [(String, NSView)] = [("custom", custom), ("field", NSTextField(string: "fixture contents")),
+let editor = NSTextView()
+editor.string = "alpha beta gamma delta"
+editor.isEditable = true
+let controls: [(String, NSView)] = [("editor", editor), ("check", NSButton(checkboxWithTitle: "Check", target: nil, action: nil)),
+                                    ("stepper", NSStepper()), ("custom", custom), ("field", NSTextField(string: "fixture contents")),
                                     ("disabled", disabled), ("slider", NSSlider(value: 3, minValue: 0, maxValue: 10, target: nil, action: nil))]
 for (index, entry) in controls.enumerated() {
     entry.1.frame = NSRect(x: 15, y: 15 + index * 45, width: 200, height: 35)
@@ -85,5 +89,9 @@ DispatchQueue.global().async {
     inspect(AXUIElementCreateApplication(getpid()), depth: 0, into: &inventory)
     let data = try! JSONSerialization.data(withJSONObject: inventory)
     FileHandle.standardOutput.write(data + Data([10]))
+    if readLine() == "selections" {
+        let ranges = DispatchQueue.main.sync { editor.selectedRanges.map { [$0.rangeValue.location, $0.rangeValue.length] } }
+        FileHandle.standardOutput.write(try! JSONSerialization.data(withJSONObject: ranges) + Data([10]))
+    }
 }
 app.run()
