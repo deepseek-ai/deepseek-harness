@@ -78,9 +78,24 @@ A hoc entry is a layer addressed by its required `id` and optional `key`. A laye
 
 Layers nest by ascending `order`, then `priority`, then registration order, lowest outermost. Every layer receives the same owner props. The renderer supplies the next inner layer as React `children`, or the owner's content at the innermost layer. The owner may omit its content without skipping the layers. Each layer may render `children` at most once. Owner props must not use the name `children`.
 
-The outer `[data-slot="key"]` marks the render position; `key` is the slot name, not the dispatch `entryKey`. With no applicable layer, the owner's content renders unchanged inside it, without a children outlet. Where a layer renders `children`, the renderer inserts one `[data-slot-children="key"]` element around the inner content, even when that content is empty. Layers that forward `children` nest these outlets. A layer that omits `children` replaces everything inside it: neither its children outlet nor its inner content mounts.
+The outer `[data-slot="key"]` marks the named slot's render position. With no applicable layer, the owner's content renders unchanged inside it, without a children outlet. Where a layer renders `children`, the renderer inserts one `[data-slot-children="key"]` outlet around the inner content, even when it is empty. Forwarding layers nest these outlets. A layer that omits `children` replaces everything inside it: neither its children outlet nor its inner content mounts.
 
-- Remounting: adding or removing a layer that applies to a dispatch remounts the content inside it; a `session` or `session-maybe` layer also remounts it when its Session binding changes. Outlets that dispatch the same key share one compiled layer chain, so a registration for another key does not remount their content; an outlet that switches its `entryKey` switches chains and remounts its content even when the same layers apply.
+`data-slot-children` names the slot that supplied those `children` to the layer. Passing them through another slot preserves that name. All layers and all render occurrences of the same slot share the value; it does not identify a layer, plugin module, or dispatch `entryKey`.
+
+Suppose the owner passes a button to `outer.frame`. Its layer passes a React fragment containing its `children` followed by a second button to its declared hoc slot `inner.frame`. If the `inner.frame` layer returns its own `children` unchanged, the DOM is:
+
+```text
+[data-slot="outer.frame"]
+  [data-slot="inner.frame"]
+    [data-slot-children="inner.frame"]
+      [data-slot-children="outer.frame"]
+        button
+      button
+```
+
+Both buttons have `inner.frame` as their nearest `[data-slot]`, and `[data-slot-children] > button` matches both. Within the intended `outer.frame` instance, `[data-slot-children="outer.frame"] > button` matches only the owner's button; `[data-slot-children="inner.frame"] > button` matches only the button added by the `outer.frame` layer.
+
+- Remounting: adding or removing a layer that applies to a dispatch remounts the content inside it; a `session` or `session-maybe` layer also remounts it when its Session binding changes. Outlets of the same named slot that dispatch the same key share one compiled layer chain, so a registration for another key does not remount their content; an outlet that switches its `entryKey` switches chains and remounts its content even when the same layers apply.
 - Errors: a crashed layer reports its error and falls back to the same `children`, including its outlet, for the rest of that occurrence's mount even when its owner props change. The layer stays registered, so other occurrences, including those dispatching the same key, keep it, and a remounted occurrence renders it again. An error thrown by the wrapped content passes every layer and is reported against none; a layer that wraps its `children` in its own error boundary catches it as an internal wrapper error rather than the original.
 - Layout: both outlet elements are `div`s (`span`s for `inline: true`) with `display: contents`. They create no layout boxes, but child and sibling selectors still see them. Identify the outlets by their attributes, not by depth. A layer that wraps `children` must not create a box of its own unless its slot documents otherwise.
 

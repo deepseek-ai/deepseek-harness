@@ -20,6 +20,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'spec.hoc.session': { kind: 'hoc'; scope: 'session' }
     'spec.hoc.keyed': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
     'spec.hoc.inline': { kind: 'hoc'; scope: 'root'; inline: true }
+    'spec.hoc.receiver': { kind: 'hoc'; scope: 'root' }
   }
 }
 
@@ -123,6 +124,50 @@ describe('hoc slots', () => {
     expect(outlets.map(node => [node.tagName, node.style.display])).toEqual([['DIV', 'contents'], ['DIV', 'contents']])
     expect(outer?.getAttribute('data-tone')).toBe('calm')
     expect(inner?.getAttribute('data-tone')).toBe('calm')
+  })
+
+  it('keeps each supplying slot name when a layer forwards its children through another hoc slot', async () => {
+    const core = new SlotCore()
+    const view = mount(core)
+    core.register({
+      name: 'spec.hoc', id: 'bridge',
+      children: { 'spec.hoc.receiver': { kind: 'hoc', scope: 'root' } },
+    }, ({ renderSlot, children }) => renderSlot('spec.hoc.receiver', {}, {
+      children: <>{children}<p>Added for the receiver</p></>,
+    }))
+    core.register({ name: 'spec.hoc', id: 'pass', order: 1 }, ({ children }) => children)
+    core.register({ name: 'spec.hoc.receiver', id: 'pass' }, ({ children }) => children)
+    await flush()
+
+    const content = view.getByTestId('content')
+    const extra = view.getByText('Added for the receiver')
+    const receiver = view.container.querySelector('[data-slot="spec.hoc"] > [data-slot="spec.hoc.receiver"]')!
+    expect(content.closest('[data-slot]')).toBe(receiver)
+    expect(extra.closest('[data-slot]')).toBe(receiver)
+    expect(receiver.querySelector([
+      ':scope', '[data-slot-children="spec.hoc.receiver"]',
+      '[data-slot-children="spec.hoc"]', '[data-slot-children="spec.hoc"]', 'p',
+    ].join(' > '))).toBe(content)
+    expect([...receiver.querySelectorAll('[data-slot-children] > p')]).toEqual([content, extra])
+    expect([...receiver.querySelectorAll('[data-slot-children="spec.hoc"] > p')]).toEqual([content])
+    expect([...receiver.querySelectorAll('[data-slot-children="spec.hoc.receiver"] > p')]).toEqual([extra])
+  })
+
+  it('keeps the selected layers and their slot names separate when two slots share one declaration object', () => {
+    const core = new SlotCore()
+    const shared = { kind: 'hoc', scope: 'root' } as const
+    core.register({ name: 'root', children: { 'spec.hoc': shared, 'spec.hoc.keyed': shared } }, ({ renderSlot }) => <>
+      {renderSlot('spec.hoc', { tone: 'first' }, { entryKey: 'same', children: 'First' })}
+      {renderSlot('spec.hoc.keyed', { tone: 'second' }, { entryKey: 'same', children: 'Second' })}
+    </>)
+    core.register({ name: 'spec.hoc', key: 'same', id: 'wrap' }, layer('first'))
+    core.register({ name: 'spec.hoc.keyed', key: 'same', id: 'wrap' }, layer('second'))
+    const view = render(<>{createSlotRenderer().renderRoot(hostOver(core), {})}</>)
+
+    for (const [slot, id, text] of [['spec.hoc', 'first', 'First'], ['spec.hoc.keyed', 'second', 'Second']]) {
+      const outlet = view.container.querySelector(`[data-slot="${slot}"] > section[data-layer="${id}"] > [data-slot-children="${slot}"]`)
+      expect(outlet?.textContent).toBe(text)
+    }
   })
 
   it('groups inline owner content without enclosing the extra control returned by the layer', async () => {
