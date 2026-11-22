@@ -17,11 +17,11 @@ def main():
         binary = Path(directory) / 'fixture'
         state = Path(directory) / 'callback.txt'
         subprocess.run(['swiftc', str(ROOT / 'tests/ActionInventoryFixture.swift'), '-o', str(binary)], check=True)
-        fixture = subprocess.Popen([str(binary), str(state)], stdout=subprocess.PIPE, text=True)
+        fixture = subprocess.Popen([str(binary), str(state)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        cleanup.callback(fixture.stdin.close)
         cleanup.callback(fixture.stdout.close)
         cleanup.callback(stop, fixture)
-        inventory = json.loads(line(fixture))
-        assert set(inventory) == {'audit-window', 'audit-custom', 'audit-disabled', 'audit-field', 'audit-slider'}, inventory
+        assert line(fixture).strip() == 'READY'
 
         helper = NativeHelper([], args.helper)
         cleanup.callback(helper.stop)
@@ -29,7 +29,11 @@ def main():
         window = next(w for w in helper.call('listWindows', owner) if w['title'] == 'Action inventory')
         scope = {**owner, 'windowId': window['windowId']}
         observed = helper.call('getState', {**scope, 'maxElements': 100, 'maxDepth': 12, 'details': True})
-        for identifier, expected in inventory.items():
+        fixture.stdin.write('observe\n')
+        fixture.stdin.flush()
+        inventory = json.loads(line(fixture))
+        assert set(inventory) == {'audit-window', 'audit-custom', 'audit-disabled', 'audit-field', 'audit-slider'}, inventory
+        for identifier, expected in sorted(inventory.items()):
             element = next(e for e in observed['elements'] if e['identifier'] == identifier)
             target = {**scope, 'snapshotId': observed['snapshotId'], 'elementId': element['elementId']}
             names = helper.call('listActions', target)

@@ -384,8 +384,8 @@
                     "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "details": {
-                    "type": "boolean",
-                    "description": "True returns element enablement, native action descriptions and setter argument types. Omit for names only."
+                    "description": "True returns element enablement, native action descriptions and setter argument types. Omit for names only.",
+                    "type": "boolean"
                   }
                 },
                 "required": [

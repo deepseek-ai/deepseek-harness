@@ -62,7 +62,7 @@ let custom = ActionButton()
 let targets = ["first", "second"].map { ActionTarget($0, state) }
 custom.custom = targets.map { NSAccessibilityCustomAction(name: "Mark", target: $0, selector: #selector(ActionTarget.mark(_:))) }
 let disabled = NSButton(title: "Disabled", target: nil, action: nil)
-disabled.isEnabled = false
+
 let controls: [(String, NSView)] = [("custom", custom), ("field", NSTextField(string: "fixture contents")),
                                     ("disabled", disabled), ("slider", NSSlider(value: 3, minValue: 0, maxValue: 10, target: nil, action: nil))]
 for (index, entry) in controls.enumerated() {
@@ -71,8 +71,14 @@ for (index, entry) in controls.enumerated() {
     window.contentView!.addSubview(entry.1)
 }
 window.orderFront(nil)
-// The main run loop must service AX messages while the fixture queries its own process.
+// Take the external snapshot while the button is enabled. Query AX after disabling it.
+DispatchQueue.main.async {
+    print("READY")
+    fflush(stdout)
+}
 DispatchQueue.global().async {
+    guard readLine() == "observe" else { return }
+    DispatchQueue.main.sync { disabled.isEnabled = false }
     var inventory: [String: Any] = [:]
     inspect(AXUIElementCreateApplication(getpid()), depth: 0, into: &inventory)
     let data = try! JSONSerialization.data(withJSONObject: inventory)

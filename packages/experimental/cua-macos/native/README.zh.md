@@ -128,7 +128,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回 `kAXErrorAttributeUnsupported`（`-25205`），且派发前后两次读取的同一窗口尺寸均有效且不同，helper 会报告成功。窗口仅移动位置，或在第二次读取后才改变大小时，helper 会保留原错误。如果用户或应用恰好在两次读取之间调整了窗口大小，也会被判为成功。
 
-读取树或枚举动作时，某个元素的动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。枚举时跳过无法确认可写性的属性。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
+读取树或只列名称时，如果动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。请求详情时会报告这个错误。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
 
 `selectText` 要求新近元素快照和可写 AXSelectedTextRange。它匹配唯一的字面文本，可用紧邻的 prefix/suffix 缩小范围，然后选中文本或将光标放在前后。匹配和返回范围采用 UTF-16 偏移。歧义或缺失文本会失败，helper 不改写内容，并重新核实值和选区。AX 文本包含可用的可写性、禁用状态、选中状态和选区信息；AXAccess 持有元素 ID 和原生引用，AXTextFormatter 渲染已观察的值。
 

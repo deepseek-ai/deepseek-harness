@@ -128,7 +128,7 @@ Keyboard modifier names are plain strings. The shared object API passes the name
 
 The helper dispatches `AXZoomWindow` once. If `AXUIElementPerformAction` returns `kAXErrorAttributeUnsupported` (`-25205`), the helper reports success when it reads two different valid sizes from the same window immediately before and after dispatch. A move alone or a resize after the second read leaves the error in place. A concurrent resize by another source can also satisfy this check.
 
-Tree observation and action discovery treat a generic AX failure reading one element’s action names as missing metadata. Discovery skips attributes whose writability cannot be determined. `invoke` requires a successful or unsupported-action query before reporting that no default action exists. `setValue` attempts a write only when the element confirms that `AXValue` is writable.
+Tree observation and names-only discovery treat a generic AX failure reading action names as missing metadata. Detailed discovery propagates that error. `invoke` requires a successful or unsupported-action query before reporting that no default action exists. `setValue` attempts a write only when the element confirms that `AXValue` is writable.
 
 `selectText` requires a fresh element snapshot and writable AXSelectedTextRange. It matches one literal occurrence, narrowed by immediately adjacent prefix/suffix, and selects text or places the cursor before/after it. Matching and reported ranges use UTF-16 offsets. Ambiguous or missing text fails; the helper rechecks the value and selected range without rewriting content. AX text includes available writable, disabled, selected and selection-range information; AXAccess owns element IDs and native references while AXTextFormatter renders the observed values.
 
