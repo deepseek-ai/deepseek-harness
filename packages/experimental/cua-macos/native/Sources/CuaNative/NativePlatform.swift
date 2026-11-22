@@ -16,6 +16,10 @@ struct ApplicationInfo: Sendable {
             || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
                 == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path)
     }
+    /// Canonical installation selector when a bundle path is available.
+    var identity: String? {
+        path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+    }
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
         if let name { value["name"] = .string(name) }

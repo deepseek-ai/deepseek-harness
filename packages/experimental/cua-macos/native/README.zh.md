@@ -72,10 +72,10 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | 方法 | 结果 |
 | --- | --- |
 | `getCapabilities` | `{permissions: {accessibility, screenRecording}, sessionLocked}`。权限值是布尔型预检结果，不打开系统提示。TypeScript provider 在暴露结果前合并其静态启动字段（`platform`、`methods`、`appLevelAccessibility`、`keyboard`、`browser`、`coordinateSpace`）。 |
-| `listApps` | 运行中的普通应用数组，元素为 `{pid, name, bundleId}`。 |
-| `findApps` | 从标准应用目录或绝对应用路径返回已安装匹配项 `{id, displayName, path, isRunning, pid?}`；发现过程不启动应用。 |
+| `listApps` | 运行中的普通应用数组，元素为 `{pid, name, bundleId?, identity, isRunning: true}`。`identity` 是规范化的 `.app` 路径，无法取得应用包路径时为 null。 |
+| `findApps` | 从标准应用目录或绝对应用路径返回安装匹配项 `{id, displayName, identity, isRunning, pid?}`，其中 `identity` 用于区分安装副本。空字符串或 null 列出全部扫描到的安装副本，不受匹配数量限制。发现过程不启动应用。 |
 | `getApp` | 运行中的选择返回 `{appHandle, pid, name, bundleId?, running: true, authorization}`。未运行的选择返回 `{appHandle, name, bundleId?, running: false, authorization}`，其中没有 `pid`，并等待 Host 授权。找到安装包后，按可执行文件路径查找运行进程。若匹配多个进程，返回 `AMBIGUOUS_APP`，可从 `listApps` 选择 PID。 |
-| `launchApp` | Host 授权后，打开指定安装副本，等待启动完成并将句柄绑定到已核实的进程，全程不请求激活。若授权或启动期间出现多个匹配实例，待启动句柄失效，返回 `AMBIGUOUS_APP`。 |
+| `launchApp` | Host 授权后，打开待启动的安装副本并将句柄绑定到已核实的进程，全程不请求激活；有歧义的待启动选择以 `AMBIGUOUS_APP` 失效。对已选定的运行应用，请求新实例并返回 `{dispatched: true}`，原句柄继续绑定原先选定的进程。 |
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
@@ -84,7 +84,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
-每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。如果进程在授权期间启动，而当前连接已取得其句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
+每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。只有进程仍存活且授权身份相同时才复用句柄；授权身份变化会使旧句柄失效并创建新句柄。完成待启动选择时，如果授权后当前连接已经持有同一进程、同一授权身份的句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的待启动句柄。
 
 稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统按下或拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 

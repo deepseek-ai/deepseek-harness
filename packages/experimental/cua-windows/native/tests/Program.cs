@@ -36,6 +36,15 @@ Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getSta
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10001,"maxDepth":100}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10000,"maxDepth":101}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
+foreach (var query in new string?[] { "", null, " \t\n", "Editor" })
+{
+    var search = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        id = "all-apps", method = "findApps", @params = new { query, maxAppMatches = 1 },
+    })));
+    Check(search.Params.GetProperty("query").GetString() == query, "Application query admission preserves strings and null");
+}
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"search","method":"findApps","params":{"maxAppMatches":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");
 Refuses(() => WireJson.Parse("""{"params":{"x":1,"x":2}}"""), "INVALID_REQUEST");
 foreach (var path in new[] { @"C:\Tools\Editor.exe", @"D:\Portable Apps\编辑器.exe", @"\\server\tools\Editor.exe" })
@@ -99,6 +108,10 @@ foreach (var parameters in new[] { """{}""", """{"action":""}""", """{"action":"
     """{"action":"Invoke.Invoke","windowId":"1"}""", """{"action":"Invoke.Invoke","elementId":"1"}""" })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"schema\",\"method\":\"getActionSchema\",\"params\":" + parameters + "}")), "INVALID_ARGUMENT");
 
+var newInstance = NativeRequest.Parse(WireJson.Parse("""{"id":"new-instance","method":"launchApp","params":{"appHandle":"selected"}}"""));
+Check(newInstance.Method == "launchApp" && newInstance.Params.GetProperty("appHandle").GetString() == "selected",
+    "New-instance launch retains the selected application handle");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"new-instance","method":"launchApp","params":{"appHandle":"selected","windowId":"1"}}""")), "INVALID_ARGUMENT");
 var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
 Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
     "Host launch continuation retains the selected application handle");

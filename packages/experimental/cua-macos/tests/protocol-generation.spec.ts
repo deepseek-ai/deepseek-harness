@@ -29,6 +29,11 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'invalid', method: 'setValue', params: target })).toBe(false)
   })
 
+  it.each(['', null, ' \t\n', 'Editor'])('admits strings and null as native application queries: %j', (query) => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    expect(validate({ id: 'all-apps', method: 'findApps', params: { query, maxAppMatches: 1 } })).toBe(true)
+  })
+
   it('admits shared pointer modifier names for native input validation', () => {
     const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
     const requests = [
@@ -86,7 +91,6 @@ describe('native protocol generation', () => {
     { method: 'releaseHeldInputs', params: {} },
     { method: 'takeWindowActivity', params: { appHandle: 'app', observations: { '7': '123' } } },
     { method: 'clearWindowActivity', params: {} },
-    { method: 'launchApp', params: { appHandle: 'pending' } },
     { method: 'applicationIcons', params: { paths: ['/Applications/Fixture.app'] } },
     { method: 'permissionStatus', params: {} },
     { method: 'requestPermission', params: { permission: 'accessibility' } },

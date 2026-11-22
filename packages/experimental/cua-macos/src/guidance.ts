@@ -6,10 +6,12 @@ export const PLATFORM_GUIDANCE = 'macOS: accessibility tree operations are avail
 
 function operationGuidance(treeAdvice: string): string {
   const mouseGuidance = 'Leave useSystemInput unset for ordinary mouseMove, toggleMouse, click, drag, pressKey, and sendKeyEvent calls, even after approval. Prefer selectText for a supported text range and ordinary window-directed drag for a draggable control. If the effect is unclear, inspect the window before choosing another action. Request system input only when the user explicitly asks for it or the intended effect requires it.'
-  const catalog = COMMON_GUIDANCE.replace('## Simulated mouse\n', `## Simulated mouse\n${mouseGuidance}\n\n`)
+  const catalog = COMMON_GUIDANCE.replace(/^CuaAppInfo = .*$/m,
+    '$& On macOS, identity comes from the canonical application bundle path. For installations sharing an id, pass their non-null identity unchanged to cua.getApp. To select a specific running instance, pass String(pid); instances of the same installation can share both id and identity. Running records include a pid; stopped records omit it.')
+    .replace('## Simulated mouse\n', `## Simulated mouse\n${mouseGuidance}\n\n`)
   const methodDetails = new Map<string, string>([
-    ['cua.listApps', 'Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.'],
-    ['cua.findApps', 'Running installation matches include their process ID. Stopped matches have no pid.'],
+    ['cua.listApps', 'Each row represents one running process.'],
+    ['cua.findApps', 'Each row represents an installation.'],
     ['sendKeyEvent', "For example W down, D down, D up, W up. A repeated 'down' for an ordinary held key sends one repeat without adding another hold. System down requires the selected foreground app; use the same useSystemInput value for explicit key up."],
     ['getAccessibilityTree', `macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. ${treeAdvice} Use element ids from the file only while that observation is current.`],
     ['mouseMove', 'With useSystemInput omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.'],

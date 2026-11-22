@@ -2,6 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
+import { AppsResult, NativeAppsResult } from '@deepseek-ai/dsh-cua/protocol'
 import { expect, it, onTestFinished } from 'vitest'
 import { Config } from '../src/index.ts'
 import { WindowsNativeRuntime } from '../src/native-runtime.ts'
@@ -25,6 +26,24 @@ it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or n
   const capabilities = await client.request('getCapabilities', {}, new AbortController().signal)
   expect(capabilities).toHaveProperty('permissions.accessibility', expect.any(Boolean))
   expect(capabilities).toHaveProperty('permissions.screenRecording', expect.any(Boolean))
+  const apps = NativeAppsResult.parse(await client.request('listApps', {}, new AbortController().signal))
+  expect(apps.length).toBeGreaterThan(0)
+  for (const app of apps) {
+    expect(app.identity).toBeNull()
+    expect(app).not.toHaveProperty('pid')
+  }
+  const installed = AppsResult.parse(await client.request('findApps', { query: null, maxAppMatches: 1 }, new AbortController().signal))
+  expect(installed.length).toBeGreaterThan(0)
+  const matches = AppsResult.parse(await client.request('findApps', { query: installed[0]!.id, maxAppMatches: 1000 }, new AbortController().signal))
+  expect(matches.some(app => app.id === installed[0]!.id)).toBe(true)
+  for (const app of matches) {
+    expect(app.identity).toBeNull()
+    expect(app).not.toHaveProperty('pid')
+  }
+  for (const query of ['', null]) {
+    const all = AppsResult.parse(await client.request('findApps', { query, maxAppMatches: 1 }, new AbortController().signal))
+    expect(all.length).toBeGreaterThan(0)
+  }
 }, 60_000)
 
 it.skipIf(!helperPath)('describes one action argument without an application or window', async () => {

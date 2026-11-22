@@ -31,7 +31,24 @@ it.each([0, -1, 1.5, '1', 2 ** 32])('keeps screenshot pixel dimensions numeric a
   expect(NativeScreenshotResult.safeParse({ ...image, pixelHeight: dimension }).success).toBe(false)
 })
 
+it.each(['', null, 'Editor', ' \t\n'])('admits explicit application discovery queries: %j', (query) => {
+  const request = { method: 'findApps', params: { query } }
+  expect(Request.parse(request)).toEqual(request)
+})
+
+it('admits launchApp only for an application handle', () => {
+  const request = { method: 'launchApp', params: { appHandle: 'app' } }
+  for (const schema of [Request, SystemInputRequest]) {
+    expect(schema.parse(request)).toEqual(request)
+    for (const params of [{}, { appHandle: '' }, { appHandle: 'app', windowId: '1' }, { selector: 'Editor' }])
+      expect(schema.safeParse({ method: 'launchApp', params }).success).toBe(false)
+    expect(schema.safeParse({ method: 'launch', params: { appHandle: 'app' } }).success).toBe(false)
+  }
+})
+
 const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
+  { reason: 'missing application query', request: { method: 'findApps', params: {} } },
+  { reason: 'numeric application query', request: { method: 'findApps', params: { query: 7 } } },
   { reason: 'raw process ID instead of a selected app handle', request: { method: 'typeText', params: { pid: 17, text: 'hello' } } },
   { reason: 'unknown native method', request: { method: 'shutdown', params: {} } },
   { reason: 'zero node budget', request: { method: 'getState', params: { appHandle: 'app', maxElements: 0 } } },

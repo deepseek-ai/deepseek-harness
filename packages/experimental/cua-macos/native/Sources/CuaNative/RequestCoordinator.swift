@@ -240,7 +240,8 @@ import Darwin
         } else if request.method == "openPermissionSettings" {
             result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
         } else if request.method == "findApps" {
-            result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
+            let query = try (params.values["query"] == .null ? "" : params.string("query"))
+            result = .array(try ApplicationDiscovery.applications(matching: query, exact: false,
                 limit: params.integer("maxAppMatches", in: 1...1000), cancellation: cancellation).map { $0.json(catalog: catalog) })
         } else {
             var installed: InstalledApplication?
@@ -281,7 +282,10 @@ import Darwin
                 }
                 result = AXWorker.actionResult
             case .launch(let plan):
-                let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
+                if plan.source != nil {
+                    try ApplicationAuthorization.requireLaunchSelection(plan.authorization, application: plan.application)
+                }
+                let pid = try await ApplicationDiscovery.launch(plan.application, newInstance: plan.source != nil, cancellation: cancellation)
                 result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
         }

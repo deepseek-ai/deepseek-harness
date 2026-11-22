@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象负责激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 和 Windows 提供方负责各自平台的原生操作。
+各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象通过 `launch()` 请求新实例，激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 和 Windows 提供方负责各自平台的原生操作。
 
 ## 概述
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 
 `cua` 在创建环境时安装一次。不要覆盖这个全局对象。需要重建损坏的环境时，在 `cua_run_code` 中执行 `process.exit(0)`；该次工具调用会因进程退出而返回失败。下一次调用启动新环境并恢复 `cua`。请重新创建其他变量，并重新选择应用和窗口。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。macOS 和 Windows 共用的原始 `getState` 结果可返回 `hasUnreadableElements: true`，表示本次树中有未能读到的元素。其他情况下可省略该字段。节点数或深度达到上限时，由 `truncated` 单独标记。
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。应用发现统一使用带有 `identity: string | null` 的 `CuaAppInfo`；将非 null 的 identity 原样传给 `getApp`，可区分相同 ID 的应用。`findApps("")` 和 `findApps(null)` 列出发现范围内的全部应用，不受 `maxAppMatches` 限制，响应大小和时间限制仍然有效。`cua.getState()` 返回 `{ apps: await cua.listApps(), browsers: [] }`。Windows 返回提供方给出的应用 ID，不提供 PID。`app.launch()` 请求新实例并返回 `ActionResult`；当前 App 对象保持原选择，启动后的应用和窗口通过发现接口取得。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口校验遵循各提供方的规则。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。macOS 和 Windows 共用的原始 `getState` 结果可返回 `hasUnreadableElements: true`，表示本次树中有未能读到的元素。其他情况下可省略该字段。节点数或深度达到上限时，由 `truncated` 单独标记。
 
 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 

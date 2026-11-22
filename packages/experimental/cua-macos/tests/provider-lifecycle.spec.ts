@@ -367,15 +367,17 @@ it.each([true, false])('classifies native cancellation by whether the caller can
     : { name: 'NativeError', code: 'NATIVE_CANCELLED' })
 })
 
-it('rejects a model attempt to call the private launch operation', async () => {
+it('rejects launchApp without a selected application', async () => {
   const f = await setup()
-  expect((await f.execute('launchApp', { appHandle: 'unapproved' })).isError).toBe(true)
+  const result = await f.execute('launchApp', { appHandle: 'unapproved' })
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'NativeError', code: 'APP_ACCESS_REQUIRED' })
   expect(native.request).not.toHaveBeenCalled()
 })
 
 it('correlates a native request with its logged tool invocation', async () => {
   const f = await setup()
-  const apps = [{ name: 'Editor', isRunning: true, pid: 101 }]
+  const apps = [{ name: 'Editor', isRunning: true, pid: 101, identity: '/Applications/Editor.app' }]
   native.request.mockResolvedValueOnce(apps)
   expect((await f.execute()).value).toEqual(apps)
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
@@ -389,7 +391,7 @@ it('reports declared methods outside a turn while merging runtime native fields'
   expect(result.isError).toBe(false)
   expect(result.value).toEqual({ ...runtime, platform: 'macos', systemInput: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
-      'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke',
+      'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke', 'launchApp',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
       'selectText', 'sendKeyEvent', 'setValue', 'show', 'toggleMouse', 'typeText',
     ] })
@@ -627,6 +629,11 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-4'))
   await f.execute('findApps', { query: 'Fixture' })
   expect(native.request).toHaveBeenLastCalledWith('findApps', { query: 'Fixture', maxAppMatches: 20 }, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-5'))
+  for (const query of ['', null]) {
+    native.request.mockResolvedValueOnce([])
+    expect((await f.execute('findApps', { query })).value).toEqual([])
+    expect(native.request).toHaveBeenLastCalledWith('findApps', { query, maxAppMatches: 20 }, expect.any(AbortSignal), expect.any(String))
+  }
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
@@ -958,7 +965,7 @@ it('prepares the selected native component before registering CUA and creates no
 it('adds an installation-owned bridge URL when persistent PTC is available', async () => {
   const f = await setup()
   const text = async () => (await f.ctx.systemPrompt.assemble()).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
-  expect(await text()).toContain('AX read defaults: maxElements=64, maxDepth=8.')
+  expect(await text()).toContain('Accessibility tree defaults: maxElements=64, maxDepth=8.')
   expect(await text()).not.toContain('Persistent PTC initialization:')
   await f.ctx.plugin(FileSystem)
   await f.ctx.plugin(Sandbox)

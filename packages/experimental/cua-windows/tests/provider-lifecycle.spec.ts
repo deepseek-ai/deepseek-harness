@@ -51,6 +51,8 @@ it('provides the Host runtime cleanup to CUA when using an absolute helper overr
   expect(backend.capabilities.methods).toContain('getActionSchema')
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
+  expect(backend.capabilities.methods).toContain('findApps')
+  expect(backend.capabilities.methods).toContain('launchApp')
   expect(backend.heldInputState).toBe(true)
   expect(GUIDANCE).toContain('Key and mouse holds use desktop input.')
   const channel = { marker: 'native stream' }

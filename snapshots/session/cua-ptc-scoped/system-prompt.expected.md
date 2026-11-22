@@ -42,16 +42,19 @@ Call inspect(...values) to display selected observation results.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: string and the methods listed below for window level. Window IDs are opaque provider-issued strings; preserve them verbatim.
 
+CuaAppInfo = { id: string, displayName: string, identity: string | null, isRunning: boolean, pid?: number }. Pass id unchanged to cua.getApp. For entries sharing the same id, pass identity unchanged or String(pid), when available, to select the intended entry. On macOS, identity comes from the canonical application bundle path. For installations sharing an id, pass their non-null identity unchanged to cua.getApp. To select a specific running instance, pass String(pid); instances of the same installation can share both id and identity. Running records include a pid; stopped records omit it.
+
 Supported modifier names depend on the platform and the operation; see the platform guidance.
 
 Setup and discovery:
 - cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
-- cua.listApps() -> { id: string, displayName: string, isRunning: boolean, pid?: number }[] — list applications the provider exposes for selection with their current running state; pass the returned id unchanged to cua.getApp. Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.
-- cua.findApps(query: string) -> { id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[] — search installed applications, including stopped matches. Running installation matches include their process ID. Stopped matches have no pid.
-- cua.getState() -> { apps: { id: string, displayName: string, isRunning: boolean, pid?: number }[], browsers: [] } — summarize the same provider discovery; this is not an accessibility observation.
-- cua.getApp(selector: string) -> App — select an application by provider-issued discovery ID, name, bundle ID, or absolute path where supported, obtain consent, start a stopped application in the background only where the provider supports launch, and return without reading accessibility state or activating the app.
+- cua.listApps() -> CuaAppInfo[] — list running applications exposed by the provider. Each row represents one running process.
+- cua.findApps(query: string | null) -> CuaAppInfo[] — query is a partial-match search string for discoverable applications, including stopped apps. Discovery does not launch applications. Pass an empty string or null to list all discoverable apps without a match-count limit. Excessive matches for a nonempty query reject instead of truncating. Whitespace-only queries reject; strings are not trimmed. Response-size and operation-time limits still apply. Each row represents an installation.
+- cua.getState() -> { apps: CuaAppInfo[], browsers: [] } — return the running application list from listApps(), together with an empty browser list.
+- cua.getApp(selector: string) -> App — select an application by a returned id or non-null identity, or by an exact name, bundle ID or absolute path where supported; obtain consent, start a stopped application in the background where launch is supported, and return without reading the accessibility tree or requesting activation.
 - app.getWindows() -> { windowId: string, appName: string, title: string, bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null }[] — enumerate windows with global native bounds; null onCurrentSpace means unknown Space membership.
-- app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading accessibility state. Providers reject closed or foreign windows when operating on them.
+- app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
+- app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
 - app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
 - window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
@@ -97,7 +100,7 @@ click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, a
 
 Pass useSystemInput: true only when the task requires system keyboard or mouse input. Omitting the option or passing false uses the provider default. When approval is enabled, the first explicit system input requests permission; otherwise it executes immediately. Prefer a supported non-system action when it meets the task. The approval question interrupts the user; approval or refusal lasts until this session closes or DSH restarts. Approval does not change later calls: pass true on each system operation. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request system input.
 
-AX read defaults: maxElements=5000, maxDepth=50.
+Accessibility tree defaults: maxElements=5000, maxDepth=50.
 
 Maximum click holdMs: 5000 ms.
 
@@ -166,7 +169,7 @@ interface ToolArgsMap {
     /** Optional positive safe-integer limit on automatic continuation rounds. */
     max_goal_rounds?: number;
   } & Record<string, JsonValue>;
-  /** Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state. */
+  /** Inspect desktop access, select an application and window, read accessibility state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state. */
   cua: unknown;
   /** Edit an existing UTF-8 text file by replacing literal text. */
   edit: {

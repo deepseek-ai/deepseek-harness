@@ -13,7 +13,7 @@ import { windowsHost, prepareWsl, retainWslHelper } from './windows-host.ts'
 const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'windows',
   methods: [
-    'getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState',
+    'getCapabilities', 'listApps', 'findApps', 'getApp', 'launchApp', 'activate', 'show', 'listWindows', 'getState',
     'listActions', 'getActionSchema', 'performAction', 'invoke', 'mouseMove', 'toggleMouse', 'click', 'setValue', 'selectText',
     'typeText', 'paste', 'pressKey', 'sendKeyEvent', 'scroll', 'drag', 'screenshot',
   ],

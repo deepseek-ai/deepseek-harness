@@ -31,20 +31,23 @@ kind: "package-reference"
 
 ### 应用发现
 
-应用发现采用 PowerShell `Get-StartApps` 所使用的 AppsFolder 目录口径：当前用户可发现的开始菜单应用，而不是所有后台进程或磁盘上的可执行文件。`cua.listApps()` 还会补充可访问的顶层窗口所关联的应用。最终结果不保证与该命令的输出逐项一致；应以 `cua.listApps()` 返回的 ID 为准。
+`cua.listApps()` 从当前 Windows 会话中符合条件的可见顶层窗口聚合应用。名称搜索和空查询的 `cua.findApps` 返回通过 AppsFolder 枚举的 StartApps 目录中的已安装应用。窗口观察用于补充这些目录条目的运行状态和已知可执行文件路径。目录可能不完整；找不到应用时，可以询问用户其位置。
 
-每条结果包含 `id`、`displayName` 和 `isRunning`。ID 是 AUMID；Windows 没有提供窗口或进程 AUMID 时，使用完整可执行文件路径作为兜底标识。只有完全相同的 ID 字符串才合并。匹配区分大小写，不规范化路径，也不按名称或可执行文件合并。必须原样传回返回的 ID；显示名称、PID、窗口 ID 或任意路径都不是替代选择器。
+每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是 AUMID；Windows 没有提供窗口或进程 AUMID 时，使用完整可执行文件路径。只有完全相同的 ID 字符串才按区分大小写的相等关系合并。将返回的 ID 原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。
 
-`isRunning` 表示本次发现存在关联窗口，不表示存在后台进程。目录中的应用没有窗口时返回 `false`；仅最小化窗口不会使应用被判定为未运行。无法访问的窗口或进程会被忽略。应用目录读取失败时，请求整体失败，不会只返回窗口侧的发现结果。`cua.getState()` 汇总相同的应用发现结果，不读取辅助功能树。
+`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
+
+`cua.findApps(query)` 对显示名称、ID 和已知可执行文件路径做不区分大小写的字面子串匹配，或直接检查 `.exe` 绝对路径。`""` 和 `null` 返回目录中的全部应用。非空查询须包含非空白字符，并受 `maxAppMatches` 限制，默认 20；匹配过多时返回 `AMBIGUOUS_APP`。响应大小和时间限制适用于所有查询。
 
 ### 应用与窗口选择
 
-- `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。Windows 不支持启动应用；无窗口应用的选择还受下方限制约束。
-- `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口；窗口关闭后，列表也可以变为空。
-- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。执行窗口操作时会检查目标是否仍属于所选应用。
+- `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。尚未运行的应用在授权后通过 Explorer 启动。
+- `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。
+- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 首次接纳窗口时检查应用归属，此后只要 HWND 有效就信任它。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
 - 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
+- `app.launch()` 请求启动应用的新实例，等待所选应用的 HWND 集合变化或启动等待时限到达。单例程序可能仅激活已有实例，启动的实例也可能归属于另一个应用 ID。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
 
 <a id="interaction-rules"></a>
@@ -87,8 +90,8 @@ kind: "package-reference"
 - 清理完整动作内的临时输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
 - helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
 - Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。
-- 不支持 `findApps`、启动应用和应用级辅助功能。请让用户打开所需应用或窗口。
-- 可以发现 `isRunning: false` 的应用，但当前 `getApp` 流程会尝试未支持的启动操作，并以 `UNSUPPORTED` 失败。选择这类应用前应先打开窗口。
+- 不支持应用级辅助功能；读取树前必须明确选择窗口。
+- 如果启动后 `getWindows()` 仍为空，请让用户打开所需窗口。
 - 观察和输入需要可访问、未锁定的交互式 Windows 会话。截图需要 Windows Graphics Capture 支持；列出的窗口仍可能无法截图或接收输入。
 - 应用授权不提供 **Always allow（始终允许）** 选项。其他会话需要分别获得授权。
 

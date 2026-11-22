@@ -38,6 +38,14 @@ enum ApplicationAuthorization {
         return try record(bundleID: current.bundleID, name: app.name, executablePath: current.executablePath)
     }
 
+    /// Require the selected authorization to still describe the installation that would launch.
+    static func requireLaunchSelection(_ selected: JSONValue, application: InstalledApplication) throws {
+        let current = try describeInstalled(application)
+        guard current["id"] == selected["id"] else {
+            throw NativeFailure(code: "STALE_APP", message: "Application authorization changed since selection; select the application again")
+        }
+    }
+
     private static func record(bundleID: String?, name: String, executablePath: String?) throws -> JSONValue {
         let path = executablePath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
         let identity: String

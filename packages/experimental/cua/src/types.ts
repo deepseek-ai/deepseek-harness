@@ -4,7 +4,7 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, AppsResult, CapabilitiesResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -27,7 +27,7 @@ export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Stored screenshot returned to a program for explicit inspection. */
 export type CuaProgramImage = { readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number }
 /** Full observations of the requested content; each read replaces the application's current snapshot. */
-export interface CuaAxOptions {
+export interface CuaAccessibilityOptions {
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
@@ -44,13 +44,11 @@ export type CuaStartupCapabilities = Pick<
   CuaCapabilities,
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
 > & { systemInput?: boolean }
-/** App discovery result accepted by getApp, including the provider-reported running state. */
-export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'> & {
+/** App discovery result with its running state; identity is null when no distinguishing selector is provided. */
+export type CuaAppInfo = Pick<z.output<typeof AppsResult>[number], 'id' | 'identity' | 'displayName' | 'isRunning'> & {
   /** Running process selector on macOS. */
   pid?: number | undefined
 }
-/** An installed application match with its current running state. */
-export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
 /** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
@@ -103,7 +101,7 @@ export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
 /**
  * Common operations inherited by application and window objects; not a standalone object.
- * Advertised AX actions remain available; failed actions are not retried through pointer input.
+ * Advertised accessibility actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
   /**
@@ -118,7 +116,7 @@ export interface CuaSurface {
    * @param options - Traversal limits, menu expansion and field detail options.
    * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
-  getAccessibilityTree(options?: CuaAxOptions): Promise<string>
+  getAccessibilityTree(options?: CuaAccessibilityOptions): Promise<string>
   /**
    * List the actions currently advertised by an element, including attribute-setting operations.
    * @param elementId - Element id from the application's current snapshot.
@@ -156,7 +154,7 @@ export interface CuaSurface {
    */
   setValue(elementId: CuaElementId, value: JsonValue): Promise<CuaActionResult>
   /**
-   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
+   * Select one literal text occurrence through the provider's accessibility interface and verify its range.
    * @param elementId - Element id from the application's current snapshot.
    * @param text - Nonempty literal text; multiple matches require adjacent context.
    * @param options - Adjacent prefix/suffix and selection or cursor placement.
@@ -202,8 +200,9 @@ export interface CuaSurface {
 }
 /**
  * An explicit window with screenshot and pointer input operations.
- * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
- * Coordinate input requires a successful AX observation covering the window or a screenshot, and rejects resizing since that observation.
+ * Capture and pointer delivery reject known conflicts between accessibility and displayed window bounds with WINDOW_CHANGED.
+ * Coordinate input requires a successful accessibility observation covering the window or a screenshot,
+ * and rejects resizing since that observation.
  */
 export interface CuaWindow extends CuaSurface {
   /** Opaque window identifier issued by the platform provider. */
@@ -262,6 +261,11 @@ export interface CuaWindow extends CuaSurface {
 export interface CuaApp extends CuaSurface {
   readonly appHandle: CuaAppHandle
   /**
+   * Request launch of a new instance of this application; the current App object keeps its selected target.
+   * @returns Dispatch evidence; discover applications and windows again to locate the resulting instance.
+   */
+  launch(): Promise<CuaActionResult>
+  /**
    * Activate this application explicitly, potentially changing the user's focused app and Space.
    * @returns Dispatch evidence; read fresh state before further interaction.
    */
@@ -292,19 +296,21 @@ export interface CuaApi {
    */
   listApps(): Promise<CuaAppInfo[]>
   /**
-   * Search the provider's installed application locations without launching an app.
-   * @param query - Nonempty name, provider-specific application identifier or absolute application path.
-   * @returns Matching installed applications; overly broad queries reject instead of silently truncating.
+   * Search discoverable applications without launching an app.
+   * @param query - Name, provider-specific application identifier or absolute application path;
+   * an empty string or null lists all discoverable apps.
+   * @returns Discovered applications; only nonempty queries enforce the configured match-count limit, rejecting rather than truncating.
    */
-  findApps(query: string): Promise<CuaFoundAppInfo[]>
+  findApps(query: string | null): Promise<CuaAppInfo[]>
   /**
-   * Summarize provider application discovery.
-   * @returns native apps with their running state and an empty browser list.
+   * Summarize running applications exposed by the provider.
+   * @returns running applications from listApps and an empty browser list.
    */
   getState(): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, and launch it only where the provider supports launch, without reading AX; selection never activates it.
-   * @param selector - Provider-issued ID, or a supported exact name, bundle ID or absolute path; ambiguous selectors reject.
+   * Select an app, obtain consent, and launch it only where the provider supports launch, without reading the accessibility tree.
+   * Selection never activates it.
+   * @param selector - Provider-issued id or identity, or a supported exact name, bundle ID or absolute path; ambiguous selectors reject.
    * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>

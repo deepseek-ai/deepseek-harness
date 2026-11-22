@@ -109,14 +109,14 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 return ActionResult(before, dispatched);
             }
             DesktopSession.RequireInteractive();
-            if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
+            if (request.Method == "listApps") return DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
-                throw new NativeFailure("UNSUPPORTED", "Windows discovers selectable applications with listApps");
+                return await DesktopWindows.FindApps(parameters.GetProperty("query").GetString(), parameters.GetProperty("maxAppMatches").GetInt32(), context);
             if (request.Method == "getApp")
             {
                 var selected = await DesktopWindows.Select(String(parameters, "selector"), context);
                 state.Apps[selected.Handle] = selected;
-                return new { appHandle = selected.Handle, pid = 4, name = selected.Name,
+                return new { appHandle = selected.Handle, name = selected.Name,
                     running = selected.IsRunning, authorization = selected.Authorization };
             }
             var app = state.App(String(parameters, "appHandle"));
@@ -126,7 +126,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "launchApp":
                 {
                     var before = Windows.Refresh(app, context)
-                        .Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)).ToHashSet();
+                        .Select(window => window.Handle).ToHashSet();
                     await sta.Invoke(() => ShellBroker.Launch(Path.IsPathFullyQualified(app.AppId)
                         ? app.AppId : @"shell:AppsFolder\" + app.AppId), cancellation);
                     var elapsed = Stopwatch.StartNew();
@@ -134,13 +134,13 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     while (true)
                     {
                         windows = Windows.Refresh(app, context);
-                        if (!before.SetEquals(windows.Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)))) break;
+                        if (!before.SetEquals(windows.Select(window => window.Handle))) break;
                         var remaining = config.LaunchWaitMs - elapsed.ElapsedMilliseconds;
                         if (remaining <= 0) break;
                         await Task.Delay((int)Math.Min(config.PollIntervalMs, remaining), cancellation);
                     }
                     context.Check();
-                    return new { appHandle = app.Handle, pid = 4, name = app.Name, running = windows.Length != 0 };
+                    return new { appHandle = app.Handle, name = app.Name, running = windows.Length != 0, dispatched = true };
                 }
                 case "listWindows":
                     return Windows.DescribeAll(app, Windows.Refresh(app, context), context).Values;

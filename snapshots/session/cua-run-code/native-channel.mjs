@@ -43,7 +43,9 @@ export function createNativeFixture(selectorPid) {
         return released
       }
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-      if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: selectorPid ?? 4 }]
+      if (method === 'listApps') return [{ id: 'test.fixture', identity: null, name: 'Fixture', isRunning: true, pid: selectorPid ?? null }]
+      if (method === 'findApps') return [{ id: 'test.fixture', identity: null, displayName: 'Fixture', isRunning: true,
+        ...(selectorPid === undefined ? {} : { pid: selectorPid }) }]
       if (method === 'getApp') {
         if (params.selector !== 'test.fixture' && (selectorPid === undefined || params.selector !== String(selectorPid))) {
           throw new Error('Unknown fixture application selector')
