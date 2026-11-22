@@ -70,3 +70,13 @@ private func canList(_ attribute: String, read: () throws -> CFTypeRef?) throws 
         }
     #expect(names == ["AXPress", "Custom.Action", "AXTable.AXFocused.Set", "AXTable.AXCustom.Set"])
 }
+
+@Test func everyListedNameRoundTripsThroughTheActionGrammar() throws {
+    let output = try AXAccess.listActionNames(actions: ["AXGroup.AXTitle.Set", "Custom.Action", "AXOther.AXTitle.Set"],
+        role: "AXGroup", writableAttributes: ["", "Vendor.Dotted", "AXTitle"]) { _ in
+            Issue.record("Probed an unrepresentable or fixed-type setter"); return nil
+        }
+    #expect(output == ["Custom.Action", "AXGroup.AXTitle.Set"])
+    let namesOnly = try AXAccess.listActionNames(actions: ["AXOther.AXTitle.Set"], role: nil, writableAttributes: []) { _ in nil }
+    #expect(namesOnly.isEmpty)
+}

@@ -10,8 +10,7 @@ enum ActionSchema {
                 "argument": SchemaBuilder.scalar("null", description: "This action accepts no argument; omit argument or pass null."),
             ], required: [])
         }
-        let parameter = AXSetterParameter.resolve(role: target.role, attribute: target.attribute)
-        return SchemaBuilder.object(["argument": try parameter.schema(attribute: target.attribute)], required: ["argument"])
+        return SchemaBuilder.object(["argument": try target.parameter.schema(attribute: target.attribute)], required: ["argument"])
     }
 }
 

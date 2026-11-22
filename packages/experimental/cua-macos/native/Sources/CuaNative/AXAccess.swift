@@ -24,6 +24,8 @@ struct AXAttributeSetTarget: Sendable {
     let role: String
     let attribute: String
 
+    var parameter: AXSetterParameter { AXSetterParameter.resolve(role: role, attribute: attribute) }
+
     init?(_ action: String) {
         let parts = action.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[2] == "Set", !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
@@ -271,21 +273,23 @@ final class AXAccess {
     func listActions(_ element: AXUIElement) throws -> [String] {
         let advertised = try actions(element)
         let attributes = try writableAttributes(element)
-        guard !attributes.isEmpty else { return advertised }
-        return try Self.listActionNames(actions: advertised, role: string(element, "AXRole"), writableAttributes: attributes) {
+        let role = attributes.isEmpty ? nil : try string(element, "AXRole")
+        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes) {
             try attribute(element, $0)
         }
     }
     static func listActionNames(actions: [String], role: String?, writableAttributes: [String],
                                 read: (String) throws -> CFTypeRef?) throws -> [String] {
-        guard !writableAttributes.isEmpty else { return actions }
+        // Schema lookup and dispatch reserve Role.Attribute.Set for attribute writes.
+        let native = actions.filter { AXAttributeSetTarget($0) == nil }
+        guard !writableAttributes.isEmpty else { return native }
         guard let role, !role.isEmpty else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Cannot name attribute-setting operations without an accessibility role")
         }
-        return actions + (try writableAttributes.compactMap { attribute in
-            let parameter = AXSetterParameter.resolve(role: role, attribute: attribute)
-            guard try parameter.canList(attribute: attribute, read: { try read(attribute) }) else { return nil }
-            return "\(role).\(attribute).Set"
+        return native + (try writableAttributes.compactMap { attribute in
+            let name = "\(role).\(attribute).Set"
+            guard let target = AXAttributeSetTarget(name), try target.parameter.canList(attribute: attribute, read: { try read(attribute) }) else { return nil }
+            return name
         })
     }
     func writableAttributes(_ element: AXUIElement) throws -> [String] {
