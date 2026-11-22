@@ -58,14 +58,15 @@ struct ApplicationCatalogSnapshot: Sendable {
         return bitmap.representation(using: .png, properties: [:]).map { "data:image/png;base64," + $0.base64EncodedString() }
     }
     /// Only return to the previous app while the application that took focus still owns it.
-    static func returnFocus(to previous: ProcessIdentity, from target: ProcessIdentity) throws {
+    static func returnFocus(to previous: ProcessIdentity, from target: ProcessIdentity) throws -> Bool {
+        guard NativePlatform.frontPID() == target.pid else { return false }
         try NativePlatform.verify(previous)
         try NativePlatform.verify(target)
-        guard NativePlatform.frontPID() == target.pid else { return }
         guard let app = NSRunningApplication(processIdentifier: previous.pid), !app.isHidden,
               !app.isTerminated, app.activate(options: []) else {
             throw NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "The previous application could not regain focus. Inspect the desktop before further input.")
         }
+        return true
     }
     static var animationDuration: Double { NSAnimationContext.current.duration }
     static func activateForShow(_ target: ProcessIdentity, whileUsing original: ProcessIdentity) throws {

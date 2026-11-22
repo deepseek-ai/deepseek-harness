@@ -96,7 +96,10 @@ private final class WindowRestoration {
         let returningToOriginalApp = current.pid == owner.pid && original != owner
         if returningToOriginalApp {
             handoffPending = true
-            try await ApplicationCatalog.returnFocus(to: original, from: owner)
+            guard try await ApplicationCatalog.returnFocus(to: original, from: owner) else {
+                handoffPending = false
+                return
+            }
             while NativePlatform.frontPID() == owner.pid {
                 try cancellation.check()
                 guard ContinuousClock.now < deadline else { throw unavailable("The previous application did not regain focus.") }

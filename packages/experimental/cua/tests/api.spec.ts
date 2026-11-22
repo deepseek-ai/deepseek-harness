@@ -212,14 +212,15 @@ describe('application discovery', () => {
 })
 
 describe('background window restoration', () => {
-  it('shows an app or selected window without dispatching activation or AXRaise', async () => {
+  it('routes app and window show calls and preserves the provider’s restoration status', async () => {
     const f = fixture()
     f.setWindows(['23', '24'])
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow('24')
     f.dispatch.mockClear()
     expect(await app.show()).toEqual({ ...delivered, windowId: '23', foregroundChanged: false })
-    expect(await window.show()).toEqual({ ...delivered, windowId: '24', foregroundChanged: false })
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: '24', foregroundChanged: false, status: 'restored' })
+    expect(await window.show()).toEqual({ ...delivered, windowId: '24', foregroundChanged: false, status: 'restored' })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'show', params: { appHandle: 'app-17' } },
       { method: 'show', params: { appHandle: 'app-17', windowId: '24' } },
