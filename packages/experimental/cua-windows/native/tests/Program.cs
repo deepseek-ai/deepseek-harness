@@ -20,6 +20,7 @@ void Refuses(Action action, string code)
 }
 
 NotificationChecks.Run(Check);
+await NotificationCleanupChecks.Run(Check);
 
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
@@ -129,7 +130,7 @@ foreach (var parameters in new[] { "{}", "{\"appHandle\":\"\"}", "{\"selector\":
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"close"}"""), null) == NativeControl.Close, "Connection close needs no active operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one") == NativeControl.Cancel, "Cancellation matches the live operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one", completed: true) == NativeControl.CompletedCancel,
-    "Cancellation arriving after the matching response is a no-op");
+    "Cancellation can identify a discarded reply after the matching operation completes");
 foreach (var frame in new[] { "null", "[]", "{}", "{\"type\":1}",
     "{\"type\":\"close\",\"extra\":1}", "{\"type\":\"cancel\"}",
     "{\"type\":\"cancel\",\"id\":null}", "{\"type\":\"cancel\",\"id\":1}",

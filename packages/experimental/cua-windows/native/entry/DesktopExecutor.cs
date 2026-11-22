@@ -298,8 +298,11 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     {
         await inputs.ReleaseOnDisconnect(state.Connection, queue, graceMs);
         if (state.Notifications is { } notifications)
-            await mta.Invoke(() => { notifications.Stop(); return true; }, CancellationToken.None)
-                .WaitAsync(TimeSpan.FromMilliseconds(graceMs));
+        {
+            var removal = mta.Invoke(() => { notifications.Stop(); return true; }, CancellationToken.None);
+            await NotificationCleanup.WaitForDisconnect(removal, TimeSpan.FromMilliseconds(graceMs),
+                error => NativeServer.Report("NATIVE_CLEANUP", error));
+        }
     }
 
     public ValueTask DisposeAsync()
