@@ -92,6 +92,18 @@ it('retries an unconfirmed sign-in by checking again', () => {
   expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
 })
 
+it('retries a check that failed before the account was ever read', () => {
+  const shown = presentAccount({
+    account: { state: 'unchecked' },
+    result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 3 } },
+  })
+  expect(shown).toMatchObject({
+    phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.unavailable'),
+    notes: [], failure: { text: say('failed'), details: ['auth-status', 'exit 3'] },
+  })
+  expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
+})
+
 it('shows the download of a missing CLI with its cancel, and a retry after one that did not finish', () => {
   const UNCHECKED: FeishuState = { account: { state: 'unchecked' } }
   let shown = presentAccount({ ...UNCHECKED, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: true } })

@@ -86,7 +86,10 @@ export interface CliOperationControl<Account, Phase extends string, Command exte
 export interface CliAccountPreparation<Account, Phase extends string> {
   /** The plugin phase the operation is in while `run` runs; listed in `cancellable` when the page may cancel `run`. */
   readonly phase: Phase
-  /** The account the view reports after `run` threw or was cancelled. */
+  /**
+   * The account the view reports after `run` threw or was cancelled, until a check starts its `perform` with nothing
+   * missing: that check first replaces this object with the registration's `account`.
+   */
   readonly unprepared: Account
   /**
    * Tell whether everything `run` puts in place is there; called before each `check` operation and each time required

@@ -56,7 +56,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 | `sign-out` | 用户确认后，对最近一次检查发现的账号运行 `auth logout --profile <corpId>:<userId>`，这也会让用户自己的终端退出该账号，然后重新检查 |
 | 取消 | 在登录等待授权时取消它，或在检查下载时取消下载，并等待命令或下载停止；其他步骤会被忽略 |
 
-检查运行 `auth status --format json`，它会向服务端刷新已过期的访问令牌，无论是否有用户登录，退出码都是 0。`authenticated` 为 true 时，账号为 `connected`，并带上 dws 报告的用户名和组织名；为 false 且原因属于 dws 报告为无法判断的几种（`local_state_requires_repair`、`local_state_unreadable`、`ciphertext_key_mismatch`、`dek_missing`、`keychain_unavailable`）时为 `unverified`；其余为 `signed-out`。退出码非零，或输出不是状态 JSON，会使检查失败并保留之前的账号状态；下载没有完成时为 `not-installed`。退出登录要求两个 id 都存在，因此不会选中一个组织的全部账号；其他组织的账号保持登录，下一次检查显示 dws 届时报告的当前账号。`auth login` 在 stderr 中单独一行、带缩进打印的链接，只有是 `login.dingtalk.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出会被省略。运行 DSH 的进程需要能访问 `~/.dws` 和该 CLI 的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
+检查运行 `auth status --format json`，它会向服务端刷新已过期的访问令牌，无论是否有用户登录，退出码都是 0。`authenticated` 为 true 时，账号为 `connected`，并带上 dws 报告的用户名和组织名；为 false 且原因属于 dws 报告为无法判断的几种（`local_state_requires_repair`、`local_state_unreadable`、`ciphertext_key_mismatch`、`dek_missing`、`keychain_unavailable`）时为 `unverified`；其余为 `signed-out`。退出码非零，或输出不是状态 JSON，会使检查失败并保留之前的账号状态，只是下载就位之后 `not-installed` 会换成 `unchecked`；下载没有完成时为 `not-installed`。退出登录要求两个 id 都存在，因此不会选中一个组织的全部账号；其他组织的账号保持登录，下一次检查显示 dws 届时报告的当前账号。`auth login` 在 stderr 中单独一行、带缩进打印的链接，只有是 `login.dingtalk.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出会被省略。运行 DSH 的进程需要能访问 `~/.dws` 和该 CLI 的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
 
 ### 配置
 

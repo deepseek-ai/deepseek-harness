@@ -119,13 +119,16 @@ export function presentAccount(view: FeishuState, text: Text): ConnectorAccountD
   /* jscpd:ignore-end */
   if (operation !== undefined) return presentOperation(operation, text)
   const failure = failureOf(view.result, text)
+  const unavailable = (detail: 'detail.missing' | 'detail.unavailable', notes: ConnectorAccountNote[]): ConnectorAccountDisplay => ({
+    phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
+    buttons: [{ label: text('action.retry'), command: CHECK }], detail: text(detail), notes, ...failure,
+  })
   switch (account.state) {
-    case 'unchecked': return { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
-    case 'not-installed':
-      return {
-        phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
-        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.missing'), notes: [], ...failure,
-      }
+    case 'unchecked':
+      return view.result?.outcome === 'failed'
+        ? unavailable('detail.unavailable', [])
+        : { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
+    case 'not-installed': return unavailable('detail.missing', [])
     case 'unconfigured':
       return {
         phase: 'disconnected', status: text('status.disconnected'), badge: text('badge.disconnected'),
@@ -138,11 +141,7 @@ export function presentAccount(view: FeishuState, text: Text): ConnectorAccountD
         buttons: [{ label: text('action.signIn'), command: SIGN_IN, variant: 'primary' }], connect: SIGN_IN,
         detail: text('detail.signed-out'), notes: appNotes(account.appId, text), ...failure,
       }
-    case 'unverified':
-      return {
-        phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
-        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes: appNotes(account.appId, text), ...failure,
-      }
+    case 'unverified': return unavailable('detail.unavailable', appNotes(account.appId, text))
     /* jscpd:ignore-start -- CLI app plugins that sign out offer the same confirmed sign-out button. */
     case 'connected':
       return {

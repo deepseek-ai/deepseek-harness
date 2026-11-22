@@ -55,7 +55,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 | `connect` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权。已授权的区块以“更换机器人”再次提供它，需先确认，因为新绑定会替换终端共用的那一个 |
 | 取消 | 在等待扫码期间取消连接，或在检查等待子指南下载期间取消检查，并等待命令或下载停止；其他步骤会被忽略 |
 
-检查运行 `auth show`。授权状态从 CLI 输出的 `Status` 行读作 `authorized` 或 `unauthorized`，CLI 打印 `Bot ID` 行时，从中读取已绑定机器人的 id 并显示在区块中；其他输出或非零退出码会使检查失败，并保留之前的状态；没有完成的下载使状态成为 `not-installed`。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
+检查运行 `auth show`。授权状态从 CLI 输出的 `Status` 行读作 `authorized` 或 `unauthorized`，CLI 打印 `Bot ID` 行时，从中读取已绑定机器人的 id 并显示在区块中；其他输出或非零退出码会使检查失败，并保留之前的状态，只是下载就位之后 `not-installed` 会换成 `unchecked`；没有完成的下载使状态成为 `not-installed`。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
 
 ### 配置
 

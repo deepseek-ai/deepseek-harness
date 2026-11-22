@@ -104,7 +104,7 @@ export function apply(ctx: Context): void {
 <a id="prepare-before-a-check"></a>
 ### 检查之前的准备
 
-CLI 或 skills 在加载之后才下载的插件注册 `prepare: { phase, unprepared, ready, run }`。`ready()` 返回 false 期间，每次 `check` 操作先进入 `phase`，等待 `run(signal)`，再进入 Service 的 `checking` 阶段，然后才调用 `perform`；其他操作直接调用 `perform`。`run` 抛出异常时，账号变为 `unprepared`，`perform` 不被调用，操作失败，结果中没有命令。`phase` 列在 `cancellable` 中时，插件页可以取消 `run`：signal 中止，账号变为 `unprepared`，操作以取消结束。`ready()` 返回 true 时不调用 `run`；失败之后的下一次检查会再次调用它，所以插件页的重试按钮就是重新下载的方式。
+CLI 或 skills 在加载之后才下载的插件注册 `prepare: { phase, unprepared, ready, run }`。`ready()` 返回 false 期间，每次 `check` 操作先进入 `phase`，等待 `run(signal)`，再进入 Service 的 `checking` 阶段，然后才调用 `perform`；其他操作直接调用 `perform`。`run` 抛出异常时，账号变为 `unprepared`，`perform` 不被调用，操作失败，结果中没有命令。`phase` 列在 `cancellable` 中时，插件页可以取消 `run`：signal 中止，账号变为 `unprepared`，操作以取消结束。`ready()` 返回 true 时不调用 `run`；失败之后的下一次检查会再次调用它，所以插件页的重试按钮就是重新下载的方式。账号仍是 `unprepared` 这个对象时，调用 `perform` 的检查会先把它换成注册的 `account`：什么都不缺之后，`perform` 没有发布就失败时，留下的是最初的账号，而不是 `unprepared`。
 
 ### 运行时上下文
 

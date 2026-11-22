@@ -370,6 +370,32 @@ describe('prepare', () => {
     expect(subprocess.processes).toEqual([])
   })
 
+  it.each([
+    ['its step succeeded', 2],
+    ['what was missing arrived without the step', 1],
+  ])('reports the first account again, not the unprepared one, when a later check fails after %s', async (_path, runs) => {
+    const { ctx, subprocess } = await host()
+    subprocess.respond = (process) => { process.reply({ exitCode: 3 }) }
+    let ready = false
+    const run = vi.fn<(signal: AbortSignal) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('download failed'))
+      .mockImplementationOnce(() => {
+        ready = true
+        return Promise.resolve()
+      })
+    const prepare: Registration['prepare'] = { phase: 'downloading', unprepared: { state: 'not-installed' }, ready: () => ready, run }
+    const { handle } = await app(ctx, { ...REGISTRATION, prepare })
+    const first = await ctx.connectorAccounts.start(PACKAGE, 'check')
+    await vi.waitFor(() => { expect(handle.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id: first, kind: 'check', outcome: 'failed' } }) })
+
+    if (runs === 1) ready = true
+    const id = await ctx.connectorAccounts.start(PACKAGE, 'check')
+
+    await vi.waitFor(() => { expect(handle.snapshot().result).toMatchObject({ id, outcome: 'failed', failure: { command: 'status', exitCode: 3 } }) })
+    expect(handle.snapshot().account).toEqual({ state: 'unchecked' })
+    expect(run).toHaveBeenCalledTimes(runs)
+  })
+
   it('starts the other operations without the step', async () => {
     const { ctx, subprocess } = await host()
     subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }

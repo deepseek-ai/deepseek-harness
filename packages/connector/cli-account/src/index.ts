@@ -54,8 +54,9 @@ export default class CliAccounts extends Service {
    * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
    * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
    * loaded. With a `prepare` step, the path stays out of runtime context while the step reports that something is
-   * missing, and each check first runs the step. The registration belongs to the calling plugin: unloading that plugin
-   * withdraws it, after the active operation and the CLI processes it started have stopped.
+   * missing, and each check first runs the step; a check that starts with nothing missing replaces an account the
+   * step left `unprepared` with the registration's first account. The registration belongs to the calling plugin:
+   * unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.
    * @param registration - the plugin's CLI, account operations, and Plugins page text.
    * @returns the handle for the plugin's own reads and updates of the account.
    * @throws when the runtime-context name `<name>:cli` is already registered.
@@ -73,15 +74,19 @@ export default class CliAccounts extends Service {
       cancellable: registration.cancellable,
       authorizationHosts: registration.authorizationHosts,
       perform: async (kind, control, signal) => {
-        if (kind === registration.check && prepare !== undefined && !prepare.ready()) {
-          control.stage(prepare.phase)
-          try {
-            await prepare.run(signal)
-          } catch (error) {
-            control.publish(prepare.unprepared)
-            throw error
+        if (kind === registration.check && prepare !== undefined) {
+          if (!prepare.ready()) {
+            control.stage(prepare.phase)
+            try {
+              await prepare.run(signal)
+            } catch (error) {
+              control.publish(prepare.unprepared)
+              throw error
+            }
+            control.stage('checking')
           }
-          control.stage('checking')
+          // Nothing is missing here, so `unprepared` from an earlier step must not outlast a check that publishes nothing.
+          if (runtime.snapshot().account === prepare.unprepared) control.publish(registration.account)
         }
         await registration.perform(kind, control, signal)
       },

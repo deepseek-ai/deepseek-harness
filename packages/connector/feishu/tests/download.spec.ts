@@ -183,6 +183,33 @@ it('offers the skill at the retry after lark-cli was installed outside the plugi
   expect(await skills()).toEqual(['feishu'])
 })
 
+it.each([
+  ['the retry downloaded lark-cli', false, [INSTALLER, INSTALLER, STATUS]],
+  ['lark-cli was installed outside the plugin\'s download', true, [INSTALLER, STATUS]],
+])('stops reporting a missing download when `auth status` fails after %s', async (_path, outside, ran) => {
+  install = (process) => { process.reply({ exitCode: 1 }) }
+  status = (process) => { process.reply({ exitCode: 3 }) }
+  const page = await load()
+  const account = page.source
+  expect(await settled(account)).toMatchObject({ account: { state: 'not-installed' } })
+
+  present = outside
+  install = (process) => {
+    present = true
+    process.reply({})
+  }
+  const retry = await account.start('check')
+
+  const failure = { command: 'auth-status', exitCode: 3 }
+  await vi.waitFor(() => { expect(account.snapshot().result).toEqual({ id: retry, kind: 'check', outcome: 'failed', failure }) })
+  expect(account.snapshot().account).toEqual({ state: 'unchecked' })
+  expect(page.present(account.snapshot())).toMatchObject({
+    phase: 'unavailable', status: say('status.unavailable'), detail: say('detail.unavailable'),
+    failure: { text: say('failed'), details: ['auth-status', 'exit 3'] }, buttons: [{ label: say('action.retry'), command: CHECK }],
+  })
+  expect(commands()).toEqual(ran)
+})
+
 it('stops the download when the plugin unloads', async () => {
   install = () => {}
   const fiber = await ctx.plugin(Feishu, {})
