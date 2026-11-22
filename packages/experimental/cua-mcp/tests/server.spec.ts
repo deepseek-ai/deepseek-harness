@@ -47,6 +47,8 @@ function batch(text: string, isError = false): ToolBatchResult {
 }
 
 interface SetupOptions {
+  /** The registry's default preset; `null` models a registry configured without one. */
+  defaultPreset?: string | null
   createFailures?: number
   programs?: Partial<CuaPrograms> | false
   elicitation?: boolean
@@ -102,7 +104,7 @@ function fixture(options: SetupOptions = {}) {
   }))
   const release = vi.fn(async () => {})
   ctx.provide('agents', { create, withInitiator } as never)
-  ctx.provide('agentPresets', { defaultId: 'cua-mcp', mount } as never)
+  ctx.provide('agentPresets', { defaultId: options.defaultPreset === null ? undefined : options.defaultPreset ?? 'cua-mcp', mount } as never)
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
@@ -144,6 +146,11 @@ function texts(result: CallToolResult): string[] {
 }
 
 describe('Computer Use MCP server', () => {
+  it('records no preset on the Agent header when the registry configures no default', async () => {
+    const { create } = await setup({ defaultPreset: null })
+    expect(create.mock.calls[0]?.[0]).toHaveProperty('meta', { cwd: '/workspace' })
+  })
+
   it('creates the Agent before serving, projects its registration verbatim, and runs programs as Agent maintenance inside the initiator scope', async () => {
     const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance } = await setup()
     expect(create).toHaveBeenCalledOnce()

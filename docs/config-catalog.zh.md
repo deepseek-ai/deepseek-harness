@@ -172,8 +172,8 @@ export type Config = PresetDefinition
 ```ts config-catalog
 /** Registry selection policy. */
 export interface Config {
-  /** Deployment default when the caller omits a preset. */
-  default: string
+  /** Deployment default when the caller omits a preset. Without one, such a caller fails. */
+  default?: string
   /** User-selected default; edited through Settings. */
   selectedDefault: Volatile<string | undefined>
 }
