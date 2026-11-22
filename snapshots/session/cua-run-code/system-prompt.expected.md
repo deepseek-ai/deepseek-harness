@@ -52,8 +52,8 @@ Setup and discovery:
 - app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
 - app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
-- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
-- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
+- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show an application window. Use the returned windowId to select it.
+- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show the specified window.
 
 ## Accessibility tree
 Available at app or window level depending on the platform.

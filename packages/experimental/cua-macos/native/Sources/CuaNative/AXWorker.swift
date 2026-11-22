@@ -223,7 +223,7 @@ actor AXWorker {
                              accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
 
-    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
+    func execute(_ method: String, deadline: ContinuousClock.Instant, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
@@ -328,19 +328,12 @@ actor AXWorker {
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
         case "show":
-            let windowID = try params.optionalWindowID()
-            if let windowID { _ = try NativePlatform.ownedWindow(identity.pid, windowID) }
-            let beforePID = NativePlatform.frontPID()
-            let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let restored = try ax().restoreWindow(windowID, owner: identity)
+            let shelf = try await StageManagerShelf.current()
+            let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
+                                              deadline: deadline, sessionState: sessionState, shelf: shelf)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
-            let afterPID = NativePlatform.frontPID()
-            let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
-                                                       afterPID: afterPID, afterWindow: afterWindow)
-            return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
+            return .result(result)
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":

@@ -10,6 +10,8 @@ function operationGuidance(treeAdvice: string): string {
     '$& On macOS, identity comes from the canonical application bundle path. For installations sharing an id, pass their non-null identity unchanged to cua.getApp. To select a specific running instance, pass String(pid); instances of the same installation can share both id and identity. Running records include a pid; stopped records omit it.')
     .replace('## Simulated mouse\n', `## Simulated mouse\n${mouseGuidance}\n\n`)
   const methodDetails = new Map<string, string>([
+    ['app.show', 'If a window is already visible, no action is taken. Otherwise restore a minimized window or ask the running app to reopen once. The resulting window ID may be new. With Stage Manager, show can add a window from the strip to the active group. A thumbnail alone does not count as displayed.'],
+    ['window.show', 'If the selected window was closed, call app.show() and use the returned windowId. Use app.activate() to keep the app in front.'],
     ['cua.listApps', 'Each row represents one running process.'],
     ['cua.findApps', 'Each row represents an installation.'],
     ['sendKeyEvent', "For example W down, D down, D up, W up. A repeated 'down' for an ordinary held key sends one repeat without adding another hold. System down requires the selected foreground app; use the same useSystemInput value for explicit key up."],

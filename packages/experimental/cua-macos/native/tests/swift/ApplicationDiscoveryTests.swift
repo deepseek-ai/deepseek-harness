@@ -34,12 +34,12 @@ func failedLaunchInspectionInvalidatesThePendingHandle(failure: String) async th
         ]))))
     }
     do {
-        let selection = try await worker.execute("getApp", params: parameters("getApp", ["selector": .string(app.path)]),
+        let selection = try await worker.execute("getApp", deadline: .now + .seconds(30), params: parameters("getApp", ["selector": .string(app.path)]),
                                                  catalog: catalog, installed: app)
         guard case .result(let selected) = selection else { throw NativeFailure(code: "TEST", message: "Expected pending selection") }
         let handle = try #require(selected["appHandle"].string)
         let launchParameters = try parameters("launchApp", ["appHandle": .string(handle)])
-        let outcome = try await worker.execute("launchApp", params: launchParameters, catalog: catalog)
+        let outcome = try await worker.execute("launchApp", deadline: .now + .seconds(30), params: launchParameters, catalog: catalog)
         guard case .launch(let plan) = outcome else { throw NativeFailure(code: "TEST", message: "Expected launch plan") }
         let plist = URL(fileURLWithPath: app.path).appendingPathComponent("Contents/Info.plist")
         let original = try Data(contentsOf: plist)
@@ -56,7 +56,7 @@ func failedLaunchInspectionInvalidatesThePendingHandle(failure: String) async th
         }
         if failure == "metadata" { try original.write(to: plist) }
         do {
-            _ = try await worker.execute("launchApp", params: launchParameters, catalog: catalog)
+            _ = try await worker.execute("launchApp", deadline: .now + .seconds(30), params: launchParameters, catalog: catalog)
             Issue.record("A failed launch retained a handle that could launch another instance")
         } catch let error as NativeFailure { #expect(error.code == "STALE_APP") }
     } catch {
@@ -117,7 +117,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
         ]))))
     }
     func select() async throws -> JSONValue {
-        let outcome = try await worker.execute("getApp", params: parameters("getApp",
+        let outcome = try await worker.execute("getApp", deadline: .now + .seconds(30), params: parameters("getApp",
             ["selector": .string(String(getpid()))]), catalog: catalog)
         guard case .result(let value) = outcome else {
             throw NativeFailure(code: "TEST", message: "Expected application selection")
@@ -127,7 +127,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
     do {
         let selected = try await select()
         let handle = try #require(selected["appHandle"].string)
-        let outcome = try await worker.execute("launchApp", params: parameters("launchApp", ["appHandle": .string(handle)]),
+        let outcome = try await worker.execute("launchApp", deadline: .now + .seconds(30), params: parameters("launchApp", ["appHandle": .string(handle)]),
                                                catalog: catalog)
         guard case .launch(let plan) = outcome else {
             throw NativeFailure(code: "TEST", message: "Expected new-instance launch plan")
@@ -145,7 +145,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
         info["CFBundleIdentifier"] = (identifier ?? "test.dsh.changed") + ".changed"
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: plist)
         do {
-            _ = try await worker.execute("launchApp", params: parameters("launchApp", ["appHandle": .string(handle)]),
+            _ = try await worker.execute("launchApp", deadline: .now + .seconds(30), params: parameters("launchApp", ["appHandle": .string(handle)]),
                                          catalog: catalog)
             Issue.record("Changed bundle metadata allowed a new instance launch")
         } catch let error as NativeFailure { #expect(error.code == "STALE_APP") }
@@ -258,7 +258,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
         ]))))
     }
     do {
-        let listed = try await worker.execute("listApps", params: parameters("listApps"), catalog: catalog)
+        let listed = try await worker.execute("listApps", deadline: .now + .seconds(30), params: parameters("listApps"), catalog: catalog)
         guard case .result(.array(let rows)) = listed else { throw NativeFailure(code: "TEST", message: "Expected listApps rows") }
         let byPID = Dictionary(uniqueKeysWithValues: rows.map { (Int($0["pid"].number ?? 0), $0) })
         let bundledRow = try #require(byPID[Int(getpid())])
@@ -271,7 +271,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
         #expect(pathlessRow["pid"] == .number(Double(pathlessPID)))
         #expect(pathless.matches(String(pathlessPID)))
         #expect(pathlessRow["isRunning"] == .bool(true))
-        let selected = try await worker.execute("getApp", params: parameters("getApp", ["selector": .string(identity)]),
+        let selected = try await worker.execute("getApp", deadline: .now + .seconds(30), params: parameters("getApp", ["selector": .string(identity)]),
                                                 catalog: catalog)
         guard case .result(let application) = selected else {
             throw NativeFailure(code: "TEST", message: "Expected application selection")
@@ -305,7 +305,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
     let worker = AXWorker(cancellation: CancellationLatch(), axTimeout: 1, textEventInterval: 0, maxClickHoldMs: 5000,
                           sessionState: { false })
     func select(_ catalog: ApplicationCatalogSnapshot) async throws -> JSONValue {
-        let outcome = try await worker.execute("getApp", params: params, catalog: catalog, installed: installed)
+        let outcome = try await worker.execute("getApp", deadline: .now + .seconds(30), params: params, catalog: catalog, installed: installed)
         guard case .result(let app) = outcome else { throw NativeFailure(code: "TEST", message: "Expected application selection") }
         return app
     }
@@ -322,7 +322,7 @@ func launchRejectsInstallationsWhoseBundleMetadataChanged(change: String) throws
             Issue.record("Selected one of two processes at the same executable path")
         } catch let failure as NativeFailure { #expect(failure.code == "AMBIGUOUS_APP") }
         let request = Data(#"{"id":"select-pid","method":"getApp","params":{"selector":"\#(getpid())"}}"#.utf8)
-        let byPID = try await worker.execute("getApp", params: RequestParameters(NativeRequest(data: request)), catalog: instances)
+        let byPID = try await worker.execute("getApp", deadline: .now + .seconds(30), params: RequestParameters(NativeRequest(data: request)), catalog: instances)
         guard case .result(let selected) = byPID else { throw NativeFailure(code: "TEST", message: "Expected PID selection") }
         #expect(selected["pid"] == .number(Double(getpid())))
         #expect(selected["appHandle"].string == handle)

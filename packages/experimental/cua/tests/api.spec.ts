@@ -212,13 +212,15 @@ describe('application discovery', () => {
 })
 
 describe('background window restoration', () => {
-  it('shows an app or selected window without dispatching activation or AXRaise', async () => {
+  it('routes app and window show calls and preserves the resulting window ID', async () => {
     const f = fixture()
     f.setWindows(['23', '24'])
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow('24')
     f.dispatch.mockClear()
-    expect(await app.show()).toEqual({ ...delivered, windowId: '23', foregroundChanged: false })
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: '25', foregroundChanged: false })
+    expect(await app.show()).toEqual({ ...delivered, windowId: '25', foregroundChanged: false })
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: '24', foregroundChanged: false })
     expect(await window.show()).toEqual({ ...delivered, windowId: '24', foregroundChanged: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'show', params: { appHandle: 'app-17' } },
@@ -239,8 +241,10 @@ describe('background window restoration', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    f.dispatch.mockRejectedValueOnce(new Error('UNSUPPORTED: Window cannot be restored'))
-    await expect(app.show()).rejects.toThrow('UNSUPPORTED')
+    const failure = new NativeError('BACKGROUND_RESTORE_UNAVAILABLE',
+      'The window is still minimized. Restoring it may take keyboard focus. Call app.activate(), then inspect the window.')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.show()).rejects.toBe(failure)
     expect(f.dispatch).toHaveBeenCalledTimes(1)
   })
 })

@@ -54,8 +54,8 @@ Setup and discovery:
 - app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
 - app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
-- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
-- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
+- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show an application window. Use the returned windowId to select it. If a window is already visible, no action is taken. Otherwise restore a minimized window or ask the running app to reopen once. The resulting window ID may be new. With Stage Manager, show can add a window from the strip to the active group. A thumbnail alone does not count as displayed.
+- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show the specified window. If the selected window was closed, call app.show() and use the returned windowId. Use app.activate() to keep the app in front.
 
 ## Accessibility tree
 Available at app or window level depending on the platform.

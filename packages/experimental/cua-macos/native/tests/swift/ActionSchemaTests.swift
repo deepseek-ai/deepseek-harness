@@ -224,7 +224,7 @@ private func failOnSessionRead() -> @Sendable () -> Bool? {
         "id": .string("schema"), "method": .string("getActionSchema"),
         "params": .object(["action": .string("AXWindow.AXPosition.Set")]),
     ])))
-    let outcome = try await worker.execute("getActionSchema", params: RequestParameters(request),
+    let outcome = try await worker.execute("getActionSchema", deadline: .now + .seconds(30), params: RequestParameters(request),
                                            catalog: ApplicationCatalogSnapshot(applications: [], frontPID: nil))
     guard case .result(let schema) = outcome else {
         throw NativeFailure(code: "TEST", message: "Expected an action schema")
@@ -241,7 +241,7 @@ private func failOnSessionRead() -> @Sendable () -> Bool? {
         "params": .object(["action": .string("")]),
     ])))
     do {
-        _ = try await worker.execute("getActionSchema", params: RequestParameters(request),
+        _ = try await worker.execute("getActionSchema", deadline: .now + .seconds(30), params: RequestParameters(request),
                                      catalog: ApplicationCatalogSnapshot(applications: [], frontPID: nil))
         Issue.record("Empty action name produced a schema")
     } catch let error as NativeFailure {
