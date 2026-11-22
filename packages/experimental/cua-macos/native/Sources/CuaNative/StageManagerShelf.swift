@@ -50,7 +50,7 @@ struct StageManagerShelf {
     }
 
     /// The action selects the top member. An app-scoped call can accept any member only if all belong to that app.
-    func join(_ pile: Pile, windowID: UInt32, owner: ProcessIdentity, appScoped: Bool, originalPID: Int32, access: AXAccess) throws {
+    func join(_ pile: Pile, windowID: UInt32, owner: ProcessIdentity, appScoped: Bool, foreground: (pid: Int32?, windowID: UInt32?), access: AXAccess) throws {
         try NativePlatform.verify(manager)
         try NativePlatform.verify(owner)
         let owned = Set(NativePlatform.applicationWindows(owner.pid).map(\.windowID))
@@ -62,7 +62,7 @@ struct StageManagerShelf {
               try access.actions(pile.button).contains("AXAddToStage"), try windowIDs(pile.button, access) == pile.ids else {
             throw Self.unavailable("The Stage Manager pile changed or does not offer Add Window to Stage.")
         }
-        guard NativePlatform.frontPID() == originalPID else { throw Self.unavailable("The active group changed before the window could be added.") }
+        guard NativePlatform.foregroundAppWindow() == foreground else { throw Self.unavailable("The active group changed before the window could be added.") }
         try access.perform(pile.button, "AXAddToStage")
     }
 

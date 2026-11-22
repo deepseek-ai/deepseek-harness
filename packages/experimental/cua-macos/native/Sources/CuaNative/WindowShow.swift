@@ -51,6 +51,7 @@ private final class WindowRestoration {
     private var targetID: UInt32?
     let access: AXAccess
     let original: ProcessIdentity
+    let originalFrontWindow: UInt32?
     let originalAX: AXUIElement?
     let originalID: UInt32?
     let cancellation: CancellationLatch
@@ -69,6 +70,7 @@ private final class WindowRestoration {
         self.shelf = shelf
         self.appScoped = appScoped
         self.access = access
+        originalFrontWindow = previousWindow
         original = try NativePlatform.identity(previousPID)
         originalAX = try access.element(AXUIElementCreateApplication(previousPID), "AXFocusedWindow")
         originalID = try originalAX.flatMap { try access.windowID($0) } ?? previousWindow
@@ -90,7 +92,7 @@ private final class WindowRestoration {
                                            shelf: shelf, piles: shelf?.piles(access) ?? [])
     }
     func userSwitched() -> Bool {
-        guard let front = NativePlatform.frontPID() else { return false }
+        let front = NativePlatform.frontPID()
         return front != original.pid && front != owner.pid
     }
 
@@ -189,7 +191,7 @@ private final class WindowRestoration {
             throw unavailable("Stage Manager has not exposed a selectable pile for the full-size window.")
         }
         try checkTarget()
-        try shelf.join(pile, windowID: id, owner: owner, appScoped: !exact, originalPID: original.pid, access: access)
+        try shelf.join(pile, windowID: id, owner: owner, appScoped: !exact, foreground: (original.pid, originalFrontWindow), access: access)
         stageActionSent = true
         // Let WindowManager start the move before returning focus, which can otherwise switch stages mid-animation.
         let returnBy = min(deadline, ContinuousClock.now + .seconds(animation))

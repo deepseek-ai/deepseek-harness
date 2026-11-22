@@ -18,3 +18,13 @@ import Testing
     #expect(!StageManagerShelf.canAdd(9, members: [9], owned: owned, appScoped: false))
     #expect(!StageManagerShelf.canAdd(7, members: [8], owned: owned, appScoped: true))
 }
+
+@Test func withoutStageManagerAnOnScreenWindowDoesNotNeedAccessibilityGeometry() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    for onScreen in [true, false] {
+        let info = WindowInfo(windowID: 7, pid: 42, appName: "Editor", title: "",
+                              bounds: .init(x: 16, y: 435, width: 140, height: 145),
+                              isOnScreen: onScreen, onCurrentSpace: true)
+        #expect(try access.displayedForShow(info, window: nil, shelf: nil, piles: []) == onScreen)
+    }
+}
