@@ -56,7 +56,7 @@ Setup and discovery:
 - app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
 - app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
-- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — restore the default window without requesting activation. On macOS, a non-minimized window returns dispatched: false.
+- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — request background restoration of the default window. A result of dispatched: false means no action was taken.
 - window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — restore this window without taking keyboard focus. If background restoration requires foreground access, use app.activate() and inspect the window.
 
 ## Accessibility tree
