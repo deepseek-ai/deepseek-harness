@@ -27,5 +27,8 @@ it('resolves Windows input defaults without a compiler path setting', () => {
   expect(resolved.pollIntervalMs).toBe(25)
   expect(resolved.textEventIntervalMs).toBe(0)
   expect(() => Config({ pollIntervalMs: 0 })).toThrow()
+  expect(resolved.maxDiffNotifications).toBeUndefined()
+  expect(Config({ maxDiffNotifications: 1 }).maxDiffNotifications).toBe(1)
+  for (const invalid of [0, -1, 1.5, 2 ** 31]) expect(() => Config({ maxDiffNotifications: invalid })).toThrow()
   expect(() => Config({ maxResponseBytes: 2 ** 31 })).toThrow()
 })

@@ -23,26 +23,33 @@ internal sealed class NotificationBuffer(int limit)
         }
     }
 
-    // Null means the observation must return the full tree. New callbacks belong to the next read.
-    internal UiaNotice[]? Take()
+    // New callbacks after the drain belong to the next read.
+    internal NotificationBatch Take()
     {
         lock (gate)
         {
             var batch = overflow ? null : pending.ToArray();
             overflow = false;
             pending.Clear();
-            return batch;
+            return new(batch);
         }
     }
+}
 
-    internal static string Format(UiaNotice[] notices, Func<string, string?> currentRow, Func<string, bool> wasVisible,
-        string fullTree)
+// A missing notice array records overflow, including when the current tree is also truncated.
+internal readonly record struct NotificationBatch(UiaNotice[]? Notices)
+{
+    private const string TooLarge = "Diff too large. Showing the current tree instead.\n";
+
+    internal string Format(Func<string, string?> currentRow, Func<string, bool> wasVisible, string fullTree, bool truncated)
     {
-        if (notices.Length == 0) return "No UIA notifications received.";
+        if (Notices == null) return TooLarge + fullTree;
+        if (truncated) return fullTree;
+        if (Notices.Length == 0) return "No UIA notifications received.";
         var lines = new HashSet<string>(StringComparer.Ordinal);
-        var bytes = 0;
+        long bytes = 0;
         var fullBytes = Encoding.UTF8.GetByteCount(fullTree);
-        foreach (var notice in notices)
+        foreach (var notice in Notices)
         {
             var line = notice.Kind;
             if (notice.Id is { } id)
@@ -55,7 +62,7 @@ internal sealed class NotificationBuffer(int limit)
             }
             if (!lines.Add(line)) continue;
             bytes += Encoding.UTF8.GetByteCount(line) + (lines.Count > 1 ? 1 : 0);
-            if (bytes >= fullBytes) return fullTree;
+            if (bytes >= fullBytes) return TooLarge + fullTree;
         }
         return string.Join('\n', lines);
     }

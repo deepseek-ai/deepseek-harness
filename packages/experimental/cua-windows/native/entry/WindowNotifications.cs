@@ -7,7 +7,7 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed record ObservationScope(WindowState Window, int MaxElements, int MaxDepth, bool IncludeMenus, bool Details);
 
-internal sealed class WindowNotifications
+internal sealed class WindowNotifications(int maxDiffNotifications)
 {
     private readonly Stack<Action> unsubscribe = new();
     private ObservationScope? scope;
@@ -15,7 +15,7 @@ internal sealed class WindowNotifications
     internal string? LastSnapshot { get; set; }
 
     // Only the MTA dispatcher changes registrations. A late callback owns only its original buffer.
-    internal UiaNotice[]? Begin(AutomationElement root, ObservationScope next, string? previousSnapshot,
+    internal NotificationBatch? Begin(AutomationElement root, ObservationScope next, string? previousSnapshot,
         AutomationProperty[] properties)
     {
         var comparable = scope == next && LastSnapshot != null && LastSnapshot == previousSnapshot;
@@ -23,7 +23,7 @@ internal sealed class WindowNotifications
         if (scope != next)
         {
             Stop();
-            var pending = new NotificationBuffer(next.MaxElements);
+            var pending = new NotificationBuffer(maxDiffNotifications);
             using var cache = new CacheRequest { TreeScope = TreeScope.Element, AutomationElementMode = AutomationElementMode.None }.Activate();
             StructureChangedEventHandler structure = (sender, e) =>
             {

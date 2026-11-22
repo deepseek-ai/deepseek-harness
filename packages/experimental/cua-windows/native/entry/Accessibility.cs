@@ -30,7 +30,7 @@ internal static class Accessibility
         if (!all.Any(window => window.Id == target.Id)) all = [.. all, target];
         var targets = new[] { target };
         var previous = app.Snapshots.GetValueOrDefault(selected);
-        UiaNotice[]? notices = null;
+        NotificationBatch? batch = null;
         var eventRows = new Dictionary<string, string?>(StringComparer.Ordinal);
         if (!showDiff && notifications != null) context.Ax(() => { notifications.Stop(); return true; });
         var rows = new List<string>();
@@ -57,9 +57,9 @@ internal static class Accessibility
                 var root = context.Ax(() => AutomationElement.FromHandle(window.Handle).GetUpdatedCache(cache));
                 if (showDiff)
                 {
-                    notices = context.Ax(() => notifications!.Begin(root,
+                    batch = context.Ax(() => notifications!.Begin(root,
                         new(window, maximumElements, maximumDepth, includeMenus, details), previous?.Id, Properties));
-                    if (notices != null)
+                    if (batch?.Notices is { } notices)
                         foreach (var notice in notices)
                             if (notice.Id is { } id) eventRows.TryAdd(id, null);
                 }
@@ -78,8 +78,8 @@ internal static class Accessibility
             throw new NativeFailure("WINDOW_CHANGED", "The selected window disappeared during observation; read fresh application state");
         var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), selected, targets, elements);
         var tree = string.Join('\n', rows);
-        if (notices != null && !truncated)
-            tree = NotificationBuffer.Format(notices, eventRows.GetValueOrDefault, id => previous!.Elements.ContainsKey(id), tree);
+        if (batch is { } changes)
+            tree = changes.Format(eventRows.GetValueOrDefault, id => previous!.Elements.ContainsKey(id), tree, truncated);
         var result = new
         {
             appHandle = app.Handle, windowId = selected.ToString(CultureInfo.InvariantCulture),

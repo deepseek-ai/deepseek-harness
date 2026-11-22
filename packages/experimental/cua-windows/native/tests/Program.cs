@@ -19,6 +19,22 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+var handshakeConfig = new JsonObject
+{
+    ["maxRequestBytes"] = 8192, ["maxResponseBytes"] = 8192, ["axTimeoutMs"] = 10, ["textEventIntervalMs"] = 0,
+    ["screenshotTimeoutMs"] = 10, ["timeoutMs"] = 50, ["graceMs"] = 10, ["pollIntervalMs"] = 1,
+    ["launchWaitMs"] = 10, ["maxClickHoldMs"] = 25,
+};
+NativeConfig ReadConfig() => NativeConfig.Parse(JsonSerializer.SerializeToElement(handshakeConfig));
+Check(ReadConfig().MaxDiffNotifications == 50, "An existing handshake defaults to 50 distinct notifications");
+handshakeConfig["maxDiffNotifications"] = 2;
+Check(ReadConfig().MaxDiffNotifications == 2, "The handshake overrides the diff limit independently of tree traversal");
+foreach (var invalid in new[] { "0", "-1", "1.5", "2147483648", "null", "\"2\"" })
+{
+    handshakeConfig["maxDiffNotifications"] = JsonNode.Parse(invalid);
+    Refuses(() => ReadConfig(), "INVALID_CONFIG");
+}
+
 NotificationChecks.Run(Check);
 await NotificationCleanupChecks.Run(Check);
 

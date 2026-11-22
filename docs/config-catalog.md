@@ -1076,6 +1076,8 @@ export interface Config extends CuaConfig {
   windowsPowerShellPath: string
   /** Milliseconds between application-readiness and clipboard-release observations. */
   pollIntervalMs: number
+  /** Maximum distinct UIA notifications per diff read. The Windows helper defaults to 50. */
+  maxDiffNotifications?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->

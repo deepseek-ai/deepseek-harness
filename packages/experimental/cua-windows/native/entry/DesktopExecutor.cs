@@ -149,7 +149,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 {
                     var target = Selected(app, parameters, context);
                     var showDiff = Flag(parameters, "showDiff");
-                    if (showDiff) state.Notifications ??= new WindowNotifications();
+                    if (showDiff) state.Notifications ??= new WindowNotifications(config.MaxDiffNotifications);
                     return await mta.Invoke(() => Accessibility.State(app, target.Id, parameters.GetProperty("maxElements").GetInt32(),
                         parameters.GetProperty("maxDepth").GetInt32(), Flag(parameters, "includeMenus"), Flag(parameters, "details"), showDiff, state.Notifications, context), cancellation);
                 }
