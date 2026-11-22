@@ -91,7 +91,7 @@ struct AXTreeBaseline {
                     insertionPath.removeAll(keepingCapacity: true)
                 }
             }
-            if let before, before.body != line.body {
+            if let before, !before.body.utf8.elementsEqual(line.body.utf8) {
                 changes.append("~" + lines[i].rendered)
                 insertionPath.removeAll(keepingCapacity: true)
             }

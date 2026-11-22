@@ -210,3 +210,12 @@ private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused:
     #expect(delta.tree.contains("Removed element IDs: 1-2"))
     #expect(delta.tree.hasPrefix("The following is a diff"))
 }
+
+@Test func equivalentUnicodeSpellingsStillReproduceTheCurrentRowBytes() throws {
+    var reader = Reader()
+    _ = try reader.read(tree(["Caf\u{e9}"]))
+    let current = try tree(["Cafe\u{301}"])
+    let diff = try reader.read(current)
+    let row = try #require(current.tree.split(separator: "\n").last)
+    #expect(diff.tree.split(separator: "\n").last?.utf8.elementsEqual(("~" + row).utf8) == true)
+}

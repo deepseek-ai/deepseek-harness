@@ -8,6 +8,10 @@ private struct Row: Equatable {
     var depth: Int
     let id: Int
     var body: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.depth == rhs.depth && lhs.id == rhs.id && lhs.body.utf8.elementsEqual(rhs.body.utf8)
+    }
 }
 private struct BadPatch: Error {}
 
