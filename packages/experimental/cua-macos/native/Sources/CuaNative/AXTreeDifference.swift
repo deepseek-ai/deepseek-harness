@@ -59,7 +59,7 @@ struct AXTreeBaseline {
         var changes: [String] = []
         var ids: [AXUIElement: Int] = [:]
         var lastChild: [AXUIElement?: Int] = [:]
-        var lastInsertion: Int?
+        var insertionPath: [(depth: Int, id: Int)] = []
         var nextID = (previous.lines.map(\.id).max() ?? -1) + 1
         for i in lines.indices {
             try checkCancellation()
@@ -72,23 +72,28 @@ struct AXTreeBaseline {
             // Preorder makes both the destination parent and its preceding child available to the reader.
             let sibling = lastChild.updateValue(id, forKey: line.parent)
             if !retained.contains(line.element) {
-                let anchor: String
-                if let sibling { anchor = ">" + String(sibling) }
-                else if let parent = line.parent { anchor = "^" + String(ids[parent]!) }
-                else { anchor = "^root" }
+                let parentID = line.parent.map { ids[$0]! }
+                let anchor = sibling.map { ">\($0)" } ?? ("^" + (parentID.map(String.init) ?? "root"))
                 if before == nil {
                     nextID += 1
-                    let continuation = sibling != nil && lastInsertion == sibling
+                    // A run of inserted rows uses the same indentation rules as a full subtree.
+                    while let last = insertionPath.last, last.depth > line.depth { insertionPath.removeLast() }
+                    let last = insertionPath.last
+                    let followsSibling = last?.depth == line.depth && last?.id == sibling
+                    let startsChildren = last?.depth == line.depth - 1 && last?.id == parentID && sibling == nil
+                    let continuation = followsSibling || startsChildren
+                    if !continuation { insertionPath.removeAll(keepingCapacity: true) }
+                    else if followsSibling { insertionPath.removeLast() }
                     changes.append("+" + lines[i].rendered(at: continuation ? "" : anchor))
-                    lastInsertion = id
+                    insertionPath.append((line.depth, id))
                 } else {
                     changes.append(">\(id)\(anchor)")
-                    lastInsertion = nil
+                    insertionPath.removeAll(keepingCapacity: true)
                 }
             }
             if let before, before.body != line.body {
                 changes.append("~" + lines[i].rendered)
-                lastInsertion = nil
+                insertionPath.removeAll(keepingCapacity: true)
             }
         }
         let deleted = previous.lines.compactMap { ids[$0.element] == nil ? $0.id : nil }.sorted()

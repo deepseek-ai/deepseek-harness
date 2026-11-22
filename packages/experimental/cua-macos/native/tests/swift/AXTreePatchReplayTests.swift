@@ -30,7 +30,7 @@ private func fullRows(_ text: String) throws -> [Row] {
 
 private func replay(_ text: String, on original: [Row]) throws -> [Row] {
     var rows = original
-    var lastAdd: Int?
+    var additions: [Row] = []
     func index(_ id: Int) throws -> Int {
         guard let i = rows.firstIndex(where: { $0.id == id }) else { throw BadPatch() }
         return i
@@ -42,10 +42,6 @@ private func replay(_ text: String, on original: [Row]) throws -> [Row] {
     }
     func destination(_ anchor: Substring) throws -> (offset: Int, depth: Int) {
         if anchor == "^root" { return (0, 0) }
-        if anchor.isEmpty, let lastAdd {
-            let i = try index(lastAdd)
-            return (subtree(i).upperBound, rows[i].depth)
-        }
         guard let id = Int(anchor.dropFirst()) else { throw BadPatch() }
         let i = try index(id)
         switch anchor.first {
@@ -60,17 +56,31 @@ private func replay(_ text: String, on original: [Row]) throws -> [Row] {
         switch line.first {
         case "+":
             let (row, anchor) = try decodeRow(line.dropFirst())
-            let place = try destination(anchor)
+            let place: (offset: Int, depth: Int)
+            if anchor.isEmpty {
+                while let tail = additions.last, tail.depth > row.depth { additions.removeLast() }
+                guard let tail = additions.last else { throw BadPatch() }
+                let i = try index(tail.id)
+                if tail.depth == row.depth {
+                    place = (subtree(i).upperBound, tail.depth)
+                    additions.removeLast()
+                } else {
+                    place = (i + 1, tail.depth + 1)
+                }
+            } else {
+                additions = []
+                place = try destination(anchor)
+            }
             guard place.depth == row.depth, !rows.contains(where: { $0.id == row.id }) else { throw BadPatch() }
             rows.insert(row, at: place.offset)
-            lastAdd = row.id
+            additions.append(row)
         case ">":
             let digits = line.dropFirst().prefix(while: \.isNumber)
             guard let id = Int(digits) else { throw BadPatch() }
             let range = subtree(try index(id))
             var moved = Array(rows[range])
             rows.removeSubrange(range)
-            lastAdd = nil
+            additions = []
             let place = try destination(line.dropFirst(1 + digits.count))
             let shift = place.depth - moved[0].depth
             for i in moved.indices { moved[i].depth += shift }
@@ -80,7 +90,7 @@ private func replay(_ text: String, on original: [Row]) throws -> [Row] {
             let i = try index(row.id)
             guard anchor.isEmpty, row.depth == rows[i].depth else { throw BadPatch() }
             rows[i] = row
-            lastAdd = nil
+            additions = []
         default:
             let prefix = "Removed element IDs: "
             guard line.hasPrefix(prefix) else { throw BadPatch() }
