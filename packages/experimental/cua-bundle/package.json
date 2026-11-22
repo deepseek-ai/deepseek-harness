@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-bundle",
   "description": "Optional Computer Use for macOS and Windows",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
