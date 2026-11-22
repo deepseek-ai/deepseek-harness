@@ -26,6 +26,7 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
     const browser = await engine.launch()
     onTestFinished(() => browser.close())
     const page = await browser.newPage({ viewport: { width: 1000, height: 600 } })
+    expect(COMPOSER_PANELS).toHaveLength(2)
     for (const panel of COMPOSER_PANELS) {
       const css = await readFile(new URL(`../../../packages/${panel.file}`, import.meta.url), 'utf8')
       // The transcript and sticky seat are synthetic; the panel placement comes from its owner.
