@@ -62,7 +62,6 @@ let custom = ActionButton()
 let targets = ["first", "second"].map { ActionTarget($0, state) }
 custom.custom = targets.map { NSAccessibilityCustomAction(name: "Mark", target: $0, selector: #selector(ActionTarget.mark(_:))) }
 let disabled = NSButton(title: "Disabled", target: nil, action: nil)
-
 let controls: [(String, NSView)] = [("custom", custom), ("field", NSTextField(string: "fixture contents")),
                                     ("disabled", disabled), ("slider", NSSlider(value: 3, minValue: 0, maxValue: 10, target: nil, action: nil))]
 for (index, entry) in controls.enumerated() {

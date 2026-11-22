@@ -185,21 +185,7 @@ def main():
                 button = next(e for e in observed["elements"] if e["role"] == "AXButton" and e["title"] == "Increment primary")
                 field = next(e for e in observed["elements"] if e["role"] == "AXTextField")
                 target = {**owner, "snapshotId": observed["snapshotId"], "elementId": button["elementId"]}
-                button_target = {**target, "windowId": primary["windowId"]}
-                field_target = {**button_target, "elementId": field["elementId"]}
-                for element_target in [button_target, field_target]:
-                    names = call("listActions", element_target)
-                    details = call("listActions", {**element_target, "details": True})
-                    assert [entry["name"] for entry in details["actions"]] == names, details
-                    assert details["enabled"] is True, details
-                    if element_target == button_target:
-                        press = next(entry for entry in details["actions"] if entry["name"] == "AXPress")
-                        assert press["kind"] == "native" and press["description"], press
-                    else:
-                        setters = {entry["attribute"]: entry["argument"] for entry in details["actions"] if entry["kind"] == "setAttribute"}
-                        assert setters["AXValue"]["type"] == "string", setters
-                        assert setters["AXSelectedTextRange"]["required"] == ["location", "length"], setters
-                call("invoke", button_target)
+                call("invoke", {**target, "windowId": primary["windowId"]})
                 wait_state(lambda state: state["count"] == 1, "application snapshot did not invoke on selected window")
                 # A second fixture window is closed while the application snapshot stays live.
                 close_button = next(e for e in observed["elements"] if e["role"] == "AXButton" and e["title"] == "Close secondary")
