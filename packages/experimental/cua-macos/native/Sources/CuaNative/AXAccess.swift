@@ -245,7 +245,7 @@ final class AXAccess {
             let owned = try NativePlatform.ownedWindow(owner.pid, requested)
             guard let match = try windows.first(where: { try windowID($0) == requested }) else {
                 if owned.isOnScreen { return requested }
-                throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Window is unavailable for background restoration. Use app.activate() and inspect the target window.")
+                throw Self.backgroundRestoreUnavailable("macOS did not expose the selected window for background restoration.")
             }
             selected = match
         } else {
@@ -255,10 +255,14 @@ final class AXAccess {
             }
             selected = window
         }
-        guard try boolean(selected, "AXMinimized") == false else {
-            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "macOS cannot guarantee restoration without taking keyboard focus. Use app.activate() and inspect the target window.")
+        guard let minimized = try boolean(selected, "AXMinimized") else {
+            throw Self.backgroundRestoreUnavailable("macOS did not report whether the window is minimized.")
         }
+        if minimized { throw Self.backgroundRestoreUnavailable("The window is still minimized. Restoring it may take keyboard focus.") }
         return try windowID(selected)
+    }
+    private static func backgroundRestoreUnavailable(_ reason: String) -> NativeFailure {
+        NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "\(reason) Call app.activate(), then inspect the window.")
     }
     func actions(_ element: AXUIElement, requireKnown: Bool = false) throws -> [String] {
         try prepare(element)

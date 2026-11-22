@@ -239,8 +239,10 @@ describe('background window restoration', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    f.dispatch.mockRejectedValueOnce(new Error('UNSUPPORTED: Window cannot be restored'))
-    await expect(app.show()).rejects.toThrow('UNSUPPORTED')
+    const failure = new NativeError('BACKGROUND_RESTORE_UNAVAILABLE',
+      'The window is still minimized. Restoring it may take keyboard focus. Call app.activate(), then inspect the window.')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.show()).rejects.toBe(failure)
     expect(f.dispatch).toHaveBeenCalledTimes(1)
   })
 })

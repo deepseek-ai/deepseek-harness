@@ -153,8 +153,9 @@ def main():
 
                 def check_show(before, selected, minimized=False):
                     if minimized:
-                        failure = helper.call('show', selected, 'FOREGROUND_REQUIRED')
-                        assert 'app.activate()' in failure['message'], failure
+                        failure = helper.call('show', selected, 'BACKGROUND_RESTORE_UNAVAILABLE')
+                        assert failure['message'] == ('The window is still minimized. Restoring it may take keyboard focus. '
+                                                      'Call app.activate(), then inspect the window.'), failure
                     else:
                         result = helper.call('show', selected)
                         assert result == {'dispatched': False, 'windowId': window_id, 'foregroundChanged': False}, result
