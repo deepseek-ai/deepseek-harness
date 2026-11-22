@@ -281,8 +281,12 @@ final class AXAccess {
         if shelf == nil, let other = observed.first(where: { $0.layer == 0 && $0.isOnScreen && !seen.contains($0.windowID) }) {
             return .visible(other.windowID)
         }
-        if let id = inPile ?? observed.first(where: { shelved.contains($0.windowID) })?.windowID { return .needs(.shelf(id)) }
+        let ownedIDs = Set(observed.map(\.windowID))
+        let movable = Set(piles.filter { $0.ids.allSatisfy(ownedIDs.contains) }.flatMap(\.ids))
+        if let id = inPile, movable.contains(id) { return .needs(.shelf(id)) }
+        if let member = observed.first(where: { movable.contains($0.windowID) }) { return .needs(.shelf(member.windowID)) }
         if let (id, window) = minimized { return .needs(.window(id, window)) }
+        if let id = inPile ?? observed.first(where: { shelved.contains($0.windowID) })?.windowID { return .needs(.shelf(id)) }
         return .needs(.application)
     }
     /// An unsupported raise permits explicit deminimization. Other AX failures can have an unknown outcome.

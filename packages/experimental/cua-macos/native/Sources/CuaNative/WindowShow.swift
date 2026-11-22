@@ -90,7 +90,7 @@ private final class WindowRestoration {
                                            shelf: shelf, piles: shelf?.piles(access) ?? [])
     }
     func userSwitched() -> Bool {
-        let front = NativePlatform.frontPID()
+        guard let front = NativePlatform.frontPID() else { return false }
         return front != original.pid && front != owner.pid
     }
 
@@ -263,7 +263,7 @@ private final class WindowRestoration {
             case .application:
                 dispatched = try await reopen(on: worker)
             case .shelf(let id):
-                targetID = id
+                targetID = appScoped ? nil : id
                 targetID = try await joinStage(id, exact: !appScoped, on: worker)
                 dispatched = stageActionSent
             }

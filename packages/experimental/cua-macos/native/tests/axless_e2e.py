@@ -20,6 +20,23 @@ from native_test_support import ROOT, NativeHelper, run_cleanup
 from capabilities_e2e import stop_application, wait_for_state
 
 
+def focus_fixture(helper, app, path, ready=lambda: True):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        helper.call('activate', app)
+        first = wait_for_state(path, lambda s: s['active'] and s['key'])
+        since = time.monotonic()
+        while time.monotonic() - since < 1:
+            state = json.loads(path.read_text())
+            if not state['key'] or state['keyLosses'] != first['keyLosses']:
+                break
+            time.sleep(0.025)
+        else:
+            if ready():
+                return state
+    raise AssertionError(f'could not establish keyboard focus for {path.stem}')
+
+
 def check_stage_groups(helper, make_bundle, executable, root):
     with ExitStack() as owned:
         def launch(name):
@@ -42,20 +59,7 @@ def check_stage_groups(helper, make_bundle, executable, root):
 
         def focus(binding):
             app, path, _ = binding
-            deadline = time.monotonic() + 10
-            while time.monotonic() < deadline:
-                helper.call('activate', app)
-                first = wait_for_state(path, lambda s: s['active'] and s['key'])
-                since = time.monotonic()
-                while time.monotonic() - since < 1:
-                    state = json.loads(path.read_text())
-                    if not state['key'] or state['keyLosses'] != first['keyLosses']:
-                        break
-                    time.sleep(0.025)
-                else:
-                    if expanded(binding):
-                        return
-            raise AssertionError(f'could not establish a stable current stage for {path.stem}')
+            return focus_fixture(helper, app, path, lambda: expanded(binding))
 
 
         front = launch('StageFront')
@@ -205,8 +209,7 @@ def main():
                 target = {**owner, 'windowId': window_id}
 
                 def focus_foreground():
-                    helper.call('activate', front_owner)
-                    return wait_for_state(foreground_path, lambda s: s['active'] and s['key'] and s['keySettled'])
+                    return focus_fixture(helper, front_owner, foreground_path)
 
                 def check_show(before, selected, status):
                     result = helper.call('show', selected)
