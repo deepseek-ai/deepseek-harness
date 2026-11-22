@@ -5,7 +5,11 @@ import Darwin
 
 private typealias AXWindowFunction = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
 
+/// Complete trees have a scope header and may end with a menu-disclosure line.
+enum AXTreeFrame { case noWindowRoot, tree, menusCollapsed }
+
 struct AXProjection {
+    let frame: AXTreeFrame
     var tree: String
     let lines: [AXTreeLine]
     var elements: [JSONValue]
@@ -646,7 +650,7 @@ final class AXAccess {
                 var lines: [String] = []
                 if hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
                 if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
-                return AXProjection(tree: lines.joined(separator: "\n"), lines: [], elements: [], indexed: [:], focusedWindowID: focusedID,
+                return AXProjection(frame: .noWindowRoot, tree: lines.joined(separator: "\n"), lines: [], elements: [], indexed: [:], focusedWindowID: focusedID,
                                     truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
             let dialog = try matches.contains { root in

@@ -79,7 +79,7 @@ export function createNativeFixture(selectorPid) {
           output = !params.showDiff || lastNumberedCount === undefined ? '0 AXButton "Increment"\n' + row
             : lastNumberedCount === state.count ? 'There has been no change in the accessibility tree' + target + '.'
             : 'The following is a diff from the previous accessibility tree' + target
-              + ' with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.\n~' + row
+              + '.\n~' + row
           lastNumberedCount = state.count
         }
         return { appHandle: 'fixture-app', windowId: params.windowId ?? null, snapshotId: observed,

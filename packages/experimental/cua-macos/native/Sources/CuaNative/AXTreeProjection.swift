@@ -86,7 +86,7 @@ enum AXTreeProjection {
         }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         if elementLimitReached || depthLimitReached { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), lines: treeLines, elements: elements, indexed: indexed,
+        return AXProjection(frame: menusCollapsed ? .menusCollapsed : .tree, tree: lines.joined(separator: "\n"), lines: treeLines, elements: elements, indexed: indexed,
                             focusedWindowID: focusedWindowID, truncated: elementLimitReached || depthLimitReached, hasUnreadableElements: hasUnreadableElements)
     }
 }

@@ -11,7 +11,11 @@ struct AXTreeLine {
     let focused: Bool
     let selectedText: String?
 
-    var rendered: String { String(repeating: "\t", count: depth) + "\(id) " + body }
+    var rendered: String { rendered(at: "") }
+
+    func rendered(at anchor: String) -> String {
+        String(repeating: "\t", count: depth) + "\(id)\(anchor) " + body
+    }
 }
 
 struct AXTreeReadOptions: Equatable {
@@ -29,6 +33,7 @@ struct AXTreeReadOptions: Equatable {
 }
 
 struct AXTreeBaseline {
+    let frame: AXTreeFrame
     let options: AXTreeReadOptions
     let lines: [AXTreeLine]
 
@@ -45,33 +50,54 @@ struct AXTreeBaseline {
         }
         projection.tree += focusSummary(lines)
         guard !projection.truncated, !projection.hasUnreadableElements else { return nil }
-        guard let previous, options == previous.options else { return AXTreeBaseline(options: options, lines: lines) }
+        guard let previous, options == previous.options, projection.frame == previous.frame else {
+            return AXTreeBaseline(frame: projection.frame, options: options, lines: lines)
+        }
 
         let old = Dictionary(uniqueKeysWithValues: previous.lines.map { ($0.element, $0) })
         let retained = try matches(before: previous.lines, after: lines, checkCancellation: checkCancellation)
         var changes: [String] = []
-        var live: Set<AXUIElement> = []
+        var ids: [AXUIElement: Int] = [:]
+        var lastChild: [AXUIElement?: Int] = [:]
+        var lastInsertion: Int?
         var nextID = (previous.lines.map(\.id).max() ?? -1) + 1
         for i in lines.indices {
             try checkCancellation()
             let line = lines[i]
-            if retained.contains(line.element), line.parent.map(live.contains) ?? true, let before = old[line.element] {
-                live.insert(line.element)
-                lines[i].id = before.id
-                if before.body != line.body { changes.append("~" + lines[i].rendered) }
-            } else {
-                lines[i].id = nextID
-                nextID += 1
-                changes.append("+" + lines[i].rendered)
+            let before = old[line.element]
+            let id = before?.id ?? nextID
+            lines[i].id = id
+            ids[line.element] = id
+
+            // Preorder makes both the destination parent and its preceding child available to the reader.
+            let sibling = lastChild.updateValue(id, forKey: line.parent)
+            if !retained.contains(line.element) {
+                let anchor: String
+                if let sibling { anchor = ">" + String(sibling) }
+                else if let parent = line.parent { anchor = "^" + String(ids[parent]!) }
+                else { anchor = "^root" }
+                if before == nil {
+                    nextID += 1
+                    let continuation = sibling != nil && lastInsertion == sibling
+                    changes.append("+" + lines[i].rendered(at: continuation ? "" : anchor))
+                    lastInsertion = id
+                } else {
+                    changes.append(">\(id)\(anchor)")
+                    lastInsertion = nil
+                }
+            }
+            if let before, before.body != line.body {
+                changes.append("~" + lines[i].rendered)
+                lastInsertion = nil
             }
         }
-        let deleted = previous.lines.compactMap { live.contains($0.element) ? nil : $0.id }.sorted()
+        let deleted = previous.lines.compactMap { ids[$0.element] == nil ? $0.id : nil }.sorted()
         let target = windowTitle.map { " for Window: " + String(reflecting: $0) } ?? ""
         var delta = "There has been no change in the accessibility tree" + target + "."
         if !deleted.isEmpty || !changes.isEmpty {
-            var output = ["The following is a diff from the previous accessibility tree" + target + " with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range."]
-            if !deleted.isEmpty { output.append("Removed element IDs: " + ranges(deleted)) }
+            var output = ["The following is a diff from the previous accessibility tree" + target + "."]
             output += changes
+            if !deleted.isEmpty { output.append("Removed element IDs: " + ranges(deleted)) }
             delta = output.joined(separator: "\n")
         }
 
@@ -87,10 +113,10 @@ struct AXTreeBaseline {
         }
         projection.indexed = actions
         projection.tree = delta + focusSummary(lines)
-        return AXTreeBaseline(options: options, lines: lines)
+        return AXTreeBaseline(frame: projection.frame, options: options, lines: lines)
     }
 
-    /// Retain an ordered subsequence of each parent's children. A move removes the old subtree and inserts the new one.
+    /// Retain an ordered subsequence of each parent's children. Other surviving children need an explicit move.
     private static func matches(before: [AXTreeLine], after: [AXTreeLine], checkCancellation: () throws -> Void) throws -> Set<AXUIElement> {
         let old = Dictionary(uniqueKeysWithValues: before.enumerated().map { ($0.element.element, ($0.offset, $0.element.parent)) })
         var retained: Set<AXUIElement> = []

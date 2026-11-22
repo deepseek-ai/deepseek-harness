@@ -72,9 +72,12 @@ enum AXTextFormatter {
     }
 
     static func body(_ node: AXTextNode, details: Bool, inlineFocusAndSelection: Bool = true) -> String {
-        var line = node.role
+        func singleLineRole(_ name: String) -> String {
+            !inlineFocusAndSelection && name.contains(where: \.isNewline) ? String(reflecting: name) : name
+        }
+        var line = singleLineRole(node.role)
         if let subrole = node.subrole, !subrole.isEmpty, subrole != "AXUnknown", subrole != node.role,
-           details || !["AXStandardWindow", "AXHostingView"].contains(subrole) { line += " subrole=\(subrole)" }
+           details || !["AXStandardWindow", "AXHostingView"].contains(subrole) { line += " subrole=\(singleLineRole(subrole))" }
         if node.enabled == false { line += " disabled" }
         if inlineFocusAndSelection, node.focused == true { line += " focused" }
         if let expanded = node.expanded { line += " expanded=\(expanded)" }

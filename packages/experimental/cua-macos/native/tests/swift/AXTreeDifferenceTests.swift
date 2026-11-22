@@ -55,7 +55,7 @@ private struct Reader {
     let initial = Array(1...25)
     _ = try r.read(tree(titles, order: initial))
     let plus = try r.read(tree(titles, order: [26] + initial))
-    #expect(plus.tree.split(separator: "\n").dropFirst() == ["+\t26 AXButton \"Control 26\""])
+    #expect(plus.tree.split(separator: "\n").dropFirst() == ["+\t26^0 AXButton \"Control 26\""])
     #expect(plus.indexed[26] == AXUIElementCreateApplication(126))
     #expect(plus.elements[0]["elementId"] == .string("26"))
     let minus = try r.read(tree(titles, order: initial.filter { ![2, 3, 7].contains($0) }))
@@ -64,17 +64,16 @@ private struct Reader {
     #expect(minus.indexed[4] == AXUIElementCreateApplication(104))
 }
 
-@Test func movingTwoSameLabelledButtonsChangesTheirIDs() throws {
+@Test func movingTwoSameLabelledButtonsPreservesTheirActionIDs() throws {
     var r = Reader()
     let labels = Array(repeating: "Duplicate", count: 30)
     var order = Array(1...30)
     _ = try r.read(tree(labels, order: order))
     order.swapAt(2, 8)
     let delta = try r.read(tree(labels, order: order))
-    #expect(delta.tree.contains("Removed element IDs: 3, 9"))
-    #expect(delta.tree.contains("+\t31 AXButton \"Duplicate\"\n+\t32 AXButton \"Duplicate\""))
-    #expect(delta.indexed[31] == AXUIElementCreateApplication(109))
-    #expect(delta.indexed[32] == AXUIElementCreateApplication(103))
+    #expect(delta.tree.components(separatedBy: "\n").dropFirst() == [">9>2", ">3>8"])
+    #expect(delta.indexed[9] == AXUIElementCreateApplication(109))
+    #expect(delta.indexed[3] == AXUIElementCreateApplication(103))
 }
 
 @Test func cutoffAndUnreadableReadsCannotImplyRemovals() throws {
@@ -172,15 +171,15 @@ private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused:
     #expect(changed.indexed[5] == AXUIElementCreateApplication(505))
 }
 
-@Test func reparentAndSameLabelReplacementRemoveOldActionIDs() throws {
+@Test func reparentKeepsTheActionIDButReplacementInvalidatesIt() throws {
     var r = Reader()
     _ = try r.read(toolbars([[3, 4], [5, 6]]))
     let moved = try r.read(toolbars([[3, 4, 5], [6]]))
-    #expect(moved.tree.contains("Removed element IDs: 5\n+\t\t7 AXButton \"Save\""))
-    #expect(moved.indexed[5] == nil && moved.indexed[7] == AXUIElementCreateApplication(505))
+    #expect(moved.tree.hasSuffix("\n>5>3"))
+    #expect(moved.indexed[5] == AXUIElementCreateApplication(505))
     let replaced = try r.read(toolbars([[3, 4, 8], [6]]))
-    #expect(replaced.tree.contains("Removed element IDs: 7\n+\t\t8 AXButton \"Save\""))
-    #expect(replaced.indexed[7] == nil && replaced.indexed[8] == AXUIElementCreateApplication(508))
+    #expect(replaced.tree.hasSuffix("+\t\t7>3 AXButton \"Save\"\nRemoved element IDs: 5"))
+    #expect(replaced.indexed[5] == nil && replaced.indexed[7] == AXUIElementCreateApplication(508))
 }
 
 @Test func focusIsReportedSeparatelyEvenWhenNoTreeRowsChange() throws {
@@ -193,21 +192,21 @@ private func toolbars(_ children: [[Int]], labels: [Int: String] = [:], focused:
     #expect(selected.tree == "There has been no change in the accessibility tree.\nSelected text: \"Selection\"")
 }
 
-@Test func swappingAdjacentSiblingsKeepsTheFirstNodeInTheNewOrder() throws {
+@Test func swappingAdjacentSiblingsMovesOnlyTheSecondNodeInTheNewOrder() throws {
     var r = Reader()
     _ = try r.read(tree(["Left", "Right"]))
     let swapped = try r.read(tree(["Left", "Right"], order: [2, 1]))
-    #expect(swapped.tree.hasSuffix("Removed element IDs: 1\n+\t3 AXButton \"Left\""))
+    #expect(swapped.tree.hasSuffix("\n>1>2"))
     #expect(swapped.indexed[2] == AXUIElementCreateApplication(102))
     let restored = try r.read(tree(["Left", "Right"]))
-    #expect(restored.tree.hasSuffix("Removed element IDs: 2\n+\t4 AXButton \"Right\""))
+    #expect(restored.tree.hasSuffix("\n>2>1"))
 }
 
-@Test func compactChangesCanExceedTheFullTreeByteLength() throws {
+@Test func deletionOfAdjacentNodesUsesOneRange() throws {
     var r = Reader()
     _ = try r.read(tree(["A", "B", "C"]))
     let full = try tree(["A", "B", "C"], order: [3])
     let delta = try r.read(full)
     #expect(delta.tree.contains("Removed element IDs: 1-2"))
-    #expect(delta.tree.utf8.count > full.tree.utf8.count)
+    #expect(delta.tree.hasPrefix("The following is a diff"))
 }
