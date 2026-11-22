@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-`app.show()` makes a running application visible. If it has no visible or recoverable minimized window, it asks the app to reopen once. The app may reuse a window or create another one. `window.show()` only targets the original window ID and fails if it is no longer usable. Both return `dispatched: false` when the window is already visible.
+`app.show()` makes a running application visible. If it has no visible or recoverable minimized window, it asks the app to reopen once. The app may reuse a window or create another one. `window.show()` only targets the original window ID and fails if it is no longer usable. Both return `dispatched: false` when the window is already visible. A Stage Manager thumbnail is added to the active group before the helper confirms visibility.
 
 ## Migration
 

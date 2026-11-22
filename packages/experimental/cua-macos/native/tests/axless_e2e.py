@@ -19,6 +19,51 @@ from native_test_support import ROOT, NativeHelper, run_cleanup
 from capabilities_e2e import stop_application, wait_for_state
 
 
+def check_stage_groups(helper, make_bundle, executable, root):
+    import contextlib
+
+    with contextlib.ExitStack() as owned:
+        def launch(name):
+            path = root / (name + '.json')
+            binary = make_bundle(name, path, stage_participant=True)
+            shutil.copy2(executable, binary)
+            handle = helper.call('getApp', {'selector': str(binary.parents[2])})['appHandle']
+            app = {'appHandle': handle}
+            helper.call('launchApp', app)
+            state = wait_for_state(path, lambda s: bool(s.get('windowId')))
+            owned.callback(stop_application, state['pid'])
+            return app, path, state['windowId']
+
+        def expanded(binding):
+            app, path, window_id = binding
+            state = json.loads(path.read_text())
+            window = next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)
+            return window['isOnScreen'] and all(abs(window['bounds'][k] - actual) <= 1
+                                                for k, actual in zip(('width', 'height'), state['size']))
+
+        def focus(binding):
+            app, path, _ = binding
+            helper.call('activate', app)
+            wait_for_state(path, lambda s: s['keySettled'] and s['active'] and expanded(binding))
+
+        front = launch('StageFront')
+        for name, explicit in [('StageApp', False), ('StageWindow', True)]:
+            target = launch(name)
+            app, path, window_id = target
+            focus(target)
+            focus(front)
+            # Stage Manager keeps the thumbnail on screen even after the normal window leaves the stage.
+            wait_for_state(path, lambda s: not s['minimized'] and not s['active'] and not expanded(target))
+            assert next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)['isOnScreen']
+            params = {**app, 'windowId': window_id} if explicit else app
+            result = helper.call('show', params)
+            assert result == {'windowId': window_id, 'dispatched': True, 'foregroundChanged': False}, result
+            wait_for_state(front[1], lambda s: s['active'] and s['keySettled'] and expanded(front) and expanded(target))
+            assert not json.loads(path.read_text())['minimized']
+            assert helper.call('show', params) == {**result, 'dispatched': False}
+            print(f'PASS: {name} joined the current stage at full size; original window kept keyboard focus')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
@@ -37,13 +82,13 @@ def main():
         with tempfile.TemporaryDirectory(prefix='dsh-cua-axless-') as directory:
             root = Path(directory)
             state_path = root / 'state.json'
-            def app_binary(name, state_file):
+            def app_binary(name, state_file, stage_participant=False):
                 contents = root / (name + '.app') / 'Contents'
                 (contents / 'MacOS').mkdir(parents=True)
                 (contents / 'Info.plist').write_bytes(plistlib.dumps({
                     'CFBundleIdentifier': 'org.deepseek-harness.cua.' + root.name + '.' + name,
                     'CFBundleExecutable': 'fixture', 'CFBundleName': name, 'CFBundlePackageType': 'APPL',
-                    'DSHFixtureStatePath': str(state_file),
+                    'DSHFixtureStatePath': str(state_file), 'DSHStageParticipant': stage_participant,
                 }))
                 return contents / 'MacOS/fixture'
 
@@ -208,6 +253,10 @@ def main():
                 assert helper.call('show', owner) == {'dispatched': False, 'windowId': new['windowId'], 'foregroundChanged': False}
                 helper.call('show', target, 'WINDOW_UNAVAILABLE')
                 assert json.loads(state_path.read_text())['reopened'] == new['reopened']
+                stage = subprocess.run(['defaults', 'read', 'com.apple.WindowManager', 'GloballyEnabled'],
+                                       capture_output=True, text=True)
+                if stage.stdout.strip() == '1':
+                    check_stage_groups(helper, app_binary, binary, root)
                 helper.eof()
                 print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
             finally:

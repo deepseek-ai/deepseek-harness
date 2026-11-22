@@ -28,7 +28,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.title = "DSH AXless window fixture"
         window.isReleasedWhenClosed = false
         window.animationBehavior = .none
-        window.collectionBehavior = [.canJoinAllApplications, .stationary]
+        let participate = Bundle.main.object(forInfoDictionaryKey: "DSHStageParticipant") as? Bool == true
+        window.collectionBehavior = participate ? [] : [.canJoinAllApplications, .stationary]
         button = NSButton(title: "Increment AXless fixture", target: self, action: #selector(increment))
         button.frame = NSRect(x: 40, y: 65, width: 280, height: 40)
         window.contentView!.addSubview(button)

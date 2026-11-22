@@ -329,7 +329,7 @@ actor AXWorker {
         switch method {
         case "show":
             let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
-                                              axTimeout: axTimeout, sessionState: sessionState)
+                                              axTimeout: axTimeout, sessionState: sessionState, shelf: StageManagerShelf.current(catalog))
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
             return .result(result)

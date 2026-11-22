@@ -236,39 +236,52 @@ final class AXAccess {
         guard let focused = try element(AXUIElementCreateApplication(pid), "AXFocusedWindow") else { return nil }
         return try windowID(focused)
     }
+    /// A Stage Manager thumbnail can be on screen while its application's full-size window is off stage.
+    func displayedForShow(_ info: WindowInfo, window: AXUIElement?, shelf: StageManagerShelf?, piles: [StageManagerShelf.Pile]) throws -> Bool {
+        guard info.isOnScreen else { return false }
+        guard shelf != nil else { return true }
+        guard !piles.contains(where: { $0.ids.contains(info.windowID) }),
+              let window, let actual = try bounds(window) else { return false }
+        return StageManagerShelf.matchesWindowSize(info.bounds, actual)
+    }
+
     /// App-scoped show can reopen the app. A window-scoped request can only display its original WindowServer ID.
-    func selectWindowForShow(_ requested: UInt32?, owner: ProcessIdentity) throws -> WindowForShow {
+    func selectWindowForShow(_ requested: UInt32?, owner: ProcessIdentity, shelf: StageManagerShelf?) throws -> WindowForShow {
         let app = AXUIElementCreateApplication(owner.pid)
         let windows = try children(app, "AXWindows")
         let observed = NativePlatform.applicationWindows(owner.pid)
+        let piles = try shelf?.piles(self) ?? []
+        let shelved = Set(piles.flatMap(\.ids))
         if let requested {
             let missing = NativeFailure(code: "WINDOW_UNAVAILABLE",
                 message: "The selected window is no longer available. Use app.show() to reopen the app, then select a current window from app.getWindows().")
             guard let owned = observed.first(where: { $0.windowID == requested }) else { throw missing }
-            if let match = try windows.first(where: { try windowID($0) == requested }) {
-                let minimized = try boolean(match, "AXMinimized")
-                if owned.isOnScreen && minimized != true { return .visible(requested) }
-                guard minimized != nil else { throw missing }
-                return .needs(.window(requested, match))
-            }
-            guard owned.isOnScreen else { throw missing }
-            return .visible(requested)
+            if shelved.contains(requested) { return .needs(.shelf(requested)) }
+            let match = try windows.first(where: { try windowID($0) == requested })
+            let minimized = try match.flatMap { try boolean($0, "AXMinimized") }
+            if minimized != true, try displayedForShow(owned, window: match, shelf: shelf, piles: piles) { return .visible(requested) }
+            guard let match, minimized != nil else { throw missing }
+            if shelf != nil && owned.isOnScreen && minimized == false { return .needs(.shelf(requested)) }
+            return .needs(.window(requested, match))
         }
 
         let focused = try element(app, "AXFocusedWindow")
         let main = try element(app, "AXMainWindow")
         var seen = Set<UInt32>()
         var minimized: (UInt32, AXUIElement)?
+        var inPile: UInt32?
         for window in [focused, main].compactMap({ $0 }) + windows {
             guard let id = try windowID(window), seen.insert(id).inserted,
                   let owned = observed.first(where: { $0.windowID == id && $0.layer == 0 }) else { continue }
             let state = try boolean(window, "AXMinimized")
-            if owned.isOnScreen && state != true { return .visible(id) }
+            if state != true, try displayedForShow(owned, window: window, shelf: shelf, piles: piles) { return .visible(id) }
+            if shelved.contains(id) || (shelf != nil && owned.isOnScreen && state == false) { inPile = inPile ?? id }
             if minimized == nil && state == true && owned.onCurrentSpace == true { minimized = (id, window) }
         }
-        if let other = observed.first(where: { $0.layer == 0 && $0.isOnScreen && !seen.contains($0.windowID) }) {
+        if shelf == nil, let other = observed.first(where: { $0.layer == 0 && $0.isOnScreen && !seen.contains($0.windowID) }) {
             return .visible(other.windowID)
         }
+        if let id = inPile ?? observed.first(where: { shelved.contains($0.windowID) })?.windowID { return .needs(.shelf(id)) }
         if let (id, window) = minimized { return .needs(.window(id, window)) }
         return .needs(.application)
     }
