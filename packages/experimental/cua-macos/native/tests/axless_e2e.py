@@ -267,17 +267,17 @@ def main():
                 assert helper.call('show', owner) == {'dispatched': False, 'windowId': new['windowId'], 'foregroundChanged': False}
                 helper.call('show', target, 'WINDOW_UNAVAILABLE')
                 assert json.loads(state_path.read_text())['reopened'] == new['reopened']
-                stage = subprocess.run(['defaults', 'read', 'com.apple.WindowManager', 'GloballyEnabled'],
-                                       capture_output=True, text=True)
-                if stage.stdout.strip() == '1':
-                    check_stage_groups(helper, app_binary, binary, root)
-                helper.eof()
-                print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
             finally:
                 run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
                             lambda: stop_application(fixture))
                 fixture = None
                 foreground = None
+            stage = subprocess.run(['defaults', 'read', 'com.apple.WindowManager', 'GloballyEnabled'],
+                                   capture_output=True, text=True)
+            if stage.stdout.strip() == '1':
+                check_stage_groups(helper, app_binary, binary, root)
+            helper.eof()
+            print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
     finally:
         run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
                     lambda: stop_application(fixture) if fixture is not None else None,
