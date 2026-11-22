@@ -5,6 +5,7 @@ changes no system permission settings, and controls no user applications.
 """
 import argparse
 import base64
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -20,9 +21,7 @@ from capabilities_e2e import stop_application, wait_for_state
 
 
 def check_stage_groups(helper, make_bundle, executable, root):
-    import contextlib
-
-    with contextlib.ExitStack() as owned:
+    with ExitStack() as owned:
         def launch(name):
             path = root / (name + '.json')
             binary = make_bundle(name, path, stage_participant=True)
@@ -43,8 +42,21 @@ def check_stage_groups(helper, make_bundle, executable, root):
 
         def focus(binding):
             app, path, _ = binding
-            helper.call('activate', app)
-            wait_for_state(path, lambda s: s['keySettled'] and s['active'] and expanded(binding))
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                helper.call('activate', app)
+                first = wait_for_state(path, lambda s: s['active'] and s['key'])
+                since = time.monotonic()
+                while time.monotonic() - since < 1:
+                    state = json.loads(path.read_text())
+                    if not state['key'] or state['keyLosses'] != first['keyLosses']:
+                        break
+                    time.sleep(0.025)
+                else:
+                    if expanded(binding):
+                        return
+            raise AssertionError(f'could not establish a stable current stage for {path.stem}')
+
 
         front = launch('StageFront')
         for name, explicit in [('StageApp', False), ('StageWindow', True)]:
@@ -217,13 +229,12 @@ def main():
                 state = wait_state(lambda s: s['minimizeRequested'] and (s['minimized'] or not s['active']),
                                    'target did not minimize or leave the active Stage Manager group')
                 before = focus_foreground()
-                windows = helper.call('listWindows', owner)
-                on_screen = next(w['isOnScreen'] for w in windows if w['windowId'] == window_id)
-                status = 'already_visible' if on_screen and not state['minimized'] else 'restored'
-                foreground_after = check_show(before, owner if state['minimized'] else target, status)
-                after = wait_state(lambda s: not s['minimized'], 'target remained minimized')
-                assert after['size'] == state['size'], after
-                if status == 'restored':
+                # With Stage Manager a minimize request can just move the window to the strip.
+                # The ordinary-window pairs below cover that transition in their own stages.
+                if state['minimized']:
+                    foreground_after = check_show(before, owner, 'restored')
+                    after = wait_state(lambda s: not s['minimized'], 'target remained minimized')
+                    assert after['size'] == state['size'], after
                     check_show(foreground_after, target, 'already_visible')
                     os.kill(fixture, signal.SIGXCPU)
                     wait_state(lambda s: s['focusOnRestore'], 'target did not arm foreground restoration')

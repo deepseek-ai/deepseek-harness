@@ -176,16 +176,28 @@ private final class WindowRestoration {
         try checkTarget()
         guard !userSwitched() else { throw unavailable("The active group changed before the window could be added.") }
         try await restoreFocus(on: worker)
-        if let already = try expanded() { return already }
-        guard !stageActionSent, let pile = try shelf.piles(access).first(where: { $0.ids.contains(id) }) else {
+        // The strip can report transformed bounds before publishing the pile's accessibility button.
+        let readyBy = min(deadline, ContinuousClock.now + .seconds(animation * 2))
+        var pile: StageManagerShelf.Pile?
+        repeat {
+            if let already = try expanded() { return already }
+            pile = try shelf.piles(access).first { $0.ids.contains(id) }
+            if pile != nil || userSwitched() || ContinuousClock.now >= readyBy { break }
+            try await Task.sleep(for: .milliseconds(16))
+        } while true
+        guard !stageActionSent, let pile else {
             throw unavailable("Stage Manager has not exposed a selectable pile for the full-size window.")
         }
+        try checkTarget()
         try shelf.join(pile, windowID: id, owner: owner, appScoped: !exact, originalPID: original.pid, access: access)
         stageActionSent = true
+        // Let WindowManager start the move before returning focus, which can otherwise switch stages mid-animation.
+        let returnBy = min(deadline, ContinuousClock.now + .seconds(animation))
         repeat {
             try checkTarget()
-            try await restoreFocus(on: worker)
-            if let shown = try expanded() { return shown }
+            let shown = try expanded()
+            if shown != nil || ContinuousClock.now >= returnBy { try await restoreFocus(on: worker) }
+            if let shown, let confirmed = try expanded(), confirmed == shown { return shown }
             guard !userSwitched(), ContinuousClock.now < deadline - .seconds(animation) else {
                 throw unavailable("The window was not confirmed expanded in the original stage after Add Window to Stage.")
             }
