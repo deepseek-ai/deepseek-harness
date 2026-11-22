@@ -36,7 +36,7 @@ extension AXWorker {
             previousWindow: initial.windowID, cancellation: cancellation, sessionState: sessionState,
             animation: ApplicationCatalog.animationDuration, timeout: axTimeout)
         let shown = try await operation.run(target, on: self, initial: initial)
-        return result(shown, dispatched: true, changed: foregroundChange())
+        return result(shown.id, dispatched: shown.dispatched, changed: foregroundChange())
     }
 }
 
@@ -142,6 +142,7 @@ private final class WindowRestoration {
         }
         if !shown && !userSwitched() {
             try checkTarget()
+            guard try access.boolean(window, "AXMinimized") == true else { return }
             try await ApplicationCatalog.activateForShow(owner, whileUsing: original)
             if !userSwitched(), try access.boolean(window, "AXMinimized") == true {
                 if try access.writable(window, "AXMinimized") == true {
@@ -157,26 +158,30 @@ private final class WindowRestoration {
         NativePlatform.topVisibleWindow(owner.pid)
     }
 
-    private func reopen(on worker: isolated AXWorker) async throws -> UInt32 {
-        if try access.boolean(AXUIElementCreateApplication(owner.pid), "AXHidden") == true {
+    /// Returns whether an unhide or reopen request was sent.
+    private func reopen(on worker: isolated AXWorker) async throws -> Bool {
+        if visibleAppWindow() != nil { return false }
+        let hidden = try access.boolean(AXUIElementCreateApplication(owner.pid), "AXHidden") == true
+        if hidden {
             try await ApplicationCatalog.unhideForShow(owner)
             let until = min(deadline, ContinuousClock.now + .seconds(animation))
             repeat {
                 try checkTarget()
-                if let id = visibleAppWindow() { return id }
+                if visibleAppWindow() != nil { return true }
                 if userSwitched() || ContinuousClock.now >= until { break }
                 try await restoreFocus(on: worker)
                 try await Task.sleep(for: .milliseconds(16))
             } while true
         }
         try checkTarget()
+        if visibleAppWindow() != nil { return hidden }
         guard !userSwitched() else { throw unavailable("The foreground changed before the application could reopen.") }
         try ApplicationReopen.send(to: owner)
         // Leave the final animation interval for focus handoff and verification.
         let until = deadline - .seconds(animation)
         while true {
             try checkTarget()
-            if let id = visibleAppWindow() { return id }
+            if visibleAppWindow() != nil { return true }
             try await restoreFocus(on: worker)
             guard !userSwitched(), ContinuousClock.now < until else {
                 throw unavailable("The app was asked to reopen once, but no visible window was observed.")
@@ -186,10 +191,11 @@ private final class WindowRestoration {
     }
 
     func run(_ selection: ShowTarget, on worker: isolated AXWorker,
-             initial: (pid: Int32?, windowID: UInt32?)) async throws -> UInt32 {
+             initial: (pid: Int32?, windowID: UInt32?)) async throws -> (id: UInt32, dispatched: Bool) {
         try checkTarget()
         guard NativePlatform.foregroundAppWindow() == initial else { throw unavailable("The foreground changed before restoration.") }
         do {
+            let dispatched: Bool
             switch selection {
             case .window(let id, let window):
                 targetID = id
@@ -197,8 +203,9 @@ private final class WindowRestoration {
                     throw unavailable("Cannot confirm the selected window is on the current Space.")
                 }
                 try await restore(window, id: id, on: worker)
+                dispatched = true
             case .application:
-                _ = try await reopen(on: worker)
+                dispatched = try await reopen(on: worker)
             }
             // AppKit may deliver a foreground change during the restoration animation, after the AX request returns.
             let settleBy = min(deadline, ContinuousClock.now + .seconds(animation))
@@ -214,10 +221,10 @@ private final class WindowRestoration {
                 guard try visible(window, id: id) else {
                     throw NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "The selected window is not confirmed visible. Use app.show() to reopen the app if the window was closed.")
                 }
-                return id
+                return (id, dispatched)
             case .application:
                 guard let id = visibleAppWindow() else { throw unavailable("The application has no visible window after reopening.") }
-                return id
+                return (id, dispatched)
             }
         } catch {
             if !handoffPending { try await restoreFocus(on: worker) }
