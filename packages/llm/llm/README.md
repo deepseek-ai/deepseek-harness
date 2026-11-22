@@ -29,16 +29,19 @@ Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider ada
 
 Any composition that calls a model provider — an agent loop, a session-title generator, a compaction summarizer — streams its requests through this service. Mount it together with at least one provider adapter; the service itself has no configuration and no provider wire code.
 
+Import message, tool-call, provider-request, attempt, and reasoning-effort identifier types from `@deepseek-ai/dsh-llm/types` or the package root using `import type`. Brand strings with `brandString<IdentifierType>(value)` from `@deepseek-ai/dsh-brand`; branding preserves the string without validation.
+
 ### When to choose it
 
 Choose this package whenever a plugin or composition needs to call a model: it is the only supported path into provider adapters, and it keeps one vocabulary across the loop, the session log, and every consumer. Do not reach for it when you need provider-specific wire behavior (that belongs in an adapter such as `dsh-llm-deepseek` or `dsh-llm-pi-ai`) or retry execution (that belongs in `dsh-llm-retry`).
 
 ### Minimal composition
 
-Mount the service and at least one adapter, then select the provider by name in every request:
+Mount the service and at least one adapter, then select the provider by name in every request. The DeepSeek route below also requires [`dsh-deepseek-auth`](../../account/deepseek-auth/README.md), which releases its API key:
 
 ```yaml
 - name: '@deepseek-ai/dsh-llm'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-llm-deepseek-api-key'
   config:
     apiKeyEnv: DEEPSEEK_API_KEY
@@ -83,6 +86,7 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 ### What you can do
 
+- **Extract content text** — `extractTextContent(content, options?)` from `@deepseek-ai/dsh-llm/message` joins only `text` blocks in order, preserving whitespace and empty text blocks while omitting all other block types without placeholders. The optional `options.separator` defaults to `''`. `options.trim` instead trims each text block and omits blocks left empty, so they add no separator. It accepts read-only content and returns `''` when no text blocks exist.
 - **Stream one model call** — `ctx.llm.stream(options)` yields raw chunks (token-level deltas) for any registered provider and model; consumers assemble them with `BlockAssembler`.
 - **Register provider adapters** — an adapter owns one or more provider routes, and its registration captures that route's retry policy; registering the same route twice fails with `DUPLICATE_ADAPTER`.
 - **Expose and activate providers through configuration** — adapters declare configurable-provider routes plus a settings namespace, so configuration surfaces can activate dormant providers and edit connection facts without a restart. `LlmConfigurableProvider.error` reports a configuration diagnostic for repair; unaffected models can remain serviceable. An entry can also carry `defaultBaseURL`, the endpoint the adapter uses when the profile sets none, and `nativeAuth`, the environment variables and OAuth sign-in that the adapter's authentication reads when the profile names no credential reference; `baseURLEnv` lists environment variables used to configure the endpoint. Configuration UIs read these fields from the directory without calling the adapter.
@@ -114,21 +118,22 @@ The service is built on one separation: **the logical contract is provider-neutr
 |---|---|
 | [`src/index.ts`](src/index.ts) | The `LlmRuntime` service: adapter registry, configurable-provider directory, model discovery, call preparation, and the streaming boundary |
 | [`src/types.ts`](src/types.ts) | The `StreamChunk` protocol, content-block map, finish reasons, and shared vocabulary |
-| [`src/message.ts`](src/message.ts) | Immutable message constructors shared by delivery, history, and requests |
+| [`src/message.ts`](src/message.ts) | Content text extraction and immutable message constructors shared by delivery, history, and requests |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`: incremental chunk-to-block assembly |
 | [`src/assistant-stream.ts`](src/assistant-stream.ts) | Compact timed Assistant stream accumulation, strict validation, exact expansion, and record-level readers |
 | [`src/call-config.ts`](src/call-config.ts) | Call-config validation, adapter-default materialization, and request freezing |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | Provider-owned retry policy resolution (normal and always modes) |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` taxonomy and provider-neutral failure codes |
-| [`src/content.ts`](src/content.ts) | Shared file and image helpers: content walks, file projection, image offload accounting, and offloaded-image projection |
-| [`src/api-key.ts`](src/api-key.ts) | Credential format check shared by every adapter |
+| [`src/content.ts`](src/content.ts) | File and image handle text and request-history projections |
 | [`src/adapter-failure.ts`](src/adapter-failure.ts) | Failure normalization into terminal finish chunks |
 
 ### Main flow
 
-A request is validated against its exact model's capability — context window, output default, reasoning efforts, input modalities, and `systemPromptUpdate` mode — and any adapter-configured defaults are materialized. The runtime preserves freezing for already-frozen input; hand-built callers own input immutability. `prepareCall()` binds those facts, detached context, and retry policy to the exact adapter generation that performs terminal dispatch, so HMR or dynamic settings cannot combine one generation's image capability with another generation's endpoint. An image-capable adapter projects durable references into route-specific request versions; `resolveImageAttachmentAccess()` separately maps an attachment provider's optional host object into the current tool execution world without changing the request image or its `variantId`. A text-only route receives deterministic per-image placeholders, including tool-role result images, without rewriting append-only session history. Durable `FileBlock` references never reach any adapter: request assembly replaces each one, including tool-role result occurrences, with deterministic handle text naming the file and its saved read-only path, resolved through the mounted attachment and filesystem providers. `ctx.llm.fileRequestText(ref)` exposes that exact synchronous projection to request measurement. An image occurrence derived with `offloaded: true` reaches every route as placeholder text through `projectOffloadedImages()`. An image-capable route whose retained occurrences exceed its `LlmImageRequestBudget` at their exact bytes fails with `IMAGE_OFFLOAD_REQUIRED` naming the additional oldest occurrences (`requiredImageOffload()`), never with an unlogged projection; `dsh-compaction-image-offload` logs the selected occurrences in one `image/offload` event and retries. Adapters that charge visual tokens declare per-route `imageRequestPricing`, which `ctx.llm.imageRequestPricing(provider, model)` resolves synchronously for the token meter. Dispatch goes through the `llm/stream` waterfall, then chunks return as token-level deltas and every adapter outcome reaches the consumer as one terminal `finish` chunk. `imageRequestTarget(provider, model, image)` exposes the same request-image dimensions and byte target to screenshot consumers; adapters without image resizing preserve the normalized source.
+A request is validated against its exact model's capability — context window, output default, reasoning efforts, input modalities, and `systemPromptUpdate` mode — and any adapter-configured defaults are materialized. The runtime preserves freezing for already-frozen input; hand-built callers own input immutability. `prepareCall()` binds those facts, detached context, and retry policy to the exact adapter generation that performs terminal dispatch, so HMR or dynamic settings cannot combine one generation's image capability with another generation's endpoint. An image-capable adapter projects durable references into route-specific request versions; `resolveImageAttachmentAccess()` separately maps an attachment provider's optional host object into the current tool execution world without changing the request image or its `variantId`. A text-only route receives deterministic per-image placeholders, including tool-role result images, without rewriting append-only session history. Durable `FileBlock` references never reach any adapter: request assembly replaces each one, including tool-role result occurrences, with deterministic handle text naming the file and its saved read-only path, resolved through the mounted attachment and filesystem providers. `ctx.llm.fileRequestText(ref)` exposes that exact synchronous projection to request measurement. An image occurrence derived with `offloaded: true` reaches every route as placeholder text through `projectOffloadedImages()`. An image-capable route whose retained occurrences exceed its `LlmImageRequestBudget` at their exact bytes fails with `IMAGE_OFFLOAD_REQUIRED` naming the additional oldest occurrences (`requiredImageOffload()`), never with an unlogged projection; `dsh-compaction-image-offload` logs the selected occurrences in one `image/offload` event and retries. Adapters that charge visual tokens declare per-route `imageRequestPricing`, which `ctx.llm.imageRequestPricing(provider, model)` resolves synchronously for the token meter. Dispatch goes through the `llm/stream` waterfall, then chunks return as token-level deltas and every adapter outcome reaches the consumer as one terminal `finish` chunk. `imageRequestTarget(provider, model, image)` exposes maximum dimensions and byte budgets; screenshot consumers use the actual dimensions returned by `readImageRequest` after byte-limit resizing.
 
 File detection reads current content, including tool-role result content, on every request without caching message identities or freeze state. The [archived file-scan decision](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
+
+`uniqueRequestImageRefs()` from `@deepseek-ai/dsh-llm/message` returns one reference per retained attachment. Each adapter supplies its model's dimensions and byte limits to `AttachmentStore.readImageRequest()`. Once the wire representation is selected, `requestImageBudgetFailure()` counts the actual encoded size of every retained occurrence, including repeats.
 
 ### Invariants
 
@@ -176,6 +181,7 @@ Reasoning-effort materialization preserves the assembled request prefix. Image i
 These limits define where this service stops and other packages or future work begin. They are current package constraints, not a task backlog.
 
 - **No retry execution, caching, or rate limiting ships in this service** — provider registration stores the retry policy, but a stream remains a single provider attempt; `@deepseek-ai/dsh-llm-retry` executes the policy at durable agent-step boundaries.
+- **Only `attributionHeaders()` carries the `DSH_USER_AGENT_SUFFIX` token** — DeepSeek web search and web API plugins send their own fixed `User-Agent`, so the profile suffix does not reach those requests.
 - **`GenerateOptions` sampling is `temperature`/`maxTokens`/`stop` only** — no `tool_choice`, `top_p`, or penalty fields; the vocabulary grows when a producer lands ([dropped inert knobs](../../../.agents/notes/archived/simplification/2026-07-04-drop-inert-request-knobs.md)).
 - **Variants normally require a producer** — `prefill`, per-tool `strict`, block `cache` hints, and the `agent` message-source variant have no producer ([Agent Note](../../../.agents/notes/archived/simplification/2026-07-04-prune-producerless-vocabulary-variants.md)).
 - **`BlockAssembler` handles core block kinds only** — a plugin-added block type whose stream is never closed by `block-end` makes `blocks()` throw.

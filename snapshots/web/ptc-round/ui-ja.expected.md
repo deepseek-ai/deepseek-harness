@@ -1,13 +1,14 @@
 - banner:
   - navigation "セッション階層": "Using ONE run_code program: run"
   - text: PTC モード
+  - button "セッションパネル"
   - button "その他の操作"
   - button "右サイドバーを開く"
   - tablist:
     - tab "チャット" [selected]
     - tab "軌跡"
   - button "その他の会話ビュー"
-- text: "Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt catching its error in the program. Return an object with both outcomes. Then reply DONE and stop. {{clock}}"
+- text: "Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop. {{clock}}"
 - button "コピー"
 - status: 完了
 - button "完了まで {{duration}}" [expanded]

@@ -3,10 +3,10 @@
  * the service constructor, as the job and Agent registries install their own
  * archive-admission families, so it holds for every Session the Workspace archives.
  */
+import { sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle, SessionProjectionMap } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-working-directory'
@@ -32,9 +32,14 @@ export interface ReclamationHost {
   retainOnArchive(): boolean
   /** Run `body` after every operation on `path` that was requested earlier, and before any requested later. */
   exclusiveCheckout<T>(path: string, body: () => Promise<T>): Promise<T>
-  /** Inspect and, when eligible and admitted, remove the checkout without force. Rejects on Git failure. */
-  removeCheckout(session: Session, request: CreatedWorktree, signal: AbortSignal, admit: () => boolean): Promise<boolean>
+  /**
+   * Inspect and, when eligible and admitted, remove the checkout without force. Rejects on Git failure.
+   */
+  removeCheckout(request: CreatedWorktree, signal: AbortSignal, admit: () => boolean): Promise<boolean>
 }
+
+/** The wire values cleanup reads from an observation; the service injects every owner, so each is always present. */
+type Observed = Pick<SessionProjectionMap, 'worktree' | 'workingDirectory'>
 
 interface Attempt {
   readonly worktree: CreatedWorktree
@@ -46,11 +51,14 @@ interface Attempt {
 
 /**
  * Whether `path` is `root` or lies below it. Both are canonical absolute
- * directories of one execution world without a trailing separator, so string
- * prefixing is exact.
+ * process paths without a trailing separator, so prefixing with the platform
+ * separator is exact.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute directory to test.
+ * @returns whether `root` contains `path`.
  */
-function within(root: string, path: string): boolean {
-  return path === root || path.startsWith(`${root}/`)
+export function within(root: string, path: string): boolean {
+  return path === root || path.startsWith(`${root}${sep}`)
 }
 
 /** Owns pending cleanup, gates directory entry into a checkout being removed, and drains before the service is released. */
@@ -62,8 +70,8 @@ export class WorktreeReclamation {
   private revision = 0
 
   /**
-   * @param ctx - scope injecting the Workspace registry, Session query, store, working-directory, and
-   *   sandbox-policy providers; the projection cache is read when mounted.
+   * @param ctx - scope injecting the Workspace registry, Session query, store, and working-directory
+   *   providers; the projection cache is read when mounted.
    * @param host - the service operations the module runs through.
    * @param projection - the `worktree` unit, read live and through the persisted cache.
    */
@@ -101,16 +109,16 @@ export class WorktreeReclamation {
 
   /**
    * Read the most recent cleanup attempt of a Session; waiting never starts one.
-   * @param session - archived Session whose attempt is read.
+   * @param sessionId - archived Session whose attempt is read.
    * @param revision - null reads at once; a matching revision waits for that attempt to settle.
    * @returns the attempt state, or null when none exists, the revision was superseded, or the service is stopping.
    */
-  async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null> {
-    const attempt = this.attempts.get(session.id)
+  async cleanupOf(sessionId: SessionId, revision: number | null): Promise<WorktreeCleanup | null> {
+    const attempt = this.attempts.get(sessionId)
     if (attempt === undefined || (revision !== null && revision !== attempt.revision)) return null
     if (revision !== null) await attempt.done
     // A cold Session without creations withdraws its placeholder while it settles.
-    if (this.lifetime.signal.aborted || this.attempts.get(session.id) !== attempt) return null
+    if (this.lifetime.signal.aborted || this.attempts.get(sessionId) !== attempt) return null
     return { revision: attempt.revision, status: attempt.status }
   }
 
@@ -118,8 +126,8 @@ export class WorktreeReclamation {
   private schedule(sessionId: SessionId): void {
     if (this.host.retainOnArchive()) return
     const live = this.ctx.sessions.get(sessionId)
-    // A cold Session's creations come from the persisted cache or its log, below.
-    const owned = live === undefined ? undefined : this.projection.stateOf(live).created.filter(creation => creation.owned)
+    // A cold Session is observed in the background, below.
+    const owned = live === undefined ? undefined : ownedOf(this.projection.stateOf(live).created)
     if (owned !== undefined && owned.length === 0) return
     const attempt: Attempt = {
       worktree: owned?.[0]?.worktree ?? { path: '', branch: '', baseCommit: '', repositoryRoot: '' },
@@ -135,7 +143,7 @@ export class WorktreeReclamation {
   private async run(sessionId: SessionId, attempt: Attempt, owned: readonly WorktreeCreation[] | undefined): Promise<void> {
     const ctx = this.ctx
     try {
-      const creations = owned ?? (await this.creationsOf(sessionId, undefined)).filter(creation => creation.owned)
+      const creations = owned ?? ownedOf((await this.projected(sessionId)).worktree)
       const candidate = creations[0]?.worktree
       if (candidate === undefined) {
         this.attempts.delete(sessionId)
@@ -145,12 +153,10 @@ export class WorktreeReclamation {
       ctx.emit('worktree/cleanup', {
         sessionId, path: candidate.path, cleanup: { revision: attempt.revision, status: attempt.status },
       })
-      const session = await this.creatorSession(sessionId)
-      if (session === undefined || attempt.cancelled || ctx.sandboxPolicy.resolve({ session }).mode === 'read-only'
-        || !await this.unused(candidate, sessionId)) {
+      if (attempt.cancelled || !await this.unused(candidate, sessionId)) {
         attempt.status = 'retained'
       } else {
-        attempt.status = await this.remove(session, candidate, attempt) ? 'removed' : 'retained'
+        attempt.status = await this.remove(candidate, attempt) ? 'removed' : 'retained'
       }
     } catch (error: unknown) {
       attempt.status = 'failed'
@@ -168,10 +174,10 @@ export class WorktreeReclamation {
    * competing operations settled. A Session has one attempt and unarchiving
    * awaits it, so removals of one path never overlap.
    */
-  private async remove(session: Session, worktree: CreatedWorktree, attempt: Attempt): Promise<boolean> {
+  private async remove(worktree: CreatedWorktree, attempt: Attempt): Promise<boolean> {
     const operation = this.host.exclusiveCheckout(worktree.path, async () => {
       if (attempt.cancelled || !await this.unused(worktree, undefined)) return false
-      return await this.host.removeCheckout(session, worktree, this.lifetime.signal, () => !attempt.cancelled)
+      return await this.host.removeCheckout(worktree, this.lifetime.signal, () => !attempt.cancelled)
     })
     this.removing.set(worktree.path, operation.then(() => {}, () => {}))
     try {
@@ -201,39 +207,46 @@ export class WorktreeReclamation {
       const id = record.header.id
       if (archived.has(id) || ancestorArchived(record.header, headers, archived)) continue
       const live = ctx.sessions.get(id)
-      const cwd = live === undefined ? await this.directoryOf(record.header) : ctx.workingDirectory.get(live)
+      const { workingDirectory: cwd, worktree: creations } = live === undefined
+        ? await this.usageOf(record.header)
+        : { workingDirectory: ctx.workingDirectory.get(live), worktree: this.projection.stateOf(live).created }
       if (cwd !== null && within(worktree.path, cwd)) return false
-      const creations = live === undefined ? await this.creationsOf(id, record.header) : this.projection.stateOf(live).created
       if (creations.some(creation => creation.worktree.path === worktree.path)) return false
       signal.throwIfAborted()
     }
     return true
   }
 
-  /** The archived Session itself, prepared cold when not live, whose sandbox policy confines the Git commands. */
-  private async creatorSession(sessionId: SessionId): Promise<Session | undefined> {
-    const live = this.ctx.sessions.get(sessionId)
-    if (live !== undefined) return live
-    return await this.ctx.sessionQuery.inspectSession(sessionId, session => session, this.lifetime.signal)
+  /**
+   * The recorded directory (null when its log recorded none) and creations of a cold Session: the
+   * persisted cache when it holds both, else one observation of its log.
+   */
+  private async usageOf(header: SessionHeader): Promise<Observed> {
+    const cached = this.ctx.get('sessionProjectionCache')?.cachedSnapshot(header, ['workingDirectory', 'worktree'])?.values
+    if (cached?.workingDirectory !== undefined && cached.worktree !== undefined) {
+      return { workingDirectory: cached.workingDirectory, worktree: cached.worktree }
+    }
+    return await this.projected(header.id)
   }
 
-  /** The recorded directory of a cold Session, null when its log recorded none: the persisted cache when it has one, else its log. */
-  private async directoryOf(header: SessionHeader): Promise<string | null> {
-    const cached = this.ctx.get('sessionProjectionCache')?.cachedSnapshot(header, ['workingDirectory'])?.values.workingDirectory
-    if (cached !== undefined) return cached
-    return await this.ctx.sessionQuery.inspectSession(header.id, session => this.ctx.workingDirectory.get(session), this.lifetime.signal)
+  /**
+   * The read wire values of a Session at its log end; observing a cold Session neither attaches nor resumes it.
+   * @throws when an injected owner's value is missing, which a misassembled projection registry would cause.
+   */
+  private async projected(sessionId: SessionId): Promise<Observed> {
+    using observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal: this.lifetime.signal })
+    const values = observation.projections?.values
+    /* v8 ignore next 3 -- the service injects the registry and every owner read here, so each value is registered. */
+    if (values?.worktree === undefined || values.workingDirectory === undefined) {
+      throw new Error(`worktree: the observation of Session ${sessionId} lacks a projected value`)
+    }
+    return { worktree: values.worktree, workingDirectory: values.workingDirectory }
   }
+}
 
-  /** The recorded creations of a cold Session: the persisted cache when it has one, else its log. */
-  private async creationsOf(
-    sessionId: SessionId, header: SessionHeader | undefined,
-  ): Promise<readonly WorktreeCreation[]> {
-    const cached = header === undefined
-      ? undefined
-      : this.ctx.get('sessionProjectionCache')?.cachedSnapshot(header, ['worktree'])?.values.worktree
-    if (cached !== undefined) return cached
-    return await this.ctx.sessionQuery.inspectSession(sessionId, session => this.projection.stateOf(session).created, this.lifetime.signal)
-  }
+/** The creations the Session made itself, not those a fork inherited. */
+function ownedOf(creations: readonly WorktreeCreation[]): readonly WorktreeCreation[] {
+  return creations.filter(creation => creation.owned)
 }
 
 /** Whether any subagent ancestor of `header`, followed through the listed headers, is archived. */

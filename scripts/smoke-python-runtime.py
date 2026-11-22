@@ -103,6 +103,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-todo",
     "tool-web",
 )
+SNAPSHOT_TIME_ZONE = "UTC"
 SNAPSHOT_PROMPT = "Run the advanced packaged-runtime snapshot scenario."
 SNAPSHOT_SESSION_ID = "advanced-executable"
 SNAPSHOT_DIRECT_CHILD_PROMPT = "Reply with exactly DIRECT_CHILD_OK and nothing else."
@@ -508,7 +509,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
                 raise AssertionError("PTC mode must advertise only run_code")
             return tool_call_chunks(
                 "advanced-code", "run_code",
-                {"code": "return await tools.snapshot_double({ value: 21 })",
+                {"code": "inspect(await tools.snapshot_double({ value: 21 }))",
                  "description": "Call the configured Plugin tool"},
             )
         assert_advertised_tool(body, "snapshot_double")
@@ -536,7 +537,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         return tool_call_chunks(
             "call-code-worker",
             "run_code",
-            {"code": "return 6 * 7", "description": "Compute the smoke value"},
+            {"code": "inspect(6 * 7)", "description": "Compute the smoke value"},
         )
     if prompt == WORKFLOW_PROMPT:
         assert_advertised_tool(body, "workflow")
@@ -692,7 +693,7 @@ def advanced_tool_followup(
         if "42" not in tool_text:
             raise AssertionError(f"run_code returned no configured-tool value: {tool_text}")
         return tool_call_chunks("advanced-denied-ptc", "run_code", {
-            "code": "try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }",
+            "code": "try { await tools.snapshot_double({ value: -1 }) } catch (error) { inspect(error.message) }",
             "description": "Catch a structured inner tool denial",
         })
     if call_id == "advanced-denied-ptc" and tool_name == "run_code":
@@ -898,6 +899,8 @@ def main() -> None:
         print("smoke-python-runtime: sdk-live passed")
         return
 
+    # Child processes that sample their own time zone inherit the snapshot zone.
+    os.environ["TZ"] = SNAPSHOT_TIME_ZONE
     with MockModel() as model:
         if args.scenario == "sdk-plugin-manager":
             assert args.exe is not None
@@ -938,6 +941,7 @@ def main() -> None:
             smoke_sdk_scheduler_recovery(model.url, args.exe.resolve(), args.update_snapshots)
         if args.scenario in {"all", "sdk-restart"}:
             assert args.exe is not None
+            smoke_sdk_v3_resume(model.url, args.exe.resolve())
             smoke_sdk_restart_snapshot(model.url, args.exe.resolve(), args.update_snapshots)
         if args.installed_wheel and args.scenario in {"all", "sdk-profile-plugin"}:
             smoke_sdk_profile_plugin(model.url)
@@ -968,9 +972,9 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             root = Path(temporary).resolve()
             home = root / "home"
             if mode == "replacement":
-                skill = home / "skills/office-docx/SKILL.md"
+                skill = home / "skills/office/SKILL.md"
                 skill.parent.mkdir(parents=True)
-                skill.write_text("---\nname: office-docx\ndescription: CUSTOM_OFFICE_DOCX\n---\nUse the bundled Python for custom document work.\n")
+                skill.write_text("---\nname: office\ndescription: CUSTOM_OFFICE\n---\nUse the bundled Python for custom document work.\n")
             patch = root / "skills.patch.yml"
             # Fix the model-visible clock in this child only; native timers stay live.
             patch_rows = [
@@ -990,15 +994,15 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                 env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "DSH_RESOURCE_CACHE": str(cache)},
                 request_timeout_seconds=60,
             ) as harness:
-                result = harness.run(AUTHORING_PROMPT, session_id="authoring")
+                result = harness.run(AUTHORING_PROMPT, session_id="authoring", time_zone=SNAPSHOT_TIME_ZONE)
             assert result.final_response == EXPECTED_TEXT, result.final_response
             requests = MockModelHandler.requests[first:]
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
             assert ("- `office`:" in prompt) == (mode != "disabled"), mode
-            for name in ("office-docx", "office-pptx", "office-xlsx"):
-                assert (name in prompt) == (mode != "disabled"), (mode, name)
-            assert ("CUSTOM_OFFICE_DOCX" in prompt) == (mode == "replacement"), mode
+            assert not re.search(r"office-(?:docx|pptx|xlsx)", prompt), mode
+            assert ("Word, PowerPoint, and Excel" in prompt) == (mode == "default"), mode
+            assert ("CUSTOM_OFFICE" in prompt) == (mode == "replacement"), mode
             tool_result = next(block for message in requests[1]["messages"]
                                for block in message.get("content", [])
                                if isinstance(block, dict) and block.get("tool_use_id") == "authoring-runtime")
@@ -1485,7 +1489,7 @@ def smoke_sdk_minimal(
             base_url=base_url,
             request_timeout_seconds=60,
         ) as harness:
-            result = harness.run(MINIMAL_PROMPT, session_id="minimal-agent-smoke")
+            result = harness.run(MINIMAL_PROMPT, session_id="minimal-agent-smoke", time_zone=SNAPSHOT_TIME_ZONE)
 
         event_text = json.dumps(result.events)
         if MINIMAL_TEXT not in event_text:
@@ -1548,7 +1552,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
             },
             api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
         ) as harness:
-            result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke")
+            result = harness.run(DYNAMIC_TOOLS_PROMPT, session_id="dynamic-tools-smoke", time_zone=SNAPSHOT_TIME_ZONE)
         assert result.final_response == DYNAMIC_TOOLS_TEXT, result.final_response
         assert task.read_text(encoding="utf-8") == "Call snapshot_ping once.\n"
         logs = read_session_logs(sessions)
@@ -1812,7 +1816,8 @@ def smoke_sdk_snapshot_mode(
                     MockModelHandler.direct_child_finished.set()
 
             result = harness.run(
-                SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID, on_notification=observe_child,
+                SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE,
+                on_notification=observe_child,
             )
 
         assert result.final_response == SNAPSHOT_FINAL_TEXT, (result.final_response, harness.client._runtime_diagnostics())
@@ -1888,6 +1893,63 @@ def smoke_sdk_snapshot_mode(
         )
 
 
+def smoke_sdk_v3_resume(base_url: str, executable: Path) -> None:
+    """Migrate persisted V3 history and reopen the published log in a fresh runtime."""
+    from deepseek_harness import DeepSeekHarness
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-v3-resume-") as temporary:
+        root = Path(temporary).resolve()
+        sessions = root / "sessions"
+        session_id = "v3-resume"
+        directory = sessions / "_no-cwd" / session_id
+        directory.mkdir(parents=True)
+        source = directory / "session.v3.jsonl"
+        header = {
+            "type": "session", "version": 3, "id": session_id, "createdAt": 1,
+            "isSeeded": False, "delegationDepth": 0,
+        }
+        message = {
+            "id": "saved-message", "role": "user", "source": {"kind": "user"},
+            "content": [{"type": "text", "text": "Saved V3 history"}],
+        }
+        events = [
+            {"type": "turn/start", "data": {"turn": 1}},
+            {"type": "user/message", "data": message, "surfaceOp": "append"},
+            {"type": "turn/end", "data": {"turn": 1, "reason": {"kind": "completed"}}},
+        ]
+        records = [header, *({**event, "seq": seq, "time": seq + 10} for seq, event in enumerate(events))]
+        original = "".join(json.dumps(record) + "\n" for record in records).encode("utf-8")
+        source.write_bytes(original)
+        patch = write_profile_patch(root, "v3-resume.patch.yml", sessions, [])
+        request_count = len(MockModelHandler.requests)
+
+        def connect() -> DeepSeekHarness:
+            return DeepSeekHarness(
+                provider="deepseek-official", model="smoke-model", cwd=str(root),
+                dsh_bin=str(executable), dsh_home=str(root / "home"), patches=(str(patch),),
+                env={"DSH_TELEMETRY_DISABLED": "1"}, api_key="sk-keyless-smoke", base_url=base_url,
+                request_timeout_seconds=60,
+            )
+
+        with connect() as harness:
+            session = harness.resume_session(session_id)
+            assert session.id == session_id, f"migration resumed {session.id!r}"
+        logs = read_session_logs(sessions)
+        assert set(logs) == {session_id}, f"unexpected persisted sessions: {list(logs)}"
+        assert any(row.get("type") == "user/message" and row.get("data") == message for row in logs[session_id]), (
+            "the migrated log lost the saved V3 user message"
+        )
+        (published,) = latest_persisted_session_paths(sessions)
+        migrated = published.read_bytes()
+
+        with connect() as harness:
+            session = harness.resume_session(session_id)
+            assert session.id == session_id, f"restart resumed {session.id!r}"
+        assert published.read_bytes().startswith(migrated), "restart rewrote the published session history"
+        assert source.read_bytes() == original, "resuming changed the original V3 log"
+        assert len(MockModelHandler.requests) == request_count, "resuming sent a model request"
+
+
 def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
     """Check isolated sessions and explicit history restoration across runtime restarts."""
     from deepseek_harness import DeepSeekHarness
@@ -1917,9 +1979,9 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             )
 
         with connect() as harness:
-            first = harness.run(RESTART_FIRST_PROMPT, session_id=RESTART_FIRST_SESSION_ID)
+            first = harness.run(RESTART_FIRST_PROMPT, session_id=RESTART_FIRST_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         with connect() as harness:
-            second = harness.run(RESTART_SECOND_PROMPT, session_id=RESTART_SECOND_SESSION_ID)
+            second = harness.run(RESTART_SECOND_PROMPT, session_id=RESTART_SECOND_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         requests = MockModelHandler.requests[first_request:]
         if len(requests) != 2:
             raise AssertionError(f"restart snapshot expected two model requests: {requests}")
@@ -1952,12 +2014,12 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         )
         before_resume = logs[RESTART_FIRST_SESSION_ID]
         with connect("resumed-smoke-model") as harness:
-            session = harness.resume_session(RESTART_FIRST_SESSION_ID)
+            session = harness.resume_session(RESTART_FIRST_SESSION_ID, {"permission_mode": "read-only"})
             if session.id != RESTART_FIRST_SESSION_ID:
                 raise AssertionError(f"resume changed the saved identity: {session.id}")
             if len(MockModelHandler.requests) != first_request + 2:
                 raise AssertionError("resume sent a model request before receiving new input")
-            resumed = session.run(RESUME_PROMPT)
+            resumed = session.run(RESUME_PROMPT, time_zone=SNAPSHOT_TIME_ZONE)
 
         requests = MockModelHandler.requests[first_request + 2:]
         if len(requests) != 1 or resumed.final_response != RESUME_TEXT:
@@ -2000,7 +2062,20 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             raise AssertionError(f"resume did not persist the initialized model: {selection_events}")
         if requests[0].get("model") != "resumed-smoke-model":
             raise AssertionError(f"resumed request ignored the initialized model: {requests[0]}")
+        permission_events = [
+            {"type": record["type"], "data": record["data"]}
+            for record in restored[len(before_resume):]
+            if record.get("type") in {"permission/preset", "sandbox/mode", "approval/policy"}
+        ]
+        expected_permissions = [
+            {"type": "permission/preset", "data": {"preset": "read-only"}},
+            {"type": "sandbox/mode", "data": {"mode": "read-only"}},
+            {"type": "approval/policy", "data": {"policy": "ask"}},
+        ]
+        if permission_events != expected_permissions:
+            raise AssertionError(f"resume did not persist the requested permissions: {permission_events}")
         files["resume.json"] = json.dumps({
+            "permissionEvents": permission_events,
             "model": requests[0].get("model"),
             "final_response": resumed.final_response,
             "eventTypes": [event.get("type") for event in resumed.events],
@@ -2045,8 +2120,8 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
             )
 
         with connect() as harness:
-            failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID)
-            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID)
+            failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
+            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID, time_zone=SNAPSHOT_TIME_ZONE)
         results = [failed, continued]
         if [result.finish_reason for result in results] != ["error", "completed"]:
             outcomes = [
@@ -2502,7 +2577,13 @@ def build_in_history_snapshot_files(
     systems = [event for event in result.events if event.get("type") == "system/message"]
     assert len(systems) == 2, systems
     assert [event.get("surfaceOp") for event in systems] == ["append", "append"], systems
-    prompts = [message_text(event["data"]["message"]["content"]) for event in systems]
+    prompts = [
+        "\n\n".join(
+            block["text"].strip() for block in event["data"]["message"]["content"]
+            if block["type"] == "text" and block["text"].strip()
+        )
+        for event in systems
+    ]
     assert "Python SDK prompt version 1." in prompts[0], prompts
     assert "Python SDK prompt version 2." not in prompts[0], prompts
     assert "Python SDK prompt version 2." in prompts[1], prompts
@@ -2969,7 +3050,7 @@ def scrub_snapshot_header(value: dict[object, object]) -> None:
 
 
 def scrub_snapshot_system_message(value: dict[object, object]) -> None:
-    """Tokenize the rendered prompt text of a `system/message` surface node."""
+    """Tokenize system text while retaining whitespace separators and source attribution."""
     if value.get("type") != "system/message":
         return
     data = value.get("data")
@@ -2979,7 +3060,11 @@ def scrub_snapshot_system_message(value: dict[object, object]) -> None:
         return
     for block in content:
         if isinstance(block, dict) and block.get("type") == "text":
-            block["text"] = "{{system}}"
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                leading = text[:len(text) - len(text.lstrip())]
+                trailing = text[len(text.rstrip()):]
+                block["text"] = leading + "{{system}}" + trailing
 
 
 def render_jsonl(records: list[object]) -> str:

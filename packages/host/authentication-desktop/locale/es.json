@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Autenticación de Desktop",
+    "description": "Autentica las solicitudes de Desktop con una credencial privada compartida por el proceso padre y el proceso Host."
+  }
+}

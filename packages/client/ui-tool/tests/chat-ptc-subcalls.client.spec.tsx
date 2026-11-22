@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,17 +46,17 @@ beforeEach(() => {
 const PROGRAM = 'const listing = await tools.bash({ command: "ls notes", description: "List notes" })\nreturn listing'
 const RUN_CODE_ARGS = JSON.stringify({ code: PROGRAM, description: 'List the notes directory' })
 
-const codeResult = (seq: number, callId: string): ToolResultNode => ({
+const codeResult = (seq: number, callId: string, name = 'run_code', argsRaw = RUN_CODE_ARGS): ToolResultNode => ({
   kind: 'tool-result', seq, time: seq * 1_000, callId,
-  name: 'run_code', args: PartialArguments.fromText(RUN_CODE_ARGS),
-  call: { name: 'run_code', argsRaw: RUN_CODE_ARGS },
+  name, args: PartialArguments.fromText(argsRaw),
+  call: { name, argsRaw },
   callTime: seq * 1_000 - 500,
   content: [{ type: 'text', text: 'demo.txt' }], isError: false,
   subCalls: [],
 })
 
-const runningCode = (callId: string): StartedToolCall => ({
-  phase: 'start' as const, args: PartialArguments.fromText(RUN_CODE_ARGS), callId, name: 'run_code', argsRaw: RUN_CODE_ARGS, turn: 9, step: 0, time: 9_000,
+const runningCode = (callId: string, name = 'run_code', argsRaw = RUN_CODE_ARGS): StartedToolCall => ({
+  phase: 'start' as const, args: PartialArguments.fromText(argsRaw), callId, name, argsRaw, turn: 9, step: 0, time: 9_000,
   subCalls: [],
 })
 
@@ -130,7 +131,7 @@ async function bench(snapshot: ChatSnapshot) {
     summary: { title: 'S', displayTitle: 'S', cwd: '/w' },
     snapshot: { running: snapshot.legacy.runningCalls.length > 0 },
   })
-  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView' }).ready
+  await runtime.sessions.retainFor(runtime.ctx, SID, { source: 'mainView', facets: { conversation: true } }).ready
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   const openWorkspacePath = vi.fn(async () => ({ ok: true, value: { opened: true } }))
   ctx.provide('layout', layout as never)
@@ -143,7 +144,7 @@ async function bench(snapshot: ChatSnapshot) {
   locale.register(CONVERSATION_NS, { zh: conversationZh, en: conversationEn })
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
 
   await runtime.root.declare(ROOT_CHILDREN, AppRoot)
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
@@ -155,7 +156,24 @@ function mountApp(runtime: SlotTestRuntime) {
   return runtime.renderRoot()
 }
 
-describe('run_code sub-calls through the real chat machinery', () => {
+describe('program sub-calls through the real chat machinery', () => {
+  it.each([false, true])('renders the CUA program and its nested calls while running=%s', async (running) => {
+    const parent = 'cua-program'
+    const program = "var app = await cua.getApp('Calculator')\nconsole.log(app)"
+    const argsRaw = JSON.stringify({ code: program, description: 'Select Calculator' })
+    const child = subCall(11, parent, 1, 'cua', { method: 'getApp', params: { selector: 'Calculator' } }, 'Calculator')
+    const b = await bench(snapshotWith(
+      running ? [] : [codeResult(10, parent, 'cua_run_code', argsRaw)], [child],
+      running ? [runningCode(parent, 'cua_run_code', argsRaw)] : [],
+    ))
+    const view = mountApp(b.runtime)
+    expect(view.getByText('Code')).toBeTruthy()
+    expect(view.getByText('Select Calculator')).toBeTruthy()
+    expect(view.container.querySelector('[data-subcalls] [data-tool="cua"]')).not.toBeNull()
+    fireEvent.click(view.getByText('Select Calculator'))
+    expect(view.container.querySelector('pre.shiki')?.textContent).toBe(program)
+  })
+
   it('renders the code-variant parent row with the description summary and nested sub-rows', async () => {
     const parent = 'call-64'
     const subCalls = [
@@ -244,7 +262,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     const view = mountApp(b.runtime)
     view.getByText('notes/demo.txt').click()
     await vi.waitFor(() => {
-      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1/notes/demo.txt')
+      expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s1//w/notes/demo.txt')
     })
     expect(b.openWorkspacePath).not.toHaveBeenCalled()
     view.getByText('List notes').click()

@@ -70,17 +70,17 @@ Members use standard `list_agents` to discover the tree and `send_message` to co
 
 ### Shared task board
 
-Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
+Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only while pending and when every dependency is complete. A rejected claim identifies a non-pending status or unfinished dependencies with `TEAM_TASK_BLOCKED`; ownership checks still run first.
 
 A member claims a task to start work, completes it, releases it, or reopens it. The root can reassign a task to itself or any reachable continuable descendant. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
-File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
+Pending and in-progress tasks report advisory warnings when their write scopes overlap another in-progress task. Completed and deleted tasks report no overlap warnings. Warnings never block operations. Deleted tasks stay in history but disappear from the active list.
 
 ### Waiting and interruption
 
 The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Task changes and Team mode changes do not end waits, add inbox input, or start idle Agents. Use `send_message` when an Agent needs to act on an update.
 
-An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
+When the [subagent control plugin](../../subagent/tool-subagent-control/README.md#use-this-package) enables `config.interrupt`, an ancestor can stop a descendant’s current turn with `interrupt_agent`. Built-in configurations disable this tool by default. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
 ### What success and failure look like
 
@@ -147,7 +147,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 ### Browser projection
 
-The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations with `TeamError` `TEAM_STATE_CORRUPT` without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
 The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels display the owner's full name, or its Session id when the owner has no name.
 

@@ -52,12 +52,13 @@ const useDetachedChat: ChatNodeViewProps['useChat'] = bindSnapshotSelector({
 interface MessageItemProps {
   readonly node: ConversationNode
   readonly t: ChatNodeViewProps['t']
+  readonly openCompaction?: React.ComponentProps<typeof CompactionNodeView>['openCompaction']
   readonly referenceLabels?: readonly string[]
   readonly skillNames?: readonly string[]
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate, referenceLabels, skillNames }: MessageItemProps) {
+function MessageItem({ node, t: translate, openCompaction, referenceLabels, skillNames }: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -93,7 +94,8 @@ function MessageItem({ node, t: translate, referenceLabels, skillNames }: Messag
     case 'context':
       return <ContextMessageNodeView {...props as ChatNodeViewProps<'context'>} />
     case 'compaction':
-      return <CompactionNodeView {...props as ChatNodeViewProps<'compaction'>} />
+      return <CompactionNodeView {...props as ChatNodeViewProps<'compaction'>}
+        openCompaction={openCompaction ?? vi.fn()} useCompactionPreview={select => select(openCompaction !== undefined)} />
     case 'model-retry':
       return <RetryNodeView {...props as ChatNodeViewProps<'model-retry'>} />
     case 'unknown':
@@ -227,11 +229,32 @@ describe('MessageItem arms', () => {
     expect(exec).toHaveBeenCalledWith('copy')
   })
 
+  it('user copy succeeds through execCommand when the host refuses the async write', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    const exec = vi.fn().mockReturnValue(true)
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec })
+    render(
+      <MessageItem t={t} node={{
+        kind: 'user', seq: 1, time: 1_000,
+        content: [{ type: 'text', text: 'refused body' }] as never,
+        source: null,
+      }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    expect(await screen.findByRole('button', { name: '复制成功' })).toBeTruthy()
+    expect(exec).toHaveBeenCalledWith('copy')
+  })
+
   it('user copy never claims success when the host rejects the write', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
     render(
       <MessageItem t={t} node={{
         kind: 'user', seq: 1, time: 1_000,
@@ -848,57 +871,47 @@ describe('MessageItem arms', () => {
     expect(unknownView.getByText(/未知 surface 事件：surface\/next/)).toBeTruthy()
   })
 
-  it('a compaction marker discloses its summary and never shows the framed checkpoint', () => {
+  it.each([
+    [{ status: 'running' }, 'running', t('message.compaction.running')],
+    [{ status: 'interrupted' }, 'error', t('message.taskStopped')],
+    [{ status: 'ended' }, 'ok', t('command.done')],
+    [{ status: 'ended', error: 'Failure\nDetails' }, 'error', 'Failure Details'],
+  ] as const)('renders automatic compaction progress %j', (progress, state, summary) => {
+    const node = { data: { kind: 'compaction-progress', ...progress } }
+    const view = render(<CompactionNodeView {...{ node, t } as ChatNodeViewProps<'compaction'>}
+      useCompactionPreview={select => select(false)} openCompaction={vi.fn()} />)
+    expect(view.container.querySelector(`[data-state="${state}"]`)).toBeTruthy()
+    expect(view.getByText(summary)).toBeTruthy()
+  })
+
+  it('a compaction marker opens its summary seq in the Sidebar and never shows the framed checkpoint', () => {
+    const openCompaction = vi.fn<(seq: number, signal: AbortSignal) => Promise<string | null>>(async () => null)
     const view = render(
-      <MessageItem t={t} node={{
-        kind: 'compaction', seq: 5, time: 1_000,
-        summary: '## 摘要标题\n\n保留的事实。',
-        summaryEventSeq: 4,
+      <MessageItem t={t} openCompaction={openCompaction} node={{
+        kind: 'compaction', seq: 5, summaryEventSeq: 4, time: 1_000,
         shadowedItemCount: 16,
         shadowedTokenCount: 11_309,
       }}
       />,
     )
-    const row = view.getByRole('button', { name: /上下文已压缩/ })
-    expect(row.getAttribute('aria-expanded')).toBe('false')
+    const row = view.getByRole('button', { name: /上下文已压缩.*在侧栏查看压缩摘要/ })
+    expect(row).toHaveProperty('disabled', false)
+    expect(row.getAttribute('aria-expanded')).toBeNull()
     expect(view.getByText('已压缩 16 条历史记录（约 11309 tokens）')).toBeTruthy()
-    expect(view.queryByText(/保留的事实/)).toBeNull()
     fireEvent.click(row)
-    expect(row.getAttribute('aria-expanded')).toBe('true')
-    expect(view.getByRole('heading', { name: '摘要标题' })).toBeTruthy()
-    fireEvent.click(row)
-    expect(row.getAttribute('aria-expanded')).toBe('false')
+    expect(openCompaction).toHaveBeenCalledExactlyOnceWith(4, expect.any(AbortSignal))
+    expect(view.container.querySelector('[class*="compactionBody"]')).toBeNull()
   })
 
-  it('anchors the sticky-header selector: the compaction body sits under compactionRow only while open', () => {
-    const view = render(
-      <MessageItem t={t} node={{
-        kind: 'compaction', seq: 5, time: 1_000,
-        summary: '## 摘要标题\n\n保留的事实。',
-        summaryEventSeq: 4,
-        shadowedItemCount: 16,
-        shadowedTokenCount: 11_309,
-      }}
-      />,
-    )
-    // Collapsed there is no body sibling, so the rule's `:has(.compactionBody)`
-    // gate never matches.
-    expect(view.container.querySelector('[class*="compactionRow"] [class*="compactionBody"]')).toBeNull()
-    fireEvent.click(view.getByRole('button', { name: /上下文已压缩/ }))
-    expect(view.container.querySelector('[class*="compactionRow"] [class*="compactionBody"]')).not.toBeNull()
-  })
-
-  it('a marker whose cited summary event fell outside the window is not expandable', () => {
+  it('a marker without a Sidebar opener is disabled and keeps neutral copy without counts', () => {
     const view = render(<MessageItem t={t} node={{
-      kind: 'compaction', seq: 6, time: 1_000, summary: null,
-      summaryEventSeq: null, shadowedItemCount: null, shadowedTokenCount: null,
+      kind: 'compaction', seq: 6, summaryEventSeq: 5, time: 1_000, shadowedItemCount: null, shadowedTokenCount: null,
     }} />)
     const row = view.getByRole('button', { name: /上下文已压缩/ })
     expect(row).toHaveProperty('disabled', true)
-    expect(row.getAttribute('aria-expanded')).toBeNull()
-    expect(view.getByText('压缩摘要不可用')).toBeTruthy()
-    fireEvent.click(row) // a disabled control stays collapsed
-    expect(row.getAttribute('aria-expanded')).toBeNull()
+    expect(view.getByText('较早的历史已压缩为摘要')).toBeTruthy()
+    expect(view.queryByText('在侧栏查看压缩摘要')).toBeNull()
+    fireEvent.click(row)
   })
 
   it('collapses retry details behind the durable model retry status', () => {

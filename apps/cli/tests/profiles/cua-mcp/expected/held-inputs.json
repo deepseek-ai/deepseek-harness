@@ -1,0 +1,12 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Input sequence finished.\n"
+    },
+    {
+      "type": "text",
+      "text": "<system-reminder>\nCUA inputs are still held:\n- Key \"shift\", appHandle \"fixture-app\" (application input).\n- Mouse left, appHandle \"fixture-app\", windowId \"7\" (window input).\n- Key \"w\", appHandle \"fixture-app\" (application input).\nThey remain pressed across programs and turns. To release them, call sendKeyEvent or toggleMouse on the same target with direction 'up' and the same input options as the down.\n</system-reminder>"
+    }
+  ]
+}

@@ -16,10 +16,12 @@ import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '..
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
+import { ChatAside } from './ChatAside.tsx'
 import { mergeTurnRailItems } from './turn-rail-items.ts'
 import { useTextInteraction } from './text-interaction.ts'
 import { useChatScroll } from './use-chat-scroll.ts'
 import { fileMediaUrl, resolveWorkspacePath, sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
+import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import css from './ChatView.module.css'
 
 /** Host/OS refusal text for the file-open dialog; empty throws keep a locale fallback. */
@@ -63,7 +65,7 @@ const MOTION_TAIL_MS = 800
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
-  loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
+  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
   usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
@@ -99,15 +101,17 @@ export function ChatView({
   const inbox = useProjection('inbox') as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
+  // The directory the Session works in now: a relative image target resolves from it, as a relative link does.
+  const directory = useSessions(s => selectSessionDirectory(s, sessionId))
   const fileImages = useMemo(() => ({
     fileDrag,
-    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(cwd, path)),
-    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(cwd, path)),
+    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(directory, path)),
+    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(directory, path)),
     labels: {
       open: t('image.open'), loading: t('image.loading'), failed: t('image.failed'),
       dialog: t('image.dialog'), close: t('image.close'),
     },
-  }), [cwd, t, fileDrag, sessionId])
+  }), [directory, t, fileDrag, sessionId])
   const codeLabels = useMemo(() => markdownLabels(t).code, [t])
   // Every fence in the flow dispatches by language; the content is the plain
   // code block, so a language without a layer renders as code without diff rows.
@@ -136,6 +140,8 @@ export function ChatView({
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
+  const historyLoadStatus = useSession(s => s.historyLoadStatus)
+  const historyWasPartial = useSession(s => s.historyWasPartial)
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   // Close/retry must ignore a settlement that started before the latest
@@ -211,8 +217,9 @@ export function ChatView({
   const steeringId = latestSteering?.source.kind === 'user' && 'rpcId' in latestSteering.source
     ? latestSteering.source.rpcId : latestSteering?.id ?? null
   const scroll = useChatScroll({
-    ready: openState === 'open',
-    order, firstSeq, lastKey, running, loadingOlder, hasMore, chatScroll, loadOlder, loadThrough, deferCompletedTurns,
+    isOpen: openState === 'open',
+    order, firstSeq, lastKey, running, loadingOlder, historyLoadStatus, hasMore, chatScroll,
+    loadOlder, consumeOlder, loadThrough, deferCompletedTurns,
     lastIsUser: lastKey !== null && nodeStore.get(lastKey)?.kind === 'user',
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
@@ -236,6 +243,7 @@ export function ChatView({
           t={t}
         />
       )}
+      <ChatAside renderSlot={renderSlot} />
       <div className={css.root} data-chat-following-tail={scroll.followingTail ? '' : undefined}>
         <div ref={scroll.listRef} className={css.scroll}>
           <div ref={scroll.columnRef} className={css.column} data-chat-flow=""
@@ -247,10 +255,24 @@ export function ChatView({
                 {t('chat.loadError', { message: openError.message, code: openError.code })}
               </div>
             )}
-            {hasMore && (
-              <div className={css.older}>
-                <button type="button" disabled={loadingOlder} onClick={scroll.loadEarlier}>
-                  {loadingOlder ? t('loading') : t('chat.loadOlder')}
+            {(hasMore || historyWasPartial) && (
+              <div className={css.older} ref={scroll.historyEdgeRef} data-chat-history={historyLoadStatus}>
+                <button type="button" disabled={!hasMore}
+                  onClick={scroll.loadEarlier}>
+                  {([
+                    ['more', t('chat.loadOlder')],
+                    ['loading', t('chat.loadingOlder')],
+                    ['processing', t('chat.processingOlder')],
+                    ['error', t('chat.retryOlder')],
+                    ['start', t('chat.historyStart')],
+                  ] as const).map(([state, label]) => {
+                    const current = !hasMore ? 'start' : loadingOlder ? 'loading'
+                      : historyLoadStatus === 'error' ? 'error'
+                        : scroll.historyInputHeld ? 'more'
+                          : scroll.historyProcessing ? 'processing' : 'more'
+                    return <span key={state} aria-hidden={state !== current}
+                      className={state === current ? undefined : css.historyHidden}>{label}</span>
+                  })}
                 </button>
               </div>
             )}
@@ -289,7 +311,7 @@ export function ChatView({
             aria-label={t('chat.toBottom')}
             onClick={scroll.returnToBottom}
           >
-            <IconChevronDownOutlineRegular />
+            <IconChevronDownOutlineRegular size={16} />
           </button>
         </div>
       )}

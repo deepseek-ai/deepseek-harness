@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": {{workspace}}
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -35,6 +36,7 @@
   - button "Jump to turn 26"
   - button "Jump to turn 27"
   - button "Jump to turn 28"
+- button "Start of conversation" [disabled]
 - text: m1 7/25 {{clock}}
 - button "Copy"
 - status: Completed

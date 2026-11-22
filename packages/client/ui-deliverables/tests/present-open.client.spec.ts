@@ -1,11 +1,12 @@
 /** Delivery gestures share pending state, report their settled outcome, and cancel with the plugin. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { PresentedOpenController } from '../src/client/present-open.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
-const id = SessionId('fork')
+const id = brandString<SessionId>('fork')
 const url = 'api/present.open?sessionId=fork&seq=2&index=1'
 
 it('coalesces concurrent card and mention gestures, then allows another open', async () => {

@@ -4,9 +4,10 @@ import { expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { bindScopeParent, createScope, type Scope, type ScopeKey } from '@deepseek-ai/dsh-scope'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { AssembleContext, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
@@ -16,7 +17,7 @@ import AgentLoop from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
 /** An independent execution implementation: no PTC executor inheritance or delegation. */
-function independent(ctx: Context, name: string, trace: string[]): ToolExecutor {
+function independent(ctx: Context, name: string, trace: string[], sectionPrefix = 'tools'): ToolExecutor {
   const transport = defineTool({
     name, description: `Execute through ${name}.`, parameters: {},
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
@@ -28,8 +29,8 @@ function independent(ctx: Context, name: string, trace: string[]): ToolExecutor 
   })
   const executor: ToolExecutor = {
     sections: [
-      { name: 'tools:transport', order: 800, text: `Call ${name}.`, interpolate: false },
-      { name: 'tools:sdk', order: 5000, text: tools => tools.map(tool => tool.name).join(', '), interpolate: false },
+      { name: `${sectionPrefix}:transport`, order: 800, text: `Call ${name}.`, interpolate: false },
+      { name: `${sectionPrefix}:sdk`, order: 5000, text: tools => tools.map(tool => tool.name).join(', '), interpolate: false },
     ],
     describe: () => ({ schemas: [transport], knownNames: [name] }),
     async execute(input) {
@@ -110,9 +111,9 @@ it('shares the registry and selects an independent executor through the preset s
   const presetKey = { preset: 'sdk' }
   const preset = await scoped(ctx, presetKey)
   preset.ctx.tools.setExecutor(independent(preset.ctx, 'sdk_eval', trace))
-  const sdk = await ctx.agentLoop.create(SessionId('sdk'), { provider: 'mock', model: 'mock' })
+  const sdk = await ctx.agentLoop.create(brandString<SessionId>('sdk'), { provider: 'mock', model: 'mock' })
   bindScopeParent(sdk, presetKey)
-  const native = await ctx.agentLoop.create(SessionId('native'), { provider: 'mock', model: 'mock' })
+  const native = await ctx.agentLoop.create(brandString<SessionId>('native'), { provider: 'mock', model: 'mock' })
   expect(ctx.tools).toBeInstanceOf(ToolsService)
   expect('registerExecutor' in ctx.tools).toBe(false)
   expect(sdk.ctx.tools.get('echo', sdk)).toBe(ctx.tools.get('echo'))
@@ -141,10 +142,10 @@ it('dispatches through the current Agent scope after prompt listeners rebuild th
   const presetKey = { preset: 'first' }
   const preset = await scoped(ctx, presetKey)
   preset.ctx.tools.setExecutor(independent(preset.ctx, 'first_eval', trace))
-  const agent = await ctx.agentLoop.create(SessionId('changing'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('changing'), { provider: 'mock', model: 'mock' })
   bindScopeParent(agent, presetKey)
   const selectNearer = () => {
-    const nearer = independent(agent.ctx, 'first_eval', trace)
+    const nearer = independent(agent.ctx, 'first_eval', trace, 'nearer-tools')
     const execute = nearer.execute.bind(nearer)
     nearer.execute = (input) => { trace.push('nearer'); return execute(input) }
     agent.ctx.tools.setExecutor(nearer)
@@ -160,7 +161,7 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   const ctx = await setup()
   const key = { preset: 'temporary' }
   const scope = await scoped(ctx, key)
-  const agent = await ctx.agentLoop.create(SessionId('temporary'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('temporary'), { provider: 'mock', model: 'mock' })
   bindScopeParent(agent, key)
   const provider = independent(scope.ctx, 'old_eval', trace)
   const entered = Promise.withResolvers<undefined>()
@@ -170,7 +171,7 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   provider.execute = async (input) => { entered.resolve(undefined); await release.promise; return execute(input) }
   const dispose = scope.ctx.tools.setExecutor(provider)
   const input = {
-    calls: [{ type: 'tool-call', name: 'old_eval', id: ToolCallId('accepted'), arguments: '{}' }],
+    calls: [{ type: 'tool-call', name: 'old_eval', id: brandString<ToolCallId>('accepted'), arguments: '{}' }],
     signal: new AbortController().signal,
     agent,
   } satisfies ToolBatchInput
@@ -185,7 +186,7 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   expect(result.results[0]?.result).toMatchObject({ isError: false, value: 'old_eval:shared' })
   const replacement = await ctx.tools.execute({
     ...input,
-    calls: [{ type: 'tool-call', name: 'replacement_eval', id: ToolCallId('replacement'), arguments: '{}' }],
+    calls: [{ type: 'tool-call', name: 'replacement_eval', id: brandString<ToolCallId>('replacement'), arguments: '{}' }],
   })
   expect(replacement.results[0]?.result).toMatchObject({ isError: false, value: 'replacement_eval:shared' })
   expect(trace).toEqual(['old_eval:execute', 'replacement_eval:execute'])
@@ -207,25 +208,23 @@ it('refreshes executor projections without emitting tool registry changes', asyn
   expect(registryChanges).toBe(0)
 })
 
-it.each([
-  ['occupied', 1, 'already registered'],
-  ['invalid-order', Number.NaN, 'order must be a finite number'],
-] as const)('rolls back executor section registrations when %s is rejected', async (name, order, message) => {
+it('rolls back executor section registrations when a later section has an invalid order', async () => {
   const ctx = await setup()
-  const key = { preset: name }
+  const key = { preset: 'invalid-order' }
   const scope = await scoped(ctx, key)
   scope.ctx.systemPrompt.section({ name: 'occupied', order: 1, text: 'Existing guidance.' })
   const executor: ToolExecutor = {
     ...independent(scope.ctx, 'rejected_eval', []),
     sections: [
       { name: 'transient', order: 0, text: 'Must be rolled back.' },
-      { name, order, text: 'Invalid contribution.' },
+      { name: 'occupied', order: Number.NaN, text: 'Invalid contribution.' },
     ],
   }
-  expect(() => scope.ctx.tools.setExecutor(executor)).toThrow(message)
+  expect(() => scope.ctx.tools.setExecutor(executor)).toThrow('order must be a finite number')
   const assembly = await ctx.systemPrompt.assemble({ scope: key })
   expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
   expect(assembly.sections.map(section => section.name)).not.toContain('transient')
+  expect(assembly.sections.find(section => section.name === 'occupied')?.text).toBe('Existing guidance.')
 })
 
 it('assembles independent tools and section text for overlapping prompt assemblies', async () => {
@@ -259,14 +258,15 @@ it('assembles independent tools and section text for overlapping prompt assembli
   expect(first.tools.map(tool => tool.name)).toEqual(['echo'])
   expect(first).not.toHaveProperty('toolExecutor')
   expect(second.tools.map(tool => tool.name)).toEqual(['next_eval'])
-  expect(second.sections).toContainEqual({ name: 'tools:transport', text: 'Call next_eval.', interpolate: false })
-  expect(second.sections).toContainEqual({ name: 'tools:sdk', text: 'echo', interpolate: false })
+  expect(second.sections).toContainEqual({ name: 'tools:transport', order: 800, text: 'Call next_eval.', interpolate: false })
+  expect(second.sections).toContainEqual({ name: 'tools:sdk', order: 5000, text: 'echo', interpolate: false })
   expect(projections).toBe(1)
 })
 
 it('keeps the foundation usable for registration and requires an explicit executor for calls', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   ctx.tools.register(defineTool({
@@ -277,7 +277,7 @@ it('keeps the foundation usable for registration and requires an explicit execut
   expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['echo'])
   await expect(ctx.systemPrompt.assemble()).rejects.toThrow('selected tool executor is unavailable')
   await expect(ctx.tools.execute({
-    calls: [{ type: 'tool-call', name: 'echo', id: ToolCallId('unconfigured'), arguments: '{}' }], signal: new AbortController().signal,
+    calls: [{ type: 'tool-call', name: 'echo', id: brandString<ToolCallId>('unconfigured'), arguments: '{}' }], signal: new AbortController().signal,
   })).rejects.toThrow('selected tool executor is unavailable')
 })
 
@@ -285,13 +285,13 @@ it.each([undefined, 1, 6])('hands the executor raw calls and the resolved loop l
   const raw = ['{ "value": 1 }', '[2, 3]']
   const adapter = new MockAdapter([[
     { type: 'block-start', index: 0, blockType: 'tool-call' },
-    { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('one'), name: 'custom', arguments: raw[0]! } },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('one'), name: 'custom', arguments: raw[0]! } },
     { type: 'block-start', index: 1, blockType: 'tool-call' },
-    { type: 'block-end', index: 1, block: { type: 'tool-call', id: ToolCallId('two'), name: 'custom', arguments: raw[1]! } },
+    { type: 'block-end', index: 1, block: { type: 'tool-call', id: brandString<ToolCallId>('two'), name: 'custom', arguments: raw[1]! } },
     { type: 'finish', reason: { kind: 'tool-calls' } },
   ], textResponse('done')])
   const ctx = await setup(adapter, maxParallelToolCalls)
-  const agent = await ctx.agentLoop.create(SessionId('raw-batch'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('raw-batch'), { provider: 'mock', model: 'mock' })
   const executor = independent(agent.ctx, 'custom', [])
   const batches: ToolBatchInput[] = []
   const execute = executor.execute.bind(executor)
@@ -309,10 +309,10 @@ it.each([undefined, 1, 6])('hands the executor raw calls and the resolved loop l
 
 it('keeps Agent scope without a model step and logs raw calls only with a logging step', async () => {
   const ctx = await setup()
-  const agent = await ctx.agentLoop.create(SessionId('batch-scope'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('batch-scope'), { provider: 'mock', model: 'mock' })
   agent.ctx.tools.restrict({ deny: ['echo'] })
   const input = {
-    calls: [{ type: 'tool-call', id: ToolCallId('scoped'), name: 'echo', arguments: '{ }' }],
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('scoped'), name: 'echo', arguments: '{ }' }],
     signal: new AbortController().signal,
   } satisfies ToolBatchInput
   const scoped = await ctx.tools.execute({ ...input, agent })

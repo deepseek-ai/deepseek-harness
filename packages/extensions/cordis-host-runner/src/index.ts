@@ -5,9 +5,11 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -43,8 +45,10 @@ export type {
   DynamicCordisPackageInspection, DynamicCordisPlugin, DynamicCordisPluginInspection,
   DynamicCordisReference, DynamicCordisRun,
 } from './registry.ts'
-export { CordisInspectRegistryService } from './inspect-registry.ts'
-export type { HostCordisInspectProviderRegistration } from './inspect-registry.ts'
+export { CordisInspectRegistryService, InspectError } from './inspect-registry.ts'
+export type { HostCordisInspectProviderRegistration, InspectErrorCode } from './inspect-registry.ts'
+export { PluginToolError } from './guard.ts'
+export type { PluginToolErrorCode } from './guard.ts'
 
 /**
  * Brand a Host-minted Plugin ID.
@@ -183,7 +187,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
       if (!/^[a-z]{3,6}$/.test(prefix)) {
         throw new Error('cordis_define `plugin.idPrefix` must contain 3–6 lowercase English letters')
       }
-      const pluginId = brandCordisDynamicPluginId(this.registry.mintPluginId(prefix))
+      const pluginId = brandString<CordisDynamicPluginId>(this.registry.mintPluginId(prefix))
       plugin = {
         pluginId,
         sessionId: request.sessionId,
@@ -200,7 +204,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
       plugin = found
     }
 
-    const packageId = brandCordisDynamicPackageId(this.registry.mintPackageId())
+    const packageId = brandString<CordisDynamicPackageId>(this.registry.mintPackageId())
     const definition: DynamicCordisDefinition = {
       packageId,
       name,
@@ -292,7 +296,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
       return { ...started, reason: 'host-half-failed' }
     }
 
-    const requestId = brandApprovalRequestId(this.registry.mintApprovalRequestId())
+    const requestId = brandString<ApprovalRequestId>(this.registry.mintApprovalRequestId())
     const requiresApproval = !plan.plugin.clientVersionUpdatesApproved
       && !plan.plugin.approvedClientPackages.has(packageId)
     attempt.approvalRequestId = requestId
@@ -520,19 +524,19 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
 
   /**
    * Submit a Client inspect result or failure for a pending query.
-   * @param agent - Session that owns the query.
+   * @param agentId - Session identity that owns the pending query; answering does not resolve or resume an Agent.
    * @param requestId - exact pending query identity.
    * @param resolution - provider result or structured refusal.
    * @returns acknowledgement with accepted true only for a valid success that settles the query;
    * pending-query failures return { accepted: false } and retain only the first diagnostic.
    */
-  @Remote('resolveInspectQuery')
+  @Remote({ name: 'resolveInspectQuery', resources: { session: agentId => agentId } })
   resolveInspectQuery(
-    agent: Agent,
+    agentId: SessionId,
     requestId: CordisInspectRequestId,
     resolution: CordisInspectQueryResolution,
   ): CordisInspectResolveAck {
-    return this.inspectRegistry.resolveClientQuery(agent, requestId, resolution)
+    return this.inspectRegistry.resolveClientQuery(agentId, requestId, resolution)
   }
 
   /**
@@ -1189,7 +1193,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
 
   private createAttempt(plan: ActivationPlan): DynamicCordisRunAttempt {
     return {
-      pluginRunId: brandCordisDynamicPluginRunId(this.registry.mintPluginRunId()),
+      pluginRunId: brandString<CordisDynamicPluginRunId>(this.registry.mintPluginRunId()),
       packageId: plan.definition.packageId,
       mode: plan.mode,
       status: 'starting-host',

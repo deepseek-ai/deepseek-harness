@@ -55,13 +55,18 @@ try {
 
 `await harness.resumeSession(savedId)` 从配置的 `dshHome` 恢复持久化会话，并返回可调用 `run()` 的 `HarnessSession`。请保存原会话 id，并沿用其 home 和工作区。恢复会保留对话历史及其目录、修复最后一个被中断的轮次，且不发送新输入。会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。`session(id)` 仍是当前进程内会话的惰性句柄，不会请求持久化恢复。此 API 不恢复 shell、浏览器或其他外部进程。
 
-`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
+第二个参数传入 `{ permissionMode: "danger-full-access" }` 可在恢复后的执行开始前覆盖已保存的权限预设；省略时保留历史权限。profile 必须通过权限服务提供该预设；选择会同时更新 sandbox 和审批策略，并持久化供后续恢复使用。缺少该服务的 profile 和已被提醒任务恢复的会话会拒绝显式覆盖。
+
+`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据与已有进程保持不变；`workspace-write` 边界移到新目录。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
 
 ### 用 DeepSeekHarness 运行 agent 轮次
 
+下面的示例在运行时导入 `brandString`。请在应用中直接声明 `@deepseek-ai/dsh-brand` 依赖，不要依赖 SDK 的传递依赖；仅测试使用时可以放入开发依赖。
+
 ```ts
 import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 
 await using harness = new DeepSeekHarness({
   profile: 'sdk',
@@ -69,7 +74,7 @@ await using harness = new DeepSeekHarness({
   patches: ['./automation.cordis.yml'],
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
-  reasoningEffort: ReasoningEffortId('max'),
+  reasoningEffort: brandString<ReasoningEffortId>('max'),
   maxTokens: 49_152,
 })
 const result = await harness.run('say hi')
@@ -96,6 +101,8 @@ console.log(result.finalResponse)
 字符串和内容块输入始终返回 `RunResult`，包含 `sessionId`、`finalResponse`、`finishReason`、根会话事件和会话树通知。仅改变状态的命令返回原生结果文本；提交模型工作的命令等待对应活动并返回最终助手文本，未输出助手文本时返回空字符串。原生拒绝通过 `finishReason === "error"` 表达，路由、协议、传输和观察回调失败会拒绝 Promise。命令 id 和原生结果保留在 `command/run`、`command/done` 事件中。完成通知缺少匹配的命令生命周期事件时抛出 `SdkProtocolError`，不会返回不完整的结果。需要按原文排队时，使用底层 `client.prompt(sessionId, blocks)` 并管理后续活动；运行时技能识别仍然适用。
 
 每次调用在发送前建立订阅，并在结束前释放。`onNotification` 按传输顺序接收本次输入的会话树活动；区间可以包含其他重叠工作。内部完成回执由 SDK 消费。并发调用保留各自结果，因此模型运行期间仍能取得另一条命令的忙碌错误。超时或观察回调失败不回滚运行时工作，也不授权自动重试。
+
+在 `run()` 选项中以 `timeZone` 传入用户时区，或调用 `client.prompt(sessionId, blocks, { timeZone })`，例如 `session.run('When is noon tomorrow?', { timeZone: 'Asia/Shanghai' })`。取值为 `UTC` 或 IANA Area/Location 名称；其他取值会在执行输入前被运行时以 `JsonRpcResponseError` 拒绝。不传时，运行时为每条 prompt 采样自身进程时区。原生命令不记录时区。记录的来源见 [SDK server](../server/README.zh.md#command-input)。
 
 启动选项提供初始值。权限命令只修改目标 Session；后续输入与恢复保留该状态，其他 Session 保留自己的状态，新 Session 使用配置默认值。命令不修改选项对象或已保存的用户默认值。运行中的审批策略变化可以注入通知并触发下一步骤。原生转换与恢复行为见[权限 preset](../../interaction/permission-presets/README.zh.md)。
 

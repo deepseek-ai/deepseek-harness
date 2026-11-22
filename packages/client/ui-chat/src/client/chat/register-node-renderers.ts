@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { compactionRows } from './compaction-preview.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
@@ -7,7 +8,7 @@ import { AssistantNodeView, type AssistantNodeInjected } from './AssistantNodeVi
 import { sessionFilePath } from '../file-path.ts'
 import { CommandNodeView, ManualCompactionNodeView } from './CommandNodeView.tsx'
 import {
-  CompactionNodeView, ContextMessageNodeView, RetryNodeView, TurnErrorNodeView,
+  CompactionNodeView, ContextMessageNodeView, InheritedHistoryNodeView, RetryNodeView, TurnErrorNodeView,
   TurnMaxTokensNodeView, UnknownNodeView, UserMessageNodeView,
 } from './MessageItem.tsx'
 import { DefaultReasoningBody, ReasoningContent } from './ReasoningContent.tsx'
@@ -29,6 +30,7 @@ export function registerChatNodeRenderers(
   performanceUsage: ObservableSnapshot<PerformanceUsageMode>,
   presentation: ObservableSnapshot<ChatPresentationPolicy>,
 ): void {
+  const injectCompaction = compactionRows(ctx)
   ctx.effect(() => ctx.slots.registerFactory({
     name: 'conversation.chat.reasoning.content',
     scope: 'root',
@@ -74,9 +76,11 @@ export function registerChatNodeRenderers(
     children: { 'conversation.chat.commandview': { kind: 'keyed', scope: 'session' } },
   }, CommandNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'manual-compaction', locale: NS }, ManualCompactionNodeView))
+    { name: 'conversation.chat.node', key: 'manual-compaction', locale: NS, inject: injectCompaction }, ManualCompactionNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'compaction', locale: NS }, CompactionNodeView))
+    { name: 'conversation.chat.node', key: 'compaction', locale: NS, inject: injectCompaction }, CompactionNodeView))
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
+    { name: 'conversation.chat.node', key: 'inherited-history', locale: NS }, InheritedHistoryNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'model-retry', locale: NS }, RetryNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(

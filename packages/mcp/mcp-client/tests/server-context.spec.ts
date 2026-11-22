@@ -1,10 +1,12 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { registerServerContext } from '../src/server-context.ts'
@@ -15,6 +17,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map(ctx => ctx.fiber.d
 async function setup() {
   const ctx = new Context()
   roots.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -39,7 +42,7 @@ describe('MCP server context', () => {
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('MCP server: docs')
     const result = await executeToolFixture(ctx, {
       name: 'list_mcp_resources', arguments: { server: 'docs' },
-      callId: ToolCallId('disposed-resource'), signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('disposed-resource'), signal: new AbortController().signal,
     })
     expect(result.isError).toBe(true)
   })

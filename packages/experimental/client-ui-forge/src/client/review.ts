@@ -1,7 +1,8 @@
 /** Frozen line selections shared by the diff UI, composer references, and review submission. */
 
 import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ForgeDiffFile } from '../types.ts'
+import type { ForgeCommitRange, ForgeDiffFile } from '../types.ts'
+import type { ForgePanelKey } from './locales.ts'
 
 /** A comment on consecutive lines of one side of one displayed hunk. */
 export interface ReviewComment {
@@ -19,14 +20,24 @@ export interface ReviewComment {
   readonly body: string
 }
 
-/** The immutable source from which a comment was selected. */
+/**
+ * The immutable source from which a comment was selected. `commits` names the consecutive commits shown instead of
+ * the whole change request or `branch` scope, or is null for all of them.
+ */
 export type ReviewSource =
   /**
    * Local changes in a scope. `base` names what the `branch` scope compared with for the reader, and is null for
    * other scopes; `baseRef` identifies the comparison: the chosen ref, or null for the automatic fork point and other scopes.
    */
-  | { readonly kind: 'local'; readonly scope: string; readonly base: string | null; readonly baseRef: string | null }
-  | { readonly kind: 'change'; readonly url: string; readonly headSha: string }
+  | {
+    readonly kind: 'local'
+    readonly scope: string
+    readonly base: string | null
+    readonly baseRef: string | null
+    readonly commits: ForgeCommitRange | null
+  }
+  /** A change request; `headSha` is the commit the shown changes end at: the head, or the last chosen commit. */
+  | { readonly kind: 'change'; readonly url: string; readonly headSha: string; readonly commits: ForgeCommitRange | null }
 
 /** One selected range and the source the user saw. */
 export interface ReviewSelection {
@@ -89,8 +100,10 @@ export function formatReviewComment(selection: ReviewSelection, index: number): 
   const range = comment.startLine === comment.endLine ? String(comment.startLine) : `${comment.startLine}-${comment.endLine}`
   // A longer fence keeps code containing Markdown fences inside the quoted hunk.
   const fence = '`'.repeat(Math.max(3, ...Array.from(comment.hunk.matchAll(/`+/g), match => match[0].length + 1)))
-  const origin = source.kind === 'change' ? `Source: ${source.url}\nCommit: ${source.headSha}`
-    : `Source: Local (${source.scope})${source.base === null ? '' : `\nBase: ${source.base}`}`
+  const commits = source.commits === null ? ''
+    : `\nCommits: ${source.commits.from === source.commits.to ? source.commits.from : `${source.commits.from}^..${source.commits.to}`}`
+  const origin = source.kind === 'change' ? `Source: ${source.url}\nCommit: ${source.headSha}${commits}`
+    : `Source: Local (${source.scope})${source.base === null ? '' : `\nBase: ${source.base}`}${commits}`
   return `## User Comment ${index}\nFile: ${comment.path}\nSide: ${comment.side}\nLines: ${range}\n${origin}\nDiff hunk:\n${fence}diff\n${comment.hunk}\n${fence}\nComment:\n${comment.body}`
 }
 
@@ -105,4 +118,30 @@ export function reviewMatches(selection: ReviewSelection, source: ReviewSource, 
   if (selection.source.kind === 'change' && (source.kind !== 'change' || source.headSha !== selection.source.headSha)) return false
   const comment = selection.comment
   return selectReviewLines(file, comment.side, comment.startLine, comment.endLine)?.hunk === comment.hunk
+}
+
+/** Copy of the quote actions: the button, the tag of a quoted comment, and the failure, which the review page renames. */
+export interface QuoteCopy {
+  /** Text of the button that quotes a comment or thread. */
+  readonly add: ForgePanelKey
+  /** Tag of a comment that was quoted. */
+  readonly added: ForgePanelKey
+  /** Message when the quote was refused. */
+  readonly failed: ForgePanelKey
+}
+
+/** The quote copy of the right-sidebar changes tab, which quotes into the Session's input. */
+export const INPUT_QUOTE_COPY: QuoteCopy = { add: 'review.addToInput', added: 'review.quoted', failed: 'review.inputFailed' }
+
+/**
+ * Run a quote action and report its outcome once it settles; a rejected quote counts as refused.
+ * @param result - whether the quote was accepted, now or once it settles.
+ * @param done - receives the outcome.
+ */
+export function settleQuote(result: boolean | Promise<boolean>, done: (accepted: boolean) => void): void {
+  if (typeof result === 'boolean') {
+    done(result)
+    return
+  }
+  void result.then(done, () => { done(false) })
 }

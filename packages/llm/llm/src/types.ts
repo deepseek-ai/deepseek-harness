@@ -432,10 +432,10 @@ export interface LlmModelReasoningInfo {
 }
 
 /**
- * How a model applies a system prompt that changes mid-conversation.
- * `'in-history'`: the model reads the latest `system` message at any position
- * of `messages` as the complete effective system prompt, so a changed prompt
- * can follow the cached history instead of rewriting message 0.
+ * Whether a model accepts native system updates within conversation history.
+ * `'in-history'` preserves later system messages as additions or explicit
+ * supersession notices. Without it, the adapter uses its supported prompt or
+ * reminder format. This capability does not select system-section admission.
  */
 export type SystemPromptUpdate = 'in-history'
 
@@ -604,3 +604,5 @@ export interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {
    */
   purpose?: Purpose
 }
+
+export type { MessageId, ToolCallId, ProviderRequestId, LlmAttemptId, ReasoningEffortId } from './brand.ts'

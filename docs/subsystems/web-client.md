@@ -25,6 +25,8 @@ The Host writes the composed `WebBootGraph` to `window.__DSH_BOOT__` and install
 
 The Web boot kernel creates the module system, prefetches `immediately` entries, mounts the vendored Cordis Loader, and creates every graph entry. Cordis service injection determines activation; module graph order determines only whether synchronous imports can be materialized. After the complete roster reaches a settled state and the boot audit accepts it (an inactive entry on the browser required list rejects startup; other inactive entries produce one console warning), `ui-renderer` hydrates the framework-free boot DOM and calls the sole context-level `renderSlot('root')` operation. [Client Modules](client-modules.md) owns the graph, bundle route, cache revision, and loader details.
 
+Module construction binds the startup carrier's existing script loader as its Main environment; optional Realm providers do not add a startup phase. Modules retains optional metadata producers and emits module-record changes; [UI Renderer](../../packages/client/ui-renderer/README.md) evaluates stylesheet descriptors and owns their main-document installation. This resource lifecycle is module-level, not a Slot or component mount protocol.
+
 ## Remote communication
 
 Host business services annotate callable methods with Typert Remote decorators. Host generation emits strict descriptors, runtime codecs, declaration merges, and source maps. The Client-side `api-remotes` assembly selects those generated contributions and mounts concrete methods under `ctx.remote.<namespace>` and Session-scoped `agentCtx.remote.<namespace>`. Feature packages depend on the generated service face, not the Gateway implementation or a Host package's runtime entry.
@@ -57,7 +59,7 @@ This pairing is not a second source of business truth. Host controllers decide d
 
 Web and desktop share the [Coding Tools preference](../../packages/client/ui-settings/README.md#use-this-package). It controls diagnostic Views, [available preset choices](../../packages/client/ui-agent-preset/README.md), changed-file cards, and the builtin HTML preview policy without changing Session records.
 
-`ui-session` installs the Session scope adapter and publishes `useSessions`, `useSessionStatus`, `useSessionRetainInfo`, `useSessionAccess`, `useSession`, `sessionId`, `useProjection`, and the Session-scope `useAccess` over the [remote-access](../../packages/api/remote-access/README.md) Client service. `SessionProvider` inherits an outer binding or binds an explicit `SessionReference`, so concurrent subtrees can target different Sessions. Domain adapters add further standard sources without putting React hooks on the model objects.
+`ui-session` installs the Session scope adapter and publishes `useSessions`, `useSessionRetainInfo`, `useSessionAccess`, `useSession`, `sessionId`, `useProjection`, and the Session-scope `useAccess` over the [remote-access](../../packages/api/remote-access/README.md) Client service. `SessionProvider` inherits an outer binding or binds an explicit `SessionReference`, so concurrent subtrees can target different Sessions. [`ui-session-status`](../../packages/client/ui-session-status/README.md) publishes `useSessionStatus` from the `ctx.uiSession.sessionStatus` table of running state, the effective pending interaction, and reading reminders that its Host face keeps for every Client of one Host. Domain adapters add further standard sources without putting React hooks on the model objects.
 
 `ui-conversation` binds once to each `SessionBinding.eventSource`. Its event registry correlates durable Session events and Client-only `assistant/live-chunk` updates into stable business Contexts, and its view registry materializes target snapshots. Chat Assistant, Trajectory Assistant, and Turn Tail interpret both live chunks and the compact streams embedded in durable settlements, so reconnect and paged history reproduce the same Assistant state without durable token rows. `ui-chat` and `ui-trajectory` register separate Definitions and builders: they may interpret the same event family, but they do not import or share each other's final display model. The shell selects a registered view and passes its snapshot through standard hooks and Slots. [Conversation](conversation.md) defines Context identity, replay, Location data, target builders, and keyed renderers.
 
@@ -86,11 +88,29 @@ Recovery follows the data's semantics:
 
 There is no monolithic Client `Runtime`, `HostFrame`, `events.mux`, `events.host`, or universal `resync()` API. The Connection exposes generation state, Gateway owns logical stream supervision, and each Client model defines replacement or resume semantics appropriate to its data.
 
+## Reading reminders
+
+[Session status](../../packages/client/ui-session-status/README.md) holds read acknowledgements and explicit unread marks in Host memory, outside the conversation log. Its Host Remote service sends complete reconnect baselines and committed changes; its Client plugin folds them into the `ctx.uiSession.sessionStatus` status table and acknowledges loaded completions in the visible, focused main view. Reading state does not change model history.
+
+### SessionReadState
+
+A whole reading record names its `sessionId`, latest `completedTurn`, whether that turn `failed` with an execution error this Host observed, acknowledged `readTurn`, and `manualUnread` flag. A Session is unread when the flag is set or its latest ended turn exceeds the acknowledged turn.
+
+`mark(sessionId, action)` updates one Session in Host processing order. Only the ordered subscription updates Client records. The service records `turn/end` events itself, including whether that turn failed.
+
+### SessionReadAction
+
+An `unread` action sets the manual flag. A `read` action clears it and advances the read position through its `throughTurn`; an `acknowledge` action advances that position without changing the flag. Positions never move backwards or beyond the Host's latest completed turn. Mutation replies report success or failure without echoing a record.
+
+### SessionReadFrame
+
+A follow generation starts with `type: 'baseline'` and every accessible record in `items`. Each later `type: 'changed'` carries one complete committed `state`. Reconnection replaces the previous generation's records.
+
 ## Package boundaries
 
 Feature plugin packages may share declarations through `import type`; they do not runtime-import or re-export another feature plugin's values. Cross-package behavior uses injected Cordis services, and cross-package UI uses Slots. Target-specific Conversation Definitions, projection helpers, and final view data stay with their target package even when Chat and Trajectory intentionally implement parallel logic.
 
-Shared runtime values need a narrow static owner with no feature lifecycle, such as `client/store`, `ui-primitives`, or a browser-safe utility package. Transport and generated API assembly may import runtime contributions because assembling one protocol is their explicit responsibility. A feature package does not add `dsh.client.external` merely to bypass this rule.
+Shared runtime values need a narrow static owner with no feature lifecycle, such as `client/store`, `ui-primitives`, or a browser-safe utility package. Transport and generated API assembly may import runtime contributions because assembling one protocol is their explicit responsibility. A feature package may request the runtime values of a row under `packages/api/` through `dsh.client.external`, but never another feature plugin's row.
 
 Use the four detailed references according to the extension being added:
 
@@ -98,3 +118,40 @@ Use the four detailed references according to the extension being added:
 - [API Gateway](../api-gateway.md) for Host methods, generated Remote contributions, streams, and forwarded events.
 - [Web Client Slots](slots.md) for components, hooks, stores, injection, and placement.
 - [Conversation](conversation.md) for durable event correlation, target snapshots, and Chat or Trajectory view contributions.
+
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxsessionstatus--sessionstatusservice"></a>
+
+### `ctx.sessionStatus` — `SessionStatusService`
+
+Shared owner reading records; no reading operation changes model history.
+
+```ts cordis-catalog
+/**
+ * Update one Session; read positions advance only through Client-observed completions.
+ * @param sessionId - Session identity.
+ * @param action - Explicit reminder change or automatic read-position acknowledgement.
+ * @throws RemoteError when closing, the Session is missing, or its metadata cannot be read.
+ */
+@Remote async mark(sessionId: SessionId, action: SessionReadAction): Promise<void>
+
+/**
+ * Follow accessible reading records; every connection starts with a complete baseline.
+ * @param signal - generation cancellation.
+ * @returns the baseline and whole-record changes, filtered by Session access.
+ * @throws RemoteError when the service is closing.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<SessionReadFrame>
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/client/ui-session-status/src/index.ts`](../../packages/client/ui-session-status/src/index.ts)
+<!-- END GENERATED cordis-surface -->

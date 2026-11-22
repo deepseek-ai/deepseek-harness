@@ -74,7 +74,7 @@ describe('Windows token signing', () => {
         } else {
           expect(options.env.DSH_DESKTOP_WINDOWS_TOKEN_PIN).toBeUndefined()
           expect(options.env.DSH_DESKTOP_WINDOWS_KEY_CONTAINER).toBeUndefined()
-          if (command === 'powershell.exe') {
+          if (command === 'pwsh') {
             const timestamped = readFileSync(options.env.DSH_RUNTIME_VERIFY_FILE!, 'utf8').endsWith(':timestamp')
             if (!timestamped) expect(existsSync(join(stateDirectory, 'attempt.json'))).toBe(true)
             callback(null, JSON.stringify({ status: mode === 'invalid-primary' ? 'NotTrusted' : 'Valid', timestamped, thumbprint: 'A'.repeat(40) }), '')

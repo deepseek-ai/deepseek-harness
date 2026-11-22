@@ -55,13 +55,18 @@ try {
 
 `await harness.resumeSession(savedId)` restores a persisted session from the configured `dshHome` and returns a `HarnessSession` ready for `run()`. Save the original session id and reuse its home and workspace. Restoration preserves conversation history and its directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions reject without creating a replacement. `session(id)` remains a lazy handle for an in-process session; it does not request persisted restoration. Shell, browser, and other external processes are not restored by this API.
 
-`HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
+Pass `{ permissionMode: "danger-full-access" }` as the second argument to replace the saved permission preset before resumed execution. Omission preserves saved permissions. The profile must provide the named preset through its permission service; the selection updates sandbox and approval policy and persists for later resumes. Profiles without that service and sessions already restored by reminders reject explicit overrides.
+
+`HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata and existing processes remain unchanged; the `workspace-write` boundary moves to the new directory. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
 
 ### Running agent turns with DeepSeekHarness
 
+The following example imports `brandString` at runtime. Declare `@deepseek-ai/dsh-brand` as a direct dependency of your application rather than relying on the SDK's transitive dependencies; tests alone can use a development dependency.
+
 ```ts
 import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 
 await using harness = new DeepSeekHarness({
   profile: 'sdk',
@@ -69,7 +74,7 @@ await using harness = new DeepSeekHarness({
   patches: ['./automation.cordis.yml'],
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
-  reasoningEffort: ReasoningEffortId('max'),
+  reasoningEffort: brandString<ReasoningEffortId>('max'),
   maxTokens: 49_152,
 })
 const result = await harness.run('say hi')
@@ -96,6 +101,8 @@ console.log(result.finalResponse)
 String and content-block input always return `RunResult` with `sessionId`, `finalResponse`, `finishReason`, root events and Session-tree notifications. State-only commands return native result text; commands that submit model work wait for that activity and return its final assistant text, or an empty string when none is emitted. Native refusals use `finishReason === "error"`; routing, protocol, transport and observer failures reject. Command ids and native outcomes remain in `command/run` and `command/done` events. A completion without its matching command lifecycle events raises `SdkProtocolError` instead of returning a partial result. For literal queued input, use the low-level `client.prompt(sessionId, blocks)` and manage subsequent activity; runtime skill recognition still applies.
 
 Every call subscribes before sending and releases its subscription before settlement. `onNotification` observes the input's Session-tree activity in wire order; the interval can include overlapping work. The SDK consumes internal completion receipts. Concurrent calls retain independent results, including a native busy result during model activity. Timeout or observer failure does not roll back runtime work or authorize automatic retry.
+
+Pass the user's zone as `timeZone` in `run()` options, or as `client.prompt(sessionId, blocks, { timeZone })`, for example `session.run('When is noon tomorrow?', { timeZone: 'Asia/Shanghai' })`. The value is `UTC` or an IANA Area/Location name; the runtime rejects any other value with `JsonRpcResponseError` before running input. Without it, the runtime samples its own process zone for each prompt. Native commands record no zone. See the [SDK server](../server/README.md#command-input) for the recorded source.
 
 Launch options supply initial values. A permission command changes only its target Session; later inputs and restoration retain that state, other Sessions keep theirs, and new Sessions use configured defaults. It does not update the options object or saved user defaults. An approval-policy change during a running turn can inject a notice and cause another step. See [permission presets](../../interaction/permission-presets/README.md) for native transition and restoration behavior.
 

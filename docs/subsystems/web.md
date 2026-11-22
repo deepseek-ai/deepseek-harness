@@ -12,7 +12,7 @@ Search and fetch share no request schema and no business logic, but they are del
 
 ## Search request and result
 
-Each seam request carries exactly one `query`. The `dsh-tool-web` consumer accepts a required `queries` array and fans it out into separate seam requests; a one-item array performs one search. `maxResults` is a consumer-owned bound (`dsh-tool-web`'s `searchMaxResults` config, default `10`) passed through the seam and enforced on the way back — if a provider over-returns, the seam truncates `sources[]` and sets `truncated`.
+Each seam request carries exactly one `query`. The `dsh-tool-web` consumer accepts a required `queries` array and fans it out into separate seam requests; a one-item array performs one search. `maxResults` is a consumer-owned bound (`dsh-tool-web`'s `searchMaxResults` config, default `10`) passed through the seam and enforced on the way back — if a provider over-returns, the seam truncates `sources[]` and sets `truncated`. `llmProvider` names the provider route of the model request a search serves; `dsh-tool-web` sets it to the route of the calling Session's latest model request.
 
 ```ts type-equiv
 /**
@@ -31,6 +31,12 @@ interface WebSearchRequest {
    * bound regardless.
    */
   readonly maxResults?: number
+  /**
+   * Provider route id of the model request this search serves. While no search
+   * provider is configured, the seam selects with it, as `searchReady()` selects
+   * with its argument. Omitted = the search serves no model request.
+   */
+  readonly llmProvider?: string
 }
 ```
 
@@ -127,7 +133,7 @@ A provider's `available(): boolean` is a cheap LOCAL check (credential presence,
 
 A search or fetch provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether an operation made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask only the provider that `search()` or `fetch()` would select, treat a provider without `ready()` as ready, and answer true when selection fails, because the operation reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` makes it the activation condition of `web_search` and `web_fetch`, so a model step whose route answers false neither declares nor dispatches the tool. The DeepSeek Search and Fetch API providers use the route to choose between the account token and the API key, as the [web-deepseek-api authentication](../../packages/web/web-deepseek-api/README.md#authentication) section describes.
 
-Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins. Each operation reads the configured id when it runs, so a saved settings change applies to the next search or fetch without remounting `ctx.web`.
+Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins. One fixed preference precedes that rule for search: with no configured id, a search runs `deepseek-official` (DeepSeek Messages search, which has no per-search charge) for a model request on the `deepseek-official` or `deepseek-account` route, and `deepseek-search-api` on every other route and outside a model request, whenever that provider is registered and usable. `searchReady(llmProvider)` selects the same provider as a search whose request carries that `llmProvider`. Each operation reads the configured id when it runs, so a saved settings change applies to the next search or fetch without remounting `ctx.web`.
 
 ## Fetch network policy
 
@@ -137,7 +143,7 @@ The HTTP provider does not restrict destination addresses: `web_fetch` reaches l
 
 ## Errors
 
-`WebError extends HarnessError` ([core.md](core.md) error taxonomy) with a `code: string` (open, like every other seam's error — `LlmError`, `SubagentError`), not a closed union: a provider may raise its own codes without editing `dsh-web`, and consumers must tolerate an unknown code. The codes split by owner. Seam-neutral codes are raised by the shared `WebRuntime` contract: `WEB_PROVIDER_UNAVAILABLE`, `WEB_PROVIDER_CONFIGURED_MISSING`, `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`, `WEB_PROVIDER_AMBIGUOUS`, `WEB_DUPLICATE_PROVIDER` (a registration-time programming error, the analogue of `LlmRuntime`'s `DUPLICATE_ADAPTER`), `WEB_ABORTED`, and `WEB_PROVIDER_ERROR` (the catch-all for a provider's own failure surfaced through the seam, including network/transport failure — DNS, connection refused, TLS). Fetch-transport codes are owned by the `dsh-web-fetch-http` implementation and a different fetch backend need not raise them: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_REDIRECT_BLOCKED`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_UNSUPPORTED_CONTENT_TYPE`.
+`WebError extends HarnessError` ([core.md](core.md) error taxonomy) with a `code: string` (open, like every other seam's error — `LlmError`, `SubagentError`), not a closed union: a provider may raise its own codes without editing `dsh-web`, and consumers must tolerate an unknown code. The codes split by owner. Seam-neutral codes are raised by the shared `WebRuntime` contract: `WEB_PROVIDER_UNAVAILABLE`, `WEB_PROVIDER_CONFIGURED_MISSING`, `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`, `WEB_PROVIDER_AMBIGUOUS`, `WEB_DUPLICATE_PROVIDER` (a registration-time programming error, the analogue of `LlmRuntime`'s `DUPLICATE_ADAPTER`), `WEB_ABORTED`, and `WEB_PROVIDER_ERROR` (the catch-all for a provider's own failure surfaced through the seam). Fetch-transport codes are owned by the `dsh-web-fetch-http` implementation and a different fetch backend need not raise them: `WEB_INVALID_URL`, `WEB_BLOCKED_URL`, `WEB_REDIRECT_BLOCKED`, `WEB_FETCH_TOO_LARGE`, `WEB_FETCH_TIMEOUT`, `WEB_UNSUPPORTED_CONTENT_TYPE`, and the network failure classes `WEB_FETCH_DNS_FAILED`, `WEB_FETCH_CONNECTION_REFUSED`, `WEB_FETCH_CONNECTION_TIMEOUT`, `WEB_FETCH_CERTIFICATE_INVALID`, `WEB_FETCH_CONNECTION_INTERRUPTED`, `WEB_FETCH_NETWORK_UNREACHABLE`, and `WEB_FETCH_NETWORK_ERROR`. The Web `web_fetch` row shows a localized summary for a network failure class and keeps the recorded message in its output.
 
 ## The service
 
@@ -162,6 +168,7 @@ Selection semantics (resolved at execution time, never order-dependent):
 - A configured id that is registered and `available()` → that provider.
 - A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.
 - A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.
+- No search id configured, and the provider assigned to the route of the model request the search serves is usable → that provider: `deepseek-official` (Messages search) on the `deepseek-official` and `deepseek-account` routes, `deepseek-search-api` on every other route and outside a model request.
 - No id configured, exactly one registered usable provider → that provider.
 - No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.
 - No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.
@@ -199,7 +206,7 @@ registerFetchProvider(provider: WebFetchProvider): () => void
  * time with the selection rules above; throws {@link WebError} when the
  * capability cannot run. The seam enforces `request.maxResults` on the result:
  * if the provider over-returns, `sources[]` is truncated and `truncated` set.
- * @param request - the query and optional result limit.
+ * @param request - the query, the optional result limit, and the route of the model request the search serves.
  * @param signal - optional cancellation signal forwarded to the provider.
  * @returns the provider's results, capped to `request.maxResults`.
  */

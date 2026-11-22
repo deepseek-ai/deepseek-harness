@@ -10,7 +10,7 @@ export const guideEn = {
   guideStandardIntro: 'Choose Standard mode when starting a new task. Describe what you want to accomplish, point to the relevant files, and explain how to check the result.',
   guideStandardExplanation: [
     '### How it works',
-    'The agent calls tools directly to read and edit files, search, and run terminal commands. It includes Skills, planning, goals, subagents, workflows, plugin management, and context compaction.',
+    'The agent calls tools directly to read and edit files, search, and run terminal commands. It includes Skills, planning, goals, subagents, workflows, plugin management, read-only runtime inspection, and context compaction.',
     'For questions about DSH and plugin or preset work you request, the dsh-doc skill guides the agent to the installed documentation and source. Its instructions load only when requested or relevant; loading it does not change files, tools, or the profile.',
     '### When to choose it',
     'Start here for everyday coding, file work, and research. Standard mode can also write scripts and process files in batches. PTC changes how tool calls are organized; it is not required for batch tasks.',
@@ -30,7 +30,7 @@ export const guideEn = {
     '### What reaches the model',
     'Tool results first reach the program, which can filter and combine them. The model receives what the program prints or returns; image results are attached separately. Nested tool calls are still recorded and remain subject to tool permissions.',
     '### Compared with Standard mode',
-    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow and plugin management tools disabled. Speed and token use depend on the task and how the program handles its results.',
+    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow tool disabled. Speed and token use depend on the task and how the program handles its results.',
   ].join('\n\n'),
   guidePtcUsage: [
     '### Check a set of configuration files',
@@ -55,7 +55,7 @@ export const guideEn = {
   guideCordisIntro: 'Choose Creator mode for a new task. Describe the capability you want, where it should appear, and how you will verify it.',
   guideCordisExplanation: [
     '### What you can create',
-    'Creator mode includes the standard task tools and adds runtime inspection. Standard and Creator share the dsh-doc guidance for plugin and preset development. The agent can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
+    'Creator mode focuses on customizing DSH. It shares read-only runtime inspection and dsh-doc guidance with Standard mode. The agent can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
     '### Plugins and modes',
     'A plugin adds capabilities to DSH, such as a tool, a service connection, or a UI entry. A mode is an agent preset that selects tools and defines how the agent works in a task. A plugin can be included in a custom preset.',
     '### How the result takes effect',
@@ -89,7 +89,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideStandardIntro: '新建任务时选择「标准模式」，说明要完成什么、相关文件在哪里，以及怎样判断任务完成。',
   guideStandardExplanation: [
     '### 工作方式',
-    'Agent 直接调用工具来读写文件、检索资料和执行终端命令。包含 Skills、计划、目标、子 Agent、工作流、插件管理和上下文压缩等能力。',
+    'Agent 直接调用工具来读写文件、检索资料和执行终端命令。包含 Skills、计划、目标、子 Agent、工作流、插件管理、只读运行时检查和上下文压缩等能力。',
     '对于 DSH 相关问题以及你要求的插件或预设工作，dsh-doc skill 引导 Agent 查阅已安装的文档和源码。其指令仅在被要求加载或与当前任务相关时加载；加载该 skill 不会改变文件、工具或 profile。',
     '### 什么时候选',
     '日常编程、文件处理和资料整理可以从这里开始。标准模式也能编写脚本、批量处理文件；PTC 改变的是工具调用方式，批量任务并不必须使用 PTC。',
@@ -109,7 +109,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
     '### 哪些结果交给模型',
     '工具返回的数据先交给程序，经过筛选、计算或合并，再通过输出或返回值交给模型；图片结果会另行附加。程序中的工具调用仍会被记录，也仍受工具权限约束。',
     '### 与标准模式的区别',
-    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 和插件管理工具。速度和 token 用量取决于具体任务与结果处理方式。',
+    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 工具。速度和 token 用量取决于具体任务与结果处理方式。',
   ].join('\n\n'),
   guidePtcUsage: [
     '### 批量检查配置文件',
@@ -134,7 +134,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideCordisIntro: '新建任务时选择「创造模式」，说明希望增加什么能力、从哪里使用，以及怎样验证效果。',
   guideCordisExplanation: [
     '### 可以创造什么',
-    '创造模式包含标准任务工具，并增加了运行时检查。标准模式和创造模式共用 dsh-doc 指引，用于插件和预设开发。Agent 可以创建插件来添加能力或界面，也可以创建预设，为特定工作组合工具和提示词。',
+    '创造模式专注于定制 DSH。它与标准模式共用只读运行时检查和 dsh-doc 指引。Agent 可以创建插件来添加能力或界面，也可以创建预设，为特定工作组合工具和提示词。',
     '### 插件与模式的关系',
     '插件为 DSH 增加能力，例如工具、服务连接或界面入口。模式是一份 Agent 预设，用来选择任务可用的工具，并约定 Agent 的工作方式。自定义模式中也可以使用自己开发的插件。',
     '### 怎样让成果生效',
@@ -163,16 +163,16 @@ export const guideJa = {
   'guideCopied': 'コピーしました',
   'guideFootnotes': '脚注',
   'guideStandardIntro': '新しいタスクを始めるときは標準モードを選びます。達成したいことを説明し、関連するファイルを示し、結果の確認方法を伝えてください。',
-  'guideStandardExplanation': '### 仕組み\n\nエージェントはツールを直接呼び出してファイルの読み取りや編集、検索、ターミナルコマンドの実行を行います。スキル、計画、目標、サブエージェント、ワークフロー、プラグイン管理、コンテキストの圧縮に対応しています。\n\n### 選ぶべき場面\n\n日々のコーディング、ファイル作業、調査はまずここから始めてください。標準モードではスクリプトの作成やファイルの一括処理も行えます。PTC はツール呼び出しの構成を変えるものであり、一括処理に必須ではありません。',
+  'guideStandardExplanation': '### 仕組み\n\nエージェントはツールを直接呼び出してファイルの読み取りや編集、検索、ターミナルコマンドの実行を行います。スキル、計画、目標、サブエージェント、ワークフロー、プラグイン管理、読み取り専用のランタイム検査、コンテキストの圧縮に対応しています。\n\n### 選ぶべき場面\n\n日々のコーディング、ファイル作業、調査はまずここから始めてください。標準モードではスクリプトの作成やファイルの一括処理も行えます。PTC はツール呼び出しの構成を変えるものであり、一括処理に必須ではありません。',
   'guideStandardUsage': '### バグを修正する\n\n> 検索フォームを二度送信すると結果が消える原因を調べてください。修正して関連するテストを実行し、原因と変更内容を説明してください。\n\n期待される出力: コードの変更、関連するテスト結果、原因の説明。\n\n### プロジェクトのメモを整理する\n\n> このプロジェクト内の Markdown メモを読み、合意された決定と未解決の課題を、元ファイルへのリンク付きで要約してください。\n\n期待される出力: 元のメモと照合できる参照付きの要約。',
   'guidePtcIntro': '新しいタスクを始めるときは PTC モードを選びます。入力ファイル、処理ルール、出力形式を指定してください。コードはエージェントが書きます。',
-  'guidePtcExplanation': '### ツールの呼び出され方\n\nPTC は Programmatic Tool Calling の略です。この組み込みプリセットでは、エージェントは run_code を使い、生成された SDK 経由でツールを呼び出す TypeScript プログラムを書きます。プログラムではループ、条件分岐、エラー処理、必要に応じて並行呼び出しを利用できます。\n\n### モデルに届くもの\n\nツールの結果はまずプログラムに届き、そこでフィルタリングや結合ができます。モデルが受け取るのはプログラムが出力または返した内容です。画像の結果は別途添付されます。ネストされたツール呼び出しも記録され、ツール権限の対象のままです。\n\n### 標準モードとの比較\n\nどちらのモードもコーディングや一括処理のタスクを扱えます。標準モードは個々のツールを直接公開し、PTC はツール呼び出しをコードで整理します。現在の PTC プリセットではワークフローとプラグイン管理ツールが無効になっています。速度とトークン消費はタスクやプログラムの結果の扱い方によって変わります。',
+  'guidePtcExplanation': '### ツールの呼び出され方\n\nPTC は Programmatic Tool Calling の略です。この組み込みプリセットでは、エージェントは run_code を使い、生成された SDK 経由でツールを呼び出す TypeScript プログラムを書きます。プログラムではループ、条件分岐、エラー処理、必要に応じて並行呼び出しを利用できます。\n\n### モデルに届くもの\n\nツールの結果はまずプログラムに届き、そこでフィルタリングや結合ができます。モデルが受け取るのはプログラムが出力または返した内容です。画像の結果は別途添付されます。ネストされたツール呼び出しも記録され、ツール権限の対象のままです。\n\n### 標準モードとの比較\n\nどちらのモードもコーディングや一括処理のタスクを扱えます。標準モードは個々のツールを直接公開し、PTC はツール呼び出しをコードで整理します。現在の PTC プリセットではワークフローツールが無効になっています。速度とトークン消費はタスクやプログラムの結果の扱い方によって変わります。',
   'guidePtcUsage': '### 設定ファイルのセットを検証する\n\n> configs/ 内のすべての JSON ファイルを検査してください。schema.json に基づき、必須フィールドの欠落と無効な値を一覧にしてください。問題ごとに 1 行の CSV を保存してください。読み取れないファイルもレポートに含め、残りの検査は続けてください。元のファイルは変更しないでください。\n\n期待される出力: 問題の要約と CSV レポート。プログラムは同じ検査を繰り返し、個々の失敗に対処し、結果を集約できます。\n\n### エラーログを要約する\n\n> logs/ 内のログファイルを分析してください。エラーをサービスとエラー種別でグループ化し、頻度上位 10 グループと各 1 件の例を示してください。完全な件数を CSV に保存してください。\n\n期待される出力: 上位のエラーグループと完全な件数表。中間データは要約がモデルに届く前にプログラム内で集約できます。',
   'guideMinimalIntro': '新しいタスクには最小モードを選びます。比較を行う場合は、モデル、権限、入力、開始時のワークスペース状態を実行間で一定に保ってください。',
   'guideMinimalExplanation': '### 含まれるもの\n\n永続的なシェルツール 1 つ、read_image、固定のシステムプロンプト。画像の読み取りには画像対応モデルが必要です。古い履歴はコンテキストの負荷に応じて自動的に圧縮されます。エージェントがアイドル状態のときに /compact を使えば手動で圧縮できます。この組み込みプリセットはスキル、計画、標準のランタイムコンテキストを読み込みません。\n\n### 選ぶべき場面\n\n実験や比較のベースラインとして使用します。シェルコマンド経由でファイルの読み取りやスクリプトの実行はできますが、長いタスクを管理するための組み込み手段は少なくなります。ツールが少ないからといって、初心者にとって必ずしも簡単になるわけではありません。',
   'guideMinimalUsage': '### 小さなバグ修正で性能を比較する\n\n> このプロジェクトのテストを実行し、失敗の原因を見つけて最小限の修正をしてください。関連するテストを再度実行し、結果を報告してください。\n\n同じ開始状態から、標準モードと最小モードで同じタスクを別々に実行します。タスクの完了状況、ツール呼び出し、生じた変更を比較してください。最小モードはターミナルコマンドを通じて作業を行います。',
   'guideCordisIntro': '新しいタスクにはクリエイターモードを選びます。実現したい機能、表示される場所、確認方法を説明してください。',
-  'guideCordisExplanation': '### 作成できるもの\n\nクリエイターモードには標準的なタスクツールに加え、ランタイムの検査、Cordis プラグインやエージェントプリセットの作成ガイドが含まれます。機能や UI を追加するプラグインを作成することも、特定の作業向けにツールとプロンプトを組み合わせたプリセットを作成することもできます。\n\n### プラグインとモード\n\nプラグインはツール、サービス接続、UI エントリなど、DSH に機能を追加します。モードはエージェントプリセットであり、ツールを選択し、タスク内でのエージェントの動作を定義します。プラグインはカスタムプリセットに含めることができます。\n\n### 結果を反映させる方法\n\nソースコードを生成するだけでなく、エージェントにインストールと確認を依頼してください。プラグインは変更内容によっては即座に読み込まれるか、再起動が必要になる場合があります。新しく作成したプリセットは、新しいタスクを始めるときに選択されます。',
+  'guideCordisExplanation': '### 作成できるもの\n\nクリエイターモードは DSH のカスタマイズに重点を置いています。読み取り専用のランタイム検査と dsh-doc のガイドを標準モードと共有しています。エージェントは機能や UI を追加するプラグインを作成することも、特定の作業向けにツールとプロンプトを組み合わせたプリセットを作成することもできます。\n\n### プラグインとモード\n\nプラグインはツール、サービス接続、UI エントリなど、DSH に機能を追加します。モードはエージェントプリセットであり、ツールを選択し、タスク内でのエージェントの動作を定義します。プラグインはカスタムプリセットに含めることができます。\n\n### 結果を反映させる方法\n\nソースコードを生成するだけでなく、エージェントにインストールと確認を依頼してください。プラグインは変更内容によっては即座に読み込まれるか、再起動が必要になる場合があります。新しく作成したプリセットは、新しいタスクを始めるときに選択されます。',
   'guideCordisUsage': '### UI を追加する\n\n> サイドバーにプロジェクトメモのエントリを追加する DSH プラグインを作成してください。このワークスペース内の Markdown ファイルを閲覧でき、選択したメモをプレビューできるようにしてください。インストールしてページが開くことを確認してください。\n\n期待される出力: 動作するエントリとプレビューページを備えた、インストール済みのプラグイン。残っている有効化手順があればそれも含みます。\n\n### ツールを追加する\n\n> このプロジェクトのテストレポートを読み、失敗したテストを要約するツールを備えたプラグインを作成してください。登録し、サンプルのレポートで確認してください。\n\n期待される出力: 呼び出し可能なツールを備えたプラグインと、確認済みのサンプル呼び出し。\n\n### 独自のモードを作成する\n\n> 標準モードをベースに「コードレビュー」モードを作成してください。潜在的なバグとテストの不足を優先し、ファイルパスと行番号を示し、ファイルを変更する前に確認を求めるようにしてください。選択可能なプリセットとして保存してください。\n\n期待される出力: 新しいタスク用のカスタムプリセット。これらのレビュー指示はエージェントを導くものであり、実行できる操作は権限設定によって決まります。',
 } satisfies Record<keyof typeof guideEn, string>
 
@@ -188,7 +188,7 @@ export const guideEs = {
   guideStandardIntro: 'Elija el modo Estándar al iniciar una nueva tarea. Describe lo que quieres lograr, señala los archivos relevantes y explica cómo verificar el resultado.',
   guideStandardExplanation: [
     '### Cómo funciona',
-    'El agente llama a herramientas directamente para leer y editar archivos, buscar y ejecutar comandos de terminal. Incluye habilidades, planificación, objetivos, subagentes, flujos de trabajo, gestión de complementos y compactación de contexto.',
+    'El agente llama a herramientas directamente para leer y editar archivos, buscar y ejecutar comandos de terminal. Incluye habilidades, planificación, objetivos, subagentes, flujos de trabajo, gestión de complementos, inspección del tiempo de ejecución de solo lectura y compactación de contexto.',
     '### Cuándo elegirlo',
     'Comience aquí para la codificación, el trabajo con archivos y la investigación diaria. El modo estándar también puede escribir scripts y procesar archivos en lotes. PTC cambia la forma en que se organizan las llamadas a herramientas; no es necesario para tareas por lotes.',
   ].join('\n\n\n\n'),
@@ -207,7 +207,7 @@ export const guideEs = {
     '### Lo que llega al modelo',
     'Los resultados de la herramienta llegan primero al programa, que puede filtrarlos y combinarlos. El modelo recibe lo que el programa imprime o devuelve; Los resultados de la imagen se adjuntan por separado. Las llamadas a herramientas anidadas aún se registran y permanecen sujetas a los permisos de la herramienta.',
     '### Comparado con el modo Estándar',
-    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC deja las herramientas de administración de complementos y flujo de trabajo deshabilitadas. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
+    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC deja deshabilitada la herramienta de flujo de trabajo. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Verifique un conjunto de archivos de configuración',
@@ -232,7 +232,7 @@ export const guideEs = {
   guideCordisIntro: 'Elija el modo Creador para una nueva tarea. Describe la capacidad que deseas, dónde debería aparecer y cómo la verificarás.',
   guideCordisExplanation: [
     '### Lo que puedes crear',
-    'El modo Creador incluye las herramientas de tareas estándar además de inspección del tiempo de ejecución y orientación para crear Cordis complementos y ajustes preestablecidos de agentes. Puede crear un complemento que agregue una capacidad o interfaz de usuario, o un ajuste preestablecido que combine herramientas e indicaciones para un trabajo en particular.',
+    'El modo Creador se centra en personalizar DSH. Comparte la inspección del tiempo de ejecución de solo lectura y la orientación de dsh-doc con el modo Estándar. El agente puede crear un complemento que agregue una capacidad o interfaz de usuario, o un ajuste preestablecido que combine herramientas e indicaciones para un trabajo en particular.',
     '### Complementos y modos',
     'Un complemento agrega capacidades a DSH, como una herramienta, una conexión de servicio o una entrada de UI. Un modo es un ajuste preestablecido del agente que selecciona herramientas y define cómo trabaja el agente en una tarea. Se puede incluir un complemento en un ajuste preestablecido personalizado.',
     '### Cómo surte efecto el resultado',
@@ -263,7 +263,7 @@ export const guideFr = {
   guideStandardIntro: 'Choisissez le mode Standard lorsque vous démarrez une nouvelle tâche. Décrivez ce que vous souhaitez accomplir, pointez vers les fichiers pertinents et expliquez comment vérifier le résultat.',
   guideStandardExplanation: [
     '### Comment ça marche',
-    "L'agent appelle directement des outils pour lire et modifier des fichiers, rechercher et exécuter des commandes de terminal. Il comprend les compétences, la planification, les objectifs, les sous-agents, les flux de travail, la gestion des plugins et le compactage du contexte.",
+    "L'agent appelle directement des outils pour lire et modifier des fichiers, rechercher et exécuter des commandes de terminal. Il comprend les compétences, la planification, les objectifs, les sous-agents, les flux de travail, la gestion des plugins, l\'inspection d\'exécution en lecture seule et le compactage du contexte.",
     '### Quand le choisir',
     "Commencez ici pour le codage quotidien, le travail sur les fichiers et la recherche. Le mode standard peut également écrire des scripts et traiter des fichiers par lots. PTC modifie la façon dont les appels d'outils sont organisés ; il n'est pas requis pour les tâches par lots.",
   ].join('\n\n\n\n'),
@@ -282,7 +282,7 @@ export const guideFr = {
     '### Ce qui arrive au modèle',
     "Les résultats des outils parviennent d’abord au programme, qui peut les filtrer et les combiner. Le modèle reçoit ce que le programme imprime ou renvoie ; les résultats des images sont joints séparément. Les appels d'outils imbriqués sont toujours enregistrés et restent soumis aux autorisations de l'outil.",
     '### Par rapport au mode Standard',
-    "Les deux modes peuvent gérer les tâches de codage et par lots. Le mode standard expose directement les outils individuels ; PTC organise les appels d'outils dans le code. Le préréglage PTC actuel laisse les outils de gestion de flux de travail et de plugins désactivés. La vitesse et l'utilisation des jetons dépendent de la tâche et de la manière dont le programme gère ses résultats.",
+    "Les deux modes peuvent gérer les tâches de codage et par lots. Le mode standard expose directement les outils individuels ; PTC organise les appels d'outils dans le code. Le préréglage PTC actuel laisse l’outil de flux de travail désactivé. La vitesse et l'utilisation des jetons dépendent de la tâche et de la manière dont le programme gère ses résultats.",
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Vérifier un ensemble de fichiers de configuration',
@@ -307,7 +307,7 @@ export const guideFr = {
   guideCordisIntro: 'Choisissez le mode Créateur pour une nouvelle tâche. Décrivez la fonctionnalité souhaitée, où elle doit apparaître et comment vous la vérifierez.',
   guideCordisExplanation: [
     '### Ce que vous pouvez créer',
-    "Le mode Créateur inclut les outils de tâches standard, ainsi qu'une inspection d'exécution et des conseils pour la création de Cordis plug-ins et préréglages d'agent. Il peut créer un plugin qui ajoute une fonctionnalité ou une interface utilisateur, ou un préréglage combinant des outils et des invites pour une tâche particulière.",
+    "Le mode Créateur se concentre sur la personnalisation de DSH. Il partage l'inspection d'exécution en lecture seule et les conseils de dsh-doc avec le mode Standard. L'agent peut créer un plugin qui ajoute une fonctionnalité ou une interface utilisateur, ou un préréglage combinant des outils et des invites pour une tâche particulière.",
     '### Plugins et modes',
     "Un plug-in ajoute des fonctionnalités à DSH, telles qu'un outil, une connexion à un service ou une entrée d'interface utilisateur. Un mode est un préréglage d'agent qui sélectionne les outils et définit la manière dont l'agent fonctionne dans une tâche. Un plugin peut être inclus dans un préréglage personnalisé.",
     '### Comment le résultat prend effet',
@@ -338,7 +338,7 @@ export const guideDe = {
   guideStandardIntro: 'Wählen Sie den Standardmodus, wenn Sie eine neue Aufgabe starten. Beschreiben Sie, was Sie erreichen möchten, zeigen Sie auf die relevanten Dateien und erklären Sie, wie Sie das Ergebnis überprüfen können.',
   guideStandardExplanation: [
     '### Wie es funktioniert',
-    'Der Agent ruft Tools direkt auf, um Dateien zu lesen und zu bearbeiten, zu suchen und Terminalbefehle auszuführen. Es umfasst Fähigkeiten, Planung, Ziele, Subagenten, Arbeitsabläufe, Plugin-Verwaltung und Kontextkomprimierung.',
+    'Der Agent ruft Tools direkt auf, um Dateien zu lesen und zu bearbeiten, zu suchen und Terminalbefehle auszuführen. Es umfasst Fähigkeiten, Planung, Ziele, Subagenten, Arbeitsabläufe, Plugin-Verwaltung, schreibgeschützte Laufzeitprüfung und Kontextkomprimierung.',
     '### Wann man es wählt',
     'Beginnen Sie hier mit alltäglicher Codierung, Dateiarbeit und Recherche. Im Standardmodus können auch Skripts geschrieben und Dateien stapelweise verarbeitet werden. PTC ändert die Organisation von Toolaufrufen; Für Batch-Aufgaben ist es nicht erforderlich.',
   ].join('\n\n\n\n'),
@@ -357,7 +357,7 @@ export const guideDe = {
     '### Was das Modell erreicht',
     'Werkzeugergebnisse gelangen zunächst in das Programm, das diese filtern und kombinieren kann. Das Modell empfängt, was das Programm ausgibt oder zurückgibt; Bildergebnisse sind separat beigefügt. Verschachtelte Werkzeugaufrufe werden weiterhin aufgezeichnet und unterliegen weiterhin den Werkzeugberechtigungen.',
     '### Im Vergleich zum Standardmodus',
-    'Beide Modi können Codierungs- und Batch-Aufgaben bewältigen. Im Standardmodus werden einzelne Tools direkt verfügbar gemacht. PTC organisiert Toolaufrufe im Code. Die aktuelle Voreinstellung PTC lässt die Workflow- und Plugin-Verwaltungstools deaktiviert. Geschwindigkeit und Token-Nutzung hängen von der Aufgabe ab und davon, wie das Programm mit seinen Ergebnissen umgeht.',
+    'Beide Modi können Codierungs- und Batch-Aufgaben bewältigen. Im Standardmodus werden einzelne Tools direkt verfügbar gemacht. PTC organisiert Toolaufrufe im Code. Die aktuelle Voreinstellung PTC lässt das Workflow-Tool deaktiviert. Geschwindigkeit und Token-Nutzung hängen von der Aufgabe ab und davon, wie das Programm mit seinen Ergebnissen umgeht.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Überprüfen Sie eine Reihe von Konfigurationsdateien',
@@ -382,7 +382,7 @@ export const guideDe = {
   guideCordisIntro: 'Wählen Sie den Erstellermodus für eine neue Aufgabe. Beschreiben Sie die gewünschte Funktion, wo sie angezeigt werden soll und wie Sie sie überprüfen.',
   guideCordisExplanation: [
     '### Was Sie erstellen können',
-    'Der Erstellermodus umfasst die Standardaufgabentools sowie eine Laufzeitprüfung und Anleitungen zum Erstellen von Cordis-Plugins und Agent-Voreinstellungen. Es kann ein Plugin erstellt werden, das eine Funktion oder Benutzeroberfläche hinzufügt, oder eine Voreinstellung, die Tools und Eingabeaufforderungen für einen bestimmten Job kombiniert.',
+    'Der Erstellermodus konzentriert sich auf die Anpassung von DSH. Er bietet dieselbe schreibgeschützte Laufzeitprüfung und dieselben dsh-doc-Anleitungen wie der Standardmodus. Der Agent kann ein Plugin erstellen, das eine Funktion oder Benutzeroberfläche hinzufügt, oder eine Voreinstellung, die Tools und Eingabeaufforderungen für einen bestimmten Job kombiniert.',
     '### Plugins und Modi',
     'Ein Plugin fügt DSH Funktionen hinzu, beispielsweise ein Tool, eine Dienstverbindung oder einen UI-Eintrag. Ein Modus ist eine Agentenvoreinstellung, die Tools auswählt und definiert, wie der Agent in einer Aufgabe arbeitet. Ein Plugin kann in eine benutzerdefinierte Voreinstellung eingebunden werden.',
     '### Wie das Ergebnis wirksam wird',
@@ -413,7 +413,7 @@ export const guideRu = {
   guideStandardIntro: 'Выбирайте стандартный режим при запуске новой задачи. Опишите, чего вы хотите добиться, укажите соответствующие файлы и объясните, как проверить результат.',
   guideStandardExplanation: [
     '### Как это работает',
-    'Агент напрямую вызывает инструменты для чтения и редактирования файлов, поиска и выполнения команд терминала. Он включает в себя навыки, планирование, цели, субагенты, рабочие процессы, управление плагинами и сжатие контекста.',
+    'Агент напрямую вызывает инструменты для чтения и редактирования файлов, поиска и выполнения команд терминала. Он включает в себя навыки, планирование, цели, субагенты, рабочие процессы, управление плагинами, проверку во время выполнения только для чтения и сжатие контекста.',
     '### Когда это выбирать',
     'Начните здесь ежедневное программирование, работу с файлами и исследования. Стандартный режим также позволяет писать сценарии и обрабатывать файлы в пакетном режиме. PTC изменяет организацию вызовов инструментов; для пакетных задач это не требуется.',
   ].join('\n\n\n\n'),
@@ -432,7 +432,7 @@ export const guideRu = {
     '### Что достигает модели',
     'Результаты инструмента сначала поступают в программу, которая может их фильтровать и комбинировать. Модель получает то, что программа печатает или возвращает; Результаты изображения прилагаются отдельно. Вызовы вложенных инструментов по-прежнему записываются, и для них действуют разрешения инструмента.',
     '### По сравнению со стандартным режимом',
-    'Оба режима могут выполнять кодирование и пакетные задачи. Стандартный режим напрямую предоставляет доступ к отдельным инструментам; PTC организует вызовы инструментов в коде. Текущая предустановка PTC оставляет инструменты управления рабочим процессом и плагинами отключенными. Скорость и использование токенов зависят от задачи и того, как программа обрабатывает ее результаты.',
+    'Оба режима могут выполнять кодирование и пакетные задачи. Стандартный режим напрямую предоставляет доступ к отдельным инструментам; PTC организует вызовы инструментов в коде. Текущая предустановка PTC оставляет инструмент рабочего процесса отключенным. Скорость и использование токенов зависят от задачи и того, как программа обрабатывает ее результаты.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Проверка набора файлов конфигурации',
@@ -457,7 +457,7 @@ export const guideRu = {
   guideCordisIntro: 'Выберите режим «Создатель» для новой задачи. Опишите желаемую возможность, где она должна появиться и как вы ее проверите.',
   guideCordisExplanation: [
     '### Что вы можете создать',
-    'Режим Creator включает в себя стандартные инструменты задач, а также проверку во время выполнения и рекомендации по созданию подключаемых модулей Cordis и предустановок агента. Он может создать плагин, добавляющий возможности или пользовательский интерфейс, или предустановку, объединяющую инструменты и подсказки для конкретной работы.',
+    'Режим Creator предназначен для настройки DSH. Он предоставляет ту же проверку во время выполнения только для чтения и те же рекомендации dsh-doc, что и стандартный режим. Агент может создать плагин, добавляющий возможности или пользовательский интерфейс, или предустановку, объединяющую инструменты и подсказки для конкретной работы.',
     '### Плагины и режимы',
     'Плагин добавляет к DSH возможности, такие как инструмент, подключение к службе или запись пользовательского интерфейса. Режим — это предустановка агента, которая выбирает инструменты и определяет, как агент работает над задачей. Плагин может быть включен в пользовательский пресет.',
     '### Как результат вступает в силу',
@@ -488,7 +488,7 @@ export const guidePt = {
   guideStandardIntro: 'Escolha o modo Padrão ao iniciar uma nova tarefa. Descreva o que você deseja realizar, indique os arquivos relevantes e explique como verificar o resultado.',
   guideStandardExplanation: [
     '### Como funciona',
-    'O agente chama ferramentas diretamente para ler e editar arquivos, pesquisar e executar comandos de terminal. Inclui habilidades, planejamento, metas, subagentes, fluxos de trabalho, gerenciamento de plugins e compactação de contexto.',
+    'O agente chama ferramentas diretamente para ler e editar arquivos, pesquisar e executar comandos de terminal. Inclui habilidades, planejamento, metas, subagentes, fluxos de trabalho, gerenciamento de plugins, inspeção de tempo de execução somente leitura e compactação de contexto.',
     '### Quando escolher',
     'Comece aqui para codificação diária, trabalho de arquivo e pesquisa. O modo padrão também pode escrever scripts e processar arquivos em lotes. PTC altera a forma como as chamadas de ferramenta são organizadas; não é necessário para tarefas em lote.',
   ].join('\n\n\n\n'),
@@ -507,7 +507,7 @@ export const guidePt = {
     '### O que chega ao modelo',
     'Os resultados da ferramenta chegam primeiro ao programa, que pode filtrá-los e combiná-los. O modelo recebe o que o programa imprime ou retorna; os resultados da imagem são anexados separadamente. As chamadas de ferramentas aninhadas ainda são gravadas e permanecem sujeitas às permissões da ferramenta.',
     '### Comparado com o modo Padrão',
-    'Ambos os modos podem lidar com tarefas de codificação e em lote. O modo padrão expõe ferramentas individuais diretamente; PTC organiza chamadas de ferramentas em código. A predefinição PTC atual deixa o fluxo de trabalho e as ferramentas de gerenciamento de plug-ins desativados. A velocidade e o uso do token dependem da tarefa e de como o programa lida com seus resultados.',
+    'Ambos os modos podem lidar com tarefas de codificação e em lote. O modo padrão expõe ferramentas individuais diretamente; PTC organiza chamadas de ferramentas em código. A predefinição PTC atual deixa a ferramenta de fluxo de trabalho desativada. A velocidade e o uso do token dependem da tarefa e de como o programa lida com seus resultados.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Verifique um conjunto de arquivos de configuração',
@@ -532,7 +532,7 @@ export const guidePt = {
   guideCordisIntro: 'Escolha o modo Criador para uma nova tarefa. Descreva o recurso desejado, onde ele deve aparecer e como você o verificará.',
   guideCordisExplanation: [
     '### O que você pode criar',
-    'O modo Criador inclui ferramentas de tarefas padrão, além de inspeção de tempo de execução e orientação para criação de Cordis plug-ins e predefinições de agente. Ele pode criar um plug-in que adicione um recurso ou UI, ou uma predefinição que combine ferramentas e prompts para um trabalho específico.',
+    'O modo Criador se concentra na personalização do DSH. Ele compartilha a inspeção de tempo de execução somente leitura e a orientação do dsh-doc com o modo Padrão. O agente pode criar um plug-in que adicione um recurso ou UI, ou uma predefinição que combine ferramentas e prompts para um trabalho específico.',
     '### Plug-ins e modos',
     'Um plug-in adiciona recursos a DSH, como uma ferramenta, uma conexão de serviço ou uma entrada de IU. Um modo é uma predefinição de agente que seleciona ferramentas e define como o agente trabalha em uma tarefa. Um plugin pode ser incluído em uma predefinição personalizada.',
     '### Como o resultado entra em vigor',

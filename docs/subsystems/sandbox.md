@@ -161,7 +161,7 @@ The [local provider](../../packages/sandbox/sandbox-local/README.md) owns operat
 
 ## Provider and fail-closed errors
 
-`await ctx.sandbox.confine(argv, policy, signal)` resolves policy paths and returns a `ConfinedArgv` from the execution world, or rejects with `SandboxUnavailableError` and code `SANDBOX_UNAVAILABLE` when no usable backend exists. The optional signal cancels resolution before launch. Consumers may also classify a failure while spawning or observing the returned argv; that attribution belongs to the consumer contract. Silent unconfined passthrough is never legal for a confined policy.
+`await ctx.sandbox.confine(argv, policy, signal)` resolves policy paths and returns a `ConfinedArgv` from the execution world, or rejects with `SandboxUnavailableError` and code `SANDBOX_UNAVAILABLE` when no usable backend exists, or with `SandboxPreparationError` (`SANDBOX_PREPARATION_FAILED`, `SANDBOX_INVALID_TEMP_ROOT`) when the provider cannot prepare host state for the mode. The optional signal cancels resolution before launch. Consumers may also classify a failure while spawning or observing the returned argv; that attribution belongs to the consumer contract. Silent unconfined passthrough is never legal for a confined policy.
 
 Provider selection, probing, caching, and backend-specific enforcement reports belong to the [local provider](../../packages/sandbox/sandbox-local/README.md).
 
@@ -207,12 +207,16 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
 /**
  * Resolve the complete policy for one capability call. An approved explicit
  * mode outranks the session's last `sandbox/mode` event, which outranks the
- * deployment default. A session cwd is its workspace-write boundary; the
- * configured root is the fallback for agentless calls and sessions without a
- * cwd. Configured extra roots and this Session's active registrations are
- * snapshotted together; existing operations and processes keep their policy.
+ * deployment default. A session's working directory is its workspace-write
+ * boundary, so a Host move of the Session moves the boundary; the configured
+ * root is the fallback for agentless calls and, without the working-directory
+ * service, sessions without a header directory. Configured extra roots and
+ * this Session's active registrations are snapshotted together; existing
+ * operations and processes keep their policy.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's directory is
+ *   relative or contains a NUL byte.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 

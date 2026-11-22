@@ -6,7 +6,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, defineTool } from '@deepseek-ai/dsh-tools'
 import type { DiffCallView, DiffResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -23,7 +23,7 @@ import type { FsSandboxController } from './sandbox.ts'
  * @returns the camelCased input; `content` passes through untouched.
  */
 export function parseWriteArgs(args: { file_path: string; content: string }): { filePath: string; content: string } {
-  if (args.file_path.trim().length === 0) throw new Error('file_path must be a non-empty string')
+  if (args.file_path.trim().length === 0) throw new ToolArgsError(['file_path must be a non-empty string'])
   return { filePath: args.file_path, content: args.content }
 }
 
@@ -68,6 +68,7 @@ export function applyWriteTool(ctx: Context, sandbox: FsSandboxController): void
       : 'Read an existing file before overwriting it with write'
         + (ctx.tools.get('edit', scope) === undefined ? '' : ' and prefer edit for targeted changes')
         + '.',
+    retirement: 'The write tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

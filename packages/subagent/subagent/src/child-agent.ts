@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 // Type-only: make `ctx.get('sandboxPolicy')`, `ctx.get('approval')`, and
 // `ctx.get('permissionPresets')` resolve to their services when composed — delegation consumes them
@@ -28,10 +28,10 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { delegationDepthOf } from './depth.ts'
 import { SubagentError } from './error.ts'
 
-/** Thrown when starting a child would exceed the requested depth cap. */
-export class SubagentDepthError extends Error {
+/** Thrown when starting a child would exceed the requested depth cap; `code` is `DEPTH_EXCEEDED`. */
+export class SubagentDepthError extends SubagentError {
   constructor(public readonly attemptedDepth: number, public readonly maxDepth: number) {
-    super(`subagent depth ${attemptedDepth} exceeds maxDepth ${maxDepth}`)
+    super(`subagent depth ${attemptedDepth} exceeds maxDepth ${maxDepth}`, 'DEPTH_EXCEEDED')
     this.name = 'SubagentDepthError'
   }
 }
@@ -44,12 +44,12 @@ export class SubagentDepthError extends Error {
  * @param maxDepth - optional absolute cap the resolved depth must not exceed.
  * @returns the child's non-negative safe-integer depth.
  * @throws {SubagentDepthError} when the resolved depth exceeds `maxDepth`.
- * @throws {RangeError} when the resolved depth leaves the safe-integer range.
+ * @throws {SubagentError} `INVALID_DEPTH` when the resolved depth leaves the safe-integer range.
  */
 export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): number {
   const childDepth = delegationDepthOf(parent) + 1
   if (!Number.isSafeInteger(childDepth)) {
-    throw new RangeError('subagent child depth exceeds the safe-integer range')
+    throw new SubagentError('subagent child depth exceeds the safe-integer range', 'INVALID_DEPTH')
   }
   if (maxDepth !== undefined && childDepth > maxDepth) {
     throw new SubagentDepthError(childDepth, maxDepth)
@@ -164,7 +164,7 @@ export interface ChildComposition {
 }
 
 /**
- * Model-facing delegation-scope statement for every in-process child. A
+ * Model-facing delegation-scope and message-authorship statement for every in-process child. A
  * runtime-context contribution rather than a system-prompt section, so the
  * deployment's system prompt stays uniform across parents and children.
  */
@@ -172,7 +172,9 @@ export const SUBAGENT_DELEGATION_CONTEXT
   = 'You are a delegated subagent: your permission scope was fixed when you were started and cannot be '
     + 'widened from inside this session — operations that require approval are rejected automatically. '
     + 'When the task needs access beyond that scope, do not retry the denied operation; state the '
-    + 'limitation in your reply so the delegating agent can handle it.'
+    + 'limitation in your reply so the delegating agent can handle it. Messages from other agents begin with '
+    + '"Agent <name> sent a message:". Other user messages come from the human user, who reads this conversation '
+    + 'directly. You can still message other agents to coordinate, but answer the human user in your reply.'
 
 /**
  * Compose a child before publication and restore historical descriptor overrides.
@@ -183,6 +185,9 @@ export const SUBAGENT_DELEGATION_CONTEXT
  * @param parent - creator for fresh delegation; absent during target-only restoration.
  * @param composition - independent preset and any overrides read from a historical descriptor.
  * @returns A promise when mounting an independent preset; otherwise completes synchronously.
+ * @throws {SubagentError} `PRESET_UNAVAILABLE` when a preset is selected but the preset
+ *   service is absent. An unknown or unloadable selected preset rejects with the registry's
+ *   `RemoteError` code.
  */
 export function applyChildComposition(
   childCtx: Context,
@@ -210,7 +215,7 @@ function applyChildOverrides(childCtx: Context, composition: ChildComposition): 
   })
   if (composition.persona !== undefined) {
     childCtx.systemPrompt.section({
-      name: 'deployment:persona-prefix',
+      name: PERSONA_PREFIX_SECTION,
       order: childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'),
       text: composition.persona,
     })

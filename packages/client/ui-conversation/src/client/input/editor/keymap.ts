@@ -1,10 +1,11 @@
 /**
  * Composer keymap over the Lexical command layer: menu arbitration
- * (arrows/escape/enter), space adjudication, the Enter submit gesture, and
- * paste routing. Registered at CRITICAL priority so it decides before
- * @lexical/plain-text's own Enter/paste defaults; a handler returning false
- * falls through to those defaults (Shift+Enter's line break, ordinary
- * spaces, text paste the bar routes itself).
+ * (arrows/escape/enter), prompt recall on draft-end arrows, space
+ * adjudication, the Enter submit gesture, and paste routing. Registered at
+ * CRITICAL priority so it decides before @lexical/plain-text's own
+ * Enter/paste defaults; a handler returning false falls through to those
+ * defaults (Shift+Enter's line break, ordinary spaces, text paste the bar
+ * routes itself).
  *
  * IME guard: a composition-closing Enter/Space must not submit or adjudicate.
  * KeyboardEvent.isComposing covers most engines; Safari delivers the closing
@@ -16,7 +17,7 @@
  */
 import type { LexicalEditor } from 'lexical'
 import {
-  $getAdjacentNode, $getSelection, $isElementNode, $isLineBreakNode, $isRangeSelection, $isTextNode,
+  $createRangeSelectionFromDom, $getAdjacentNode, $getSelection, $isElementNode, $isLineBreakNode, $isRangeSelection, $isTextNode,
   KEY_DOWN_COMMAND, MOVE_TO_END,
   COMMAND_PRIORITY_CRITICAL, KEY_ARROW_DOWN_COMMAND, KEY_ARROW_UP_COMMAND, KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
@@ -24,6 +25,7 @@ import {
 import { mergeRegister } from '@lexical/utils'
 import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.ts'
 import { clipboardFiles } from '../file-intake.ts'
+import { $composerLayout, $detectOffsetOfPoint } from './projection.ts'
 import { $isQuoteNode } from './QuoteNode.tsx'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
@@ -34,6 +36,8 @@ export interface ComposerKeymapHandlers {
   space(): boolean
   /** Dismiss the popupSelect shell (Escape layering: an open overlay closes first). */
   dismissPopup(): void
+  /** Replace the draft with an adjacent recalled prompt when recall applies; true = the arrow is consumed. */
+  recallHistory(direction: 'older' | 'newer'): boolean
   /** Whether Enter may submit right now (locked/busy states refuse). */
   canSubmit(): boolean
   /** Plain Enter submits; exactly Ctrl+Enter or Cmd+Enter selects accelerated delivery. */
@@ -84,6 +88,21 @@ function domCaretTouches(element: HTMLElement, backward: boolean): boolean {
   }
   return boundary.parentNode === parent
     && (backward ? boundary.previousSibling : boundary.nextSibling) === element
+}
+
+/**
+ * Whether the collapsed browser caret sits at the end of the draft. Must run
+ * inside an editor update. The DOM selection is mapped directly because
+ * Lexical's own selection lags a native caret move until the next
+ * selectionchange.
+ */
+function $caretAtDraftEnd(editor: LexicalEditor): boolean {
+  const domSelection = editor.getRootElement()?.ownerDocument.getSelection() ?? null
+  if (domSelection === null || domSelection.rangeCount === 0 || !domSelection.isCollapsed) return false
+  const point = $createRangeSelectionFromDom(domSelection, editor)?.focus
+  if (point === undefined) return false
+  const layout = $composerLayout()
+  return $detectOffsetOfPoint(layout, point) === layout.detectLength
 }
 
 /** Find an atomic quote immediately beside both editor and browser carets. */
@@ -142,8 +161,6 @@ function moveBeforeQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
 
 /** Move from immediately before a quote to the end of its hard line. */
 function movePastQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
-  if (!isApplePlatform() || event.key !== 'ArrowRight' || !event.metaKey
-    || event.ctrlKey || event.altKey || event.shiftKey) return false
   const quote = adjacentQuote(editor, false)
   if (quote === null) return false
   const block = quote.getParent()
@@ -164,6 +181,32 @@ function movePastQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
   }
   event.preventDefault()
   block.select(lineEnd, lineEnd)
+  return true
+}
+
+/**
+ * Move the caret to the start or end of its visual line for Home or End, with
+ * Shift extending the selection. Apple key bindings map Home and End to
+ * scrolling the document, which in the composer scrolls the conversation
+ * instead of moving the caret; other platforms already move to the line
+ * boundary. End immediately before a quote takes Cmd+Right's path to the end
+ * of the quote's hard line, because the browser's line-boundary movement
+ * stops before a quote that starts a line. Returns false and leaves the key
+ * to the browser for any other key, on other platforms, with Ctrl, Cmd, or
+ * Alt held, during IME composition, and when the editor has no root element
+ * or its document has no selection.
+ */
+function moveToLineBoundary(editor: LexicalEditor, event: KeyboardEvent, recentlyComposing: () => boolean): boolean {
+  if (event.key !== 'Home' && event.key !== 'End') return false
+  if (!isApplePlatform() || event.ctrlKey || event.metaKey || event.altKey
+    || isComposingEvent(event, recentlyComposing)) return false
+  if (event.key === 'End' && !event.shiftKey && movePastQuote(editor, event)) return true
+  const root = editor.getRootElement()
+  if (root === null) return false
+  const selection = root.ownerDocument.getSelection()
+  if (selection === null) return false
+  event.preventDefault()
+  selection.modify(event.shiftKey ? 'extend' : 'move', event.key === 'Home' ? 'backward' : 'forward', 'lineboundary')
   return true
 }
 
@@ -205,6 +248,18 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     return false
   }
 
+  // An unmodified arrow the menu passes may recall prompts only with
+  // the caret at the draft end; the handler decides whether recall applies.
+  const history = (key: 'up' | 'down') => (event: KeyboardEvent): boolean => {
+    if (arrow(key)(event)) return true
+    if (isComposingEvent(event, recentlyComposing)
+      || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
+    if (!$caretAtDraftEnd(editor)) return false
+    if (!handlers.recallHistory(key === 'up' ? 'older' : 'newer')) return false
+    event.preventDefault()
+    return true
+  }
+
   return mergeRegister(
     editor.registerRootListener((root, prevRoot) => {
       prevRoot?.removeEventListener('compositionstart', onCompositionStart)
@@ -218,15 +273,20 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       syncComposition()
     }),
     editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (moveToLineBoundary(editor, event, recentlyComposing)) return true
       if (!isApplePlatform() || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
       const key = event.key.toLowerCase()
       if (key === 'a') return moveBeforeQuote(editor, event)
       return false
     }, COMMAND_PRIORITY_CRITICAL),
-    editor.registerCommand(MOVE_TO_END, event => movePastQuote(editor, event), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(MOVE_TO_END, (event) => {
+      if (!isApplePlatform() || event.key !== 'ArrowRight' || !event.metaKey
+        || event.ctrlKey || event.altKey || event.shiftKey) return false
+      return movePastQuote(editor, event)
+    }, COMMAND_PRIORITY_CRITICAL),
     editor.registerUpdateListener(syncComposition),
-    editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
-    editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(KEY_ARROW_UP_COMMAND, history('up'), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(KEY_ARROW_DOWN_COMMAND, history('down'), COMMAND_PRIORITY_CRITICAL),
     // Tab settles the highlighted completion and passes without one, keeping
     // native focus traversal; Shift+Tab leaves the menu like Escape whenever it
     // is open, highlight or not, so the two Tab gestures never disagree about

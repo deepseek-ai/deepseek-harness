@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/extension-cookbook.md
 /cookbook-extension-plugin-shapes:
-  en: 1d31f2923d4b4e42
-  zh: 194aaeceaa020e8e
+  en: 75356dcac6f6000d
+  zh: 9d9d9f5821fa4994
 /cookbook-extension-plugin-shapes/a-tool-plugin:
   en: 39704ef102f2f2f7
   zh: 8771f9c19450b347
@@ -17,6 +17,9 @@
 /cookbook-extension-plugin-shapes/an-external-protocol-driver:
   en: fc5e0d074214eaaf
   zh: aac2bf67d6e7b30a
+/cookbook-extension-plugin-shapes/a-forge-review-extension:
+  en: 63267f9317969d16
+  zh: 9a0ce54da348509a
 /cookbook-extension-plugin-shapes/runnable-wirings:
   en: f0a28d07c0bb4d1b
   zh: 840962f512cb4031

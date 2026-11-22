@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type {
   AttachmentStore,
   ImageAttachmentRef,
   ImageRequestTarget,
   RequestImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
-import { createDeveloperMessage, ToolCallId, createAssistantMessage, createMessage, createToolResultMessage, createUserMessage, offloadedImageText } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createDeveloperMessage, type ToolCallId, createAssistantMessage, createMessage, createToolResultMessage, createUserMessage, offloadedImageText } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, Message, RequestUserInput } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '../src/context.ts'
@@ -20,7 +21,7 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 const ref: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png',
   bytes: 1,
   width: 1,
@@ -29,7 +30,7 @@ const ref: ImageAttachmentRef = {
 
 function requestImage(value: ImageAttachmentRef, data: Uint8Array): RequestImageAttachment {
   return {
-    variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`),
+    variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`),
     attachment: value,
     data,
     mediaType: value.mediaType,
@@ -91,8 +92,8 @@ describe('pi-ai request context conversion', () => {
 
   it('preserves the exact context for request-only input after durable tool history', async () => {
     const prefix = [
-      history('assistant', [{ type: 'tool-call', id: ToolCallId('lookup'), name: 'lookup', arguments: '{}' }]),
-      createToolResultMessage({ callId: ToolCallId('lookup'), content: [{ type: 'text', text: 'result' }], isError: false }),
+      history('assistant', [{ type: 'tool-call', id: brandString<ToolCallId>('lookup'), name: 'lookup', arguments: '{}' }]),
+      createToolResultMessage({ callId: brandString<ToolCallId>('lookup'), content: [{ type: 'text', text: 'result' }], isError: false }),
     ]
     const input: RequestUserInput = { role: 'user', content: [{ type: 'text', text: 'review or summarize this input' }] }
     const durable = createUserMessage({ content: input.content, source: { kind: 'test' } })
@@ -113,8 +114,20 @@ describe('pi-ai request context conversion', () => {
     expect(toPiContext({ ...base, tools: [] })).toEqual({ messages: [] })
   })
 
+  it('preserves separate user and tool text blocks on both conversion paths', async () => {
+    const callId = brandString<ToolCallId>('text-blocks')
+    const content: ContentBlock[] = [{ type: 'text', text: 'first ' }, { type: 'text', text: 'second' }]
+    const options = request([user(content), createToolResultMessage({ callId, content, isError: false })])
+    const expected = [
+      { role: 'user', content, timestamp: 0 },
+      { role: 'toolResult', content, toolCallId: callId, toolName: 'unknown', isError: false, timestamp: 0 },
+    ]
+    expect(toPiContext(options).messages).toEqual(expected)
+    expect((await toPiContext(options, imageContext(attachments))).messages).toEqual(expected)
+  })
+
   it('converts complete text-only history and rejects tool images without storage', () => {
-    const callId = ToolCallId('call-1')
+    const callId = brandString<ToolCallId>('call-1')
     expect(toPiContext(request([
       history('system', [{ type: 'text', text: 'history system' }]),
       history('assistant', [{ type: 'tool-call', id: callId, name: 'lookup', arguments: '{}' }]),
@@ -124,7 +137,7 @@ describe('pi-ai request context conversion', () => {
       systemPrompt: 'history system',
       messages: [
         { role: 'assistant' },
-        { role: 'user', content: 'after tool' },
+        { role: 'user', content: [{ type: 'text', text: 'after tool' }] },
         {
           role: 'toolResult',
           toolCallId: 'call-1',
@@ -141,8 +154,8 @@ describe('pi-ai request context conversion', () => {
   })
 
   it('resolves user and tool-result images while preserving explicit fallbacks', async () => {
-    const callId = ToolCallId('missing-call')
-    const knownCallId = ToolCallId('known-call')
+    const callId = brandString<ToolCallId>('missing-call')
+    const knownCallId = brandString<ToolCallId>('known-call')
     const context = await toPiContext(request([
       user([{ type: 'text', text: '' }]),
       history('assistant', [
@@ -163,7 +176,7 @@ describe('pi-ai request context conversion', () => {
     ]), imageContext(attachments))
 
     expect(context.messages).toEqual([
-      { role: 'user', content: '', timestamp: 0 },
+      { role: 'user', content: [], timestamp: 0 },
       expect.objectContaining({ role: 'assistant' }),
       {
         role: 'user',
@@ -218,7 +231,7 @@ describe('pi-ai request context conversion', () => {
   })
 
   it('treats a tool message without isError as a successful result', () => {
-    const callId = ToolCallId('default-success')
+    const callId = brandString<ToolCallId>('default-success')
     const message = createMessage({
       role: 'tool',
       source: { kind: 'tool', callId },
@@ -232,7 +245,7 @@ describe('pi-ai request context conversion', () => {
   })
 
   it('converts tool text and images on the image path', async () => {
-    const callId = ToolCallId('nested-call')
+    const callId = brandString<ToolCallId>('nested-call')
     const context = await toPiContext(request([createToolResultMessage({
       callId,
       content: [
@@ -256,8 +269,8 @@ describe('pi-ai request context conversion', () => {
     }])
   })
 
-  it('flattens tool text and ignores other block types without storage', () => {
-    const callId = ToolCallId('nested-text')
+  it('preserves tool text blocks and ignores other block types without storage', () => {
+    const callId = brandString<ToolCallId>('nested-text')
     expect(toPiContext(request([
       createToolResultMessage({
         callId,
@@ -281,7 +294,7 @@ describe('pi-ai request context conversion', () => {
     ))
     const store = projectionStore(readImageRequest)
     const sized: ImageAttachmentRef = { ...ref, bytes: 3 }
-    const callId = ToolCallId('shot-call')
+    const callId = brandString<ToolCallId>('shot-call')
     // The tool-result occurrence is offloaded on the surface; the two retained 3-byte images cost
     // 4 base64 characters each and fit the 8-byte bound exactly.
     const context = await toPiContext(request([
@@ -323,9 +336,36 @@ describe('pi-ai request context conversion', () => {
     ])
     expect(readImageRequest).toHaveBeenCalledTimes(1)
   })
+  it('starts distinct reads together and keeps repeated images in wire order', async () => {
+    const second = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`) }
+    const firstStarted = Promise.withResolvers<undefined>()
+    const releaseFirst = Promise.withResolvers<undefined>()
+    const read = vi.fn(async (attachment: ImageAttachmentRef) => {
+      if (attachment.attachmentId === ref.attachmentId) {
+        firstStarted.resolve(undefined)
+        await releaseFirst.promise
+      }
+      return requestImage(attachment, Uint8Array.of(attachment.attachmentId === ref.attachmentId ? 1 : 2))
+    })
+    const pending = toPiContext(request([user([
+      { type: 'image', attachment: { ...ref, name: 'first.png' } }, { type: 'image', attachment: second },
+      { type: 'image', attachment: { ...ref, name: 'again.png' } },
+    ])]), imageContext(projectionStore(read)))
+    await firstStarted.promise
+    const started = read.mock.calls.map(([attachment]) => attachment.attachmentId)
+    releaseFirst.resolve(undefined)
+    const context = await pending
+    expect(started).toEqual([ref.attachmentId, second.attachmentId])
+    expect(context.messages[0]).toMatchObject({ content: [
+      { type: 'text', text: expect.stringContaining('first.png') as string }, { type: 'image', data: 'AQ==' },
+      { type: 'text' }, { type: 'image', data: 'Ag==' },
+      { type: 'text', text: expect.stringContaining('again.png') as string }, { type: 'image', data: 'AQ==' },
+    ] })
+  })
+
   it('does not prepare a surface-offloaded image', async () => {
-    const old = { ...ref, attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`), bytes: 3 }
-    const recent = { ...ref, attachmentId: AttachmentId(`sha256:${'d'.repeat(64)}`), bytes: 3 }
+    const old = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`), bytes: 3 }
+    const recent = { ...ref, attachmentId: brandString<AttachmentId>(`sha256:${'d'.repeat(64)}`), bytes: 3 }
     const readImageRequest = vi.fn((value: ImageAttachmentRef) => {
       if (value.attachmentId === old.attachmentId) throw new Error('old image must not be read')
       return Promise.resolve(requestImage(value, Uint8Array.of(1, 2, 3)))
@@ -388,7 +428,7 @@ describe('pi-ai request context conversion', () => {
 
     expect(context.messages).toEqual([{
       role: 'user',
-      content: offloadedImageText(sized, access),
+      content: [{ type: 'text', text: offloadedImageText(sized, access) }],
       timestamp: 0,
     }])
     expect(readImageRequest).not.toHaveBeenCalled()
@@ -451,17 +491,17 @@ describe('pi-ai request context conversion', () => {
     expect(readImageRequest).toHaveBeenCalledTimes(2)
   })
   it('keeps empty text-only users while separating result-only messages', () => {
-    const callId = ToolCallId('unknown-call')
+    const callId = brandString<ToolCallId>('unknown-call')
     expect(toPiContext(request([
       user([]),
       history('assistant', [
         { type: 'text', text: 'answer' },
-        { type: 'tool-call', id: ToolCallId('other-call'), name: 'lookup', arguments: '{}' },
+        { type: 'tool-call', id: brandString<ToolCallId>('other-call'), name: 'lookup', arguments: '{}' },
       ]),
       createToolResultMessage({ callId, content: [{ type: 'text', text: 'result' }], isError: false }),
     ]))).toMatchObject({
       messages: [
-        { role: 'user', content: '' },
+        { role: 'user', content: [] },
         { role: 'assistant' },
         { role: 'toolResult', toolName: 'unknown' },
       ],
@@ -486,7 +526,7 @@ describe('pi-ai request context conversion', () => {
       systemPrompt: 'history system',
       messages: [
         { role: 'assistant' },
-        { role: 'user', content: 'plain' },
+        { role: 'user', content: [{ type: 'text', text: 'plain' }] },
       ],
     })
 
@@ -522,12 +562,36 @@ describe('pi-ai system prompt source', () => {
 
   it('maps a leading system message to systemPrompt on both conversion paths', async () => {
     const options: GenerateOptions = { ...base, messages: [leading, question] }
-    const expected = { systemPrompt: 'lead rule', messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
+    const expected = { systemPrompt: 'lead\n\nrule', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)
-    expect(toPiContext(options, undefined, undefined, true)).toEqual(toPiContext({ ...base, system: 'lead rule', messages: [question] }))
+    expect(toPiContext(options, undefined, undefined, true)).toEqual(toPiContext({ ...base, system: 'lead\n\nrule', messages: [question] }))
+  })
+
+  it.each([false, true])('pre-joins system blocks with blank lines with native support=%s on both paths', async (supported) => {
+    const update = createMessage({
+      role: 'system',
+      content: [{ type: 'text', text: ' First source. ' }, { type: 'text', text: 'Second source.' }],
+      source: { kind: 'system-prompt', sections: [
+        { name: 'first', order: 0, state: 'active', contentIndex: 0 },
+        { name: 'second', order: 1, state: 'active', contentIndex: 1 },
+      ] },
+    })
+    const options = { ...base, messages: [update, question, update] }
+    const text = 'First source.\n\nSecond source.'
+    const expected = {
+      systemPrompt: text,
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
+        supported
+          ? { role: 'system', content: text, timestamp: 0 }
+          : { role: 'user', content: `<system-reminder>\n${text}\n</system-reminder>`, timestamp: 0 },
+      ],
+    }
+    expect(toPiContext(options, undefined, undefined, supported)).toEqual(expected)
+    await expect(toPiContext(options, imageContext(attachments), undefined, supported)).resolves.toEqual(expected)
   })
 
   it('wraps later system text without changing the prefix on both conversion paths', async () => {
@@ -537,7 +601,7 @@ describe('pi-ai system prompt source', () => {
       { type: 'text', text: 'Second source.' },
     ])
     const options = { ...prefix, messages: [...prefix.messages, update, history('system', []), update] }
-    const reminder = { role: 'user', content: '<system-reminder>\nFirst source.Second source.\n</system-reminder>', timestamp: 0 }
+    const reminder = { role: 'user', content: '<system-reminder>\nFirst source.\n\nSecond source.\n</system-reminder>', timestamp: 0 }
     const before = toPiContext(prefix)
     const expected = { ...before, messages: [...before.messages, reminder, reminder] }
     expect(toPiContext(options)).toEqual(expected)
@@ -545,7 +609,7 @@ describe('pi-ai system prompt source', () => {
     expect(options.messages[2]).toBe(update)
     expect(update.role).toBe('system')
     expect(toPiContext({ ...base, messages: [question, update] })).toEqual({
-      messages: [{ role: 'user', content: 'hi', timestamp: 0 }, reminder],
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 }, reminder],
     })
   })
 
@@ -557,7 +621,7 @@ describe('pi-ai system prompt source', () => {
       const expected = {
         systemPrompt: text,
         messages: [
-          { role: 'user', content: 'hi', timestamp: 0 },
+          { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
           supported
             ? { role: 'system', content: text, timestamp: 0 }
             : { role: 'user', content: '<system-reminder>\nliteral <\\/system-reminder> marker\n</system-reminder>', timestamp: 0 },
@@ -570,7 +634,7 @@ describe('pi-ai system prompt source', () => {
 
   it('omits an empty initial prompt on both conversion paths', async () => {
     const options: GenerateOptions = { ...base, messages: [history('system', []), question] }
-    const expected = { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] }
+    const expected = { messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 }] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)
   })
@@ -580,17 +644,17 @@ describe('pi-ai system prompt source', () => {
       history('system', [{ type: 'text', text: 'additional rule' }]),
       leading, history('system', []),
     ] }
-    const expected = { systemPrompt: 'direct\n\nlead rule', messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
+    const expected = { systemPrompt: 'direct\n\nlead\n\nrule', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
       { role: 'system', content: 'additional rule', timestamp: 0 },
-      { role: 'system', content: 'lead rule', timestamp: 0 },
+      { role: 'system', content: 'lead\n\nrule', timestamp: 0 },
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)
   })
 
   it('preserves repeated system updates in history order on both paths', async () => {
-    const callId = ToolCallId('lookup')
+    const callId = brandString<ToolCallId>('lookup')
     const snapshot = history('system', [{ type: 'text', text: 'lead rule\nnew rule' }])
     const options: GenerateOptions = { ...base, system: 'direct', messages: [leading,
       snapshot, question,
@@ -599,8 +663,8 @@ describe('pi-ai system prompt source', () => {
       createToolResultMessage({ callId, content: [{ type: 'text', text: 'found' }], isError: false }),
       snapshot,
     ] }
-    const expected = { systemPrompt: 'direct\n\nlead rule\n\nlead rule\nnew rule', messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
+    const expected = { systemPrompt: 'direct\n\nlead\n\nrule\n\nlead rule\nnew rule', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
       expect.objectContaining({ role: 'assistant' }),
       { role: 'system', content: 'lead rule\nnew rule', timestamp: 0 },
       expect.objectContaining({ role: 'toolResult', content: [{ type: 'text', text: 'found' }] }),
@@ -617,11 +681,11 @@ describe('pi-ai system prompt source', () => {
       user([{ type: 'text', text: 'next question' }]),
       history('assistant', [{ type: 'text', text: 'second answer' }]),
     ] }
-    const expected = { systemPrompt: 'lead rule', messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
+    const expected = { systemPrompt: 'lead\n\nrule', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
       expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'first answer' }] }),
       { role: 'system', content: 'replacement', timestamp: 0 },
-      { role: 'user', content: 'next question', timestamp: 0 },
+      { role: 'user', content: [{ type: 'text', text: 'next question' }], timestamp: 0 },
       expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'second answer' }] }),
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
@@ -635,8 +699,8 @@ describe('pi-ai system prompt source', () => {
       history('assistant', [{ type: 'text', text: 'answer' }]),
       history('system', []),
     ] }
-    const expected = { systemPrompt: 'lead rule', messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
+    const expected = { systemPrompt: 'lead\n\nrule', messages: [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
       expect.objectContaining({ role: 'assistant' }),
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
@@ -646,8 +710,8 @@ describe('pi-ai system prompt source', () => {
   it('keeps a later update distinct from an absent initial prompt', async () => {
     const options: GenerateOptions = { ...base, messages: [question, leading] }
     const expected = { messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
-      { role: 'system', content: 'lead rule', timestamp: 0 },
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
+      { role: 'system', content: 'lead\n\nrule', timestamp: 0 },
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)
@@ -663,15 +727,15 @@ describe('pi-ai system prompt source', () => {
     const lookup = { name: 'lookup', description: 'initial', parameters: { type: 'object' } }
     const search = { name: 'search', description: 'later', parameters: { type: 'object' }, deferLoading: true }
     const update = createDeveloperMessage({ source: { kind: 'test' }, content: [
-      { type: 'text', text: 'first' }, { type: 'text', text: '' },
+      { type: 'text', text: ' first ' }, { type: 'text', text: '' },
       { type: 'tool-removal', toolName: 'lookup' },
       { type: 'text', text: 'second' }, { type: 'tool-addition', toolName: 'search' },
     ] })
     const options: GenerateOptions = { ...base, tools: [lookup, search], messages: [leading, update, question] }
-    const expected = { systemPrompt: 'lead rule', tools: [lookup], messages: [
-      { role: 'system', content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }], timestamp: 0,
+    const expected = { systemPrompt: 'lead\n\nrule', tools: [lookup], messages: [
+      { role: 'system', content: 'first\n\nsecond', timestamp: 0,
         toolsAdded: [{ name: 'search', description: 'later', parameters: { type: 'object' } }], toolsRemoved: [{ name: 'lookup' }] },
-      { role: 'user', content: 'hi', timestamp: 0 },
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)
@@ -679,12 +743,12 @@ describe('pi-ai system prompt source', () => {
 
   it('accepts text-only developer updates and ignores empty developer events', async () => {
     const options: GenerateOptions = { ...base, messages: [question,
-      createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'text', text: '' }] }),
+      createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'text', text: '' }, { type: 'text', text: ' ' }] }),
       createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }] }),
     ] }
     const expected = { messages: [
-      { role: 'user', content: 'hi', timestamp: 0 },
-      { role: 'system', content: [{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }], timestamp: 0 },
+      { role: 'user', content: [{ type: 'text', text: 'hi' }], timestamp: 0 },
+      { role: 'system', content: 'one\n\ntwo', timestamp: 0 },
     ] }
     expect(toPiContext(options, undefined, undefined, true)).toEqual(expected)
     await expect(toPiContext(options, imageContext(attachments), undefined, true)).resolves.toEqual(expected)

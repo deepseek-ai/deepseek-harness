@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
 import { Context, Service } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { PluginEntryId } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -14,7 +16,7 @@ import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
-  system: { platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
+  system: { platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } },
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {
@@ -35,6 +37,8 @@ async function fixture(fail = false) {
     }
   }
   new Remote()
+  const list = vi.fn<Context['remote']['pluginInventory']['list']>()
+  await ctx.plugin((scope) => { scope.provide('remote.pluginInventory', { list }) })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
@@ -69,10 +73,28 @@ async function fixture(fail = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, changes, unmount, status, systemStatus, applicationIcons,
+  return { ctx, changes, unmount, status, systemStatus, applicationIcons, list,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
   }
 }
+
+it('reads the Windows provider from the Host inventory when the helper cannot report permissions', async () => {
+  const f = await fixture()
+  try {
+    f.systemStatus.mockRejectedValue(new Error('helper missing'))
+    const failed = { ok: false, error: new RemoteError('gateway/internal', 'inventory unavailable', {}) } as const
+    f.list.mockResolvedValueOnce(failed).mockResolvedValue({ ok: true, value: { entries: [
+      { moduleName: '@deepseek-ai/dsh-cua-windows', enabled: true, fiberPhase: 'failed', entryId: brandString<PluginEntryId>('cua-windows') },
+    ] } })
+    await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
+    actionsOf(actions)
+    actions.refresh()
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.error).toBe('inventory unavailable') })
+    actions.refresh()
+    await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().windowsProvider.value).toBe(true) })
+  } finally { await f.ctx.fiber.dispose() }
+})
 
 it('withdraws the permission Remote and all controls with the optional plugin', async () => {
   const f = await fixture()

@@ -2,8 +2,8 @@
 // substructure references. Stable node and location stores make old snapshots
 // live readers rather than time-point views.
 
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { LlmRetryEventData } from '@deepseek-ai/dsh-llm-retry/types'
@@ -197,10 +197,7 @@ export interface CompactionSummaryNode {
   seq: number
   /** Unix epoch ms of the checkpoint event. */
   time: number
-  /** Summary text from the checkpoint's cited `compaction/summary` event; null when
-   *  the window cut left that event outside (the marker is then not expandable). */
-  summary: string | null
-  /** Seq of the loaded `compaction/summary` event, or null when that event is outside the window. */
+  /** Sequence of the loaded compaction/summary event, or null outside the loaded window. */
   summaryEventSeq: number | null
   /** Number of surface items replaced, or null when the summary event is unavailable or malformed. */
   shadowedItemCount: number | null

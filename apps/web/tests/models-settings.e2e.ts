@@ -312,6 +312,10 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await custom.getByRole('button', { name: '添加模型', exact: true }).click()
     await custom.getByLabel('模型 ID 1').fill('acme-large')
     await custom.getByRole('button', { name: '模型选项 1' }).click()
+    const fieldLeft = async (name: string) => custom.getByLabel(name, { exact: true })
+      .evaluate(element => element.getBoundingClientRect().left)
+    expect(await fieldLeft('上下文窗口 1')).toBe(await fieldLeft('模型 ID 1'))
+    expect(await fieldLeft('最大输出 token 数 1')).toBe(await fieldLeft('显示名称 1'))
     expect(await custom.getByLabel('上下文窗口 1').getAttribute('placeholder')).toBe('1M')
     expect(await custom.getByLabel('最大输出 token 数 1').getAttribute('placeholder')).toBe('128K')
     expect(await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
@@ -535,6 +539,46 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       await scaffold.ctx.settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', 'openai'] }])
       await edit.waitFor({ state: 'detached' })
       await page.getByRole('dialog', { name: '选择模型' }).waitFor({ state: 'detached' })
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('replaces an installed catalog model\'s reasoning levels and returns to them when switched off', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-catalog-reasoning'))
+    await scaffold.ctx.settings.mutate('llm-pi-ai', [{
+      op: 'set', path: ['providers', 'openai'], value: { models: [{ id: 'gpt-6-astra', name: 'GPT-6 Astra' }] },
+    }])
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    const edit = dialog.getByRole('button', { name: '编辑 openai', exact: true })
+    const toggle = dialog.getByRole('switch', { name: '推理等级 1' })
+    const efforts = async (): Promise<string[]> =>
+      (await scaffold.ctx.llm.resolveModelInfo('openai', 'gpt-6-astra')).reasoning?.efforts.map(effort => String(effort.id)) ?? []
+    const openModelOptions = async (): Promise<void> => {
+      await edit.click()
+      await dialog.getByText('自定义设置').click()
+      await dialog.getByRole('button', { name: '模型选项 1' }).click()
+    }
+    try {
+      const inherited = await efforts()
+      expect(inherited).toContain('max')
+      await openModelOptions()
+      expect(await toggle.getAttribute('aria-checked')).toBe('false')
+      await toggle.click()
+      await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      await toggle.waitFor({ state: 'detached' })
+      expect(await efforts()).toEqual(['off', 'low', 'medium', 'high'])
+      // The saved notice confirms the browser directory refresh, so the reopened draft holds the stored levels.
+      await dialog.getByText('已保存 openai。', { exact: true }).waitFor({ timeout: 10_000 })
+
+      await openModelOptions()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      await toggle.click()
+      await dialog.getByRole('button', { name: '保存', exact: true }).click()
+      await toggle.waitFor({ state: 'detached' })
+      expect(await efforts()).toEqual(inherited)
+    } finally {
+      await scaffold.ctx.settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', 'openai'] }])
+      await edit.waitFor({ state: 'detached' })
     }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

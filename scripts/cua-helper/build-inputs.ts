@@ -12,7 +12,7 @@ const sourceDirectories = [
   'packages/experimental/cua-macos/native', 'scripts/cua-helper', 'apps/desktop/scripts', 'patches',
 ]
 const sourceFiles = new Set([
-  '.github/workflows/cua-helper-package.yml', '.github/workflows/release-publish.yml',
+  '.github/workflows/cua-helper-package-macos.yml', '.github/workflows/release-publish.yml',
   'package.json', 'scripts/package.json', 'apps/package.json', 'apps/desktop/package.json', 'scripts/release/process.ts',
   'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', '.pnpmfile.mjs',
 ])

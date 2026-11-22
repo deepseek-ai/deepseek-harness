@@ -8,6 +8,7 @@ import {
   normalizeSessionLog,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
+  REPLAY_CREDENTIAL_ENV,
   normalizeStdout,
   scrubModelRequestBulk,
   type NormalizeContext,
@@ -394,6 +395,7 @@ describe('headless stream-json snapshots', () => {
       binArgs: ['headless', '--patch', headlessOverlayPath, task],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_PERMISSION_MODE: 'danger-full-access',
         DSH_TELEMETRY_DISABLED: '1',
         NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
@@ -692,6 +694,7 @@ describe('headless stream-json snapshots', () => {
       binArgs: [retryConfigPath, prompt],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_SNAPSHOT: 'replay',
         NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
       },
@@ -1116,15 +1119,22 @@ describe('headless stream-json snapshots', () => {
         const parent = logs.find(log => typeof log.header.parentSession !== 'string')
         if (parent === undefined) throw new Error('Agent Teams snapshot did not persist its Lead')
         const rows = parseJsonl(parent.content)
+        const workflowTask = [
+          { type: 'text', text: 'Agent lead sent a message: ' },
+          { type: 'text', text: 'TEAM_WORKFLOW_CHILD' },
+        ]
         const workflowChild = logs.find(log => parseJsonl(log.content).some(row => row.type === 'user/message'
-          && JSON.stringify((row.data as JsonObject).content) === JSON.stringify([{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }])))
+          && JSON.stringify((row.data as JsonObject).content) === JSON.stringify(workflowTask)))
         if (workflowChild === undefined) throw new Error('Team profile did not persist its workflow child')
         const workflowRows = parseJsonl(workflowChild.content)
         expect(workflowRows.find(row => row.type === 'subagent/descriptor')?.data)
           .toMatchObject({ mode: 'continuable', provider: 'spawn' })
         expect(workflowRows.filter(row => row.type === 'user/message'
-          && ((row.data as JsonObject).source as JsonObject).kind === 'user').map(row => row.data))
-          .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
+          && ((row.data as JsonObject).source as JsonObject).kind === 'agent-message').map(row => row.data))
+          .toEqual([expect.objectContaining({
+            content: workflowTask,
+            source: { kind: 'agent-message', form: 'relay', senderSessionId: parent.header.id },
+          })])
         const teammates = rows.filter(row => row.type === 'subagent/catalog')
           .flatMap(row => typeof (row.data as JsonObject).label === 'string' && ((row.data as JsonObject).label as string).startsWith('Own deterministic ') ? [(row.data as JsonObject).label as string] : [])
         const tasks = rows.filter(row => row.type === 'team/task')
@@ -1160,6 +1170,7 @@ describe('headless stream-json snapshots', () => {
           const source = (row.data as JsonObject).source
           return typeof source === 'object' && source !== null && !Array.isArray(source)
             && (source as JsonObject).kind === 'agent-message'
+            && (source as JsonObject).senderSessionId !== parent.header.id
         })
         const openTurnStart = implementerRows.findLastIndex((row, index) => (
           index < steeredMessageIndex && row.type === 'turn/start'
@@ -1176,11 +1187,11 @@ describe('headless stream-json snapshots', () => {
         const identities = logs.flatMap((log) => {
           if (log === parent || log === workflowChild) return []
           const initial = parseJsonl(log.content).find(row => row.type === 'user/message'
-            && ((row.data as JsonObject).source as JsonObject).kind === 'user')
+            && ((row.data as JsonObject).source as JsonObject).kind === 'agent-message')
           if (initial === undefined) throw new Error('Teammate Session has no initial task')
           const content = (initial.data as JsonObject).content as JsonObject[]
-          // The task block is followed by the standard return guidance naming the Lead.
-          expect(content).toHaveLength(2)
+          expect(content).toHaveLength(3)
+          expect(content[0]).toEqual({ type: 'text', text: 'Agent lead sent a message: ' })
           const context = parseJsonl(log.content).find(row => row.type === 'user/message'
             && ((row.data as JsonObject).source as JsonObject).kind === 'runtime-context')
           const source = (context?.data as JsonObject)?.source as JsonObject
@@ -1310,6 +1321,7 @@ describe('headless stream-json snapshots', () => {
       binArgs: [goalConfigPath, prompt],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         DSH_SNAPSHOT: 'replay',
         DSH_SNAPSHOT_FILE: join(goalScenarioDir, 'session.jsonl'),
         DSH_SNAPSHOT_OVERRIDE: join(goalScenarioDir, 'replay.override.json'),
@@ -1370,6 +1382,7 @@ describe('headless stream-json snapshots', () => {
       binArgs: [settlementConfigPath, task],
       tsconfigPath,
       env: {
+        ...REPLAY_CREDENTIAL_ENV,
         // The override fully supplies the parent script; the child fixture
         // remains separate so replay binds it to the fresh child Session.
         DSH_SNAPSHOT_FILE: parentReplay,

@@ -12,7 +12,8 @@ import { renderList, renderRead, renderSpawn } from '@deepseek-ai/dsh-tool-termi
 import { formatSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 import { detailBadge, detailJson, detailList, detailRecord, inspectionItems, nonempty } from '../src/client/tool/models/detail-model-shared.ts'
 import { detailsCardModel } from '../src/client/tool/models/details-card-model.ts'
-import { SpillLocator } from '@deepseek-ai/dsh-spill'
+import type { SpillLocator } from '@deepseek-ai/dsh-spill'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 
 const t = makeTranslate(en, commonEn)
@@ -54,6 +55,26 @@ describe('shared detail values', () => {
 })
 
 describe('control detail adapters', () => {
+  it('shows Session message acceptance with the recorded target, content, and receipt', () => {
+    const args = { session_id: 'session-review', message: 'Review the change\nCheck the result.' }
+    const text = JSON.stringify({ message_id: 'message-accepted' })
+    expect(details('session_send_message', text, args)).toMatchObject({
+      summary: 'session-review · Accepted',
+      items: [{
+        title: 'session-review',
+        description: args.message,
+        badge: { label: 'Accepted', tone: 'success' },
+        fields: [{ label: 'Message ID', value: 'message-accepted' }],
+      }],
+    })
+    const translate = makeTranslate(zh, commonZh)
+    expect(detailsCardModel(output('session_send_message', text, args), translate, 'zh-CN')?.items[0]?.badge?.label)
+      .toBe(translate('detail.status.accepted'))
+    for (const malformed of ['null', '[]', '{}', '{"message_id":1}', '{"message_id":" "}']) {
+      expect(details('session_send_message', malformed, args)).toBeNull()
+    }
+  })
+
   it('localizes unreadable catalog statuses in English and Chinese', () => {
     const states = ['corrupt', 'unsupported', 'unavailable']
     for (const [dictionary, common, locale, labels] of [
@@ -93,22 +114,27 @@ describe('control detail adapters', () => {
     const agents = details('list_agents', 'lead [running] — root agent\nreviewer/checker [inactive] — Check tests\nold-id [unavailable]')
     expect(agents?.summary).toBe('3 agents')
     expect(agents?.items).toEqual([
-      { title: 'lead', subtitle: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
-      { title: 'reviewer/checker', subtitle: 'Check tests', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
+      { title: 'root agent', subtitle: 'lead', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'Check tests', subtitle: 'reviewer/checker', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
       { title: 'old-id', badge: { label: 'Unavailable', tone: 'neutral' }, fields: [] },
     ])
     const historical = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review\na3 [diagnostic: corrupt] parent=a1 depth=1', { scope: 'descendants' })
     expect(historical?.summary).toBe('3 agents')
     expect(historical?.items).toEqual([
-      { title: 'a1', subtitle: 'Build', badge: { label: 'Running', tone: 'info' }, fields: [] },
-      { title: 'a2', subtitle: 'Review', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
+      { title: 'Build', subtitle: 'a1', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'Review', subtitle: 'a2', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
       { title: 'a3', badge: { label: 'diagnostic: corrupt', tone: 'neutral' }, fields: [] },
     ])
     const structured = details('list_agents', JSON.stringify([{ name: 'lead', status: 'running', description: 'root agent' }, { name: 'reviewer', status: 'inactive' }]))
     expect(structured?.items).toEqual([
-      { title: 'lead', description: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'root agent', subtitle: 'lead', badge: { label: 'Running', tone: 'info' }, fields: [] },
       { title: 'reviewer', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
     ])
+    expect(details('list_agents', 'Subagent capacity: running=2, limit=8\nlead [running] — root agent\nreviewer/checker [inactive] — Check tests\nold-id [unavailable]')).toEqual(agents)
+    expect(details('list_agents', JSON.stringify({
+      running: 2, limit: 8,
+      agents: [{ name: 'lead', status: 'running', description: 'root agent' }, { name: 'reviewer', status: 'inactive' }],
+    }))).toEqual(structured)
     expect(details('list_agents', 'reviewer running')).toBeNull()
     expect(details('list_agents', '(no subagents)')?.empty).toBe('No results')
     expect(details('job_list', 'j1 [bash] running — Build')?.items[0]?.fields).toContainEqual({ label: 'Type', value: 'bash' })
@@ -222,6 +248,9 @@ describe('inspection detail adapters', () => {
   })
 
   it('accepts Cordis, workflow, and Ralph producer results', () => {
+    expect(details('cordis_inspect', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
+    expect(details('cordis_inspect', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
+    expect(details('cordis_inspect', '{}')).toBeNull()
     expect(details('cordis_inspect_list', '{"providers":[{"name":"Service","status":"ready"}]}')?.summary).toBe('1 inspect providers')
     expect(details('cordis_inspect_query', '{"provider":"Service","method":"get","data":{"value":1}}')?.summary).toBe('Service.get')
     expect(details('cordis_inspect_self', '{"mode":"client","plugins":[]}')?.summary).toBe('0 dynamic plugins')
@@ -284,7 +313,7 @@ describe('inspection detail adapters', () => {
   it('retains generic output for malformed or spilled inspection results', () => {
     expect(details('workflow', 'bad')).toBeNull()
     expect(details('session_trace', 'Session s1 — title\nCreated: invalid\nAvailability: unavailable\n\nAncestors (nearest first):\n- none (target is a root session)\n\nDescendants:\n- none')?.items[0]?.fields).toContainEqual({ label: 'Time', value: 'invalid' })
-    const notice = formatSpillNotice({ kind: 'exact', count: 100 }, { locator: SpillLocator('/tmp/result.txt'), retrievalHint: 'Read it with read' })
+    const notice = formatSpillNotice({ kind: 'exact', count: 100 }, { locator: brandString<SpillLocator>('/tmp/result.txt'), retrievalHint: 'Read it with read' })
     expect(details('session_event_trace', `Session s1 — title\nCreated: 1970-01-01T00:00:00.000Z\n\n${notice}`)).toBeNull()
     expect(details('session_search', 'not a result')).toBeNull()
     expect(details('session_event_read', 'not a result')).toBeNull()

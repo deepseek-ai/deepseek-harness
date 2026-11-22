@@ -1,6 +1,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
-import { FsError, FsTargetKey, FsVersion, type FsTarget } from '@deepseek-ai/dsh-fs'
+import { FsError, type FsTargetKey, type FsVersion, type FsTarget } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import { RemoteOperationError } from '@deepseek-ai/dsh-ssh/protocol'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -8,7 +9,7 @@ import { z } from 'zod'
 import { SshFileSystem } from '../src/index.ts'
 
 type Dispatch = (method: string, params: unknown, signal?: AbortSignal) => Promise<unknown>
-const target: FsTarget = { targetKey: FsTargetKey('/remote/work/file.txt'), displayPath: 'file.txt' }
+const target: FsTarget = { targetKey: brandString<FsTargetKey>('/remote/work/file.txt'), displayPath: 'file.txt' }
 const streamId = '00000000-0000-4000-8000-000000000001'
 
 async function setup() {
@@ -45,7 +46,7 @@ describe('SSH filesystem provider', () => {
   ])('preserves the POSIX filename %j in a file URL', async (name, encoded) => {
     const { fs } = await setup()
     const path = `/remote/work/${name}`
-    const url = fs.fileUrl({ targetKey: FsTargetKey(path), displayPath: path })
+    const url = fs.fileUrl({ targetKey: brandString<FsTargetKey>(path), displayPath: path })
     expect(url).toBe(`file:///remote/work/${encoded}`)
     expect(fileURLToPath(url)).toBe(path)
   })
@@ -66,7 +67,7 @@ describe('SSH filesystem provider', () => {
 
   it('compares POSIX canonical identities without accepting a sibling prefix', async () => {
     const { fs } = await setup()
-    const makeTarget = (path: string): FsTarget => ({ targetKey: FsTargetKey(path), displayPath: path })
+    const makeTarget = (path: string): FsTarget => ({ targetKey: brandString<FsTargetKey>(path), displayPath: path })
     const root = makeTarget('/remote/work')
     expect(fs.contains(root, root)).toBe(true)
     expect(fs.contains(root, target)).toBe(true)
@@ -109,11 +110,11 @@ describe('SSH filesystem provider', () => {
     dispatch.mockResolvedValueOnce(written).mockResolvedValueOnce(edited)
     const signal = new AbortController().signal
     const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/remote/link/..' }
-    const expected = { kind: 'replaceIfVersion' as const, version: FsVersion('v1') }
+    const expected = { kind: 'replaceIfVersion' as const, version: brandString<FsVersion>('v1') }
     const edit = { oldString: 'new', newString: 'next', replaceAll: false }
     expect(await fs.writeText(target, 'new', expected, signal, policy)).toEqual(written)
     expect(dispatch).toHaveBeenLastCalledWith('fs.write', { target, content: 'new', expected, policy }, signal)
-    expect(await fs.editText(target, edit, { version: FsVersion('v2') }, signal, policy)).toEqual(edited)
+    expect(await fs.editText(target, edit, { version: brandString<FsVersion>('v2') }, signal, policy)).toEqual(edited)
     expect(dispatch).toHaveBeenLastCalledWith('fs.edit', { target, edit, expected: { version: 'v2' }, policy }, signal)
   })
 
@@ -209,11 +210,11 @@ it.each([false, true])('forwards patch/delete/move with explicit policy %s and p
   const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/remote/work' }
   const selected = explicit ? policy : undefined
   const resolved = explicit ? policy : { mode: 'read-only', workspaceRoot: '/remote/work' }
-  const expected = { version: FsVersion('v1') }
+  const expected = { version: brandString<FsVersion>('v1') }
   const hunks = [{ lineNumber: 3, context: 'anchor', oldLines: ['old'], newLines: ['new'], isEndOfFile: false }]
   const edited = { version: 'v2', before: 'old', after: 'new' }
   const deleted = { before: 'old' }
-  const destination = { targetKey: FsTargetKey('/remote/work/new.txt'), displayPath: 'new.txt' }
+  const destination = { targetKey: brandString<FsTargetKey>('/remote/work/new.txt'), displayPath: 'new.txt' }
   const moved = { sourceBefore: 'source before patch\n', destination: { ...edited, operation: 'create' }, sourceDeleted: false, sourceFailure: { code: 'FS_PERMISSION_DENIED', message: 'cannot delete source' } }
   dispatch.mockResolvedValueOnce(edited).mockResolvedValueOnce(deleted).mockResolvedValueOnce(moved)
   expect(await fs.patchText(target, hunks, expected, signal, selected)).toEqual(edited)

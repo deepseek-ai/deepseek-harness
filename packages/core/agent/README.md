@@ -31,6 +31,8 @@ Mount `dsh-agent` with `dsh-session-projection`: it provides `ctx.agents`, the `
 
 `ctx.agents.create()` builds a fresh agent and session under one identity; `ctx.agents.resume()` loads a persisted session and rebuilds the agent on it. Both delegate to the registered factory and return an `AgentHandle` — the only object that can tear that agent down. See [`AgentFactory`](src/index.ts) for publication and failure-cleanup timing. `get(id)` and `list()` find live agents. The [subagent service](../../subagent/subagent/README.md) owns delegated execution and runtime tree membership.
 
+`seed` carries the complete constructor history. A fork additionally passes `parentSource: { sessionId, endSeq }`: the parent whose stored events the first `endSeq` seed events reproduce, as a live log or a persistence read returned them. The [loop's creation lifecycle](../agent-loop/README.md#understand-the-implementation) owns seed validation, storage, and cancellation.
+
 ```text
 const handle = await ctx.agents.create({
   sessionId,
@@ -55,7 +57,7 @@ For scoped switch notices, call `installModelSelection(agentCtx)` from `dsh-agen
 
 ### Drive an agent's conversation
 
-The handle's methods route identified user-role messages into the agent's inbox. `followup()` queues an ordinary next-turn prompt and wakes the driver; `steer()` submits next-step input and wakes it; `inject()` adds model-facing context without waking the driver, so it lands in the next admitted step. `cancel(cause)` aborts the active activity and, unless `keepInbox` is set, clears pending work; `whenIdle()` resolves after the whole agent reaches quiescence.
+The handle's methods route identified user-role messages into the agent's inbox. `followup()` queues an ordinary next-turn prompt and wakes the driver; `steer()` submits next-step input and wakes it; `inject()` adds model-facing context without waking the driver, so it lands in the next admitted step. `cancel(cause)` aborts the active activity and, unless `keepInbox` is set, clears pending work; `whenIdle()` resolves after the whole agent reaches quiescence. A queue-write failure during cancellation still aborts active work and propagates to the caller.
 
 ```text
 handle.agent.followup({

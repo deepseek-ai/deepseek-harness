@@ -21,7 +21,7 @@
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../speech-to-text"

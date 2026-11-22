@@ -1,7 +1,7 @@
 /** Discover the caller's entire subagent tree; the control plugin owns registration. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -46,6 +46,7 @@ export function registerListAgents(ctx: Context): ToolDefinition {
     name: 'list_agents',
     description:
       'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
+      + 'Shared capacity reports running/limit; do not spawn more agents when capacity is limited. '
       + 'Rows carry names, descriptions, and status. A descendant\'s name is its path from the root, such as reviewer/checker. '
       + 'You can message any other agent in the subagent tree. '
       + 'running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. '
@@ -54,40 +55,55 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',
     parameters: {},
+    // Catalog observations are read-only and release their Session handles.
+    isConcurrencySafe: () => true,
     output: {
       schema: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            name: { type: 'string', required: true },
-            status: { type: 'string', required: true, enum: ['running', 'inactive', 'corrupt', 'unsupported', 'unavailable'] },
-            description: { type: 'string' },
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          running: { type: 'integer', required: true },
+          limit: { type: 'integer', required: true },
+          agents: {
+            type: 'array', required: true,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                name: { type: 'string', required: true },
+                status: { type: 'string', required: true, enum: ['running', 'inactive', 'corrupt', 'unsupported', 'unavailable'] },
+                description: { type: 'string' },
+              },
+            },
           },
         },
       },
-      render: (_args, entries) => [{
+      render: (_args, value) => [{
         type: 'text',
-        text: entries.map(entry =>
-          `${entry.name} [${entry.status}]${entry.description === undefined ? '' : ` — ${entry.description}`}`,
-        ).join('\n'),
+        text: [
+          `Subagent capacity: running=${value.running}, limit=${value.limit}`,
+          ...value.agents.map(entry =>
+            `${entry.name} [${entry.status}]${entry.description === undefined ? '' : ` — ${entry.description}`}`),
+        ].join('\n'),
       }],
     },
     async execute(_args, exec) {
       const parent = exec.agent
       if (!parent) {
         // Non-agent callers have no session whose children could be listed.
-        throw new Error('list_agents requires a calling agent (exec.agent was undefined)')
+        throw new ToolContextUnavailableError('list_agents requires a calling agent (exec.agent was undefined)')
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
-      return [
-        { name: ROOT_AGENT_NAME, status: statusOf(ctx.agents, root.id), description: 'root agent' },
-        ...entries
-          .map(entry => project(ctx.agents, entry))
-          .filter(entry => entry !== undefined),
-      ]
+      return {
+        ...ctx.subagents.capacityOf(parent),
+        agents: [
+          { name: ROOT_AGENT_NAME, status: statusOf(ctx.agents, root.id), description: 'root agent' },
+          ...entries
+            .map(entry => project(ctx.agents, entry))
+            .filter(entry => entry !== undefined),
+        ],
+      }
     },
   })
   ctx.tools.register(definition)

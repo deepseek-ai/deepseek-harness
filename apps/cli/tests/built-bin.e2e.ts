@@ -13,9 +13,8 @@ import {
 } from '@agentclientprotocol/sdk'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { execa } from 'execa'
-import * as yaml from 'js-yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testProfileResolution } from './profiles/headless/tests/profile-resolution.ts'
 
@@ -144,9 +143,7 @@ function createProfileLifecycleFixture(): ProfileLifecycleFixture {
   writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n')
   const linkTarget = join(profileDir, 'node_modules', 'dsh-lifecycle-bundle')
   mkdirSync(join(profileDir, 'node_modules'), { recursive: true })
-  try {
-    rmSync(linkTarget, { recursive: true, force: true })
-  } catch { /* fresh dir */ }
+  rmSync(linkTarget, { recursive: true, force: true })
   // Copy-free: a package.json redirecting via a relative main is enough for require.resolve.
   mkdirSync(linkTarget, { recursive: true })
   for (const file of ['package.json', 'cordis.patch.yml', 'plugin.mjs']) {
@@ -1259,20 +1256,20 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       )
       expect(code).toBe(0)
       expect(stderr).toBe('')
-      const rows = yaml.load(stdout, { schema: entryListSchema }) as Array<{ id?: string; name?: string }>
+      const rows = parseEntryYaml(stdout) as Array<{ id?: string; name?: string }>
       expect(rows.map(row => [row.id, row.name])).toEqual([
         ['sdk-app-startup', '@deepseek-ai/dsh-sdk-app'],
         ['sdk-jsonrpc-server', '@deepseek-ai/dsh-sdk-jsonrpc-server'],
         ['deepseek-llm-api-extensions', '@deepseek-ai/dsh-deepseek-llm-api-extensions'],
         ['session-log-deepseek', '@deepseek-ai/dsh-session-log-deepseek'],
         ['plugin-package-inventory-deepseek', '@deepseek-ai/dsh-plugin-package-inventory-deepseek'],
+        ['deepseek-auth', '@deepseek-ai/dsh-deepseek-auth'],
         ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek-api-key'],
         ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
         ['filesystem', '@deepseek-ai/dsh-fs-local'],
         ['attachment-local', '@deepseek-ai/dsh-attachment-local'],
         ['tool-fs', '@deepseek-ai/dsh-tool-fs'],
         ['working-directory', '@deepseek-ai/dsh-working-directory'],
-        ['tool-working-directory', '@deepseek-ai/dsh-tool-working-directory'],
         ['session-projection', '@deepseek-ai/dsh-session-projection'],
         ['token-meter', '@deepseek-ai/dsh-token-meter'],
         ['compaction-basic', '@deepseek-ai/dsh-compaction-basic'],

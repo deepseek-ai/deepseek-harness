@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-13-draft-attachments-across-session-switches.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-13-draft-attachments-across-session-switches.md
+/agent-note-draft-attachments-across-session-switches:
+  en: 2a1645c8c80d6dff
+  zh: 59277c3754231479
+/agent-note-draft-attachments-across-session-switches/problem:
+  en: 3f4030763e1f0105
+  zh: c8a0bc5641d7bed4
+/agent-note-draft-attachments-across-session-switches/decision:
+  en: 3b2603721398054c
+  zh: 7d2e5f3be236f1d3
+/agent-note-draft-attachments-across-session-switches/alternatives-considered:
+  en: 01a406120acfc8b9
+  zh: 17a3fd9be7a303fb
+/agent-note-draft-attachments-across-session-switches/consequences:
+  en: 6ac6defa552ea040
+  zh: aa64a3c3e54dbebc

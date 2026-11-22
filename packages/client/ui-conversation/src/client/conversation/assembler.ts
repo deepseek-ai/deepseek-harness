@@ -1,7 +1,7 @@
 import type {
   SessionAssistantSettlementEntry, SessionEventLikeEntry, SessionTransientEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import type {
   ConversationContextReader, ConversationLocationData, ConversationMatch, ConversationMatchResult,
   ConversationNodeContext, ConversationNodeDefinition, ConversationPreviousContext,
@@ -378,11 +378,16 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
 
   /**
    * Rebuild against the current Registry set after a low-frequency plugin change.
+   * @param entries - complete window to rebuild from; omitted replays the loaded inputs.
+   * @param hasMore - whether older history remains outside `entries`.
    * @returns immediate publication request.
    */
-  rebuildRegistry(): ConversationPublication {
+  rebuildRegistry(
+    entries: readonly SessionEventLikeEntry[] = this.sortedInputs(),
+    hasMore: boolean = this.hasMore,
+  ): ConversationPublication {
     this.resetViewBuilders()
-    return this.replaceWindow(this.sortedInputs(), this.hasMore)
+    return this.replaceWindow(entries, hasMore)
   }
 
   /**

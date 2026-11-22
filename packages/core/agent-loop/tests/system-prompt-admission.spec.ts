@@ -1,12 +1,14 @@
+import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, LlmError, type ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -40,10 +42,15 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   ctx.llm.registerAdapter(['capable'], capable)
   ctx.llm.registerAdapter(['plain'], plain)
   let prompt = 'prompt one'
-  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
-    ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
-  }))
-  const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
+  const registerPrompt = () => ctx.systemPrompt.section({
+    name: 'test', text: () => prompt, replacement: '', order: 0, retirement: 'These instructions no longer apply.',
+  })
+  const disposePrompt = registerPrompt()
+  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    const assembly = await next()
+    return { ...assembly, sections: assembly.sections.filter(section => section.name === 'test') }
+  })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('admission'), { provider: 'capable', model: 'model' })
   installModelSelection(agent.ctx)
   ctx.on('llm/stream', (request, next) => {
     // Rebuild from copied source events, not the live projection's cached state.
@@ -53,12 +60,29 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
     expect(request.system).toBeUndefined()
     return next()
   })
-  return { ctx, agent, capable, plain, setPrompt: (text: string) => { prompt = text } }
+  return { ctx, agent, capable, plain, disposePrompt, registerPrompt, setPrompt: (text: string) => { prompt = text } }
 }
 
 async function send(agent: Agent, text: string) {
   agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
   await agent.whenIdle()
+}
+
+function compact(agent: Agent, start: import('@deepseek-ai/dsh-session').SessionSeq,
+  end: import('@deepseek-ai/dsh-session').SessionSeq, turn: number | null) {
+  const session = agent.session
+  const nodes = session.surface.nodes
+  const shadowedSeqs = nodes.slice(nodes.indexOf(start), nodes.indexOf(end) + 1)
+  const compactionId = CompactionId(`compact-${session.seq}`)
+  const opening = session.append('compaction/start', { compactionId, turn })
+  const summary = session.append('compaction/summary', {
+    compactionId, summary: [{ type: 'text', text: 'compacted history' }],
+    shadowedRange: { start, end }, shadowedSeqs, shadowedTokenCount: 0, provider: 'capable', model: 'model',
+  })
+  session.append('user/message', createUserMessage({
+    content: [{ type: 'text', text: 'compacted history' }], source: { kind: 'compact-checkpoint', compactionId },
+  }), { surfaceOp: { op: 'replace', startSeq: start, endSeq: end }, sourceEventSeqs: [opening.seq, summary.seq, ...shadowedSeqs] })
+  session.append('compaction/end', { compactionId, turn })
 }
 
 function registerTool(ctx: Context, name: string, description = `${name} tool`) {
@@ -107,20 +131,24 @@ describe('prepared-route prompt admission', () => {
       expect(header?.data.startsSeries).not.toBe(true)
     })
 
-    it('consolidates when the prepared route cannot append prompts', async () => {
+    it('preserves section history when the prepared route has no native system updates', async () => {
       const h = await harness()
       h.capable.toolUpdate = toolUpdate
+      registerTool(h.ctx, 'search')
       await send(h.agent, 'first')
       h.setPrompt('prompt two')
       await send(h.agent, 'second')
       delete h.capable.systemPromptUpdate
       registerTool(h.ctx, 'fetch')
       await send(h.agent, 'add fetch')
-
       const request = h.capable.requests.at(-1)!
-      expectPlain(request, 'prompt two')
-      expect(request.tools?.find(tool => tool.name === 'fetch')?.deferLoading).not.toBe(true)
-      expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
+      expect(systemTexts(request)).toEqual([
+        [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+      ])
+      expect(toPiContext(request).messages).toContainEqual({
+        role: 'user', content: '<system-reminder>\nprompt two\n</system-reminder>', timestamp: 0,
+      })
+      expect(request.tools?.find(tool => tool.name === 'fetch')?.deferLoading).toBe(true)
     })
 
     it.each(['explicit', 'replacement'] as const)('rebuilds declarations without re-baselining an unchanged prompt at a %s series start', async (reason) => {
@@ -184,43 +212,27 @@ describe('prepared-route prompt admission', () => {
     })
   })
 
-  it.each(['capable', 'plain'] as const)('clears every active prompt version on %s routes across repeated requests and resume', async (provider) => {
+  it('keeps a registration retirement across repeated requests and inherited history', async () => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
-    h.setPrompt('prompt three')
-    await send(h.agent, 'third')
-    expect(systemTexts(h.capable.requests[2]!)).toHaveLength(3)
-    h.agent.model.select({ provider, model: 'model' })
-    h.setPrompt('')
-    await send(h.agent, 'clear')
-    const adapter = provider === 'capable' ? h.capable : h.plain
-    const cleared = adapter.requests.at(-1)!
-    expect(systemTexts(cleared)).toEqual([])
-    expect(toPiContext(cleared).systemPrompt).toBeUndefined()
-    expect(JSON.stringify(toPiContext(cleared))).not.toContain('prompt ')
-    const clearEvents = h.agent.session.snapshotEvents().filter(event => event.type === 'system/message').filter(event => event.data.turn === 4)
-    expect(clearEvents).toHaveLength(3)
-    for (const event of clearEvents) {
-      expect(event.data.message.content).toEqual([])
-      expect(event.surfaceOp).toEqual({ op: 'replace', startSeq: event.sourceEventSeqs?.[0], endSeq: event.sourceEventSeqs?.[0] })
-    }
+    h.disposePrompt()
+    await send(h.agent, 'retire')
+    expect(systemTexts(h.capable.requests.at(-1)!)).toHaveLength(3)
+    expect(systemTexts(h.capable.requests.at(-1)!).at(-1)).toEqual([{ type: 'text', text: 'These instructions no longer apply.' }])
     const count = h.agent.session.snapshotEvents().filter(event => event.type === 'system/message').length
-    await send(h.agent, 'still clear')
-    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(count)
-    expect(systemTexts(adapter.requests.at(-1)!)).toEqual([])
+    await send(h.agent, 'still retired')
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('cleared-resume'), agentOptions: { provider, model: 'model' },
+      sessionId: brandString<SessionId>('retired-resume'), agentOptions: { provider: 'capable', model: 'model' },
       seed: [...h.agent.session.snapshotEvents()],
     })
-    await send(resumed, 'resume clear')
+    await send(resumed, 'resume')
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(count)
-    expect(systemTexts(adapter.requests.at(-1)!)).toEqual([])
+    h.registerPrompt()
     h.setPrompt('restored instruction')
     await send(resumed, 'restore')
-    expect(systemTexts(adapter.requests.at(-1)!)).toEqual([[{ type: 'text', text: 'restored instruction' }]])
-    expect(JSON.stringify(adapter.requests.at(-1)!)).not.toContain('prompt ')
+    expect(systemTexts(h.capable.requests.at(-1)!).at(-1)).toEqual([{ type: 'text', text: 'restored instruction' }])
   })
 
   it.each(['explicit', 'tools'] as const)('keeps surviving prompt versions with unchanged text at a %s series start', async (reason) => {
@@ -286,7 +298,72 @@ describe('prepared-route prompt admission', () => {
     expect(request.messages.slice(0, previous.messages.length - 1)).toEqual(previous.messages.slice(0, -1))
   })
 
-  it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
+  it('defers disposal during a failed request until the next accepted step', async () => {
+    const overflow = () => { throw LlmError.fromFailure({ message: 'context window exceeded', code: 'CONTEXT_LENGTH' }) }
+    const adapter = new MockAdapter([overflow, textResponse('retried'), textResponse('next')])
+    const h = await harness(adapter)
+    let assemblies = 0
+    h.ctx.on('system-prompt/assemble', (_assembly, _context, next) => { assemblies++; return next() })
+    h.ctx.on('agent/request-error', () => {
+      h.disposePrompt()
+      return Promise.resolve({ kind: 'retry' as const })
+    })
+    await send(h.agent, 'first')
+    expect(adapter.requests).toHaveLength(2)
+    expect(adapter.requests[1]!.messages).toEqual(adapter.requests[0]!.messages)
+    expectPlain(adapter.requests[1]!, 'prompt one')
+    expect(assemblies).toBe(1)
+    await send(h.agent, 'next')
+    expect(systemTexts(adapter.requests[2]!)).toEqual([
+      [{ type: 'text', text: 'prompt one' }],
+      [{ type: 'text', text: 'These instructions no longer apply.' }],
+    ])
+    expect(assemblies).toBe(2)
+  })
+
+  it.each(['request', 'prepare'] as const)('retains the captured source when it is disposed during %s preparation', async (stage) => {
+    const h = await harness()
+    if (stage === 'request') {
+      h.ctx.on('agent/request', (_payload, next) => { h.disposePrompt(); return next() })
+    } else {
+      const resolve = h.capable.resolveModel.bind(h.capable)
+      vi.spyOn(h.capable, 'resolveModel').mockImplementation(async (...args) => {
+        h.disposePrompt()
+        return resolve(...args)
+      })
+    }
+
+    await send(h.agent, 'captured before disposal')
+    expectPlain(h.capable.requests[0]!, 'prompt one')
+    await send(h.agent, 'retire on the next step')
+    expect(systemTexts(h.capable.requests[1]!)).toEqual([
+      [{ type: 'text', text: 'prompt one' }],
+      [{ type: 'text', text: 'These instructions no longer apply.' }],
+    ])
+  })
+
+  it('discards a rejected assembly without retiring its uncommitted source', async () => {
+    const h = await harness()
+    let reject = true
+    h.ctx.on('agent/pre-step', (_payload, next) => {
+      if (!reject) return next()
+      reject = false
+      h.disposePrompt()
+      return Promise.resolve({ kind: 'reject' as const })
+    })
+
+    await send(h.agent, 'rejected')
+    expect(h.capable.requests).toHaveLength(0)
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toEqual([])
+    await send(h.agent, 'source is gone')
+    expect(systemTexts(h.capable.requests[0]!)).toEqual([])
+    h.registerPrompt()
+    h.setPrompt('newly registered')
+    await send(h.agent, 'source returns')
+    expect(systemTexts(h.capable.requests[1]!)).toEqual([[{ type: 'text', text: 'newly registered' }]])
+  })
+
+  it.each([false, true])('rebuilds once before a compaction retry, latest update survives=%s', async (retainLatest) => {
     const overflow = () => { throw LlmError.fromFailure({ message: 'context window exceeded', code: 'CONTEXT_LENGTH' }) }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), overflow, overflow, textResponse('done')])
     const h = await harness(adapter)
@@ -300,19 +377,17 @@ describe('prepared-route prompt admission', () => {
     let attempts = 0
     h.ctx.on('system-prompt/assemble', (_assembly, _context, next) => { assemblies++; return next() })
     h.ctx.on('agent/pre-step', (_payload, next) => { preSteps++; return next() })
-    h.ctx.on('agent/request-error', ({ failure }) => {
+    h.ctx.on('agent/request-error', async ({ failure }) => {
       expect(failure.code).toBe('CONTEXT_LENGTH')
       if (attempts++ === 0) {
         const nodes = h.agent.session.surface.nodes
-        const latest = nodes.findLast(seq => h.agent.session.eventAt(seq)?.type === 'system/message')!
-        const start = retainOlder ? latest : nodes[1]!
-        const replaced = nodes.slice(nodes.indexOf(start), nodes.indexOf(latest) + 1)
-        h.agent.session.append('user/message', createUserMessage({
-          content: [{ type: 'text', text: 'compacted history' }], source: { kind: 'test-compaction' },
-        }), { surfaceOp: { op: 'replace', startSeq: start, endSeq: latest }, sourceEventSeqs: replaced })
-        // A retry must retain the assembly accepted for this step, not pick up new sections.
-        h.setPrompt('not admitted until next step')
+        const systems = nodes.filter(seq => h.agent.session.eventAt(seq)?.type === 'system/message')
+        const end = systems.at(retainLatest ? -2 : -1)!
+        const start = nodes[1]!
+        compact(h.agent, start, end, 3)
       }
+      // A retry keeps the captured sections even when their source changes, with or without compaction.
+      h.setPrompt('not admitted until next step')
       return Promise.resolve({ kind: 'retry' as const })
     })
     await send(h.agent, 'third')
@@ -320,36 +395,102 @@ describe('prepared-route prompt admission', () => {
     expect(assemblies).toBe(1)
     expect(preSteps).toBe(1)
     expect(resolve).toHaveBeenCalledTimes(5)
-    expectPlain(adapter.requests[3]!, 'prompt three')
+    expect(systemTexts(adapter.requests[3]!)).toHaveLength(1)
+    expect(systemTexts(adapter.requests[3]!).at(-1)?.at(-1)).toEqual({ type: 'text', text: 'prompt three' })
     expect(adapter.requests[4]!.messages).toEqual(adapter.requests[3]!.messages)
     expect(adapter.requests[3]!.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'third' }])
     const events = h.agent.session.snapshotEvents()
     expect(events.filter(event => event.type === 'step/start')).toHaveLength(3)
     expect(events.filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(3)
     expect(events.filter(event => event.type === 'request/header').map(event => event.data.reason)).toEqual(['initial', 'series'])
-    expect(events.filter(event => event.type === 'system/message').filter(event => event.data.turn === 3).at(-1)?.surfaceOp).not.toBe('append')
+    expect(events.filter(event => event.type === 'system/message' && event.data.turn === 3))
+      .toHaveLength(retainLatest ? 3 : 2)
   })
 
-  it.each([false, true])('normalizes capable history on a plain route, changed=%s', async (changed) => {
+  it.each(['pre-step', 'request'] as const)('rebuilds from the captured sections after compaction during %s', async (stage) => {
+    const h = await harness()
+    await send(h.agent, 'first')
+    h.setPrompt('captured before compaction')
+    let assemblies = 0
+    h.ctx.on('system-prompt/assemble', (_assembly, _context, next) => { assemblies++; return next() })
+    const rebuild = () => {
+      const seq = h.agent.session.surface.nodes.find(seq => h.agent.session.eventAt(seq)?.type === 'user/message')!
+      compact(h.agent, seq, seq, 2)
+      h.setPrompt('updated after compaction')
+    }
+    const dispose = stage === 'pre-step'
+      ? h.ctx.on('agent/pre-step', (_payload, next) => { rebuild(); return next() })
+      : h.ctx.on('agent/request', (_payload, next) => { rebuild(); return next() })
+    await send(h.agent, 'compact before admission')
+    expectPlain(h.capable.requests[1]!, 'captured before compaction')
+    expect(assemblies).toBe(1)
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(2)
+    dispose()
+    await send(h.agent, 'next checkpoint')
+    // A source change after capture is an ordinary update at the next step.
+    expect(systemTexts(h.capable.requests[2]!)).toEqual([
+      [{ type: 'text', text: 'captured before compaction' }], [{ type: 'text', text: 'updated after compaction' }],
+    ])
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(3)
+  })
+
+  it('recovers deferred rebuilding from seeded history after idle compaction', async () => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
-    expect(systemTexts(h.capable.requests[1]!)).toHaveLength(2)
+    const seq = h.agent.session.surface.nodes.find(seq => h.agent.session.eventAt(seq)?.type === 'user/message')!
+    compact(h.agent, seq, seq, null)
+    const seed = h.agent.session.snapshotEvents()
+    expect(seed.filter(event => event.type === 'system/message')).toHaveLength(2)
+    const { agent: resumed } = await h.ctx.agents.create({
+      sessionId: brandString<SessionId>('compacted-resume'), agentOptions: { provider: 'capable', model: 'model' }, seed: [...seed],
+    })
+    h.setPrompt('uncommitted current text')
+    await send(resumed, 'resume')
+    expectPlain(h.capable.requests.at(-1)!, 'uncommitted current text')
+    const writes = resumed.session.snapshotEvents().filter(event => event.type === 'system/message').slice(2)
+    expect(writes.map(event => event.data.message.content)).toEqual([[], [{ type: 'text', text: 'uncommitted current text' }]])
+    expect(writes.every(event => typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace')).toBe(true)
+    await send(resumed, 'continue')
+    expect(resumed.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(4)
+    const latestUser = resumed.session.surface.nodes.findLast(seq => resumed.session.eventAt(seq)?.type === 'user/message')!
+    compact(resumed, latestUser, latestUser, null)
+    await send(resumed, 'compact again')
+    expectPlain(h.capable.requests.at(-1)!, 'uncommitted current text')
+    // The previously cleared tail stays empty; only the head needs another replacement.
+    expect(resumed.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(5)
+  })
+
+  it('admits a full prompt after compacting imported conversation without a system node', async () => {
+    const h = await harness()
+    const input = h.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'imported conversation' }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    compact(h.agent, input.seq, input.seq, null)
+    await send(h.agent, 'continue')
+    expect(systemTexts(h.capable.requests[0]!)).toEqual([[{ type: 'text', text: 'prompt one' }]])
+    await send(h.agent, 'continue again')
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(1)
+    const system = h.agent.session.surface.nodes.find(seq => h.agent.session.eventAt(seq)?.type === 'system/message')!
+    compact(h.agent, h.agent.session.surface.nodes[0]!, system, null)
+    await send(h.agent, 'rebuild a removed system node')
+    await send(h.agent, 'no repeated rebuild')
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(2)
+  })
+
+  it.each([false, true])('preserves section history across a route change, changed=%s', async (changed) => {
+    const h = await harness()
+    await send(h.agent, 'first')
+    h.setPrompt('prompt two')
+    await send(h.agent, 'second')
     h.agent.model.select({ provider: 'plain', model: 'model' })
     if (changed) h.setPrompt('prompt three')
     await send(h.agent, 'third')
-    expectPlain(h.plain.requests[0]!, changed ? 'prompt three' : 'prompt two')
-    const events = h.agent.session.snapshotEvents()
-    const replacements = events.filter(event => event.type === 'system/message').filter(event => event.surfaceOp !== 'append')
-    expect(replacements).toHaveLength(2)
-    expect(replacements[0]?.type === 'system/message' && replacements[0].data.message.content).toEqual([])
-    for (const event of replacements) {
-      expect(event.surfaceOp).toEqual({ op: 'replace', startSeq: event.sourceEventSeqs?.[0], endSeq: event.sourceEventSeqs?.[0] })
-    }
+    expect(systemTexts(h.plain.requests[0]!)).toHaveLength(changed ? 3 : 2)
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message' && event.surfaceOp !== 'append')).toEqual([])
     await send(h.agent, 'fourth')
-    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(4)
-    expectPlain(h.plain.requests[1]!, changed ? 'prompt three' : 'prompt two')
+    expect(systemTexts(h.plain.requests[1]!)).toEqual(systemTexts(h.plain.requests[0]!))
   })
 
   it('appends on the first capable request after a plain route', async () => {
@@ -386,7 +527,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('resumed-capable'), agentOptions: { provider: 'capable', model: 'model' },
+      sessionId: brandString<SessionId>('resumed-capable'), agentOptions: { provider: 'capable', model: 'model' },
       seed: [...h.agent.session.snapshotEvents()],
     })
     h.ctx.on('agent/pre-step', ({ agent }, next) => {
@@ -412,20 +553,20 @@ describe('prepared-route prompt admission', () => {
       .toEqual(['initial', 'resume'])
   })
 
-  it('normalizes restored history after explicitly selecting the declared resume route', async () => {
+  it('preserves restored history after explicitly selecting the declared resume route', async () => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     const seed = h.agent.session.snapshotEvents()
     const { agent: resumed } = await h.ctx.agents.create({
-      sessionId: SessionId('resumed'),
+      sessionId: brandString<SessionId>('resumed'),
       agentOptions: { provider: 'plain', model: 'model' },
       seed: [...seed],
       setup: (_ctx, agent) => { agent.model.select({ provider: 'plain', model: 'model' }) },
     })
     await send(resumed, 'resume')
-    expectPlain(h.plain.requests[0]!, 'prompt two')
+    expect(systemTexts(h.plain.requests[0]!)).toHaveLength(2)
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)?.data.reason).toBe('resume')
   })
 
@@ -456,16 +597,20 @@ describe('prepared-route prompt admission', () => {
     const types = h.agent.session.snapshotEvents().map(event => event.type)
     expect(types.filter(type => type === 'step/start' || type === 'step/end')).toEqual(['step/start', 'step/end'])
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
+    h.setPrompt('captured after cancellation')
+    await send(h.agent, 'try again')
+    expectPlain(h.capable.requests[0]!, 'captured after cancellation')
+    expect(h.agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(1)
   })
 
   it.each([
-    { selected: undefined, proposed: ReasoningEffortId('high') },
-    { selected: ReasoningEffortId('high'), proposed: ReasoningEffortId('low') },
-    { selected: ReasoningEffortId('high'), proposed: undefined },
+    { selected: undefined, proposed: brandString<ReasoningEffortId>('high') },
+    { selected: brandString<ReasoningEffortId>('high'), proposed: brandString<ReasoningEffortId>('low') },
+    { selected: brandString<ReasoningEffortId>('high'), proposed: undefined },
   ])('rejects an agent/request effort change from $selected to $proposed before input admission', async ({ selected, proposed }) => {
     const adapter = new MockAdapter([textResponse('never')], {
-      efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }, { id: ReasoningEffortId('high'), name: 'High' }],
-      defaultEffort: ReasoningEffortId('low'),
+      efforts: [{ id: brandString<ReasoningEffortId>('low'), name: 'Low' }, { id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+      defaultEffort: brandString<ReasoningEffortId>('low'),
     })
     const h = await harness(adapter)
     h.agent.model.select({
@@ -491,9 +636,9 @@ describe('prepared-route prompt admission', () => {
     const adapter = new MockAdapter([
       () => { throw new LlmError('retry this request', 'SERVER') },
       textResponse('recovered'),
-    ], { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] })
+    ], { efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }] })
     const h = await harness(adapter)
-    const selection = { provider: 'capable', model: 'model', reasoningEffort: ReasoningEffortId('high') }
+    const selection = { provider: 'capable', model: 'model', reasoningEffort: brandString<ReasoningEffortId>('high') }
     h.agent.model.select(selection)
     const prepared: (Readonly<ModelSelection> | undefined)[] = []
     h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {

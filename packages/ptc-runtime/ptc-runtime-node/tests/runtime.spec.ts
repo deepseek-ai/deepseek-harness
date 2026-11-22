@@ -23,42 +23,54 @@ const sandboxUsable = await (async () => {
   } finally { await probe.fiber.dispose() }
 })()
 
-async function setup(config: Config = {}, mode: 'read-only' | 'workspace-write' | 'danger-full-access' = 'danger-full-access') {
-  const root = await mkdtemp(join(homedir(), '.dsh-node-runtime-test-'))
-  const cwd = join(root, 'workspace')
-  await mkdir(cwd)
-  const ctx = new Context()
-  onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, config, { mode, workspaceRoot: cwd })
-  const run = (request: PtcRunRequest) => runtime.run(runtime.resolve(request))
-  return { ctx, runtime, root, cwd, run }
-}
-
 function bindings(functions: Record<string, PtcBindingFunction>): PtcBindingNamespace[] {
   return [{ global: 'tools', functions, errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
 }
 
-describe('Node program process', () => {
-  it('allows function-local process imports with the scrubbed program environment', async () => {
+const modes = [
+  { executionMode: 'per-call' },
+  { executionMode: 'persistent-in-memory', replScoped: true },
+] as const satisfies Config[]
+
+describe.each(modes)('Node program process in $executionMode with scoped REPL $replScoped', (mode) => {
+  const retained = mode.executionMode !== 'per-call'
+
+  async function setup(config: Config = {}, policy: 'read-only' | 'workspace-write' | 'danger-full-access' = 'danger-full-access') {
+    const root = await mkdtemp(join(homedir(), '.dsh-node-runtime-test-'))
+    const cwd = join(root, 'workspace')
+    await mkdir(cwd)
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+    const { runtime } = await mountRuntime(ctx, { ...mode, ...config }, { mode: policy, workspaceRoot: cwd })
+    // The scoped REPL keeps one process per owner, as an Agent does.
+    const stateOwner = {}
+    const run = (request: PtcRunRequest) => runtime.run(runtime.resolve({ stateOwner, ...request }))
+    return { ctx, runtime, root, cwd, run, stateOwner }
+  }
+
+  /** Make `expression` the program result: function bodies return it; the scoped REPL completes with it. */
+  const completion = (expression: string) => retained ? `(${expression})` : `return ${expression}`
+
+  it('allows program-local process imports with the scrubbed program environment', async () => {
     const { run } = await setup()
-    const result = await run({ program: 'const process = await import("node:process"); return { platform: process.platform, env: { ...process.env } }', bindings: [] })
+    const result = await run({ program: `const process = await import("node:process"); ${completion('{ platform: process.platform, env: { ...process.env } }')}`, bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ platform: process.platform, env: {} })
   })
 
   it('runs erasable TypeScript in the resolved directory with an empty environment', async () => {
     const { run, cwd } = await setup()
-    const result = await run({ program: 'const n: number = 6; console.log("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })
+    const result = await run({ program: `const n: number = 6; inspect("ready"); ${completion('{ n: n * 7, cwd: process.cwd(), env: { ...process.env } }')};`, bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ n: 42, cwd, env: {} })
-    expect(result.logs).toEqual(['ready'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ready\n'])
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
   })
 
   it('keeps native startup paths available for nested Node creation with an empty model environment', async () => {
     const { run } = await setup()
     const result = await run({
-      program: 'const {spawnSync}=await import("node:child_process"); const child=spawnSync(process.execPath,["-e","process.stdout.write(JSON.stringify(Object.keys(process.env)))"],{encoding:"utf8"}); return {env:Object.keys(process.env),status:child.status,error:child.error?.message ?? null,childKeys:JSON.parse(child.stdout || "[]")};',
+      program: `const {spawnSync}=await import("node:child_process"); const child=spawnSync(process.execPath,["-e","process.stdout.write(JSON.stringify(Object.keys(process.env)))"],{encoding:"utf8"}); ${completion('{env:Object.keys(process.env),status:child.status,error:child.error?.message ?? null,childKeys:JSON.parse(child.stdout || "[]")}')};`,
       bindings: [],
     })
     expect(result.error).toBeUndefined()
@@ -84,7 +96,7 @@ describe('Node program process', () => {
     vi.stubEnv('DSH_TEST_RUNTIME_SECRET', 'must-not-inherit')
     const childCode = 'const fs=require("node:fs"); const path=require("node:path"); const temp=require("node:os").tmpdir(); const file=path.join(temp,"native-temp.txt"); fs.writeFileSync(file,"native-temp"); fs.writeFileSync("native-observation.json",JSON.stringify({file,temp,env:Object.keys(process.env)}));'
     const result = await run({
-      program: `const {spawnSync}=await import("node:child_process"); const child=spawnSync(process.execPath,["-e",${JSON.stringify(childCode)}],{stdio:"inherit"}); if(child.status!==0) throw new Error(child.error?.message ?? "native child failed"); const native=JSON.parse((await import("node:fs")).readFileSync("native-observation.json","utf8")); return {env:Object.keys(process.env),native,observed:await tools.inspect({path:native.file})};`,
+      program: `const {spawnSync}=await import("node:child_process"); const child=spawnSync(process.execPath,["-e",${JSON.stringify(childCode)}],{stdio:"inherit"}); if(child.status!==0) throw new Error(child.error?.message ?? "native child failed"); const native=JSON.parse((await import("node:fs")).readFileSync("native-observation.json","utf8")); const observed=await tools.inspect({path:native.file}); ${completion('{env:Object.keys(process.env),native,observed}')};`,
       bindings: bindings({ inspect: async (args) => {
         const path = (args as { path: string }).path
         expect(path.startsWith(`${temp}\\dsh-`)).toBe(true)
@@ -103,29 +115,42 @@ describe('Node program process', () => {
   it('returns binding values and preserves typed binding rejection', async () => {
     const { run } = await setup()
     const result = await run({
-      program: 'const value = await tools.echo({ n: 42 }); let rejected; try { await tools.fail({}) } catch (e) { rejected = [e instanceof ToolCallError,e.name,e.toolName,e.message]; } return {value,rejected};',
+      program: `const value = await tools.echo({ n: 42 }); let rejected; try { await tools.fail({}) } catch (e) { rejected = [e instanceof ToolCallError,e.name,e.toolName,e.message]; } ${completion('{value,rejected}')};`,
       bindings: bindings({ echo: async args => args as { n: number }, fail: async () => { throw new Error('denied') } }),
     })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
+  it('executes TypeScript binding names and own error members without cross-language exclusions', async () => {
+    const { run } = await setup()
+    const result = await run({
+      program: `const value = await $tools.echo({}); let caught; try { await __dsh_main__.fail({}) } catch (error) { caught = [value, error instanceof lambda, error.name, error.__proto__, error.message]; } ${completion('caught')}`,
+      bindings: [
+        { global: '$tools', functions: { echo: async () => 'ok' } },
+        { global: '__dsh_main__', functions: { fail: async () => { throw new Error('denied') } }, errorClass: { name: 'lambda', memberNameProperty: '__proto__' } },
+      ],
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual(['ok', true, 'lambda', 'fail', 'denied'])
+  })
+
   it('returns cleanly while an unawaited binding call is still running', async () => {
     const { run } = await setup()
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
-    const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
-    expect(result).toMatchObject({ logs: [], value: 1 })
+    const result = await run({ program: `void tools.slow({}); ${completion('1')}`, bindings: bindings({ slow: () => release.promise }) })
+    expect(result).toMatchObject({ output: [], value: 1 })
     expect(result.error).toBeUndefined()
   })
 
   it('retains raw native stdout and stderr separately from control frames', async () => {
     const { run } = await setup()
-    const result = await run({ program: 'const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); return 42;', bindings: [] })
+    const result = await run({ program: `const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); ${completion('42')};`, bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(42)
-    expect(result.logs.join('')).toContain('native-out你好')
-    expect(result.logs.join('')).toContain('native-err🙂')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-out你好')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-err🙂')
   })
 
   it.each(['throw new Error("broken")', 'enum E { A }'])('reports program failure for %s', async (program) => {
@@ -135,21 +160,22 @@ describe('Node program process', () => {
 
   it('rejects lossy program output', async () => {
     const { run } = await setup()
-    expect((await run({ program: 'return { value: undefined }', bindings: [] })).error?.kind).toBe('invalid-output')
+    expect((await run({ program: completion('{ value: undefined }'), bindings: [] })).error?.kind).toBe('invalid-output')
   })
 
   it('enforces the combined output cap', async () => {
     const { run } = await setup({ maxOutputBytes: 80 })
-    const result = await run({ program: 'console.log("x".repeat(500)); return 42;', bindings: [] })
-    expect(result.error?.kind).toBe('output-limit')
-    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const result = await run({ program: `inspect("x".repeat(500)); ${completion('42')};`, bindings: [] })
+    expect(result.error).toBeUndefined()
+    expect(result.value).toBe(42)
+    expect(result.outputTruncated).toBe(true)
+    const bytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.value))
     expect(bytes).toBeLessThanOrEqual(80)
   })
 
   it('uses the default deadline and caps explicit requests', async () => {
     const { runtime } = await setup()
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
-    expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Emit output with console.log(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
     expect(runtime.resolve({ program: '', bindings: [] }).timeoutMs).toBe(120_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: 900_000 }).timeoutMs).toBe(600_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: null }).timeoutMs).toBeNull()
@@ -168,11 +194,11 @@ describe('Node program process', () => {
     expect((await run({ program, bindings: [] })).error?.kind).toBe('timeout')
   })
 
-  it('retains console output when a non-yielding program is canceled', async () => {
+  it('retains inspected output when a non-yielding program is canceled', async () => {
     const { run, cwd } = await setup()
     const controller = new AbortController()
     const pending = run({
-      program: 'const fs = await import("node:fs"); console.log("before hot loop"); await tools.enter({}); fs.writeFileSync("entered-loop", "ready"); for (;;) {}',
+      program: 'const fs = await import("node:fs"); inspect("before hot loop"); await tools.enter({}); fs.writeFileSync("entered-loop", "ready"); for (;;) {}',
       signal: controller.signal, timeoutMs: null,
       bindings: bindings({ enter: async () => null }),
     })
@@ -181,7 +207,7 @@ describe('Node program process', () => {
       controller.abort('stop')
       const result = await pending
       expect(result.error?.kind).toBe('abort')
-      expect(result.logs).toEqual(['before hot loop'])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before hot loop\n'])
     } finally { controller.abort(); await pending }
   })
 
@@ -198,11 +224,12 @@ describe('Node program process', () => {
     const active = run({ ...timing, program: 'void tools.enter({}); for (;;) {}', signal: controller.signal, bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }) })
     await entered.promise
     controller.abort('stop')
-    expect((await active).error).toEqual({ kind: 'abort', message: 'stop' })
+    expect((await active).error).toEqual({ kind: 'abort', message: retained ? 'execution canceled; retained variables were cleared' : 'stop' })
   })
 
-  it('closes a still-running descendant before returning the program result', async () => {
-    const { run } = await setup()
+  // A retained process keeps its descendants between programs until its owner is released.
+  it(`closes a still-running descendant ${retained ? 'when the owner is released' : 'before returning the program result'}`, async () => {
+    const { run, runtime, stateOwner } = await setup()
     const connected = Promise.withResolvers<undefined>()
     const disconnected = Promise.withResolvers<undefined>()
     let peer: Socket | undefined
@@ -227,19 +254,20 @@ describe('Node program process', () => {
     if (address === null || typeof address === 'string') throw new Error('expected bound TCP listener')
     const child = `require('node:net').connect(${address.port},'127.0.0.1')`
     const result = await run({
-      program: `const {spawn}=await import("node:child_process"); spawn(process.execPath,["-e",${JSON.stringify(child)}],{stdio:"ignore"}); await tools.connected({}); return 42;`,
+      program: `const {spawn}=await import("node:child_process"); spawn(process.execPath,["-e",${JSON.stringify(child)}],{stdio:"ignore"}); await tools.connected({}); ${completion('42')};`,
       bindings: bindings({ connected: async () => { await connected.promise; return null } }),
     })
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(42)
+    if (retained) await runtime.release(stateOwner)
     await disconnected.promise
   })
 
-  it('applies the configured V8 old-generation ceiling to each fresh Node process', async () => {
+  it('applies the configured V8 old-generation ceiling to each launched Node process', async () => {
     const limits: number[] = []
     for (const maxOldGenerationSizeMb of [32, 64]) {
       const { run } = await setup({ maxOldGenerationSizeMb })
-      const result = await run({ program: 'return (await import("node:v8")).getHeapStatistics().heap_size_limit;', bindings: [] })
+      const result = await run({ program: completion('(await import("node:v8")).getHeapStatistics().heap_size_limit'), bindings: [] })
       expect(result.error).toBeUndefined()
       if (typeof result.value !== 'number') throw new Error('expected V8 heap limit')
       limits.push(result.value)
@@ -295,7 +323,7 @@ describe('Node program process', () => {
     })
     try {
       process.env.PATH = `${root}${delimiter}${previousPath ?? ''}`
-      const result = await run({ program: 'return { env: Object.keys(process.env) };', bindings: [] })
+      const result = await run({ program: completion('{ env: Object.keys(process.env) }'), bindings: [] })
       expect(result.error).toBeUndefined()
       expect(result.value).toEqual({ env: [] })
     } finally {
@@ -308,7 +336,7 @@ describe('Node program process', () => {
   it.skipIf(!sandboxUsable)('permits workspace writes and denies a symlink to a sibling outside it', async () => {
     const { run, cwd, root } = await setup({}, 'workspace-write')
     const target = join(cwd, 'allowed.txt')
-    expect((await run({ program: `await (await import('node:fs/promises')).writeFile(${JSON.stringify(target)}, 'allowed'); return true`, bindings: [] })).value).toBe(true)
+    expect((await run({ program: `await (await import('node:fs/promises')).writeFile(${JSON.stringify(target)}, 'allowed'); ${completion('true')}`, bindings: [] })).value).toBe(true)
     expect(await readFile(target, 'utf8')).toBe('allowed')
     const outside = join(root, 'outside')
     await mkdir(outside)
@@ -318,15 +346,22 @@ describe('Node program process', () => {
     expect(result.sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
     await expect(readFile(join(outside, 'denied.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
+
+  it('preserves empty inspected entries and bounds native output overflow', async () => {
+    const { run } = await setup({ maxOutputBytes: 100 })
+    const lines = await run({ program: 'inspect("a"); inspect(""); inspect("b")', bindings: [] })
+    expect(lines.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a\n', '\n', 'b\n'])
+    const overflow = await run({ program: 'const fs=await import("node:fs"); fs.writeSync(1,"HEAD-"+"x".repeat(100000));', bindings: [] })
+    expect(overflow.error).toBeUndefined()
+    expect(overflow.outputTruncated).toBe(true)
+    expect(overflow.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('HEAD-')
+    const bytes = Buffer.byteLength(JSON.stringify(overflow.output.filter(block => block.type === 'text').map(block => block.text)))
+    expect(bytes).toBeLessThanOrEqual(100)
+  })
 })
 
-it('preserves empty console entries and bounds native output overflow', async () => {
-  const { run } = await setup({ maxOutputBytes: 100 })
-  const lines = await run({ program: 'console.log("a"); console.log(""); console.log("b")', bindings: [] })
-  expect(lines.logs).toEqual(['a', '', 'b'])
-  const overflow = await run({ program: 'const fs=await import("node:fs"); fs.writeSync(1,"HEAD-"+"x".repeat(100000));', bindings: [] })
-  expect(overflow.error?.kind).toBe('output-limit')
-  expect(overflow.logs.join('')).toContain('HEAD-')
-  const bytes = Buffer.byteLength(JSON.stringify(overflow.logs)) + Buffer.byteLength(JSON.stringify(overflow.error?.message))
-  expect(bytes).toBeLessThanOrEqual(100)
+// The scoped REPL guidance is pinned with its mode in scoped-repl-mode.spec.ts.
+it('advertises per-call function-body guidance', async () => {
+  const { runtime } = await mountRuntime(new Context())
+  expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
 })

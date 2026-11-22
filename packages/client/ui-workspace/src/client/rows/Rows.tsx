@@ -2,28 +2,27 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only, and a session row's clipped
- * title marquees programmatically while the row is hovered. Workspace row
+ * title marquees while the row is hovered or its menu is open. Workspace row
  * menus share captured Workspace actions with right-click. Both row types
  * render the shared `contextMenu.button` factory for their menu trigger.
  * Session hover buttons use the browser's `renderSlot` for the
  * `sidebar.workspaces.session.row.action` list. Session and Workspace
  * hover cards are suppressed while their menu is open.
  */
-import { useEffect, useMemo, useRef } from 'react'
-import type { PointerEvent, RefObject } from 'react'
+import { useEffect, useRef } from 'react'
 import clsx from 'clsx'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  HoverCard, IconArchiveOutlineRegular,
+  HoverCard, IconArchiveOutlineRegular, MarqueeText,
   IconFolderCloseRegular, IconFolderOpenRegular,
   IconNewChatOutlineRegular, IconPinFillRegular,
-  IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, relativeTime, StateDot, Tooltip, useRowDragPreview,
+  IconTriangleRightFillRegular, IconUnarchiveOutlineRegular, relativeTime, StateDot, Tooltip, useHoverMarquee, useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { WorkspaceBrowserProps } from '../contract/slots.ts'
+import type { SessionDragType, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
 
@@ -33,6 +32,9 @@ const DRAG_PREVIEW_PROPERTIES = [
   '--dsh-sidebar-label-gap',
   '--dsh-sidebar-paint-inset',
 ] as const
+
+/** Drag data type carrying a dragged Session row's id. */
+const SESSION_DRAG_TYPE: SessionDragType = 'application/x-dsh-session'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
@@ -54,98 +56,6 @@ type RowRenderSlots = PropsRenderSlots<
 /** Row display title: blank rows show the localized New Session label. */
 function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : (node.title || t('session.untitled'))
-}
-
-/* Overflow this small hides no meaningful tail; scrolling for it reads as an
-   accidental jitter, so the title stays put. */
-const MIN_TITLE_REVEAL_PX = 8
-
-/* Marquee travel speed: slow enough to read the text as it passes. */
-const TITLE_MARQUEE_PX_PER_MS = 0.03
-
-/**
- * Place the title's scroll position and publish the stylesheet's fade-mask
- * hooks: `data-scrolled` while the title has left its start (left fade) and
- * `data-clipped` while text remains beyond the right edge (right fade).
- * @param title - the row's clipping title element.
- * @param left - scroll offset in CSS pixels.
- * @param range - the title's maximum scroll offset in CSS pixels.
- */
-function placeTitle(title: HTMLSpanElement, left: number, range: number): void {
-  // jsdom implements no scrollTo; the lane's direct assignment is instant there
-  // anyway, so both paths land on the same position.
-  if (typeof title.scrollTo === 'function') title.scrollTo({ left, behavior: 'instant' })
-  else title.scrollLeft = left
-  if (left > 0) title.dataset.scrolled = ''
-  else delete title.dataset.scrolled
-  if (left < range) title.dataset.clipped = ''
-  else delete title.dataset.clipped
-}
-
-/**
- * Return the title to its resting state: scrolled to the start with both fade
- * masks off, so the resting ellipsis renders at full strength.
- * @param title - the row's clipping title element.
- */
-function restTitle(title: HTMLSpanElement): void {
-  if (typeof title.scrollTo === 'function') title.scrollTo({ left: 0, behavior: 'instant' })
-  else title.scrollLeft = 0
-  delete title.dataset.scrolled
-  delete title.dataset.clipped
-}
-
-/**
- * Marquee a title wider than its one-line cell while its row is hovered: the
- * title clips its own text, so entering crawls it at a constant speed until the
- * far edge (a fork's incremented title, for example) is in view, then rests
- * there under the pointer. Overflow of at most {@link MIN_TITLE_REVEAL_PX}
- * stays put — a barely-clipped title moving a few pixels reads as jitter, not a
- * reveal. Leaving returns the title to the start in one step, because the
- * resting ellipsis and the narrowed cell would otherwise meet the text while it
- * travelled back. Reduced motion jumps to the far edge instead of crawling.
- * @param title - ref to the row's clipping title element.
- * @returns stable pointer enter/leave handlers for the row.
- */
-function useTitleMarquee(title: RefObject<HTMLSpanElement | null>): {
-  enter: (event?: PointerEvent) => void
-  leave: () => void
-} {
-  const frame = useRef(0)
-  const revealing = useRef(false)
-  useEffect(() => () => { cancelAnimationFrame(frame.current) }, [])
-  return useMemo(() => ({
-    enter: (event?: PointerEvent): void => {
-      if (event?.pointerType === 'touch') return
-      /* v8 ignore next -- defensive: the title span renders unconditionally. */
-      if (title.current === null) return
-      if (revealing.current) return
-      revealing.current = true
-      const element = title.current
-      const range = element.scrollWidth - element.clientWidth
-      if (range <= MIN_TITLE_REVEAL_PX) return
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        placeTitle(element, range, range)
-        return
-      }
-      cancelAnimationFrame(frame.current)
-      let previous: number | undefined
-      let position = 0
-      const step = (now: DOMHighResTimeStamp): void => {
-        position += previous === undefined ? 0 : (now - previous) * TITLE_MARQUEE_PX_PER_MS
-        previous = now
-        placeTitle(element, Math.min(position, range), range)
-        if (position < range) frame.current = requestAnimationFrame(step)
-      }
-      frame.current = requestAnimationFrame(step)
-    },
-    leave: (): void => {
-      revealing.current = false
-      cancelAnimationFrame(frame.current)
-      /* v8 ignore next -- defensive: the title span renders unconditionally. */
-      if (title.current === null) return
-      restTitle(title.current)
-    },
-  }), [title])
 }
 
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
@@ -202,7 +112,11 @@ export interface RowDragProps {
   /** Report the hovered half while a compatible drag passes over this row. */
   hover: (half: 'before' | 'after') => void
   drop: (half: 'before' | 'after') => void
-  end: () => void
+  /**
+   * End the drag.
+   * @param claimed - another drop target accepted the Session as a copy; the owner discards the insert marker.
+   */
+  end: (claimed: boolean) => void
 }
 
 /** Drag lifecycle owned by a workspace row; its enclosing group owns hit testing. */
@@ -382,7 +296,7 @@ interface SessionStatus {
  * outranks completion reminders.
  */
 function sessionStatuses(
-  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'runningSubagentCount' | 'completed'>,
+  node: Pick<SessionNode, 'pendingInteraction' | 'running' | 'runningSubagentCount' | 'completed' | 'failed'>,
   t: RowTranslate,
 ): readonly [SessionStatus, ...SessionStatus[]] {
   const subagents: SessionStatus | undefined = node.runningSubagentCount === 0
@@ -423,13 +337,17 @@ function sessionStatuses(
     /* v8 ignore next -- closed PendingInteractionStatus union */
     default: return assertNever(node.pendingInteraction)
   }
-  if (pending !== undefined) return subagents === undefined ? [pending] : [pending, subagents]
+  const completion: SessionStatus = node.failed
+    ? { state: 'error', label: t('status.failed') }
+    : { state: 'done', label: t('status.unread') }
+  const unread: SessionStatus[] = node.completed ? [completion] : []
+  if (pending !== undefined) return subagents === undefined ? [pending, ...unread] : [pending, subagents, ...unread]
   if (node.running) {
     const primary: SessionStatus = { state: 'ongoing', label: t('status.running') }
-    return subagents === undefined ? [primary] : [primary, subagents]
+    return subagents === undefined ? [primary, ...unread] : [primary, subagents, ...unread]
   }
-  if (subagents !== undefined) return [subagents]
-  if (node.completed) return [{ state: 'done', label: t('status.completed') }]
+  if (subagents !== undefined) return [subagents, ...unread]
+  if (node.completed) return [completion]
   return [{ state: 'idle', label: t('status.idle') }]
 }
 
@@ -468,10 +386,9 @@ function SessionHoverContent({ node, cwd, now, renderSlot, t }: {
   renderSlot: RowRenderSlots
   t: RowTranslate
 }) {
-  // On archived rows the archived line already says the session is inactive,
-  // so resting statuses (idle/completed) drop; live activity still shows.
-  const statuses = sessionStatuses(node, t)
-    .filter(status => !(node.archived && (status.state === 'done' || status.state === 'idle')))
+  // Archived rows show live activity but suppress idle and unread reminders.
+  const statuses = sessionStatuses(node.archived ? { ...node, completed: false } : node, t)
+    .filter(status => !(node.archived && status.state === 'idle'))
   return (
     <div className={css.hoverContent}>
       <div className={css.hoverTitle}>{displayTitle(node, t)}</div>
@@ -631,7 +548,8 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const renamable = useSessionAccess(node.id, 'session/rename')
   const reorderable = useSessionAccess(node.id, 'workspace/insertSessionBefore')
-  const draggable = drag !== undefined && reorderable && !row.blank && !row.archived
+  const draggable = !row.blank && !row.archived
+  const reorderDraggable = draggable && drag !== undefined && reorderable
   const menuOpen = useContextMenuTarget(target => target?.kind === 'session' && target.value.sessionId === node.id)
   const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -641,11 +559,7 @@ export function SessionNodeItem({
   // detail-1 press on this title since the window last lost focus.
   const renameArmed = useRef(false)
   const disarmRename = useRef(() => { renameArmed.current = false }).current
-  const marquee = useTitleMarquee(titleRef)
-  useEffect(() => {
-    if (menuOpen || rowRef.current?.matches(':hover')) marquee.enter()
-    else marquee.leave()
-  }, [menuOpen, marquee])
+  const marquee = useHoverMarquee(titleRef, { hold: menuOpen })
   useEffect(() => {
     if (onReveal === undefined) return
     rowRef.current?.scrollIntoView({ block: 'nearest' })
@@ -672,18 +586,21 @@ export function SessionNodeItem({
         event.preventDefault()
         onOpen(node.id)
       } })}
-      onPointerEnter={marquee.enter}
-      onPointerLeave={() => { if (!menuOpen) marquee.leave() }}
+      onPointerEnter={marquee.onPointerEnter}
+      onPointerLeave={marquee.onPointerLeave}
       draggable={draggable}
       onDragStart={!draggable
         ? undefined
         : (e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', node.id)
-          drag.start()
+          e.dataTransfer.effectAllowed = reorderDraggable ? 'copyMove' : 'copy'
+          e.dataTransfer.setData(SESSION_DRAG_TYPE, node.id)
+          if (reorderDraggable) {
+            e.dataTransfer.setData('text/plain', node.id)
+            drag.start()
+          }
           dragPreview.start(e)
         }}
-      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
+      onDragEnd={(e) => { if (dragPreview.clear()) drag?.end(e.dataTransfer.dropEffect === 'copy') }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {
@@ -701,8 +618,8 @@ export function SessionNodeItem({
         }}
     >
       {/* Pending interaction and own or descendant activity outrank the
-          finished-but-unviewed reminder, which returns after activity stops
-          and is cleared by opening the session. Archived rows keep the slot
+          unread reminder, which returns after activity stops
+          and clears after the visible content is acknowledged. Archived rows keep the slot
           blank — the grayed row carries the archived look — and their live
           status stays on the hover card only. */}
       <span className={css.slot}>
@@ -710,7 +627,7 @@ export function SessionNodeItem({
           ? <SessionStatusDots statuses={statuses} />
           : renderSlot('sidebar.session.row.leading', { sessionId: node.id }))}
       </span>
-      <span
+      <MarqueeText
         ref={titleRef}
         className={css.title}
         onMouseDown={(e) => {
@@ -729,7 +646,7 @@ export function SessionNodeItem({
           }}
       >
         {title}
-      </span>
+      </MarqueeText>
       {/* Blank rows have no first prompt, so neither trailing details nor
           actions for existing content are available. */}
       {!row.blank && (

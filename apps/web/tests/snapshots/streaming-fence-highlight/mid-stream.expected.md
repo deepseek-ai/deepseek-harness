@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Stream one TypeScript fence for
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

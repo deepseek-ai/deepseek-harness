@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import subprocess
@@ -15,9 +16,11 @@ from typing import Callable, TypeAlias, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from .errors import JsonRpcError, SdkProtocolError, TransportClosedError
-from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, UserQuestionAnswer, UserQuestionRequest
+from .models import CommandExecution, IncomingRequest, InitializeResponse, JsonObject, JsonValue, Notification, ResumeSessionOptions, UserQuestionAnswer, UserQuestionRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+# Every line the runtime writes to stderr, as it arrives. The host's logging configuration decides whether it is shown.
+_runtime_logger = logging.getLogger("deepseek_harness.runtime")
 NotificationFilter: TypeAlias = Callable[[Notification], bool]
 UserQuestionHandler: TypeAlias = Callable[[UserQuestionRequest, threading.Event], UserQuestionAnswer | JsonObject]
 
@@ -205,8 +208,15 @@ class HarnessClient:
         *,
         on_notification: Callable[[Notification], None] | None = None,
         notification_subscription: "NotificationSubscription | None" = None,
+        time_zone: str | None = None,
     ) -> str:
+        """Queue one prompt without command routing and return its message id.
+
+        ``time_zone`` is UTC or an IANA Area/Location name; omitted, the runtime samples its process zone.
+        """
         payload: JsonObject = {"sessionId": session_id, "contentBlocks": content_blocks}
+        if time_zone is not None:
+            payload["timeZone"] = time_zone
         response = self.request(
             "session/prompt",
             payload,
@@ -217,22 +227,32 @@ class HarnessClient:
         )
         return response.messageId
 
-    def resume_session(self, session_id: str) -> None:
-        """Restore a persisted session without sending a prompt; propagate restoration failures."""
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> None:
+        """Restore history; an explicit permission preset replaces saved permissions before execution."""
+        params: JsonObject = {"sessionId": session_id}
+        if options is not None:
+            if not isinstance(options, dict):
+                raise TypeError("resume_session options must be a dict or None")
+            for key in options:
+                if key != "permission_mode":
+                    raise TypeError(f"unknown resume_session option {key!r}; expected 'permission_mode'")
+            if "permission_mode" in options:
+                params["permissionMode"] = options["permission_mode"]
         self.request(
             "session/resume",
-            {"sessionId": session_id},
+            params,
             response_model=_EmptyResponse,
         )
 
     def _query(
-        self, session_id: str, input: str | list[JsonObject],
+        self, session_id: str, input: str | list[JsonObject], time_zone: str | None = None,
     ) -> str | CommandExecution:
         """Return a validated prompt receipt or command result for high-level run callers."""
         blocks = [{"type": "text", "text": input}] if isinstance(input, str) else input
-        result = self._request_raw("session/query", {
-            "sessionId": session_id, "contentBlocks": blocks,
-        })
+        params: JsonObject = {"sessionId": session_id, "contentBlocks": blocks}
+        if time_zone is not None:
+            params["timeZone"] = time_zone
+        result = self._request_raw("session/query", params)
         if isinstance(result, dict):
             if result.get("kind") == "prompt" and isinstance(result.get("messageId"), str) and result["messageId"]:
                 return result["messageId"]
@@ -250,7 +270,7 @@ class HarnessClient:
         return response.cwd
 
     def set_working_directory(self, session_id: str, path: str) -> str:
-        """Enter an absolute or Session-relative directory without changing origin or permissions."""
+        """Enter an absolute or Session-relative directory; the origin is unchanged and the write boundary follows."""
         response = self.request(
             "session/working-directory/set",
             {"sessionId": session_id, "path": path},
@@ -442,7 +462,9 @@ class HarnessClient:
         if proc is None or proc.stderr is None:
             return
         for line in proc.stderr:
-            self._stderr_lines.append(line.rstrip())
+            text = line.rstrip()
+            self._stderr_lines.append(text)
+            _runtime_logger.info("dsh runtime[%d] stderr: %s", proc.pid, text)
 
     def _handle_message(self, message: object) -> None:
         if not isinstance(message, dict):

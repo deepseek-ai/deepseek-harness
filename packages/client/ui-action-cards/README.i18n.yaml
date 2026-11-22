@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-action-cards/README.md
+/:
+  en: d7215c64c0245141
+  zh: a23d9e08606505a1
+/deepseek-ai-dsh-client-ui-action-cards:
+  en: 28f9569b106e9892
+  zh: 3cbca2fb4bb02837
+/deepseek-ai-dsh-client-ui-action-cards/summary:
+  en: 06d23a3a52e031b3
+  zh: b29bdafbedada6ae
+/deepseek-ai-dsh-client-ui-action-cards/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b00dddf4c88f0a45
+/deepseek-ai-dsh-client-ui-action-cards/use-this-package:
+  en: 76564472bec87384
+  zh: abd0ae7e951d9003
+/deepseek-ai-dsh-client-ui-action-cards/use-this-package/register-a-card-body:
+  en: 924cf85fcb2804fe
+  zh: 6cc87fb92ffa31a3
+/deepseek-ai-dsh-client-ui-action-cards/understand-the-implementation:
+  en: 26b1be76e7a4bfc7
+  zh: 2a7f5474380a3d37
+/deepseek-ai-dsh-client-ui-action-cards/further-exploration:
+  en: fefd0eb06493d49f
+  zh: 1cfab523d38a6c88
+/deepseek-ai-dsh-client-ui-action-cards/model-experience:
+  en: 85119b58566a0324
+  zh: 6405e0db54d066ac
+/deepseek-ai-dsh-client-ui-action-cards/model-experience/kv-cache-effect:
+  en: 238b07582e981a18
+  zh: c0e1f57b226eb0c2
+/deepseek-ai-dsh-client-ui-action-cards/known-limitations-and-deferred-work:
+  en: 25da3aa74363908d
+  zh: 87125c371538413a
+/deepseek-ai-dsh-client-ui-action-cards/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: bd8a8936229e035e

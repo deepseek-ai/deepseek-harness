@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -41,7 +42,7 @@ describe('local attachment service', () => {
     })
     expect(service.imageCompressionConcurrency).toBe(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY)
     const ref = {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
       mediaType: 'image/png' as const,
       bytes: 1,
       width: 1,
@@ -53,7 +54,7 @@ describe('local attachment service', () => {
       'aa',
       'a'.repeat(64),
     ))
-    expect(() => service.imageHostPath({ ...ref, attachmentId: AttachmentId('invalid') }))
+    expect(() => service.imageHostPath({ ...ref, attachmentId: brandString<AttachmentId>('invalid') }))
       .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }))
   })
 
@@ -63,6 +64,23 @@ describe('local attachment service', () => {
       expect(() => new LocalAttachmentStore(new Context(), { imageCompressionConcurrency }))
         .toThrow(/imageCompressionConcurrency must be an integer from 1 through 8/)
     }
+  })
+
+  it('validates request-image shrink controls in both schema and programmatic construction', () => {
+    for (const value of [0, 1, Infinity]) {
+      expect(() => LocalAttachmentStore.Config({ requestImageMinShrinkFactor: value })).toThrow()
+      expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: value }))
+        .toThrow(/requestImageMinShrinkFactor/)
+    }
+    for (const value of [0, 1.1, Infinity]) {
+      expect(() => LocalAttachmentStore.Config({ requestImageByteHeadroom: value })).toThrow()
+      expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: value }))
+        .toThrow(/requestImageByteHeadroom/)
+    }
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageMinShrinkFactor: Number.NaN }))
+      .toThrow(/requestImageMinShrinkFactor/)
+    expect(() => new LocalAttachmentStore(new Context(), { requestImageByteHeadroom: Number.NaN }))
+      .toThrow(/requestImageByteHeadroom/)
   })
 
   it('saves and reads through the service boundary', async () => {
@@ -85,7 +103,7 @@ describe('local attachment service', () => {
         String(ref.attachmentId).slice('sha256:'.length),
       ))
       await expect(readFile(hostPath)).resolves.toEqual(Buffer.from(data))
-      const request = await service.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1024 })
+      const request = await service.readImageRequest(ref, { width: 1, height: 1, maxImageBytes: 1024, imageTargetBytes: 1024 })
       expect(request).not.toHaveProperty('access')
 
       const fileData = Uint8Array.of(0, 1, 2, 255)

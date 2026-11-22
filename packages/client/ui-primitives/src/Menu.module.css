@@ -22,6 +22,7 @@
      ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  --dsh-menu-row-height: 34px;
 }
 
 /* Primary cards grow with their content between compact and readable bounds. */
@@ -35,7 +36,7 @@
 }
 
 /* Legacy slots can render no rows; keep empty context popups out of layout. */
-.list[data-context-menu]:not(:has([role='menuitem'])) {
+.list[data-context-menu]:not([data-menu-popup]):not(:has([role='menuitem'])) {
   display: none;
 }
 
@@ -147,6 +148,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: calc(var(--dsh-menu-visible-rows) * var(--dsh-menu-row-height));
 }
 
 .scrollable .viewport {
@@ -170,6 +172,31 @@
   border-top: none;
 }
 
+.searchRows {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.list:has(> .search) {
+  min-width: min(216px, calc(100vw - 24px));
+}
+
+.search {
+  --dsh-search-field-height: var(--dsh-menu-row-height);
+}
+
+.searchStatus {
+  box-sizing: border-box;
+  min-block-size: var(--dsh-menu-row-height);
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .itemWrap {
   position: relative;
 }
@@ -180,7 +207,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 34px;
+  min-height: var(--dsh-menu-row-height);
   padding: 6px 8px;
   border: none;
   border-radius: var(--dsw-radius-md);
@@ -206,8 +233,11 @@
   outline: none;
 }
 
+.denseList {
+  --dsh-menu-row-height: 30px;
+}
+
 .denseList .item {
-  min-height: 30px;
   padding-block: 4px;
 }
 
@@ -217,12 +247,12 @@
 
 .list.compactList,
 .submenu.compactList {
+  --dsh-menu-row-height: 24px;
   min-width: min(156px, calc(100vw - 24px));
   padding: 4px;
 }
 
 .compactList .item {
-  min-height: 24px;
   gap: 5px;
   padding: 2px 6px;
   border-radius: var(--dsw-radius-sm);

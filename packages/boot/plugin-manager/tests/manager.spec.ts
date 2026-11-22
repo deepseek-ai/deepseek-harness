@@ -63,13 +63,14 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
   writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
   prepareFiles?.(dir)
-  const overlays: PatchOptions[] = overlay ? [{ id: 'managed', disabled: true }] : []
+  const overlayPath = join(home, 'overlay.patch.yml')
+  writeFileSync(overlayPath, JSON.stringify(overlay ? [{ id: 'managed', disabled: true }] : []))
   const profile: ProfileContext = {
     name: 'test',
     ...(packageManager === undefined ? {} : { packageManager }),
     startedBundles: loadProfileDirectory('test', dir, anchor).layers.map(layer => layer.packageName),
     dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor, cwd: home, home,
-    overlays, telemetryDisabledEnv: undefined,
+    overlayPaths: [overlayPath], telemetryDisabledEnv: undefined,
   }
   const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (ctx) => {
     owner = ctx
@@ -90,7 +91,7 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
     stopHmr = () => owner.dispose()
     await ctx.hmr.runExclusive(async () => {})
   }
-  return { ctx, dir, manager: ctx.pluginManager, bundle, profile, stopHmr, overlays, connection, gitConnection }
+  return { ctx, dir, manager: ctx.pluginManager, bundle, profile, stopHmr, overlayPath, connection, gitConnection }
 }
 
 it.each(['live', 'startup'] as const)('refuses an unsupported bundle before saving or applying it with %s reload', async (reload) => {
@@ -734,6 +735,15 @@ it('reports an overlay overriding a saved plugin toggle', async () => {
   const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
   expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: true, application: 'overridden' })
   expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: false, application: 'overridden' })
+})
+
+it('lists plugins from current overlay files in a startup-only profile', async () => {
+  const { manager, overlayPath } = await fixture('startup')
+  const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
+  rmSync(overlayPath)
+  await expect(manager.listPlugins()).rejects.toThrow(`failed to read overlay ${overlayPath}`)
+  writeFileSync(overlayPath, '[]\n')
+  expect((await manager.listPlugins()).some(row => row.entryId === id)).toBe(true)
 })
 
 it('saves startup-only toggles and refuses removal of currently used packages', async () => {
@@ -1463,9 +1473,10 @@ it('omits installation-owned plain packages from the bundle inventory', async ()
 })
 
 it('does not delete a bundle retained by a higher-priority overlay', async () => {
-  const { ctx, manager, overlays, dir } = await fixture()
+  const { ctx, manager, overlayPath, dir } = await fixture()
   const entry = [...ctx.loader.entries()].find(row => row.id === 'include:managed')!
-  overlays.push({ insert: [{ ...entry.options }] })
+  const retained: PatchOptions[] = [{ insert: [{ ...entry.options }] }]
+  writeFileSync(overlayPath, JSON.stringify(retained))
   const remove = vi.spyOn(operations, 'runProfilePnpm')
   onTestFinished(() => { remove.mockRestore() })
   expect(await manager.removeBundle('extra')).toMatchObject({ changed: true, application: 'failed', error: { code: 'bundle-in-use' } })
@@ -2521,4 +2532,28 @@ it('refuses an update whose target does not match where the copy was installed f
   expect(pnpm).not.toHaveBeenCalled()
   expect(view).not.toHaveBeenCalled()
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+})
+
+it('reports profile read, lock, and disposal failures with error codes', async () => {
+  const { ctx, manager, dir } = await fixture('startup', false, undefined, { lockWaitMs: 0 })
+  const manifest = join(dir, 'package.json')
+  const saved = readFileSync(manifest, 'utf8')
+  writeFileSync(manifest, '{')
+  const unreadable = Promise.resolve().then(() => manager.listBundles())
+  await expect(unreadable).rejects.toMatchObject({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_PROFILE_READ_FAILED' })
+  await expect(unreadable).rejects.toHaveProperty('cause', expect.any(SyntaxError))
+  writeFileSync(manifest, saved)
+
+  writeFileSync(`${manifest}.lock`, `${process.pid}\n`)
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toMatchObject({
+    name: 'FileLockError', code: 'FILE_LOCK_TIMEOUT',
+  })
+  rmSync(`${manifest}.lock`)
+
+  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:manager')
+  await entry?.fiber?.dispose()
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toMatchObject({
+    name: 'PluginManagerError', code: 'PLUGIN_MANAGER_UNAVAILABLE',
+  })
+  expect(readFileSync(manifest, 'utf8')).toBe(saved)
 })

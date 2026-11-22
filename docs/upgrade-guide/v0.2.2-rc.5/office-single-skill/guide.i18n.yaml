@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/office-single-skill/guide.md
+/:
+  en: c18807e44f44a606
+  zh: 2a19adf2628e9216
+/one-bundled-office-skill-replaces-the-office-format-skills:
+  en: 8191b30b9455ad3c
+  zh: 85983139af027483
+/one-bundled-office-skill-replaces-the-office-format-skills/change:
+  en: 73c9ebacd1f5e133
+  zh: 4fd8085aba17e86c
+/one-bundled-office-skill-replaces-the-office-format-skills/migration:
+  en: f0af39354077fc2c
+  zh: 6b2f84cea517c22c

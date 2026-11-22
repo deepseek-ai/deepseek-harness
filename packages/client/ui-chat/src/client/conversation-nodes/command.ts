@@ -99,17 +99,10 @@ function compactSource(event: Parameters<ConversationNodeDefinition['match']>[0]
  * @returns final compaction summary Node data.
  */
 function compactSummary(match: ConversationMatch | undefined, checkpoint: ConversationMatch): CompactionSummaryNode {
-  let summary: string | null = null
   let shadowedItemCount: number | null = null
   let shadowedTokenCount: number | null = null
   if (match?.event.type === 'compaction/summary') {
     const data = match.event.data
-    if (Array.isArray(data.summary)) {
-      const text = data.summary
-        .map(block => block.type === 'text' ? block.text : '')
-        .join('')
-      summary = text.trim() === '' ? null : text
-    }
     shadowedItemCount = Array.isArray(data.shadowedSeqs)
       && data.shadowedSeqs.every(seq => Number.isSafeInteger(seq) && seq >= 0)
       ? data.shadowedSeqs.length
@@ -123,7 +116,6 @@ function compactSummary(match: ConversationMatch | undefined, checkpoint: Conver
     kind: 'compaction',
     seq: checkpoint.event.seq,
     time: checkpoint.event.time,
-    summary,
     summaryEventSeq: match?.event.seq ?? null,
     shadowedItemCount,
     shadowedTokenCount,

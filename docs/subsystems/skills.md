@@ -12,7 +12,7 @@ Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/ind
 
 The registry is host+per-scope layered, the shape the [tools registry](tools.md) established over [dsh-scope](../../packages/core/scope): a registration files into the layer of its calling context's scope, so host rows and repository plugins land in the global layer while a plugin mounted by an agent preset's standing composition lands in that preset's layer, and provider names are unique per layer rather than process-wide. A read merges the global layer with the viewing scope's chain — the nearest layer's entry wins a duplicate skill name outright, and the rank order below decides duplicates only within one layer. Discovery caches are keyed by the resolved scope chain, so re-parenting a scope (a blank-session recompose) is visible to the next read without a registry mutation.
 
-Within one layer, duplicate names resolve by rank, provider order, then local order; summaries sort by name. A rejected `list()` is logged and omitted from an incomplete observation, while an explicit incomplete observation contributes usable candidates without making the result cacheable; malformed candidates fail fast. Each provider factory receives a registration-scoped control whose `invalidate()` clears completed catalogs only while that exact registration remains active and whose signal aborts on failed registration or disposal. An in-flight discovery retries once when its provider generation changes; a second change returns the latest candidates incomplete and uncached. Provider and runtime mutations emit the unfiltered `skills/change` invalidation event; it carries no diff, so consumers refetch `snapshot()` with their own lookup options.
+Within one layer, duplicate names resolve by rank, provider order, then local order; summaries sort by name. A rejected `list()` is logged and omitted from an incomplete observation, while an explicit incomplete observation contributes usable candidates without making the result cacheable; malformed candidates fail fast as `SkillError` with `SKILL_INVALID_DEFINITION`. Each provider factory receives a registration-scoped control whose `invalidate()` clears completed catalogs only while that exact registration remains active and whose signal aborts on failed registration or disposal. An in-flight discovery retries once when its provider generation changes; a second change returns the latest candidates incomplete and uncached. Provider and runtime mutations emit the unfiltered `skills/change` invalidation event; it carries no diff, so consumers refetch `snapshot()` with their own lookup options.
 
 An array returned by `SkillProvider.list()` is complete-discovery shorthand. `SkillProviderObservation` lets a provider expose candidates that remain directly loadable while reporting that the observation is not authoritative.
 
@@ -326,6 +326,29 @@ async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition
 ```
 
 Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
+
+<a id="ctxupstreamskills--upstreamskills"></a>
+
+### `ctx.upstreamSkills` — `UpstreamSkills`
+
+Holds what CLI app plugins register: for each plugin, the entry skill and the download of the upstream files it indexes.
+
+```ts cordis-catalog
+/**
+ * Register the calling plugin's entry skill and start downloading the upstream files unless they are in place. The
+ * download starts at load so that a session without a client also gets the skill; a failure is logged as a warning
+ * and waits for `retry()`. In a profile, the files go to that profile's own directory for the plugin, and the
+ * registration deletes the other pins there once, the first time its own pin is in place. The registration belongs
+ * to the calling plugin: unloading that plugin aborts the download and removes the entry skill.
+ * @param registration - the plugin's provider name, entry, pinned files, and optional skills directory.
+ * @returns the handle the plugin's view observes and its check retries.
+ * @throws when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a
+ *   skill provider named `name` is already registered.
+ */
+register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle
+```
+
+Source: [`packages/connector/upstream-skills/src/index.ts`](../../packages/connector/upstream-skills/src/index.ts)
 
 <a id="skills-events"></a>
 

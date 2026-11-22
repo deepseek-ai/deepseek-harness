@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Control de sesiones",
+    "description": "Envía mensajes a otras sesiones y recibe confirmaciones de aceptación."
+  }
+}

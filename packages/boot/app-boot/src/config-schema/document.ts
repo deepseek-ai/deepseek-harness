@@ -13,7 +13,7 @@ function metadata(): Record<string, ConfigJsonSchema> {
     id: { type: 'string', description: 'Entry id. Loader generates an id when an entry omits it; patches use the configured id.' },
     name: { type: 'string', description: 'Plugin module specifier. Inserted relative plugin paths are anchored beside their patch file.' },
     config: {},
-    group: { type: ['boolean', 'null'], description: 'Allows patch indexing and insertion into an entry-list config; does not select the plugin implementation.' },
+    group: { type: ['boolean', 'null'], description: 'Allows patch indexing and insertion into an entry-list config, which a group: true entry requires; does not select the plugin implementation.' },
     disabled: { anyOf: [{ type: ['boolean', 'null'] }, ref('loaderExpression')], description: 'Boolean or !!js expression. The Loader coerces other truthy values as disabled; this schema rejects them.' },
     inject: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'object' }, { type: 'null' }] },
     intercept: { type: ['object', 'null'] },
@@ -129,8 +129,13 @@ export async function buildConfigSchemaDocument(
       diagnostics.push({ level: 'warning', message: `Plugin ${JSON.stringify(name)} has multiple collected schemas; entry validation accepts their union because module resolution depends on the owning tree.` })
     }
   }
+  // The Loader rejects a group entry without an entry-list config, disabled or not.
+  const groupRule: ConfigJsonSchema = {
+    if: { properties: { group: { const: true } }, required: ['group'] },
+    then: { properties: { config: ref('entryList') }, required: ['config'] },
+  }
   definitions.entry = {
-    type: 'object', required: ['name'], allOf: [ref('entryMetadata'), ...entryRules],
+    type: 'object', required: ['name'], allOf: [ref('entryMetadata'), groupRule, ...entryRules],
     description: 'Loader entry. Unknown metadata and plugin names are accepted; plugin-specific validation is available only for the names collected in this profile. Distinct resolutions of one name use a union of their schemas.',
   }
 

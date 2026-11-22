@@ -72,6 +72,8 @@ type Message = MessageRoleMap[keyof MessageRoleMap]
 
 `DeveloperMessage` records incremental agent session changes in conversation order with the `developer` role. `ToolAdditionBlock.toolName` activates the definition selected by the containing Session event's historical header reference; `ToolRemovalBlock.toolName` removes the active definition. Both blocks are rejected in other message roles. `deferLoading` independently requests deferred definition loading without requiring an addition record. See [Session](../../packages/core/session/README.md) for header binding and the [LLM package](../../packages/llm/llm/README.md#known-limitations-and-deferred-work) for provider support limits. `ToolUpdate` is `in-history` or `addition-only` on resolved and prepared model metadata. `GenerateOptions.toolHistory` carries `ToolHistory`: initial `tools` and ordered `updates`, each binding a developer `messageId` to its historically resolved `additions`. The runtime projects this state into provider declarations; it does not change the active tool list in logged headers.
 
+`SystemPromptMessageSource.sections` associates active instructions and transition notices with named sources. Active records identify canonical text through `contentIndex`; source-owned notices use `noticeIndex`, including retirement notices whose record has no canonical text. The [system-prompt package](../../packages/core/system-prompt/README.md) owns index rules and committed-state reconstruction.
+
 Where a message came from is itself a merge-extensible sum type:
 
 ```ts type-equiv
@@ -225,6 +227,8 @@ type StreamChunk =
 
 Process-local `agent/assistant-stream` frames carry live presentation. Durable replay and restore validation still expand the embedded settlement; telemetry, token accounting, and Host folds read the compact records directly. Record-level readers (`assistantStreamFirstTokenTime`, `assistantStreamHasVisibleContent`, `assistantStreamHasVisibleText`, `lastAssistantStreamChunk`, `assistantStreamChunks`, `joinAssistantStreamText`, `assembleAssistantStream`, and the per-run `runFirstTokenTime` and `runFirstVisibleTime`) answer consumer questions in one pass over the records with early exit, so a large history costs O(records) per settlement instead of O(members) expansion ([fold reference](../../packages/llm/llm/README.md)). `expandAssistantStream()` remains the validating path for records read at a durable boundary and for consumers that need every member.
 
+<a id="llmfailure"></a>
+
 ## `LlmFailure`
 
 Every thrown or in-band final-adapter failure normalizes to one serializable provider-neutral payload. `providerRetryAfterMs` is a validated positive delay requested by the provider, not a retry decision; `ProviderRequestId` is an opaque branded string for diagnostics.
@@ -311,7 +315,7 @@ Retry configuration resolves before route registration into an immutable discrim
 
 ## `AppIdentity` — app attribution
 
-The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values.
+The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values. `APP_IDENTITY.suffix` reads `DSH_USER_AGENT_SUFFIX` on each use, and `userAgent()` appends it after the comment; a value that is not an RFC 9110 product token fails the request. The `dsh` launcher sets it to `dsh-profile/<profile>` before any plugin loads, percent-encoding profile-name bytes outside `tchar` and `%` itself, so Desktop sends `deepseek-harness/<version> (+<url>) dsh-profile/desktop` and a profile named `my web` sends `dsh-profile/my%20web`. A dsh subagent child reports its own profile, because child processes do not inherit `DSH_*` variables.
 
 ```ts type-equiv
 /**
@@ -328,8 +332,12 @@ interface AppIdentity {
   version: string
   /** Repository home URL of the app, used as the `User-Agent` comment. */
   url: string
+  /** RFC 9110 product token appended after the comment, such as `dsh-profile/web`. */
+  suffix?: string | undefined
 }
 ```
+
+<a id="tokenusage"></a>
 
 ## `TokenUsage`
 
@@ -360,6 +368,8 @@ interface TokenUsage {
   reasoningTokens?: number
 }
 ```
+
+<a id="blockassembler"></a>
 
 ## `BlockAssembler`
 
@@ -566,7 +576,7 @@ interface LlmModelInfo {
 }
 ```
 
-Correctness-sensitive metadata is resolved separately from the advisory catalog and is owned by the adapter serving the exact route. Context capacity, adapter call defaults, reasoning choices, and the system prompt update mode share one exact-model result so consumers do not repeat authoritative model resolution. `SystemPromptUpdate` has the single value `'in-history'`: the model reads the latest `system` message at any position of `messages` as the complete effective system prompt, so the agent loop can append a changed prompt after the cached history instead of rewriting message 0 ([decision rule](../../packages/core/agent-loop/README.md#understand-the-implementation)); an absent mode means only a leading system message is read, and `normalizeModelInfo` rejects any other value with `INVALID_MODEL_INFO`.
+Correctness-sensitive metadata is resolved separately from the advisory catalog and is owned by the adapter serving the exact route. Context capacity, adapter call defaults, reasoning choices, and the system prompt update mode share one exact-model result so consumers do not repeat authoritative model resolution. `SystemPromptUpdate` has the single value `'in-history'`, which declares native support for system updates within conversation history. System admission appends section changes independently of this capability; each update adds instructions or explicitly supersedes earlier ones, rather than implicitly replacing the whole prompt. When the mode is absent, the adapter represents these updates through its supported prompt or reminder format. `normalizeModelInfo` rejects any other mode with `INVALID_MODEL_INFO`.
 
 ```ts type-equiv
 /** Provider-owned context capacity for one exact provider/model route. */
@@ -796,11 +806,13 @@ interface LlmDiscoveredModel {
 
 ### The request envelope: `LlmCallConfig` and the logged header
 
-The loop builds each request from logged state. `EpochHeader` records call config, marks the fields supplied by adapter defaults, and records the authoritative returned tool order (configured by `toolOrder`, or lexicographic when unset) through full `request/header` snapshots. The rendered prompt is derived history — the `system/message` at surface node 0, plus any later system node an `in-history` route appended — so the header and the derived history together make the request reconstructable from the session log. See [session.md](session.md#the-request-header-event-requestheader) and the [reconstructability Agent Note](../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.md).
+The loop builds each request from logged state. `EpochHeader` records call config, marks the fields supplied by adapter defaults, and records the authoritative returned tool order (configured by `toolOrder`, or lexicographic when unset) through full `request/header` snapshots. The system prompt is derived history: the initial `system/message` and subsequent section updates in surface order. Together, the header and derived history make the request reconstructable from the session log. See [session.md](session.md#the-request-header-event-requestheader) and the [reconstructability Agent Note](../../.agents/notes/implemented/architecture/2026-07-05-reconstructable-requests.md).
 
-The deprecated `agent/request` hook remains available to existing listeners. New code selects models and reasoning effort through [Session model selection](../../packages/core/agent/README.md#use-this-package). The hook receives a frozen call-config seed based on the step's captured model selection and may replace controls such as sampling. A replacement must preserve provider, model, and the optional explicit reasoning effort; record a new Session selection before the next step to change them. Before the waterfall, the loop removes values marked as adapter defaults so exact-model preparation materializes the selected route's current values; unmarked explicit settings remain in the proposal. After the waterfall, preparation rejects unsupported explicit effort ids without clamping and logs the effective config plus the fields supplied by adapter defaults under the turn signal. On step admission, this waterfall and preparation run after assembly and `step/start` but before the system prompt and accepted user batch are committed; cancellation during either commits neither. The prepared capability governs prompt reconciliation, and the call keeps one adapter registration through dispatch. Requests reaching `llm/stream` are deep-frozen, so mutation throws, and carry a process-local loop identity so observers do not confuse separately logged frozen auxiliary calls with conversation requests.
+The deprecated `agent/request` hook remains available to existing listeners. New code selects models and reasoning effort through [Session model selection](../../packages/core/agent/README.md#use-this-package). The hook receives a frozen call-config seed based on the step's captured model selection and may replace controls such as sampling. A replacement must preserve provider, model, and the optional explicit reasoning effort; record a new Session selection before the next step to change them. Before the waterfall, the loop removes values marked as adapter defaults so exact-model preparation materializes the selected route's current values; unmarked explicit settings remain in the proposal. After the waterfall, preparation rejects unsupported explicit effort ids without clamping and logs the effective config plus the fields supplied by adapter defaults under the turn signal. On step admission, this waterfall and preparation run after assembly and `step/start` but before the system prompt and accepted user batch are committed; cancellation during either commits neither. System admission uses the assembled section deltas without consulting the prepared capability, and the call keeps one adapter registration through dispatch. Requests reaching `llm/stream` are deep-frozen, so mutation throws, and carry a process-local loop identity so observers do not confuse separately logged frozen auxiliary calls with conversation requests.
 
-On the wire, a loop-built request is the derived history alone: the rendered prompt travels as the leading `system`-role message (surface node 0, a `system/message` event) and, when the prepared call declares `systemPromptUpdate: 'in-history'`, a non-empty changed prompt may follow the cached history as a later `system`-role message that the model reads as the effective prompt; the request's `system` field is unset — `GenerateOptions.system` serves direct one-shot callers such as title providers. An empty rendering leaves no system messages in derived history, even when earlier requests retained several prompt versions. The logged request ends with the newest `user/message` on a turn's first step and the previous step's tool results on later steps.
+At the adapter boundary, a loop-built request carries the derived history in `messages`; its `system` field is unset. `GenerateOptions.system` serves direct one-shot callers such as title providers. Section changes and retirement notices append system messages without deleting earlier instructions from history; their text tells the model which instructions remain applicable. An empty initial system node stays in the log but contributes no model message.
+
+Adapters own separators in provider requests. The DeepSeek and pi-ai adapters trim each system text block, discard empty blocks, and join the remaining blocks with blank lines. DeepSeek merges leading system messages into its top-level `system` field and sends later updates natively when supported; otherwise it combines all system text in history order. pi-ai merges leading system messages into `systemPrompt` and represents later updates as native system messages or user-role system reminders. See [DeepSeek serialization](../../packages/llm/llm-deepseek/README.md) and [pi-ai history conversion](../../packages/llm/llm-pi-ai/README.md).
 
 FIXME(call-config-shape): revisit which remaining fields are genuinely epoch-level for cache purposes (`model` and the model-owned reasoning effort are explicit; the sampling scalars sit here out of caution).
 
@@ -927,12 +939,12 @@ declare abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
   /**
-   * Resolve the image dimensions and byte target this adapter sends to the model.
+   * Resolve the maximum image dimensions and byte budgets this adapter uses for the model.
    * The default preserves normalized images; adapters that resize must override it.
    * @param _provider - registered provider route.
    * @param _model - exact model id.
    * @param image - normalized image whose request projection is being resolved.
-   * @returns the same target used by request serialization, before provider-internal processing.
+   * @returns the target used by request serialization; encoded images can be smaller to satisfy the hard byte limit.
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;
   /**
@@ -1111,7 +1123,7 @@ imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | u
  * @param provider - registered provider route.
  * @param model - exact model id.
  * @param image - normalized image reference.
- * @returns dimensions and byte target used by the adapter's request serializer.
+ * @returns maximum dimensions and byte budgets used by the request serializer; readImageRequest returns the actual encoded dimensions.
  */
 imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget
 

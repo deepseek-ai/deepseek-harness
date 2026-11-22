@@ -10,8 +10,8 @@ import type { LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environm
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
 import { DEFAULT_MODELS } from './models.ts'
-import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS, DEFAULT_MAX_INLINE_REQUEST_IMAGE_BYTES, DEFAULT_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM, DEFAULT_FILE_EXPIRY_SECONDS, DEFAULT_FILE_REFRESH_MARGIN_SECONDS, DEFAULT_FILE_QUOTA_CLEANUP_BATCH, DEFAULT_FILES_API_TIMEOUT_MS } from './defaults.ts'
-import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_MAX_REQUEST_FILES_BYTES, DEFAULT_REQUEST_IMAGE_MAX_BYTES } from './request-pricing.ts'
+import { MAX_IMAGE_BYTES, MAX_FILE_UPLOAD_CONCURRENCY, MAX_FILE_UPLOAD_RETRIES, DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS, DEFAULT_STREAM_IDLE_TIMEOUT_MS, DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS, DEFAULT_MAX_INLINE_REQUEST_IMAGE_BYTES, DEFAULT_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM, DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM, DEFAULT_FILE_EXPIRY_SECONDS, DEFAULT_FILE_REFRESH_MARGIN_SECONDS, DEFAULT_FILE_QUOTA_CLEANUP_BATCH, DEFAULT_FILES_API_TIMEOUT_MS } from './defaults.ts'
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_MAX_REQUEST_FILES_BYTES, DEFAULT_REQUEST_IMAGE_TARGET_BYTES } from './request-pricing.ts'
 
 const MODEL_MODALITIES = ['text', 'image'] as const satisfies readonly ModelModality[]
 
@@ -43,7 +43,13 @@ export interface Config {
   inlineImageOffloadByteQuantum: Volatile<number>
   /** Image-count removal step after the request exceeds its count bound (default 20). */
   imageOffloadCountQuantum: Volatile<number>
-  /** Maximum duration of one request-image Files API resolution (default one minute). */
+  /** Simultaneous Files uploads per model request (1–3, default 3). */
+  fileUploadConcurrency: Volatile<number>
+  /** Additional attempts per image after throttling or quota recovery (0–2, default 2). */
+  fileUploadMaxRetries: Volatile<number>
+  /** Local wait after upload throttling, in milliseconds (default 500). */
+  fileUploadRetryDelayMs: Volatile<number>
+  /** Maximum duration of one request-image Files API resolution (default 20 seconds). */
   filesApiTimeoutMs: Volatile<number>
   /** Explicit lifetime assigned to each uploaded image (default seven days). */
   fileExpiresAfterSeconds: Volatile<number>
@@ -77,7 +83,7 @@ export const catalogModelFields = {
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
   imagePixelBudget: z.union([z.number().step(1).min(1), 'low']),
-  imageMaxBytes: z.number().step(1).min(1),
+  imageTargetBytes: z.number().step(1).min(1).max(MAX_IMAGE_BYTES),
   systemPromptUpdate: z.const('in-history'),
   toolUpdate: z.union(['in-history', 'addition-only'] as const),
 }
@@ -103,6 +109,9 @@ export const deepSeekConfigFields = {
   imageOffloadByteQuantum: z.number().step(1).min(1).default(DEFAULT_IMAGE_OFFLOAD_BYTE_QUANTUM).volatile(),
   inlineImageOffloadByteQuantum: z.number().step(1).min(1).default(DEFAULT_INLINE_IMAGE_OFFLOAD_BYTE_QUANTUM).volatile(),
   imageOffloadCountQuantum: z.number().step(1).min(1).default(DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM).volatile(),
+  fileUploadConcurrency: z.number().step(1).min(1).max(MAX_FILE_UPLOAD_CONCURRENCY).default(MAX_FILE_UPLOAD_CONCURRENCY).volatile(),
+  fileUploadMaxRetries: z.number().step(1).min(0).max(MAX_FILE_UPLOAD_RETRIES).default(MAX_FILE_UPLOAD_RETRIES).volatile(),
+  fileUploadRetryDelayMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS).volatile(),
   filesApiTimeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_FILES_API_TIMEOUT_MS).volatile(),
   fileExpiresAfterSeconds: z.number().step(1).min(3_600).max(2_592_000).default(DEFAULT_FILE_EXPIRY_SECONDS).volatile(),
   fileRefreshMarginSeconds: z.number().step(1).min(0).default(DEFAULT_FILE_REFRESH_MARGIN_SECONDS).volatile(),
@@ -167,7 +176,10 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       throw new Error(`llm-deepseek: catalog model "${model.id}" inputModalities must not contain duplicates`)
     }
     const hasImage = inputModalities.includes('image')
-    if (!hasImage && (model.imagePixelBudget !== undefined || model.imageMaxBytes !== undefined)) {
+    if ('imageMaxBytes' in model) {
+      throw new Error('llm-deepseek: replace model imageMaxBytes with imageTargetBytes for the encoded-byte target')
+    }
+    if (!hasImage && (model.imagePixelBudget !== undefined || model.imageTargetBytes !== undefined)) {
       throw new Error(`llm-deepseek: text-only catalog model "${model.id}" cannot declare image request limits`)
     }
     if (model.imagePixelBudget !== undefined
@@ -175,9 +187,9 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       && (!Number.isSafeInteger(model.imagePixelBudget) || model.imagePixelBudget <= 0)) {
       throw new Error(`llm-deepseek: catalog model "${model.id}" imagePixelBudget must be "low" or a positive safe integer`)
     }
-    if (model.imageMaxBytes !== undefined
-      && (!Number.isSafeInteger(model.imageMaxBytes) || model.imageMaxBytes <= 0)) {
-      throw new Error(`llm-deepseek: catalog model "${model.id}" imageMaxBytes must be a positive safe integer`)
+    if (model.imageTargetBytes !== undefined
+      && (!Number.isSafeInteger(model.imageTargetBytes) || model.imageTargetBytes <= 0 || model.imageTargetBytes > MAX_IMAGE_BYTES)) {
+      throw new Error(`llm-deepseek: catalog model "${model.id}" imageTargetBytes must be a positive safe integer no greater than 32 MiB`)
     }
     // Widened: a dynamic config update reaches this check without schema validation.
     const systemPromptUpdate: string | undefined = model.systemPromptUpdate
@@ -202,7 +214,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       ...hasImage
         ? {
           ...model.imagePixelBudget === undefined ? {} : { imagePixelBudget: model.imagePixelBudget },
-          imageMaxBytes: model.imageMaxBytes ?? DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+          imageTargetBytes: model.imageTargetBytes ?? DEFAULT_REQUEST_IMAGE_TARGET_BYTES,
         }
         : {},
     }
@@ -282,6 +294,18 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
   if (imageOffloadCountQuantum > maxImagesPerRequest) {
     throw new Error('llm-deepseek: imageOffloadCountQuantum must not exceed maxImagesPerRequest')
   }
+  const fileUploadConcurrency = config.fileUploadConcurrency ?? MAX_FILE_UPLOAD_CONCURRENCY
+  if (!Number.isInteger(fileUploadConcurrency) || fileUploadConcurrency < 1 || fileUploadConcurrency > MAX_FILE_UPLOAD_CONCURRENCY) {
+    throw new Error(`llm-deepseek: fileUploadConcurrency must be an integer from 1 through ${MAX_FILE_UPLOAD_CONCURRENCY}`)
+  }
+  const fileUploadMaxRetries = config.fileUploadMaxRetries ?? MAX_FILE_UPLOAD_RETRIES
+  if (!Number.isInteger(fileUploadMaxRetries) || fileUploadMaxRetries < 0 || fileUploadMaxRetries > MAX_FILE_UPLOAD_RETRIES) {
+    throw new Error(`llm-deepseek: fileUploadMaxRetries must be an integer from 0 through ${MAX_FILE_UPLOAD_RETRIES}`)
+  }
+  const fileUploadRetryDelayMs = config.fileUploadRetryDelayMs ?? DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS
+  if (!Number.isInteger(fileUploadRetryDelayMs) || fileUploadRetryDelayMs < 1 || fileUploadRetryDelayMs > MAX_TIMER_DELAY_MS) {
+    throw new Error(`llm-deepseek: fileUploadRetryDelayMs must be an integer from 1 through ${MAX_TIMER_DELAY_MS}`)
+  }
   const filesApiTimeoutMs = config.filesApiTimeoutMs ?? DEFAULT_FILES_API_TIMEOUT_MS
   if (!Number.isFinite(filesApiTimeoutMs)
     || filesApiTimeoutMs <= 0
@@ -331,9 +355,13 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
     imageOffloadCountQuantum,
     filesApiTimeoutMs,
     filePolicy: {
+      uploadConcurrency: fileUploadConcurrency,
+      uploadTimeoutMs: filesApiTimeoutMs,
       expiresAfterSeconds: fileExpiresAfterSeconds,
       refreshMarginSeconds: fileRefreshMarginSeconds,
       quotaCleanupBatch: fileQuotaCleanupBatch,
+      uploadMaxRetries: fileUploadMaxRetries,
+      uploadRetryDelayMs: fileUploadRetryDelayMs,
     },
     retryPolicy: resolveRetryPolicy(config.retryPolicy, 'llm-deepseek: retryPolicy'),
   }

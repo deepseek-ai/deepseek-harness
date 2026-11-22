@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-05-forge-pending-review-drafts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-05-forge-pending-review-drafts.md
+/agent-note-pull-request-comment-drafts-in-the-code-host-s-pending-review:
+  en: 25b4da2d12f15b82
+  zh: 6d9fec68e8bb0baa
+/agent-note-pull-request-comment-drafts-in-the-code-host-s-pending-review/problem:
+  en: 2674866671bd0d4b
+  zh: e60d41a24d20d7bf
+/agent-note-pull-request-comment-drafts-in-the-code-host-s-pending-review/decision:
+  en: 3df55965423b6d33
+  zh: 2e8f0fbb4f7a311f
+/agent-note-pull-request-comment-drafts-in-the-code-host-s-pending-review/alternatives-considered:
+  en: ef67e05cb9442f05
+  zh: d4433ddd090a9cec
+/agent-note-pull-request-comment-drafts-in-the-code-host-s-pending-review/consequences:
+  en: 198f6cf5a2bc2230
+  zh: 92eb0a349356f100

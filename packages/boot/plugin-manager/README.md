@@ -28,7 +28,7 @@ Manage the current profile's plugins without editing configuration by hand. Enab
 <a id="use-this-package"></a>
 ## Use this package
 
-Base-backed profiles provide the manager. In Web, the sidebar's **Plugins** page ([ui-plugin-manager](../../client/ui-plugin-manager/README.md)) manages the profile's bundles and their uniquely addressable rows; the Settings Plugin list stays read-only. Agent-preset rows remain read-only. The `plugin_manager` tool exposes the same operations and is enabled in the Standard and Creator presets. Other Web presets keep it disabled by default. The full SDK profile enables it at profile scope in native/PTC mode; without HMR, saved changes return `restart-required` with `no-hmr` and apply after the runtime restarts. Every tool action requires `danger-full-access` or approval for that call. Under lower sandbox modes, `ask` requests approval; `never`, rejection, cancellation, or an unavailable approval channel prevents execution. An approval leaves the session permission mode unchanged. Profile changes persist across sessions, and installed Host code executes in-process outside the workspace sandbox. Dependency build-script approval remains separate.
+Base-backed profiles provide the manager. In Web, the sidebar's **Plugins** page ([ui-plugin-manager](../../client/ui-plugin-manager/README.md)) manages the profile's bundles and their uniquely addressable rows. Agent-preset rows remain read-only. The `plugin_manager` tool exposes the same operations and is enabled in the Standard, PTC, and Creator presets. Other Web presets keep it disabled by default. The full SDK profile enables it at profile scope in native/PTC mode; without HMR, saved changes return `restart-required` with `no-hmr` and apply after the runtime restarts. Every tool action requires `danger-full-access` or approval for that call. Under lower sandbox modes, `ask` requests approval; `never`, rejection, cancellation, or an unavailable approval channel prevents execution. An approval leaves the session permission mode unchanged. Profile changes persist across sessions, and installed Host code executes in-process outside the workspace sandbox. Dependency build-script approval remains separate.
 
 For a deployment without agent presets other than the full SDK profile, enable the tool in the profile patch. Package installation/removal requires pnpm on `PATH` or an explicit `pnpmCommand`; a launcher-provided package manager takes precedence. Preset-backed sessions use their preset’s `tool-plugin-manager` entry.
 
@@ -42,6 +42,8 @@ A plugin toggle updates only `disabled` in the last matching override in the pro
 Bundle platform declarations are checked before saving an enabled selection. Unsupported Hosts return `unsupported-platform`. The bundle remains visible with its display metadata and can still be deselected. Automatic activation after a package operation uses the same check. The agent-facing next step asks the user to run the bundle on a supported Host.
 
 `listBundles` retains default-hidden bundles and derives `listedByDefault` from each package’s visibility declaration and Host platform support. Unsupported bundles are hidden from default GUI lists, including More; explicit profile dependencies and saved selections remain manageable with the platform reason and deselection available. The offline Official catalog carries the same package-owned platform declaration, so uninstalled entries are checked without resolving provider code or querying a registry. These checks do not change selection or activation. A non-boolean declaration returns a metadata diagnostic, because the launcher does not read it. A selected bundle that cannot load remains in `listBundles` with an `error` and no row carrying an `entryId`; `enabled` records the saved selection, not successful loading. The plugin page marks it as not running and allows deselection. A broken bundle cannot be enabled. Management bundles remain protected if their files become unreadable.
+
+Use `bundleCatalogEntry(bundle)` from `@deepseek-ai/dsh-plugin-manager/catalog` to project a bundle into an English recommendation catalog. It returns the name, title, description and current `enabled` value. Missing display text falls back to the package name and manifest description.
 
 `listBundles` includes optional display `meta` for each bundle and its declared plugin rows, including disabled bundles. The Client selects a language from these values. The separate `description` field is the bundle's raw `package.json.description`; a metadata diagnostic does not block management. `source` gives a profile dependency as a spec `pnpm add` accepts: a git address or URL as recorded without the user information of an http(s) URL (a query string stays as recorded), a `file:` or `link:` path made absolute against the profile or the home directory for `~`, and a registry range, tag, or alias after the package name, as is any spec of a package installed under another name; a bundle the installation supplies has none, even when the profile also depends on it, because the installation's copy is the one that loads. The `plugin_manager` tool omits UI display metadata and update eligibility from list results.
 
@@ -143,7 +145,6 @@ The `@deepseek-ai/dsh-plugin-manager/diagnostic` entry supplies Desktop Host and
 - [App boot](../app-boot/README.md) — profile layers and startup policy.
 - [Plugin inventory](../../host/plugin-inventory/README.md) — current Loader and preset observations.
 - [Plugin manager page](../../client/ui-plugin-manager/README.md) — the Web sidebar page over this service.
-- [Plugin settings](../../client/ui-settings-plugin-inventory/README.md) — the read-only Web inventory.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -152,7 +153,7 @@ The `@deepseek-ai/dsh-plugin-manager/diagnostic` entry supplies Desktop Host and
 
 #### What the model sees
 
-The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents.
+The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents. A missing or unbounded argument fails as `ToolArgsError` with `INVALID_ARGS`. A failure before a change starts or while reading the profile throws `PluginManagerError`: `PLUGIN_MANAGER_PROFILE_READ_FAILED` when a profile or installation manifest or the profile patches cannot be read, and `PLUGIN_MANAGER_UNAVAILABLE` after the manager is disposed; another writer holding the profile lock past `lockWaitMs` fails with the atomic-write `FileLockError` `FILE_LOCK_TIMEOUT`; other operation failures stay in the change result.
 
 #### Token effect
 
@@ -178,7 +179,7 @@ Tool results append to the transcript. Enabling or disabling other tools can cha
 - Startup-only profiles cannot remove packages used to start the current process; stop it and use `dsh plugin`.
 - The manager cannot disable its own management components, change another profile, or edit an agent preset's composition.
 - A failed removal may leave dependencies partially changed, and a failed or cancelled installation can leave downloaded files under `node_modules` or the pnpm store. Inactive dependencies with missing files remain removable. Diagnostic logs remain under the profile's `.plugin-manager/logs` directory.
-- Management results describe Host activation. Browser synchronization failures appear separately in the Settings plugin list.
+- Management results describe Host activation. Browser synchronization failures appear separately in the Plugins page's synchronization notice.
 - Desktop package operations remain owned by the Desktop shell.
 
 <a id="failure-behavior"></a>

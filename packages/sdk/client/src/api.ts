@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
+import type { SessionResumeParams } from '@deepseek-ai/dsh-sdk-protocol'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 import { createProcessHarnessClient, HarnessClient, isRecord, queryInput, SdkProtocolError } from './client.ts'
 import type { RuntimeProcessOptions } from './launch.ts'
@@ -110,18 +111,19 @@ export class DeepSeekHarness implements AsyncDisposable {
    * Start the runtime and restore a persisted session without sending input.
    * The configured Harness home must contain its history; missing or occupied sessions reject.
    * @param sessionId - exact persisted identity to continue.
+   * @param options - explicit permission preset to persist before execution; omission retains saved permissions.
    * @returns a handle ready to run new prompts on the restored history.
    */
-  async resumeSession(sessionId: string): Promise<HarnessSession> {
+  async resumeSession(sessionId: string, options: Omit<SessionResumeParams, 'sessionId'> = {}): Promise<HarnessSession> {
     await this.start()
-    await this.client.resumeSession(sessionId)
+    await this.client.resumeSession(sessionId, options)
     return new HarnessSession(this, sessionId)
   }
 
   /**
    * Run text or content blocks on a fresh or named Session through native input routing.
    * @param input - prompt or command text, optionally accompanied by image content blocks.
-   * @param options - optional Session identity and notification observer.
+   * @param options - optional Session identity, prompt time zone, and notification observer.
    * @returns the completed input's RunResult, including its Session id.
    */
   run(input: string | SdkPromptContentBlock[], options?: RunOptions): Promise<RunResult> {
@@ -162,10 +164,12 @@ export function createProcessDeepSeekHarness(
   }, () => createProcessHarnessClient(runtime))
 }
 
-/** Per-run Session identity and notification observer. */
+/** Per-run Session identity, prompt time zone, and notification observer. */
 export interface RunOptions {
   /** Session id to run on; omitted mints a fresh session per call. */
   sessionId?: string
+  /** User time zone for a prompt: UTC or IANA Area/Location. Omitted: the runtime samples its process zone. Native commands record none. */
+  timeZone?: string
   /**
    * Observe the input's Session-tree activity in wire order until completion.
    * The interval can include overlapping work from other inputs.
@@ -239,7 +243,7 @@ export class HarnessSession {
   }
 
   /**
-   * Change the effective directory without moving existing processes or changing permissions.
+   * Change the effective directory without moving existing processes; the workspace-write boundary follows it.
    * @param path - absolute or Session-current-directory-relative directory.
    * @returns the validated absolute directory.
    */
@@ -251,18 +255,18 @@ export class HarnessSession {
   /**
    * Run text or content blocks through native prompt-or-command routing.
    * @param input - prompt or command text, optionally accompanied by image content blocks; image-only input is an ordinary prompt.
-   * @param options - a per-notification observer.
+   * @param options - optional prompt time zone and per-notification observer.
    * @returns RunResult after prompt activity, a state-only command, or command-started model work ends.
    * Goal creation and resume include automatic rounds through goal termination and the closing reply.
    * Native handler refusals return finishReason="error".
    * @throws on routing, protocol, transport or observer failure; runtime work is not rolled back.
    */
-  async run(input: string | SdkPromptContentBlock[], options?: Pick<RunOptions, 'onNotification'>): Promise<RunResult> {
+  async run(input: string | SdkPromptContentBlock[], options?: Pick<RunOptions, 'onNotification' | 'timeZone'>): Promise<RunResult> {
     await this.harness.start()
     const client = this.harness.client
     const subscription = client.subscribeSessionTree(this.id)
     try {
-      const response = await queryInput(client, this.id, input)
+      const response = await queryInput(client, this.id, input, options?.timeZone)
       if (response.kind === 'command') {
         const activity = new RunActivity(this.id, { commandId: response.execution.commandId })
         while (true) {

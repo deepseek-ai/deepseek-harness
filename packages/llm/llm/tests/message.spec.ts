@@ -1,6 +1,9 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import {
-  ToolCallId,
+  type ContentBlock,
+  type ToolCallId,
   boundContextSummary,
   CONTEXT_SUMMARY_MAX_CHARS,
   createAssistantMessage,
@@ -9,8 +12,61 @@ import {
   createToolResultMessage,
   createUserMessage,
   freezeMessage,
-  MessageId,
+  type MessageId,
 } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+
+describe('extractTextContent', () => {
+  it('preserves whitespace and empty text blocks while omitting non-text blocks', () => {
+    const message = createUserMessage({
+      source: { kind: 'test' },
+      content: [
+        { type: 'text', text: ' \talpha\n' },
+        { type: 'reasoning', text: 'private reasoning' },
+        { type: 'image', attachment: {
+          attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
+          mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+        } },
+        { type: 'tool-call', id: brandString<ToolCallId>('call'), name: 'tool', arguments: '{}' },
+        { type: 'text', text: '' },
+        { type: 'tool-removal', toolName: 'removed' },
+        { type: 'text', text: 'β \r\n' },
+      ],
+    })
+    expect(extractTextContent(message.content)).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, undefined)).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, {})).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: '' })).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: '\n' })).toBe(' \talpha\n\n\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: ' ' })).toBe(' \talpha\n  β \r\n')
+    expect(extractTextContent(message.content, { separator: '::' })).toBe(' \talpha\n::::β \r\n')
+    expect(Object.isFrozen(message.content)).toBe(true)
+    expect(message.content[0]).toEqual({ type: 'text', text: ' \talpha\n' })
+  })
+
+  it('returns empty text when there are no text blocks and keeps separators between empty text blocks', () => {
+    expect(extractTextContent([])).toBe('')
+    expect(extractTextContent([{ type: 'reasoning', text: 'not plain text' }], { separator: '\n' })).toBe('')
+    expect(extractTextContent([
+      { type: 'text', text: '' },
+      { type: 'reasoning', text: 'ignored' },
+      { type: 'text', text: '' },
+    ], { separator: '\n' })).toBe('\n')
+  })
+
+  it('trims each text block and omits blocks left empty when trim is set', () => {
+    const content: ContentBlock[] = [
+      { type: 'text', text: ' \talpha\n' },
+      { type: 'text', text: '' },
+      { type: 'reasoning', text: 'ignored' },
+      { type: 'text', text: ' \n' },
+      { type: 'text', text: 'β  γ \r\n' },
+    ]
+    expect(extractTextContent(content, { separator: '\n\n', trim: true })).toBe('alpha\n\nβ  γ')
+    expect(extractTextContent(content, { trim: true })).toBe('alphaβ  γ')
+    expect(extractTextContent([{ type: 'text', text: ' ' }], { separator: '\n\n', trim: true })).toBe('')
+  })
+})
 
 describe('message construction', () => {
   it('detaches and freezes developer tool names without copying their definitions', () => {
@@ -30,7 +86,7 @@ describe('message construction', () => {
   })
 
   it('preserves system-prompt attribution on immutable system messages', () => {
-    const expectedSource: { kind: 'system-prompt' } = { kind: 'system-prompt' }
+    const expectedSource: import('@deepseek-ai/dsh-llm').SystemPromptMessageSource = { kind: 'system-prompt' }
     const message = createSystemMessage('rule')
     expectTypeOf(message.source).toEqualTypeOf(expectedSource)
     expect(message.role).toBe('system')
@@ -66,7 +122,7 @@ describe('message construction', () => {
   })
 
   it('freezes an existing identity without minting a replacement', () => {
-    const id = MessageId('existing')
+    const id = brandString<MessageId>('existing')
     const input = {
       id,
       role: 'assistant' as const,
@@ -107,7 +163,7 @@ describe('message construction', () => {
   })
 
   it('couples tool-result content and its cited call seq to one call identity', () => {
-    const callId = ToolCallId('call-1')
+    const callId = brandString<ToolCallId>('call-1')
     const message = createToolResultMessage({
       callId,
       content: [{ type: 'text', text: 'result' }],

@@ -4,6 +4,7 @@
  * startup budget, and the per-Fiber lookup's registration lifecycle.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Transport } from '@modelcontextprotocol/client'
@@ -65,12 +66,14 @@ vi.mock('@modelcontextprotocol/client/stdio', () => ({
 }))
 
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
-import { Config as ConfigSchema, apply, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { Config as ConfigSchema, apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { connectionStatusIn as connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { McpStatusCell } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 
 async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   return ctx
@@ -315,7 +318,7 @@ describe('connection status surface', () => {
       expect(connectionStatusOf(fiber)).toBe(handle)
       expect(handle.closure()).toEqual({
         closeConfirmed: mode === 'cleanup-error',
-        cleanupError: mode === 'cleanup-error' ? 'Error: transport cleanup failed' : 'Error: MCP cleanup did not settle',
+        cleanupError: mode === 'cleanup-error' ? 'Error: transport cleanup failed' : 'McpLocalError: MCP cleanup did not settle',
       })
       expect(ctx.tools.schemas()).toEqual([])
     } finally {
@@ -383,10 +386,10 @@ describe('connection status surface', () => {
     const seen: McpConnectionStatus[] = []
     handle.onChange((status) => { seen.push(status) })
     await vi.waitFor(() => {
-      expect(handle.current()).toEqual({ state: 'failed', reason: 'gave-up', lastError: 'Error: MCP transport closed' })
+      expect(handle.current()).toEqual({ state: 'failed', reason: 'gave-up', lastError: 'McpLocalError: MCP transport closed' })
     })
     const reconnecting = seen.find(status => status.state === 'reconnecting')
-    expect(reconnecting).toMatchObject({ lastError: 'Error: MCP transport closed' })
+    expect(reconnecting).toMatchObject({ lastError: 'McpLocalError: MCP transport closed' })
   })
 
   it('reports a reconnect-disabled stop when the transport closes during connect', async () => {
@@ -397,7 +400,7 @@ describe('connection status surface', () => {
     })
     await apply(ctx, stdioConfig({ reconnect: { enabled: false } }))
     await vi.waitFor(() => {
-      expect(connectionStatusOf(ctx.fiber)!.current()).toEqual({ state: 'failed', reason: 'reconnect-disabled', lastError: 'Error: MCP transport closed' })
+      expect(connectionStatusOf(ctx.fiber)!.current()).toEqual({ state: 'failed', reason: 'reconnect-disabled', lastError: 'McpLocalError: MCP transport closed' })
     })
   })
 })

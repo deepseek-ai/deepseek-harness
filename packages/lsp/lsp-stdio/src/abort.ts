@@ -8,14 +8,17 @@ import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 /**
  * Build an abort Error carrying the signal's reason and preserving timeout classification.
  * @param signal - the aborted signal whose reason to surface.
- * @returns the timeout reason if present, else the Error reason, else a generic aborted Error.
+ * @returns the timeout reason if present, else the Error reason, else an `AbortError`-named Error
+ *   whose `cause` is the non-Error reason, so tool cancellation classification still applies.
  */
 export function abortError(signal: AbortSignal): Error {
   const timeout = timeoutOf(signal)
   if (timeout !== undefined) return timeout
   const reason: unknown = signal.reason
   if (reason instanceof Error) return reason
-  return new Error('LSP query aborted')
+  const aborted = new Error('LSP query aborted', { cause: reason })
+  aborted.name = 'AbortError'
+  return aborted
 }
 
 /**

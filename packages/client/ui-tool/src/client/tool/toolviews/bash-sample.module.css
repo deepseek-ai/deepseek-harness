@@ -25,8 +25,9 @@
    example, command cancellation). Preserve ToolRow's bounded IN/OUT fallback
    so the original command and full error remain available from this keyed row. */
 .ioCard {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 14px;
   margin: 4px 0 4px 4px;
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: var(--dsw-radius-lg);
@@ -36,8 +37,8 @@
 
 .ioSection {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
   padding: 12px 16px;
   max-height: 150px;
@@ -62,7 +63,7 @@
 }
 
 .ioDivider {
-  flex: none;
+  grid-column: 1 / -1;
   height: 0.5px;
   background: var(--dsw-alias-border-l2);
 }
@@ -125,10 +126,11 @@
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
    the svg attributes so the 14px business glyph follows the font-size delta.
-   TODO: this bash header duplicates the DisclosureRow structure (and this is
-   the fourth copy of the glyph rule, with DisclosureRow, MessageItem
-   .compactionLeading, and MessageIconActions); migrating the bash row onto
-   the shared DisclosureRow would collapse them to one. */
+   TODO: this bash header duplicates the DisclosureRow structure, and the glyph
+   rule is also copied in DisclosureRow, MessageItem .compactionLeading and
+   .inheritedHistoryIcon, ChatGroupSeat, SkillRow, and MessageIconActions (at
+   15px); migrating the bash row onto the shared DisclosureRow removes this
+   copy. */
 .leading svg:not([data-state]) {
   width: calc(14px + var(--dsh-content-font-delta, 0px));
   height: calc(14px + var(--dsh-content-font-delta, 0px));

@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -6,10 +7,11 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import TurndownService from 'turndown'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ResolvedToolSet, type ToolExecutionInput, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import type { WebFetchProvider, WebSearchProvider, WebSearchResult } from '@deepseek-ai/dsh-web'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
@@ -62,14 +64,28 @@ function searchProvider(result: WebSearchResult, isAvailable = available): WebSe
   return { id: 'stub-search', available: () => isAvailable, search: () => Promise.resolve(result) }
 }
 
+/**
+ * An agent whose Session reports `route` as the provider route of its latest model request.
+ * @param id - the agent's Session id.
+ * @param route - the route, or undefined for a Session that has made no model request.
+ * @returns the agent fixture.
+ */
+function agentOnRoute(id: string, route?: string): Agent {
+  const requestContext = () => route === undefined ? undefined : { provider: route, model: 'test' }
+  return { id: brandString<SessionId>(id), session: { requestContext } } as Agent
+}
+
 /** Mount the real registry, seam, and tool-web; return an executor helper. */
 async function mountTools(opts: {
   config?: ToolWeb.Config
   webConfig?: { searchProvider?: string; fetchProvider?: string }
   search?: WebSearchProvider
   fetchProvider?: WebFetchProvider
+  /** Provider route of the agent's latest model request. */
+  route?: string
 } = {}): Promise<{ ctx: Context; agent: Agent; fiber: Awaited<ReturnType<Context['plugin']>>; call: (name: string, args: unknown) => Promise<ToolExecutionResult> }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -77,10 +93,10 @@ async function mountTools(opts: {
   if (opts.search) ctx.web.registerSearchProvider(opts.search)
   if (opts.fetchProvider) ctx.web.registerFetchProvider(opts.fetchProvider)
   const fiber = await ctx.plugin(ToolWeb, opts.config ?? {})
-  const agent = { id: SessionId('tool-web') } as Agent
+  const agent = agentOnRoute('tool-web', opts.route)
   await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
   let counter = 0
-  const call = (name: string, args: unknown) => executeInStep(ctx, agent, { signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+  const call = (name: string, args: unknown) => executeInStep(ctx, agent, { signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
   return { ctx, agent, fiber, call }
 }
 
@@ -134,6 +150,9 @@ describe('search formatting', () => {
     expect(() => parseSearchArgs({ queries: ['one', 'two'] }, 1)).toThrow('at most 1 query')
     expect(() => parseSearchArgs({ queries: ['one', 'two', 'three'] }, 2)).toThrow('at most 2 queries')
     expect(() => parseSearchArgs({ queries: ['ok', ' '] }, WEB_SEARCH_MAX_QUERIES)).toThrow('each query must be a non-empty string')
+    for (const queries of [[], ['one', 'two'], ['ok', ' ']]) {
+      expect(() => parseSearchArgs({ queries }, 1)).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS' }))
+    }
   })
 
   it('falls back to the raw URL as a source label when the URL is unparseable', () => {
@@ -397,6 +416,7 @@ describe('fetch formatting', () => {
 
   it('validates url (non-empty), no timeout parameter', () => {
     expect(() => parseFetchArgs({ url: ' ' })).toThrow('non-empty')
+    expect(() => parseFetchArgs({ url: ' ' })).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS' }))
     expect(parseFetchArgs({ url: 'https://a.test' })).toEqual({ url: 'https://a.test' })
   })
 
@@ -493,9 +513,9 @@ describe('tool-web registration', () => {
     expect(names).toContain('web_search')
     expect(names).toContain('web_fetch')
     const toolSet = await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: ToolCallId('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
       .toEqual({ kind: 'parallel' })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: ToolCallId('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
       .toEqual({ kind: 'parallel' })
     await fiber.dispose()
     expect(ctx.tools.schemas().map(s => s.name)).not.toContain('web_search')
@@ -767,11 +787,40 @@ describe('tool-web execution through the real registry', () => {
     await fiber.dispose()
   })
 
+  it.each([
+    ['Messages search for a model request on a DeepSeek model route', 'deepseek-account', 'deepseek-official'],
+    ['the Search API for a model request on another route', 'openai', 'deepseek-search-api'],
+    ['the Search API for a Session that has made no model request', undefined, 'deepseek-search-api'],
+  ])('with no provider configured, searches through %s', async (_label, route, expected) => {
+    const requests: unknown[] = []
+    const { ctx, fiber, call } = await mountTools(route === undefined ? {} : { route })
+    for (const id of ['deepseek-search-api', 'deepseek-official']) {
+      ctx.web.registerSearchProvider({
+        id, available: () => available,
+        search: (request) => { requests.push(request); return Promise.resolve({ content: id, sources: [], truncated: false }) },
+      })
+    }
+    const out = await call('web_search', { queries: ['one', 'two'] })
+    expect(out.isError).toBe(false)
+    expect(out.value).toMatchObject({ content: `### one\n\n${expected}\n\n### two\n\n${expected}` })
+    expect(requests).toEqual(['one', 'two'].map(query => ({ query, maxResults: 10, ...route === undefined ? {} : { llmProvider: route } })))
+    await fiber.dispose()
+  })
+
   it.each([{}, { queries: [123] }])('rejects absent or wrongly typed queries with a structured INVALID_ARGS error', async (args) => {
     const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: searchProvider({ sources: [], truncated: false }) })
     const out = await call('web_search', args)
     expect(out.isError).toBe(true)
     expect(out.error?.info?.code).toBe('INVALID_ARGS')
+    await fiber.dispose()
+  })
+
+  it('reports hand-checked query and URL constraints with structured identity', async () => {
+    const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: searchProvider({ sources: [], truncated: false }) })
+    expect((await call('web_search', { queries: [] })).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect((await call('web_fetch', { url: ' ' })).error).toEqual({
+      message: 'invalid arguments: url must be a non-empty string', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' },
+    })
     await fiber.dispose()
   })
 
@@ -792,7 +841,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
     const controller = new AbortController()
-    const out = await executeInStep(ctx, agent, { callId: ToolCallId('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
+    const out = await executeInStep(ctx, agent, { callId: brandString<ToolCallId>('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -819,7 +868,7 @@ describe('tool-web execution through the real registry', () => {
       },
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
-    const out = await executeInStep(ctx, agent, { signal: testToolSignal, callId: ToolCallId('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
+    const out = await executeInStep(ctx, agent, { signal: testToolSignal, callId: brandString<ToolCallId>('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -841,7 +890,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    await executeInStep(ctx, agent, { callId: ToolCallId('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
+    await executeInStep(ctx, agent, { callId: brandString<ToolCallId>('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
     expect(seen.signal).toBe(controller.signal)
     await fiber.dispose()
   })
@@ -860,7 +909,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    const pending = executeInStep(ctx, agent, { callId: ToolCallId('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
+    const pending = executeInStep(ctx, agent, { callId: brandString<ToolCallId>('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
     await vi.waitFor(() => { expect(signals).toHaveLength(2) })
     expect(signals[0]).toBe(signals[1])
     expect(signals[0]).not.toBe(controller.signal)
@@ -908,6 +957,7 @@ describe('searchMaxResults is plugin config', () => {
     ['fractional', 1.5],
   ])('rejects a %s searchMaxResults at load', async (_label, value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -948,6 +998,7 @@ describe('searchSummaryMaxChars is plugin config', () => {
 
   it.each([['zero', 0], ['fractional', 2.5]])('rejects a %s searchSummaryMaxChars at load', async (_label, value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(WebRuntime, {})
@@ -976,7 +1027,7 @@ describe('searchMaxQueries is plugin config', () => {
     expect(JSON.stringify(schema?.parameters)).toContain('1–2 search queries')
     const out = await call('web_search', { queries: ['one', 'two', 'three'] })
     expect(out.isError).toBe(true)
-    expect(out.content).toEqual([{ type: 'text', text: 'Error: queries must contain at most 2 queries' }])
+    expect(out.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: queries must contain at most 2 queries' }])
     expect(seen).toEqual([])
     await fiber.dispose()
   })
@@ -1003,12 +1054,13 @@ describe('searchMaxQueries is plugin config', () => {
     for (const query of queries) expect(text).toContain(`https://${query}.test/1`)
     expect(text).not.toContain('.test/2')
     const rejected = await call('web_search', { queries: [...queries, 'q10'] })
-    expect(rejected.content).toEqual([{ type: 'text', text: 'Error: queries must contain at most 10 queries' }])
+    expect(rejected.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: queries must contain at most 10 queries' }])
     await fiber.dispose()
   })
 
   it.each([0, -1, 1.5])('rejects an invalid searchMaxQueries value %s at load', async (value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1038,6 +1090,7 @@ describe('tool-call timeout budget is plugin config', () => {
     ['searchTimeoutMs', { searchTimeoutMs: -5 }],
   ])('rejects a non-positive-integer %s at load', async (key, config) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1071,6 +1124,7 @@ describe('fetchMaxOutputChars is plugin config', () => {
 
   it.each([0, -1, 1.5])('rejects an invalid fetchMaxOutputChars value %s at load', async (value) => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1193,6 +1247,7 @@ describe('web tool admission per model step', () => {
   }) {
     const ctx = new Context()
     mounted.push(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1203,7 +1258,7 @@ describe('web tool admission per model step', () => {
     for (const provider of setup.providers) ctx.web.registerSearchProvider(provider)
     for (const provider of setup.fetchProviders ?? []) ctx.web.registerFetchProvider(provider)
     const fiber = await ctx.plugin(ToolWeb, {})
-    const agent = { id: SessionId('web-search-admission') } as Agent
+    const agent = agentOnRoute('web-search-admission')
     await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
     const selection: ModelSelection = { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' }
     const step = async (): Promise<{ toolSet: ResolvedToolSet; tools: string[]; prompt: string }> => {
@@ -1256,7 +1311,7 @@ describe('web tool admission per model step', () => {
     const { ctx, agent, step } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'], [], searched)] })
     const { toolSet } = await step()
     const result = await executeToolFixture(ctx, {
-      agent, toolSet, signal: testToolSignal, callId: ToolCallId('withheld-search'), name: 'web_search', arguments: { queries: ['q'] },
+      agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('withheld-search'), name: 'web_search', arguments: { queries: ['q'] },
     })
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
     expect(searched).toEqual([])
@@ -1303,7 +1358,7 @@ describe('web tool admission per model step', () => {
     })
     const { toolSet } = await step()
     const result = await executeToolFixture(ctx, {
-      agent, toolSet, signal: testToolSignal, callId: ToolCallId('withheld-fetch'), name: 'web_fetch', arguments: { url: 'https://a.test' },
+      agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('withheld-fetch'), name: 'web_fetch', arguments: { url: 'https://a.test' },
     })
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
     expect(fetched).toEqual([])

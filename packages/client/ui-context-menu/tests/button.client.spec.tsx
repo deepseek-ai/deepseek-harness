@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Context } from '@deepseek-ai/cordis'
 import { useState } from 'react'
 import { apply, inject } from '../src/client/index.ts'
 import type { ContextMenuTarget, MenuAction } from '../src/client/types.ts'
 import { isContextMenuTrigger } from '../src/client/external-trigger.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
   interface ContextMenuTargetMap {
@@ -18,7 +20,7 @@ declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
   }
 }
 
-const target = (id: string): ContextMenuTarget => ({ kind: 'header', value: { sessionId: SessionId(id) } })
+const target = (id: string): ContextMenuTarget => ({ kind: 'header', value: { sessionId: brandString<SessionId>(id) } })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 it('shows late registered kinds without preparing actions and withdraws them with the contributing fiber', async () => {
@@ -29,12 +31,12 @@ it('shows late registered kinds without preparing actions and withdraws them wit
   await runtime.root.declare({}, ({ renderFactorySlot }) => <>
     {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
     {renderFactorySlot('contextMenu.button', { target: { kind: 'session', value: {
-      sessionId: SessionId('row'), displayTitle: 'Row',
+      sessionId: brandString<SessionId>('row'), displayTitle: 'Row',
     } }, label: 'Row menu', className: 'row-control' })}
   </>)
   const view = runtime.renderRoot()
   expect(view.queryByRole('button')).toBeNull()
-  const plugin = await runtime.mount({ inject, apply })
+  const plugin = await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   expect(view.queryByRole('button')).toBeNull()
   const resolve = vi.fn(() => new Promise<readonly MenuAction[]>(() => {}))
   const row = await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
@@ -66,7 +68,7 @@ it('shows the label tooltip on the compact toolbar button but not on row buttons
     {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
     {renderFactorySlot('contextMenu.button', { target: target('row'), label: 'Row menu' })}
   </>)
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'header', target: 'header', order: 0, resolve: () => [],
   })) } })
@@ -98,7 +100,7 @@ it('toggles moved buttons by target identity, replaces other targets, and preser
       {renderSlot('shell.overlay', {})}
     </div>
   })
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'header', target: 'header', order: 0, resolve: () => [{ id: 'open', label: 'Open' }],
   })) } })
@@ -169,7 +171,7 @@ it('keeps an open button expanded after its owner updates display metadata in th
     update = setCurrent
     return renderFactorySlot('contextMenu.button', { target: current, label: 'Entity menu' })
   })
-  await runtime.mount({ inject, apply })
+  await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'entity', target: 'entity', order: 0, resolve: () => [],
   })) } })

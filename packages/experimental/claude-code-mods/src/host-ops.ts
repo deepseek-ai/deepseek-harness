@@ -14,7 +14,10 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
@@ -76,6 +79,14 @@ const storeDomainSpec = defineDomain({
   tables: { store: domainTable<string, Record<string, JsonValue>>(zod.record(zod.string(), zod.json())) },
 })
 
+/** A call to a mod-registered tool that no `tool.call` hook answered; code `MOD_UNANSWERED`. */
+export class ModUnansweredError extends HarnessError {
+  constructor(message: string) {
+    super(message, 'MOD_UNANSWERED')
+    this.name = 'ModUnansweredError'
+  }
+}
+
 /** Options the host op table is built from. */
 export interface HostOpsOptions {
   readonly ctx: Context
@@ -106,17 +117,13 @@ function requireAgent(context: OpContext<AgentBinding>, op: string): Agent {
   return agent
 }
 
-function textOf(content: readonly ContentBlock[]): string {
-  return content.filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text').map(block => block.text).join('')
-}
-
 /**
  * Project one tool outcome onto Claude Code's `tool.call` result.
  * @param result - the harness tool outcome.
  * @returns its text as `result`, with `isError` on a failure.
  */
 export function toolCallResultOf(result: ToolExecutionResult): ToolCallResult {
-  return result.isError ? { result: textOf(result.content), isError: true } : { result: textOf(result.content) }
+  return result.isError ? { result: extractTextContent(result.content), isError: true } : { result: extractTextContent(result.content) }
 }
 
 /** The model's raw JSON arguments as an object; an unparsable string is an empty input. */
@@ -136,7 +143,7 @@ function sessionMessages(messages: readonly Message[], aliases: ToolNameAliases)
     const toolUses = message.content
       .filter((block): block is Extract<ContentBlock, { type: 'tool-call' }> => block.type === 'tool-call')
       .map(block => ({ tool_use_id: block.id, tool: aliases.toMod(block.name), input: argumentsOf(block.arguments) }))
-    out.push({ role: message.role, text: textOf(message.content), toolUses })
+    out.push({ role: message.role, text: extractTextContent(message.content), toolUses })
   }
   return out
 }
@@ -339,7 +346,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
           render: (_args, value) => [{ type: 'text', text: value as string }],
         },
         execute() {
-          return Promise.reject(new Error(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
+          return Promise.reject(new ModUnansweredError(`${mod.name} registered ${fullName} but no tool.call hook answered it; add on('tool.call', { tool: '${fullName}' }, hook)`))
         },
       }
       track(registry.register(definition), binding.agent)
@@ -350,7 +357,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       const registry = ctx.get('tools')
       if (registry === undefined) throw new Error('$.tool.call needs a tool registry (dsh-tools), which this deployment did not compose')
       const { tool, tool_use_id: _ignored, agentId: _agent, ...args } = record(input)
-      const callId = ToolCallId(`mod-${randomUUID()}`)
+      const callId = brandString<ToolCallId>(`mod-${randomUUID()}`)
       // The pipeline raises `tool.call` for this call from the calling mod, so only earlier mods see it.
       options.callOrigins.set(callId, context.mod)
       try {

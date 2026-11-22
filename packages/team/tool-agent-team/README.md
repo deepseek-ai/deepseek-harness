@@ -56,6 +56,8 @@ The task tools complement the ordinary subagent controls:
 
 Task `owner` arguments accept the names that `list_agents` shows: `lead`, a full name such as `reviewer/checker`, or a Session id. Task results report `owner` as that name, or as the Session id when the owner has no name; `unowned: true` filters tasks without an owner, while `unowned: false` selects assigned tasks. The `owner` and `unowned` filters cannot be combined. The Team service authorizes `ownerId` Session ids and saves the full name in `ownerName` at assignment. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
+`write_scopes` accepts advisory file or directory prefixes relative to the workspace root, with no absolute paths or `..` segments. Omit it or pass `[]` when creating a task with no workspace writes. For `edit`, omission keeps existing scopes and `[]` clears them.
+
 ### What success and failure look like
 
 Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors.
@@ -89,11 +91,11 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One plugin registration provides a dynamic `team:policy` section and four conditional task tools. Each provider reads the caller’s root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids in `ctx.agentTeams`. Owner arguments resolve through `ctx.subagents.resolveName()`, which grants no authority. Results replace the saved `ownerId` and `ownerName` fields with `owner: ownerName ?? ownerId`. Displaying a task or editing its content requires no descendant catalog reads. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and remain unchanged when Team mode switches. The subagent runtime delivers final results.
+One plugin registration provides a dynamic `team:policy` section and four conditional task tools. Each provider reads the caller’s root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids in `ctx.agentTeams`. Owner arguments resolve through `ctx.subagents.resolveName()`, which grants no authority. Results replace the saved `ownerId` and `ownerName` fields with `owner: ownerName ?? ownerId`. Displaying a task or editing its content requires no descendant catalog reads. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and keep that ownership when Team mode switches; enabling Team mode removes only their result report instruction. The subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
-Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
+Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly. After the policy has been admitted, disabling Team mode appends a notice withdrawing it; unloading this plugin appends its retirement notice on the next accepted assembly. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
 
 </details>
 

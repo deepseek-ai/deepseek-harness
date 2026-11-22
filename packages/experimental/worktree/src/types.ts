@@ -1,11 +1,19 @@
-/** Public requests and results for creating a Git worktree and entering it, and for restoring a removed one. */
+/**
+ * Public requests and results for creating a Git worktree and entering it, for entering an existing one, and
+ * for restoring a removed one.
+ */
 
-/** A new checkout from a locally available Git commit, branch, or tag. */
+/** A new checkout from a locally available Git commit, branch, or tag, or from a remote branch fetched first. */
 export interface CreateWorktreeRequest {
   /** New branch name, also used as the relative checkout directory; omission generates a name. */
   name?: string
   /** Local revision to resolve before creation; omission selects HEAD. */
   from?: string
+  /**
+   * Fetch `from` from its remote before resolving it. `from` must then be the full name of a remote-tracking
+   * branch, `refs/remotes/<remote>/<branch>`, of a configured remote; only that branch is fetched, without tags.
+   */
+  fetch?: boolean
 }
 
 /** Committed Git baseline and the calling Session's resulting working directory. */
@@ -20,13 +28,30 @@ export interface CreatedWorktree {
   repositoryRoot: string
 }
 
+/** An existing checkout in the worktree pool of the checkout the calling Session works in. */
+export interface EnterWorktreeRequest {
+  /** Checkout directory relative to the pool: the name `create` gave the worktree. */
+  name: string
+}
+
+/** An existing checkout the calling Session entered. */
+export interface EnteredWorktree {
+  /** Canonical absolute checkout directory in the filesystem provider's execution world. */
+  path: string
+  /** Branch checked out there at entry; absent on a detached HEAD. */
+  branch?: string
+  /** Canonical root of the checkout whose pool holds the worktree; `exit` returns the Session there. */
+  repositoryRoot: string
+}
+
 /**
- * Stage of one creation or restoration, reported before it begins: `prepare`
+ * Stage of one creation or restoration, reported before it begins: `fetch`
+ * fetches the remote base branch of a creation that asks for it; `prepare`
  * validates the request, allocates the checkout directory, and creates the
  * branch, which a restoration creates again only when it is gone; `checkout`
  * writes the files and, for a creation, enters the checkout.
  */
-export type CreateWorktreePhase = 'prepare' | 'checkout'
+export type CreateWorktreePhase = 'fetch' | 'prepare' | 'checkout'
 
 /** A removed checkout to check out again at its recorded directory. */
 export interface RestoreWorktreeRequest {

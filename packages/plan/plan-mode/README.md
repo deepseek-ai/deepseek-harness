@@ -45,7 +45,7 @@ The only required configuration is the guidance text the agent follows while pla
 
 | Field | Default | Meaning |
 |---|---|---|
-| `section` | required | Guidance rendered as the `plan:policy` prompt section while plan mode is active |
+| `section` | required | Conditional `plan:policy` guidance retained after the first plan-mode entry |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-plan-mode) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -90,11 +90,11 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### The exit tool
 
-`exit_plan_mode` is disclosed progressively: it is admitted from the first step whose selected plan state is active and stays admitted for the rest of the Session, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; Native and PTC execution use the same admitted set. A call while plan mode is not committed fails. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
+`exit_plan_mode` is disclosed progressively: it is admitted from the first step whose selected plan state is active and stays admitted for the rest of the Session, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; Native and PTC execution use the same admitted set. A call while plan mode is not committed fails with `PlanModeError` `PLAN_NOT_ACTIVE`, and a plan without a leading `#` heading fails with `ToolArgsError` before review. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel (`ToolContextUnavailableError`), or after a service reload while the review is pending (`PLAN_REVIEW_INTERRUPTED`), the call fails closed and `/plan off` remains the manual escape. [`src/error.ts`](src/error.ts) lists the `PlanModeError` codes.
 
 ### Session projection unit
 
-The package requires `ctx.sessionProjections` and awaits registration of the `plan` unit during activation. Its prompt section is registered before that wait. Agent prompt assembly fails explicitly while the reader is unavailable, so a restored plan cannot run without its guidance. Callers must await plugin activation before running an agent.
+The package requires `ctx.sessionProjections` and awaits registration of the `plan` unit during activation. Its prompt section is registered before that wait. Agent prompt assembly, the `/plan` command, and `exit_plan_mode` fail with `PlanModeError` `PLAN_STATE_UNAVAILABLE` while the reader is unavailable, so a restored plan cannot run without its guidance. Callers must await plugin activation before running an agent.
 
 The unit turns logged `/plan` command runs into a candidate target, commits the logged state on `plan/mode`, and derives `{ active, pending }` for `view`, where `pending` is true only while an unsettled or successful selection differs from the logged state — a pure replay quantity recoverable from the log alone. The key merges into `SessionProjectionMap` from [`src/types.ts`](src/types.ts); the framework drives the unit, and unloading the plugin fiber unregisters the key. State reads use the retained handle and remain available after unregistration.
 
@@ -104,6 +104,7 @@ The unit turns logged `/plan` command runs into a candidate target, commits the 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, the `ctx.planMode` service, `plan:policy` section, `/plan` command, `exit_plan_mode` tool |
 | [`src/types.ts`](src/types.ts) | The `plan` projection-key declaration and `PlanProjection` wire value |
+| [`src/error.ts`](src/error.ts) | `PlanModeError` and its closed code union |
 | [`src/client.ts`](src/client.ts) | Client-namespace re-export of the types outlet |
 
 The review intent carries the originating tool-call id, so the Web client can reopen the same submitted plan after the review closes. The complete Markdown remains in the existing native call or PTC dispatch log.
@@ -132,7 +133,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-While plan mode is active, the model sees the deployment's exact `section` text at first-party prompt order 500; inactive mode contributes no text.
+The first entry introduces `plan:policy`: a conditional introduction followed by the configured `section` text. The policy remains registered after exit. A separate `plan:status` states whether plan mode is active; exit and reentry change only this status. After compaction, the service restores the policy and current status together.
 
 ##### Configuration example
 
@@ -142,31 +143,31 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### Token effect
 
-Inactive mode adds no tokens; active mode adds the configured section to every request.
+Before first entry, plan mode contributes no text. Afterwards, the policy stays in history; each transition adds only a short status notice. Compaction introduces the retained policy and current status once.
 
 #### KV Cache effect
 
-The section is stable within plan mode, but entering or leaving changes the system prompt from first-party order 500 onward.
+Mode transitions append status without changing the earlier instruction prefix. The first entry also appends the policy. Provider cache reuse depends on the adapter’s representation.
 
 ### Human command
 
 #### What the model sees
 
-`/plan`, `/plan off`, and their terminal results stay outside model history. A non-empty suffix other than the exact `off` argument becomes one user message through `agent.steer()` after plan mode is selected: admitted image and file blocks in selection order, then the trimmed text block. Bare `/plan` with admitted attachments steers one user message containing only those blocks. An active `/plan off` selection contributes the standard logged user-switch notice only when the last request header described plan mode; cancelling a pending entry contributes none because no request observed it.
+`/plan`, `/plan off`, and their terminal results stay outside model history. A non-empty suffix other than the exact `off` argument becomes one user message through `agent.steer()` after plan mode is selected: admitted image and file blocks in selection order, then the trimmed text block. Bare `/plan` with admitted attachments steers one user message containing only those blocks. Every committed user-selected mode transition adds a logged user-switch notice, including entry before the first request. No-op selections and pending switches cancelled before commitment add none. An approved exit tool result explains its transition without an extra notice.
 
 #### Token effect
 
-The optional message costs the same history tokens as submitting that content separately. Bare `/plan` without attachments and `/plan off` add none; bare `/plan` with attachments has the normal image and file-handle cost. A narrated active exit adds the small retained switch notice.
+The optional message costs the same history tokens as submitting that content separately. Each committed user-selected transition adds a short retained notice; attachments have their normal image and file-handle cost.
 
 #### KV Cache effect
 
-The user block is append-only conversation growth. Entering or leaving plan mode changes the earlier policy section; a narrated exit notice is appended after the reusable request prefix.
+User content and switch notices append after the existing conversation prefix. Mode transitions append system status updates without rewriting the retained policy.
 
 ### Exit tool schema and review exchange
 
 #### What the model sees
 
-The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) is offered from the first plan-mode entry in a Session; earlier calls return `UNKNOWN_TOOL`, calls after leaving plan mode fail as unavailable outside plan mode, and an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call carrying review feedback. A dismissed review returns `{ approved: false }`, renders a note that the user will reply, and concludes the turn without another model request.
+The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) is offered from the first plan-mode entry in a Session; earlier calls return `UNKNOWN_TOOL`, calls after leaving plan mode fail as unavailable outside plan mode, and an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call with `PLAN_REVISION_REQUESTED` carrying review feedback. A dismissed review returns `{ approved: false }`, renders a note that the user will reply, and concludes the turn without another model request.
 
 #### Token effect
 

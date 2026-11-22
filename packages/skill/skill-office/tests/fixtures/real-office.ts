@@ -1,6 +1,8 @@
 /** Shared model configuration and context assertions for real Office workflows. */
 import { expect } from 'vitest'
-import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ImageBlock } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 
 /** @returns Model provider patches for the configured development or official API. */
 export function officeModelPatches() {
@@ -53,12 +55,52 @@ export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
 }
 
 /**
+ * Collect images displayed during an Office task.
+ * @param events - Recorded task events.
+ * @returns Images in successful tool results and PTC additional context, excluding private dispatch output.
+ */
+export function officeImages(events: readonly SessionEvent[]): ImageBlock[] {
+  return events.flatMap((event) => {
+    const content = event.type === 'tool/result' && !event.data.message.isError ? event.data.message.content
+      : event.type === 'user/message' && event.data.source.kind === 'ptc-mode' ? event.data.content : []
+    return content.filter(block => block.type === 'image')
+  })
+}
+
+/** One PDF conversion the Office tool reported inside a recorded task. */
+export interface ConvertedPdfFile {
+  /** Absolute path of the temporary file the conversion reported. */
+  readonly file: string
+  /** Byte count the conversion reported for {@link ConvertedPdfFile.file}. */
+  readonly bytes: number
+}
+
+/** One `Converted <input> to pdf (<bytes> bytes[, <pages> pages]): <temporary file>` result line. */
+const CONVERTED_PDF = /^Converted .+ to pdf \((\d+) bytes(?:, \d+ pages?)?\): (.+)$/mu
+
+/**
+ * Collect the PDF conversions reported by successful native Office tool results.
+ * @param events - Recorded task events.
+ * @returns Reported temporary files in log order; failed results and other formats are excluded.
+ */
+export function convertedPdfFiles(events: readonly SessionEvent[]): ConvertedPdfFile[] {
+  return events.flatMap((event): ConvertedPdfFile[] => {
+    if (event.type !== 'tool/result' || event.data.message.isError) return []
+    return event.data.message.content.flatMap((block): ConvertedPdfFile[] => {
+      if (block.type !== 'text') return []
+      const match = CONVERTED_PDF.exec(block.text)
+      return match === null ? [] : [{ bytes: Number(match[1]), file: match[2]! }]
+    })
+  })
+}
+
+/**
  * Reject recorded Office render calls and the "Render the saved deliverable" instruction.
  * @param events - Recorded task events, including nested skill and shell results.
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
   expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
-  const messages = Session.create(SessionId('office-context'), events).deriveMessages()
+  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
   expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }

@@ -73,12 +73,20 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.actionCards` — `ActionCards`
 
-Card tool, kind registry, Session projection, user actions and status notices.
+Kind registry, skill switch, Session projection, user actions and status notices.
 
 ```ts cordis-catalog
 /**
+ * Build a kind's skill provider. It lists the skill while recommendations are enabled.
+ * @param candidate - the skill's catalog entry.
+ * @param get - loads the skill's definition.
+ * @returns the factory the kind passes to `ctx.skills.registerProvider`.
+ */
+skillProvider(candidate: SkillCandidate, get: SkillProvider['get']): (control: SkillProviderControl) => SkillProvider
+
+/**
  * Register one action kind for the caller's lifetime.
- * @param kind - the kind's skill, details schema, verbs and handler.
+ * @param kind - the kind's details schema, verbs and handler.
  * @returns disposer removing the kind; actions on its cards are then unavailable.
  * @throws when another kind already registered the same action.
  */
@@ -88,14 +96,14 @@ register<Details>(kind: ActionCardKind<Details>): () => void
  * Record a card decision in the Session log; the next model request reports it.
  * @param agent - agent whose Session owns the card.
  * @param decision - the card's new state.
- * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+ * @throws when no kind ever registered the decision's action with this service.
  */
 record(agent: Agent, decision: ActionCardDecision): void
 
 /**
  * Read the cards of one Session.
  * @param session - a Session whose projections are prepared.
- * @returns proposals and decisions by call id.
+ * @returns proposals and decisions by card id.
  */
 view(session: Session): ActionCardView
 
@@ -104,17 +112,38 @@ view(session: Session): ActionCardView
  * recorded here and every other verb goes to the card's kind. `dismiss` also works on an unstarted card whose kind
  * is no longer registered. Concurrent actions on one card share one operation.
  * @param agent - live root resolved from the displayed Session.
- * @param callId - the card's `propose_action` call id.
+ * @param cardId - the card's id in the Session's card view.
  * @param verb - `dismiss` or one of the kind's verbs.
  * @param payload - kind-defined fields such as a chosen location.
  * @returns acceptance of background work, the decision in effect, or a refusal.
  */
-@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
+@Remote act(agent: Agent, cardId: ActionCardId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
 ```
 
-Types: [Agent](core.zh.md) · [Session](session.zh.md) · [ToolCallId](core.zh.md)
+Types: [Agent](core.zh.md) · [Session](session.zh.md) · [SkillCandidate](skills.zh.md) · [SkillProvider](skills.zh.md) · [SkillProviderControl](skills.zh.md)
 
-Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
+Source: [`packages/interaction/action-cards/src/index.ts`](../../packages/interaction/action-cards/src/index.ts)
+
+<a id="ctxcliaccounts--cliaccounts"></a>
+
+### `ctx.cliAccounts` — `CliAccounts`
+
+Holds what CLI app plugins register: for each plugin, the CLI path the model reads in runtime context, the account operations that run one at a time, and the account the Plugins page shows.
+
+```ts cordis-catalog
+/**
+ * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
+ * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
+ * loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active
+ * operation and the CLI processes it started have stopped.
+ * @param registration - the plugin's CLI, account operations, and Plugins page text.
+ * @returns the handle for the plugin's own reads and updates of the account.
+ * @throws when the runtime-context name `<name>:cli` is already registered.
+ */
+register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>
+```
+
+Source: [`packages/connector/cli-account/src/index.ts`](../../packages/connector/cli-account/src/index.ts)
 
 <a id="ctxconfigeditor--configeditor"></a>
 
@@ -142,6 +171,50 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 ```
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
+
+<a id="ctxconnectoraccounts--connectoraccounts"></a>
+
+### `ctx.connectorAccounts` — `ConnectorAccounts`
+
+Holds the registered accounts and serves them to the Plugins page.
+
+```ts cordis-catalog
+/**
+ * Show one account on the Plugins page for as long as the returned disposer has not run.
+ * @param registration - the account key, its bundle package, the account source, the page operations, and the
+ *   presentation.
+ * @returns an idempotent disposer that withdraws the account.
+ * @throws when another account already uses the key or the package.
+ */
+register<View extends AnyConnectorAccountView>(registration: ConnectorAccountRegistration<View>): () => void
+
+/**
+ * Follow every registered account; each new subscriber starts a check of each account that runs no operation.
+ * @param signal - the Client's observation lifetime; disposal also ends the stream.
+ * @returns the current accounts, then each changed set, coalescing changes that arrive before the next read.
+ */
+@Remote({ mode: 'stream' }) async *watch(signal: AbortSignal): AsyncIterable<ConnectorAccountsView>
+
+/**
+ * Start one of the operations the account registered as page actions.
+ * @param key - the account key.
+ * @param operation - the operation kind.
+ * @returns the operation identity once the account's source has started it.
+ * @throws for an unknown account or operation, or whatever the account's source refuses, such as a second operation.
+ */
+@Remote async start(key: string, operation: string): Promise<ConnectorOperationId>
+
+/**
+ * Cancel one operation while its phase is cancellable, and wait for it to settle.
+ * @param key - the account key.
+ * @param id - the operation to cancel; a finished one or a phase that is not cancellable is ignored.
+ * @returns after the operation settles, or at once when nothing is cancelled.
+ * @throws for an unknown account.
+ */
+@Remote cancel(key: string, id: ConnectorOperationId): Promise<void>
+```
+
+Source: [`packages/client/ui-connector-account/src/index.ts`](../../packages/client/ui-connector-account/src/index.ts)
 
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 
@@ -233,6 +306,8 @@ Manage profile files and apply their declared reload lifecycle.
 
 /** Read current plugins, including why a row cannot be changed through the profile patch.
  * @returns Current runtime entries with persistent patch targets.
+ * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches
+ *   cannot be read; Remote callers receive `gateway/internal`.
  */
 @Remote async listPlugins(): Promise<PluginInfo[]>
 
@@ -240,6 +315,8 @@ Manage profile files and apply their declared reload lifecycle.
  * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
+ * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or
+ *   installation manifest cannot be read; Remote callers receive `gateway/internal`.
  */
 @Remote listBundles(): Promise<BundleInfo[]>
 
@@ -419,15 +496,15 @@ Catalog lookups for card text and the enabling behind the `enable_official_plugi
 /**
  * Read the current catalog text for a logged card.
  * @param agent - Exact live root resolved by the Gateway from the Session id.
- * @param callId - The card's `propose_action` call id, never a package supplied by the browser.
+ * @param cardId - The card's id, never a package supplied by the browser.
  * @returns the plugin's title, description and selection, or a refusal when the card names no available official plugin.
  */
-@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>
+@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>
 ```
 
-Types: [Agent](core.zh.md) · [ToolCallId](core.zh.md)
+Types: [Agent](core.zh.md)
 
-Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../../packages/experimental/plugin-recommendations/src/index.ts)
+Source: [`packages/extensions/plugin-recommendations/src/index.ts`](../../packages/extensions/plugin-recommendations/src/index.ts)
 
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
@@ -17,6 +17,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local/src/resolve.ts'
 import * as ptyLocal from '@deepseek-ai/dsh-terminal-bash'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -36,7 +37,7 @@ class PassthroughSandbox extends SandboxProvider {
 }
 
 function stubAgent(ctx: Context, rawId: string): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id)
   const agent: Agent = {
@@ -60,7 +61,8 @@ async function harness(
   const root = mkdtempSync(join(tmpdir(), 'dsh-pty-local-'))
   roots.push(root)
   const ctx = new Context()
-  provideWorkingDirectoryFixture(ctx)
+  // The Agents' Sessions record no directory, so the directory service's default is their workspace.
+  provideWorkingDirectoryFixture(ctx, root)
   contexts.push(ctx)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)

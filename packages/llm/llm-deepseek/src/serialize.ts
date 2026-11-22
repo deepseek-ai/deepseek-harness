@@ -1,5 +1,6 @@
 /** Map system snapshots, tool changes, and conversation turns to Messages using the configured route capability. */
 
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { LlmError, requestImageHandleText } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, RequestMessage } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -104,14 +105,13 @@ export function serialize(
       return unsupported('tool-change blocks outside developer messages')
     }
     if (message.role === 'system') {
-      const texts = message.content.filter(block => block.type === 'text')
-      if (texts.length !== message.content.length) return unsupported('non-text system message')
-      const text = texts.map(block => block.text).join('')
+      if (message.content.some(block => block.type !== 'text')) return unsupported('non-text system message')
+      const text = extractTextContent(message.content, { separator: '\n\n', trim: true })
+      if (text.length === 0) continue
       if (inHistory && messages.length > 0) {
-        if (text.length === 0) return unsupported('empty in-history system update')
         systemUpdates.push({ role: 'system', content: [{ type: 'text', text }] })
       } else {
-        historySystem = text
+        historySystem = [historySystem, text].filter(Boolean).join('\n\n')
       }
       continue
     }

@@ -7,6 +7,7 @@
  *
  * No API key needed — all servers are local/keyless.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -23,9 +24,11 @@ import { z } from 'zod'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { apply, probeServer } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { probeServer } from '@deepseek-ai/dsh-mcp-client/src/probe.ts'
 import { publicToolName } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
 import { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -41,6 +44,7 @@ const localBin = join(packageDir, 'node_modules', '.bin')
 
 async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -90,7 +94,7 @@ function textOf(block: unknown): string {
 
 let callSeq = 0
 function nextCallId(): ToolCallId {
-  return ToolCallId(`e2e-${++callSeq}`)
+  return brandString<ToolCallId>(`e2e-${++callSeq}`)
 }
 
 // ---- Fixture server tests ----
@@ -174,6 +178,7 @@ describe('fixture server — controlled scenarios', () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ type: 'text' })
+    expect(result.error?.info).toEqual({ name: 'McpToolError', code: 'MCP_TOOL_ERROR' })
   })
 
   it('executes image() → ordered durable image content', async () => {

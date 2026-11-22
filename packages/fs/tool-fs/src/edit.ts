@@ -6,7 +6,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, defineTool } from '@deepseek-ai/dsh-tools'
 import type { DiffCallView, DiffResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
 import { computeHunkDiffs, diffsFromMeta } from './diff.ts'
@@ -45,9 +45,9 @@ interface EditToolArgs {
  * @returns the camelCased input with `replace_all` defaulted to false.
  */
 export function parseEditArgs(args: { file_path: string; old_string: string; new_string: string; replace_all?: boolean }): EditInput {
-  if (args.file_path.trim().length === 0) throw new Error('file_path must be a non-empty string')
-  if (args.old_string.length === 0) throw new Error('old_string must be a non-empty string')
-  if (args.old_string === args.new_string) throw new Error('old_string and new_string must differ')
+  if (args.file_path.trim().length === 0) throw new ToolArgsError(['file_path must be a non-empty string'])
+  if (args.old_string.length === 0) throw new ToolArgsError(['old_string must be a non-empty string'])
+  if (args.old_string === args.new_string) throw new ToolArgsError(['old_string and new_string must differ'])
   return {
     filePath: args.file_path,
     oldString: args.old_string,
@@ -80,6 +80,7 @@ export function applyEditTool(ctx: Context, sandbox: FsSandboxController): void 
     text: ({ scope }) => ctx.tools.get('edit', scope) === undefined
       ? ''
       : 'Read a file before editing it unless you just created or edited it in this session.',
+    retirement: 'The edit tool is no longer available. Its guidance no longer applies.',
   })
 
   ctx.tools.register(defineTool({

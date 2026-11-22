@@ -1,0 +1,8 @@
+- insert:
+    - id: repeat-request-fixture
+      name: './request-fixture.mjs'
+
+# Recorded programs are scoped REPL statements.
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory

@@ -10,13 +10,13 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { HIDDEN_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { join } from 'node:path'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
+import { ZH_BROWSER_LOCALE, openSettings, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-config', import.meta.url))
 const OFFICIAL_EXPECTED = join(SNAPSHOT_DIR, 'official.expected.md')
@@ -167,18 +167,33 @@ describe('web e2e: plugin configuration pages', () => {
       await expect.poll(() => page.getByRole('menuitem').count()).toBe(0)
       return items
     }
-    // The shipped composition selects the DeepSeek Search API and local fetch, and the page writes nothing on mount.
-    expect(await searchMenu.textContent()).toBe('DeepSeek Search API')
+    // The shipped composition selects no search provider and local fetch, and the page writes nothing on mount.
+    expect(await searchMenu.textContent()).toBe('自动选择')
     expect(await fetchMenu.textContent()).toBe('本机直接获取')
-    expect(await panel.getByRole('button', { name: '网页搜索提供方 DeepSeek Search API', exact: true }).count()).toBe(1)
+    expect(await panel.getByRole('button', { name: '网页搜索提供方 自动选择', exact: true }).count()).toBe(1)
     expect(await panel.getByRole('button', { name: '网页获取提供方 本机直接获取', exact: true }).count()).toBe(1)
-    expect(await entries(searchMenu)).toEqual(['DeepSeek Search API', 'DeepSeek（旧版）'])
+    expect(await entries(searchMenu)).toEqual(['自动选择', 'DeepSeek Search API', 'DeepSeek 服务端搜索'])
     expect(await entries(fetchMenu)).toEqual(['本机直接获取', 'DeepSeek Fetch API'])
     expect(await settingsDocument()).not.toContain('searchProvider:')
     // The page fixes the menu order itself; the Loader imports plugins concurrently, so the
     // Host's registration order is not the YAML row order and only its membership is checked here.
     const hostWeb = scaffold.ctx.get('web') as { listProviders(): Record<'search' | 'fetch', { id: string }[]> } | undefined
     expect(hostWeb?.listProviders().search.map(provider => provider.id).sort()).toEqual(['deepseek-official', 'deepseek-search-api'])
+    // Automatic selection states which provider the Host runs for each model and shows no provider panel.
+    expect(await searchSection.getByText(
+      '跟随当前会话的模型：DeepSeek 模型使用 DeepSeek 服务端搜索，搜索不按次收费；其他模型使用 DeepSeek Search API。', { exact: true },
+    ).count()).toBe(1)
+    expect(await searchSection.getByRole('link', { name: '网页搜索与获取指南', exact: true }).getAttribute('href'))
+      .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
+    expect(await searchSection.getByRole('textbox').count()).toBe(0)
+    expect(await save.isDisabled()).toBe(true)
+
+    // The composition names no search provider, so a selected one is stored.
+    await choose(searchMenu, 'DeepSeek Search API')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).toContain('searchProvider: deepseek-search-api')
+    expect(await panel.getByRole('button', { name: '网页搜索提供方 DeepSeek Search API', exact: true }).count()).toBe(1)
     expect(await panel.getByRole('link', { name: '网页搜索与获取指南', exact: true }).getAttribute('href'))
       .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
     // Each section shows the description its selected provider registered with the Host, in the active language.
@@ -230,7 +245,7 @@ describe('web e2e: plugin configuration pages', () => {
     await expect.poll(() => save.isDisabled()).toBe(true)
     await expect.poll(settingsDocument).not.toContain('fetchProvider: deepseek-fetch-api')
 
-    await choose(searchMenu, 'DeepSeek（旧版）')
+    await choose(searchMenu, 'DeepSeek 服务端搜索')
     const messagesEndpoint = panel.locator('#plugin-config-web-search-endpoint')
     expect(await panel.getByLabel('单次请求最多搜索次数', { exact: true }).inputValue()).toBe('5')
     await messagesEndpoint.fill('https://messages.test/anthropic/v1')
@@ -241,17 +256,23 @@ describe('web e2e: plugin configuration pages', () => {
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await openPlugins()
     await openPage(panel, '网页搜索与获取')
-    expect(await searchMenu.textContent()).toBe('DeepSeek（旧版）')
+    expect(await searchMenu.textContent()).toBe('DeepSeek 服务端搜索')
     expect(await messagesEndpoint.inputValue()).toBe('https://messages.test/anthropic/v1')
-    expect(await entries(searchMenu)).toEqual(['DeepSeek Search API', 'DeepSeek（旧版）'])
+    expect(await entries(searchMenu)).toEqual(['自动选择', 'DeepSeek Search API', 'DeepSeek 服务端搜索'])
     expect(await save.isDisabled()).toBe(true)
     expect(await settingsDocument()).toContain('searchProvider: deepseek-official')
     await choose(searchMenu, 'DeepSeek Search API')
     await count.fill('20')
     await save.click()
     await expect.poll(() => save.isDisabled()).toBe(true)
-    await expect.poll(settingsDocument).not.toContain('searchProvider:')
+    await expect.poll(settingsDocument).toContain('searchProvider: deepseek-search-api')
     expect(await settingsDocument()).toContain('count: 20')
+    // Automatic selection clears the stored provider.
+    await choose(searchMenu, '自动选择')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).not.toContain('searchProvider:')
+    expect(await searchMenu.textContent()).toBe('自动选择')
     expect(await settingsDocument()).not.toMatch(/ApiKeyEnv:|searchBaseURL:|fetchBaseURL:/)
     expect(tripwire.pageErrors).toEqual([])
   })
@@ -503,6 +524,46 @@ describe('web e2e: plugin configuration pages', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['bundle.expected.md', 'official.expected.md', 'row.expected.md', 'subagent.expected.md', 'web-search.expected.md'])
   })
+})
 
+describe('web e2e: a community plugin settings page', () => {
+  it('shows a settings.section entry in Settings and on its bundle row', async () => {
+    const scaffold = await launchWebScaffold({
+      profile: { packages: [{ dir: join(FIXTURE_PLUGINS, 'fixture-settings-section') }] },
+    })
+    onTestFinished(() => scaffold.close())
+    const browser = await chromium.launch()
+    onTestFinished(() => browser.close())
+    const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const console = watchConsole(page)
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-settings-section'))
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+    const panel = page.locator('[data-plugin-panel]')
+    await panel.getByRole('button', { name: '查看 @fixture/settings-section', exact: true }).click({ timeout: 20_000 })
+    const row = panel.locator('[data-plugin-row]', { hasText: 'fixture-settings-section' })
+    await row.waitFor({ timeout: 10_000 })
+    const configure = panel.getByRole('button', { name: '配置 @fixture/settings-section' })
+    expect(await configure.count()).toBe(0)
 
+    // Switched on, the browser half mounts and its settings page claims the row.
+    await panel.getByRole('switch', { name: '启用 @fixture/settings-section' }).click()
+    await configure.waitFor({ timeout: 30_000 })
+    await configure.click()
+    const rowPage = panel.locator('[data-plugin-row-detail="@fixture/settings-section#fixture-settings-section"]')
+    await rowPage.waitFor({ timeout: 10_000 })
+    await rowPage.getByRole('region', { name: 'Fixture settings', exact: true })
+      .getByText('Settings content from the fixture', { exact: true }).waitFor({ timeout: 10_000 })
+
+    // Settings keeps the same page in its navigation.
+    await openSettings(page, 'zh')
+    const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+    await dialog.getByRole('navigation').getByRole('button', { name: 'Fixture settings', exact: true }).click()
+    await dialog.getByRole('region', { name: 'Fixture settings', exact: true })
+      .getByText('Settings content from the fixture', { exact: true }).waitFor({ timeout: 10_000 })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => dialog.count(), { timeout: 5_000 }).toBe(0)
+    expect(console.pageErrors).toEqual([])
+    expect(console.warnings).toEqual([])
+  }, 90_000)
 })

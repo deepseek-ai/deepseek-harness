@@ -7,7 +7,7 @@ from typing import Callable, Literal
 
 from .client import HarnessClient, HarnessConfig, UserQuestionHandler
 from .errors import SdkProtocolError
-from .models import CommandExecution, JsonObject, Notification
+from .models import CommandExecution, JsonObject, Notification, ResumeSessionOptions
 
 
 @dataclass(slots=True)
@@ -176,13 +176,15 @@ class DeepSeekHarness:
         self.start()
         return Session(self, session_id or f"session-{uuid.uuid4().hex}")
 
-    def resume_session(self, session_id: str) -> "Session":
-        """Restore persisted history from the configured Harness home without sending input.
+    def resume_session(self, session_id: str, options: ResumeSessionOptions | None = None) -> "Session":
+        """Restore persisted history without sending input.
 
+        Omit options to retain saved permissions, or set options["permission_mode"] to a configured preset
+        to persist before resumed execution. Invalid option keys raise TypeError. Unsupported presets or profiles raise.
         Missing, unreadable, incompatible, or occupied sessions raise instead of creating a new session.
         """
         self.start()
-        self._client.resume_session(session_id)
+        self._client.resume_session(session_id, options)
         return Session(self, session_id)
 
     def run(
@@ -191,9 +193,10 @@ class DeepSeekHarness:
         *,
         session_id: str | None = None,
         on_notification: Callable[[Notification], None] | None = None,
+        time_zone: str | None = None,
     ) -> RunResult:
         """Run input to completion on a fresh or named Session and return its RunResult."""
-        return self.start_session(session_id).run(input, on_notification=on_notification)
+        return self.start_session(session_id).run(input, on_notification=on_notification, time_zone=time_zone)
 
 
 class Session:
@@ -216,6 +219,7 @@ class Session:
         input: str | list[JsonObject],
         *,
         on_notification: Callable[[Notification], None] | None = None,
+        time_zone: str | None = None,
     ) -> RunResult:
         """Run text or content blocks through native input routing.
 
@@ -230,11 +234,14 @@ class Session:
         wire order. Every result retains this Session id, its root events and
         Session-tree notifications, including overlapping work. Native refusals
         return finish_reason="error". Routing, transport and observer failures
-        raise without rolling back work.
+        raise without rolling back work. ``time_zone`` is the user zone for an
+        ordinary prompt, UTC or an IANA Area/Location name; omitted, the runtime
+        samples its process zone. Native commands record no zone, and an invalid
+        zone raises before routing.
         """
         self.harness.start()
         with self.harness.client.subscribe_session_notifications(self.id) as subscription:
-            response = self.harness.client._query(self.id, input)
+            response = self.harness.client._query(self.id, input, time_zone)
             if isinstance(response, CommandExecution):
                 activity = _RunActivity(self.id, "command", response.command_id)
                 while True:

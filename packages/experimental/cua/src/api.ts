@@ -1,9 +1,8 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
-import { Buffer } from 'node:buffer'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
+import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
@@ -24,64 +23,52 @@ function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readon
 }
 
 function validatedCall(dispatch: CuaDispatch) {
-  return (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
+  return (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) => {
     const request = Request.safeParse({ method, params })
     if (!request.success) throw new Error(`${method} ${requestIssueMessage(request.error.issues)}`)
+    if (options) {
+      // The facade owns the target and coordinates. The Host validates additional options against its provider schema.
+      const extra = Object.entries(options).filter(([key, value]) =>
+        value !== undefined && !MouseMoveTargets.some(target => Object.hasOwn(target.shape, key)))
+      Object.assign(request.data.params, Object.fromEntries(extra))
+    }
     return dispatch(request.data)
   }
 }
 
-async function emit(sink: CuaObservationSink | undefined, value: object, options?: CuaObservationOptions): Promise<void> {
-  if (options?.emit !== false) await sink?.text(JSON.stringify(value))
-}
-
 /**
- * Create app/window objects using the caller's authorized dispatcher.
- * @param dispatch - Current tool authority; rejects propagate without retries.
- * @param sink - Optional text/image output; emit false suppresses this sink only.
+ * Create app/window objects using the caller's authorized program dispatcher.
+ * @param dispatch - Current tool authority; screenshots resolve to program Images and rejections propagate without retries.
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
-export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
+export function createCuaApi(dispatch: CuaDispatch): CuaApi {
   const call = validatedCall(dispatch)
   let capabilities: CuaCapabilities | undefined
-  async function currentCapabilities(): Promise<CuaCapabilities> {
-    if (capabilities === undefined) capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
-    return capabilities
-  }
-  const objects = createCuaObjects(call, sink)
+  const objects = createCuaObjects(call)
 
   const api: CuaApi = {
-    async getCapabilities(options) {
-      const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
-      capabilities = result
-      await emit(sink, result, options)
-      return result
+    async getCapabilities() {
+      capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
+      return capabilities
     },
-    async listApps(options) {
-      const result = AppsResult.parse(await call('listApps', {})).map(app => ({
-        id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
-      }))
-      await emit(sink, result, options)
-      return result
+    async listApps() {
+      return AppsResult.parse(await call('listApps', {})).map(({ id, name, bundleId, ...state }) => {
+        const selector = id ?? (bundleId || (state.isRunning && state.pid !== undefined ? String(state.pid) : name))
+        return { id: selector, displayName: name, ...state }
+      })
     },
-    async findApps(query, options) {
-      const result = FoundAppsResult.parse(await call('findApps', { query }))
-      await emit(sink, result, options)
-      return result
+    async findApps(query) {
+      return FoundAppsResult.parse(await call('findApps', { query }))
     },
-    async getState(options) {
-      const result = { apps: await api.listApps({ emit: false }), browsers: [] as [] }
-      await emit(sink, result, options)
-      return result
+    async getState() {
+      return { apps: await api.listApps(), browsers: [] }
     },
     async getApp(selector) {
       const request = Request.safeParse({ method: 'getApp', params: { selector } })
       if (!request.success) throw new Error(`getApp ${requestIssueMessage(request.error.issues)}`)
-      const capabilities = await currentCapabilities()
+      const current = capabilities ?? await api.getCapabilities()
       const { appHandle } = AppResult.parse(await call('getApp', { selector }))
-      const app = objects.createCuaApp(appHandle, capabilities)
-      if (capabilities.appLevelAccessibility) await app.getAccessibilityTree({ emit: false })
-      return app
+      return objects.createCuaApp(appHandle, current)
     },
   }
   return api
@@ -89,30 +76,37 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
 
 type CuaScopeParams = (params: Record<string, JsonValue>) => Record<string, JsonValue>
 
-function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObservationSink | undefined): {
+function createCuaObjects(call: ReturnType<typeof validatedCall>): {
   createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp
 } {
-  const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
+  const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: string | undefined }>()
   function currentSnapshot(appHandle: CuaAppHandle): string {
     const current = observed.get(appHandle)
     if (current === undefined) throw new Error('Read getAccessibilityTree before using this surface')
     return current.snapshotId
   }
-  function coordinateParams(appHandle: CuaAppHandle, windowId: number): Record<string, JsonValue> {
+  function coordinateParams(appHandle: CuaAppHandle, windowId: string): Record<string, JsonValue> {
     const current = observed.get(appHandle)
     return current !== undefined && (current.windowId === undefined || current.windowId === windowId)
       ? { snapshotId: current.snapshotId } : {}
   }
   function createCuaSurface(
-    target: { appHandle: CuaAppHandle; windowId?: number },
+    target: { appHandle: CuaAppHandle; windowId?: string },
+    capabilities: CuaCapabilities,
     paramsFor: CuaScopeParams,
     requireAccessibility: () => void,
     requireKeyboard: () => void,
   ) {
-    const scopedCall = (method: CuaOperation['method'], params: Record<string, JsonValue>) =>
-      call(method, paramsFor(params))
-    const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) =>
-      ActionResult.parse(await scopedCall(method, params))
+    const scopedCall = (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) =>
+      call(method, paramsFor(params), options)
+    const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) =>
+      ActionResult.parse(await scopedCall(method, params, options))
+    function systemInputOptions(method: CuaOperation['method'], useSystemInput: boolean | undefined) {
+      if (useSystemInput !== undefined && !capabilities.systemInput) {
+        throw new Error(`${method} useSystemInput: not accepted for these arguments`)
+      }
+      return { useSystemInput }
+    }
     const elementParams = (): Record<string, JsonValue> => ({ snapshotId: currentSnapshot(target.appHandle) })
     const surface: CuaSurface = {
       async show() { return ShowResult.parse(await scopedCall('show', {})) },
@@ -120,6 +114,8 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         requireAccessibility()
         observed.delete(target.appHandle)
         const state = StateResult.parse(await scopedCall('getState', {
+          ...options?.maxElements === undefined ? {} : { maxElements: options.maxElements },
+          ...options?.maxDepth === undefined ? {} : { maxDepth: options.maxDepth },
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
         }))
@@ -127,12 +123,14 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
           throw new Error('Native observation belongs to another application or window')
         }
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
-        if (options?.emit !== false) await sink?.text(state.tree)
         return state.tree
       },
       async listActions(elementId) {
         requireAccessibility()
         return ActionNamesResult.parse(await scopedCall('listActions', { ...elementParams(), elementId }))
+      },
+      async getActionSchema(action) {
+        return ActionSchemaResult.parse(await call('getActionSchema', { action }))
       },
       async performAction(elementId, name, argument) {
         requireAccessibility()
@@ -166,46 +164,47 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
           ...options?.format === undefined ? {} : { format: options.format },
         })
       },
-      async pressKey(key, modifiers = []) {
+      async pressKey(key, modifiers = [], options) {
         requireKeyboard()
-        return action('pressKey', { key, modifiers: [...modifiers] })
+        return action('pressKey', { key, modifiers: [...modifiers] }, systemInputOptions('pressKey', options?.useSystemInput))
       },
-      async sendKeyEvent(key, direction) {
+      async sendKeyEvent(key, direction, options) {
         requireKeyboard()
-        return action('sendKeyEvent', { key, direction })
+        return action('sendKeyEvent', { key, direction }, systemInputOptions('sendKeyEvent', options?.useSystemInput))
       },
     }
-    return { surface, call: scopedCall, action, elementParams }
+    return { surface, call: scopedCall, action, elementParams, systemInputOptions }
   }
-  function createCuaWindow(appHandle: CuaAppHandle, windowId: number, capabilities: CuaCapabilities): CuaWindow {
-    const base = createCuaSurface({ appHandle, windowId },
+  function createCuaWindow(appHandle: CuaAppHandle, windowId: string, capabilities: CuaCapabilities): CuaWindow {
+    const base = createCuaSurface({ appHandle, windowId }, capabilities,
       params => ({ ...params, appHandle, windowId }), () => undefined, () => {
         if (!capabilities.keyboard.includes('window')) {
           throw new Error('Window-scoped keyboard input is not supported on current platform.')
         }
       })
+
     return {
       ...base.surface, windowId,
-      async getScreenshot(options) {
-        const image = ScreenshotResult.parse(await base.call('screenshot', {}))
-        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
-        const screenshot: CuaScreenshot = {
-          bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
-          mimeType: image.mimeType,
-          pixelWidth: image.pixelWidth,
-          pixelHeight: image.pixelHeight,
-          windowId: image.windowId,
+      async getScreenshot() {
+        const value = await base.call('screenshot', {})
+        if (value === null || typeof value !== 'object' || Array.isArray(value)
+          || typeof value.attachmentId !== 'string'
+          || typeof value.path !== 'string' || typeof value.width !== 'number' || typeof value.height !== 'number') {
+          throw new Error('The CUA program binding must return an Image for screenshots')
         }
-        if (options?.emit !== false) await sink?.image(screenshot)
-        return screenshot
+        return value as CuaProgramImage
       },
       async mouseMove(targetPoint, options) {
+        base.systemInputOptions('mouseMove', options?.useSystemInput)
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
         if (typeof targetPoint === 'string') {
-          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }))
+          return HoverResult.parse(await base.call('mouseMove', { ...base.elementParams(), elementId: targetPoint, ...relative }, options))
         }
         const [x, y] = targetPoint
-        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }))
+        return HoverResult.parse(await base.call('mouseMove', { ...coordinateParams(appHandle, windowId), x, y, ...relative }, options))
+      },
+      async toggleMouse(mouseButton, direction, options) {
+        return ActionResult.parse(await base.call('toggleMouse', { mouseButton, direction }, base.systemInputOptions('toggleMouse', options?.useSystemInput)))
       },
       async click(targetPoint, options) {
         const mouseButton = options?.mouseButton ?? 'left'
@@ -217,10 +216,10 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         if (typeof targetPoint === 'string') {
           return base.action('click', { ...base.elementParams(), ...modifiers, ...hold, ...relative, elementId: targetPoint,
             ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
-          })
+          }, base.systemInputOptions('click', options?.useSystemInput))
         }
         const [x, y] = targetPoint
-        return base.action('click', { ...coordinateParams(appHandle, windowId), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative })
+        return base.action('click', { ...coordinateParams(appHandle, windowId), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative }, base.systemInputOptions('click', options?.useSystemInput))
       },
       async scroll(options) {
         if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
@@ -231,17 +230,17 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
         })
       },
       async drag(from, to, options) {
-        return base.action('drag', { ...coordinateParams(appHandle, windowId),
+        return ActionResult.parse(await base.call('drag', { ...coordinateParams(appHandle, windowId),
           fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
           ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },
-        })
+        }, base.systemInputOptions('drag', options?.useSystemInput)))
       },
     }
   }
   function createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp {
-    const base = createCuaSurface({ appHandle }, params => ({ ...params, appHandle }), () => {
+    const base = createCuaSurface({ appHandle }, capabilities, params => ({ ...params, appHandle }), () => {
       if (!capabilities.appLevelAccessibility) {
         throw new Error('Application-level accessibility is not supported on current platform; observe a window instead.')
       }
@@ -253,15 +252,13 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
     return {
       ...base.surface, appHandle,
       async activate() { return base.action('activate', {}) },
-      async getWindows(options) {
-        const windows = WindowsResult.parse(await base.call('listWindows', {}))
-        await emit(sink, windows, options)
-        return windows
+      async getWindows() {
+        return WindowsResult.parse(await base.call('listWindows', {}))
       },
-      async getWindow(windowId): Promise<CuaWindow> {
-        const window = createCuaWindow(appHandle, windowId, capabilities)
-        await window.getAccessibilityTree({ emit: false })
-        return window
+      getWindow(windowId): Promise<CuaWindow> {
+        const result = WindowsResult.element.shape.windowId.safeParse(windowId)
+        if (!result.success) return Promise.reject(new Error(`getWindow ${requestIssueMessage(result.error.issues, ['params', 'windowId'])}`))
+        return Promise.resolve(createCuaWindow(appHandle, result.data, capabilities))
       },
     }
   }

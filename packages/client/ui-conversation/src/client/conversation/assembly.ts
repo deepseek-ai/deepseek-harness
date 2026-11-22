@@ -27,16 +27,31 @@ import { ConversationGroupRegistry } from './group-registry.ts'
 import { ConversationInteractionRegistry } from './interaction-registry.ts'
 import { UserTextRegistry } from './user-text-registry.ts'
 
-/** Observable faces published for one Session's Conversation assembly. */
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionRetainFacetMap {
+    /**
+     * Conversation assembly of the Session's event window. While a reference retains it, the binding folds the
+     * window and follows its changes; when the last such reference is released, the binding drops the fold and
+     * publishes the empty result, and retaining it again folds the current window once.
+     */
+    conversation: unknown
+  }
+}
+
+/**
+ * Observable faces published for one Session's Conversation assembly. Every face follows the
+ * Session only while a reference retains the `conversation` facet.
+ */
 export interface ConversationBinding {
   readonly snapshot: ObservableSnapshot<ConversationSnapshot>
   /**
    * Identity-stable source of the latest turn number, undefined unless its start is loaded and it remains open.
-   * Turn changes publish synchronously, including without an active View.
+   * Turn changes publish synchronously while the facet is retained, including without an active View.
    */
   readonly openTurn: ObservableSnapshot<number | undefined>
   /**
-   * Add one selected target to the Session's monotonic active set.
+   * Add one selected target to the Session's monotonic active set; while the facet is not retained,
+   * the target's view stays empty until retention folds the window.
    * @param target - registered or subsequently registered Conversation target.
    */
   activate(target: string): void
@@ -59,19 +74,34 @@ class BoundConversation implements ConversationBinding {
   private readonly targetSources = new Map<string, ObservableSnapshot<unknown>>()
   private revision = -1
   private frame: number | undefined
+  private following = false
+  /** Whether the assembler holds the window at `revision`; a failed fold leaves nothing to extend incrementally. */
+  private folded = false
   private disposeFeed: () => void = () => {}
+  private disposeRetained: () => void = () => {}
 
+  /**
+   * @param feed - the Session's contiguous event window.
+   * @param assembler - this binding's Node assembler.
+   * @param retained - whether any reference retains the `conversation` facet; assembly follows the feed only while true.
+   */
   constructor(
-    feed: SessionEventSource,
+    private readonly feed: SessionEventSource,
     private readonly assembler: ConversationNodeAssembler,
+    private readonly retained: ObservableSnapshot<boolean>,
   ) {
     this.viewStore = assembler
     this.snapshot = createSnapshotStore(this.currentSnapshot())
     this.openTurn = createSnapshotStore(assembler.openTurn())
-    this.replace(feed.getSnapshot())
-    this.disposeFeed = feed.subscribe(() => {
-      this.accept(feed.getSnapshot())
-    })
+  }
+
+  /**
+   * Begin following facet retention; the owner registers this binding's disposal first,
+   * so subscriptions acquired before a failed initial fold still have an owner.
+   */
+  start(): void {
+    this.disposeRetained = this.retained.subscribe(() => { this.follow(this.retained.getSnapshot()) })
+    this.follow(this.retained.getSnapshot())
   }
 
   target<Target extends Extract<keyof ConversationViewSnapshotMap, string>>(
@@ -97,11 +127,56 @@ class BoundConversation implements ConversationBinding {
     this.publishing(() => this.assembler.activateTarget(target))
   }
 
-  rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
+  rebuild(): void {
+    // A binding that does not follow holds no fold; following again rebuilds against the current registry.
+    if (!this.following) return
+    this.publish(this.assembler.rebuildRegistry())
+  }
 
   dispose(): void {
+    this.following = false
+    this.disposeRetained()
     this.cancelFrame()
     this.disposeFeed()
+  }
+
+  /**
+   * Start or stop following the feed. Starting folds the whole current window and publishes it at once;
+   * stopping drops the fold and publishes the empty result.
+   */
+  private follow(retained: boolean): void {
+    if (retained === this.following) return
+    this.following = retained
+    this.cancelFrame()
+    if (!retained) {
+      this.disposeFeed()
+      this.disposeFeed = () => {}
+      this.folded = false
+      this.publishing(() => {
+        this.assembler.rebuildRegistry([], false)
+        return this.assembler.flush()
+      })
+      return
+    }
+    // A dispatch already in progress keeps a copy of its listeners, so the callback checks
+    // whether the binding still follows rather than relying on unsubscription alone.
+    this.disposeFeed = this.feed.subscribe(() => {
+      if (this.following) this.accept(this.feed.getSnapshot())
+    })
+    this.foldWindow()
+  }
+
+  /** Fold the whole current window against the current registry and publish it synchronously. */
+  private foldWindow(): void {
+    const window = this.feed.getSnapshot()
+    this.folded = false
+    this.cancelFrame()
+    this.publishing(() => {
+      this.assembler.rebuildRegistry(window.entries, window.hasMore)
+      this.revision = window.revision
+      this.folded = true
+      return this.assembler.flush()
+    })
   }
 
   private replace(window: SessionEventWindow): void {
@@ -110,6 +185,10 @@ class BoundConversation implements ConversationBinding {
   }
 
   private accept(window: SessionEventWindow): void {
+    if (!this.folded) {
+      this.foldWindow()
+      return
+    }
     if (window.revision === this.revision) return
     if (window.revision !== this.revision + 1 || window.change.kind === 'replace') {
       this.replace(window)
@@ -269,6 +348,7 @@ export class UiConversation extends Service {
     const binding = new BoundConversation(
       owner.eventSource,
       new ConversationNodeAssembler(this.events, this.views, this.groups),
+      this.retainedConversation(owner),
     )
     const record: BindingRecord = { source: owner, binding, disposeScope: () => {} }
     this.bindings.set(owner, record)
@@ -277,7 +357,27 @@ export class UiConversation extends Service {
       'ui-conversation binding',
     )
     record.disposeScope = () => { void disposeScope() }
+    try {
+      binding.start()
+    } catch (error: unknown) {
+      // A failed initial fold leaves no binding behind, so the next resolution starts afresh.
+      this.drop(record, true)
+      throw error
+    }
     return binding
+  }
+
+  /**
+   * Whether a reference retains the `conversation` facet of this exact binding; a same-id
+   * replacement generation's counts do not apply to a binding that is no longer current.
+   */
+  private retainedConversation(owner: SessionBinding): ObservableSnapshot<boolean> {
+    const info = this.sessions.retainInfo(owner.sessionId)
+    return {
+      getSnapshot: () => this.sessions.binding(owner.sessionId) === owner
+        && (info.getSnapshot().retainedFacets?.conversation ?? 0) > 0,
+      subscribe: listener => info.subscribe(listener),
+    }
   }
 
   /**

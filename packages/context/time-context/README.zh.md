@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 选择时区
 
-当当前开放轮次只包含一个经 Host 校验的浏览器时区时，时间戳按该请求本地时区格式化。浏览器来源信息缺失或混杂时，配置的 `timeZone` 格式化显示；省略它则在插件加载时解析一次 Node 进程时区，每个显式回退值都经 `Intl.DateTimeFormat` 校验。解析后的指令告诉模型按所选时区解释未限定的日期与时间；来源信息混杂或不可用时，则要求用户澄清。
+请求本地时区是写入方记录在用户消息上的规范化 `clientTimeZone`：Web Host 记录经校验的浏览器时区，SDK 运行时记录该 prompt 显式传入的时区或采样到的进程时区。请求准备阶段仍拒绝非规范值。当当前开放轮次只包含一个这样的时区时，时间戳按该请求本地时区格式化。浏览器来源信息缺失或混杂时，配置的 `timeZone` 格式化显示；省略它则在插件加载时解析一次 Node 进程时区，每个显式回退值都经 `Intl.DateTimeFormat` 校验。解析后的指令告诉模型按所选时区解释未限定的日期与时间；来源信息混杂或不可用时，则要求用户澄清。
 
 -----
 
@@ -71,7 +71,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：pre-step 监听器、到期调度、读数组合 |
-| [`src/request-zone.ts`](src/request-zone.ts) | 从开放轮次 `user-rpc` 来源派生浏览器时区策略 |
+| [`src/request-zone.ts`](src/request-zone.ts) | 从开放轮次中带 `clientTimeZone` 的用户来源派生浏览器时区策略 |
 | [`src/timestamp.ts`](src/timestamp.ts) | `Intl.DateTimeFormat` 创建与时间戳格式化 |
 
 ### 主要流程

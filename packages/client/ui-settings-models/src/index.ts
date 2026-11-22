@@ -1,22 +1,20 @@
-/** Host configuration and page bootstrap for Models credential onboarding. */
-
+/** Host Loader entry declaring the Models credential-onboarding choice; onboarding belongs to the Client. */
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-host-webserver'
-import { type Config, ONBOARDING_CONFIG_GLOBAL } from './onboarding-config.ts'
+import z from '@deepseek-ai/schemastery'
+import type { ModelsConfig } from './types.ts'
 
-export { Config } from './onboarding-config.ts'
+/** Credential-onboarding choice synced to the browser. */
+export type Config = ModelsConfig
+
+/** Credential-onboarding choice synced to the browser. */
+export const Config = z.object({
+  credentialOnboarding: z.boolean().default(true).volatile(),
+})
 
 /**
- * Publish the credential-onboarding choice before browser plugins activate.
- * @param ctx - Host context collecting the page's initialization data.
- * @param config - plugin options with schema defaults applied by the Loader.
+ * Register the browser plugin without Host behavior; the Loader validates the entry's Config, and the browser face
+ * receives its volatile fields.
+ * @param _ctx - Host context; unused.
+ * @param _config - validated Config; unused on the Host.
  */
-export function apply(ctx: Context, config: Config): void {
-  ctx.on('webserver/index-inject', (table) => {
-    table.push({
-      kind: 'global',
-      name: ONBOARDING_CONFIG_GLOBAL,
-      value: { credentialOnboarding: config.credentialOnboarding },
-    })
-  })
-}
+export function apply(_ctx: Context, _config: Config): void {}

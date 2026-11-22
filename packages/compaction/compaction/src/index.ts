@@ -9,7 +9,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import type { CompactionResult } from './types.ts'
 import type { CompactionCheckpointSource } from './checkpoint.ts'
 
@@ -166,7 +166,8 @@ export abstract class CompactionEngine extends Service {
   ): Promise<CompactionResult | null>
 
   /**
-   * Forcibly compact a range of surface nodes into a single summary node.
+   * Compact a balanced range of conversation nodes into a single summary node.
+   * The initial system node, when present, lies outside the selected range.
    * `start` and `end` name an inclusive span by surface position, not numeric seq
    * order; replacements can make visible seqs non-monotonic. Both edges must be
    * balanced so assistant tool calls remain paired with their results. A model-

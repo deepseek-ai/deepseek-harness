@@ -3,7 +3,7 @@ import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ComponentProps } from 'react'
@@ -12,6 +12,7 @@ import type { ModelDirectoryState } from '../src/client/directory.ts'
 import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // The seat's key domain is model ∪ common; the stub mirrors the real lookup
 // chain: package dictionary, then common vocabulary, then the key.
@@ -86,7 +87,7 @@ describe('ModelSelect label slot', () => {
   it('distinguishes identical model names and ids by provider across all placements and restores labels on unload', async () => {
     const runtime = await SlotTestRuntime.create()
     onTestFinished(() => runtime.dispose())
-    const sessionId = SessionId('model-label')
+    const sessionId = brandString<SessionId>('model-label')
     await runtime.sessions.add({ id: sessionId })
     const session = runtime.sessions.retainFor(runtime.ctx, sessionId)
     const groups = ['trusted', 'external'].map(id => ({
@@ -186,7 +187,7 @@ describe('ModelSelect catalog badges', () => {
   it('hands the badge to a label contribution, which replaces the default rendering', async () => {
     const runtime = await SlotTestRuntime.create()
     onTestFinished(() => runtime.dispose())
-    const sessionId = SessionId('model-badge')
+    const sessionId = brandString<SessionId>('model-badge')
     await runtime.sessions.add({ id: sessionId })
     const session = runtime.sessions.retainFor(runtime.ctx, sessionId)
     await runtime.root.declare({
@@ -357,7 +358,7 @@ describe('ModelSelect reasoning effort', () => {
     const directory = createSnapshotStore<ModelDirectoryState>(state({ groups }))
     const select = vi.fn(async () => {
       const error = sessionInUse
-        ? new RemoteError('session/writer-held', 'writer held', { sessionId: SessionId('owned') })
+        ? new RemoteError('session/writer-held', 'writer held', { sessionId: brandString<SessionId>('owned') })
         : new RemoteError('session/model-unavailable', 'session already contains images', { provider: 'deepseek-official', model: 'deepseek-v4-pro' })
       directory.set(state({ groups, status: 'error', error: 'unrelated catalog refresh' }))
       return { ok: false as const, error }
@@ -473,8 +474,9 @@ describe('ModelSelect reasoning effort', () => {
     expect(menu.style.left).toBe('')
     expect(menu.style.top).toBe('')
     expect(measure).not.toHaveBeenCalled()
-    // Interactions inside the trigger subtree or the portaled card stay open.
-    expect(fireEvent.mouseDown(menu)).toBe(true)
+    // Interactions inside the trigger subtree or the portaled card stay open;
+    // presses on the card keep focus where it is.
+    expect(fireEvent.mouseDown(menu)).toBe(false)
     expect(fireEvent.mouseDown(trigger)).toBe(false)
     fireEvent.blur(trigger, { relatedTarget: menu })
     expect(screen.getByRole('menu')).toBeTruthy()
@@ -590,6 +592,23 @@ describe('ModelSelect keyboard walk', () => {
     expect(select).not.toHaveBeenCalled()
     fireEvent.keyDown(focused!, { key: 'Escape' })
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: pane === 'model' ? /^模型/ : /推理等级/ }))
+  })
+
+  it('keeps focus and the card open when non-focusable model pane content is pressed', () => {
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available
+      directory={createSnapshotStore(state({ groups: modelGroups(5) }))}
+      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^模型/ }))
+    const search = screen.getByRole('searchbox')
+    const heading = document.querySelector<HTMLElement>('[data-menu-group-heading]')!
+    // false = preventDefault ran, so the browser keeps focus where it was.
+    expect(fireEvent.mouseDown(heading)).toBe(false)
+    expect(fireEvent.mouseDown(screen.getAllByRole('menu')[0]!)).toBe(false)
+    // Text inputs keep their default so the caret can still be placed.
+    expect(fireEvent.mouseDown(search)).toBe(true)
+    expect(screen.getAllByRole('menu').length).toBeGreaterThan(0)
   })
 
   it('↑↓ walk the rows of the shown pane, wrapping, and stay open', () => {

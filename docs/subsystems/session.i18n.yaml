@@ -9,23 +9,23 @@
   en: 541354f6468e117d
   zh: 2d7a665bad828a02
 /sessions/sessioneventmap-the-event-vocabulary/the-request-header-event-request-header:
-  en: 6eb931fcb2f4ab8d
-  zh: d822a83384cc1fee
+  en: 62cd2a392c207fad
+  zh: 1496143dd0243d65
 /sessions/sessioneventmap-the-event-vocabulary/the-route-capacity-event-request-context:
-  en: 7e21ea8bcdb16b7a
-  zh: a377774d3596dbeb
+  en: 4d3263765ecdc3ae
+  zh: bb5b8e3d7a4de532
 /sessions/sessionevent-t-one-log-entry:
-  en: 622d333d9d903795
+  en: 0d233f94371bf05b
   zh: fdc9ee663330f01e
 /sessions/surface-types:
-  en: 55fa7be0643afc08
-  zh: 0bc544886c68cdb3
+  en: ee5e9670f6abda49
+  zh: 2cc665c78bdeeff6
 /sessions/surface-types/surfaceeventtype-the-message-producing-subset-of-event-types:
   en: 2f1b6a16a4ee7cc1
   zh: 7f16b568c4aa940f
 /sessions/surface-types/surfaceop-how-an-event-entered-the-surface:
-  en: 8fcc967516a13692
-  zh: d3978d3b8d02c566
+  en: 90c0a35e4e152679
+  zh: d962d2312f09b265
 /sessions/surface-types/surfaceintent-the-parameter-to-session-append:
   en: c65cc976acad9005
   zh: 3efd10779881cba5
@@ -39,13 +39,16 @@
   en: 13820e0611b2e141
   zh: 2aafb1e5e3dc42f6
 /sessions/session-public-api:
-  en: 04e9982948d9560d
-  zh: 221961cadebc6fb1
+  en: 2dbf1890d8c38701
+  zh: 9948971a092b3243
+/sessions/session-public-api/sessioneventinput-one-proposed-event:
+  en: 90c3989856a301dc
+  zh: 839a494d5b2b1fa4
 /sessions/derived-history-derivemessages-and-deriveeventmessage:
   en: 45d1a9ee6d610ac5
   zh: 79c061252fde4ceb
 /sessions/live-session-fork-api:
-  en: 06189884c62a80a1
+  en: dd2828959411ceba
   zh: 30121aed7a011c72
 /sessions/why-a-turn-ended-turnendreasonmap:
   en: 966cc60273fb3911

@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../config"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -30,10 +33,7 @@
       "path": "../ui-settings-account"
     },
     {
-      "path": "../../credentials/deepseek-account"
-    },
-    {
-      "path": "../../host/webserver"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../ui-renderer"

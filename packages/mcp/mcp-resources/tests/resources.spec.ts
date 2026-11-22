@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -6,11 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import McpResources, { type McpResourceProvider } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const resourceToolNames = ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource']
 
@@ -18,7 +20,7 @@ class BindingProbe extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'in-process-test'
   behavior: (spec: PtcRunSpec) => Promise<PtcRunResult> = async spec => ({
-    logs: [], value: Object.keys(spec.bindings[0]!.functions).sort(),
+    output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions).sort()) }],
   })
 
   resolve(request: PtcRunRequest): PtcRunSpec {
@@ -38,6 +40,7 @@ afterEach(async () => {
 async function setup(mode: ('native' | 'ptc') = 'native') {
   const ctx = new Context()
   roots.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
@@ -61,7 +64,7 @@ function visibleResourceTools(ctx: Context, agent?: Agent): string[] {
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
   const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
   return execute(ctx, {
-    name, arguments: args, callId: ToolCallId('resource-test'),
+    name, arguments: args, callId: brandString<ToolCallId>('resource-test'),
     signal: new AbortController().signal,
     ...agent === undefined ? {} : { agent },
   })
@@ -81,7 +84,7 @@ describe('MCP resource tools', () => {
     }
     if (mode !== 'native') {
       expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
-        .toMatchObject({ isError: false, value: { result: [] } })
+        .toMatchObject({ isError: false, value: { logs: ['[]'] } })
     }
   })
 
@@ -95,6 +98,8 @@ describe('MCP resource tools', () => {
       inner.mcpResources.register('second', { request })
     } })
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
+    expect(resourceToolNames.map(name => ctx.tools.get(name)?.isConcurrencySafe?.({ server: 'first', uri: 'docs://text' })))
+      .toEqual(resourceToolNames.map(() => true))
     await first.dispose()
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
     expect((await call(ctx, 'list_mcp_resources', { server: 'second' })).isError).toBe(false)
@@ -208,18 +213,19 @@ describe('MCP resource tools', () => {
     const runtime = ctx.ptcRuntime as BindingProbe
     runtime.behavior = async (spec) => {
       const binding = spec.bindings[0]!.functions['list_mcp_resources']!
-      expect(await binding({ server: 'docs' })).toEqual({ resources: [] })
+      const resolved = await binding({ server: 'docs' })
+      expect(resolved instanceof PtcInspectableValue ? resolved.value : resolved).toEqual({ resources: [] })
       remove()
       await expect(binding({ server: 'docs' })).rejects.toThrow('unknown tool')
-      return { logs: [] }
+      return { output: [] }
     }
     const result = await call(ctx, 'run_code', { code: 'invoke and remove provider', description: 'Use resource binding' })
     expect(result.isError).toBe(false)
     expect(request).toHaveBeenCalledOnce()
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('mcp')
-    runtime.behavior = async spec => ({ logs: [], value: Object.keys(spec.bindings[0]!.functions) })
+    runtime.behavior = async spec => ({ output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions)) }] })
     expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
-      .toMatchObject({ isError: false, value: { result: [] } })
+      .toMatchObject({ isError: false, value: { logs: ['[]'] } })
   })
 
   it('retains tools for a configured provider while its requests fail', async () => {
@@ -286,6 +292,7 @@ describe('MCP resource tools', () => {
   it('withdraws all shared tools and server-name context when its plugin unloads', async () => {
     const ctx = new Context()
     roots.push(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -340,7 +347,10 @@ describe('MCP resource tools', () => {
     expect((await call(ctx, 'read_mcp_resource', { uri: 'docs://text' })).isError).toBe(true)
     const result = await call(ctx, 'read_mcp_resource', { server: 'missing', uri: 'docs://text' })
     expect(result.isError).toBe(true)
-    expect(JSON.stringify(result.content)).toContain('unavailable in this agent')
+    expect(result.error).toEqual({
+      message: 'invalid arguments: server: MCP resource server "missing" is unavailable in this agent\'s scope',
+      info: { name: 'ToolArgsError', code: 'INVALID_ARGS' },
+    })
   })
 
   it('resolves scoped providers and removes only the disposed registration', async () => {

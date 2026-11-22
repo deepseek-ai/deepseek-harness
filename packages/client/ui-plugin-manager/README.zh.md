@@ -11,7 +11,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 Web 侧栏的**插件**入口管理 profile 已安装的组合包，以及安装随附、默认关闭的官方组合包。可以启停组合包及其行、在 Host 读出 spec 指向什么之后安装组合包、查看 pnpm 输出、停止一次运行，并启用它新增的包。卸载会要求确认。注册了配置页的插件在这里、在它自己的页面上编辑；设置里只保留只读的插件列表。
+使用 Web 侧栏的**插件**入口管理 profile 已安装的组合包，以及安装随附、默认关闭的官方组合包。可以启停组合包及其行、在 Host 读出 spec 指向什么之后安装组合包、查看 pnpm 输出、停止一次运行，并启用它新增的包。卸载会要求确认。注册了配置页的插件在这里、在它自己的页面上编辑；「设置 → 插件管理」打开本页。
 
 ## 目录
 
@@ -31,7 +31,9 @@ kind: "package-reference"
 
 [Ralph 循环](../../experimental/ralph-bundle/README.zh.md)和[会话搜索](../../experimental/session-search/README.zh.md)仍随包提供，但默认不在两个插件列表中展示，只有 profile 启用或另行安装后才显示。已有的启用状态仍可管理；关闭随安装提供的版本后，它会再次隐藏。在**添加插件**中输入准确包名，再选择**立即启用**，即可使用随包提供的版本，无需再次下载。侧栏会话搜索独立于此功能。LiveShare 在其 bundle manifest 中声明相同的默认隐藏意图（`dsh.bundle.listedByDefault: false`），因此在自身声明的行开始运行或被启用前，它不会出现在两个列表（含**更多**页）中。页面的 manifest 规则是通用的：未声明 `listedByDefault: false` 的组合包会列出；声明了的，只有在 profile 启用、安装随附版本被选中，或它声明的某一行开始运行时才列出；隐藏的组合包也不能通过 ID 打开详情。
 
-在侧栏选择**插件**。信息按钮使用 11px 的 caption 色图标和 20px 方形悬停区域，与副标题间隔 4px。它说明当前页用于配置官方插件、安装和管理其他插件，**设置 → 内置插件**则展示内置插件列表及运行状态。悬停或聚焦显示共享 tooltip；点击后保持展开，直至再次点击、Escape、Tab 或外部点击。页面首次打开时通过 `api-remotes` 读取清单与组合包；没有受管 profile 的 Host 上页面显示为不可用。**内置插件配置**按配置的顺序列出官方配置页：子智能体、网页搜索与获取、Agent 循环、终端。**实验性插件**展示主要的可选组合包，标题旁的**更多**打开同名的独立页面。该页列出符合展示条件的官方组合包，也包含主列表已有的条目，Codex 和 Claude Code 子智能体排在最后。返回按钮回到主列表，**已安装插件**保持在实验性插件下方。组合包详情返回打开它的列表。目录条目在安装或移除后保持原位置。**已安装插件**列出其他 profile 组合包。安装随附的可选组合包没有卸载操作。实验性包在两个列表中均保留**实验性**标签。开启仅在该页列出的组合包会按该页中的位置把它加入主列表，关闭后它只留在该页，但 manifest 声明默认隐藏的组合包会从该页消失；其他组合包在两个列表中均保持原位。没有组合包 patch 的依赖不是插件，除非 profile 选中了它才会带异常标签列出。全局配置仍在设置的**内置插件**分区中编辑。
+在侧栏选择**插件**。信息按钮使用 11px 的 caption 色图标和 20px 方形悬停区域，与副标题间隔 4px。它说明当前页用于配置官方插件，以及安装、管理和配置其他插件。悬停或聚焦显示共享 tooltip；点击后保持展开，直至再次点击、Escape、Tab 或外部点击。页面首次打开时通过 `api-remotes` 读取清单与组合包；没有受管 profile 的 Host 上页面显示为不可用。**内置插件配置**按配置的顺序列出官方配置页：子智能体、网页搜索与获取、Agent 循环、终端。**实验性插件**展示主要的可选组合包，标题旁的**更多**打开同名的独立页面。该页列出符合展示条件的官方组合包，也包含主列表已有的条目，Codex 和 Claude Code 子智能体排在最后。返回按钮回到主列表，**已安装插件**保持在实验性插件下方。组合包详情返回打开它的列表。目录条目在安装或移除后保持原位置。**已安装插件**列出其他 profile 组合包。安装随附的可选组合包没有卸载操作。实验性包在两个列表中均保留**实验性**标签。开启仅在该页列出的组合包会按该页中的位置把它加入主列表，关闭后它只留在该页，但 manifest 声明默认隐藏的组合包会从该页消失；其他组合包在两个列表中均保持原位。没有组合包 patch 的依赖不是插件，除非 profile 选中了它才会带异常标签列出。
+
+页面的每个视图（无论组合包列表是否可用）都在页面正文顶部（任何页头之下）显示本浏览器页面的客户端插件同步状态，该状态来自 `ctx.modules.entries.state`。同步进行时，状态行显示**正在同步本页面的插件…**。有条目失败时，提示（`data-client-sync-failure`）说明本页面的插件未能完成同步、服务端的启用状态保持不变，把每个失败列为 `id: message`，并提供**重试本页面同步**；该按钮调用 `ctx.modules.entries.retry()`，同步进行时禁用。
 
 页头可用宽度缩小时，“刷新”和“添加插件”先变为保留可访问名称与 tooltip 的图标按钮；标签再从常规最小宽度收紧为文案所需宽度，仍不足时操作组才换行。信息按钮紧随副标题文字。主页面的页头和列表共用一个滚动容器。页头控件随滚动位置移动，到达紧凑态位置后停住；反向滚动沿同样的坐标返回。页头外层容器保留静止态的文档流高度，以保持列表滚动范围；可拖动页头的矩形与其绘制高度一致，使原生拖动区域不会延伸到列表中。只能滚动少量距离的列表可能在页头完全收拢前到达底部。“更多”列表的返回与标题行固定，详情页的页头随内容滚动。“已安装/发现”标签使用总高 34px 的紧凑控件，选中指示块与外框之间留 2px。副标题随滚动离开视口；有标签时标题也随之滚出，标签在空间足够时停靠到“刷新”“添加插件”旁边。窄页面中，标签与图标操作优先在标题下方共用一行；放不下时，标签始终在操作组上方。滚动过程中两组控件的相对顺序保持不变。静止态与紧凑态分别保留 28px 和 16px 的页面顶部留白，紧凑态控件下方保留 16px。macOS 静止态保留框架的标题栏安全区；折叠态在侧栏展开时上下各留 16px，侧栏收起时再避让框架顶部安全区，使控件位于原生窗口控件下方。仅在 macOS 侧栏收起时，紧凑态控件在原有框架安全区之外的顶部留白统一由 16px 减为 8px，不受窗口宽度影响；静止态布局与紧凑态底部留白均不变。Windows 使用框架已有的标题栏偏移，不重复叠加。分隔线在紧凑页头底部横跨页面，列表初始的顶部留白随内容滚动。悬停样式只在可悬停的指针下生效，点按不会让卡片、行或菜单项停留在悬停态；卡片与图标操作改以按下填充回馈触摸。安装、注册表与筛选输入框在粗指针下使用 16px 字号，iOS Safari 不会因聚焦而放大页面。
 
@@ -78,12 +80,13 @@ Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时�
 
 ### 切换一个组合包
 
-组合包页面在标题下方显示完整包名。组件列表之后的「来源信息」给出在别处安装它所需的 spec（`pnpm add` 接受的形式），安装随附的官方组合包显示「内置」，随后是当前版本。组合包开关改变其层选择。profile 变更触发重新读取时，已显示的详情文档保持可见，直到新结果返回。Host 应用更改期间，开关保持禁用，旁边显示旋转指示器；操作区在开关左侧固定预留 22px。常驻状态区域向屏幕阅读器播报进行中的更改。启用了 HMR 的 profile 在操作完成前重组；没有 HMR 的 profile，以及被更高层覆盖的组合包，会以 toast 说明。Host 读不了的组合包带异常标签，其页面给出原因，且不能打开；提供管理组件的组合包保持锁定。已选中组合包的层被 Host 跳过时（Host 将其报告为错误，且该组合包没有带存活条目的行），该组合包的开关保持打开，改带未运行标签，其卡片给出原因，但不列出未满足的版本要求。Host 报告错误且没有报告任何行时，组合包页面不显示组件列表，因为 Host 可能未读取其 patch。Host 以错误码作答，由页面字典措辞；pnpm 与 Loader 自己的诊断原样显示。页面从卡片和详情页中排除内置 profile 组合包和持久终端组合包，无论其启用状态、依赖声明或 Host 异常如何。隐藏组合包保留其在 Host 中的可用性和启用状态。Host 清单仍保留完整数据；设置中「插件」分区的「插件列表」标签页负责查看它们的插件。
+组合包页面在标题下方显示完整包名。组件列表之后的「来源信息」给出在别处安装它所需的 spec（`pnpm add` 接受的形式），安装随附的官方组合包显示「内置」，随后是当前版本。组合包开关改变其层选择。profile 变更触发重新读取时，已显示的详情文档保持可见，直到新结果返回。Host 应用更改期间，开关保持禁用，旁边显示旋转指示器；操作区在开关左侧固定预留 22px。常驻状态区域向屏幕阅读器播报进行中的更改。启用了 HMR 的 profile 在操作完成前重组；没有 HMR 的 profile，以及被更高层覆盖的组合包，会以 toast 说明。Host 读不了的组合包带异常标签，其页面给出原因，且不能打开；提供管理组件的组合包保持锁定。已选中组合包的层被 Host 跳过时（Host 将其报告为错误，且该组合包没有带存活条目的行），该组合包的开关保持打开，改带未运行标签，其卡片给出原因，但不列出未满足的版本要求。Host 报告错误且没有报告任何行时，组合包页面不显示组件列表，因为 Host 可能未读取其 patch。Host 以错误码作答，由页面字典措辞；pnpm 与 Loader 自己的诊断原样显示。页面从卡片和详情页中排除 [`HIDDEN_BUNDLES`](../../util/official-bundles/README.zh.md#plugin-manager-lists) 中的组合包，无论其启用状态、依赖声明或 Host 异常如何。隐藏组合包保留其在 Host 中的可用性和启用状态。Host 清单仍保留完整数据。
 
 ### 切换组合包里的一行
 
-组合包页面上行的开关调用 `pluginManager.setPluginEnabled`，按[开关规则](../../boot/plugin-manager/README.zh.md#use-this-package)在 profile 的 `cordis.patch.yml` 中记录该行的启用状态。启用了 HMR 的 profile 的树随即重组，该行的宿主半区卸下或挂上，组合包其余部分照常运行，页面无需重载即跟随客户端模块图。行使用共享状态标记表示 Host fiber 阶段：pending 与 disabled 为 idle，loading 与 unloading 为 ongoing，active 为 done，failed 为 error。开关只出现在已打开的组合包上；没有存活条目的行，以及 Host 不通过 profile patch 寻址的行，带着 Host 的原因锁定。超过十行的列表带一个按本地化标题、描述、行 id 和模块名筛选的输入框。
+组合包页面上行的开关调用 `pluginManager.setPluginEnabled`，按[开关规则](../../boot/plugin-manager/README.zh.md#use-this-package)在 profile 的 `cordis.patch.yml` 中记录该行的启用状态。启用了 HMR 的 profile 的树随即重组，该行的宿主半区卸下或挂上，组合包其余部分照常运行，页面无需重载即跟随客户端模块图。行使用共享状态标记表示 Host fiber 阶段：pending 与 disabled 为 idle，loading 与 unloading 为 ongoing，active 为 done，failed 为 error。开关只出现在已打开的组合包上；没有存活条目的行，以及 Host 不通过 profile patch 寻址的行，带着 Host 的原因锁定。超过十行的列表带一个筛选框，使用共享的[文本搜索](../../util/text-search/README.zh.md)：行 id、模块名和标题的所有声明语言模糊匹配，描述的所有语言按子串匹配；各行以当前语言显示。
 
+<a id="configuration-pages"></a>
 ### 配置页
 
 自带配置的插件把配置渲染在本页而不是设置里，通过本页声明的三个 slot：`plugins.item`（list）用于官方插件，按其 `label` 列在内置插件配置分组里；`plugins.bundle.config`（以组合包的包名为键）用于组合包自己的配置，显示在组合包页面的描述与行之间；`plugins.row.config`（以 `<包名>#<行 id>` 为键）用于某一行的配置，这一行由此多出一个**配置**控件，打开该行自己的页面。页面用 `view: 'page'` 渲染带自己保存控件的表单。官方插件卡片还在标题下渲染 `view: 'summary'`；行详情页只在缺少包描述时使用该视图。只有保存才写入：页面负责画标题、图标与面包屑，条目的表单在离开页面时丢弃暂存的修改。安装随附的四个宿主平面配置页——shell 执行器、agent loop、子智能体、DeepSeek 搜索提供方——各来自一个伴生包：[ui-settings-shell](../ui-settings-shell/README.zh.md)、[ui-settings-agent-loop](../ui-settings-agent-loop/README.zh.md)、[ui-settings-subagent](../ui-settings-subagent/README.zh.md) 与 [ui-settings-web-search](../ui-settings-web-search/README.zh.md)，在 Host 服务其命名空间期间注册。组合包的浏览器半侧用同样的方式注册：
@@ -97,6 +100,8 @@ ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
 ```
 
 组合包的 patch 必须以该 id 声明这一行；注册只在组合包开启期间存在，因此关闭的组合包不显示配置控件。
+
+插件自己的设置页面是一个 `settings.section` 条目，其类型位于 [ui-settings](../ui-settings/README.zh.md#filling-the-settings-slots)；设置列出全部条目，本页也在已列出的组合包认领某个条目时，经同一个 `settings.section.view` Component Factory 渲染它。模块名等于注册该条目的包、且没有 `plugins.row.config` 条目的已列出组合包行认领该条目：该行多出一个**配置**控件，行页面渲染该条目，并传入返回组合包页面的 `close` prop。注册包是某个已列出组合包自身的包名、没有已列出的行使用该模块、且该组合包没有 `plugins.bundle.config` 条目时，组合包页面渲染该条目，其 `close` 返回打开该组合包页面的视图。没有已列出的行或组合包认领、或注册包未知的条目只出现在设置中。设置中的**插件管理**条目是 id 为 `plugins`、order 为 15 的 `settings.section` 注册，选择它会关闭设置并打开本页主列表。
 
 ### 详情页扩展点
 
@@ -148,7 +153,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 自定义条目页以 Host 条目 id 作为注册 id；行页面使用 bundle 包名和行 id。当条目提供可编辑 Config 字段时，页面宿主传入 `form.state` 和 `form.mutate(operations, expectedRevision)`。自定义页面负责草稿和校验提示，并可复用 ui-primitives 的 `ConfigField`。整个 bundle 的页面可以包含多个条目，因此没有单一表单。
 
-页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择主列表、完整的实验性插件列表、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。新的注册从主列表开始。安装后的高亮仅在当前页面有对应卡片时滚动定位，不改变所选页面。其他 Client 插件经 `ctx.get` 或 `ctx.inject` 以可选方式读取 `pluginNavigation`，调用其 `openBundle(packageName)` 即可打开组合包详情，不改变当前 Session；把它写进插件的 `inject` 会让该插件在无权限的页面上一直等待。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 卡片和详情页仅为 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md#plugin-manager-lists) 中 `EXPERIMENTAL_BUNDLES` 名单内的包显示实验性标签，包名前缀不决定标签。
+页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把四份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目与 `settings.section` 条目（每个条目在已知时带注册它的模块），以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择主列表、完整的实验性插件列表、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。新的注册从主列表开始。安装后的高亮仅在当前页面有对应卡片时滚动定位，不改变所选页面。其他 Client 插件经 `ctx.get` 或 `ctx.inject` 以可选方式读取 `pluginNavigation`，调用其 `openBundle(packageName)` 即可打开组合包详情，不改变当前 Session；把它写进插件的 `inject` 会让该插件在无权限的页面上一直等待。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 卡片和详情页仅为 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md#plugin-manager-lists) 中 `EXPERIMENTAL_BUNDLES` 名单内的包显示实验性标签，包名前缀不决定标签。
 
 `plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。Client 插件可订阅只读的 `ctx.pluginChanges.bundle(packageName)`，在组合包或其组件行变更期间暂停查询。通知先于管理请求发出，页面关闭后仍会更新；订阅方在卸载时释放观察。`plugins.bundle.activation` 在用户从列表或详情页显式启用后提供 Bundle 自有引导，并传入关闭引导和打开详情的回调。仅列出已启用的 Bundle 不会触发引导。
 

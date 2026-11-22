@@ -112,7 +112,7 @@ jobs:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Configure persistent package caches
         env:
           DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
@@ -199,7 +199,7 @@ jobs:
           dest: ${{ runner.temp }}/archive-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Configure persistent package caches
         env:
           DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
@@ -211,13 +211,33 @@ jobs:
       - name: Archive verified retained build
         id: archive
         working-directory: artifact-archiver
-        run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts
-      - name: Retain installers for the selected mode
-        if: success()
+        run: node --import tsx apps/desktop/scripts/archive-desktop-ci.ts --split-macos
+      - name: Retain DMG installer
+        if: ${{ !cancelled() && steps.archive.outcome == 'success' }}
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: ${{ env.DESKTOP_ARCHIVE_NAME }}
-          path: ${{ steps.archive.outputs.path }}
+          name: ${{ steps.archive.outputs.dmg-name }}
+          path: ${{ steps.archive.outputs.dmg-path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+      - name: Retain update ZIP
+        if: ${{ !cancelled() && steps.archive.outcome == 'success' }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ${{ steps.archive.outputs.update-name }}
+          path: ${{ steps.archive.outputs.update-path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+      - name: Retain package metadata
+        if: ${{ !cancelled() && steps.archive.outcome == 'success' }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ${{ steps.archive.outputs.metadata-name }}
+          path: ${{ steps.archive.outputs.metadata-path }}
           archive: false
           if-no-files-found: error
           retention-days: 14

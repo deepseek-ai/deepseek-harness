@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   DSH_TELEMETRY_DISABLED: '1'
@@ -19,17 +19,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  publisher-isolated:
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        os: [linux, macos]
+    runs-on: >-
+      ${{ matrix.os == 'macos' && 'macos-latest'
+          || vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          path: publisher-isolated
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '^24.22.3'
+      - name: Check preflights before dependency installation
+        working-directory: publisher-isolated
+        run: node apps/desktop-publisher/tests/preinstall.mjs
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: publisher-isolated/package.json
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Install only publisher production dependencies
+        working-directory: publisher-isolated
+        run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
+      - name: Load publisher without Desktop or root development dependencies
+        working-directory: publisher-isolated/apps/desktop-publisher
+        run: node --import tsx tests/isolated-install.mjs
 
-  # Three enterprise jobs isolate coverage, static analysis, and the
-  # build-backed consumer tail. The consumer job owns the only Linux build so
-  # all three jobs enter runner allocation independently.
+
+  # Enterprise jobs isolate coverage, static analysis, and the build-backed
+  # tail. Coverage runs two file shards on separate runners and merges them on
+  # one small report runner. The build job
+  # owns the only Linux artifact build; the consumer job and the two web
+  # snapshot shards restore its output instead of rebuilding.
   #
   # FAILOVER (Linux): each Linux enterprise job resolves its pool through the
   # DSH_CI_FAILOVER_LINUX repository variable. Unset (normal), the expressions
   # pick the hosted enterprise pools below. Setting the variable to
   # 'selfhosted' (repo Settings → Actions → Variables; writer-manageable
-  # repository state — not PR-editable, no merge required) retargets all
-  # three onto the in-house
+  # repository state — not PR-editable, no merge required) retargets them
+  # all onto the in-house
   # vm-backup pool and re-running the failed jobs is the entire switch —
   # see .agents/notes/implemented/process/2026-07-26-ci-failover-runbook.md.
   # Setting the variable to 'blacksmith' instead routes the same jobs onto
@@ -113,8 +151,16 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'dsh-ubuntu-24-04-16core' }}
-    name: node 24 / coverage
+    # Two instrumented file shards run on separate runners; the first also
+    # runs the uninstrumented heavy suites. node-24-coverage-report merges the
+    # shard blobs and owns the thresholds and the duration history.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    name: node 24 / coverage ${{ matrix.shard }}/2
     env:
+      DSH_COVERAGE_SHARD: ${{ matrix.shard }}/2
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_COVERAGE_MAX_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
       DSH_COVERAGE_PARTITIONS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}
@@ -179,6 +225,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -192,8 +248,102 @@ jobs:
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
 
-      - name: Run exhaustive coverage
-        run: pnpm run check:ci:coverage
+      # The save step is skipped on a hit. A restored archive whose digest fails
+      # is re-downloaded but not re-saved (the key already exists), so a tampered
+      # entry survives until eviction; that needs deliberate cache poisoning.
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
+      - name: Run coverage shard
+        run: pnpm run check:ci:coverage-shard
+
+      - name: Upload coverage shard blobs
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-blobs-${{ matrix.shard }}
+          path: coverage/shard/
+          # A re-run of this shard replaces the previous attempt's output.
+          overwrite: true
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+  # Merging blobs and checking thresholds runs after both coverage shards
+  # succeed. The merge converts every shard's V8 coverage to per-file reports
+  # and needs several GB of heap: a 2-vCPU runner took 154s against ~30s on the
+  # former 16-vCPU lane (run 44667701311), so this job uses an 8-vCPU runner.
+  # A failed shard skips this job, and the skipped result fails all-checks-passed.
+  node-24-coverage-report:
+    needs: node-24-coverage
+    if: github.event_name == 'pull_request'
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-8vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'dsh-ubuntu-24-04-8core' }}
+    name: node 24 / coverage report
+    steps:
+      # Runner cleanup owns tool caches and fixtures, including cancelled runs.
+      - name: Use runner-owned temporary storage
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      # Self-hosted runners reuse the shared persistent pnpm store.
+      # Hosted runners restore the remote cache into their ephemeral store.
+      - uses: actions/cache/restore@v6.1.0
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download coverage shard blobs
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: coverage-blobs-*
+          path: ${{ runner.temp }}/coverage-shards
+
+      # Node sizes its default heap from host memory; merging the whole
+      # inventory exceeded the ~2 GB default of a 2-vCPU runner (run
+      # 44664262449), so the merge states its heap instead of inheriting one.
+      - name: Merge coverage shards and check thresholds
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm run test:coverage:merge-shards "$RUNNER_TEMP/coverage-shards"
 
       - name: Save coverage duration history
         if: ${{ !cancelled() }}
@@ -267,17 +417,33 @@ jobs:
       - name: Run lint and duplication
         run: pnpm run check:ci:lint:contracts-ready
 
+  # The two suite phases run on separate idle runners from the shared build
+  # output: phase `first` holds the corpus cases that tolerate a sibling and
+  # phase `last` the browser, animation-frame, and fresh-child cases that need
+  # an idle runner (SERIAL_BENCH_FILES in scripts/run-bench-suite.ts).
   node-24-bench:
+    needs: node-24-build
     if: github.event_name == 'pull_request'
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
           || 'ubuntu-24.04' }}
-    name: node 24 / benchmarks
-    # Wall-clock budgets need an otherwise idle runner, so this job runs the
-    # benchmark lane alone instead of joining a concurrent gate aggregate, and
-    # keeps its own two-file parallelism inside that runner. The self-hosted
-    # failover pool is shared, so the benchmarks stay on hosted Linux there.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            phase: first
+          - shard: 2
+            phase: last
+    name: node 24 / benchmarks ${{ matrix.shard }}/2
+    # Wall-clock budgets need an otherwise idle runner, so each phase runs
+    # alone on its runner instead of joining a concurrent gate aggregate; the
+    # first phase keeps its own two-file parallelism inside that runner. The
+    # self-hosted failover pool is shared, so the benchmarks stay on hosted
+    # Linux there.
     timeout-minutes: 20
+    env:
+      DSH_BENCH_PHASE: ${{ matrix.phase }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -309,18 +475,95 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Download build output
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/build-output
+
+      - name: Unpack build output
+        run: |
+          set -o pipefail
+          archive="$RUNNER_TEMP/build-output/build-output.tar.zst"
+          # -m stamps restored files with the extraction time: newer than this
+          # checkout and never in the future.
+          zstd -dc -T0 "$archive" | tar -xmf -
+          test -f apps/cli/lib/bin.js && test -f apps/web/dist/index.html && test -f .dsh-build/client-build-environment.json
+
+      # node-24-build can run on another pool (vm-backup under self-hosted
+      # failover) while the benchmarks stay on hosted Linux, so the restored
+      # Node-API addon is loaded here and rebuilt on this runner if it fails.
+      - name: Rebuild the native addon if the restored one does not load
+        run: |
+          addon=native/system/packages/linux-x64/bin/glibc/system.node
+          if node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"; then
+            echo "Restored native addon loads on this runner."
+          else
+            echo "::notice::Restored native addon does not load on this runner; rebuilding it."
+            pnpm run build:native-system
+            node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"
+          fi
+
       - name: Install benchmark browser and hosted dependencies
         run: pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium
 
       - name: Run performance benchmarks
         env:
           DSH_GATE_VERBOSE: '1'
-        run: pnpm run check:ci:bench
+        run: pnpm run check:ci:bench-prebuilt
 
-      # The report global teardown renders benchmarks/.dsh-report after the run,
-      # including after a failing budget assertion. A run that fails before
-      # recording any timing has no report, so missing files warn instead of
-      # failing the benchmark job a second time.
+      # The report global teardown writes results.jsonl and environment.json
+      # after the run, including after a failing budget assertion; the report
+      # job renders both phases into one report. A phase that fails before
+      # recording any timing has no results, so missing files warn.
+      - name: Upload benchmark results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: benchmark-results-${{ matrix.shard }}
+          path: benchmarks/.dsh-report/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+          # A re-run of this phase replaces the previous attempt's results.
+          overwrite: true
+
+  # Bookkeeping only: renders one scaled report from both phases, including
+  # after a failing budget. The benchmark verdict comes from node-24-bench, so
+  # this job stays out of all-checks-passed.
+  node-24-bench-report:
+    needs: node-24-bench
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-2vcpu-ubuntu-2404'
+          || 'ubuntu-latest' }}
+    name: node 24 / benchmark report
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: benchmark-results-*
+          path: ${{ runner.temp }}/benchmark-results
+
+      # The renderer runs under Node type stripping and needs no install.
+      - name: Render scaled benchmark report
+        run: |
+          shopt -s nullglob
+          phases=("$RUNNER_TEMP"/benchmark-results/*/)
+          if (( ${#phases[@]} == 0 )); then
+            echo "::warning::No benchmark phase uploaded results."
+            exit 0
+          fi
+          node scripts/render-benchmark-report.ts benchmarks/.dsh-report "${phases[@]}"
+
       - name: Upload scaled benchmark report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7.0.1
@@ -331,7 +574,117 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Build the artifacts once, run the cheap readers, and publish the output
+  # for the downstream consumer and web snapshot jobs, which restore it
+  # instead of rebuilding.
+  node-24-build:
+    if: github.event_name == 'pull_request'
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'dsh-ubuntu-24-04-16core' }}
+    name: node 24 / build
+    env:
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
+      DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+      # A failing gate aborts its running siblings.
+      DSH_GATE_FAIL_FAST: '1'
+    steps:
+      # Runner cleanup owns tool caches and fixtures, including cancelled runs.
+      - name: Use runner-owned temporary storage
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      # Pull requests restore the pnpm store without paying compression and
+      # upload on the required path. Self-hosted runners reuse the shared
+      # persistent store instead of restoring the remote archive.
+      - uses: actions/cache/restore@v6.1.0
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Everything the build adds to the ignored or untracked set is its output.
+      - name: Record files before the build
+        run: git status --porcelain=v1 --ignored --untracked-files=normal > "$RUNNER_TEMP/files-before.txt"
+
+      - name: Build artifacts and run the cheap readers
+        run: pnpm run check:ci:build
+
+      - name: Pack build output
+        env:
+          # Compression costs well under a second at -T0; a smaller archive
+          # shortens the upload and every download.
+          ZSTD_LEVEL: '9'
+        run: |
+          set -o pipefail
+          out="$RUNNER_TEMP/build-output"
+          mkdir -p "$out"
+          git status --porcelain=v1 --ignored --untracked-files=normal > "$RUNNER_TEMP/files-after.txt"
+          comm -13 <(sort "$RUNNER_TEMP/files-before.txt") <(sort "$RUNNER_TEMP/files-after.txt") \
+            | sed -n -E 's/^(!!|\?\?) //p' \
+            | grep -v -E '(^|/)(node_modules|\.node-next-types-[^/]*|\.doc-typecheck-[^/]*|\.oxlint-contract-[^/]*|\.typert-[^/]*|\.cache)/?$' \
+            | sed 's#/$##' > "$out/paths.txt"
+          echo "build output entries: $(wc -l < "$out/paths.txt")"
+          du -sch $(cat "$out/paths.txt") | tail -1
+          tar -cf - -T "$out/paths.txt" | zstd -q -T0 -"$ZSTD_LEVEL" -o "$out/build-output.tar.zst"
+          zstd -dc "$out/build-output.tar.zst" | tar -tf - > "$out/contents.txt"
+          for required in apps/cli/lib/bin.js apps/web/dist/index.html .dsh-build/client-build-environment.json; do
+            grep -qx "$required" "$out/contents.txt" || { echo "::error::build output is missing $required"; exit 1; }
+          done
+          echo "archive entries: $(wc -l < "$out/contents.txt")"
+          rm "$out/contents.txt"
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: build-output
+          path: |
+            ${{ runner.temp }}/build-output/build-output.tar.zst
+            ${{ runner.temp }}/build-output/paths.txt
+          # Re-running a failed downstream job does not rebuild; keep the output
+          # for GitHub's 30-day re-run window.
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+          # A re-run of this job replaces the previous attempt's output.
+          overwrite: true
+
   node-24-consumers:
+    needs: node-24-build
     if: github.event_name == 'pull_request'
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
@@ -343,14 +696,152 @@ jobs:
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
-      DSH_OXLINT_THREADS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
-      DSH_PUBLINT_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
-      DSH_WEB_SNAPSHOT_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
       DSH_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '' }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
-      # A failing gate aborts its running siblings: a failing build stops the
-      # independent Node compatibility smoke, and a failing reader (e.g.
-      # publint) stops the remaining artifact consumers.
+      # A failing gate aborts its running siblings.
+      DSH_GATE_FAIL_FAST: '1'
+    steps:
+      # Runner cleanup owns tool caches and fixtures, including cancelled runs.
+      - name: Use runner-owned temporary storage
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      # Pull requests restore the pnpm store without paying compression and
+      # upload on the required path. Self-hosted runners reuse the shared
+      # persistent store instead of restoring the remote archive.
+      - uses: actions/cache/restore@v6.1.0
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
+      - name: Install dependencies and prepare bubblewrap
+        run: |
+          pnpm install --frozen-lockfile &
+          install_pid=$!
+          bash scripts/prepare-ci-bubblewrap.sh &
+          sandbox_pid=$!
+          install_status=0
+          wait "$install_pid" || install_status=$?
+          sandbox_status=0
+          wait "$sandbox_pid" || sandbox_status=$?
+          if (( install_status != 0 )); then exit "$install_status"; fi
+          exit "$sandbox_status"
+
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
+      # Restore the build job's output after the install, so no install or
+      # postinstall step can replace restored files. The fixed artifact name
+      # resolves within this run, including a re-run of this job alone.
+      - name: Download build output
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/build-output
+
+      - name: Unpack build output
+        run: |
+          set -o pipefail
+          archive="$RUNNER_TEMP/build-output/build-output.tar.zst"
+          # -m stamps restored files with the extraction time: newer than this
+          # checkout and never in the future. Build-time mtimes ahead of the
+          # clock make HMR treat freshly loaded lib/ modules as changed.
+          zstd -dc -T0 "$archive" | tar -xmf -
+          test -f apps/cli/lib/bin.js && test -f apps/web/dist/index.html && test -f .dsh-build/client-build-environment.json
+
+      # No gate reads the Office runtime output, so it builds beside the gates.
+      # GitHub runners keep a background process started in one step alive for
+      # the later steps of the same job; the final step collects its status.
+      - name: Start the Linux Office runtime build
+        id: office-runtime
+        run: |
+          (
+            status=0
+            CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads" || status=$?
+            echo "$status" > "$RUNNER_TEMP/office-runtime.status"
+          ) > "$RUNNER_TEMP/office-runtime.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/office-runtime.pid"
+
+      - name: Run compatibility, snapshot, and artifact gates
+        run: pnpm run check:ci:consumers-prebuilt
+
+      - name: Wait for the Linux Office runtime
+        if: ${{ !cancelled() && steps.office-runtime.outcome == 'success' }}
+        run: |
+          pid=$(cat "$RUNNER_TEMP/office-runtime.pid")
+          while kill -0 "$pid" 2>/dev/null; do sleep 1; done
+          cat "$RUNNER_TEMP/office-runtime.log"
+          status=$(cat "$RUNNER_TEMP/office-runtime.status" 2>/dev/null || echo missing)
+          if [[ "$status" != 0 ]]; then
+            echo "::error::Linux Office runtime build failed with status $status"
+            exit 1
+          fi
+
+  node-24-web-snapshot:
+    needs: node-24-build
+    if: github.event_name == 'pull_request'
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'dsh-ubuntu-24-04-16core' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    name: node 24 / web snapshots ${{ matrix.shard }}/2
+    env:
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '10' || '' }}
+      DSH_WEB_SNAPSHOT_WORKERS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '6' || '' }}
+      DSH_WEB_SNAPSHOT_SHARD: ${{ matrix.shard }}/2
+      # Every shard reads these shares. Each shard runs alone on its
+      # machine; the last shard also runs the ~40s of serial files first.
+      DSH_WEB_SNAPSHOT_SHARD_SHARES: '0.54,0.46'
+      # A failing gate aborts its running siblings.
       DSH_GATE_FAIL_FAST: '1'
     steps:
       # Runner cleanup owns tool caches and fixtures, including cancelled runs.
@@ -384,11 +875,9 @@ jobs:
           store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
           echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
-      # Pull requests restore the pnpm store and Playwright caches without paying
-      # compression and upload on the required path. No master job saves these
-      # hosted cache keys, so each restore-keys fallback hits the matching archived
-      # entry until it evicts, after which the store is cold. Self-hosted runners
-      # reuse the shared persistent store instead of restoring the remote archive.
+      # Pull requests restore the pnpm store without paying compression and
+      # upload on the required path. Self-hosted runners reuse the shared
+      # persistent store instead of restoring the remote archive.
       - uses: actions/cache/restore@v6.1.0
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         with:
@@ -406,6 +895,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -419,9 +918,18 @@ jobs:
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
 
-      # Blacksmith's Ubuntu HTTP archive endpoints can be unreachable while HTTPS works.
-      - name: Use HTTPS for Ubuntu archives on Blacksmith
-        if: vars.DSH_CI_FAILOVER_LINUX == 'blacksmith'
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
+      # Ubuntu HTTP archive mirrors can stall for tens of seconds per package
+      # (Blacksmith lists http://azure.archive.ubuntu.com first), so every
+      # ephemeral runner fetches the archive over HTTPS before Playwright's apt.
+      - name: Use HTTPS for Ubuntu archives
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         run: |
           sudo python3 - <<'PY'
           from pathlib import Path
@@ -434,31 +942,63 @@ jobs:
           for source in sources:
               if source.is_file():
                   source.write_text(re.sub(
-                      r'http://((?:[a-z]{2}\.)?archive\.ubuntu\.com|security\.ubuntu\.com)/',
-                      r'https://\1/', source.read_text()))
+                      r'http://(?:[a-z0-9-]+\.)*(archive|security)\.ubuntu\.com/',
+                      r'https://\1.ubuntu.com/', source.read_text()))
           PY
 
-      - name: Install Playwright Chromium, WebKit, and hosted dependencies
-        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
-        # Ephemeral runner images can carry Ubuntu mirrors whose HTTP endpoints are unreachable.
+      # The browser install overlaps the artifact download and unpack. GitHub
+      # runners keep a background process started in one step alive for the
+      # later steps of the same job, and the wait step below collects its exit
+      # status. The persistent VM image owns Playwright's Linux system packages,
+      # so the failover pool skips apt instead of mutating the shared host.
+      - name: Start Playwright browser install
+        env:
+          PLAYWRIGHT_INSTALL_MODE: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && 'browsers' || 'with-deps' }}
         run: |
-          sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i -E 's@http://([a-z]{2}\.)?archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g; s@http://security\.ubuntu\.com/ubuntu@https://security.ubuntu.com/ubuntu@g' {} +
-          pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium webkit
+          deps=()
+          if [[ "$PLAYWRIGHT_INSTALL_MODE" == with-deps ]]; then deps=(--with-deps); fi
+          (
+            status=0
+            pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install "${deps[@]}" chromium webkit || status=$?
+            echo "$status" > "$RUNNER_TEMP/playwright-install.status"
+          ) > "$RUNNER_TEMP/playwright-install.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/playwright-install.pid"
 
-      # The persistent VM image owns Playwright's Linux system packages; do
-      # not mutate the shared host with apt on every failover run.
-      - name: Install Playwright Chromium and WebKit on the failover VM
-        if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
+      # Restore the build job's output after the install, so no install or
+      # postinstall step can replace restored files. The fixed artifact name
+      # resolves within this run, including a re-run of this job alone.
+      - name: Download build output
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/build-output
 
-      - name: Build and execute the Linux Office runtime
-        run: CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads"
+      - name: Unpack build output
+        run: |
+          set -o pipefail
+          archive="$RUNNER_TEMP/build-output/build-output.tar.zst"
+          # -m stamps restored files with the extraction time: newer than this
+          # checkout and never in the future. Build-time mtimes ahead of the
+          # clock make HMR treat freshly loaded lib/ modules as changed.
+          zstd -dc -T0 "$archive" | tar -xmf -
+          test -f apps/cli/lib/bin.js && test -f apps/web/dist/index.html && test -f .dsh-build/client-build-environment.json
 
-      - name: Run compatibility, snapshot, and artifact gates
-        run: pnpm run check:ci:consumers
+      - name: Wait for Playwright browsers
+        run: |
+          pid=$(cat "$RUNNER_TEMP/playwright-install.pid")
+          while kill -0 "$pid" 2>/dev/null; do sleep 1; done
+          cat "$RUNNER_TEMP/playwright-install.log"
+          status=$(cat "$RUNNER_TEMP/playwright-install.status" 2>/dev/null || echo missing)
+          if [[ "$status" != 0 ]]; then
+            echo "::error::Playwright browser install failed with status $status"
+            exit 1
+          fi
 
+      - name: Run web browser snapshot shard
+        run: pnpm run check:ci:web-snapshot-prebuilt
 
   node-compat:
+    needs: publisher-isolated
     if: github.event_name == 'pull_request'
     # Under the selfhosted leg this job admits only repository-owned PR code
     # to the persistent shared VM; the blacksmith branch targets ephemeral
@@ -475,6 +1015,7 @@ jobs:
     env:
       DSH_GATE_CONCURRENCY: ${{ matrix.gate_concurrency }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
+      DSH_NODE_COMPAT_BUILD: ${{ matrix.build }}
       # A failed smoke aborts the remaining compatibility gates instead of
       # letting the build-backed legs run against an already-red aggregate.
       DSH_GATE_FAIL_FAST: '1'
@@ -483,16 +1024,18 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          # Pin the supported floor, whose internal loader is v1. Primary
-          # jobs track latest 24 and exercise v2, introduced in 24.12.0.
-          - node: '24.9'
-            name: node 24.9
+          # Pin the supported floor. Primary jobs track latest 24, which can be
+          # this same release, so only this leg requests the build-backed gates.
+          - node: '24.22.3'
+            name: node 24.22.3
             runner: ubuntu-latest
             gate_concurrency: '1'
+            build: '1'
           - node: 26
             name: node 26
             runner: ubuntu-latest
             gate_concurrency: '1'
+            build: ''
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -532,8 +1075,25 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run compatibility smokes
         env:
@@ -549,7 +1109,9 @@ jobs:
   # Single stable required check for branch protection: require "all checks
   # passed" instead of enumerating matrix legs whose names change as lanes and
   # node versions evolve. Every blocking job in THIS workflow must be listed in
-  # `needs`. `needs` cannot cross workflow files: native Windows jobs report
+  # `needs` or be needed by a listed job: a failed node-24-coverage shard skips
+  # node-24-coverage-report, and a skipped need fails this verdict. `needs`
+  # cannot cross workflow files: native Windows jobs report
   # the separate "windows checks passed" verdict from ci-windows.yml, Python
   # jobs report "python checks passed" from ci-python.yml, and Wine plus the
   # master-only runtime targets live in ci-master.yml.
@@ -572,7 +1134,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-consumers, node-compat]
+    needs: [publisher-isolated, node-24, node-24-coverage-report, node-24-lint, node-24-bench, node-24-build, node-24-consumers, node-24-web-snapshot, node-compat]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed

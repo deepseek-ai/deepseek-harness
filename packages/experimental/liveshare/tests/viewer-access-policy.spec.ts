@@ -10,9 +10,11 @@ import RemoteAccessService, {
   type RemoteAccessGrant,
   type RemoteAccessResource,
 } from '@deepseek-ai/dsh-api-remote-access'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import { VIEWER_ENDPOINT_CLASSES } from '../src/endpoint-classification.ts'
 import type { ForkPromptDecision, ForkRecord } from '../src/host/fork-registry.ts'
 import type { ForkShareState, ViewerSessionMode } from '../src/host/fork-policy.ts'
 import {
@@ -29,8 +31,8 @@ const reader = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'ou_read
 const other = { ...reader, subjectId: 'ou_other' }
 const READER = shareViewerPrincipal('share', reader)
 const GLOBAL: RemoteAccessResource = { kind: 'global' }
-const session = (id: string): RemoteAccessResource => ({ kind: 'session', id: SessionId(id) })
-const workspace = (id: string): RemoteAccessResource => ({ kind: 'workspace', id: WorkspaceId(id) })
+const session = (id: string): RemoteAccessResource => ({ kind: 'session', id: brandString<SessionId>(id) })
+const workspace = (id: string): RemoteAccessResource => ({ kind: 'workspace', id: brandString<WorkspaceId>(id) })
 const CALL = { request: {} }
 
 /**
@@ -41,14 +43,21 @@ const CALL = { request: {} }
  */
 const GLOBAL_ACTIONS = [
   'commands/list', 'llm/listConfigurableProviders', 'llm/listProviders', 'session/canOpenWorkspacePath',
-  'session/control', 'session/list', 'session/modelCatalog', 'workspace/follow',
+  'session/control', 'session/list', 'session/modelCatalog', 'pluginEvents/follow',
+  'productAnalytics/enabled', 'productAnalytics/report', 'productAnalytics/watchPolicy',
+  'speech/cancelPreparation', 'speech/catalog', 'speech/follow', 'speech/prepare', 'speech/transcribe',
+  'workspace/follow',
 ] as const
 /** Session reads the served page's startup and render paths need; see {@link GLOBAL_ACTIONS}. */
 const SESSION_READS = [
-  'commands/list', 'fileUploads/upload', 'goals/get', 'session/attachment', 'session/control',
+  'commands/list', 'fileReferences/list', 'fileUploads/upload', 'goals/get', 'goals/edit',
+  'goals/clear', 'goals/complete', 'goals/create', 'goals/pause', 'goals/resume', 'job/list', 'job/follow',
+  'session/attachment', 'session/control',
   'session/events', 'session/follow', 'session/list', 'session/observeEvent', 'session/observeProjections',
   'session/observeState', 'session/page', 'session/projections', 'session/state', 'session/wait',
-  'skills/list', 'toolResults/watch', 'workspace/follow',
+  'sessionReferenceResolver/candidates', 'userQuestions/answer', 'userQuestions/attachWait',
+  'skills/list', 'toolResults/watch',
+  'workspace/follow',
 ] as const
 const SESSION_EVENTS = [
   'event:api-session/activity', 'event:api-session/added', 'event:api-session/error',
@@ -124,9 +133,9 @@ function facts(
         : { ok: false, code: 'fork-ceiling-uninstalled', message: 'no ceiling' },
     },
     workspaces: () => [
-      { id: WorkspaceId('shared-ws'), sessionIds: [SessionId('private'), SessionId('source')] },
-      { id: WorkspaceId('child-ws'), sessionIds: [SessionId('own-child')] },
-      { id: WorkspaceId('private-ws'), sessionIds: [SessionId('private'), SessionId('other-child')] },
+      { id: brandString<WorkspaceId>('shared-ws'), sessionIds: [brandString<SessionId>('private'), brandString<SessionId>('source')] },
+      { id: brandString<WorkspaceId>('child-ws'), sessionIds: [brandString<SessionId>('own-child')] },
+      { id: brandString<WorkspaceId>('private-ws'), sessionIds: [brandString<SessionId>('private'), brandString<SessionId>('other-child')] },
     ],
     offeredPlugins: () => capabilities.catalog,
   }
@@ -199,6 +208,48 @@ describe('share reader access policy', () => {
     // Only the reader's own fork may be renamed; the shared Session keeps fork as its one Session verb.
     expect(decide('session/rename', session('own-child'))).toEqual(ALLOW)
     expect(decide('session/rename', session('other-child'))).toEqual(deny('liveshare/read-only'))
+  })
+
+  it('lets the reader manage the goal of every Session it can see, and no other', async () => {
+    const { decide, grants } = await fixture()
+    // A goal is Session data, so every goal endpoint follows visibility alone; `/goal` reaches the same
+    // service from inside the owner Host, so the endpoint and the command answer the same way.
+    const goalWrites = ['goals/create', 'goals/edit', 'goals/pause', 'goals/resume', 'goals/complete', 'goals/clear'] as const
+    for (const id of ['source', 'own-child', 'revoked-child']) {
+      for (const action of goalWrites) {
+        expect(decide(action, session(id), { request: { objective: 'finish the task' } })).toEqual(ALLOW)
+      }
+    }
+    for (const id of ['private', 'other-child', 'foreign-child']) {
+      for (const action of goalWrites) {
+        expect(decide(action, session(id), { request: { objective: 'finish the task' } }))
+          .toEqual(deny('liveshare/read-only'))
+      }
+    }
+    const source = grants().find(grant => grant.resource.kind === 'session' && grant.resource.id === 'source')?.actions ?? []
+    for (const action of goalWrites) expect(source).toContain(action)
+    // The global resource keeps refusing the same endpoints: a goal belongs to one Session.
+    for (const action of goalWrites) expect(decide(action, GLOBAL, CALL)).toEqual(deny('liveshare/read-only'))
+  })
+
+  it.each(['view', 'write'] as const)('keeps the goal writable at the %s tier', async (mode) => {
+    const { decide } = await fixture({ mode })
+    for (const action of ['goals/create', 'goals/pause', 'goals/resume', 'goals/complete', 'goals/clear'] as const) {
+      expect(decide(action, session('source'), CALL)).toEqual(ALLOW)
+    }
+  })
+
+  it('refuses the preset write endpoint on every Session the reader can see', async () => {
+    const { decide, grants } = await fixture()
+    // The `/permission` line and this endpoint are the two routes to the same knob write; the policy
+    // refuses the endpoint itself so a reader page cannot reach it with an unlisted client call.
+    for (const id of ['source', 'own-child', 'revoked-child']) {
+      expect(decide('permissionPresets/set', session(id), { request: { sessionId: id, preset: 'danger-full-access' } }))
+        .toEqual(deny('liveshare/read-only'))
+    }
+    expect(decide('permissionPresets/set', session('private'), { request: { sessionId: 'private', preset: 'danger-full-access' } }))
+      .toEqual(deny('liveshare/read-only'))
+    expect(grants().flatMap(grant => grant.actions)).not.toContain('permissionPresets/set')
   })
 
   it('binds every source Session a multi-source share carries', async () => {
@@ -341,7 +392,7 @@ describe('share reader access policy', () => {
 
   it('opens the reader with grants on global, the shared Session, its own forks, and the Workspaces holding them', async () => {
     const { grants } = await fixture()
-    const reads = [...SESSION_READS]
+    const reads = [...SESSION_READS].sort()
     expect(grants()).toEqual([
       { resource: GLOBAL, actions: [...GLOBAL_ACTIONS].sort() },
       { resource: session('source'), actions: [...reads, 'session/cancel', 'session/fork', 'session/prompt'].sort() },
@@ -369,7 +420,8 @@ describe('share reader access policy', () => {
     expect(await sourceActions({ mode: 'write' })).toEqual(driving)
     // Without the confined layer the Session is not driven, and without the switch it is not forked.
     expect(await sourceActions({ confined: false })).toEqual([...SESSION_READS, 'session/fork'].sort())
-    expect(await sourceActions({ allowsFork: false })).toEqual([...SESSION_READS, 'session/cancel', 'session/prompt'].sort())
+    expect(await sourceActions({ allowsFork: false }))
+      .toEqual([...SESSION_READS, 'session/cancel', 'session/prompt'].sort())
     const { grants } = await fixture({ mode: 'view' })
     expect(grants().find(grant => grant.resource.kind === 'session' && grant.resource.id === 'own-child')?.actions)
       .toEqual([...SESSION_READS, 'session/cancel', 'session/fork', 'session/prompt', 'session/rename'].sort())
@@ -409,13 +461,40 @@ describe('viewer page startup contract', () => {
   it('keeps the owner’s own surfaces refused and out of the reader’s snapshot', async () => {
     const { decide, grants } = await fixture()
     const ownerOnly = ['account/watch', 'account/getNotifications', 'account/getNotificationContent', 'account/reportNotificationEvent',
-      'job/list', 'job/follow', 'settings/describe',
+      'settings/describe',
       'credentials/describe', 'pluginManager/listPlugins', 'schedule/catalog', 'schedule/create',
       'schedule/deliveryLimits', 'schedule/deleteInactive', 'schedule/edit', 'schedule/history',
       'schedule/list', 'schedule/run', 'schedule/view', 'agentTeams/setEnabled'] as const
     for (const action of ownerOnly) expect(decide(action, GLOBAL)).toEqual(deny('liveshare/read-only'))
     const granted = new Set(grants().flatMap(grant => [...grant.actions]))
     for (const action of ownerOnly) expect(granted.has(action)).toBe(false)
+  })
+
+  it.each(['view', 'write'] as const)('keeps owner reading reminders private for a %s share', async (mode) => {
+    const { decide, grants } = await fixture({ mode })
+    const granted = new Set(grants().flatMap(grant => [...grant.actions]))
+    for (const action of ['sessionStatus/follow', 'sessionStatus/mark'] as const) {
+      for (const resource of [GLOBAL, session('source'), session('own-child')]) {
+        expect(decide(action, resource)).toEqual(deny('liveshare/read-only'))
+      }
+      expect(granted.has(action)).toBe(false)
+    }
+  })
+
+  it('classifies every listed action for the resource its role binds', () => {
+    // A list entry the classification files under another resource kind names an action this role never
+    // binds, so the suite would keep passing while the page silently reads the read-only fact.
+    // A few actions appear in both lists: their classification names the resource the deciding role binds,
+    // so each list admits the classes whose resource that role holds.
+    for (const action of GLOBAL_ACTIONS) {
+      expect(['reader-global-read', 'reader-session-read', 'reader-workspace-read'])
+        .toContain(VIEWER_ENDPOINT_CLASSES[action])
+    }
+    for (const action of SESSION_READS) {
+      // The session role binds workspace actions on the Sessions' Workspaces too, so a list entry may be
+      // filed under any reader class; what it may never be is owner-only or a global bypass.
+      expect(VIEWER_ENDPOINT_CLASSES[action]).toMatch(/^reader-/)
+    }
   })
 
   it('grants every action the served page’s startup and render paths need', async () => {

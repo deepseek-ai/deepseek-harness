@@ -6,6 +6,7 @@
  * the style bookkeeping whose disposal the runner owns.
  */
 import * as React from 'react'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { describe, expect, it, vi } from 'vitest'
 import type { CordisDynamicPluginId } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -16,7 +17,7 @@ import {
 } from '../src/client/evaluator.ts'
 import type { DynamicCordisClosureEnv, DynamicCordisEvaluatedPlugin } from '../src/client/evaluator.ts'
 
-const ID = 'dyn-1' as CordisDynamicPluginId
+const ID = brandString<CordisDynamicPluginId>('dyn-1')
 
 function env(overrides: Partial<DynamicCordisClosureEnv> = {}): DynamicCordisClosureEnv {
   return {

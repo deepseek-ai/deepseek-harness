@@ -14,17 +14,18 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import {
-  SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
+  SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { sessionFixtureName } from '@deepseek-ai/dsh-session-snapshot'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import { launchWebScaffold, parseSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage, openSettings } from './support.ts'
+import { newEnglishPage, openSettings, showSessionPanel } from './support.ts'
 
 declare global {
   interface Window {
@@ -277,7 +278,7 @@ function replyEntry(marker: string): ReplayEntry {
 function liveLongTurn(prefix: string): ReplayEntry[] {
   const entries: ReplayEntry[] = []
   for (let step = 1; step <= LIVE_STEPS; step++) {
-    const id = ToolCallId(`${prefix.toLowerCase()}-read-${step}`)
+    const id = brandString<ToolCallId>(`${prefix.toLowerCase()}-read-${step}`)
     const args = JSON.stringify({ file_path: READ_FILE })
     entries.push({ kind: 'chunks', chunks: [
       ...textChunks(paragraphs(`${prefix}_STEP_${step}`, 10, `${prefix} narration for step ${step}, paragraph`)),
@@ -348,12 +349,22 @@ async function startTrace(page: Page, root: string): Promise<void> {
     if (read === undefined) throw new Error('fold measurement is not installed')
     const samples: Geometry[] = []
     let frame = 0
+    let pending = false
+    const observer = new ResizeObserver(() => {
+      if (!pending) return
+      pending = false
+      // A scrollport or its composer can remount between rendering opportunities.
+      if (document.querySelector(selector)?.querySelector('[data-composer-seat]')) samples.push(read(selector))
+    })
     const tick = (): void => {
-      // A scrollport can remount between frames; that frame contributes no sample.
-      try { samples.push(read(selector)) } catch (_remounting) { /* skip this frame */ }
+      // A fresh observation is delivered after *all* rAF writers, before paint, even when the root box is unchanged.
+      // Reading here instead can count a gap that the fold's later callback closes in the very same frame.
+      pending = true
+      observer.unobserve(document.documentElement)
+      observer.observe(document.documentElement)
       frame = requestAnimationFrame(tick)
     }
-    window.foldProbe = { samples, stop: () => { cancelAnimationFrame(frame) } }
+    window.foldProbe = { samples, stop: () => { cancelAnimationFrame(frame); observer.disconnect() } }
     frame = requestAnimationFrame(tick)
   }, root)
 }
@@ -525,7 +536,7 @@ function sessionKey(scenario: Case): string {
 }
 
 async function createChild(scaffold: WebScaffold, parentId: SessionId, scenario: Case): Promise<SessionId> {
-  const childId = SessionId(`${sessionKey(scenario)}-child`)
+  const childId = brandString<SessionId>(`${sessionKey(scenario)}-child`)
   const createdAt = Date.now() - 30_000
   const header: SessionHeader = {
     version: SESSION_FORMAT_VERSION, id: childId, createdAt, isSeeded: false, cwd: scaffold.workspaceCwd,
@@ -598,7 +609,7 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   await page.addInitScript(installMeasure)
   await page.setViewportSize(scenario.surface === 'main' ? { width: 1280, height: 720 } : { width: 1680, height: 900 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  const sessionId = SessionId(sessionKey(scenario))
+  const sessionId = brandString<SessionId>(sessionKey(scenario))
   if (scenario.surface === 'main') {
     const fixture = seededFixture(scenario.id, scenario.bodyParagraphs)
     await seedSession(scaffold, fixture.log, sessionId)
@@ -620,10 +631,8 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await openSessionBySearch(page, parentFixture.markers.user(1))
   await choosePreferences(page, scenario)
-  const trigger = page.getByRole('button', { name: '1 subagent', exact: true })
-  await trigger.waitFor({ timeout: 15_000 })
-  await trigger.hover()
-  const openAside = page.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
+  const panel = await showSessionPanel(page)
+  const openAside = panel.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
     .getByRole('button', { name: /^Open .+ in sidebar$/u })
   await expect.poll(() => openAside.count()).toBe(1)
   await openAside.click()
@@ -849,12 +858,13 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
       try {
         world = await openWorld(browser, scenario, replayDir)
         const { afterFold, afterTurn, samples, anchors } = await run(world, scenario)
-        const transient = samples.filter(sample => sample.maxGap > BLANK_LIMIT)
+        const transient = samples.flatMap((sample, frame) => sample.maxGap > BLANK_LIMIT
+          ? [{ frame, gap: Math.round(sample.maxGap), at: Math.round(sample.gapAt), collapsing: sample.collapsing }] : [])
         const summary = {
           id: scenario.id, landing: scenario.landing, before: samples[0] === undefined ? null : rounded(samples[0]),
           afterFold: rounded(afterFold), afterTurn: rounded(afterTurn), anchors,
           peakGap: Math.round(Math.max(0, ...samples.map(sample => sample.maxGap))),
-          framesOverLimit: transient.length, frames: samples.length,
+          framesOverLimit: transient.length, firstOverLimit: transient.slice(0, TRANSIENT_FRAMES + 1), frames: samples.length,
           peakSpacer: Math.round(Math.max(0, ...samples.map(sample => sample.spacer))),
         }
         const evidence = async (): Promise<void> => {
@@ -865,7 +875,10 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
         // Per-frame evidence is written for failures, or for every case with FOLDMX_EVIDENCE=1.
         if (process.env.FOLDMX_EVIDENCE === '1') await evidence()
         else onTestFailed(evidence)
-        if (scenario.origin === 'parent-message' || scenario.origin === 'steer') {
+        expect(samples.length, 'post-layout frame samples').toBeGreaterThan(0)
+        if (scenario.anchorFolds) {
+          expect.soft(samples.some(sample => sample.collapsing), 'sampled a closing row during the reader fold').toBe(true)
+        } else if (scenario.origin === 'parent-message' || scenario.origin === 'steer') {
           expect.soft(samples.some(sample => sample.collapsing), 'a control case folds nothing').toBe(false)
         }
         if (scenario.roomUntilReply !== true) {
@@ -899,6 +912,47 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
 export {}
 
 describe('web e2e: fold blank measurement', () => {
+  it('counts gaps left by the frame writers, including consecutive frames with the same gap', async () => {
+    const browser = await chromium.launch()
+    try {
+      const page = await browser.newPage()
+      await page.setContent(`<div id="viewport" style="display:flex;flex-direction:column">
+        <div data-chat-flow-key="a" style="height:20px"></div>
+        <div data-chat-flow-key="b" style="height:20px"></div>
+        <div data-composer-seat style="height:20px"></div>
+      </div>`)
+      await page.evaluate(installMeasure)
+      // Register an early writer before the probe and a late writer after it, all on the browser's frame clock.
+      const drive = await page.evaluateHandle(() => {
+        const row = document.querySelector<HTMLElement>('[data-chat-flow-key="b"]')!
+        let active = false
+        let earlyFrame = 0
+        const early = (): void => {
+          if (active) row.style.marginTop = '240px'
+          earlyFrame = requestAnimationFrame(early)
+        }
+        earlyFrame = requestAnimationFrame(early)
+        return () => new Promise<void>((done) => {
+          active = true
+          const gaps = [0, 180, 180, 0]
+          let index = 0
+          const late = (): void => {
+            row.style.marginTop = `${gaps[index++]}px`
+            if (index < gaps.length) requestAnimationFrame(late)
+            else { cancelAnimationFrame(earlyFrame); requestAnimationFrame(() => { done() }) }
+          }
+          requestAnimationFrame(late)
+        })
+      })
+      await startTrace(page, '#viewport')
+      await drive.evaluate(start => start())
+      const samples = await stopTrace(page)
+      expect(samples.filter(sample => sample.maxGap > BLANK_LIMIT).map(sample => sample.maxGap)).toEqual([180, 180])
+    } finally {
+      await browser.close()
+    }
+  })
+
   it('skips a band between fully transparent rows and counts a band beside a visible row', async () => {
     const browser = await chromium.launch()
     try {

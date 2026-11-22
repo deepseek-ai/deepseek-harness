@@ -24,7 +24,7 @@ def test_account_provider_signout_snapshot(tmp_path: Path) -> None:
         model='deepseek-v4-flash',
         env={'DSH_TELEMETRY_DISABLED': '1', 'DSH_SNAPSHOT': 'replay'},
     ) as harness:
-        result = harness.run('Reply with exactly: SDK snapshot')
+        result = harness.run('Reply with exactly: SDK snapshot', time_zone='UTC')
     ending = next(event for event in reversed(result.events) if event['type'] == 'turn/end')
     actual = {
         'final_response': result.final_response,

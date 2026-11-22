@@ -30,7 +30,7 @@ export function VoiceSetupDialog({ open, kind, onDismiss, onOpenDetails, onSignI
   const offersSignIn = kind === 'sign-in' || kind === 'install-or-sign-in'
   const signIn = offersSignIn && onSignIn !== undefined
   const details = onOpenDetails !== undefined && kind !== 'sign-in'
-  return <Modal open={open} title={t(TITLE[kind])} closeLabel={t('cancel')} onClose={onDismiss}
+  return <Modal open={open} title={t(TITLE[kind])} closeLabel={t('cancel')} onClose={onDismiss} description={t(BODY[kind])}
     footer={<>
       {kind === 'sign-in' && onUseLocal !== undefined
         ? <Button variant="ghost" onClick={onUseLocal}>{t('useLocal')}</Button>
@@ -40,7 +40,6 @@ export function VoiceSetupDialog({ open, kind, onDismiss, onOpenDetails, onSignI
       </Button>}
       {signIn && <Button variant="primary" data-modal-autofocus onClick={onSignIn}>{t('signIn')}</Button>}
     </>}>
-    <p>{t(BODY[kind])}</p>
-    {offersSignIn && !signIn && <p>{t('signInFromSettings')}</p>}
+    {offersSignIn && !signIn ? <p>{t('signInFromSettings')}</p> : undefined}
   </Modal>
 }

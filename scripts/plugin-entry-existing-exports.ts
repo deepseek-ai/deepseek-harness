@@ -8,7 +8,7 @@
  */
 export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-acp-app': ['ACP_APP_STARTUP_SERVICE'],
-  '@deepseek-ai/dsh-action-cards': ['Config', 'isPluginStopping'],
+  '@deepseek-ai/dsh-action-cards': ['isPluginStopping'],
   '@deepseek-ai/dsh-agent': [
     'AgentModel', 'agentCarrier', 'agentEvents', 'assembleContextFor', 'emitAgentEvent', 'foldConsumedWork',
     'installModelSelection', 'modelSelectionProjectionDefinition',
@@ -36,7 +36,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'API_PATH', 'CONNECT_PATH', 'Peer', 'RpcId', 'clientRequestSchema', 'rpcErrorSchema', 'rpcIdSchema',
     'rpcMessageSchema', 'rpcResultSchema', 'serverResponseSchema', 'transportError',
   ],
-  '@deepseek-ai/dsh-client-hmr': ['EVENTS_ENDPOINT'],
   '@deepseek-ai/dsh-client-locale': ['LOCALE_IDS', 'LOCALE_PREFERENCE_FIELD', 'LOCALE_SETTINGS_NAMESPACE'],
   '@deepseek-ai/dsh-client-modules': ['bootInjections', 'orderByModuleGraph', 'stripClientSuffix'],
   '@deepseek-ai/dsh-client-ui-chat': [
@@ -60,22 +59,14 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'CREDENTIALS_FILENAME', 'DOCUMENT_VERSION', 'parseCredentialsDocument', 'renderFlatLayoutMigration', 'resolveSpec',
   ],
   '@deepseek-ai/dsh-cua': ['CuaConfig', 'installCua'],
+  '@deepseek-ai/dsh-cua-macos': ['GUIDANCE'],
   '@deepseek-ai/dsh-experimental-claude-code-mods': [
     'DEFAULT_TOOL_ALIASES', 'KNOWN_EVENTS', 'MODS_API_VERSION', 'SERVED_EVENTS', 'defineMod',
   ],
-  '@deepseek-ai/dsh-experimental-cua-macos': ['GUIDANCE'],
   '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
   '@deepseek-ai/dsh-experimental-inspector': ['resolveInspectorOptions', 'startInspector'],
-  '@deepseek-ai/dsh-experimental-ptc-runtime-python': [
-    'checkDoneValue', 'detachResidual', 'encodeJsonPlain', 'hasNonLosslessNumber', 'hasUnsafeIntegerToken',
-    'hostFrameParseCeiling', 'logTruncationMarker', 'readProcessStart', 'resolvePythonBin', 'validateChildFrame',
-  ],
   '@deepseek-ai/dsh-experimental-worktree': [
     'CREATED_RECORD', 'createdWorktreeSchema', 'generatedWorktreeName', 'worktreeProjection',
-  ],
-  '@deepseek-ai/dsh-file-reference-local': [
-    'DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES', 'DEFAULT_FILE_SEARCH_MAX_ENTRIES', 'DEFAULT_FILE_SEARCH_MAX_RESULTS',
-    'FILE_REFERENCE_PROMPT', 'WorkspaceFileSearch', 'activeAtToken', 'formatFileMention',
   ],
   '@deepseek-ai/dsh-goal': [
     'GOAL_CHANGE_VERSION', 'GoalId', 'applyGoalProjection', 'decodeGoalChange', 'foldGoal', 'goalChangeRef',
@@ -98,35 +89,25 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'CONTEXT_SUMMARY_MAX_CHARS', 'CONTEXT_WINDOW_EXCEEDED_CODE', 'EMPTY_RESPONSE_CODE', 'IMAGE_OFFLOAD_REQUIRED_CODE',
     'INVALID_CREDENTIAL_CODE', 'LLM_FAILURE_CODES', 'LlmAdapter', 'LlmAttemptId', 'MessageId', 'ProviderRequestId',
     'QUOTA_EXCEEDED_CODE', 'RETRY_CODE_CHOICES', 'ReasoningEffortId', 'RetryPolicySchema', 'ToolCallId',
-    'assembleAssistantStream', 'assertUsableApiKey', 'assistantStreamChunks', 'assistantStreamFirstTokenTime',
+    'assembleAssistantStream', 'assistantStreamChunks', 'assistantStreamFirstTokenTime',
     'assistantStreamHasVisibleContent', 'assistantStreamHasVisibleText', 'attributionHeaders', 'boundContextSummary',
     'callConfigEquals', 'chunkHasVisibleText', 'contentHasFile', 'contentHasImage', 'createAssistantMessage',
     'createDeveloperMessage', 'createMessage', 'createSystemMessage', 'createToolResultMessage', 'createUserMessage',
     'errorChain', 'expandAssistantStream', 'fileHandleText', 'freezeMessage', 'isAgentLoopRequest',
     'isContextWindowExceededError', 'isHarnessError', 'isQuotaExceededError', 'isTokenDelta', 'isVisibleChunk',
-    'joinAssistantStreamText', 'lastAssistantStreamChunk', 'markAgentLoopRequest', 'normalizeApiKey',
+    'joinAssistantStreamText', 'lastAssistantStreamChunk', 'markAgentLoopRequest',
     'offloadedImageText', 'projectFilesToText', 'projectImagesForTextModel', 'projectOffloadedImages',
     'projectToolUpdates', 'requestImageHandleText', 'requiredImageOffload', 'resolveImageAttachmentAccess',
     'resolveRetryPolicy', 'runFirstTokenTime', 'runFirstVisibleTime', 'textOnlyImageText', 'userAgent',
   ],
-  '@deepseek-ai/dsh-llm-deepseek-account': ['plainAccountOptions', 'resolveAccountOptions'],
-  '@deepseek-ai/dsh-llm-deepseek-api-key': ['plainOptions', 'resolveAdapterOptions'],
-  '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'recordKeyFor', 'supportedProtocols'],
+  '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'supportedProtocols'],
   '@deepseek-ai/dsh-llm-replay': [
     'deriveReplayScript', 'installLlmReplay', 'loadReplayScript', 'loadSessionScripts', 'parseSessionHeader',
     'parseSessionLog', 'prepareSessionSnapshotFixtureForComparison', 'resolveScriptedEntry',
   ],
   '@deepseek-ai/dsh-llm-retry': ['RetryId'],
   '@deepseek-ai/dsh-lsp': ['LspProviderId', 'finalExtension'],
-  '@deepseek-ai/dsh-lsp-stdio': [
-    'LspConnection', 'LspInstance', 'MessageDecoder', 'canonicalizeWorkspace', 'encodeMessage',
-    'negotiatePositionEncoding', 'normalizeHover', 'normalizeLocations', 'readHostSource', 'requestMethod',
-    'supportsOperation', 'supportsTransientOpen',
-  ],
-  '@deepseek-ai/dsh-mcp-client': [
-    'ReconnectSchema', 'SERVER_NAME_PATTERN', 'assertTemplateSyntax', 'connectionStatusOf', 'createMcpToolDefinition',
-    'probeServer', 'resolveReconnectPolicy',
-  ],
+  '@deepseek-ai/dsh-mcp-client': ['createMcpToolDefinition'],
   '@deepseek-ai/dsh-office-kit': ['Config', 'OfficeKitGeneration', 'OfficeKitKey', 'OfficeSourceKey'],
   '@deepseek-ai/dsh-permission-presets': ['AUTO_PRESET', 'CUSTOM_PRESET'],
   '@deepseek-ai/dsh-persona': ['PERSONA_PREFIX_SECTION', 'PERSONA_SUFFIX_SECTION'],
@@ -154,6 +135,8 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'deriveEventMessage', 'encodeSeqRanges', 'foldRequestHeader', 'foldSurface', 'headerEquals',
     'interruptedTurnClosers', 'isAppendSurfaceEvent', 'isReplacementSurfaceEvent', 'isSurfaceEligibleType',
     'isSurfaceEvent', 'pluginRecordOf', 'snapshotSessionEvent',
+    // SessionData v2 transition: temporary exemption until these values move to a subpath export.
+    'buildSessionHeader', 'needsInheritedSeedMarker', 'validateSessionLog',
   ],
   '@deepseek-ai/dsh-session-log-deepseek': ['acceptedThrough'],
   '@deepseek-ai/dsh-session-log-export': [
@@ -211,9 +194,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-terminal-panel': ['GUIDANCE'],
   '@deepseek-ai/dsh-tool-call-timeout-policy': ['TOOL_TIMEOUT'],
   '@deepseek-ai/dsh-tool-executor-native': ['NativeToolExecutor'],
-  '@deepseek-ai/dsh-tool-executor-ptc': [
-    'PtcExecutor', 'jsonSchemaToPy', 'jsonSchemaToTs', 'renderToolsSdk', 'renderToolsSdkPy',
-  ],
+  '@deepseek-ai/dsh-tool-executor-ptc': ['PtcExecutor', 'jsonSchemaToTs', 'renderToolsSdk'],
   '@deepseek-ai/dsh-tool-fs-search': [
     'GLOB_MAX_RESULTS', 'GLOB_VCS_EXCLUDES', 'GREP_MAX_LINE_BYTES', 'GREP_MAX_MATCHES', 'RAW_OUTPUT_MAX_BYTES',
     'SEARCH_GRACE_MS', 'SEARCH_META_MAX_BYTES', 'SEARCH_STDERR_MAX_BYTES', 'SEARCH_TIMEOUT_MS', 'applyGlobTool',

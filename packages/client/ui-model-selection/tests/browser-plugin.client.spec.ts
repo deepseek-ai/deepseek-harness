@@ -17,7 +17,8 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import type { CommandContribution, PopupSelectSpec, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -100,7 +101,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         model: payload.model,
         ...payload.reasoningEffort === undefined
           ? {}
-          : { reasoningEffort: ReasoningEffortId(payload.reasoningEffort) },
+          : { reasoningEffort: brandString<ReasoningEffortId>(payload.reasoningEffort) },
       }
       projections.get(payload.sessionId)?.set({ lastUsed: null, next: selected })
       return Promise.resolve({ ok: true as const, value: { selected } })
@@ -244,7 +245,6 @@ describe('ui-model-selection dual entry', () => {
     ])
     expect(options.map(option => option.group?.label)).toEqual(['DeepSeek', 'DeepSeek', 'External Provider'])
     expect(options.every(option => option.detail === undefined)).toBe(true)
-    expect(b.popup().searchMode).toBe('fuzzy-label')
     expect(options[0]?.active).toBe(true)
     expect(options[1]?.active).toBeUndefined()
     expect(b.popup().searchLabels?.()).toEqual(locale === 'zh'
@@ -477,12 +477,12 @@ describe('ui-model-selection dual entry', () => {
   it('retains saved effort for existing and new sessions after credentials disappear', async () => {
     const b = await bench()
     try {
-      b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: ReasoningEffortId('max') })
+      b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: brandString<ReasoningEffortId>('max') })
       b.mint('existing')
       const existing = b.ctx.modelDirectories.directoryFor(sid('existing'))
       await existing.load()
       b.setProjected(sid('existing'), { lastUsed: null,
-        next: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: ReasoningEffortId('high') } })
+        next: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: brandString<ReasoningEffortId>('high') } })
       b.setRoutable(false)
       b.remote.emit('settings/document-updated', ['llm-deepseek', 1])
       expect(existing.store.getSnapshot().retainedEffort).toBe('High')
@@ -575,7 +575,7 @@ it.each([false, true])('reports accepted switches with blank=%s and no refused s
   const scope = b.mint('analytics', blank)
   try {
     const face = b.seat().inject!(sid('analytics'))
-    await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: ReasoningEffortId('max') })
+    await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: brandString<ReasoningEffortId>('max') })
     expect(b.track).toHaveBeenCalledWith('model_switch', { ...blank ? {} : { session_id: 'analytics' }, switch_from: 'deepseek-official/deepseek-v4-flash', switch_to: 'deepseek-official/deepseek-v4-pro' })
     b.track.mockClear()
     await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' })

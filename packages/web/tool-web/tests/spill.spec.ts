@@ -6,6 +6,7 @@
  * tool-specific spill code, and the model-facing text changes ONLY by the
  * deliberate spill notice (the full formatted result lands in the spill file).
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -17,8 +18,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -49,6 +51,7 @@ beforeEach(async () => {
   spillRoot = mkdtempSync(join(tmpdir(), 'dsh-spill-web-'))
 
   ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -73,8 +76,8 @@ afterEach(async () => {
  * owner's step admission because web_fetch is a conditional registration.
  */
 async function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
-  const agent = { session: { header: { id: SessionId('web-sess') } } }
-  const exec = { callId: ToolCallId('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as unknown as ToolExecution
+  const agent = { session: { header: { id: brandString<SessionId>('web-sess') } } }
+  const exec = { callId: brandString<ToolCallId>('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as ToolExecution
   if (exec.agent === undefined) throw new Error('the spill fixture call needs its session owner')
   const toolSet = await ctx.tools.resolve({ agent: exec.agent, modelSelection: { provider: 'test', model: 'test' }, signal: exec.signal })
   try {

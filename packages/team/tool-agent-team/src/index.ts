@@ -4,10 +4,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import { TeamTaskId } from '@deepseek-ai/dsh-agent-team'
-import type { TeamTaskView } from '@deepseek-ai/dsh-agent-team'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
@@ -82,7 +82,7 @@ type NamedTaskView = Omit<TeamTaskView, 'ownerId' | 'ownerName'> & { readonly ow
 /** Recover the exact caller guaranteed by conditional Team-tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
   /* v8 ignore next 2 -- The Team condition rejects callers without an Agent before execution. */
-  if (agent === undefined) throw new Error(`${toolName} requires a calling Agent`)
+  if (agent === undefined) throw new ToolContextUnavailableError(`${toolName} requires a calling Agent`)
   return agent
 }
 
@@ -111,6 +111,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   ctx.systemPrompt.section({
     name: 'team:policy',
+    retirement: 'The shared task board is no longer available. Its instructions no longer apply.',
     order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
     text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
   })
@@ -124,7 +125,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       write_scopes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Advisory workspace-relative file or directory prefixes this task expects to modify.',
+        description: 'Advisory file or directory prefixes relative to the workspace root; no absolute paths or ".." segments. Omit or pass [] if no workspace files will be modified.',
       },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
@@ -133,7 +134,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const task = await ctx.agentTeams.createTask(caller, {
         subject: args.subject,
         description: args.description,
-        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(brandString<TeamTaskId>) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
       }, exec.signal)
       return withOwnerName(task)
@@ -156,13 +157,15 @@ export function apply(ctx: Context, config: Config = {}): void {
       limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
     },
     output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
+    // Board reads project the Team Lead journal without appending to it.
+    isConcurrencySafe: () => true,
     async execute(args, exec) {
       const cursor = args.cursor ?? 0
       const limit = args.limit ?? 50
-      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
+      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new ToolArgsError(['cursor must be a non-negative safe integer'])
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ToolArgsError(['limit must be an integer from 1 through 100'])
       const caller = callingAgent(exec.agent, 'team_task_list')
-      if (args.owner !== undefined && args.unowned !== undefined) throw new Error('owner and unowned filters cannot be combined')
+      if (args.owner !== undefined && args.unowned !== undefined) throw new ToolArgsError(['owner and unowned filters cannot be combined'])
       const owner = args.owner === undefined
         ? undefined
         : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
@@ -186,9 +189,11 @@ export function apply(ctx: Context, config: Config = {}): void {
       task_id: { type: 'string', required: true, description: 'Shared task id.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
+    // Board reads project the Team Lead journal without appending to it.
+    isConcurrencySafe: () => true,
     execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_get')
-      const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+      const task = ctx.agentTeams.getTask(caller, brandString<TeamTaskId>(args.task_id))
       return Promise.resolve(withOwnerName(task))
     },
   }), { when: ({ agent }) => enabled(agent) })
@@ -208,20 +213,20 @@ export function apply(ctx: Context, config: Config = {}): void {
       subject: { type: 'string', description: 'Replacement title for edit.' },
       description: { type: 'string', description: 'Replacement details for edit.' },
       blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
-      write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
+      write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.' },
       owner: { type: 'string', description: 'Agent name of the root or any continuable descendant for root-only reassign; omit to unassign.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
     async execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_update')
-      const taskId = TeamTaskId(args.task_id)
+      const taskId = brandString<TeamTaskId>(args.task_id)
       const task = await ctx.agentTeams.updateTask(caller, {
         taskId,
         expectedRevision: args.expected_revision,
         action: args.action,
         ...args.subject === undefined ? {} : { subject: args.subject },
         ...args.description === undefined ? {} : { description: args.description },
-        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(brandString<TeamTaskId>) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
         ...args.owner === undefined ? {} : { owner: await ctx.subagents.resolveName(caller, args.owner, exec.signal) },
       }, exec.signal)

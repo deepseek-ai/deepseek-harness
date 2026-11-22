@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": Queue item to remove
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -45,9 +46,9 @@
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}} Inactive Goal Keep working after Stop
-- button "Resume goal"
 - button "Edit goal"
 - button "Clear goal"
+- button "Resume goal"
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write

@@ -23,22 +23,30 @@ export const REMOTES_PACKAGE = '@deepseek-ai/dsh-api-remotes'
 
 const PREFIX = 'remote.'
 
+/** Namespaces a roster package mounts through its own generated Remote client; a proxy would collide with that mount. */
+const SELF_MOUNTED_NAMESPACES: Readonly<Record<string, string>> = {
+  pluginEvents: '@deepseek-ai/dsh-client-hmr',
+  remoteConnection: '@deepseek-ai/dsh-client-remote-connection',
+}
+
 /**
  * Namespaces to provide: every `remote.<ns>` a roster module injects, plus the
- * namespace of every endpoint the mock has a rule for.
- * @param modules - loaded roster modules.
+ * namespace of every endpoint the mock has a rule for, except a namespace that
+ * a roster package mounts itself.
+ * @param modules - loaded roster modules keyed by package name.
  * @param mock - the spec's mock.
  * @returns sorted namespace names.
  */
-export function remoteNamespacesOf(modules: Iterable<ClientPluginModule>, mock: RemoteMock): readonly string[] {
+export function remoteNamespacesOf(modules: ReadonlyMap<string, ClientPluginModule>, mock: RemoteMock): readonly string[] {
   const names = new Set<string>()
-  for (const module of modules) {
+  for (const module of modules.values()) {
     for (const service of injectNames(module.inject)) if (service.startsWith(PREFIX)) names.add(service.slice(PREFIX.length))
   }
   for (const endpoint of mock.endpoints()) {
     const slash = endpoint.indexOf('/')
     if (slash > 0 && !endpoint.startsWith('$')) names.add(endpoint.slice(0, slash))
   }
+  for (const [namespace, owner] of Object.entries(SELF_MOUNTED_NAMESPACES)) if (modules.has(owner)) names.delete(namespace)
   return [...names].sort()
 }
 

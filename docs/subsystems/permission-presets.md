@@ -72,6 +72,8 @@ interface PresetOption {
 
 `set(session, name)` resolves the preset (unknown names throw), runs Auto admission when applicable, appends a log-only `permission/preset` event unless `name` is already the effective preset, then writes each knob through its own setter — `setSandboxMode` from [dsh-sandbox-policy](../../packages/sandbox/sandbox-policy) and `setApprovalPolicy` from [dsh-user-approval](../../packages/interaction/user-approval) — only when that knob's effective value changes. The selection event precedes the knob events in the same turn, and re-selecting the effective preset appends nothing.
 
+The `permissionPresets/set` Remote (`setPreset`) is the write's Remote face: it switches one live Session through `set` and declares that Session as the `session` resource the Gateway decides, so access control runs before any preset is resolved.
+
 `permission/preset` is durable, log-only user intent: it stays out of the model transcript (the knob events own the model-visible consequences through their consumers), and it exists so `current()` can preserve which preset the user chose when two presets share a bundle. The `permissions` projection folds that selection with both knob events and retains the `session/end-seed` boundary used to distinguish a restored empty seed from a fresh session; replay needs no catch-up state or raw-log rescan. A restored `auto` selection requires the live Auto registration before Agent publication. The complete event declaration is in the [persistence log event catalog](../persistence-catalog.md); the method signatures are in the generated [service catalog](#ctxpermissionpresets--permissionpresetservice).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -94,6 +96,25 @@ Owns the deployment's configured permission presets, the fixed Auto integration 
  * @returns every currently selectable preset in contribution order.
  */
 @Remote('catalog') catalog(): PermissionCatalog
+
+/**
+ * Switch one live Session to another preset, opened as a Remote call so a
+ * caller's Session access is decided before any preset is resolved or any
+ * knob is written. The call's `session` resource is the Session named by
+ * `request.sessionId`, per {@link PermissionPresetSetRequest}; the session
+ * controller's resolver names it.
+ *
+ * The switch appends `permission/preset` and the changed knob events to the
+ * Session log, so persisted-only Sessions are refused: they have no live log
+ * to append to.
+ * @param request - live target Session and the preset name to switch to.
+ * @returns the Session's current selection after the switch, read the way
+ * the client reads it: the recorded preset while its bundle still matches,
+ * otherwise the first preset whose bundle matches, otherwise `custom`.
+ * @throws {RemoteError} `gateway/bad-request` for an unknown preset name or a
+ * Session this process does not hold live; neither call writes.
+ */
+@Remote({ name: 'set' }) setPreset(request: PermissionPresetSetRequest): PermissionSelection
 
 /**
  * Publish the fixed current-session Auto preset for the calling

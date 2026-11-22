@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-llm/message'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { RemoteAccessFrame, RemoteAccessGrant } from '@deepseek-ai/dsh-api-remote-access/client'
-import type { MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type {
   AssistantMessage,
   ContentBlock,
@@ -26,7 +26,7 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import {
   AssistantStreamAccumulator,
   expandAssistantStream,
@@ -49,10 +49,7 @@ import type {
 import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo/client'
-// Type-only: the brand constructor is host-side; the fixture casts at its
-// wire-fabrication boundary (the schema layer's one-cast-point posture).
-import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands/brand'
-import type { CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
+import type { CommandDefinitionId, CommandId, CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 import type { DirectoryListing as FixtureDirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
@@ -280,7 +277,7 @@ type FixtureFollowEventFrame = Exclude<FixtureFollowFrame, { type: 'snapshot' }>
 interface FixtureAssistantStreamBaseline {
   readonly revision: number
   readonly activeAttempt?: {
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly startedAfterSeq: number
     readonly turn: number
     readonly step: number
@@ -293,7 +290,7 @@ interface FixtureAssistantStreamBaseline {
 export type FixtureAssistantStreamFrame =
   | {
     readonly type: 'start'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly startedAfterSeq: SessionSeqCursor
     readonly turn: number
@@ -301,7 +298,7 @@ export type FixtureAssistantStreamFrame =
   }
   | {
     readonly type: 'chunk'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly index: number
     readonly time: number
@@ -309,7 +306,7 @@ export type FixtureAssistantStreamFrame =
   }
   | {
     readonly type: 'end'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly index: number
     readonly outcome:
@@ -431,14 +428,20 @@ export interface FixtureViewerGrant {
  * only the write answers; the read rows keep the scripted snapshot shaped like the real one.
  */
 const FIXTURE_SESSION_READS = [
-  'commands/list', 'goals/get', 'session/attachment', 'session/control', 'session/follow', 'session/list',
-  'session/page', 'session/projections', 'skills/list', 'workspace/follow',
+  'commands/list', 'fileReferences/list', 'goals/get', 'goals/edit',
+  'goals/clear', 'goals/complete', 'goals/create', 'goals/pause', 'goals/resume', 'job/list', 'job/follow',
+  'session/attachment', 'session/control', 'session/follow', 'session/list',
+  'session/page', 'session/projections', 'sessionReferenceResolver/candidates', 'skills/list',
+  'userQuestions/answer', 'userQuestions/attachWait', 'workspace/follow',
 ] as const
 
 /** Endpoint actions the owner's share policy allows a reader on the global resource. */
 const FIXTURE_GLOBAL_READS = [
   'commands/list', 'llm/listConfigurableProviders', 'llm/listProviders',
-  'session/canOpenWorkspacePath', 'session/control', 'session/list', 'session/modelCatalog', 'workspace/follow',
+  'productAnalytics/enabled', 'productAnalytics/report', 'productAnalytics/watchPolicy',
+  'speech/cancelPreparation', 'speech/catalog', 'speech/follow', 'speech/prepare', 'speech/transcribe',
+  'session/canOpenWorkspacePath', 'session/control', 'session/list', 'session/modelCatalog', 'pluginEvents/follow',
+  'workspace/follow',
 ] as const
 
 type FixtureControlFrame =
@@ -1954,8 +1957,6 @@ export interface FixtureOptions {
   dropSessionCreateResponse?: boolean
   /** Order of the two successful create frames. */
   createFrameOrder?: 'session-first' | 'workspace-first'
-  /** Announce one Agent write to `notes/demo.txt` shortly after a `workspaceFiles/changes` stream opens. */
-  fileChanges?: boolean
   /**
    * Present a fork as the reading viewer's own branch of the shared Session: the child carries the
    * branch facts a Host publishes for a viewer's fork, so the client exercises the deployed shape.
@@ -1974,16 +1975,6 @@ export interface FixtureOptions {
   /** Have one fixture turn declare workspace files for the Host desktop, as the `present` tool does. */
   presented?: boolean
 }
-
-/** File observation payload, mirrored so this Client fixture names no Host package. */
-type FixtureWorkspaceFileChange =
-  | { readonly absolutePath: string; readonly version: string }
-  | { readonly absolutePath: string; readonly absent: true }
-
-/** Host subscription acknowledgement followed by file observations. */
-type FixtureWorkspaceFileWatchFrame =
-  | { readonly kind: 'ready' }
-  | { readonly kind: 'change'; readonly change: FixtureWorkspaceFileChange }
 
 /** Inbox pump shared by both stream generators (FrameQueue pattern: ONE abort listener hung
  *  outside the loop — a per-iteration {once:true} listener never fires for non-final rounds and
@@ -2296,7 +2287,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const controlConns = new Set<StreamConn<FixtureControlFrame>>()
   const followConns = new Map<SessionId, Set<StreamConn<FixtureFollowEventFrame>>>()
   interface FixtureAttemptState {
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly startedAfterSeq: number
     readonly turn: number
     readonly step: number
@@ -2331,7 +2322,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     return revision
   }
   const beginAssistant = (sessionId: SessionId, turn: number, step: number): FixtureAttemptState => {
-    const attemptId = LlmAttemptId(`${sessionId}:fixture:${String(nextAssistantRevision(sessionId))}`)
+    const attemptId = brandString<LlmAttemptId>(`${sessionId}:fixture:${String(nextAssistantRevision(sessionId))}`)
     const lastSeq = logOf(sessionId).length - 1
     const startedAfterSeq = lastSeq < 0 ? -1 : SessionSeq(lastSeq)
     const attempt = {
@@ -2574,7 +2565,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
               ? 'Attachments cannot accompany /plan off.'
               : undefined
         if (rejection !== undefined) {
-          const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+          const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
           append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
           const result: CommandResult = { kind: 'error', text: rejection }
           append(id, { type: 'command/done', data: { commandId, ...result } })
@@ -2583,7 +2574,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }
       if (name === 'permission') {
         const preset = args.trim()
-        const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+        const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
         append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
         const spec = PERMISSION_PRESETS[preset]
         let result: CommandResult
@@ -2602,7 +2593,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return { ok: true, value: { commandId, result } }
       }
       if (name === 'goal') {
-        const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+        const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
         append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
         const objective = args.trim()
         const current = backscanGoal(logOf(id))
@@ -2636,7 +2627,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }
       const text = name === undefined ? undefined : outcomes[name]
       if (name === undefined || text === undefined) return { ok: true, value: undefined }
-      const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+      const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
       append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
       if (name === 'plan' && !running) {
         const plan = foldPlan(logOf(id))
@@ -2701,157 +2692,6 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           }
         })
       return { ok: true, value }
-    },
-  }
-
-  /**
-   * Workspace text reads under `?fixture`.
-   *
-   * The sample content is deliberately more than one shape: the panel's states
-   * (text, oversized, unreadable) are only demonstrable if the fixture can
-   * produce each of them, and a preview that can only ever succeed hides its
-   * own failure rendering.
-   */
-  // The Session workspace the replayed conversation writes into: `list` walks a
-  // fixed tree under it so the file-tree tab has directories, files, one entry
-  // of neither kind, and one cut listing to draw.
-  const WORKSPACE_FILES_ROOT = '/tmp/fixture'
-  type FixtureWorkspaceEntry = { name: string; type: 'file' | 'directory' | 'other'; size?: number }
-  const workspaceFileTree = new Map<string, FixtureWorkspaceEntry[]>([
-    ['', [
-      { name: '.gitignore', type: 'file', size: 24 },
-      { name: 'dev.sock', type: 'other' },
-      { name: 'notes', type: 'directory' },
-      { name: 'package.json', type: 'file', size: 512 },
-      { name: 'README.md', type: 'file', size: 640 },
-      { name: 'src', type: 'directory' },
-    ]],
-    ['notes', [
-      { name: 'demo.txt', type: 'file', size: 14 },
-      { name: 'new-demo.txt', type: 'file', size: 14 },
-    ]],
-    ['src', [
-      { name: 'config.ts', type: 'file', size: 211 },
-      { name: 'index.ts', type: 'file', size: 88 },
-      { name: 'lib', type: 'directory' },
-    ]],
-    ['src/lib', Array.from({ length: 24 }, (_, index) => ({
-      name: `module-${String(index + 1).padStart(2, '0')}.ts`,
-      type: 'file' as const,
-      size: 96 + index,
-    }))],
-  ])
-  /** Resolve a `list` argument to its workspace-relative path, or undefined when it leaves the root. */
-  const workspaceFilePath = (path: string): string | undefined => {
-    const segments: string[] = []
-    for (const segment of (path.startsWith('/') ? path : `${WORKSPACE_FILES_ROOT}/${path}`).split('/')) {
-      if (segment === '' || segment === '.') continue
-      if (segment === '..') {
-        segments.pop()
-        continue
-      }
-      segments.push(segment)
-    }
-    const absolute = `/${segments.join('/')}`
-    if (absolute !== WORKSPACE_FILES_ROOT && !absolute.startsWith(`${WORKSPACE_FILES_ROOT}/`)) return undefined
-    return absolute.slice(WORKSPACE_FILES_ROOT.length + 1)
-  }
-  // Page cap mirrored from the Host default so an over-limit request fails here too.
-  const WORKSPACE_FILE_PAGE_LINES = 5000
-  /**
-   * Sample text for any readable path: a heading plus two lines of copy. The
-   * replayed conversation's `demo` files, and any `huge` path, run past two
-   * default pages so paging can be exercised without a real workspace.
-   */
-  const workspaceFileLines = (path: string): string[] => {
-    const name = path.slice(path.lastIndexOf('/') + 1)
-    const head = [`# ${name}`, '', 'fixture 模式下的示例文本，用于验收侧栏的文本预览。', '真实构建从工作区读取同名文件。']
-    return path.includes('demo') || path.includes('huge')
-      ? [...head, ...Array.from({ length: 12_000 }, (_, index) => `第 ${index + 5} 行：用于验收分页与滚动的长文本样本。`)]
-      : head
-  }
-  const workspaceFileRemotes = {
-    list(path: string): ConnectionRpcResult<{
-      path: string
-      entries: readonly FixtureWorkspaceEntry[]
-      truncated: boolean
-    }> {
-      if (path.length === 0) {
-        return { ok: false, error: { code: 'gateway/bad-request', message: 'path is required', details: {} } }
-      }
-      const relative = workspaceFilePath(path)
-      if (relative === undefined) {
-        return {
-          ok: false,
-          error: { code: 'workspace-file/outside-workspace', message: `${path} is outside the workspace`, details: { path } },
-        }
-      }
-      const entries = workspaceFileTree.get(relative)
-      if (entries === undefined) {
-        const cut = relative.lastIndexOf('/')
-        const name = relative.slice(cut + 1)
-        const sibling = workspaceFileTree.get(cut === -1 ? '' : relative.slice(0, cut))?.find(entry => entry.name === name)
-        if (sibling === undefined) {
-          return { ok: false, error: { code: 'workspace-file/not-found', message: `no entry at ${path}`, details: { path } } }
-        }
-        return {
-          ok: false,
-          error: {
-            code: 'workspace-file/not-directory',
-            message: `${path} is a ${sibling.type}`,
-            details: { path, kind: sibling.type === 'file' ? 'file' : 'other' },
-          },
-        }
-      }
-      return { ok: true, value: { path: relative, entries, truncated: relative === 'src/lib' } }
-    },
-    read(path: string, range: { offset?: number; limit?: number }): ConnectionRpcResult<{
-      absolutePath: string
-      version: string
-      bytes: number
-      offset: number
-      text: string
-      lines: number
-      eof: boolean
-    }> {
-      const located = workspaceFileRemotes.stat(path)
-      if (!located.ok) return located
-      const offset = range.offset ?? 1
-      const limit = range.limit ?? WORKSPACE_FILE_PAGE_LINES
-      if (!Number.isInteger(offset) || offset < 1 || !Number.isInteger(limit) || limit < 1 || limit > WORKSPACE_FILE_PAGE_LINES) {
-        return { ok: false, error: { code: 'gateway/bad-request', message: 'offset and limit must be positive integers within the page cap', details: {} } }
-      }
-      const lines = workspaceFileLines(path)
-      const page = lines.slice(offset - 1, offset - 1 + limit)
-      return {
-        ok: true,
-        value: {
-          ...located.value,
-          offset,
-          text: page.join('\n'),
-          lines: page.length,
-          eof: offset - 1 + limit >= lines.length,
-        },
-      }
-    },
-    stat(path: string): ConnectionRpcResult<{ absolutePath: string; version: string; bytes: number }> {
-      if (path.length === 0) {
-        return { ok: false, error: { code: 'gateway/bad-request', message: 'path is required', details: {} } }
-      }
-      if (path.endsWith('.png') || path.endsWith('.bin')) {
-        return {
-          ok: false,
-          error: { code: 'workspace-file/not-text', message: `${path} is not UTF-8 text`, details: { path } },
-        }
-      }
-      return {
-        ok: true,
-        value: {
-          absolutePath: path.startsWith('/') ? path : `/${path}`,
-          version: 'fx-v1',
-          bytes: new TextEncoder().encode(workspaceFileLines(path).join('\n')).byteLength,
-        },
-      }
     },
   }
 
@@ -3888,27 +3728,6 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     }
   }
 
-  async function* openWorkspaceFileChanges(signal: AbortSignal): AsyncGenerator<FixtureWorkspaceFileWatchFrame> {
-    signal.throwIfAborted()
-    const conn = new FxInbox<FixtureWorkspaceFileWatchFrame>()
-    const breakNow = (): void => { conn.breakNow() }
-    streamBreakers.add(breakNow)
-    // Opt-in only: an unprompted frame would age every preview of demo.txt
-    // into its changed state on a timer the assembled snapshots cannot see.
-    const announce = options.fileChanges
-      ? setTimeout(() => {
-        conn.push({ kind: 'change', change: { absolutePath: `${WORKSPACE_FILES_ROOT}/notes/demo.txt`, version: 'fx-demo-v2' } })
-      }, 1000)
-      : undefined
-    try {
-      yield { kind: 'ready' }
-      yield* conn.drain(signal)
-    } finally {
-      if (announce !== undefined) clearTimeout(announce)
-      streamBreakers.delete(breakNow)
-    }
-  }
-
   async function* openRemoteEvents(
     signal: AbortSignal,
   ): AsyncGenerator<FixtureRemoteEventReadyFrame | FixtureRemoteEventFrame> {
@@ -4290,15 +4109,6 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'session/openWorkspacePath': {
           return sessionOk({ opened: true as const })
         }
-        case 'workspaceFiles/read': {
-          return Promise.resolve(workspaceFileRemotes.read(args.path ?? '', args.range ?? {}))
-        }
-        case 'workspaceFiles/stat': {
-          return Promise.resolve(workspaceFileRemotes.stat(args.path ?? ''))
-        }
-        case 'workspaceFiles/list': {
-          return Promise.resolve(workspaceFileRemotes.list(args.path ?? ''))
-        }
         case 'session/canOpenWorkspacePath': return Promise.resolve({ ok: true, value: true })
         case 'session/modelCatalog': return Promise.resolve({
           ok: true,
@@ -4406,7 +4216,6 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'remoteAccess/follow': return openAccess(signal)
         case 'session/follow': return openFollow(args.request as FixtureFollowRequest, signal)
         case 'workspace/follow': return openWorkspace(signal)
-        case 'workspaceFiles/changes': return openWorkspaceFileChanges(signal)
         default:
           throw new Error(`fixture connection stream endpoint ${JSON.stringify(endpoint)} is unavailable`)
       }
@@ -4460,7 +4269,6 @@ function fixtureOptionsFromLocation(): FixtureOptions {
     failWorkspaceAttach: query.get('fixtureAttach') === 'fail',
     dropSessionCreateResponse: query.get('fixtureSessionCreate') === 'drop-response',
     createFrameOrder: query.get('fixtureFrames') === 'workspace-first' ? 'workspace-first' : 'session-first',
-    fileChanges: query.get('fixtureFileChanges') === 'demo',
     presented: query.get('fixturePresented') === '1',
     viewerFork: query.get('fixtureFork') === 'viewer' || query.get('fixtureFork') === 'refused'
       || query.get('fixtureFork') === 'running',

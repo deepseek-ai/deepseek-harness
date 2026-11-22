@@ -8,7 +8,7 @@
  * the page declares.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -20,11 +20,14 @@ import {
   SegmentedTabs, StateDot, Switch, Tag, TerminalBlock, Toast, Tooltip, useDismissOnOutsidePointer,
   type IconProps, type StateDotState, type TerminalBlockLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { localizedValues, TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { createNavigationStore } from './navigation-store.ts'
 import type { PluginHeaderLayoutFace } from './header-scroll.ts'
-import { rowConfigKey, type OfficialItem } from './config-ledger.ts'
+import { rowConfigKey, type OfficialItem, type SettingsSectionItem } from './config-ledger.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, type PluginManagerLocaleKey } from './locales.ts'
 import {
   bundleBusy, asksMirror, githubRecoveryRegistry, isInstallPending, offeredRegistries, rowKey, updateCandidate,
@@ -36,6 +39,7 @@ import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-cont
 import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
+import { ClientSyncNotice } from './ClientSyncNotice.tsx'
 import css from './PluginManagerPage.module.css'
 
 /** Full component props assembled by the main slot renderer. */
@@ -47,12 +51,22 @@ export type PluginManagerPageProps =
     | 'plugins.add.actions' | 'plugins.tab'
     | 'plugins.detail.actions' | 'plugins.detail.badge' | 'plugins.detail.section'
   >
+  & PropsRenderFactories
   & InjectFace<PluginManagerFace & PluginHeaderLayoutFace>
+  & InjectFace<ClientSyncFace>
   & PropsStore<ReturnType<typeof createNavigationStore>>
+
+/** This page's client plugin synchronization, read from the page's module system. */
+export interface ClientSyncFace {
+  readonly hooks: { readonly clientSync: ObservableSnapshot<ClientEntryState> }
+  /** Retry the latest client graph without changing the Host composition. */
+  readonly retryClient: () => void
+}
 
 /** The page's slot renderer, narrowed to the configuration slots. */
 type RenderConfig = PluginManagerPageProps['renderSlot']
 type ResolveText = PluginManagerFace['resolveText']
+type RenderFactory = PluginManagerPageProps['renderFactorySlot']
 
 type RowPhase = NonNullable<PackageRow['phase']>
 
@@ -282,10 +296,12 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
   readonly configure?: RowConfigure | undefined
 }): ReactNode {
   const [filter, setFilter] = useState('')
-  const query = filter.trim().toLowerCase()
-  const localized = rows.map(row => ({ row, ...rowText(row, resolveText) }))
-  const shown = query === '' ? localized : localized.filter(({ row, title, description }) =>
-    [title, description, row.rowId, row.moduleName].some(value => value?.toLowerCase().includes(query)))
+  // Rows display one language; matching covers every language a value carries.
+  const rowIndex = useMemo(() => new TextSearchIndex(rows, row => ({
+    fuzzy: [row.rowId, row.moduleName, ...localizedValues(row.meta?.title)],
+    substring: localizedValues(row.meta?.description),
+  })), [rows])
+  const shown = rowIndex.search(filter).map(row => ({ row, ...rowText(row, resolveText) }))
   return (
     <section className={css.detailSection} data-plugin-rows>
       <div className={css.sectionHead}>
@@ -674,14 +690,17 @@ function ItemDetail({ item, t, onBack, renderSlot, form }: {
  * A row's configuration page keeps its technical identity beside local package
  * text and the form supplied by its configuration entry.
  */
-function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
+function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, renderFactory, form, sections }: {
   readonly pkg: PackageView
   readonly row: PackageRow
   readonly t: Translate
   readonly resolveText: ResolveText
   readonly onBack: () => void
   readonly renderSlot: RenderConfig
+  readonly renderFactory: RenderFactory
   readonly form: ConfigPageForm | undefined
+  /** The settings pages the row's module registered, shown when the row registers no configuration of its own. */
+  readonly sections: readonly SettingsSectionItem[]
 }): ReactNode {
   const { title } = packageText(pkg, resolveText)
   const { title: rowTitle, description } = rowText(row, resolveText)
@@ -709,6 +728,7 @@ function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
       <RuntimeError error={row.diagnostic} t={t} />
       <div className={css.detailSections} data-plugin-config>
         {renderSlot('plugins.row.config', { view: 'page', form }, { entryKey: key })}
+        {sections.map(section => <Fragment key={section.id}>{renderFactory('settings.section.view', { id: section.id, close: onBack })}</Fragment>)}
         {renderSlot('plugins.detail.section', { subject })}
       </div>
     </div>
@@ -724,7 +744,7 @@ function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
  * and configure controls, unless the Host reports an error and no rows; and where it comes from.
  */
 function PackageDetail({
-  pkg, t, resolveText, busy, rowBusy, configured, configure, renderSlot, inMore, versions, detail,
+  pkg, t, resolveText, busy, rowBusy, configured, configure, sections, renderSlot, renderFactory, inMore, versions, detail,
   onBack, onSetEnabled, onUninstall, onUpdate, onSetRowEnabled, onEnsureVersions, onCheckVersions, onUpdateVersion,
 }: {
   readonly pkg: PackageView
@@ -740,7 +760,13 @@ function PackageDetail({
   /** Whether the bundle registered a configuration of its own. */
   readonly configured: boolean
   readonly configure: RowConfigure
+  /**
+   * The settings pages the bundle's own package registered, shown when the bundle has no configuration and no listed
+   * row's module is that package.
+   */
+  readonly sections: readonly SettingsSectionItem[]
   readonly renderSlot: RenderConfig
+  readonly renderFactory: RenderFactory
   readonly inMore: boolean
   readonly onBack: () => void
   readonly onSetEnabled: (enabled: boolean) => void
@@ -823,6 +849,11 @@ function PackageDetail({
             </section>
           )
           : null}
+        {sections.map(section => (
+          <section key={section.id} className={css.detailSection} data-plugin-config>
+            {renderFactory('settings.section.view', { id: section.id, close: onBack })}
+          </section>
+        ))}
         {/* A Host error with no rows can mean the Host never read the patch, so the page does not claim the bundle has no components. */}
         {pkg.availability === 'missing' || (pkg.error !== undefined && pkg.rows.length === 0) ? null : (<RowsSection
           rows={pkg.rows}
@@ -1593,8 +1624,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }, [highlight, clearHighlight])
   const noticeLine = state.notice === null || state.notice.kind === 'refresh-failed' ? null : noticeText(state.notice, t)
 
-  // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
-  // unreadable selections remain manageable; Settings' Plugin list inspects the full Host inventory.
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
     && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))
@@ -1613,6 +1642,14 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     ? listed.find(pkg => pkg.name === view.name)
     : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
+  // A plugin's settings page also shows on the listed row whose module registered it, or else on the bundle whose
+  // package registered it, when that row or bundle registers no configuration of its own; Settings shows it either way.
+  const rowModules = new Set(listed.flatMap(pkg => pkg.rows.map(row => row.moduleName)))
+  const sectionsOf = (pkg: PackageView, row: PackageRow): readonly SettingsSectionItem[] =>
+    ledger.rows.has(rowConfigKey(pkg.name, row.rowId)) ? [] : ledger.sections.filter(section => section.module === row.moduleName)
+  const bundleSections = (pkg: PackageView): readonly SettingsSectionItem[] => ledger.bundles.has(pkg.name) || rowModules.has(pkg.name)
+    ? []
+    : ledger.sections.filter(section => section.module === pkg.name)
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const onInstalled = tab === INSTALLED_TAB
   const showsCards = !onInstalled || (openPkg === undefined && openItem === undefined)
@@ -1639,7 +1676,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     if (row.entryId !== undefined) props.setRowEnabled(row.entryId, enabled)
   }
   const configure = (pkg: PackageView): RowConfigure => ({
-    has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)),
+    has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)) || sectionsOf(pkg, row).length > 0,
     open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
   const updates = updatesNote(mine, state.versions, t)
@@ -1750,7 +1787,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
             </div>
           )
           : null}
-
+        <ClientSyncNotice sync={props.useClientSync(snapshot => snapshot)} t={t} retry={props.retryClient} />
         {!onInstalled
           ? (
             <div role="tabpanel" id={`${tabsId}-${tab}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={css.tabPanel}>
@@ -1799,6 +1836,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               pkg={openPkg}
               row={openRow}
               form={formFor(openRow.rowId)}
+              sections={sectionsOf(openPkg, openRow)}
+              renderFactory={props.renderFactorySlot}
               t={t}
               resolveText={resolveText}
               renderSlot={renderSlot}
@@ -1816,6 +1855,8 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               rowBusy={row => row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))}
               configured={ledger.bundles.has(openPkg.name)}
               configure={configure(openPkg)}
+              sections={bundleSections(openPkg)}
+              renderFactory={props.renderFactorySlot}
               renderSlot={renderSlot}
               inMore={backToMore}
               detail={(

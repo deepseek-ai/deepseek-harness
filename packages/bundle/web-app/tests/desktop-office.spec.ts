@@ -11,10 +11,11 @@ import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import OfficeKit from '@deepseek-ai/dsh-office-kit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/src/locate.ts'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
@@ -33,7 +34,7 @@ vi.mock('@deepseek-ai/dsh-office-kit/src/locate.ts', async (original) => {
 })
 
 const assets = fileURLToPath(new URL('../../../skill/skill-office/assets/', import.meta.url))
-const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+const names = ['office']
 const ROWS = ['office-kit', 'tool-office', 'workspace-dependencies', 'skill-office']
 const OFFICE_TOOLS = ['office_convert', 'office_recalculate', 'office_render']
 
@@ -70,12 +71,12 @@ async function boot(profile: string, primaryRuntime: (root: string) => string | 
   onTestFinished(() => ctx.fiber.dispose())
   ctx.provide('profileContext', {
     name: profile, dir: '/profile', patchPath: '/profile/cordis.patch.yml', installAnchor: join(root, 'package.json'),
-    cwd: workspace, home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+    cwd: workspace, home: '/home', startedBundles: [], overlayPaths: [], telemetryDisabledEnv: undefined,
   })
   ctx.provide('dshHomePath', dshHomePath)
   provideWorkingDirectoryFixture(ctx, workspace)
-  await ctx.plugin(SystemPrompt)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SystemPrompt)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -102,7 +103,7 @@ async function boot(profile: string, primaryRuntime: (root: string) => string | 
 
 /** Convert through `office_convert` as an Agent whose previous request declared the Office tools. */
 async function convertReport(ctx: Context, workspace: string, callId: string) {
-  const id = SessionId(callId)
+  const id = brandString<SessionId>(callId)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd: workspace, isSeeded: false })
   vi.spyOn(session, 'requestHeader').mockReturnValue({ config: { provider: 'fixture', model: 'fixture' }, tools: ctx.tools.schemas() })
   const agent = { session, options: {} } as never
@@ -110,7 +111,7 @@ async function convertReport(ctx: Context, workspace: string, callId: string) {
   const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'fixture', model: 'fixture' }, signal })
   try {
     return await executeToolFixture(ctx, {
-      signal, callId: ToolCallId(callId), name: 'office_convert', agent, toolSet, arguments: { input: 'report.docx', format: 'pdf' },
+      signal, callId: brandString<ToolCallId>(callId), name: 'office_convert', agent, toolSet, arguments: { input: 'report.docx', format: 'pdf' },
     })
   } finally { toolSet.dispose() }
 }
@@ -122,11 +123,12 @@ it('mounts packaged Desktop skills with the primary runtime Python beside the Of
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
+  expect((await ctx.skills.get('office'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office').split(sep).join('/') })
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['load_workspace_dependencies', ...OFFICE_TOOLS])
   expect(ctx.officeKit.outputDirectory).toBe(join(root, 'home', 'office-kit', 'outputs'))
-  expect((await ctx.skills.get('office-docx'))?.content).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
-  expect((await ctx.skills.get('office'))?.content).toContain('`office_convert`')
+  const office = (await ctx.skills.get('office'))?.content
+  expect(office).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
+  expect(office).toContain('`office_convert`')
 })
 
 it('keeps the Office tools and returns the unavailable Kit error to the model when Kit is absent', async () => {
@@ -165,10 +167,10 @@ it('mounts Office skills with packaged defaults and the user Python outside the 
   expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'user' })
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
-  const docx = (await ctx.skills.get('office-docx'))?.content
-  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
-  expect(docx).not.toContain('load_workspace_dependencies')
+  expect((await ctx.skills.get('office'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office').split(sep).join('/') })
+  const office = (await ctx.skills.get('office'))?.content
+  expect(office).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
+  expect(office).not.toContain('load_workspace_dependencies')
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 
@@ -180,10 +182,10 @@ it('mounts packaged Office skills with the user Python in a Desktop profile laun
   expect(ctx.loader.resolve('workspace-dependencies').fiber).toBeUndefined()
   expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ pythonEnvironment: 'user' })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
-  const docx = (await ctx.skills.get('office-docx'))?.content
-  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
-  expect(docx).not.toContain('load_workspace_dependencies')
+  expect((await ctx.skills.get('office'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office').split(sep).join('/') })
+  const office = (await ctx.skills.get('office'))?.content
+  expect(office).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
+  expect(office).not.toContain('load_workspace_dependencies')
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(OFFICE_TOOLS)
 })
 

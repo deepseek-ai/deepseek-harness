@@ -96,6 +96,8 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     } }]))
     scaffold = await launchWebScaffold({
       developerTools: true, profile: { packages: [{ dir: PACKAGE }] },
+      // The recorded program is an async function body.
+      ptcExecutionMode: 'per-call',
       extraOverlayPath: [fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), overlay],
       replayFixture: FIXTURE, compareReplaySession: true,
     })
@@ -141,7 +143,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     const firstTurnEvents = agent.session.snapshotEvents()
     const toolResults = firstTurnEvents.filter(event => event.type === 'tool/result').map(event => event.data)
     expect(toolResults, `PTC execution must start the native child before waiting for its result: ${JSON.stringify(toolResults)}`)
-      .toMatchObject([{ message: { isError: false, content: [{ type: 'text', text: 'agent-1' }] } }])
+      .toMatchObject([{ message: { isError: false, content: [{ type: 'text', text: 'agent-1\n' }] } }])
     const dispatches = firstTurnEvents.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
     expect(dispatches).toMatchObject([{ name: 'subagent_claude_code', isError: false }])
     const catalog = firstTurnEvents.filter(event => event.type === 'subagent/catalog').map(event => event.data)

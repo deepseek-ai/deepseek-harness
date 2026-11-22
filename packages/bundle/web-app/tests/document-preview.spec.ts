@@ -10,8 +10,7 @@ import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import WorkspaceFiles, { type WorkspaceFileScope } from '@deepseek-ai/dsh-api-workspace-files'
 import OfficeKit from '@deepseek-ai/dsh-office-kit'
 import * as DocumentPreview from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
-import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -19,9 +18,7 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { expect, it, onTestFinished, vi } from 'vitest'
-
-/** The Peer an index render speaks for; this listener reads no field of it. */
-const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const kit = vi.hoisted(() => ({ create: vi.fn<(options?: ConverterOptions) => Promise<Converter>>() }))
 vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
@@ -47,11 +44,11 @@ it('loads the shipped Office rows with separately patched settings and authorize
     .flatMap(patch => patch.insert ?? []).filter(row => row.id !== undefined && Object.hasOwn(expectedRows, row.id))
   expect(rows.map(row => [row.id, row.name])).toEqual(Object.entries(expectedRows))
   const providerConfig = { maxInputBytes: 4096, maxConcurrentConversions: 1, fontFallbacks: [['Missing Serif', 'Available Serif']], outputDirectory }
-  const clientConfig = DocumentPreview.Config({ office: { maxCachedEntries: 3, maxCachedBytes: 8192 } })
+  const clientConfig = { office: { maxCachedEntries: 3, maxCachedBytes: 8192 } }
   const configured = applyEntryPatches(rows, [
     { id: 'office-kit', config: providerConfig },
     { id: 'ui-sidebar-documentpreview', config: clientConfig },
-  ], (message) => { throw new Error(message) })
+  ], (message) => { throw new Error(message) }).data
   expect(configured.find(row => row.id === 'ui-sidebar-documentpreview')!.config).toEqual(clientConfig)
   await writeFile(configPath, JSON.stringify([
     { name: '@deepseek-ai/dsh-session' },
@@ -100,18 +97,15 @@ it('loads the shipped Office rows with separately patched settings and authorize
   const entries = new Map([...ctx.loader.entries()].map(entry => [entry.options.id, entry]))
   for (const row of configured) await entries.get(row.id)!.fiber!.await()
   expect(ctx.officeKit.outputDirectory).toBe(outputDirectory)
-  const injections: IndexInjection[] = []
-  ctx.emit('webserver/index-inject', injections, PAGE_PEER)
-  expect(injections).toEqual([
-    { kind: 'global', name: '__DSH_DOCUMENT_PREVIEW_CONFIG__', value: clientConfig },
-  ])
+  const preview = entries.get('ui-sidebar-documentpreview')!.fiber!.effectiveConfig as DocumentPreview.Config
+  expect(preview.office.get()).toEqual({ maxCachedEntries: 3, maxCachedBytes: 8192, maxPending: 8, maxReaders: 32 })
 
-  const id = SessionId('office-loader')
+  const id = brandString<SessionId>('office-loader')
   const session = ctx.sessions.create(id, { meta: { cwd: directory } })
   const lookup = ctx.typert.lookups.get('workspaceFileScope')!
   const scope = await lookup.resolve(id) as WorkspaceFileScope | undefined
   if (scope === undefined) throw new Error('Expected the Session workspace scope')
-  expect(await lookup.resolve(SessionId('missing'))).toBeUndefined()
+  expect(await lookup.resolve(brandString<SessionId>('missing'))).toBeUndefined()
   const sourcePath = join(directory, 'report.docx')
   await writeFile(sourcePath, 'authorized OOXML')
   const signal = new AbortController().signal

@@ -7,7 +7,8 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
 import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import { OfficeSourceKey, type OfficeKitRequest } from '@deepseek-ai/dsh-office-kit'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { OfficeSourceKey, OfficeKitRequest } from '@deepseek-ai/dsh-office-kit/types'
 import * as LibreOfficeProvider from '@deepseek-ai/dsh-office-kit'
 import { expect, it, onTestFinished } from 'vitest'
 
@@ -27,7 +28,7 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
     .filter(row => row.name === '@deepseek-ai/dsh-office-kit')
   expect(rows.map(row => row.id)).toEqual(['office-kit'])
   const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1, outputDirectory } }],
-    (message) => { throw new Error(message) })
+    (message) => { throw new Error(message) }).data
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(configured))
   ctx.baseUrl = pathToFileURL(directory).href + '/'
@@ -51,7 +52,7 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
   let reads = 0
   const request = (key: string): OfficeKitRequest => ({
     extension: 'docx', priority: 'foreground',
-    source: { key: OfficeSourceKey(key), version: 'fixture', bytes: bytes.length,
+    source: { key: brandString<OfficeSourceKey>(key), version: 'fixture', bytes: bytes.length,
       async read(signal, maxBytes) {
         signal.throwIfAborted()
         expect(bytes.length).toBeLessThanOrEqual(maxBytes)

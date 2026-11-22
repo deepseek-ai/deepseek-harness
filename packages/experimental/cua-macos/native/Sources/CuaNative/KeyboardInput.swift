@@ -2,78 +2,102 @@
 import CoreGraphics
 import Foundation
 
-/// Balanced PID-targeted chords and scalar-based Unicode input on one serial worker.
+/// Process-directed text and chords, with explicit system delivery for keystrokes and held keys.
 final class KeyboardInput {
-    private struct Modifier {
+    private struct Key {
         let keyCode: CGKeyCode
         let flag: CGEventFlags
     }
 
-    private struct ModifierEvents {
-        let down: CGEvent
-        let up: CGEvent
-    }
-
-    private let poster: PIDEventPoster
+    private let connection: UUID
+    private let held: HeldInputs
+    private let postProcess: (CGEvent, Int32) -> Void
+    private let system: SystemKeyboardInput
     private let textEventInterval: Double
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(poster: PIDEventPoster, textEventInterval: Double, checkCancellation: @escaping @Sendable () throws -> Void = {}) {
-        self.poster = poster
+    init(post: @escaping (CGEvent, Int32) -> Void, textEventInterval: Double, held: HeldInputs = HeldInputs(), connection: UUID = UUID(), system: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+        self.connection = connection
+        self.held = held
+        self.postProcess = post
+        self.system = system
         self.textEventInterval = textEventInterval
         self.checkCancellation = checkCancellation
     }
 
-    /// Construct the entire chord before posting; cleanup releases only keys pressed by this call.
-    func pressKey(_ key: String, modifiers: [String], to pid: Int32) throws {
+    private func post(_ event: CGEvent, _ pid: Int32, _ useSystemInput: Bool = false) {
+        if useSystemInput { system.post(event) }
+        else { postProcess(event, pid) }
+    }
+
+    func keyDown(_ name: String, app: String, useSystemInput: Bool = false, recipient: () throws -> ProcessIdentity) throws {
+        let owner = HeldInputs.Owner(connection: connection, app: app)
+        let code = try Self.keyCode(name)
+        let source = try Self.source(system: useSystemInput)
+        let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
         try checkCancellation()
-        var names = modifiers
-        let isPlus = key == "+" || key.lowercased() == "plus"
-        if isPlus { names.append("shift") }
-        let code = try Self.keyCode(isPlus ? "=" : key)
-        var selected: [Modifier] = []
-        for name in names {
-            let modifier = try Self.modifier(name)
-            if !selected.contains(where: { $0.keyCode == modifier.keyCode }) {
-                selected.append(modifier)
-            }
+        if useSystemInput { try system.validateTarget(recipient().pid) }
+        if try held.repeatIfHeld(owner: owner, name: name, code: code, down: down, system: useSystemInput) { return }
+        if useSystemInput { try system.requireReleased([code]) }
+        let target = try recipient()
+        let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
+        try checkCancellation()
+        try NativePlatform.verify(target)
+        try held.keyDown(owner: owner, recipient: target, name: name, code: code, flag: Self.namedModifier(name)?.flag ?? [],
+                      down: down, up: up, system: useSystemInput, post: { [postProcess, system] event in
+                          if useSystemInput { system.post(event) } else { postProcess(event, target.pid) }
+                      })
+    }
+
+    func keyUp(_ name: String, app: String, useSystemInput: Bool = false, recipientIfUnheld: () throws -> ProcessIdentity) throws -> Bool {
+        try held.keyUp(owner: .init(connection: connection, app: app), name: name, code: Self.keyCode(name), system: useSystemInput,
+                    recipientIfUnheld: recipientIfUnheld)
+    }
+
+    /// Prepare every event before dispatch. On cancellation, release only the keys this call pressed.
+    func pressKey(_ name: String, modifiers: [String], to pid: Int32, useSystemInput: Bool = false) throws {
+        try checkCancellation()
+        var chord = try modifiers.map(Self.modifier)
+        let isPlus = name == "+" || name.lowercased() == "plus"
+        if isPlus { chord.append(try Self.modifier("shift")) }
+        let code = try Self.keyCode(isPlus ? "=" : name)
+        chord.append(Key(keyCode: code, flag: Self.namedModifier(name)?.flag ?? []))
+        let alreadyHeld = held.snapshot(pid: pid, system: useSystemInput)
+        guard alreadyHeld[code] == nil else {
+            throw RequestParameters.invalid("Key '\(name)' is already held for this target. Use pressKey after the holder releases it.")
         }
-        let source = try Self.source()
-        var flags: CGEventFlags = []
-        var modifierEvents: [ModifierEvents] = []
-        for modifier in selected {
+        var selected = Set(alreadyHeld.keys)
+        var flags = alreadyHeld.values.reduce(useSystemInput ? system.currentFlags() : CGEventFlags()) { $0.union($1) }
+        var events: [(down: CGEvent, up: CGEvent)] = []
+        let source = try Self.source(system: useSystemInput)
+        for key in chord {
+            guard selected.insert(key.keyCode).inserted else { continue }
             let releasedFlags = flags
-            flags.insert(modifier.flag)
-            modifierEvents.append(ModifierEvents(
-                down: try Self.keyEvent(source: source, code: modifier.keyCode, down: true, flags: flags),
-                up: try Self.keyEvent(source: source, code: modifier.keyCode, down: false, flags: releasedFlags)
+            flags.formUnion(key.flag)
+            events.append((
+                down: try Self.keyEvent(source: source, code: key.keyCode, down: true, flags: flags),
+                up: try Self.keyEvent(source: source, code: key.keyCode, down: false, flags: releasedFlags)
             ))
         }
-        let down = try Self.keyEvent(source: source, code: code, down: true, flags: flags)
-        let up = try Self.keyEvent(source: source, code: code, down: false, flags: flags)
-        var heldModifiers = 0
-        var keyHeld = false
+        if useSystemInput {
+            try system.validateTarget(pid)
+            try system.requireReleased(events.map { CGKeyCode($0.down.getIntegerValueField(.keyboardEventKeycode)) })
+        }
+        var pressed = 0
         do {
             defer {
-                if keyHeld { poster.post(up, to: pid) }
-                for index in (0..<heldModifiers).reversed() {
-                    poster.post(modifierEvents[index].up, to: pid)
-                    Thread.sleep(forTimeInterval: 0.008)
+                for index in (0..<pressed).reversed() {
+                    post(events[index].up, pid, useSystemInput)
+                    if index > 0 { Thread.sleep(forTimeInterval: 0.008) }
                 }
             }
-            for events in modifierEvents {
+            for event in events {
                 try checkCancellation()
-                poster.post(events.down, to: pid)
-                heldModifiers += 1
+                if useSystemInput { try system.validateTarget(pid) }
+                post(event.down, pid, useSystemInput)
+                pressed += 1
                 Thread.sleep(forTimeInterval: 0.008)
             }
-            try checkCancellation()
-            poster.post(down, to: pid)
-            keyHeld = true
-            Thread.sleep(forTimeInterval: 0.008)
-            try checkCancellation()
-            poster.post(up, to: pid)
-            keyHeld = false
         }
         try checkCancellation()
     }
@@ -82,6 +106,8 @@ final class KeyboardInput {
     func typeText(_ text: String, to pid: Int32) throws {
         try checkCancellation()
         let source = try Self.source()
+        let alreadyHeld = held.snapshot(pid: pid)
+        let flags = alreadyHeld.values.reduce(CGEventFlags()) { $0.union($1) }
         for scalar in text.replacingOccurrences(of: "\r\n", with: "\n").unicodeScalars {
             try checkCancellation()
             let code: CGKeyCode
@@ -90,8 +116,11 @@ final class KeyboardInput {
             case 9: code = try Self.keyCode("Tab")
             default: code = 0
             }
-            let down = try Self.keyEvent(source: source, code: code, down: true, flags: [])
-            let up = try Self.keyEvent(source: source, code: code, down: false, flags: [])
+            guard alreadyHeld[code] == nil else {
+                throw RequestParameters.invalid("Release the held physical key before typing text with its key code")
+            }
+            let down = try Self.keyEvent(source: source, code: code, down: true, flags: flags)
+            let up = try Self.keyEvent(source: source, code: code, down: false, flags: flags)
             if code == 0 {
                 let units = Array(String(scalar).utf16)
                 units.withUnsafeBufferPointer { buffer in
@@ -104,16 +133,16 @@ final class KeyboardInput {
             do {
                 defer {
                     if keyHeld {
-                        poster.post(up, to: pid)
+                        post(up, pid)
                         Thread.sleep(forTimeInterval: textEventInterval)
                     }
                 }
                 try checkCancellation()
-                poster.post(down, to: pid)
+                post(down, pid)
                 keyHeld = true
                 Thread.sleep(forTimeInterval: textEventInterval)
                 try checkCancellation()
-                poster.post(up, to: pid)
+                post(up, pid)
                 keyHeld = false
                 Thread.sleep(forTimeInterval: textEventInterval)
             }
@@ -121,14 +150,14 @@ final class KeyboardInput {
         try checkCancellation()
     }
 
-    private static func source() throws -> CGEventSource {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+    static func source(system: Bool = false) throws -> CGEventSource {
+        guard let source = CGEventSource(stateID: system ? .combinedSessionState : .hidSystemState) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create keyboard event source")
         }
         return source
     }
 
-    private static func keyEvent(
+    static func keyEvent(
         source: CGEventSource, code: CGKeyCode, down: Bool, flags: CGEventFlags
     ) throws -> CGEvent {
         // CoreGraphics creates FlagsChanged for modifier virtual keys.
@@ -139,15 +168,22 @@ final class KeyboardInput {
         return event
     }
 
-    private static func modifier(_ name: String) throws -> Modifier {
+    private static func namedModifier(_ name: String) -> Key? {
         switch name.lowercased() {
-        case "command", "cmd": return Modifier(keyCode: 55, flag: .maskCommand)
-        case "shift": return Modifier(keyCode: 56, flag: .maskShift)
-        case "option", "alt": return Modifier(keyCode: 58, flag: .maskAlternate)
-        case "control", "ctrl": return Modifier(keyCode: 59, flag: .maskControl)
-        case "fn": return Modifier(keyCode: 63, flag: .maskSecondaryFn)
-        default: throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported key modifier: \(name)")
+        case "command", "cmd": return Key(keyCode: 55, flag: .maskCommand)
+        case "shift": return Key(keyCode: 56, flag: .maskShift)
+        case "option", "alt": return Key(keyCode: 58, flag: .maskAlternate)
+        case "control", "ctrl": return Key(keyCode: 59, flag: .maskControl)
+        case "fn": return Key(keyCode: 63, flag: .maskSecondaryFn)
+        default: return nil
         }
+    }
+
+    private static func modifier(_ name: String) throws -> Key {
+        guard let modifier = namedModifier(name) else {
+            throw NativeFailure(code: "INVALID_ARGUMENT", message: "Unsupported key modifier: \(name)")
+        }
+        return modifier
     }
 
     static func modifierFlags(_ names: [String]) throws -> CGEventFlags {
@@ -155,6 +191,7 @@ final class KeyboardInput {
     }
 
     static func keyCode(_ key: String) throws -> CGKeyCode {
+        if let modifier = namedModifier(key) { return modifier.keyCode }
         switch key.lowercased() {
         case "kp_0": return 82
         case "kp_1": return 83
@@ -180,12 +217,7 @@ final class KeyboardInput {
         case "space": return 49
         case "delete", "backspace": return 51
         case "escape", "esc": return 53
-        case "command", "cmd": return 55
-        case "shift": return 56
         case "capslock": return 57
-        case "option", "alt": return 58
-        case "control", "ctrl": return 59
-        case "fn": return 63
         case "home": return 115
         case "pageup": return 116
         case "del", "forward_delete": return 117
@@ -254,7 +286,7 @@ final class KeyboardInput {
         case "m": return 46
         case ".": return 47
         case "`": return 50
-        default: throw NativeFailure(code: "NATIVE_ERROR", message: "Unknown key name: \(key)")
+        default: throw RequestParameters.invalid("Unknown key name: \(key)")
         }
     }
 }

@@ -38,14 +38,14 @@
 }
 
 @media (hover: hover) {
-  .tab:hover {
+  .tab:hover:not(:disabled) {
     background: transparent;
     color: var(--dsw-alias-label-primary);
   }
 }
 
 .tab[aria-selected='true'] {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tabs[data-size='sm'] {
@@ -58,15 +58,9 @@
   height: 30px;
 }
 
-.tabs[data-size='sm'] .tab[aria-selected='true'] {
-  font-weight: 500;
-}
-
 .tab:focus-visible {
-  outline: none;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

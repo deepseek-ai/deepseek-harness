@@ -19,10 +19,15 @@ import { relative } from 'node:path'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SandboxExecutionPolicy } from './index.ts'
 
-/** An explicit directory grant cannot be enforced without changing the caller's selected path. */
+/** A workspace root or explicit directory grant cannot be enforced without changing the caller's selected path. */
 export class SandboxInvalidRootError extends HarnessError {
-  constructor(path: string, detail: string) {
-    super(`Invalid additional writable directory ${JSON.stringify(path)}: ${detail}`, 'SANDBOX_INVALID_ROOT')
+  /**
+   * @param path - the rejected path, as the caller spelled it.
+   * @param detail - why the path cannot be enforced.
+   * @param subject - the role of the path in the policy, as the message names it.
+   */
+  constructor(path: string, detail: string, subject = 'additional writable directory') {
+    super(`Invalid ${subject} ${JSON.stringify(path)}: ${detail}`, 'SANDBOX_INVALID_ROOT')
     this.name = 'SandboxInvalidRootError'
   }
 }

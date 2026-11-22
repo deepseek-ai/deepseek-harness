@@ -1,5 +1,5 @@
 ---
-description: "持久会话数据平面的包映射：持久化 seam 及其后端、检查点策略、投影、基于日志的标题与外发会话遥测。"
+description: "持久会话数据平面的包映射：持久化 seam 及其后端、检查点策略、投影、Session 消息、基于日志的标题与外发会话遥测。"
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-session 组让对话持久保存，恢复已发布的日志格式，并使已提交历史在重启后仍可用。存储与检查点包保护请求、工具副作用和已完成步骤；投影包生成客户端可用的值；标题包为会话命名；遥测包上报活动。先使用随产品交付的 JSONL 存储，再添加检查点，并仅按部署需要添加投影、标题策略或遥测。每个包 README 负责各自的保证与配置，同级查询组则提供独立的读取和工具访问。
+session 组让对话持久保存，恢复已发布的日志格式，并使已提交历史在重启后仍可用。存储与检查点包保护请求、工具副作用和已完成步骤；投影包生成客户端可用的值；消息工具让 Web Agent 向其他 Session 发送消息；标题包为会话命名；遥测包上报活动。先使用随产品交付的 JSONL 存储，再添加检查点，并仅按部署需要添加投影、标题策略或遥测。每个包 README 负责各自的保证与配置，同级查询组则提供独立的读取和工具访问。
 
 ## 目录
 
@@ -22,7 +22,7 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 <a id="packages"></a>
 ## 包
 
-本组分为四个家族：持久存储（持久化 seam、后端、检查点策略）、投影、标题与遥测。每个包 README 负责各自的约定与配置。
+本组涵盖持久存储（持久化 seam、后端、检查点策略）、投影、消息、标题与遥测。每个包 README 负责各自的约定与配置。
 
 ### 持久化
 
@@ -46,10 +46,15 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 |---|---|---|
 | [`session-projection/`](session-projection/README.zh.md) | 定义并驱动把已提交事件折叠为完整当前值的投影单元 | `ctx.sessionProjections` |
 | [`working-directory/`](working-directory/README.zh.md) | 拥有每个 Session 的有效执行目录和用户上下文变更 | `ctx.workingDirectory` |
-| [`tool-working-directory/`](tool-working-directory/README.zh.md) | 通过一个工具读取或改变当前目录 | `working_directory` |
 | [`session-projection-cache/`](session-projection-cache/README.zh.md) | 持久化投影检查点，使冷读跳过全量日志加载 | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.zh.md) | 通过 `sessionStats` 单元提供全日志会话计数与墙钟时间 | 注册到 `ctx.sessionProjections` |
 | [`session-turn-outline/`](session-turn-outline/README.zh.md) | 通过 `turnOutline` 单元提供全日志轮次大纲（轮次、`turn/start` seq、提示词预览） | 注册到 `ctx.sessionProjections` |
+
+### 消息
+
+| 包 | 职责 | ctx key |
+|---|---|---|
+| [`tool-session-control/`](tool-session-control/README.zh.md) | 让 Web 组合中的 Agent 按 id 向另一个普通 Session 发送消息；不在线的目标通过 Session 控制器恢复 | `session_send_message` |
 
 ### 标题
 

@@ -21,6 +21,9 @@
       "path": "../forge"
     },
     {
+      "path": "../forge-session"
+    },
+    {
       "path": "../../subprocess/subprocess"
     },
     {
@@ -28,6 +31,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }

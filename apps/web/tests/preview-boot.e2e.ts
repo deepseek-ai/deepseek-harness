@@ -48,9 +48,11 @@ import {
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
 import { captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './scaffold.ts'
-import { expandOwningTurnProcess, newEnglishPage, REPO_ROOT, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, hideSessionPanel, newEnglishPage, REPO_ROOT, saveFailureShot, showSessionPanel } from './support.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
+/** Optional bundles that compose a profile of their own; the Web plugin page hides them, the Host inventory still reports them. */
+const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
 
 /** Where the client looks for the image: the runtime's own name, beside the page. */
 const IMAGE_FILE = join(DIST_ROOT, 'preview', IMAGE_FILE_NAME)
@@ -200,6 +202,7 @@ function requireVfsAssets(): PreviewAssets {
     version: PREVIEW_FIXTURE_MANIFEST_VERSION,
     defaultFixture: fixtures[0]?.id ?? null,
     fixtures,
+    links: [],
   }
   writeAsset(`preview/${PREVIEW_FIXTURE_MANIFEST_FILE}`, `${JSON.stringify(fixtureManifest, null, 2)}\n`)
   return { overrides, manifest, cleanup: () => { rmSync(directory, { recursive: true, force: true }) } }
@@ -511,7 +514,8 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
       await commands.first().scrollIntoViewIfNeeded()
       const geometry = await commands.first().evaluate((element) => {
         const prompt = element.parentElement!
-        const header = element.closest('[class*="_header_"]')!
+        const header = element.closest('[data-terminal-banner]')
+        if (header === null) throw new Error('wrapped preview command has no terminal banner')
         header.scrollTop = 0
         const dot = prompt.querySelector('[data-state="done"]')
         if (dot === null) throw new Error('wrapped preview command has no successful status dot')
@@ -543,15 +547,19 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     await preview.getByRole('heading', { name: 'Preview Workspace', exact: true }).waitFor({ state: 'visible' })
     expect(await preview.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['PREVIEW.md'])
 
-    const subagents = page.getByRole('button', { name: '2 subagents', exact: true })
-    await subagents.waitFor({ timeout: 15_000 })
-    await subagents.hover()
-    const catalog = page.getByRole('tree', { name: 'Subagent sessions' })
+    const catalog = (await showSessionPanel(page)).getByRole('tree', { name: 'Subagent sessions' })
     await catalog.getByRole('treeitem', { name: /Review preview architecture/ }).waitFor()
     await catalog.getByRole('treeitem', { name: /Continue preview verification/ }).waitFor()
-    await catalog.press('Escape')
+    await hideSessionPanel(page)
 
-    await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+    // Auto-prefetch may already have published the page, and a pointer click can
+    // land on whatever moved under it; activate the control only while it still
+    // offers a page, then wait for the oldest seeded row.
+    const historyEdge = page.locator('[data-chat-history]')
+    await historyEdge.getByRole('button').evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement)) throw new Error('history control is not a button')
+      if (!button.disabled) button.click()
+    })
     await page.getByText(SHOWCASE_OLDEST, { exact: true }).waitFor({ timeout: 15_000 })
 
     await requestLazyChunk(page, site, manifest)
@@ -603,8 +611,8 @@ async function requestLazyChunk(page: Page, site: Site, manifest: ImageManifest)
 
 /**
  * Open the Plugins page, prove every optional bundle and installed plugin reads
- * its metadata, then switch each optional bundle on and off. Both changes apply
- * live; the session-titles layer applies after the base layers, and the
+ * its metadata, then switch each layerable optional bundle on and off. Both changes
+ * apply live; the session-titles layer applies after the base layers, and the
  * Inspector bundle runs Session Inspector without the NodeJS Inspector Worker.
  * @param page - Booted preview page.
  */
@@ -630,7 +638,8 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   expect(mask.url).toMatch(/^blob:/u)
   expect(mask.unresolved).toBe(false)
   expect(mask.width).toBeGreaterThan(0)
-  const result = await page.evaluate(async () => {
+  const standalone = STANDALONE_PROFILE_BUNDLES
+  const result = await page.evaluate(async ({ standalone }) => {
     type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
     const transport = (globalThis as typeof globalThis & {
       __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
@@ -674,9 +683,11 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
     }> = []
     // The packed worker composition cannot mount the Liveshare declaration row and its share host in
     // the same patch batch without racing the declaration service; the ordinary Web scaffold covers
-    // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it.
+    // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it. A bundle that
+    // composes a profile of its own is reported by the Host inventory but never layered over the Web profile, so the
+    // toggle list skips it too.
     for (const entry of bundles.filter(candidate => candidate.optional
-      && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare')) {
+      && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare' && !standalone.includes(candidate.name))) {
       const enable = await remote<{ application: string; error?: unknown }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: true })
       const plugins = await remote<Plugin[]>('pluginManager/listPlugins', {})
       const disable = await remote<{ application: string }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: false })
@@ -702,8 +713,10 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
         .map(row => ({ moduleName: row.moduleName, error: row.meta?.error })),
       toggles,
     }
-  })
+  }, { standalone })
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
+  // The Host inventory reports the standalone bundle with its metadata, switched off; no toggle targets it.
+  expect(result.toggles.map(toggle => toggle.name).filter(name => standalone.includes(name))).toEqual([])
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
   expect(result.optional.filter(entry => entry.error !== null)).toEqual([
     expect.objectContaining({ name: '@deepseek-ai/dsh-cua-bundle', error: { code: 'unsupported-platform' } }),
@@ -832,6 +845,39 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
       return body.result.value.items.length
     })
     expect(sessionCount).toBe(0)
+    const remoteStatus = await page.evaluate(async () => {
+      const transport = (globalThis as typeof globalThis & {
+        __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+      }).__DSH_TRANSPORT__
+      if (transport === undefined) throw new Error('empty preview transport is absent after boot')
+      const response = await transport.fetch('/api/remoteConnection/status', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request', rpcId: 'empty-preview-remote-status', method: 'remoteConnection/status',
+          payload: { args: { id: null } },
+        }),
+      })
+      const body = await response.json() as {
+        result: { ok: true; value: { url: string; availability: string; loginUrlAllowed: boolean; ticket: string; pollIntervalMs: number } }
+          | { ok: false; error: { message: string } }
+      }
+      if (!body.result.ok) throw new Error(`empty remoteConnection/status failed: ${body.result.error.message}`)
+      return body.result.value
+    })
+    expect(remoteStatus).toEqual({
+      url: 'http://127.0.0.1:3080', availability: 'unreachable-host', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000,
+    })
+    const pairingScript = await page.evaluate(async () => {
+      const transport = (globalThis as typeof globalThis & {
+        __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+      }).__DSH_TRANSPORT__
+      if (transport === undefined) throw new Error('empty preview transport is absent after boot')
+      const response = await transport.fetch('/pairing/client.js', { method: 'GET' })
+      if (!response.ok) throw new Error(`preview pairing script returned ${String(response.status)}`)
+      return response.text()
+    })
+    await exercisePairingScript(browser, origin, pairingScript)
     expect(pageErrors.map(error => error.message)).toEqual([])
     // One accepted static-host 404: the open-in-app availability read has no
     // host routes — the controller publishes an empty list and the header
@@ -846,6 +892,40 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
     throw pageErrors.length === 0
       ? error
       : new AggregateError([error, ...pageErrors], 'empty preview boot failed, with uncaught page errors')
+  } finally {
+    await page.close()
+  }
+}
+
+/**
+ * Execute the script generated inside the packed Worker in an independent browser document.
+ * Its pairing responses are page-local fixtures; no Worker globals or Client loader reach the document.
+ * @param browser - browser running the preview acceptance.
+ * @param origin - unique static fixture origin.
+ * @param script - JavaScript returned by the packed plugin's public route.
+ */
+async function exercisePairingScript(browser: Browser, origin: string, script: string): Promise<void> {
+  const page = await newEnglishPage(browser)
+  const errors: Error[] = []
+  page.on('pageerror', (error) => { errors.push(error) })
+  try {
+    await page.route(`${origin}/pairing-script-check`, route => route.fulfill({
+      contentType: 'text/html', body: '<!doctype html><html><body><dsh-device-pairing></dsh-device-pairing></body></html>',
+    }))
+    await page.route(`${origin}/pairing/request`, route => route.fulfill({ json: {
+      ...(route.request().postDataJSON() as { id: string; secret: string }), code: 'ABCD2345',
+      authority: origin, sourceIp: null, expiresInMs: 30000, pollIntervalMs: 1000,
+    } }))
+    await page.route(`${origin}/pairing/status`, route => route.fulfill({ json: { status: 'pending' } }))
+    await page.route(`${origin}/pairing/cancel`, route => route.fulfill({ json: { status: 'cancelled' } }))
+    await page.goto(`${origin}/pairing-script-check`)
+    await page.addScriptTag({ content: script })
+    expect(await page.evaluate(() => '__ModuleLoader__' in window)).toBe(false)
+    await page.locator('#auth-pair-request').click()
+    await expect.poll(() => page.locator('#auth-pair-code').textContent()).toBe('ABCD 2345')
+    await page.locator('#auth-pair-cancel').click()
+    await expect.poll(() => page.locator('#auth-pair-panel').getAttribute('data-state')).toBe('cancelled')
+    expect(errors.map(error => error.message)).toEqual([])
   } finally {
     await page.close()
   }

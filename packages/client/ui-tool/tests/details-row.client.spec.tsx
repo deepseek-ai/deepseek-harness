@@ -153,26 +153,33 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
-  it('puts agent names first and lets a compact description expand and collapse', () => {
+  it('expands a Session message acceptance receipt and retains Inspect', () => {
+    const inspect = vi.fn()
+    const args = JSON.stringify({ session_id: 'session-recipient', message: 'Please review the result.' })
+    const block = result('session_send_message', { message_id: 'accepted-message' }, args)
+    render(<DetailsRow {...{ useDisclosure, toolName: 'session_send_message', block, inspect, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toContain('Send message')
+    expect(header.textContent).toContain('session-recipient · Accepted')
+    expect(screen.queryByText('accepted-message')).toBeNull()
+    fireEvent.keyDown(header, { key: 'Enter' })
+    expect(screen.getByText('accepted-message')).toBeTruthy()
+    expect(screen.getByText('Please review the result.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
+    expect(inspect).toHaveBeenCalledOnce()
+  })
+
+  it('shows the full agent description above its name without a disclosure', () => {
     const description = 'Verify every construction bound. '.repeat(20)
     const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `reviewer/checker [running] — ${description}` }] }
     const model = detailsCardModel(block, t, 'en')!
     render(<ToolDetails model={model} t={t} />)
     const name = screen.getByText('reviewer/checker')
-    const toggle = screen.getByRole('button', { name: 'Expand description for reviewer/checker' })
-    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(toggle.textContent).toBe(description)
-    fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Collapse description for reviewer/checker' }).getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-  })
-
-  it('uses an unqualified accessible name when a compact description has no title', () => {
-    render(<ToolDetails model={{ compact: true, items: [{ subtitle: 'Details', fields: [] }] }} t={t} />)
-    const toggle = screen.getByRole('button', { name: 'Expand' })
-    fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Collapse' })).toBe(toggle)
+    const title = screen.getByText(description.trim())
+    expect(title.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('listitem').textContent).toBe(`${description}Runningreviewer/checker`)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByRole('listitem').querySelector('svg')).toBeNull()
   })
 
   it('expands fields with the keyboard and keeps Inspect available', () => {
@@ -191,6 +198,7 @@ describe('DetailsRow', () => {
     ['subagent', 'Create subagent'],
     ['subagent_fork', 'Fork subagent'],
     ['list_subagent_models', 'List models'],
+    ['session_send_message', 'Send message'],
   ])('%s uses the two-person icon and its own title', (name, title) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
@@ -220,15 +228,33 @@ describe('DetailsRow', () => {
     expect(header.textContent).toBe('Waiting for messages…')
   })
 
+  it.each([
+    ['cordis_inspect_list', {}, { providers: [] }],
+    ['cordis_inspect_query', { platform: 'host', provider: 'Service', method: 'listService' }, { provider: 'Service', method: 'listService', data: {} }],
+  ] as const)('keeps the %s title and details for the unified tool', (legacyName, query, value) => {
+    const legacy = result(legacyName, value, JSON.stringify(query))
+    const current = result('cordis_inspect', value, JSON.stringify(legacyName === 'cordis_inspect_list' ? {} : { query }))
+    expect(detailsCardModel(current, t, 'en')).toEqual(detailsCardModel(legacy, t, 'en'))
+    const oldView = render(
+      <DetailsRow {...{ useDisclosure, toolName: legacyName, block: legacy, t } as Parameters<typeof DetailsRow>[0]} />,
+    )
+    const title = screen.getByRole('button', { expanded: false }).textContent
+    oldView.unmount()
+    render(<DetailsRow {...{ useDisclosure, toolName: 'cordis_inspect', block: current, t } as Parameters<typeof DetailsRow>[0]} />)
+    expect(screen.getByRole('button', { expanded: false }).textContent).toBe(title)
+  })
+
   it('registers the supported tool names through the scoped keyed slot', () => {
     const register = vi.fn((_spec: unknown, _component: unknown) => () => undefined)
     const inject = vi.fn((_name: string, callback: () => Iterable<() => void>) => {
       for (const dispose of callback()) dispose()
     })
     detailsToolview.apply({ slots: { inject, register } } as never)
-    expect(register.mock.calls).toHaveLength(40)
+    expect(register.mock.calls).toHaveLength(42)
     const specs = register.mock.calls.map(([spec]) => spec)
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'subagent_fork', locale: 'conversation' })
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'session_send_message', locale: 'conversation' })
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect', locale: 'conversation' })
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
     for (const key of ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit', 'schedule_update', 'schedule_delete']) {
       expect(specs).toContainEqual({ name: 'tool.call.toolview', key, locale: 'conversation' })

@@ -2,6 +2,7 @@
  * Tests for the mcp-client plugin's `apply` lifecycle entry point.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import assert from 'node:assert/strict'
 import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest'
@@ -78,6 +79,7 @@ import { apply, name, inject, Config as ConfigSchema } from '@deepseek-ai/dsh-mc
 async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -282,6 +284,7 @@ describe('apply (plugin lifecycle)', () => {
 
   it('releases the serverName reservation on dispose', async () => {
     const first = new Context()
+    await first.plugin(SessionProjectionRegistry)
     await first.plugin(SystemPrompt)
     await first.plugin(ToolRuntime)
     await first.plugin(NativeToolExecutor)
@@ -293,6 +296,7 @@ describe('apply (plugin lifecycle)', () => {
     // Same root would conflict; a fresh app root reuses the name freely,
     // and the disposed instance no longer holds the reservation on its root.
     const second = new Context()
+    await second.plugin(SessionProjectionRegistry)
     await second.plugin(SystemPrompt)
     await second.plugin(ToolRuntime)
     await second.plugin(NativeToolExecutor)
@@ -492,6 +496,7 @@ describe('server instruction limits', () => {
       assert(failure instanceof Error)
       assert(failure.cause instanceof Error)
       expect(failure.cause.message).toContain('server instructions exceed maxInstructionBytes')
+      expect(failure.cause).toMatchObject({ name: 'McpLocalError', code: 'MCP_INSTRUCTIONS_TOO_LARGE' })
       expect(ctx.tools.schemas()).toEqual([])
     } finally {
       spy.mockRestore()

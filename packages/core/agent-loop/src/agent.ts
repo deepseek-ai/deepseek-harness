@@ -32,7 +32,7 @@ import type { Scope } from '@deepseek-ai/dsh-scope'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
-import { renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import { ToolActivationError, ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
 import type { ResolvedToolSet } from '@deepseek-ai/dsh-tools'
@@ -40,7 +40,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
 import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
-import { SystemPromptProjection } from './runtime-context.ts'
 
 /** Projected facts consumed by this driver; registration stays with the factory. */
 interface LoopProjections {
@@ -130,7 +129,6 @@ export class ReactLoopAgent implements Agent {
   /** Process-local revision of assistant frames for this attached Session. */
   private assistantStreamRevision = 0
   private assistantAttemptCounter = 0
-  private readonly systemPrompt: SystemPromptProjection
   /** Identities fully frozen by this loop; weak references do not retain replaced history. */
   private readonly frozenMessages = new WeakSet<Message>()
 
@@ -141,6 +139,7 @@ export class ReactLoopAgent implements Agent {
     public readonly session: Session,
     projections: LoopProjections,
     lastTurn: number,
+    private readonly lifetimeSignal: AbortSignal,
   ) {
     this.requestSurfaceGeneration = session.surface.contentGeneration
     this.dispatch = agentEvents(loopCtx, this)
@@ -150,7 +149,6 @@ export class ReactLoopAgent implements Agent {
     this.inbox = new ReactLoopInbox(projections.inbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
-    this.systemPrompt = new SystemPromptProjection(session)
   }
 
   get status(): AgentStatus {
@@ -189,11 +187,15 @@ export class ReactLoopAgent implements Agent {
   }
 
   cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
-    if (!options.keepInbox) {
-      this.inbox.clear()
-      if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+    try {
+      if (!options.keepInbox) this.inbox.clear()
+    } finally {
+      // Queue persistence must not prevent cancellation of admitted work.
+      if (this.phase.kind !== 'idle') {
+        if (!options.keepInbox) this.phase.wakeRequested = false
+        this.phase.abort.abort(cause)
+      }
     }
-    if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
   }
 
   runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -228,6 +230,7 @@ export class ReactLoopAgent implements Agent {
    *   the inbox insertion so a reentrant cancel cannot reclassify it.
    */
   private wakeDriver(wakeAfterAbort = false): void {
+    if (this.lifetimeSignal.aborted) return
     if (this.phase.kind !== 'idle') {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;
@@ -314,13 +317,6 @@ export class ReactLoopAgent implements Agent {
       toolSet.dispose()
       throw error
     }
-  }
-
-  /** Whether the assembled tool schemas differ from the logged request header's. */
-  private toolsChanged(tools: PromptAssembly['tools']): boolean {
-    const baseline = this.session.requestHeader()
-    if (baseline === undefined) return false
-    return !headerEquals(baseline, canonicalHeader({ ...baseline, tools: [...tools] }))
   }
 
   /** Open one turn before claiming its first proposed step. */
@@ -439,7 +435,6 @@ export class ReactLoopAgent implements Agent {
     signal.throwIfAborted()
 
     const { assembly } = decision
-    const renderedPrompt = renderPrompt(assembly)
     let firstAttempt = true
     while (true) {
       const { config, preparedCall } = await this.prepareRequest(turn, step, decision.selection, signal)
@@ -450,16 +445,11 @@ export class ReactLoopAgent implements Agent {
       const context = this.runtimeContext.project(sections)
       signal.throwIfAborted()
       const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
-      const commits = this.systemPrompt.project(renderedPrompt, {
-        inHistory: preparedCall?.systemPromptUpdate === 'in-history',
-        startsSeries: startsRequestSeries
-          || this.requestSurfaceGeneration !== this.session.surface.contentGeneration
-          || (preparedCall?.toolUpdate === undefined && this.toolsChanged(assembly.tools)),
-      })
-      for (const { message, intent } of commits) {
+      let contextAdmitted = false
+      // A retry writes only the rebuild that an intervening compaction requires.
+      for (const { message, intent } of assembly.systemUpdates(!firstAttempt)) {
         this.session.append('system/message', { turn, step, message }, intent)
       }
-      let contextAdmitted = false
       if (firstAttempt) {
         for (const message of decision.messages) {
           if (message.source.kind === 'runtime-context') {

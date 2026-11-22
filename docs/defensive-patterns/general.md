@@ -121,6 +121,35 @@ globalThis.__dshCache = new Map()   // shared across instances, reclaimed never
 
 The wrong form lets instances overwrite each other, makes reclamation timing unknowable, and leaks state between tests.
 
+## Plugins do not read the Cordis root context
+
+A plugin reaches services, listeners, and registrations through its own context, never through the root context that `ctx[Context.root]` returns. A read through the root skips the `inject` check, because the root fiber has no runtime; a listener on the root skips scope filtering; the root resolves services in the root isolate realm instead of the plugin's; and a listener or accessor registered there is not removed when the plugin is disposed.
+
+The judged condition: name the declared mechanism each use replaces. A service read is an `inject` entry; a listener that must observe every scope passes `{ global: true }`; a per-application key or a root-level boot operation is a service that owns it. The boundary is first-party JavaScript and TypeScript, including tests and fixtures, and covers `Context.root`, `symbols.root`, and `Symbol.for('cordis.root')`, which name the same symbol. [verify-cordis-root.ts](../../scripts/verify-cordis-root.ts), run as `pnpm run verify-cordis-root` and by `scripts/run-gates.ts` as the `cordis-root` gate, rejects new reads. Exception: the files listed in its `CORDIS_ROOT_EXEMPTIONS`, which pin the root contract itself. The reads recorded in `scripts/cordis-root.baseline.json` are remediation work owned by their packages, not a precedent for new code; the [decision record](../../.agents/notes/implemented/process/2026-11-13-no-new-cordis-root-reads.md) states the rationale.
+
+```ts
+// Services come from inject; a listener that observes every scope says so.
+interface Loader { await(): Promise<void> }
+interface Context {
+  readonly loader: Loader
+  on(name: string, listener: () => void, options?: { global?: boolean }): () => void
+}
+
+export const inject = ['loader']
+
+export function apply(ctx: Context, listener: () => void): void {
+  void ctx.loader.await()
+  ctx.on('agent/inbox/inserted', listener, { global: true })
+}
+```
+
+```ts ignore-check
+void ctx[Context.root].loader.await()                   // no inject entry, no wait
+ctx[Context.root].on('agent/inbox/inserted', listener)  // escapes scope filtering and plugin disposal
+```
+
+The wrong form starts a plugin before its dependency exists, lets it observe and change state outside its scope and realm, and leaves registrations behind after the plugin is disposed.
+
 ## A business capability owns itself
 
 A business capability lives in its own package and attaches through a registration surface — a registry, `slots.inject`, a waterfall, or an event subscription. A runtime, controller, manager, or gateway carries generic orchestration: it may hold the registry structure and the disposal lifecycle, while the entries are written by the packages that own them, and it never hardcodes a central table of business rows.
@@ -163,7 +192,7 @@ Measurement is owned by [benchmarks/](../../benchmarks/AGENTS.md), one directory
 pnpm run test:bench
 ```
 
-Package-local diagnostics stay beside their owner with the `.perf.ts` suffix and do not join `test:bench`. The CI gate is `pnpm run check:ci:bench` (job `node 24 / benchmarks`), which publishes a scaled report — that gate is an alert, not a pass: a regression there is located by re-running the owning scenario and profiling segments locally to find which part slowed and which change introduced it. Retained-memory claims use `pnpm run test:bench:memory 4g|8g`, which reruns its listed files under an unchanged budget in a swapless cgroup.
+Package-local diagnostics stay beside their owner with the `.perf.ts` suffix and do not join `test:bench`. The CI gates are the two phase jobs `node 24 / benchmarks 1/2` and `2/2` (`pnpm run check:ci:bench-prebuilt`), and `node 24 / benchmark report` publishes a scaled report from both — that gate is an alert, not a pass: a regression there is located by re-running the owning scenario and profiling segments locally to find which part slowed and which change introduced it. Retained-memory claims use `pnpm run test:bench:memory 4g|8g`, which reruns its listed files under an unchanged budget in a swapless cgroup.
 
 Boundaries: edits that touch no runtime path — comments, documentation, test-only code — need no measurement, and production performance code is not benchmark instrumentation to be deleted opportunistically (`performance.now()` and `scheduler.yield()` are part of production decode and encode chunk scheduling). An architectural change that genuinely costs performance states the measured cost and the reason, and the domain owner approves it; "the layering needed it" is not a self-service reason. Record the command, the numbers, the environment, and the input size so the baseline can be rebuilt.
 

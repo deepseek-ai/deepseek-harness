@@ -20,12 +20,14 @@ import {
   type InitializeParams,
   type InitializeResult,
   type SessionPromptParams,
+  type SessionResumeParams,
   type SessionQueryParams,
   type SessionQueryResult,
   type SdkPromptContentBlock,
   type SdkUserQuestionRequest,
 } from '@deepseek-ai/dsh-sdk-protocol'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { disposeRuntimeProcess } from './dispose.ts'
 import { resolveDshLaunch, type RuntimeProcessOptions } from './launch.ts'
 import type { HarnessClientOptions, HarnessNotification, NotificationFilter } from './types.ts'
@@ -349,10 +351,13 @@ export class HarnessClient {
    * Queue one prompt without native command routing and return its durable inbox identity.
    * @param sessionId - target session; an unknown id creates it.
    * @param contentBlocks - the user message, sent verbatim.
+   * @param options - optional user time zone (UTC or IANA Area/Location); omitted, the runtime samples its process zone.
    * @returns the queued message id.
    */
-  async prompt(sessionId: string, contentBlocks: SdkPromptContentBlock[]): Promise<string> {
-    const params: SessionPromptParams = { sessionId, contentBlocks }
+  async prompt(sessionId: string, contentBlocks: SdkPromptContentBlock[], options?: { timeZone?: string }): Promise<string> {
+    const params: SessionPromptParams = {
+      sessionId, contentBlocks, ...options?.timeZone === undefined ? {} : { timeZone: options.timeZone },
+    }
     const result = await this.request('session/prompt', { ...params })
     if (!isRecord(result) || typeof result.messageId !== 'string') {
       throw new SdkProtocolError(`session/prompt returned no message id: ${JSON.stringify(result)}`)
@@ -363,10 +368,11 @@ export class HarnessClient {
   /**
    * Restore persisted history without sending a prompt; failures propagate without creating a session.
    * @param sessionId - persisted identity in this runtime's configured persistence store.
+   * @param options - explicit permission preset to persist before execution; omission retains saved permissions.
    * @returns after the session is ready for prompts.
    */
-  async resumeSession(sessionId: string): Promise<void> {
-    await this.request('session/resume', { sessionId })
+  async resumeSession(sessionId: string, options: Omit<SessionResumeParams, 'sessionId'> = {}): Promise<void> {
+    await this.request('session/resume', { ...options, sessionId })
   }
 
   /**
@@ -379,7 +385,7 @@ export class HarnessClient {
   }
 
   /**
-   * Change a Session's effective directory without changing origin or permissions.
+   * Change a Session's effective directory without changing its origin; the workspace-write boundary follows it.
    * @param sessionId - target Session; an unknown id creates it.
    * @param path - absolute or Session-current-directory-relative path.
    * @returns the validated absolute directory.
@@ -585,15 +591,18 @@ export function createProcessHarnessClient(options: RuntimeProcessOptions): Harn
  * @param client - client owning the initialized runtime connection.
  * @param sessionId - target Session; an unknown id creates it.
  * @param input - text or content blocks, without client-side command interpretation.
+ * @param timeZone - optional user time zone for a prompt; omitted, the runtime samples its process zone.
  * @returns the validated prompt receipt or native command execution.
  */
 export async function queryInput(
   client: HarnessClient,
   sessionId: string,
   input: string | SdkPromptContentBlock[],
+  timeZone?: string,
 ): Promise<SessionQueryResult> {
   const params: SessionQueryParams = {
-    sessionId: SessionId(sessionId), contentBlocks: normalizeInput(input),
+    sessionId: brandString<SessionId>(sessionId), contentBlocks: normalizeInput(input),
+    ...timeZone === undefined ? {} : { timeZone },
   }
   const value = await client.request('session/query', params)
   if (isRecord(value)) {

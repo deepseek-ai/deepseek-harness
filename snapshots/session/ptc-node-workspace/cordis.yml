@@ -35,6 +35,9 @@
 - insert:
     - id: ptc-runtime-late
       name: '@deepseek-ai/dsh-ptc-runtime-node'
+      # Recorded programs are async function bodies.
+      config:
+        executionMode: per-call
 
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'

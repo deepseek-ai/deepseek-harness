@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { FiberState } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge'
 import { chromium } from 'playwright'
@@ -82,22 +83,23 @@ it('persists the unified review and worktree switch and retains checkouts after 
   expect(rows()).toEqual([])
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
   expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
-  expect(tools()).toContain('working_directory')
-  expect(tools()).not.toContain('create_worktree')
+  expect(tools()).not.toContain('enter_worktree')
+  expect(tools()).not.toContain('exit_worktree')
 
   await toggle.click()
   await expect.poll(() => rows().length, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(2)
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
   expect(await selectedBundles()).toContain(BUNDLE)
-  expect(tools()).toContain('create_worktree')
+  expect(tools()).toContain('enter_worktree')
+  expect(tools()).toContain('exit_worktree')
   expect(scaffold.ctx.get('forgePanel')).toBeDefined()
   const created = { path: join(repository, '.agents/worktrees/gui-opt-in'), baseCommit: (await git('rev-parse', 'HEAD')).stdout.trim() }
   const result = await scaffold.ctx.tools.execute({
     agent, signal: new AbortController().signal,
-    calls: [{ type: 'tool-call', id: ToolCallId('gui-opt-in'), name: 'create_worktree', arguments: JSON.stringify({ name: 'gui-opt-in' }) }],
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('gui-opt-in'), name: 'enter_worktree', arguments: JSON.stringify({ name: 'gui-opt-in' }) }],
   })
   expect(result.results[0]?.result.isError).not.toBe(true)
-  expect(result.results[0]?.result.value).toEqual({ ...created, branch: 'gui-opt-in', repositoryRoot: repository })
+  expect(result.results[0]?.result.value).toEqual({ ...created, branch: 'gui-opt-in', repositoryRoot: repository, created: true })
   expect(await readFile(join(created.path, 'retained.txt'), 'utf8')).toBe('retained checkout\n')
   expect(scaffold.ctx.workingDirectory.get(agent.session)).toBe(created.path)
 
@@ -106,15 +108,15 @@ it('persists the unified review and worktree switch and retains checkouts after 
   card = panel.locator(`[data-plugin-group="more"] [data-plugin-package="${BUNDLE}"]`)
   toggle = card.getByRole('switch', { name: 'Enable Change requests & worktrees', exact: true })
   await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-  expect(tools()).toContain('create_worktree')
+  expect(tools()).toContain('enter_worktree')
   await toggle.click()
   await expect.poll(() => rows().length, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(0)
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   expect(await selectedBundles()).not.toContain(BUNDLE)
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
   expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
-  expect(tools()).not.toContain('create_worktree')
-  expect(tools()).toContain('working_directory')
+  expect(tools()).not.toContain('enter_worktree')
+  expect(tools()).not.toContain('exit_worktree')
   expect(await readFile(join(created.path, 'retained.txt'), 'utf8')).toBe('retained checkout\n')
   expect((await git('show-ref', '--verify', 'refs/heads/gui-opt-in')).stdout).toContain(created.baseCommit)
   expect(scaffold.ctx.workingDirectory.get(agent.session)).toBe(created.path)
@@ -123,7 +125,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   panel = await openPlugins()
   await expect.poll(() => panel.getByRole('switch', { name: 'Enable Change requests & worktrees', exact: true })
     .getAttribute('aria-checked')).toBe('false')
-  expect(tools()).not.toContain('create_worktree')
+  expect(tools()).not.toContain('enter_worktree')
   expect(await selectedBundles()).not.toContain(BUNDLE)
   expect(tripwire.pageErrors).toEqual([])
 })

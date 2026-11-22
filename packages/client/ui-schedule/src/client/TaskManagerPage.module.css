@@ -36,11 +36,15 @@
 
 /* Matches the Plugins page's 960px column and responsive inline insets. */
 .pageContent {
-  max-width: 960px;
+  max-width: calc(960px + 2 * clamp(24px, 4vw, 48px));
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 @media (max-width: 767px) {
@@ -91,14 +95,13 @@
   white-space: nowrap;
 }
 
-/* The Plugins toolbar's steps: New and the bulk cleanup share one 32px
-   capsule with a 13px label. */
+/* Header actions use the standard-control radius at their compact page height. */
 .headerAction {
   height: 32px;
   font-size: 13px;
   line-height: 20px;
   padding: 0 12px;
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-md);
 }
 
 /* The existing Plugins page's adjacent creation menu. */
@@ -108,7 +111,7 @@
   height: 32px;
   width: 32px;
   padding: 0;
-  border-radius: 0 var(--dsw-radius-lg) var(--dsw-radius-lg) 0;
+  border-radius: 0 var(--dsw-radius-md) var(--dsw-radius-md) 0;
   border-left: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 30%, transparent);
 }
 .createMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
@@ -157,9 +160,7 @@
   gap: 8px 12px;
 }
 
-/* The mock's `.tab`: the filter chip's 28px box, 10px sides, 14px radius, and
-   the mock's 14px label. The selected chip takes the mock's `--hover` fill at
-   the chip's own weight instead of the atom's bordered capsule. */
+/* Filter chips use the compact-control radius and retain a stable footprint. */
 .filterTab {
   display: inline-flex;
   flex: none;
@@ -167,7 +168,7 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
@@ -220,7 +221,7 @@
   margin: 0;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-tertiary);
   transition: border-color 0.15s;
 }
@@ -257,7 +258,7 @@
 }
 
 .searchField input::placeholder {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .searchField input:focus-visible {
@@ -288,7 +289,9 @@
 /* The mock's `#rule-list`: the catalog notices and the rows share one column
    with no box of their own. */
 .list {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 
 /* The Plugins page's `.cards` column: 2px between rows. */
@@ -311,7 +314,7 @@
   width: 100%;
   height: auto;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   text-align: left;
   white-space: normal;
 }
@@ -417,7 +420,7 @@
   gap: 9px;
   margin: 0 0 20px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-sidebar-fill);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -786,7 +789,7 @@
 .retentionRule {
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -804,7 +807,7 @@
   min-width: 0;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
 }
 
 /* The searchable zone inventory is intentionally shorter than a general menu:
@@ -889,7 +892,7 @@
   min-width: 0;
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   transition: background 0.15s;
 }
 
@@ -936,7 +939,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: var(--dsw-radius-md);
   outline: none;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -963,7 +966,7 @@
   padding: 5px 8px;
   margin-right: 0;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -992,7 +995,7 @@
   justify-content: center;
   min-width: 72px;
   height: 36px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
 }
 
@@ -1118,7 +1121,7 @@
   margin: 0;
   padding: 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
   outline: 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -1156,7 +1159,7 @@
   gap: 12px;
   margin: 0 -8px;
   padding: 14px 8px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   font-size: 14px;
   line-height: 22px;
 }
@@ -1365,8 +1368,18 @@
   --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
+/* The instruction only identifies the task here, so a long one stays a
+   three-line excerpt instead of growing the dialog. */
 .confirmPrompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1440,4 +1453,144 @@
   .zoneSearch {
     font-size: 16px;
   }
+}
+
+/* Recommended tasks under the empty Enabled and All views: a two-column grid,
+   one column below 600px of content width. The heading starts on the tiles'
+   12px inset. */
+.recommendations {
+  container-type: inline-size;
+  margin-top: 8px;
+}
+
+.recommendationsHeading {
+  margin: 0 0 6px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.recommendationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (max-width: 600px) {
+  .recommendationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.recommendation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  height: auto;
+  padding: 12px;
+  border-radius: var(--dsw-radius-lg);
+  text-align: left;
+  white-space: normal;
+}
+
+/* Tiles take the empty illustration's background. Glyphs draw in the blue
+   accent, and each glyph's main shape takes a 16% tint of that blue, which
+   stays visible against the tile in both themes. */
+.tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-illustration-background);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tile [data-fill] {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+
+.tileGlyph {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.tilePlus {
+  display: none;
+  flex: none;
+}
+
+.recommendation:focus-visible .tileGlyph {
+  display: none;
+}
+
+.recommendation:focus-visible .tilePlus {
+  display: block;
+}
+
+@media (hover: hover) {
+  .recommendation:hover .tileGlyph {
+    display: none;
+  }
+
+  .recommendation:hover .tilePlus {
+    display: block;
+  }
+}
+
+.recommendationContent,
+.recommendationDetails {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recommendationContent {
+  flex: 1;
+}
+
+.recommendationTitle {
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.recommendationDescription {
+  margin-top: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.recommendationWhen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.whenGlyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.list:not(.listWithRecommendations) > .empty {
+  flex: 1;
+  justify-content: center;
+  min-height: 280px;
+  box-sizing: border-box;
 }

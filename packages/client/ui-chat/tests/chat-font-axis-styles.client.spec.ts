@@ -33,7 +33,7 @@ describe('chat flow font-size axis', () => {
   })
 
   it('command and context summaries read the secondary tier on the shared row line', () => {
-    expect(declarationsFrom(read('GenericCommandCard.module.css'), '.summary')).toEqual(expect.arrayContaining([
+    expect(declarationsFrom(read('CommandStatusRow.module.css'), '.summary')).toEqual(expect.arrayContaining([
       'font-size: var(--dsh-content-font-size-secondary, 13px)',
       'line-height: calc(24px + var(--dsh-content-font-delta, 0px))',
     ]))
@@ -64,7 +64,7 @@ describe('chat flow font-size axis', () => {
 
   it('compaction rows follow the axis like the disclosure rows they mirror', () => {
     const css = read('MessageItem.module.css')
-    for (const selector of ['.compactionTitle', '.compactionSummary', '.compactionBody']) {
+    for (const selector of ['.compactionTitle', '.compactionSummary']) {
       expect(declarationsFrom(css, selector)).toEqual(expect.arrayContaining([
         'font-size: var(--dsh-content-font-size-secondary, 13px)',
         'line-height: calc(24px + var(--dsh-content-font-delta, 0px))',
@@ -76,13 +76,18 @@ describe('chat flow font-size axis', () => {
     ]))
   })
 
+  it('the inherited-history caption glyph scales with its label', () => {
+    expect(declarationsFrom(read('MessageItem.module.css'), '.inheritedHistoryIcon')).toEqual(expect.arrayContaining([
+      'width: calc(14px + var(--dsh-content-font-delta, 0px))',
+      'height: calc(14px + var(--dsh-content-font-delta, 0px))',
+    ]))
+  })
+
   it('expanded bodies indent by 22px + delta so content stays under the shifted title start', () => {
     // The DisclosureRow title starts at leading (16 + delta) + gap 6; a fixed
     // 22px indent would misalign at every non-default size.
     const indent = 'calc(22px + var(--dsh-content-font-delta, 0px))'
     expect(declarationsFrom(read('ReasoningRow.module.css'), '.thinkBody'))
-      .toEqual(expect.arrayContaining([`padding: 4px 0 4px ${indent}`]))
-    expect(declarationsFrom(read('MessageItem.module.css'), '.compactionBody'))
       .toEqual(expect.arrayContaining([`padding: 4px 0 4px ${indent}`]))
     expect(declarationsFrom(read('ContextInjectionRow.module.css'), '.body'))
       .toEqual(expect.arrayContaining([`margin: 4px 0 0 ${indent}`]))

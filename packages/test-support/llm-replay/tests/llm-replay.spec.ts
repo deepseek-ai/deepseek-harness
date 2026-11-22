@@ -5,12 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { CompactionId } from '@deepseek-ai/dsh-compaction'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import LlmRuntime, {
   AssistantStreamAccumulator,
   BlockAssembler,
-  ToolCallId,
+  type ToolCallId,
   createAssistantMessage,
   createToolResultMessage,
   createUserMessage,
@@ -57,7 +58,7 @@ const TEXT_CHUNKS: StreamChunk[] = [
   { type: 'finish', reason: { kind: 'stop' } },
 ]
 
-const COMPACTION_ID = CompactionId('replay-compaction')
+const COMPACTION_ID = brandString<CompactionId>('replay-compaction')
 
 /** Build a minimal session-JSONL string: a header line + the given events. */
 function sessionJsonl(
@@ -709,7 +710,7 @@ describe('parseSessionLog', () => {
   })
 
   it('synthesizes projected tool-call chunk envelopes from their argument count', () => {
-    const callId = ToolCallId('call-1')
+    const callId = brandString<ToolCallId>('call-1')
     const source = [
       JSON.stringify({ type: 'session', version: 0, id: 'packed-tool', createdAt: 0 }),
       JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
@@ -1327,8 +1328,8 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
     function scriptedCall(argumentsDelta: string): StreamChunk[] {
       return [
         { type: 'block-start', index: 0, blockType: 'tool-call' },
-        { type: 'tool-call-delta', index: 0, id: ToolCallId('c1'), name: 'update_goal', argumentsDelta },
-        { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('c1'), name: 'update_goal', arguments: argumentsDelta } },
+        { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('c1'), name: 'update_goal', argumentsDelta },
+        { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('c1'), name: 'update_goal', arguments: argumentsDelta } },
         { type: 'finish', reason: { kind: 'tool-calls' } },
       ]
     }
@@ -2029,7 +2030,7 @@ describe('installLlmReplay (per-session keying)', () => {
         index: 0,
         block: {
           type: 'tool-call',
-          id: ToolCallId('send-child'),
+          id: brandString<ToolCallId>('send-child'),
           name: 'send_message',
           arguments: '{"agent":"{{session:2}}"}',
         },
@@ -2050,7 +2051,7 @@ describe('installLlmReplay (per-session keying)', () => {
         index: 0,
         block: {
           type: 'tool-call',
-          id: ToolCallId('send-child'),
+          id: brandString<ToolCallId>('send-child'),
           name: 'send_message',
           arguments: '{"agent":"live-child"}',
         },

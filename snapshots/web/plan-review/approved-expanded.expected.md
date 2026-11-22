@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy": "Plan a small change: add"
   - text: Standard mode
+  - button "Session panel"
   - button "More actions"
   - tablist:
     - tab "Chat" [selected]
@@ -11,6 +12,7 @@
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Analysis completed" [expanded]
+- button "Context injection plan-mode The user switched this session to plan mode."
 - button "Context injection runtime-context"
 - button "Context injection skill-catalog"
 - button "Context injection time-context"

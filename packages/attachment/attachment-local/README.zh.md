@@ -47,6 +47,8 @@ kind: "package-reference"
 | `normalizedImageMaxDimension` | `8192` | 应用总像素预算后的最大长边 |
 | `normalizedImageMaxBytes` | `4 MiB` | 编码字节目标；没有候选满足时保留质量阶梯中的最小输出 |
 | `imageCompressionConcurrency` | `2` | 并发规范化与请求变换的 FIFO 上限 |
+| `requestImageMinShrinkFactor` | `1.1` | 请求图片超过硬字节上限后，长边缩小倍数的最小值；必须大于 1 |
+| `requestImageByteHeadroom` | `0.95` | 估算下一次尺寸时使用的硬字节上限比例；范围为 `(0, 1]` |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-attachment-local)完整列出了所有受支持的字段及其 JSDoc。
 
@@ -57,6 +59,10 @@ kind: "package-reference"
 ### 附加图片时会发生什么
 
 附加图片后，会先检查源图限制、媒体类型、尺寸与像素，再完成规范化并保存。系统应用 EXIF 方向、移除元数据与色彩配置、保留透明度，并按总像素预算与长边上限缩小光栅。带 alpha 的图片使用 WebP，不透明图片使用 JPEG，共享 85/75/60 质量阶梯；全部候选都超过字节目标时保留最小输出。被接受的图片会重新出现在历史和后续轮次中，重启后也不例外；所选模型路由会收到缓存的请求版本，并在其文件系统可映射宿主对象时收到只读执行世界路径。
+
+### 请求图片的字节限制
+
+模型路由提供硬编码字节上限 `maxImageBytes`，以及不大于硬上限的目标 `imageTargetBytes`。编码器先在请求尺寸下尝试 85、75、60 三档质量。仅超过目标值的输出保持分辨率。最小结果仍超过硬上限时，长边除以 `max(requestImageMinShrinkFactor, sqrt(actualBytes / (requestImageByteHeadroom × maxImageBytes)))`，向下取整并确保严格减小。每次都从已保存的源图按新尺寸编码，不重复压缩上一轮有损结果。每轮编码之间检查取消状态；即使 1×1 图片仍无法满足上限时，以 `IMAGE_REQUEST_TOO_LARGE` 失败。成功结果和缓存命中均满足硬上限。调用方使用返回的实际宽高计算坐标。
 
 ### 可能出什么问题
 
@@ -87,7 +93,7 @@ kind: "package-reference"
 
 准入允许每条消息最多 20 张图片与 200 MiB 源字节；单个源图最多 50 MiB、6400 万像素与单边 65,535 像素。系统应用方向、移除元数据与色彩配置，并把规范化结果限制在 2048×2048 总像素预算、8192 像素长边和 4 MiB 编码字节目标内，因此，即使宽高比极端，图片也会保留短边分辨率。已经满足限制的干净、单帧、8-bit sRGB/sRGBA PNG、JPEG 或 WebP 会逐字节直通；GIF、动画、元数据、方向、16-bit PNG 与不兼容色彩空间会触发转换。
 
-请求版本位于由 `dshCachePath` 解析的 `<DSH_HOME>/cache/attachments/request-images/`；显式 `dshHome` 设置同时适用于缓存与持久存储。在两次请求之间清空此缓存会保留持久附件，后续读取会重新生成请求版本。`readImageRequest` 在不放大的前提下缩放到路由选定的目标尺寸，缩放只按长边给定，短边由编码器按路由预测的方式推出，随后通过相同的 alpha 路由与质量阶梯应用独立编码字节目标。缓存身份包含附件 id、变换版本、目标尺寸、字节目标与固定编码参数；缓存字节会先通过文件头探测格式、8-bit sRGB/sRGBA、尺寸与 alpha 信息，不匹配时重新生成。并发调用方共享一次变换与缓存写入，且只在没有等待方时由取消停止共享工作。`imageHostPath` 派生规范化对象的宿主路径，挂载的文件系统可以把该路径映射进执行世界，而不会写入持久历史。
+请求版本位于 `<DSH_HOME>/cache/attachments/request-images/`，由 `dshCachePath` 解析；显式 `dshHome` 同时用于缓存和持久存储。请求之间清空此缓存不会影响持久附件，后续读取会重新生成变体。`readImageRequest` 按路由目标缩放且不放大，沿长边调整以保持比例，再按相同的透明度分流和质量阶梯处理软目标及硬字节上限，仅在硬上限仍不满足时继续降低分辨率。缓存身份包含附件 id、变换版本、目标尺寸、两项字节限制、缩放参数和固定编码设置。缓存读取检查格式、8 位 sRGB/sRGBA、尺寸、透明度和硬字节上限，不匹配时重新生成。并发调用共享一次变换和缓存写入，仅在所有等待方均离开后取消共享工作。`imageHostPath` 派生规范化对象的宿主路径，文件系统可以将其映射到执行环境，不写入持久历史。
 
 通用文件字节的唯一规范对象位于 `<DSH_HOME>/attachments/v1/file-objects/<digest-prefix>/<digest>`。每条引用路径 `<DSH_HOME>/attachments/v1/files/<digest-prefix>/<digest>/<name>` 都是只读硬链接，所以名称不同但字节相同的文件不会重复占用磁盘。`readFileStream` 以有界分块读取引用路径，并在消费方成功结束前校验完整摘要与记录的字节数。对象缺失、被改写或截断时，消费方会失败，不会得到字节已经变化的完整导出。
 

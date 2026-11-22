@@ -3,7 +3,7 @@ import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { once } from 'node:events'
@@ -12,6 +12,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Translator from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** One external anonymous request, with only the relevant protocol facts. */
 export interface StorageWireCall { provider: 'bing' | 'google'; path: string; text: string; source: string; target: string }
@@ -125,7 +126,7 @@ export async function storageFixture(cleanups: Array<() => Promise<void>>, optio
     await using handle = await ctx.sessionPersistence.open(id, 'read')
     return (await handle.read()).events
   }
-  const createSession = async (id: SessionId = SessionId('stored-translation'), live = true) => {
+  const createSession = async (id: SessionId = brandString<SessionId>('stored-translation'), live = true) => {
     const events = mainEvents()
     const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 1, cwd: root, isSeeded: false, delegationDepth: 0 }
     let session: Session | undefined, scope: Fiber | undefined, writer: SessionHandle | undefined

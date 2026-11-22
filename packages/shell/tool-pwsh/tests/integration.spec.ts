@@ -8,6 +8,7 @@
  * PowerShell); the fake-executor suite (tools.spec.ts) carries the coverage
  * gate.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -18,7 +19,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -44,7 +46,7 @@ let callCounter = 0
 function call(name: string, args: unknown, agentObj?: object, signal?: AbortSignal) {
   return executeToolFixture(ctx, {
     signal: signal ?? testToolSignal,
-    callId: ToolCallId(`it-${++callCounter}`),
+    callId: brandString<ToolCallId>(`it-${++callCounter}`),
     name,
     arguments: args,
     ...agentObj ? { agent: agentObj as never } : {},
@@ -63,6 +65,7 @@ describe.skipIf(!hasPwsh)('pwsh tool over the real pwsh executor', () => {
     ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

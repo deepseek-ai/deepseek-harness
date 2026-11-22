@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import inspect
 import sys
 import threading
@@ -20,6 +21,7 @@ def test_high_level_sdk_runs_turn_and_preserves_auto_review_errors(tmp_path: Pat
     script.write_text(
         """
 import json
+import logging
 import os
 import sys
 
@@ -226,6 +228,7 @@ def test_session_run_invokes_notification_callback_before_returning(tmp_path: Pa
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -265,6 +268,7 @@ def test_high_level_sdk_rejects_turn_end_without_reason_kind(tmp_path: Path) -> 
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -303,6 +307,7 @@ def test_relative_cwd_is_absolute_in_process_environment_and_wire(
     script.write_text(
         """
 import json
+import logging
 import os
 import sys
 
@@ -339,6 +344,7 @@ def test_session_run_includes_subagent_finished_for_parent_session(tmp_path: Pat
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -381,6 +387,7 @@ def test_session_run_collects_nested_subagent_tree_without_polluting_root_events
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -441,6 +448,7 @@ def test_session_run_ignores_notifications_for_other_sessions(tmp_path: Path) ->
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -478,6 +486,7 @@ def test_high_level_session_run_does_not_accumulate_global_notifications(tmp_pat
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -508,6 +517,7 @@ def test_session_run_waits_for_late_idle_without_replaying_stale_notifications(t
     script.write_text(
         """
 import json
+import logging
 import sys
 import time
 
@@ -552,6 +562,7 @@ def test_client_starts_subprocess_sends_requests_and_routes_notifications(tmp_pa
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -721,6 +732,7 @@ def test_client_contains_notification_filter_failure_to_its_subscription(tmp_pat
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -763,6 +775,7 @@ def test_client_rejects_unaccepted_session_prompt_response(tmp_path: Path) -> No
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -789,6 +802,7 @@ def test_client_routes_bridge_requests_and_sends_responses(tmp_path: Path) -> No
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -824,6 +838,7 @@ def test_client_ignores_non_json_stdout_lines(tmp_path: Path) -> None:
     script.write_text(
         """
 import json
+import logging
 import sys
 
 print("node warning: experimental loader", flush=True)
@@ -877,6 +892,7 @@ def test_client_close_times_out_when_shutdown_does_not_respond(tmp_path: Path) -
     script.write_text(
         """
 import json
+import logging
 import signal
 import sys
 import time
@@ -915,6 +931,7 @@ def test_client_close_allows_eof_quiescence_after_shutdown_response(tmp_path: Pa
     script.write_text(
         """
 import json
+import logging
 import os
 from pathlib import Path
 import sys
@@ -951,6 +968,7 @@ def test_initialize_failure_reaps_started_runtime(tmp_path: Path) -> None:
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -1017,6 +1035,7 @@ def test_client_close_is_idempotent_before_and_after_start(tmp_path: Path) -> No
     script.write_text(
         """
 import json
+import logging
 import sys
 
 for line in sys.stdin:
@@ -1063,6 +1082,7 @@ def test_client_serializes_concurrent_writes(tmp_path: Path) -> None:
     script.write_text(
         """
 import json
+import logging
 import os
 import sys
 
@@ -1107,6 +1127,7 @@ def _install_fake_bundled_dsh(
     runtime.write_text(
         """
 import json
+import logging
 import os
 import sys
 
@@ -1201,3 +1222,31 @@ def test_client_reports_missing_bundled_runtime_dependency(monkeypatch: pytest.M
 
     with pytest.raises(FileNotFoundError, match="Install deepseek-harness-runtime-bin"):
         HarnessClient(HarnessConfig(dsh_home="/explicit/home")).start()
+
+
+def test_runtime_stderr_lines_reach_the_runtime_logger(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    script = tmp_path / "failing_runtime.py"
+    script.write_text(
+        """
+import sys
+
+print("dsh: fatal load failure: TypeError: boom", file=sys.stderr, flush=True)
+print("    at node:internal/deps/undici/undici:6933:28", file=sys.stderr, flush=True)
+sys.exit(1)
+""".strip()
+    )
+
+    with caplog.at_level(logging.INFO, logger="deepseek_harness.runtime"):
+        with HarnessClient(HarnessConfig(request_timeout_seconds=2), _launch_args=(sys.executable, str(script))) as client:
+            pid = client._proc.pid
+            with pytest.raises(Exception, match="fatal load failure"):
+                client.initialize(provider="deepseek-official", cwd="/workspace", model="dsagent")
+            # The reader thread ends at the runtime's stderr EOF, after it has logged every line.
+            client._stderr_thread.join(timeout=5)
+            assert not client._stderr_thread.is_alive()
+
+    records = [record for record in caplog.records if record.name == "deepseek_harness.runtime"]
+    assert [(record.levelno, record.getMessage()) for record in records] == [
+        (logging.INFO, f"dsh runtime[{pid}] stderr: dsh: fatal load failure: TypeError: boom"),
+        (logging.INFO, f"dsh runtime[{pid}] stderr:     at node:internal/deps/undici/undici:6933:28"),
+    ]

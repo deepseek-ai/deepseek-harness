@@ -2,20 +2,26 @@
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { LaunchConfig } from './launch.ts'
+import { resolvePersistentExecution } from './configuration.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  /** persistent-in-memory, the default, retains a REPL per owner; per-call uses fresh async function bodies; vm-script uses VM contexts. */
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
+  /**
+   * Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings;
+   * omitted, it is `SCOPED_REPL_BY_DEFAULT` from configuration.ts, currently true, with persistent-in-memory and false otherwise.
+   */
+  replScoped?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
   maxTimeoutMs?: number
-  /** Combined serialized logs, completion and diagnostic byte cap. */
+  /** Combined serialized output and completion or diagnostic cap; terminal data takes priority over captured output. */
   maxOutputBytes?: number
   /** V8 old-generation heap limit in MiB; native allocations are excluded. */
   maxOldGenerationSizeMb?: number
@@ -33,8 +39,9 @@ export interface Config {
 export type ResolvedConfig = Required<Config>
 /** Loader defaults for the Node PTC provider. */
 export const NodeConfig: z<Config> = z.object({
-  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
+  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('persistent-in-memory'),
   scriptPersistence: z.boolean().default(false),
+  replScoped: z.boolean(),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),
@@ -50,11 +57,22 @@ export const NodeConfig: z<Config> = z.object({
 })
 
 /**
+ * Select the scoped REPL setting for the configured execution mode.
+ * @param config - Loader-defaulted fields whose `replScoped` may be omitted.
+ * @returns The explicit setting; when omitted, the setting that `resolvePersistentExecution` writes for function bodies with
+ * `persistent-in-memory`, and false in other modes.
+ */
+export function resolveReplScoped(config: Pick<Config, 'executionMode' | 'replScoped'>): boolean {
+  return config.replScoped ?? (config.executionMode === 'persistent-in-memory' && resolvePersistentExecution().replScoped)
+}
+
+/**
  * Validate resolved Node limits and paths.
  * @param config - Loader-defaulted fields with the selected executable.
  */
 export function validateConfig(config: ResolvedConfig): void {
   if (config.scriptPersistence && config.executionMode !== 'vm-script') throw new Error('ptc-runtime-node: scriptPersistence requires executionMode: vm-script')
+  if (config.replScoped && config.executionMode !== 'persistent-in-memory') throw new Error('ptc-runtime-node: replScoped requires executionMode: persistent-in-memory')
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
   }

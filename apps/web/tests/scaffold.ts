@@ -33,8 +33,7 @@ import { expect } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import yaml from 'js-yaml'
+import { stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
@@ -75,18 +74,20 @@ import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import {
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
   type Session,
   type SessionEvent,
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-// Empty type imports carry the webServer/agents/sessionPersistence Context merges.
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
+// Empty type imports carry the webApp/agents Context merges.
+import type {} from '@deepseek-ai/dsh-web-app'
 import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { startPrefixProxy, type PrefixProxy } from './prefix-proxy.ts'
 import { REPO_ROOT, requireBuilt, requireDist } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type AppBoot = typeof import('@deepseek-ai/dsh-app-boot')
 let builtAppBoot: AppBoot | undefined
@@ -310,6 +311,8 @@ export interface LaunchOptions {
   developerTools?: boolean
   /** Enable the real Open In rows with deterministic launch-environment facts. */
   openInAppEnvironment?: LaunchEnvironmentSnapshot
+  /** Keep the shipped personalized recommendation rows, whose two card skills enter the model-visible skill catalog. */
+  actionCards?: true
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
   /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
@@ -416,6 +419,8 @@ export interface LaunchOptions {
     /** Credential reference of both sections. */
     apiKeyEnv: string
   }
+  /** Node PTC execution mode for recordings whose programs use another syntax than the provider default. */
+  ptcExecutionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
     default: string
@@ -450,10 +455,11 @@ export interface LaunchOptions {
   harnessHome?: string
 }
 
-/** Dispose the booted tree and remove both owned temp roots, reporting every independent cleanup failure. */
-async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persistenceRoot: string): Promise<unknown[]> {
+/** Dispose the booted tree and remove the owned temp roots and overlay file, reporting every independent cleanup failure. */
+async function cleanupScaffoldWorld(ctx: Context, workspaceCwd: string, persistenceRoot: string, overlayPath: string): Promise<unknown[]> {
   const failures: unknown[] = []
   await Promise.resolve(ctx.fiber.dispose()).catch((error: unknown) => failures.push(error))
+  await rm(overlayPath, { force: true }).catch((error: unknown) => failures.push(error))
   await rm(workspaceCwd, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   await rm(persistenceRoot, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   return failures
@@ -526,6 +532,8 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // paths at load, and an in-process boot must NEVER touch the developer's
   // real ~/.dsh document or credential file.
   const harnessHome = options.harnessHome ?? join(workspaceCwd, '.dsh-home')
+  // Scaffolds sharing a harness home each watch their own process overlay file.
+  const overlayPath = join(harnessHome, 'profiles', 'scaffold', `${basename(workspaceCwd)}.overlay.patch.yml`)
   // Skill discovery is model-visible input, and its roots now resolve inside a
   // PRESET — a subtree this lane's include patches cannot reach, because the
   // roster mounts it directly per session rather than as a row of the booted
@@ -650,11 +658,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       },
     },
     // The bundle's web-runtime row resolves the same built dist under test
-    // (apps/web IS @deepseek-ai/dsh-web-frontend); native browser opening and the
-    // URL line are disabled because this scaffold owns its Playwright browser.
+    // (apps/web IS @deepseek-ai/dsh-web-frontend). Collect Token entries through
+    // WebApp's event without printing credentials; Playwright owns browser opening.
     // Preserve the composed surface-context choice because a patch replaces
     // the row's complete config.
-    { id: 'web-runtime', config: { openBrowser: false, printUrl: false, surfaceContext } },
+    { id: 'web-runtime', config: { surfaceContext, openBrowser: false, printUrl: false } },
     ...publicHost === undefined && options.remoteAuthority === undefined
       ? []
       : [{
@@ -682,6 +690,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // Open In scenario supplies launch facts that suppress every native probe.
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
+    ...options.ptcExecutionMode === undefined ? [] : [{ id: 'ptc-runtime', config: { executionMode: options.ptcExecutionMode } }],
+    // Ordinary scenarios exclude the card skills, so their requests omit two catalog entries that shipped Standard requests carry.
+    ...['action-cards', 'client-ui-action-cards', 'creation-recommendations', 'client-ui-creation-recommendations',
+      'plugin-recommendations', 'client-ui-plugin-recommendations'].map(id => ({ id, disabled: options.actionCards !== true })),
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
@@ -807,10 +819,12 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       const fixtureDir = join(profileDir, 'node_modules', SCAFFOLD_DEFAULTS_BUNDLE)
       await mkdir(fixtureDir, { recursive: true })
       await writeFile(join(fixtureDir, 'package.json'), JSON.stringify({ name: SCAFFOLD_DEFAULTS_BUNDLE, version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-      await writeFile(join(fixtureDir, 'cordis.patch.yml'), yaml.dump(formDefaults, { schema: entryListSchema }))
+      await writeFile(join(fixtureDir, 'cordis.patch.yml'), stringifyEntryYaml(formDefaults))
       bundles.push(SCAFFOLD_DEFAULTS_BUNDLE)
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)
+      // Process-specific rows load like a `--patch` file, so profile reads see the launcher's overlay layer.
+      await writeFile(overlayPath, stringifyEntryYaml(processOverlays))
       const manifest = readProfileManifest('dsh', profileDir)
       manifest.dependencies = dependencies
       await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
@@ -819,7 +833,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         ...options.profile?.packageManager === undefined ? {} : { packageManager: options.profile.packageManager },
         cwd: workspaceCwd, home: harnessHome,
         startedBundles: loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers.map(layer => layer.packageName),
-        overlays: processOverlays, telemetryDisabledEnv: undefined,
+        overlayPaths: [overlayPath], telemetryDisabledEnv: undefined,
       }
       // HMR gates file-driven reloads on application readiness, which the
       // launcher commits after boot; this direct harness is ready at once.
@@ -838,7 +852,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         throw new Error(`web e2e scaffold: the web app requested exit ${String(code)} with no arguments to reject`)
       },
     })
-    const resolution = await createRuntimeResolution(resolutionOptions)
+    // Like the launcher, resolve the dependencies of every selected bundle, not only the extra install anchors.
+    const selectedLayers = loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers
+    const resolution = await createRuntimeResolution({
+      ...resolutionOptions, profile: { ...profile, layers: [...profile.layers, ...selectedLayers] },
+    })
     await ctx.plugin(PluginPackages, {
       resolution,
     })
@@ -846,6 +864,18 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     await mountRootInclude(ctx, rootConfig, readProfilePatches('dsh', profileContext))
     await ctx.loader.await()
     await auditStartupEntries(ctx, 'web e2e scaffold')
+    const advertised = new URL(ctx.webApp.getAdvertisedUrl())
+    const entries: WebEntryUrl[] = []
+    ctx.emit(ctx.webServer, 'webserver/entry-url', advertised.href, entries)
+    const tokenEntries = entries.filter((entry) => {
+      const url = new URL(entry.url)
+      return url.origin === advertised.origin && url.pathname === advertised.pathname
+        && url.searchParams.getAll('token').length === 1 && Boolean(url.searchParams.get('token'))
+    })
+    if (tokenEntries.length !== 1) {
+      throw new Error('web e2e scaffold: expected one Token provider login URL for this application')
+    }
+    const startupLoginUrl = new URL(tokenEntries[0]!.url)
     if (options.developerTools !== undefined) {
       await ctx.settings.update('ui-settings', { enabled: options.developerTools })
     }
@@ -929,7 +959,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       publicProxy.setTarget(port)
       baseUrl = `http://${publicHost}:${String(publicProxy.port)}${publicPrefix}`
     }
-    authenticatedUrl = ctx.connection.authenticatedUrl(baseUrl)
+    const browserLoginUrl = new URL(baseUrl)
+    browserLoginUrl.search = startupLoginUrl.search
+    authenticatedUrl = browserLoginUrl.href
     // Chromium resolves *.localhost itself; Node may not. Both scaffold
     // listeners bind loopback, including the optional prefix proxy.
     const loginUrl = new URL(authenticatedUrl)
@@ -945,7 +977,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }
   } catch (error) {
     if (process.cwd() !== originalCwd) process.chdir(originalCwd)
-    const cleanupFailures = await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot)
+    const cleanupFailures = await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot, overlayPath)
     if (publicProxy !== undefined) {
       await publicProxy.close().catch((closeError: unknown) => cleanupFailures.push(closeError))
     }
@@ -1021,7 +1053,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       }
       try {
         stopObservingSessions()
-        failures.push(...await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot))
+        failures.push(...await cleanupScaffoldWorld(ctx, workspaceCwd, persistenceRoot, overlayPath))
         if (publicProxy !== undefined) {
           try {
             await publicProxy.close()
@@ -1152,14 +1184,22 @@ function replaceWebCwd(value: string, cwd: string): string {
 /**
  * Normalize Web-only volatile strings while preserving JSON structure and row framing.
  * @param log - raw Session JSONL.
- * @param workspaceCwd - optional scaffold parent used before a live Session selects its cwd.
+ * @param workspaceCwd - non-empty `{{cwd}}` root required in `workspace` mode; optional fallback
+ *   before a live Session selects its cwd in `session` mode.
+ * @param cwdToken - `workspace` keeps a Session directory below `workspaceCwd` relative to `{{cwd}}`;
+ *   `session` tokenizes the Session's own cwd.
  * @returns compact JSONL with run-local strings tokenized.
+ * @throws Error when `workspace` mode has no non-empty `workspaceCwd`.
  */
-export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string): string {
+export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string, cwdToken: 'session' | 'workspace' = 'session'): string {
+  if (cwdToken === 'workspace' && (workspaceCwd === undefined || workspaceCwd.length === 0)) {
+    throw new Error('workspace cwd normalization requires a non-empty workspaceCwd')
+  }
   const headerLine = log.split(/\r?\n/).find(line => line.trim().length > 0)
   const header = headerLine === undefined ? undefined : JSON.parse(headerLine) as { cwd?: unknown }
   const sessionCwd = typeof header?.cwd === 'string' && header.cwd.length > 0 ? header.cwd : undefined
-  const cwdSpellings = [...new Set([sessionCwd ?? workspaceCwd]
+  const tokenizedCwd = cwdToken === 'workspace' ? workspaceCwd : sessionCwd ?? workspaceCwd
+  const cwdSpellings = [...new Set([tokenizedCwd]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .flatMap((value) => {
       const forward = value.replaceAll('\\', '/')
@@ -1483,7 +1523,7 @@ export async function seedSession(
   const createdAt = options.createdAt ?? Date.now() - 60_000
   const meta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
-    id: SessionId(id),
+    id: brandString<SessionId>(id),
     createdAt,
     isSeeded: false,
     cwd: scaffold.workspaceCwd,
@@ -1621,18 +1661,13 @@ function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): st
 /**
  * Capture the region's aria snapshot at a settled milestone: poll until two
  * consecutive normalized captures are equal — a single-shot capture races the
- * last React commits. A foreground shell command is a job while it runs, and
- * its removal reaches the browser one coalesced roster frame after the tool
- * result, so by default the capture first waits for the session header's
- * running-job control to leave; a scenario whose milestone is a running job
- * keeps it with `runningJobs: 'keep'`.
+ * last React commits.
  * @param page - the page under test.
  * @param selector - the region locator selector.
  * @param workspaceCwd - normalization input.
  * @param options - `normalizeAge` collapses relative-time buckets to `{{age}}`
  *   for a region whose rows are dated from live wall-clock state;
- *   `replacements` tokenizes scenario-owned values before generic normalization;
- *   `runningJobs` is `'settle'` (default: wait for no running-job control) or `'keep'`.
+ *   `replacements` tokenizes scenario-owned values before generic normalization.
  * @returns the stable normalized snapshot.
  */
 export async function captureStableAria(
@@ -1642,13 +1677,8 @@ export async function captureStableAria(
   options: {
     normalizeAge?: boolean
     replacements?: readonly (readonly [value: string, token: string])[]
-    runningJobs?: 'settle' | 'keep'
   } = {},
 ): Promise<string> {
-  if ((options.runningJobs ?? 'settle') === 'settle') {
-    await page.getByRole('button', { name: /background jobs? running/ })
-      .waitFor({ state: 'detached', timeout: 10_000 })
-  }
   const region = page.locator(selector).first()
   const age = options.normalizeAge === true
   const normalize = (snapshot: string): string => {

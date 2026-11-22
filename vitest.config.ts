@@ -5,6 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
+import { sourceRemotePlugin } from './scripts/vitest-source-remote.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './scripts/coverage-exempt.ts'
 import { COVERAGE_PARTITION_MODE_ENV, COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutOptions } from './scripts/coverage-partitions.ts'
 import { LOCAL_TEST_PARALLELISM_CAP, defaultParallelism } from './scripts/parallelism.ts'
@@ -35,7 +36,6 @@ const windowsUnsupportedPackages = process.platform === 'win32'
       'packages/experimental/hooks-claude-code',
       'packages/experimental/hooks-codex',
       'packages/terminal/terminal-bash',
-      'packages/experimental/ptc-runtime-python',
       'packages/sandbox/sandbox-local',
       // OpenSSH multiplexing and Unix-socket helper streams require POSIX endpoints.
       'packages/ssh/*',
@@ -107,12 +107,15 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // win32.spec's injected bindings and exercised natively by every
       // Windows suite through the real backend.
       'packages/session/session-persistence-jsonl/src/lease.ts',
+      'packages/session/session-persistence-sqlite/src/lease.ts',
       // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
       'packages/experimental/cua-macos/src/shared-native.ts',
       // The GitHub CLI runner's suite stands in for `gh` with POSIX shell
       // scripts and skips on Windows: the Linux and macOS lanes hold its
       // per-file 100%, while the provider suite pins its callers everywhere.
       'packages/experimental/forge-github/src/gh.ts',
+      // The GitLab CLI runner's suite does the same with a POSIX `glab` stand-in.
+      'packages/experimental/forge-gitlab/src/glab.ts',
       // The panel's Git failure and environment cases stand in for `git` with
       // POSIX shell scripts and skip on Windows: the Linux and macOS lanes hold
       // its per-file 100%, while its real-Git cases run everywhere.
@@ -187,17 +190,32 @@ const claudeCodeTestingAliases = {
   'claude-code': fileURLToPath(new URL('./packages/experimental/claude-code-mods/tests/support/claude-code.ts', import.meta.url)),
 }
 
-// The LiveShare client entry statically imports its generated `./remote` contribution, which exists
+// These client entries statically import their generated `./remote` contribution, which exists
 // only in built `lib/` output. On a clean checkout Vite resolves that import while transforming the
 // entry, before `vi.mock` can answer it, so the jsdom assembly suites need a resolvable stand-in.
 const liveshareRemoteBuild = fileURLToPath(new URL('./packages/experimental/liveshare/lib/typert.remote-client.js', import.meta.url))
-const generatedRemoteAliases = existsSync(liveshareRemoteBuild) ? {} : {
-  '@deepseek-ai/dsh-experimental-liveshare/remote': fileURLToPath(new URL('./packages/experimental/liveshare/tests/generated-remote-stub.ts', import.meta.url)),
+const chatImportRemoteBuild = fileURLToPath(new URL('./packages/experimental/deepseek-chat-import/lib/typert.remote-client.js', import.meta.url))
+const hmrRemoteBuild = fileURLToPath(new URL('./packages/client/hmr/lib/typert.remote-client.js', import.meta.url))
+const generatedRemoteAliases = {
+  ...existsSync(hmrRemoteBuild) ? {} : {
+    '@deepseek-ai/dsh-client-hmr/remote': fileURLToPath(new URL('./packages/client/hmr/tests/generated-remote-stub.ts', import.meta.url)),
+  },
+  ...existsSync(liveshareRemoteBuild) ? {} : {
+    '@deepseek-ai/dsh-experimental-liveshare/remote': fileURLToPath(new URL('./packages/experimental/liveshare/tests/generated-remote-stub.ts', import.meta.url)),
+  },
+  ...existsSync(chatImportRemoteBuild) ? {} : {
+    '@deepseek-ai/dsh-deepseek-chat-import/remote': fileURLToPath(new URL('./packages/experimental/deepseek-chat-import/tests/generated-remote-stub.ts', import.meta.url)),
+  },
 }
 const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
+const testPlugins = () => [
+  pathsPlugin(),
+  standardDecoratorPlugin(),
+  sourceRemotePlugin(import.meta.dirname, '@deepseek-ai/dsh-client-remote-connection'),
+]
 
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  plugins: testPlugins(),
   resolve: { alias: testingAliases },
   test: {
     ...localWorkerBudget,
@@ -211,7 +229,7 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'thread-safe',
@@ -233,7 +251,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',
@@ -357,9 +375,6 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
-        // Built Web replays cover the generated Remote wiring of the card entries; their mount modules are source-covered.
-        'packages/experimental/client-ui-action-cards/src/client/index.ts',
-        'packages/experimental/client-ui-plugin-recommendations/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
         'packages/experimental/cua/src/client/index.ts',
@@ -399,8 +414,7 @@ export default defineConfig({
         'packages/client/ui-primitives/src/JsonTree.tsx',
         'packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.tsx',
         'packages/client/ui-settings-models/src/client/welcome-store.ts',
-        'packages/extensions/*/src/**/*.ts',
-        'packages/extensions/*/src/**/*.tsx',
+        'packages/extensions/{cordis-client-runner,cordis-host-runner,tool-cordis,ui-cordis}/src/**/*.{ts,tsx}',
         // Typert correctness is checked by its uninstrumented suites,
         // including compiler fixtures and byte-for-byte catalog reproduction.
         'packages/typert/*/src/**/*.{ts,tsx}',

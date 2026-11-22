@@ -67,4 +67,14 @@ describe('FileLabel', () => {
     expect(b.view.getByRole('button', { name: 'lib/b.txt' })).toBeTruthy()
     expect(hover(b.root)).toBe('lib/a.txt → lib/b.txt')
   })
+
+  it('waits 500ms of hover before showing the path', () => {
+    const b = label('src/app.ts')
+    vi.useFakeTimers()
+    fireEvent.pointerEnter(b.root)
+    act(() => { vi.advanceTimersByTime(499) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(screen.getByRole('tooltip').textContent).toBe('src/app.ts')
+  })
 })

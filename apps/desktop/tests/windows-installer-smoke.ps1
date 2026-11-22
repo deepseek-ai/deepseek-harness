@@ -157,6 +157,14 @@ try {
     $results.Add('welcome-ready-before-first-show')
     $results.Add('successful-install-paints-100-before-finish')
 
+    $process = Start-Setup light
+    Click-Control $process $copy.INSTALLER_INSTALL
+    [void](Wait-Control $process $copy.INSTALLER_FINISH)
+    Click-Control $process ([string][char]0xD7)
+    if (-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0) { throw 'Completion close did not exit successfully' }
+    if (Test-Path -LiteralPath (Join-Path $installPath 'launched.txt')) { throw 'Completion close launched the application' }
+    $results.Add('completion-close-exits-without-launch')
+
     $lockedFile = [IO.File]::Open($appPath, 'Open', 'Read', 'Read')
     try {
         $process = Start-Setup light

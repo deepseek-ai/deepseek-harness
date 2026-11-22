@@ -16,6 +16,8 @@ The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.
 
 [ui-settings](../../packages/client/ui-settings/README.md#filling-the-settings-slots) documents the settings page and navigation-icon extension points.
 
+[ui-session-panel](../../packages/client/ui-session-panel/README.md#contribute-a-section) documents the Session panel's section, title-control, row, and toggle-indicator extension positions.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.
@@ -106,7 +108,8 @@ The shipped adapters add these standard props. They are available according to t
 
 | Availability | Props | Owner |
 |---|---|---|
-| every scope | `useSessions`, `useSessionStatus`, `useSessionRetainInfo`, `useSessionAccess` | `ui-session` |
+| every scope | `useSessions`, `useSessionRetainInfo`, `useSessionAccess` | `ui-session` |
+| every scope | `useSessionStatus` | `ui-session-status` |
 | every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
 | every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
@@ -147,6 +150,8 @@ root [AppFrame]
       │     ├─ conversation.session.header.lineage
       │     ├─ conversation.session.header.actions
       │     ├─ conversation.session.header.utilities
+      │     │  └─ id=session-panel [SessionPanelToggle]
+      │     │     └─ conversation.session.panel.indicator [list, inline]
       │     ├─ conversation.session.header.views.actions
       │     └─ conversation.session.header.corner
       └─ calls Factory: conversation.content
@@ -157,6 +162,11 @@ Factory: conversation.content [ConversationContent]
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
 │     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
+│     │  ├─ conversation.chat.aside [SessionPanel]
+│     │  │  ├─ conversation.session.panel.section [list]
+│     │  │  │  └─ id=environment [EnvironmentSection]
+│     │  │  │     └─ conversation.session.panel.environment.row [list]
+│     │  │  └─ conversation.session.panel.section.actions [keyed]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]
@@ -186,6 +196,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.plan-review.actions
 ├─ conversation.composer.bar [InputBar]
 │  ├─ conversation.input.attachments
+│  ├─ conversation.input.placeholder
 │  ├─ conversation.input.permission
 │  ├─ conversation.input.plan
 │  ├─ conversation.input.model

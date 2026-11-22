@@ -1,0 +1,11 @@
+version: 1
+scenario: cua-run-code-ptc-scoped
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: cua-run-code-ptc-scoped
+  pin: true
+  toolSchemasSource: ptc-turn-scoped
+permission: danger-full-access
+# Replays the cua-run-code-ptc programs as scoped REPL statements.

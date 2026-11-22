@@ -1,5 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Use the read tool twice
+  - button "Session panel"
   - button "More actions"
   - button "Open right sidebar"
   - tablist:
@@ -9,6 +10,7 @@
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
+- button "Start of conversation" [disabled]
 - text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
 - status: Completed
@@ -19,7 +21,7 @@
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}}
-- button "compact Compacted 5 history items (~{{tokens}} tokens)"
+- button "compact Compacted 5 history items (~{{tokens}} tokens) View compaction summary in the sidebar"
 - status: Completed
 - button "Completed in {{duration}}" [disabled]
 - button "Context injection AGENTS.md"

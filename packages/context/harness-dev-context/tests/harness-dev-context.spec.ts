@@ -5,12 +5,13 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import {
-  createUserMessage, LlmAdapter,
-  type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk, type SystemPromptUpdate,
+  createUserMessage, createMessage, LlmAdapter,
+  type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk, type SystemPromptUpdate, type SystemMessage,
 } from '@deepseek-ai/dsh-llm'
-import { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import type { SessionId, Session } from '@deepseek-ai/dsh-session'
 import { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import * as HarnessDevContext from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SOURCE_PROMPT = 'The runtime context names the DeepSeek Harness implementation checkout. The checkout location and current working directory are separate values and may differ; never infer the working directory from the checkout path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.'
 const WEB_GUIDANCE = 'When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. '
@@ -84,7 +85,7 @@ async function promptLoop(systemPromptUpdate: SystemPromptUpdate | undefined) {
   const harness = await mountAgentLoopTestHarness(ctx)
   /** Resume the Session's complete log under a new Agent, as a restarted process does. */
   const resume = async (session: Session, id: string): Promise<Agent> => (await ctx.agents.create({
-    sessionId: SessionId(id), agentOptions: ROUTE, seed: [...session.snapshotEvents()],
+    sessionId: brandString<SessionId>(id), agentOptions: ROUTE, seed: [...session.snapshotEvents()],
   })).agent
   /** One turn under an earlier release: the given paragraphs and no value contexts. */
   const earlierSession = async (source = LEGACY_SOURCE, web = LEGACY_WEB): Promise<Agent> => {
@@ -97,7 +98,7 @@ async function promptLoop(systemPromptUpdate: SystemPromptUpdate | undefined) {
         contexts: assembly.contexts.filter(entry => entry.name !== 'harness:source' && entry.name !== 'app:web-surface'),
       }
     })
-    const agent = await harness.create(SessionId('earlier'), ROUTE)
+    const agent = await harness.create(brandString<SessionId>('earlier'), ROUTE)
     await send(agent, 'before the upgrade')
     earlierRelease()
     return agent
@@ -126,7 +127,7 @@ function latestRuntimeContext(session: Session): string | undefined {
 
 function requestSystemPrompts(request: GenerateOptions | undefined): string[] {
   return (request?.messages ?? []).filter(message => message.role === 'system')
-    .flatMap(message => message.content.map(block => block.type === 'text' ? block.text : ''))
+    .map(message => message.content.map(block => block.type === 'text' ? block.text : '').join(''))
 }
 
 describe('harness-dev-context', () => {
@@ -148,7 +149,8 @@ describe('harness-dev-context', () => {
 
     await fiber.dispose()
     const disposed = await ctx.systemPrompt.assemble()
-    expect(disposed.sections.some(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')).toBe(false)
+    expect(disposed.sections.filter(entry => entry.name === 'harness:source' || entry.name === 'app:web-surface')).toEqual([])
+    expect(admittedMessages(disposed)).toEqual([])
     expect(disposed.contexts).toEqual([])
   })
 
@@ -177,7 +179,57 @@ describe('harness-dev-context', () => {
     }
   })
 
-  it('keeps earlier paragraphs after a series consolidation empties a later prompt version', async () => {
+  it('retains legacy paragraphs through repeated and empty history and retires only the named section', async () => {
+    const h = await promptLoop(undefined)
+    const agent = await h.harness.create(brandString<SessionId>('legacy-metadata'), ROUTE)
+    agent.session.append('turn/start', { turn: 1 })
+    agent.session.append('step/start', { turn: 1, step: 1 })
+    const append = (message: SystemMessage) => agent.session.append('system/message', {
+      turn: 1, step: 1, message,
+    }, { surfaceOp: 'append' })
+    const current = async () => renderPrompt(await h.ctx.systemPrompt.assemble({ agent }))
+    append(createMessage({ role: 'system', content: [
+      { type: 'text', text: LEGACY_SOURCE },
+      { type: 'reasoning', text: 'unrelated legacy content' },
+      { type: 'text', text: `\n\n${LEGACY_WEB}` },
+    ], source: { kind: 'system-prompt' } }))
+    expect(await current()).toContain(LEGACY_SOURCE)
+    expect(await current()).toContain(LEGACY_WEB)
+    // An upgraded Session can hold several whole-prompt messages with the same paragraphs.
+    append(createMessage({ role: 'system', content: [
+      { type: 'text', text: `${LEGACY_SOURCE}\n\n${LEGACY_WEB}\n\nA later whole-prompt addition.` },
+    ], source: { kind: 'system-prompt' } }))
+    expect(await current()).toContain(LEGACY_SOURCE)
+    expect(await current()).toContain(LEGACY_WEB)
+    append(createMessage({ role: 'system', content: [], source: { kind: 'system-prompt' } }))
+    expect(await current()).toContain(LEGACY_SOURCE)
+    expect(await current()).toContain(LEGACY_WEB)
+    append(createMessage({ role: 'system', content: [{ type: 'text', text: 'The checkout instructions no longer apply.' }],
+      source: { kind: 'system-prompt', sections: [{ name: 'harness:source', state: 'retired', noticeIndex: [0] }] },
+    }))
+    expect(await current()).toContain(SOURCE_PROMPT)
+    expect(await current()).not.toContain(LEGACY_SOURCE)
+    expect(await current()).toContain(LEGACY_WEB)
+    append(createMessage({ role: 'system', content: [{ type: 'text', text: 'The Web instructions no longer apply.' }],
+      source: { kind: 'system-prompt', sections: [{ name: 'app:web-surface', state: 'retired', noticeIndex: [0] }] },
+    }))
+    expect(await current()).toContain(WEB_PROMPT)
+    expect(await current()).not.toContain(LEGACY_WEB)
+    append(createMessage({ role: 'system', content: [
+      { type: 'text', text: 'Replacement notice.\n\n' }, { type: 'text', text: LEGACY_WEB },
+    ], source: { kind: 'system-prompt', sections: [
+      { name: 'app:web-surface', order: 1, state: 'active', contentIndex: 1, noticeIndex: [0] },
+    ] } }))
+    expect(await current()).toContain(LEGACY_WEB)
+    append(createMessage({ role: 'system', content: [{ type: 'text', text: 'No earlier sections apply.' }],
+      source: { kind: 'system-prompt', reset: true, sections: [] },
+    }))
+    expect(await current()).not.toContain(LEGACY_WEB)
+    agent.session.append('step/end', { turn: 1, step: 1 })
+    agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  })
+
+  it('keeps earlier paragraphs and additions across an explicit series start', async () => {
     const h = await promptLoop('in-history')
     const resumed = await h.resume((await h.earlierSession()).session, 'earlier-consolidated')
     const [earlier] = systemPrompts(resumed.session)
@@ -189,12 +241,12 @@ describe('harness-dev-context', () => {
       const decision = await next()
       return decision.kind === 'enter' ? { ...decision, startsRequestSeries: true } : decision
     })
-    // The head already matches, so consolidation logs only the emptied later version.
     await send(resumed, 'start a new series')
-    expect(systemPrompts(resumed.session)).toEqual([earlier, expect.stringContaining('Updated instruction.'), ''])
+    const expected = [earlier, 'Updated instruction.', 'The earlier instructions from test:update no longer apply.']
+    expect(systemPrompts(resumed.session)).toEqual(expected)
     await send(resumed, 'continue the series')
     expect(systemPrompts(resumed.session)).toHaveLength(3)
-    expect(requestSystemPrompts(h.adapter.requests.at(-1))).toEqual([earlier])
+    expect(requestSystemPrompts(h.adapter.requests.at(-1))).toEqual(expected)
   })
 
   it.each([
@@ -212,7 +264,7 @@ describe('harness-dev-context', () => {
 
   it('keeps a new Session system prompt free of process values across ports', async () => {
     const h = await promptLoop(undefined)
-    const agent = await h.harness.create(SessionId('fresh'), ROUTE)
+    const agent = await h.harness.create(brandString<SessionId>('fresh'), ROUTE)
     await send(agent, 'first')
     const logged = systemPrompts(agent.session)
     expect(logged).toHaveLength(1)
@@ -228,3 +280,7 @@ describe('harness-dev-context', () => {
     expect(latestRuntimeContext(resumed.session)).toContain('Current DeepSeek Harness Web GUI URL: "http://127.0.0.1:4568".')
   })
 })
+
+function admittedMessages(assembly: import('@deepseek-ai/dsh-system-prompt').PromptAssembly) {
+  return assembly.systemUpdates(false).map(update => update.message)
+}

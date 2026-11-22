@@ -7,15 +7,16 @@
 
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
 import {
-  CompactionId,
   ManualCompactionError,
   compactCheckpointSource,
   toolPairingBalancedAfter,
   toolPairingBalancedBefore,
 } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { Message, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { TokenMeasurement, TokenMeter } from '@deepseek-ai/dsh-token-meter'
@@ -201,7 +202,7 @@ export async function compactSurfaceRegion(
     owner = entryState.openTurn
   }
 
-  const compactionId = CompactionId(randomUUID())
+  const compactionId = brandString<CompactionId>(randomUUID())
   const lifecycle = {
     compactionId,
     ...options.sourceCommandId === undefined ? {} : { sourceCommandId: options.sourceCommandId },
@@ -344,6 +345,11 @@ function validateSurfaceRegion(session: Session, start: SessionSeq, end: Session
     throw new Error(
       `compactRegion: start seq ${start} (position ${startIdx}) is after end seq ${end} (position ${endIdx}) on the surface`,
     )
+  }
+  // The validated start and end guarantee a nonempty surface.
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  if (startIdx === 0 && systemHead(session, nodes[0]!) !== undefined) {
+    throw new Error('compactRegion: the selected range includes the protected initial system message')
   }
   // oxlint-disable-next-line typescript/no-non-null-assertion
   if (!toolPairingBalancedBefore(session, nodes[startIdx]!)) {

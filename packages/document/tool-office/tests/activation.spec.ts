@@ -7,9 +7,10 @@ import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, LlmAdapter, ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, LlmAdapter, type ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { PtcInspectableValue, PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
@@ -17,7 +18,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as ToolOffice from '../src/index.ts'
 
 const NAMES = ['office_convert', 'office_recalculate', 'office_render']
-const SKILLS = ['office', 'office-docx', 'office-xlsx', 'office-pptx']
+const SKILLS = ['office']
 const signal = new AbortController().signal
 
 function response(name?: string, args: object = {}): StreamChunk[] {
@@ -27,7 +28,7 @@ function response(name?: string, args: object = {}): StreamChunk[] {
     { type: 'block-end', index: 0, block: { type: 'text', text: 'Done' } },
     { type: 'finish', reason: { kind: 'stop' } },
   ]
-  const block = { type: 'tool-call' as const, id: ToolCallId('load'), name, arguments: JSON.stringify(args) }
+  const block = { type: 'tool-call' as const, id: brandString<ToolCallId>('load'), name, arguments: JSON.stringify(args) }
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
     { type: 'tool-call-delta', index: 0, id: block.id, name, argumentsDelta: block.arguments },
@@ -55,7 +56,8 @@ class SkillRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
-    return { logs: [], value: await request.bindings[0]!.functions.skill!({ name: this.skill }) }
+    const resolved = await request.bindings[0]!.functions.skill!({ name: this.skill })
+    return { output: [], value: resolved instanceof PtcInspectableValue ? resolved.value : resolved }
   }
 }
 
@@ -73,13 +75,13 @@ async function harness(script: StreamChunk[][] = [], options: {
   if (options.root !== undefined) await ctx.plugin(JsonlPersistence, { root: options.root, compression: 'none' })
   const loop = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(SkillRegistry)
-  for (const name of [...SKILLS, 'other', 'custom-office']) ctx.skills.register({ name, source: 'runtime', description: name, content: `${name} instructions` })
+  for (const name of [...SKILLS, 'office-docx', 'other', 'custom-office']) ctx.skills.register({ name, source: 'runtime', description: name, content: `${name} instructions` })
   if (!options.officeFirst) await ctx.plugin(ToolSkill)
   const fiber = await ctx.plugin(ToolOffice, options.skills === undefined ? {} : { activationSkills: options.skills })
   if (options.officeFirst) await ctx.plugin(ToolSkill)
   const adapter = new ScriptedAdapter(script)
   ctx.llm.registerAdapter(['fixture'], adapter)
-  const agent = await loop.create(SessionId(`office-${randomUUID()}`), { provider: 'fixture', model: 'fixture' }, { cwd })
+  const agent = await loop.create(brandString<SessionId>(`office-${randomUUID()}`), { provider: 'fixture', model: 'fixture' }, { cwd })
   return { ctx, agent, adapter, fiber }
 }
 
@@ -137,8 +139,8 @@ describe('Office skill admission', () => {
   })
 
   it.each([false, true])('marks committed user skill injections independently of plugin order (officeFirst=%s)', async (officeFirst) => {
-    const { agent, adapter } = await harness([response('skill', { name: 'office' }), response()], { officeFirst })
-    await turn(agent, '/office-docx')
+    const { agent, adapter } = await harness([response('skill', { name: 'other' }), response()], { officeFirst })
+    await turn(agent, '/office')
     expect(names(adapter.requests[0])).toEqual([])
     expect(names(adapter.requests[1])).toEqual(NAMES)
     expect(agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toBe(true)
@@ -155,7 +157,7 @@ describe('Office skill admission', () => {
 
   it('ignores a skill invocation on a Session that the registered Agent no longer owns', async () => {
     const { ctx, agent } = await harness()
-    const other = (await ctx.agents.create({ sessionId: SessionId(`office-other-${randomUUID()}`) })).agent
+    const other = (await ctx.agents.create({ sessionId: brandString<SessionId>(`office-other-${randomUUID()}`) })).agent
     const get = vi.spyOn(ctx.agents, 'get').mockReturnValue(other)
     agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'office instructions' }], source: { kind: 'skill-invocation', name: 'office', form: 'instructions' },
@@ -166,9 +168,9 @@ describe('Office skill admission', () => {
     expect(await admitted(ctx, other)).toEqual([])
   })
 
-  it('does not activate for user invocation of a non-Office skill', async () => {
+  it.each(['other', 'office-docx'])('does not activate for user invocation of the unlisted skill %s', async (name) => {
     const { ctx, agent } = await harness([response()])
-    await turn(agent, '/other')
+    await turn(agent, `/${name}`)
     expect(await admitted(ctx, agent)).toEqual([])
   })
 
@@ -179,7 +181,7 @@ describe('Office skill admission', () => {
     for (const name of NAMES) {
       for (const admission of [undefined, toolSet]) {
         const result = await executeToolFixture(ctx, { name, arguments: { input: 'a.xlsx', format: 'xlsx' }, agent,
-          callId: ToolCallId(name), signal, ...admission === undefined ? {} : { toolSet: admission } })
+          callId: brandString<ToolCallId>(name), signal, ...admission === undefined ? {} : { toolSet: admission } })
         expect(result).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
       }
     }
@@ -217,7 +219,7 @@ describe('Office skill admission', () => {
     const resumed = (await next.ctx.agents.resume({ resumeSessionId: sessionId })).agent
     expect(await admitted(next.ctx, resumed)).toEqual(ptc ? [] : NAMES)
     await turn(resumed)
-    const forked = await next.ctx.agents.create({ sessionId: SessionId('office-fork'), seed,
+    const forked = await next.ctx.agents.create({ sessionId: brandString<SessionId>('office-fork'), seed,
       inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, parentSession: sessionId } })
     expect(forked.agent.session.requestHeader()?.tools).toEqual(first.agent.session.requestHeader()?.tools)
     expect(await admitted(next.ctx, forked.agent)).toEqual(ptc ? [] : NAMES)
@@ -247,7 +249,7 @@ describe('Office skill admission', () => {
     expect(await admitted(ctx, agent)).toEqual(NAMES)
     ctx.emit('agent/disposed', { agent })
     expect(await admitted(ctx, agent)).toEqual([])
-    await executeToolFixture(ctx, { name: 'skill', arguments: { name: 'office' }, agent, callId: ToolCallId('reload'), signal })
+    await executeToolFixture(ctx, { name: 'skill', arguments: { name: 'office' }, agent, callId: brandString<ToolCallId>('reload'), signal })
     expect(await admitted(ctx, agent)).toEqual(NAMES)
     await fiber.dispose()
     expect(await admitted(ctx, agent)).toEqual([])

@@ -32,6 +32,13 @@ it('retains optional resource fields and tuple-valued parameters without inventi
   expect(generated.enums.get('getState')?.get('choice')).toEqual(new Set(['one']))
 })
 
+it('generates opaque string admission for native window targets', () => {
+  const index = Request.options.findIndex(schema => schema.shape.method.value === 'screenshot')
+  expect(JSON.parse(nativeProtocol().json)).toHaveProperty(
+    ['oneOf', index, 'properties', 'params', 'properties', 'windowId'], { type: 'string', minLength: 1 },
+  )
+})
+
 it('admits only locator fields for default invocation', () => {
   expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId', 'windowId']))
 })
@@ -48,6 +55,13 @@ it('admits key events with only an explicit direction enum', () => {
   expect(native.enums.get('sendKeyEvent')?.get('direction')).toEqual(new Set(['down', 'up']))
   expect(native.enums.get('sendKeyEvent')?.has('modifiers') ?? false).toBe(false)
   expect(native.enums.get('sendKeyEvent')?.has('key') ?? false).toBe(false)
+})
+
+it('admits mouse-button events with explicit button and direction enums and no coordinates', () => {
+  const native = nativeProtocol()
+  expect(native.fields.get('toggleMouse')).toEqual(new Set(['appHandle', 'windowId', 'mouseButton', 'direction']))
+  expect(native.enums.get('toggleMouse')?.get('mouseButton')).toEqual(new Set(['left', 'right', 'middle']))
+  expect(native.enums.get('toggleMouse')?.get('direction')).toEqual(new Set(['down', 'up']))
 })
 
 it('accepts a parameter-free object schema without a properties dictionary', () => {

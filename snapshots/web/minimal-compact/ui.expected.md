@@ -1,15 +1,12 @@
 - banner:
   - navigation "Session hierarchy": "Remember the project requirements: imple"
   - text: Minimal mode
+  - button "Session panel"
   - button "More actions"
-  - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
   - button "More conversation views"
-- navigation "Turn navigation":
-  - button "Jump to turn 1"
-  - button "Jump to turn 2"
 - text: "Remember the project requirements: implement image reading in minimal mode by reusing the existing filesystem tool. Preserve the fixed system prompt and keep standard mode unchanged. The new tool selection configuration must default to the full filesystem suite and reject unknown names, duplicate names, and empty lists. Minimal mode selects read_image only. Image reads must use the inherited filesystem authorization and durable attachment store, and the calling model must explicitly support image input. Do not register text read, write, or edit tools in minimal mode. Enable automatic compaction under context pressure and manual /compact while the agent is idle, using the existing backend to generate the summary. Keep the token meter shared and the compaction service isolated per preset. Preserve balanced tool-call and result pairs when replacing older history, retain recent context, and continue from the checkpoint. Dispose every tool, command, and listener with its owning plugin. Reply exactly MINIMAL_COMPACT_READY and stop. {{clock}}"
 - button "Copy"
 - status: Completed
@@ -20,8 +17,7 @@
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}}
-- button "compact Compacted 2 history items (~{{tokens}} tokens)" [expanded]
-- paragraph: Implement minimal image reading through the existing filesystem tool, preserving permissions, model capability checks, and standard mode. Enable automatic and manual compaction.
+- button "compact Compacted 2 history items (~{{tokens}} tokens) View compaction summary in the sidebar"
 - text: Continue using the project requirements. Reply exactly MINIMAL_COMPACT_OK and stop. {{clock}}
 - button "Copy"
 - status: Completed

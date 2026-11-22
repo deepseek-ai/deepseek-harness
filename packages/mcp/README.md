@@ -26,6 +26,7 @@ The client owns each configured connection, the manager runs a settings-driven f
 
 | Package | What it provides |
 |---|---|
+| [`mcp-account/`](mcp-account/README.md) | Show each MCP connector's OAuth server account on the Plugins page through the connector account registry |
 | [`mcp-client/`](mcp-client/README.md) | Connect one MCP server, expose its tools and instructions, and provide its resource operations |
 | [`mcp-manager/`](mcp-manager/README.md) | Manage a settings-driven fleet of mcp-client instances: live add/edit/enable/disable/delete, status, restart, probe |
 | [`mcp-resources/`](mcp-resources/README.md) | Discover and read resources through shared tools with explicit server selection |

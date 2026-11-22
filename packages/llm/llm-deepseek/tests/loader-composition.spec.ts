@@ -11,7 +11,7 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { profileComposition } from '../../../settings/settings/tests/profile-composition.ts'
@@ -20,9 +20,11 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as DeepSeekPluginPackageInventory from '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { sourceModuleLoader } from './helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-llm/types' {
   interface LlmRequestPurposeMap {
@@ -99,6 +101,7 @@ async function loadComposition(
         '    debounceMs: 10',
       ]
       : [],
+    "- name: '@deepseek-ai/dsh-deepseek-auth'",
     '- id: llm-deepseek',
     "  name: '@deepseek-ai/dsh-llm-deepseek-api-key'",
     '  config:',
@@ -122,6 +125,7 @@ async function loadComposition(
     ['@deepseek-ai/dsh-session-log-deepseek', SessionLogDeepSeek],
     ['@deepseek-ai/dsh-plugin-package-inventory-deepseek', DeepSeekPluginPackageInventory],
     ['@deepseek-ai/dsh-credentials-local', LocalCredentialProvider],
+    ['@deepseek-ai/dsh-deepseek-auth', DeepSeekAuth],
     ['@deepseek-ai/dsh-llm-deepseek-api-key', LlmDeepSeek],
   ])
   // The custom importer bypasses Node resolution; mirror the package manifests
@@ -223,7 +227,7 @@ describe('llm-deepseek real dynamic composition', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, enableSessionLog: false })
-    const session = ctx.sessions.create(SessionId('extension-composition'))
+    const session = ctx.sessions.create(brandString<SessionId>('extension-composition'))
     session.append('turn/start', { turn: 1 })
 
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id })
@@ -245,7 +249,7 @@ describe('llm-deepseek real dynamic composition', () => {
       withDynamic: false,
       baseURL: server.url,
     })
-    const session = ctx.sessions.create(SessionId('extension-composition-enabled'))
+    const session = ctx.sessions.create(brandString<SessionId>('extension-composition-enabled'))
     session.append('turn/start', { turn: 1 })
 
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id })
@@ -272,7 +276,7 @@ describe('llm-deepseek real dynamic composition', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: textEvents }])
     const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, exclusionFirst })
-    const session = ctx.sessions.create(SessionId('excluded-composition'))
+    const session = ctx.sessions.create(brandString<SessionId>('excluded-composition'))
     session.append('turn/start', { turn: 1 })
 
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: session.id, purpose: 'test-upload-exclusion' })
@@ -311,6 +315,18 @@ describe('llm-deepseek real dynamic composition', () => {
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(serverA.requests).toHaveLength(1)
     expect(serverB.headers[0]?.['x-api-key']).toBe('rotated-key')
+  })
+
+  it('reports a provider refusal for a request without a safety check flag', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    const refusal = textEvents.map(event => event.replace('"end_turn"', '"refusal"'))
+    const server = await mockServer([{ kind: 'sse', events: refusal }])
+    const { ctx } = await loadComposition({ withDynamic: true, baseURL: server.url })
+
+    const refused = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.requests).toHaveLength(1)
+    expect(server.requests[0]).not.toHaveProperty('safety_check')
+    expect(refused.finish).toMatchObject({ kind: 'error', failure: { code: 'CONTENT_REFUSED' } })
   })
 
   it('keeps a stored key writable and rotatable across a real restart', async () => {

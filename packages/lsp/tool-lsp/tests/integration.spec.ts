@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -52,6 +53,7 @@ function serverScript(hang: boolean): string {
 async function mount(hang: boolean, timeoutMs?: number): Promise<Context> {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -100,6 +102,19 @@ describe('tool-lsp integration', () => {
     const result = await call(ctx, { operation: 'goToDefinition', file_path: 'a.ts', line: 1, character: 7 })
     expect(result.isError).toBe(true)
     expect(result.error?.info?.code).toBe('TOOL_TIMEOUT')
+    await ctx.fiber.dispose()
+  }, 30_000)
+
+  it('keeps provider failure names and codes on tool results', async () => {
+    const outside = join(root, 'outside.ts')
+    await writeFile(outside, 'x')
+    const ctx = await mount(false)
+    const missing = await call(ctx, { operation: 'goToDefinition', file_path: 'missing.ts', line: 1, character: 1 })
+    expect(missing.isError).toBe(true)
+    expect(missing.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_FOUND' })
+    const escaped = await call(ctx, { operation: 'goToDefinition', file_path: outside, line: 1, character: 1 })
+    expect(escaped.isError).toBe(true)
+    expect(escaped.error?.info).toEqual({ name: 'LspError', code: 'LSP_FILE_OUTSIDE_WORKSPACE' })
     await ctx.fiber.dispose()
   }, 30_000)
 })

@@ -1,0 +1,17 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - status:
+    - paragraph: 当前地址无法用于跨设备登录。请用另一台设备能访问的地址重新启动服务。
+    - list:
+      - listitem: 两台设备在同一局域网时，可用局域网 IP。
+      - listitem: 通过 VPN 或公网访问时，可用已开通访问的 VPN 地址或公网 IP。
+  - region "访问地址":
+    - heading "访问地址" [level=3]
+    - code: {{access-address}}?token={{login-token}}
+    - button "复制链接"
+    - paragraph: 请勿公开分享登录链接
+    - paragraph: 此链接包含登录凭据，能访问此地址的人可凭链接登录，请仅发送给自己的设备，勿公开分享；重启服务后链接失效
+    - paragraph: HTTP 会明文传输登录凭据，请仅在可信网络中使用
+  - region "配对申请":
+    - heading "配对申请" [level=3]
+    - paragraph: 在另一台设备上打开此应用并申请配对，核对两端配对码后再批准

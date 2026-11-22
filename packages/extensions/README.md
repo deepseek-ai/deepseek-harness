@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The extensions group provides read-only runtime API discovery for agents, process-local runners for programmatic and browser consumers, and historical generated-plugin cards. Standard and Creator modes install persistent plugins through [Plugin Manager](../boot/plugin-manager/README.md). Choose a child package for inspection, Host execution, Client execution, or browser controls.
+The extensions group provides read-only runtime API discovery for agents, process-local runners for programmatic and browser consumers, and historical generated-plugin cards. Standard, PTC, and Creator modes install persistent plugins through [Plugin Manager](../boot/plugin-manager/README.md). Choose a child package for inspection, Host execution, Client execution, or browser controls.
 
 ## Table of Contents
 
@@ -24,10 +24,12 @@ The extensions group provides read-only runtime API discovery for agents, proces
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`tool-cordis`](tool-cordis/README.md) | Two read-only tools for runtime API discovery | registers on `ctx.tools` |
+| [`tool-cordis`](tool-cordis/README.md) | One read-only tool for runtime API discovery | registers on `ctx.tools` |
 | [`cordis-host-runner`](cordis-host-runner/README.md) | Host half: definition registry, sandboxed host-half lifecycle, and the inspect registry that answers browser queries | provides `ctx.dynamicCordisRunner` and `ctx.cordisInspect` |
 | [`cordis-client-runner`](cordis-client-runner/README.md) | Browser half: evaluates a browser-half source into a live plugin and answers run requests | client face; provides browser `ctx.dynamicCordisRunner` |
 | [`ui-cordis`](ui-cordis/README.md) | Browser panel and historical lifecycle tool cards | client face; registers slots |
+| [`creation-recommendations`](creation-recommendations/README.md) | Explicit-need creation of persistent removable interface plugins | — |
+| [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | provides `ctx.pluginRecommendations` |
 
 -----
 
@@ -35,7 +37,7 @@ The extensions group provides read-only runtime API discovery for agents, proces
 ## Related documentation
 
 - [Extensions subsystem](../../docs/subsystems/extensions.md) — the generated `ctx.cordisInspect` and `ctx.dynamicCordisRunner` service API.
-- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) — the two read-only tool schemas.
+- [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) — the read-only inspection tool schema.
 - [Generated configuration catalog](../../docs/config-catalog.md#deepseek-aidsh-cordis-host-runner) — the runner's accepted config fields.
 - [Self-referential Cordis toolset reference](cordis-host-runner/README.md) — design home for sandbox semantics, lifecycle, and composition.
 - [Client shells and dynamic packages Agent Note](../../.agents/notes/implemented/architecture/2026-08-15-client-shells-and-dynamic-packages.md) — package placement and build faces for the client halves.

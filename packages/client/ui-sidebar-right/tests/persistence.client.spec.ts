@@ -55,6 +55,33 @@ it('restores current layout independently by Session with a fresh undo history',
   expect(createSidebarRightStore(seed).create('second').getSnapshot()).toEqual(second.getSnapshot())
 })
 
+it('removes transient occurrences from docked and floating layouts before restoring a Session', () => {
+  storage()
+  const first = createSidebarRightStore(seed).create(sessionId)
+  const open = (contentId: string, destination: 'sidebar' | 'float') => {
+    first.actions.openContent(sessionId, { kind: 'preview', contentId, title: contentId, destination }, () => {})
+  }
+  open('sidebar://preview', 'sidebar')
+  open('sidebar://preview/content/summary', 'sidebar')
+  open('sidebar://preview/content/diagram', 'float')
+  const restored = createSidebarRightStore(seed).create(sessionId).getSnapshot().bySession[sessionId]!.layout
+  expect(Object.values(restored.tabs).map(tab => tab.contentId)).toEqual(['sidebar://preview'])
+  expect(restored.floats).toEqual([])
+  expect(restored.expanded).toBe(true)
+  const active = restored.nodes[restored.activePaneId]
+  expect(active?.kind === 'pane' && active.activeTabId).toBe(Object.values(restored.tabs)[0]!.id)
+})
+
+it('collapses a restored sidebar whose only tab was transient', () => {
+  storage()
+  const first = createSidebarRightStore(seed).create(sessionId)
+  first.actions.openContent(sessionId, { kind: 'preview', contentId: 'sidebar://preview/content/1', title: 'Summary', destination: 'sidebar' }, () => {})
+  first.actions.setMode(sessionId, 'fullscreen')
+  const restored = createSidebarRightStore(seed).create(sessionId).getSnapshot().bySession[sessionId]!
+  expect(restored.layout).toMatchObject({ expanded: false, mode: 'push', tabs: {}, floats: [] })
+  expect(restored.history.entries).toHaveLength(0)
+})
+
 it('pins restored records during adoption before the first render or store mutation', async () => {
   storage()
   const first = createSidebarRightStore(seed).create(sessionId)

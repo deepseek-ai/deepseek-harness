@@ -5,14 +5,14 @@ import { dirname, extname, isAbsolute, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import { load } from 'js-yaml'
+import { applyEntryPatches, parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolvePluginResource } from './package-meta.ts'
 import { barePackageName } from './profile-resolution/resolver.ts'
 import type {} from './profile-resolution/service.ts'
 import type {} from './profile-context.ts'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileCompatibility } from './profile-compatibility.ts'
+import { includeFilename } from './include-filename.ts'
 
 function readManifest(filename: string): object {
   return JSON.parse(readFileSync(filename, 'utf8')) as object
@@ -145,19 +145,19 @@ function preflight(
       // A dynamic Include is resolved by the Include plugin itself; this walk cannot judge its rows.
       return undefined
     }
-    const requested = isAbsolute(config.path) ? config.path : fileURLToPath(new URL(config.path, base))
+    const requested = includeFilename(config.path, base)
     const filename = existsSync(requested) ? realpathSync(requested) : requested
     if (includes.has(filename)) return undefined
     includes.add(filename)
     try {
       let data: unknown
-      try { data = load(readFileSync(filename, 'utf8'), { schema: entryListSchema }) }
+      try { data = parseEntryYaml(readFileSync(filename, 'utf8')) }
       catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || config.initial === undefined) return undefined
         data = config.initial
       }
       if (!Array.isArray(data)) return undefined
-      const children = applyEntryPatches(data as EntryOptions[], config.patches, patchWarning(ctx))
+      const children = applyEntryPatches(data as EntryOptions[], structuredClone(config.patches), patchWarning(ctx)).data
       return check(children, pathToFileURL(filename).href)
         ? `its included file ${filename} reaches an incompatible plugin, and that file is never rewritten`
         : undefined
@@ -181,7 +181,7 @@ export function prepareProfilePatches(
   ctx: Context, patches: PatchOptions[], parentURL: string, binName = 'dsh',
 ): PatchOptions[] {
   if (ctx.get('profileContext') === undefined) return patches
-  const entries = applyEntryPatches([], patches, patchWarning(ctx))
+  const entries = applyEntryPatches([], structuredClone(patches), patchWarning(ctx)).data
   const rows = prepareProfileEntries(ctx, entries, parentURL, binName)
   return rows.length === 0 ? [] : [{ insert: rows }]
 }

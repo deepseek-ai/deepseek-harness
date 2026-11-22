@@ -45,12 +45,12 @@ describe.each(['inputModalities', 'input'] as const)('%s input types', (field) =
 
   it('removes DeepSeek image limits when images are unchecked', () => {
     const onChange = vi.fn()
-    const model = { id: 'vision', [field]: ['text', 'image'], description: 'kept', imagePixelBudget: 'low', imageMaxBytes: 12345 }
+    const model = { id: 'vision', [field]: ['text', 'image'], description: 'kept', imagePixelBudget: 'low', imageTargetBytes: 12345 }
     render(<ModelInputTypes model={model} field={field} position={1} disabled={false} t={key => en[key]} onChange={onChange} />)
     fireEvent.click(screen.getByRole('checkbox', { name: en.modelInputImage }))
     expect(onChange).toHaveBeenCalledWith({
       id: 'vision', description: 'kept', [field]: ['text'],
-      ...field === 'input' ? { imagePixelBudget: 'low', imageMaxBytes: 12345 } : {},
+      ...field === 'input' ? { imagePixelBudget: 'low', imageTargetBytes: 12345 } : {},
     })
     expect(model[field]).toEqual(['text', 'image'])
   })

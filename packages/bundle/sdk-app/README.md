@@ -39,6 +39,8 @@ The model can use [`plugin_manager`](../../boot/plugin-manager/README.md) in nat
 
 The Python runtime exposes explicitly downloaded authoring resources and Office sidecars to this profile. `DSH_PRIMARY_RUNTIME` overrides the authoring payload; an empty value disables its query. Office skills, the Office kit, and the [Office tools](../../document/tool-office/README.md) always load. The skills use their packaged assets; with an authoring payload they direct the model to its bundled Python environment, and without one to the user's existing Python. The tool reports an unavailable LibreOffice Kit until an Office sidecar is downloaded or selected. Profile patches can disable `skill-office` or replace its `assetRoot` independently of `workspace-dependencies`; filesystem skills with the same name take precedence. See the [runtime package](../../../python/sdk-runtime/README.md) for downloads and configuration.
 
+The standard SDK profile lists `official-plugins` and `personalized-pages` by default. A proposal reaches the caller as a fenced `action-card` block in the final response. For training, pass a YAML patch containing `- {id: action-cards, config: {enabled: false}}` to omit both skills from the catalog and prevent loading them by name.
+
 -----
 
 <a id="model-experience"></a>
@@ -48,22 +50,22 @@ The Python runtime exposes explicitly downloaded authoring resources and Office 
 
 #### What the model sees
 
-The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, and adds the same model-interpolated coding persona as the Web and headless profiles. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`. The model also receives `present`, `ask_user_question`, `plugin_manager`, schedule tools, shared file-reference guidance, and time context. Child agents cannot use schedule tools. The [`time-context`](../../context/time-context/README.md) row accepts a fallback time zone. The skill catalog always lists the Office skills; their Python environment section names `load_workspace_dependencies` with an authoring payload and the user's existing Python without one.
+The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, and adds the same model-interpolated coding persona as the Web and headless profiles. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`. The model also receives `present`, `ask_user_question`, `plugin_manager`, schedule tools, shared file-reference guidance, and time context. Child agents cannot use schedule tools. The [`time-context`](../../context/time-context/README.md) row accepts a fallback time zone. Each ordinary prompt reports its zone like a Web prompt: the client's `timeZone` (`time_zone` in Python) when given, otherwise the runtime process zone sampled for that prompt, so the model sees `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.` A process zone that is not UTC or an IANA Area/Location name, such as the `+00:00` that `TZ=GMT` produces, reports `unavailable`. The skill catalog always lists the Office skills; their Python environment section names `load_workspace_dependencies` with an authoring payload and the user's existing Python without one. The catalog also lists `dsh-doc`, the DSH documentation skill that the Desktop standard, PTC, and Creator presets list; see the [Web app](../web-app/README.md#model-experience) for what it guides.
 
 #### Token effect
 
-The profile adds a coding-persona sentence, the mounted tool definitions and guidance, and logged runtime-context and time messages. The `plugin_manager` description and parameter schema add input tokens even when an operation cannot be approved; an embedding that does not use plugin management can disable its row.
+The profile adds a coding-persona sentence, the mounted tool definitions and guidance, and logged runtime-context and time messages. The `plugin_manager` description and parameter schema add input tokens even when an operation cannot be approved; an embedding that does not use plugin management can disable its row. The `dsh-doc` catalog entry adds about 125 heuristic tokens to the first request; its instructions and references enter context only when the model loads the skill.
 
 #### KV Cache effect
 
-Enabling `plugin_manager` changes the tool-schema prefix from earlier SDK versions. The static prefix is stable for a fixed profile, provider, model, and tool roster. Runtime values append to logged user context. Profile changes take effect on the next process because the shipped SDK profile uses startup-only patches.
+Enabling `plugin_manager` changes the tool-schema prefix from earlier SDK versions, and the `dsh-doc` entry changes the skill catalog logged at the first step. The static prefix is stable for a fixed profile, provider, model, and tool roster. Runtime values append to logged user context. Profile changes take effect on the next process because the shipped SDK profile uses startup-only patches.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **No graphical client** — file cards, native file opening, and browser state require an embedding client; the SDK starts no Web server.
-- **User time zone is unknown** — the SDK protocol does not carry a user time zone, so time context reports `Browser time zone for this request: unavailable.` The process or container time zone may differ from the user's. The `time-context.timeZone` setting only controls fallback timestamp formatting; it does not establish the user's time zone. Automatic detection and SDK time-zone input are deferred.
+- **The process zone stands in for the user** — a prompt without `timeZone` reports the runtime process zone, which may differ from the user's; containers usually run in UTC. Pass the user's zone per prompt or set `TZ` for the runtime. The `time-context.timeZone` setting only controls fallback timestamp formatting; it does not establish the user's time zone. Native commands record no zone, matching Web commands, so a turn opened by `/plan <message>` reports `unavailable`.
 - **Questions require an answerer** — configure `onUserQuestion` in TypeScript or `on_user_question` in Python, or supply a native `user-questions/request` handler; otherwise `ask_user_question` returns `NO_PROVIDER`.
 - **Schedules share the runtime lifetime** — delivery needs a running process and its persistent Session storage.
 - **A profile can omit the SDK server** — a custom profile selected by the TypeScript client must retain this bundle or another `dsh-sdk-jsonrpc-server` row; client initialization fails when no peer answers.

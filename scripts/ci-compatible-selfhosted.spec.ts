@@ -20,7 +20,7 @@ interface CompatibilityJob {
   'runs-on': string
   if: string
   env: Record<string, string>
-  strategy: { 'fail-fast': boolean; matrix: { include: Array<{ node: string | number; name: string; runner: string; gate_concurrency: string }> } }
+  strategy: { 'fail-fast': boolean; matrix: { include: Array<{ node: string | number; name: string; runner: string; gate_concurrency: string; build: string }> } }
   steps: Step[]
 }
 
@@ -59,11 +59,13 @@ function route(options: { mode?: string; author?: string; repository?: string; f
 }
 
 describe('Node compatibility self-hosted routing', () => {
-  it('runs the build-backed compatibility minor and declares it for installed CLI users', () => {
+  it('runs the build-backed compatibility floor release and declares it for installed CLI users', () => {
     expect(job.strategy.matrix.include.filter(entry => String(entry.node) === BUILD_BACKED_NODE_COMPAT_VERSION)).toHaveLength(1)
+    expect(job.strategy.matrix.include.filter(entry => entry.build === '1').map(entry => String(entry.node))).toEqual([BUILD_BACKED_NODE_COMPAT_VERSION])
+    expect(job.env.DSH_NODE_COMPAT_BUILD).toBe('${{ matrix.build }}')
     for (const manifest of ['package.json', 'apps/cli/package.json']) {
       const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', manifest), 'utf8')) as { engines: { node: string } }
-      expect(pkg.engines.node).toBe(`>=${BUILD_BACKED_NODE_COMPAT_VERSION}.0`)
+      expect(pkg.engines.node).toBe(`^${BUILD_BACKED_NODE_COMPAT_VERSION} || >=26.13.1`)
     }
   })
 
@@ -84,8 +86,8 @@ describe('Node compatibility self-hosted routing', () => {
     expect(job.if).toBe("github.event_name == 'pull_request'")
     expect(job.strategy['fail-fast']).toBe(false)
     expect(job.strategy.matrix.include).toEqual([
-      { node: '24.9', name: 'node 24.9', runner: 'ubuntu-latest', gate_concurrency: '1' },
-      { node: 26, name: 'node 26', runner: 'ubuntu-latest', gate_concurrency: '1' },
+      { node: '24.22.3', name: 'node 24.22.3', runner: 'ubuntu-latest', gate_concurrency: '1', build: '1' },
+      { node: 26, name: 'node 26', runner: 'ubuntu-latest', gate_concurrency: '1', build: '' },
     ])
     expect(job.env.DSH_GATE_CONCURRENCY).toBe('${{ matrix.gate_concurrency }}')
     expect(job.steps.map(step => step.run)).toContain('pnpm run check:node-compat')
@@ -108,7 +110,11 @@ describe('Node compatibility self-hosted routing', () => {
       )
     }
     expect(job.steps[0]?.with).toEqual({ 'persist-credentials': false })
-    expect(job.steps.some(step => step.uses?.startsWith('actions/cache/'))).toBe(false)
+    // The verified bubblewrap archive is the one remote cache this job restores
+    // and saves; it must stay excluded from the persistent self-hosted pool.
+    const remoteCaches = job.steps.filter(step => step.uses?.startsWith('actions/cache/'))
+    expect(remoteCaches.length).toBeGreaterThan(0)
+    for (const step of remoteCaches) expect(step.if).toContain("vars.DSH_CI_FAILOVER_LINUX != 'selfhosted'")
   })
 
   it('overrides runner exports inside setup-node without affecting later Node processes', () => {
@@ -145,8 +151,8 @@ describe('Node compatibility self-hosted routing', () => {
     const step = job.steps.find(candidate => candidate.name === 'Verify isolated Node installation')!
     expect(step.if).toBe("runner.environment == 'self-hosted'")
     for (const [executable, status] of [
-      ['/runner temp/node-compat-toolcache/node/24.9.0/x64/bin/node', 0],
-      ['/shared/toolcache/node/24.9.0/x64/bin/node', 1],
+      ['/runner temp/node-compat-toolcache/node/24.22.3/x64/bin/node', 0],
+      ['/shared/toolcache/node/24.22.3/x64/bin/node', 1],
       ['/runner temp/node-compat-toolcache-other/node', 1],
     ] as const) {
       const child = spawnSync('bash', ['-e', '-u', '-o', 'pipefail', '-c', 'node() { printf "%s" "$TEST_EXECUTABLE"; }; ' + step.run!], {

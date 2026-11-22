@@ -12,7 +12,7 @@ The [PTC foundation](../feature/2026-06-15-ptc.md) remains responsible for regis
 
 ## Decision
 
-`dsh-ptc-runtime-node` in its default `per-call` mode runs each program in one fresh Node process. The host resolves execution choices, confines the launch through the same `ctx.sandbox` provider as Bash, and gives process lifetime to `ctx.subprocess`. The child evaluates erasable TypeScript with direct Node APIs, an empty model environment and host-provided asynchronous bindings. No worker or persistent kernel remains after a per-call execution.
+`dsh-ptc-runtime-node` in its `per-call` mode runs each program in one fresh Node process. The host resolves execution choices, confines the launch through the same `ctx.sandbox` provider as Bash, and gives process lifetime to `ctx.subprocess`. The child evaluates erasable TypeScript with direct Node APIs, an empty model environment and host-provided asynchronous bindings. No worker or persistent kernel remains after a per-call execution.
 
 The host preserves `ELECTRON_RUN_AS_NODE` for child startup; the bootstrap removes it from the native environment before evaluation, and model-visible `process.env` stays empty. Nested Electron launches require their own explicit Node-mode selection. Desktop uses Electron as its Node executable; removing this selector launches Electron's application path instead of the PTC bootstrap. Sandbox permission changes cannot repair that launch mismatch. The macOS Desktop regression uses real Electron to verify binding writes, direct workspace writes, and rejection of writes outside the workspace under restricted policy. It requires an installed Electron binary; ordinary runtime tests cover environment filtering without that dependency.
 
@@ -21,8 +21,6 @@ The host preserves `ELECTRON_RUN_AS_NODE` for child startup; the bootstrap remov
 `PtcRuntime.resolve(request)` validates supported options and supplies a complete `PtcRunSpec`; `run(spec)` does not introduce defaults. PTC passes the calling Session's cwd and resolved standing policy. Direct runtime callers receive deployment defaults through the same resolver. The filesystem and subprocess providers share one execution world, and bootstrap paths cross through the filesystem's explicit host-file mapping or a configured preinstalled bootstrap.
 
 File mode, observed denial and enforcement completeness travel in `PtcRunResult.sandbox` separately from the program outcome. Restricted execution fails if the required sandbox backend cannot launch. Full access is an explicit policy mode. Program success does not prove full enforcement, and neither the `process` descriptor nor the extra control pipe claims multi-tenant isolation.
-
-The [experimental Python provider](../../../../packages/experimental/ptc-runtime-python/README.md) shares the resolved file policy and sandbox diagnostics while retaining its local Unix execution and configured wall deadline. Per-call timeout overrides remain unsupported.
 
 ### Control and lifetime
 
@@ -34,7 +32,7 @@ For temporary executions, program completion, timeout, cancellation and protocol
 
 The default elapsed deadline is 120 seconds, capped at 600 seconds by default. Trusted service consumers may request `timeoutMs: null` to disable this timer; [workflow sandbox reuse](2026-09-13-workflow-ptc-sandbox-reuse.md) owns that caller-controlled lifetime. Omitted and numeric requests, including model-facing `run_code`, retain the numeric defaults and caps. An enabled deadline includes runtime setup and nested tool or approval waits. V8 old-generation memory, serialized outer output and control traffic have separate configured bounds. The heap limit excludes native allocations and descendant memory, and elapsed time is not a process-tree CPU budget.
 
-The opt-in [in-memory execution mode](2026-09-23-best-effort-persistent-ptc.md) retains disposable memory under the same file policy; [retained-process permissions](2026-10-08-persistent-ptc-sandbox.md) govern policy changes and temporary escalation.
+The default [in-memory execution mode](2026-09-23-best-effort-persistent-ptc.md) retains disposable memory under the same file policy; [retained-process permissions](2026-10-08-persistent-ptc-sandbox.md) govern policy changes and temporary escalation.
 
 ## Alternatives considered
 

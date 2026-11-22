@@ -25,6 +25,8 @@ exe 使用 [@yao-pkg/pkg](https://github.com/yao-pkg/pkg)（vercel/pkg 归档后
 
 同一补丁还把 SEA bootstrap 的原生插件解包改成原子写入。VFS 内的插件首次 `dlopen` 时，pkg 的 `patchDlopen` 会把该插件所在的包目录整棵拷到 `$PKG_NATIVE_CACHE_PATH/pkg/<.node 文件的 sha256>/`（默认 `~/.cache/pkg/...`），这是同一个 exe 的所有并发进程共用的按用户目录；上游用 `writeFileSync` 直接写目标路径，会把另一个进程可能已经映射的文件截断，并让该进程的 `existsSync`/哈希比对读到写了一半的文件。因此并发首次启动在 Linux 上以 SIGBUS 崩溃，在 macOS 上对 sharp 的 libvips 报 `ERR_DLOPEN_FAILED: Library not loaded`（#4664）。补丁让三处写入都经过同目录临时文件加 `renameSync`，于是缓存路径要么不存在、要么完整，每个进程都在加载前走完自己的拷贝，相同内容的并发 rename 不需要锁。缓存位置、哈希键与逐文件比对均未改变，通过 `PKG_NATIVE_CACHE_PATH` 按实例隔离缓存的消费方照常工作；worker 线程只定义该钩子而从不安装。 实测（linux-x64、node24 构建目标、pkg 6.21.0，一个加载 sharp 及其 18 MB libvips 库的探针，16 个进程对同一个空缓存并发首次启动，跑五轮）：改动前 80 个进程中 39 个以 SIGBUS 崩溃，改动后 80 个全部正常，且无残留临时文件。
 
+同一补丁还让 VFS 的 `stat`、`lstat`、它们的同步形式以及 `fs.promises` 遵守 `{ bigint: true }`。上游无论选项如何都返回同一份数值型 stats，而 `dsh-fs-local` 与 `dsh-fs-sandbox` 通过 BigInt stats 读取 VFS 路径，因此经 `ctx.fs` 访问打包文件时都会以 `Cannot mix BigInt and other types` 失败：`read` 工具打不开打包的 skill 文件，位于 VFS 内的 `skill-filesystem` 根使 skill 发现不完整。补丁把 VFS 条目的数值转换为 `BigIntStats` 字段，其中纳秒时间由毫秒值换算；VFS 之外的路径仍使用 Node 自身的结果。
+
 术语提醒：pkg 的 `/snapshot` VFS 与本仓库测试体系的「快照」（ACP（Agent Client Protocol）回放预期输出、`$DSH_SNAPSHOT`）无关，本文用「VFS」指前者。
 
 ### 对外服务接口是 dsh 应用中的插件
@@ -54,7 +56,7 @@ CI 使用 [`.github/workflows/build-exe-for-python-sdk.yml`](../../../../.github
 
 ### Python SDK 分发：双载体，exe 用于生产，`node` 用于开发
 
-Python SDK 位于 [`python/`](../../../../python/README.zh.md)：`python/sdk` 是客户端，`python/sdk-runtime` 是运行时载体包。运行时包的数据目录包含构建注入的平台可执行文件及其必需的 `-rg` 伴随文件、轻量下载元数据与 Office skills 和可选的 macOS helper，以及供仓库开发使用的构建注入 `runtime/node/` 闭包树。`resolve_bundled_launch_args()` 默认选择可执行文件；显式设置 `DSH_RUNTIME_MODE=node` 会在系统 Node 24.9 或更高版本上运行 `runtime/node/runtime-bootstrap.mjs`。node 载体从不进入 wheel 分发，两种载体都不使用检入的完整 `cordis.yml`。
+Python SDK 位于 [`python/`](../../../../python/README.zh.md)：`python/sdk` 是客户端，`python/sdk-runtime` 是运行时载体包。运行时包的数据目录包含构建注入的平台可执行文件及其必需的 `-rg` 伴随文件、轻量下载元数据与 Office skills 和可选的 macOS helper，以及供仓库开发使用的构建注入 `runtime/node/` 闭包树。`resolve_bundled_launch_args()` 默认选择可执行文件；显式设置 `DSH_RUNTIME_MODE=node` 会在系统 Node `^24.22.3 || >=26.13.1` 上运行 `runtime/node/runtime-bootstrap.mjs`。node 载体从不进入 wheel 分发，两种载体都不使用检入的完整 `cordis.yml`。
 
 [`scripts/build-python-release.py`](../../../../scripts/build-python-release.py) 从仓库根目录的 `package.json` 读取权威的 `X.Y.Z` 或预发布版本，把预发布版本转换为 PEP 440 写法，并以该 wheel 包版本暂存两个包，让 `deepseek-harness-sdk` 精确依赖匹配版本的 `deepseek-harness-runtime-bin`。可选的 `python-v<repository-version>` 发布标签只是一项一致性断言，与仓库版本不同时会被拒绝；源码 `pyproject.toml` 中的开发占位版本从不决定发布版本。暂存过程还会把仓库许可证放入两个 wheel 包，并把第三方声明放入内置运行时 wheel 包。SDK 是 `py3-none-any` wheel 包；每个只提供 wheel 包的运行时包都包含一个 exe、轻量资源元数据与 skills 及架构匹配的 ripgrep 伴随文件，macOS wheel 包还包含与其架构匹配的 spawn helper。运行时 wheel 包使用 `py3-none-manylinux_2_28_x86_64`、`py3-none-manylinux_2_28_aarch64`、`py3-none-macosx_14_0_arm64`、`py3-none-macosx_14_0_x86_64` 或 `py3-none-win_amd64`；Hatch 钩子拒绝 sdist、通用标签、混合平台载荷、伴随文件缺失或多余，以及不支持的平台。两个 macOS 标签都会特意声明保守的 14.0 安装下限：打包后的 Node 24 可执行文件声明 macOS 13.5，x64 PTY helper 声明 10.7，但发布验证只按照 14.0 wheel 声明证明完整载荷，不会把各组件实测的最低版本承诺为受支持宿主。两个 macOS wheel 包仍按架构分别发布，不发布 universal2 wheel 包。
 

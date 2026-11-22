@@ -18,6 +18,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../core/tools"
     }
   ]

@@ -57,7 +57,8 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
       extraOverlayPath: fileURLToPath(new URL('./present.overlay.yml', import.meta.url)),
       agentPresets: { default: 'ptc' }, compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
+      // The recorded UI includes decode throughput from an incremental stream.
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 15 }),
     })
     // File associations belong to the desktop rather than the recorded Session.
     const controller = scaffold.ctx.get('sessionController')
@@ -151,7 +152,7 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
         await mention.click()
         const preview = column.locator('[data-document-preview]')
         await expect.poll(() => preview.getAttribute('data-textpreview-url'))
-          .toBe(`dsh-resource://file/session/${sessionId}/${encodeURIComponent(name)}`)
+          .toBe(`dsh-resource://file/session/${sessionId}/${join(cwd, name).split('/').map(encodeURIComponent).join('/')}`)
         await preview.getByText(content, { exact: true }).waitFor()
         await mention.click()
         expect(await column.locator('[data-dockkit-tab]').filter({ hasText: name }).count()).toBe(1)

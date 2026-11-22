@@ -91,23 +91,37 @@ try {
   checks.push('native-pty')
 
   const runtime = ctx.ptcRuntime
+  // The verifier composes per-call function bodies and the scoped REPL; each program ends with the format's completion statement.
+  const scoped = runtime.programFormat === 'scoped-repl'
+  assert(scoped || runtime.programFormat === 'function-body', `Unexpected PTC program format ${runtime.programFormat}`)
+  const complete = (expression: string): string => scoped ? `${expression};` : `return ${expression};`
+  const stateOwner = {}
   const bindings = [{ global: 'tools', functions: { echo: async (input: unknown) => String(input) } }]
   const policy = { mode: 'danger-full-access', workspaceRoot: root } as const
   const result = await runtime.run(runtime.resolve({
-    program: 'const fs=await import("node:fs/promises"); await fs.writeFile("ptc.txt","embedded"); console.log("worker-output"); return {value:await tools.echo("bridge"),env:Object.keys(process.env),executable:process.execPath,cwd:process.cwd()};',
-    bindings, cwd: root, sandboxPolicy: policy,
+    program: 'const fs=await import("node:fs/promises"); await fs.writeFile("ptc.txt","embedded"); inspect("worker-output"); '
+      + complete('({value:await tools.echo("bridge"),env:Object.keys(process.env),executable:process.execPath,cwd:process.cwd()})'),
+    bindings, cwd: root, sandboxPolicy: policy, stateOwner,
   }))
   assert.equal(result.error, undefined, JSON.stringify(result))
   assert.deepEqual(result.value, { value: 'bridge', env: [], executable: hello.executable, cwd: root })
-  assert(result.logs.join('').includes('worker-output'))
+  assert(result.output.filter(block => block.type === 'text').map(block => block.text).join('').includes('worker-output'))
   assert.equal(await ctx.fs.readText(await ctx.fs.resolve(`${root}/ptc.txt`)), 'embedded')
   const locked = await runtime.run(runtime.resolve({
-    program: 'const fs=await import("node:fs"); const {tryLockExclusive}=await import("@deepseek-ai/node-addon-system/flock"); const fd=fs.openSync("native-lock","w"); try { await tryLockExclusive(fd); return "locked" } finally { fs.closeSync(fd) }',
-    bindings: [], cwd: root, sandboxPolicy: policy,
+    program: 'const fs=await import("node:fs"); const {tryLockExclusive}=await import("@deepseek-ai/node-addon-system/flock"); const fd=fs.openSync("native-lock","w"); let lock; try { await tryLockExclusive(fd); lock="locked" } finally { fs.closeSync(fd) } '
+      + complete('lock'),
+    bindings: [], cwd: root, sandboxPolicy: policy, stateOwner,
   }))
   assert.equal(locked.error, undefined, JSON.stringify(locked))
   assert.equal(locked.value, 'locked')
   checks.push('native-flock')
+  if (scoped) {
+    const retained = await runtime.run(runtime.resolve({ program: complete('lock'), bindings: [], cwd: root, sandboxPolicy: policy, stateOwner }))
+    assert.equal(retained.error, undefined, JSON.stringify(retained))
+    assert.equal(retained.value, 'locked')
+    checks.push('scoped-repl-retention')
+  }
+  await runtime.release(stateOwner)
   const timed = await runtime.run(runtime.resolve({ program: 'while(true){}', bindings: [], cwd: root, sandboxPolicy: policy, timeoutMs: 1500 }))
   assert.equal(timed.error?.kind, 'timeout')
   checks.push('embedded-ptc-and-deadline')
@@ -119,7 +133,7 @@ try {
       assert.equal(basename(invocation.argv[0]!), runner)
     }
     const confined = await runtime.run(runtime.resolve({
-      program: 'return await (await import("node:fs/promises")).readFile("ptc.txt","utf8")', bindings: [], cwd: root,
+      program: complete('await (await import("node:fs/promises")).readFile("ptc.txt","utf8")'), bindings: [], cwd: root,
       sandboxPolicy: { mode: 'read-only', workspaceRoot: root },
     }))
     assert.equal(confined.error, undefined, JSON.stringify(confined))

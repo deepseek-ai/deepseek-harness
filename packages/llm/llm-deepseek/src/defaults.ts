@@ -1,5 +1,7 @@
 /** Shared provider limits and Chat Files API defaults. */
 
+/** Provider hard encoded-byte limit for one request image. */
+export const MAX_IMAGE_BYTES = 32 * 1024 * 1024
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default combined request/response context capacity. */
@@ -20,5 +22,11 @@ export const DEFAULT_FILE_EXPIRY_SECONDS = 7 * 24 * 60 * 60
 export const DEFAULT_FILE_REFRESH_MARGIN_SECONDS = 60 * 60
 /** Default number of oldest harness-owned files removed on quota recovery. */
 export const DEFAULT_FILE_QUOTA_CLEANUP_BATCH = 100
+/** Maximum simultaneous Files uploads per model request. */
+export const MAX_FILE_UPLOAD_CONCURRENCY = 3
+/** Maximum additional upload attempts per image. */
+export const MAX_FILE_UPLOAD_RETRIES = 2
+/** Local wait after an upload is rate limited, in milliseconds. */
+export const DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS = 500
 /** Default deadline for resolving one request image through the Files API. */
-export const DEFAULT_FILES_API_TIMEOUT_MS = 60_000
+export const DEFAULT_FILES_API_TIMEOUT_MS = 20_000

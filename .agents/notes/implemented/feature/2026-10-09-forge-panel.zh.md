@@ -10,11 +10,11 @@ Status: implemented
 
 ## Decision
 
-[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个新会话选项、一张位于输入框上方的创建卡片、一个 toast，以及[会话列表中的图标与悬浮卡片部分](2026-10-20-forge-session-list.zh.md)。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务、工作树模型工具与面板使用的一个隔离 worktree 服务作为插件页中默认禁用的一个条目发布。
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括[会话面板](2026-11-05-session-panel.zh.md)中的“变更请求”分栏、检出行与本地变更行和提醒标记，以及一个变更视图、一个新会话选项、一张位于输入框上方的创建卡片、一个 toast，以及[会话列表中的图标与悬浮卡片部分](2026-10-20-forge-session-list.zh.md)。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务、工作树模型工具与面板使用的一个隔离 worktree 服务作为插件页中默认禁用的一个条目发布。
 
 评审与工作树控件服务于同一个代码修改流程。统一插件入口让用户可以一次启用这些能力，无需根据底层包的拆分判断应该开启哪张卡片。包与两套工作树服务仍保持独立，分别负责会话开始前和对话中创建工作树的流程。
 
-Remote 通过 Session 的子进程提供方，按其[解析出的权限与查询限制](../bug-fix/2026-10-28-forge-git-session-permissions.zh.md)检查检出，因此它读到的与 Session 命令看到的相同。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
+Remote 通过 Session 的子进程提供方，按其[解析出的权限与查询限制](../bug-fix/2026-10-28-forge-git-session-permissions.zh.md)检查检出，因此它读到的与 Session 命令看到的相同。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `workspace-root/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
 
 状态轮询跟随面板订阅：只有该 Session 的某个界面挂载时才监听其绑定，注册表停止轮询无人监听的变更请求。每张卡片保留最近一次轮询得到的快照，因此短暂的失败不会让标题与编号消失。Session 只有一个打开的变更请求时，它的卡片默认展开；有多个时全部折叠；用户第一次展开或收起卡片后，以用户的选择为准。
 
@@ -28,16 +28,11 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 面板还通过变更视图展示 Session 工作背后的变更；变更视图是本包的一个资源标签页类型。Remote 在宿主上把每个 diff 解析成文件与 hunk，因此浏览器无需补丁解析器即可绘制，每次读取都受 `maxDiffBytes` 与 `maxUntrackedFiles` 约束。本地变更来自使用 Session 权限与执行环境的 `git diff`，范围由用户选择：默认是分支相对于分叉点的变更，也可以是未提交、未暂存或已暂存的变更；未跟踪文件经 Session 的文件系统读取，显示为新文件。变更请求的变更来自代码托管平台，取自绑定最新状态中的 head，经 forge seam 新增的两个提供方读取操作 `diff` 与 `fileText` 获得。Host 为每个变更请求保留最近读到的补丁，按 head 提交与目标分支区分，总量受 `maxCachedDiffBytes` 约束，因此在同一 head 下重新打开、刷新与导航都不会再次下载；托管平台或提供方因结果超过其大小上限而拒绝时报告 forge 失败 `too-large`，视图随之提供变更请求的网页而不是重试。hunk 之间未变更的行从文件的新版本展开，即工作树、暂存区或 head 提交，并且只在该文本仍与 hunk 吻合时展开。每次检查还会为变更卡片统计分支的变更规模；没有打开中的变更请求以当前检出分支为源分支时才显示该卡片。卡片上的“创建变更请求”向 Session 发送一条用户消息，由 Agent 用自己的工具创建变更请求，绑定像其他变更请求一样来自 `gh pr create`。
 
-评审评论在用户选择代码时固定文件、侧、行范围、完整 hunk 与所评审的 head。Agent 引用进入既有输入框引用机制，由用户决定批量发送，发送后的消息记录模型实际收到的内容。GitHub 写入属于 forge 提供方的可选操作：预检核对当前 head，写入明确指向该提交；结果不明时阻止再次写入，直到用户核对。评审草稿与行内记录归浏览器页签实例所有，不进入 Session 日志，也不创建 GitHub 待提交评审。切换 Session 保留该实例；关闭时丢弃本地状态并拒绝迟到的写入结果。已发布的 GitHub 评论仍保留在外部平台。
+评审评论在用户选择代码时固定文件、侧、行范围、完整 hunk 与所评审的 head。Agent 引用进入既有输入框引用机制，由用户决定批量发送，发送后的消息记录模型实际收到的内容。GitHub 写入属于 forge 提供方的可选操作：预检核对当前 head，写入明确指向该提交；结果不明时阻止再次写入，直到用户核对。Agent 引用与已发布评论的行内记录以及评审总结归浏览器页签实例所有，不进入 Session 日志；留待之后一起提交的 PR 评论写入代码托管平台的待提交评审，见[待提交评审决策](2026-11-05-forge-pending-review-drafts.zh.md)。切换 Session 保留该实例；关闭时丢弃本地状态并拒绝迟到的写入结果。已发布的 GitHub 评论仍保留在外部平台。
 
 ## Deferred
 
-在左侧导航“插件”“自动化任务”旁边新增代码审查页、列出用户在所选提供方上的 pull request 或 merge request，这项工作推迟。它的接入不需要改动本包面向 Session 的界面：
-
-- **提供方能力**——`ForgeProvider` 增加一个可选方法，例如 `listForViewer(host, filter, signal)`，返回变更请求引用；GitHub 用 `gh search prs --author @me` 或 GraphQL `viewer` 实现，注册表汇总已启用的提供方。
-- **Remote**——一条类似 `follow` 的流，以提供方与筛选条件而不是 Session 为键，通过同一个 `ctx.forge.watch` 轮询。
-- **客户端**——在本包中以 `sidebar.panellist` 条目加一个 `main` 页面实现（与 `ui-schedule` 相同），渲染接收变更请求、其快照与可选操作的 `ChangeRequestCard`。
-- **设置**——在套件的配置页中选择提供方与主机。
+本节曾暂缓的左侧导航代码审查页已实现为[代码评审页](2026-11-11-forge-review-page.zh.md)；它的列表来自可选的提供方能力，页面按 URL 读取变更请求，因此本包的会话界面没有改变。
 
 变更视图目前还没有单个提交与上一轮的范围；两者将是经 `localDiff` 读取的更多 `ForgeLocalScope` 种类。
 

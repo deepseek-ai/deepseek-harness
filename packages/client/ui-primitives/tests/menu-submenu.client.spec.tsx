@@ -97,6 +97,35 @@ describe('Menu submenus', () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
+  it('closes when another popup trigger is activated, even one that stops its pointer presses', () => {
+    const close = vi.fn()
+    render(<>
+      <button type="button" data-context-menu-trigger="" aria-haspopup="menu"
+        onPointerDown={(event) => { event.stopPropagation() }} onClick={(event) => { event.stopPropagation() }}>Isolated more</button>
+      <button type="button">Plain</button>
+      <Menu open anchor={<button type="button" aria-haspopup="menu">Own</button>} items={entries} onClose={close} />
+    </>)
+    fireEvent.click(screen.getByRole('button', { name: 'Own' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Plain' }))
+    expect(close).not.toHaveBeenCalled()
+    const isolated = screen.getByRole('button', { name: 'Isolated more' })
+    fireEvent.pointerDown(isolated)
+    expect(close).not.toHaveBeenCalled()
+    fireEvent.click(isolated)
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('leaves other popup triggers the external-trigger rule claims to their own popup', () => {
+    const close = vi.fn()
+    render(<>
+      <button type="button" data-context-menu-trigger="" aria-haspopup="menu">Claimed</button>
+      <Menu open anchor={null} items={entries} onClose={close} isExternalTrigger={node => node instanceof Element && node.hasAttribute('data-context-menu-trigger')} />
+    </>)
+    fireEvent.click(screen.getByRole('button', { name: 'Claimed' }))
+    expect(close).not.toHaveBeenCalled()
+  })
+
   it('does not activate an external popup trigger on ArrowRight', () => {
     render(<ExternalTriggerFixture onClose={vi.fn()} />)
     const trigger = screen.getByRole('button', { name: 'External more' })
@@ -410,6 +439,33 @@ describe('Menu submenus', () => {
     pointer(target, 'pointerover', 'mouse')
     expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
     expect(document.activeElement).toBe(target)
+  })
+
+  it('collapses a searchable submenu when hovering a sibling row', () => {
+    render(<Menu open anchor={null} items={entries} onClose={() => {}}
+      search={{ label: 'Filter actions', clearLabel: 'Clear filter', value: '', onChange: () => {} }} />)
+    pointer(screen.getByRole('menuitem', { name: 'Applications' }), 'pointerover', 'mouse')
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeTruthy()
+    pointer(screen.getByRole('menuitem', { name: 'Other action' }), 'pointerover', 'mouse')
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+  })
+
+  it('closes the searchable menu on Escape after ArrowDown leaves the submenu parent', () => {
+    const onClose = vi.fn()
+    render(<Menu open anchor={null} items={entries} onClose={onClose}
+      search={{ label: 'Filter actions', clearLabel: 'Clear filter', value: '', onChange: () => {} }} />)
+    const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+    expect(document.activeElement).toBe(search)
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    expect(document.activeElement).toBe(parent)
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeTruthy()
+    fireEvent.keyDown(parent, { key: 'ArrowDown' })
+    const sibling = screen.getByRole('menuitem', { name: 'Other action' })
+    expect(document.activeElement).toBe(sibling)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    fireEvent.keyDown(sibling, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('returns child focus after pointer grace so root arrow navigation can continue', () => {

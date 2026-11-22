@@ -72,7 +72,7 @@
   border-radius: 2px;
 }
 
-.heading:has(.statusText) .text {
+.heading[data-has-status] .text {
   flex-basis: 12em;
 }
 
@@ -186,42 +186,6 @@
 
 .root[data-compact] .caption {
   padding: 6px 10px 4px;
-}
-
-.subtitleToggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.subtitleToggle > span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.subtitleToggle > svg {
-  flex: none;
-  margin-top: 3px;
-}
-
-.subtitleToggle[aria-expanded='true'] > span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.subtitleToggle[aria-expanded='true'] > svg {
-  transform: rotate(90deg);
 }
 
 .description {

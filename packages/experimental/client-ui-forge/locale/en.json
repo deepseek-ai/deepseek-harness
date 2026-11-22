@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Change request panel",
-    "description": "Shows a Session's change requests in a sidebar tab and lets a new Session start in a worktree."
+    "description": "Shows a Session's change requests in the Session panel and lets a new Session start in a worktree."
   }
 }

@@ -8,10 +8,11 @@
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId  } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, LlmError, type ReasoningEffortId  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelReasoningInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, foldRequestHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, foldRequestHeader } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -93,7 +94,7 @@ describe('request stability across the loop', () => {
     ])
     const ctx = await harness(adapter)
     registerEcho(ctx)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)
@@ -114,7 +115,7 @@ describe('request stability across the loop', () => {
   it('a later turn append-extends the previous turn (one conversation, one log)', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -130,7 +131,7 @@ describe('request stability across the loop', () => {
   it('starts a new request series only when the admitted step explicitly asks for one', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     ctx.on('agent/pre-step', async ({ turn }, next) => {
       const decision = await next()
       return decision.kind === 'enter' && turn === 2
@@ -151,7 +152,7 @@ describe('request stability across the loop', () => {
   it('retains the explicit series boundary when that request also changes its header', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     ctx.on('agent/pre-step', async ({ turn }, next) => {
       const decision = await next()
       return decision.kind === 'enter' && turn === 2
@@ -180,7 +181,7 @@ describe('request stability across the loop', () => {
   it('keeps the series declaration when an outer listener rebuilds the enter decision', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     // Context-appending wrapper in the tool-cordis / session-reference shape:
     // it rebuilds the downstream decision, so it must spread it to keep fields
     // it does not own — a bare `{ kind: 'enter', messages }` drops the series.
@@ -213,30 +214,30 @@ describe('request stability across the loop', () => {
   it('logs adapter defaults, supports per-turn effort changes, and restores the effective value', async () => {
     const reasoning = {
       efforts: [
-        { id: ReasoningEffortId('high'), name: 'High' },
-        { id: ReasoningEffortId('max'), name: 'Max' },
+        { id: brandString<ReasoningEffortId>('high'), name: 'High' },
+        { id: brandString<ReasoningEffortId>('max'), name: 'Max' },
       ],
-      defaultEffort: ReasoningEffortId('high'),
+      defaultEffort: brandString<ReasoningEffortId>('high'),
     }
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')], reasoning)
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('effort'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('effort'), { provider: 'mock', model: 'mock' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
     agent.model.select({
-      provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('max'),
+      provider: 'mock', model: 'mock', reasoningEffort: brandString<ReasoningEffortId>('max'),
     })
     send(agent, 'second')
     await waitForIdle(ctx, agent)
 
     expect(adapter.requests.map(request => request.reasoningEffort)).toEqual([
-      ReasoningEffortId('high'),
-      ReasoningEffortId('max'),
+      brandString<ReasoningEffortId>('high'),
+      brandString<ReasoningEffortId>('max'),
     ])
     const headers = agent.session.snapshotEvents().filter(event => event.type === 'request/header')
     expect(headers.map(event => event.data.header.config.reasoningEffort)).toEqual([
-      ReasoningEffortId('high'),
-      ReasoningEffortId('max'),
+      brandString<ReasoningEffortId>('high'),
+      brandString<ReasoningEffortId>('max'),
     ])
     expect(headers.map(event => event.data.header.adapterDefaults)).toEqual([
       { reasoningEffort: true },
@@ -245,13 +246,13 @@ describe('request stability across the loop', () => {
     expect(headers.map(event => event.data.reason)).toEqual(['initial', 'change'])
 
     for (const [model, effort] of [
-      ['mock', ReasoningEffortId('max')],
-      ['replacement', ReasoningEffortId('high')],
+      ['mock', brandString<ReasoningEffortId>('max')],
+      ['replacement', brandString<ReasoningEffortId>('high')],
     ] as const) {
       const resumedAdapter = new MockAdapter([textResponse('resumed')], reasoning)
       const resumedCtx = await harness(resumedAdapter)
       const resumedHandle = await resumedCtx.agents.create({
-        sessionId: SessionId(`effort-${model}`),
+        sessionId: brandString<SessionId>(`effort-${model}`),
         seed: structuredClone(agent.session.snapshotEvents()),
         agentOptions: { provider: 'mock', model },
         setup: (_ctx, agent) => {
@@ -272,7 +273,7 @@ describe('request stability across the loop', () => {
   it('logs an adapter-owned maxTokens default before dispatch', async () => {
     const adapter = new MockAdapter([textResponse('bounded')], undefined, 256_000)
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('adapter-max-tokens'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('adapter-max-tokens'), {
       provider: 'mock',
       model: 'mock',
     })
@@ -294,7 +295,7 @@ describe('request stability across the loop', () => {
       ['deepseek', deepseek],
       ['other', other],
     ])
-    const agent = await ctx.agentLoop.create(SessionId('adapter-max-tokens-switch'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('adapter-max-tokens-switch'), {
       provider: 'deepseek',
       model: 'deepseek-model',
     })
@@ -321,7 +322,7 @@ describe('request stability across the loop', () => {
       ['deepseek', deepseek],
       ['other', other],
     ])
-    const agent = await ctx.agentLoop.create(SessionId('explicit-max-tokens-switch'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('explicit-max-tokens-switch'), {
       provider: 'deepseek',
       model: 'deepseek-model',
       maxTokens: 4_096,
@@ -367,28 +368,28 @@ describe('request stability across the loop', () => {
       }
     }([textResponse('first')])
     const second = new MockAdapter([textResponse('second')], {
-      efforts: [{ id: ReasoningEffortId('max'), name: 'Max' }],
-      defaultEffort: ReasoningEffortId('max'),
+      efforts: [{ id: brandString<ReasoningEffortId>('max'), name: 'Max' }],
+      defaultEffort: brandString<ReasoningEffortId>('max'),
     })
     const disposeFirst = ctx.llm.registerAdapter(['mock'], first)
-    const agent = await ctx.agentLoop.create(SessionId('effort-hmr'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('effort-hmr'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'go')
     await started.promise
     disposeFirst()
     ctx.llm.registerAdapter(['mock'], second)
     reasoning.resolve({
-      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
-      defaultEffort: ReasoningEffortId('high'),
+      efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+      defaultEffort: brandString<ReasoningEffortId>('high'),
     })
     await waitForIdle(ctx, agent)
 
     expect(first.requests.map(request => request.reasoningEffort)).toEqual([
-      ReasoningEffortId('high'),
+      brandString<ReasoningEffortId>('high'),
     ])
     expect(second.requests).toHaveLength(0)
     const headers = agent.session.snapshotEvents().filter(event => event.type === 'request/header')
-    expect(headers.at(-1)?.data.header.config.reasoningEffort).toBe(ReasoningEffortId('high'))
+    expect(headers.at(-1)?.data.header.config.reasoningEffort).toBe(brandString<ReasoningEffortId>('high'))
   })
 
   it('aborts a blocked reasoning lookup before quiescent disposal completes', async () => {
@@ -414,7 +415,7 @@ describe('request stability across the loop', () => {
     }([])
     const ctx = await harness(adapter)
     const handle = await ctx.agents.create({
-      sessionId: SessionId('reasoning-dispose'),
+      sessionId: brandString<SessionId>('reasoning-dispose'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
 
@@ -440,7 +441,7 @@ describe('request stability across the loop', () => {
         }
       }([])
       const ctx = await harness(adapter)
-      const agent = await ctx.agentLoop.create(SessionId(`reasoning-${kind}`), {
+      const agent = await ctx.agentLoop.create(brandString<SessionId>(`reasoning-${kind}`), {
         provider: 'mock',
         model: 'mock',
       })
@@ -476,7 +477,7 @@ describe('request stability across the loop', () => {
         yield* textResponse('owned')
       })()
     })
-    const agent = await ctx.agentLoop.create(SessionId('listener-owned'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('listener-owned'), {
       provider: 'listener',
       model: 'virtual',
     })
@@ -498,7 +499,7 @@ describe('request stability across the loop', () => {
   it('a compaction replace rewrites the resend, and the log explains it', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     ctx.on('agent/request', async ({ turn }, next) => {
       const config = await next()
       return turn === 2 ? { ...config, maxTokens: 1_024 } : config
@@ -538,7 +539,7 @@ describe('request stability across the loop', () => {
       textResponse('recovered'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('same-step-compaction'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('same-step-compaction'), {
       provider: 'mock',
       model: 'mock',
     })
@@ -566,10 +567,10 @@ describe('request stability across the loop', () => {
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
   })
 
-  it('a system-prompt change replaces surface node 0 and starts a new series under the same header', async () => {
+  it('a new section appends without changing the request header', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), textResponse('three')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -583,16 +584,15 @@ describe('request stability across the loop', () => {
     await waitForIdle(ctx, agent)
 
     const snapshots = agent.session.snapshotEvents().filter(e => e.type === 'request/header')
-    expect(snapshots.map(event => event.data.reason)).toEqual(['initial', 'series'])
+    expect(snapshots.map(event => event.data.reason)).toEqual(['initial'])
     const systemNodes = agent.session.snapshotEvents().filter(e => e.type === 'system/message')
     expect(systemNodes).toHaveLength(2)
-    expect(systemNodes[1]?.surfaceOp).toEqual({ op: 'replace', startSeq: systemNodes[0]?.seq, endSeq: systemNodes[0]?.seq })
-    expect(systemNodes[1]?.sourceEventSeqs).toEqual([systemNodes[0]?.seq])
-    const head = adapter.requests[2]!.messages[0]!
+    expect(systemNodes[1]?.surfaceOp).toBe('append')
+    expect(systemNodes[1]?.sourceEventSeqs).toBeUndefined()
+    const head = adapter.requests[2]!.messages.at(-2)!
     expect(head.role).toBe('system')
     expect(head.content).toContainEqual({ type: 'text', text: expect.stringContaining('new guidance') as unknown })
-    expect(agent.session.surface.nodes[0]).toBe(systemNodes[1]?.seq)
-    // History is preserved across the change — only node 0 moved.
+    expect(agent.session.surface.nodes[0]).toBe(systemNodes[0]?.seq)
     expect(adapter.requests[2]!.messages.length).toBeGreaterThan(adapter.requests[1]!.messages.length)
   })
 
@@ -600,7 +600,7 @@ describe('request stability across the loop', () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), textResponse('three'), textResponse('four')])
     adapter.systemPromptUpdate = 'in-history'
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -632,11 +632,11 @@ describe('request stability across the loop', () => {
     expectPrefixExtension(adapter.requests[2]!, adapter.requests[3]!)
   })
 
-  it('on an in-history route a series start folds a prompt change into node 0 and empties later system nodes', async () => {
+  it('explicit series starts preserve sections and append only changed text', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two'), textResponse('three'), textResponse('four')])
     adapter.systemPromptUpdate = 'in-history'
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     let startSeries = false
     ctx.on('agent/pre-step', async (_payload, next) => {
       const decision = await next()
@@ -646,18 +646,16 @@ describe('request stability across the loop', () => {
     send(agent, 'first')
     await waitForIdle(ctx, agent)
 
-    // Series start with only node 0: the change rewrites node 0 (the cache is lost anyway).
     let disposeSection = ctx.systemPrompt.section({ name: 'extra', order: 2, text: 'new guidance' })
     startSeries = true
     send(agent, 'second')
     await waitForIdle(ctx, agent)
     let systemNodes = agent.session.snapshotEvents().filter(e => e.type === 'system/message')
     expect(systemNodes).toHaveLength(2)
-    expect(systemNodes[1]?.surfaceOp).toEqual({ op: 'replace', startSeq: systemNodes[0]?.seq, endSeq: systemNodes[0]?.seq })
+    expect(systemNodes[1]?.surfaceOp).toBe('append')
     expect(agent.session.snapshotEvents().flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
 
-    // A continuing series appends a mid-history node…
     startSeries = false
     disposeSection()
     disposeSection = ctx.systemPrompt.section({ name: 'extra', order: 2, text: 'newer guidance' })
@@ -667,28 +665,27 @@ describe('request stability across the loop', () => {
     expect(systemNodes).toHaveLength(3)
     expect(systemNodes[2]?.surfaceOp).toBe('append')
 
-    // A broken series normalizes every active prompt version, preserving intervening messages.
     startSeries = true
     disposeSection()
     ctx.systemPrompt.section({ name: 'extra', order: 2, text: 'newest guidance' })
     send(agent, 'fourth')
     await waitForIdle(ctx, agent)
     systemNodes = agent.session.snapshotEvents().filter(e => e.type === 'system/message')
-    expect(systemNodes).toHaveLength(5)
-    expect(systemNodes[3]?.data.message.content).toEqual([])
-    expect(systemNodes[3]?.surfaceOp).toEqual({ op: 'replace', startSeq: systemNodes[2]?.seq, endSeq: systemNodes[2]?.seq })
-    expect(agent.session.surface.nodes[0]).toBe(systemNodes[4]?.seq)
-    const systemTexts = adapter.requests[3]!.messages.flatMap(message => message.role === 'system' ? [message.content[0]] : [])
-    expect(systemTexts).toEqual([
-      { type: 'text', text: expect.stringContaining('newest guidance') as unknown },
+    expect(systemNodes).toHaveLength(4)
+    expect(systemNodes.every(event => event.surfaceOp === 'append')).toBe(true)
+    expect(agent.session.surface.nodes[0]).toBe(systemNodes[0]?.seq)
+    expect(adapter.requests[3]!.messages.filter(message => message.role === 'system')).toHaveLength(4)
+    expect(systemNodes[3]?.data.message.content).toEqual([
+      { type: 'text', text: 'The following replaces the earlier instructions from extra.' },
+      { type: 'text', text: 'newest guidance' },
     ])
   })
 
-  it('on an in-history route a compaction replace since the last request re-baselines node 0', async () => {
+  it('appends new guidance when compaction preserves the admitted system nodes', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     adapter.systemPromptUpdate = 'in-history'
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -708,17 +705,18 @@ describe('request stability across the loop', () => {
 
     const systemNodes = agent.session.snapshotEvents().filter(e => e.type === 'system/message')
     expect(systemNodes).toHaveLength(2)
-    expect(systemNodes[1]?.surfaceOp).toEqual({ op: 'replace', startSeq: systemNodes[0]?.seq, endSeq: systemNodes[0]?.seq })
-    expect(adapter.requests[1]!.messages.map(message => message.role)).toEqual(['system', 'user', 'user'])
+    expect(systemNodes[1]?.surfaceOp).toBe('append')
+    expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
+    expect(adapter.requests[1]!.messages.map(message => message.role)).toEqual(['system', 'user', 'system', 'user'])
     expect(agent.session.snapshotEvents().flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
   })
 
-  it('on an in-history route a tool-schema change re-baselines node 0 together with the changed header', async () => {
+  it('a tool-schema change updates its header without consolidating sections', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     adapter.systemPromptUpdate = 'in-history'
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -729,17 +727,17 @@ describe('request stability across the loop', () => {
     await waitForIdle(ctx, agent)
 
     const headers = agent.session.snapshotEvents().filter(e => e.type === 'request/header')
-    expect(headers.map(event => [event.data.reason, event.data.startsSeries])).toEqual([['initial', undefined], ['change', true]])
+    expect(headers.map(event => [event.data.reason, event.data.startsSeries])).toEqual([['initial', undefined], ['change', undefined]])
     const systemNodes = agent.session.snapshotEvents().filter(e => e.type === 'system/message')
     expect(systemNodes).toHaveLength(2)
-    expect(systemNodes[1]?.surfaceOp).toEqual({ op: 'replace', startSeq: systemNodes[0]?.seq, endSeq: systemNodes[0]?.seq })
-    expect(adapter.requests[1]!.messages.filter(message => message.role === 'system')).toHaveLength(1)
+    expect(systemNodes[1]?.surfaceOp).toBe('append')
+    expect(adapter.requests[1]!.messages.filter(message => message.role === 'system')).toHaveLength(2)
   })
 
   it('an inject() during the agent/request waterfall joins the NEXT request (the step/start boundary)', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     let injected = false
     ctx.on('agent/request', async (_payload, next) => {
@@ -767,7 +765,7 @@ describe('request stability across the loop', () => {
   it('a mutation attempt on the frozen request content throws into the step (loud, not silent)', async () => {
     const adapter = new MockAdapter([textResponse('one')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('llm/stream', (options, next) => {
       // The historical failure mode this design kills: a listener rewriting
@@ -791,7 +789,7 @@ describe('request stability across the loop', () => {
   it('a fresh loop instance over a seeded log anchors with a resume snapshot and stays cache-aligned', async () => {
     const adapter = new MockAdapter([textResponse('one')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('gen1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('gen1'), { provider: 'mock', model: 'mock' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
 
@@ -800,7 +798,7 @@ describe('request stability across the loop', () => {
     const adapter2 = new MockAdapter([textResponse('two')])
     const ctx2 = await harness(adapter2)
     const handle = await ctx2.agents.create({
-      sessionId: SessionId('gen2-session'),
+      sessionId: brandString<SessionId>('gen2-session'),
       seed: agent.session.snapshotEvents(),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
@@ -820,7 +818,7 @@ describe('request stability across the loop', () => {
   it('a delegating listener cannot mutate the seed through next() — the fold stays log-true', async () => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('agent/request', async (_payload, next) => {
       const config = await next()
@@ -855,7 +853,7 @@ describe('request stability across the loop', () => {
     ])
     const ctx = await harness(adapter)
     registerEcho(ctx)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)
@@ -880,7 +878,7 @@ describe('request stability across the loop', () => {
       )!
       // Messages: the entered batch is logged after step/start, so rebuild the
       // complete dispatch prefix through a completely fresh Session.
-      const rebuilt = Session.create(SessionId(`rebuild-${index}`), structuredClone(events.slice(0, settlement.seq)))
+      const rebuilt = Session.create(brandString<SessionId>(`rebuild-${index}`), structuredClone(events.slice(0, settlement.seq)))
       expect(structuredClone(request.messages)).toEqual(rebuilt.deriveMessages())
 
       // Header: the latest request/header snapshot up to this step's dispatch
@@ -916,7 +914,7 @@ describe('request/context capacity records', () => {
   it('records capacity once and skips it while the route is unchanged', async () => {
     const adapter = capacityAdapter({ mock: 128_000 }, [textResponse('a'), textResponse('b')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('capacity-dedup'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('capacity-dedup'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -938,7 +936,7 @@ describe('request/context capacity records', () => {
       [textResponse('a'), textResponse('b')],
     )
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('capacity-switch'), { provider: 'mock', model: 'small' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('capacity-switch'), { provider: 'mock', model: 'small' })
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
@@ -953,7 +951,7 @@ describe('request/context capacity records', () => {
 
   it('records and deduplicates a route whose adapter advertises no capacity', async () => {
     const ctx = await harness(new MockAdapter([textResponse('a'), textResponse('b')]))
-    const agent = await ctx.agentLoop.create(SessionId('capacity-absent'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('capacity-absent'), { provider: 'mock', model: 'mock' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
     send(agent, 'second')
@@ -966,7 +964,7 @@ describe('request/context capacity records', () => {
   it('clears a previous capacity when the next route advertises none', async () => {
     const adapter = capacityAdapter({ known: 64_000 }, [textResponse('a'), textResponse('b')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('capacity-clear'), { provider: 'mock', model: 'known' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('capacity-clear'), { provider: 'mock', model: 'known' })
     send(agent, 'first')
     await waitForIdle(ctx, agent)
     agent.model.select({ provider: 'mock', model: 'unknown' })

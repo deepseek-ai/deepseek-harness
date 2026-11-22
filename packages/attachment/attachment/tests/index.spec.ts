@@ -1,9 +1,9 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import AttachmentStore, {
-  AttachmentError,
-  AttachmentId,
-  ImageVariantId,
+  AttachmentError, type AttachmentId, type ImageVariantId,
   isAttachmentError,
   isImageAdmissionError,
   type ImageAttachmentRef,
@@ -41,7 +41,7 @@ class RecordingStore extends AttachmentStore {
     this.calls.push(`save:${value}`)
     if (value === this.rejectSaveAt) throw new Error(`write:${value}`)
     return {
-      attachmentId: AttachmentId(`sha256:${String(value).padStart(64, '0')}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${String(value).padStart(64, '0')}`),
       mediaType: input.mediaType,
       bytes: input.data.byteLength,
       width: 1,
@@ -60,7 +60,7 @@ class RecordingStore extends AttachmentStore {
   ): Promise<RequestImageAttachment> {
     this.calls.push(`request:${ref.name}`)
     return Promise.resolve({
-      variantId: ImageVariantId(`sha256:${String(ref.bytes).padStart(64, '0')}`),
+      variantId: brandString<ImageVariantId>(`sha256:${String(ref.bytes).padStart(64, '0')}`),
       attachment: ref,
       data: Uint8Array.of(ref.bytes),
       mediaType: ref.mediaType,
@@ -96,7 +96,7 @@ class RecordingFileStore extends RecordingStore {
   override saveFile(input: SaveFileAttachment) {
     this.fileInput = input
     return Promise.resolve({
-      attachmentId: AttachmentId(`sha256:${'cd'.repeat(32)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'cd'.repeat(32)}`),
       name: input.name ?? 'unnamed',
       bytes: input.data.byteLength,
     })
@@ -154,12 +154,14 @@ describe('AttachmentStore.readImageRequest', () => {
   it('reports unsupported request projection while preserving cancellation', async () => {
     const store = new UnsupportedProjectionStore(new Context())
     const ref = await new RecordingStore(new Context()).saveImage(image(1))
-    await expect(store.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1 }))
+    await expect(store.readImageRequest(ref, { width: 1, height: 1, maxImageBytes: 1, imageTargetBytes: 1 }))
       .rejects.toMatchObject({ code: 'ATTACHMENT_PROJECTION_UNSUPPORTED' })
     const controller = new AbortController()
     const reason = new Error('cancel unsupported projection')
     controller.abort(reason)
-    expect(() => store.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1 }, controller.signal)).toThrow(reason)
+    expect(() => store.readImageRequest(ref, {
+      width: 1, height: 1, maxImageBytes: 1, imageTargetBytes: 1,
+    }, controller.signal)).toThrow(reason)
   })
 
   it('rejects generic-file storage and exposes no provider-owned host path by default', async () => {
@@ -173,7 +175,7 @@ describe('AttachmentStore.readImageRequest', () => {
       name: 'notes.txt',
     })).rejects.toMatchObject({ code: 'ATTACHMENT_FILES_UNSUPPORTED' })
     const fileRef = {
-      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'ab'.repeat(32)}`),
       name: 'notes.txt',
       bytes: 1,
     }
@@ -215,6 +217,15 @@ describe('isImageAdmissionError', () => {
     expect(isImageAdmissionError(new AttachmentError('corrupt object', 'ATTACHMENT_CORRUPT'))).toBe(false)
     expect(isImageAdmissionError(new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED'))).toBe(false)
     expect(isImageAdmissionError(new Error('unknown failure'))).toBe(false)
+  })
+})
+
+describe('AttachmentError', () => {
+  it('is a HarnessError that keeps its literal name and attachment code', () => {
+    const cause = new Error('disk full')
+    const error = new AttachmentError('disk failed', 'ATTACHMENT_WRITE_FAILED', { cause })
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'AttachmentError', code: 'ATTACHMENT_WRITE_FAILED', message: 'disk failed', cause })
   })
 })
 

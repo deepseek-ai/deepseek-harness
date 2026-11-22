@@ -9,6 +9,7 @@
  * formatted-result spill handoff, and the no-background-job invariant.
  * Real-`rg` behavior is pinned separately in integration.spec.ts.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -17,7 +18,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { join, sep } from 'node:path'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH, type ToolExecution, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
@@ -25,9 +26,10 @@ import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessCollectedOutputs, SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { rgPath } from '@vscode/ripgrep'
-import { SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
+import { type SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   buildGlobCommand,
   buildGrepCommand,
@@ -185,7 +187,7 @@ class FakeSpill extends SpillStore {
     if (this.failWith) return Promise.reject(this.failWith)
     this.saves.push(input)
     return Promise.resolve({
-      locator: SpillLocator(`/spill/${input.suggestedName}`),
+      locator: brandString<SpillLocator>(`/spill/${input.suggestedName}`),
       bytes: Buffer.byteLength(input.content, 'utf8'),
       retrievalHint: 'Use the fake retrieval hint.',
     })
@@ -204,6 +206,7 @@ async function setup(options: SetupOptions = {}) {
   provideWorkingDirectoryFixture(ctx)
   const warnings: string[] = []
   ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -227,7 +230,7 @@ function call(
 ) {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: args,
     ...options.agent ? { agent: options.agent as never } : {},
@@ -259,9 +262,16 @@ describe('registration', () => {
     expect(glob?.description).toContain('sampled across top-level entries')
   })
 
+  it('declares glob and grep parallel-safe', async () => {
+    const { ctx } = await setup()
+    expect(ctx.tools.get('glob')?.isConcurrencySafe?.({ pattern: '*.ts' })).toBe(true)
+    expect(ctx.tools.get('grep')?.isConcurrencySafe?.({ pattern: 'x' })).toBe(true)
+  })
+
   it('stays pending until ctx.subprocess exists (inject)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -274,7 +284,7 @@ describe('registration', () => {
     expect(ctx.tools.schemas()).toHaveLength(2)
     await fiber.dispose()
     expect(ctx.tools.schemas()).toHaveLength(0)
-    const sections = (await ctx.systemPrompt.assemble()).sections.map(s => s.name)
+    const sections = (await ctx.systemPrompt.assemble()).sections.filter(s => !s.retire).map(s => s.name)
     expect(sections).not.toContain('tool:glob')
     expect(sections).not.toContain('tool:grep')
   })
@@ -319,6 +329,7 @@ describe('config validation', () => {
   ] as const)('rejects a non-positive or fractional %s at load', async (name, config) => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -329,6 +340,7 @@ describe('config validation', () => {
   it('rejects a grace beyond the Node timer range at load', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -482,7 +494,11 @@ describe('workdir derivation and signal forwarding', () => {
     const { ctx } = await setup()
     const controller = new AbortController()
     controller.abort()
-    const exec = { signal: controller.signal, name: 'glob', callId: ToolCallId('direct-pre-abort') } as unknown as ToolExecution
+    const callId = brandString<ToolCallId>('direct-pre-abort')
+    const exec: ToolExecution = {
+      signal: controller.signal, name: 'glob', callId, rootCallId: callId,
+      arguments: {}, token: Symbol('direct-pre-abort') as ToolExecutionToken,
+    }
     await expect(runRipgrep(ctx, exec, 'glob', ['--files'], 1_000_000, 3_000, 64 * 1024)).rejects
       .toMatchObject({ name: 'SearchError', code: 'SEARCH_ABORTED' })
   })
@@ -754,8 +770,14 @@ describe('glob results', () => {
 
   it('validates arguments (blank pattern, blank path)', async () => {
     const { ctx } = await setup()
-    expect(text(await call(ctx, 'glob', { pattern: '  ' }))).toContain('pattern must be a non-empty string')
-    expect(text(await call(ctx, 'glob', { pattern: '*', path: ' ' }))).toContain('path must be a non-empty string')
+    for (const [args, message] of [
+      [{ pattern: '  ' }, 'pattern must be a non-empty string'],
+      [{ pattern: '*', path: ' ' }, 'path must be a non-empty string'],
+    ] as const) {
+      const result = await call(ctx, 'glob', args)
+      expect(text(result)).toContain(message)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    }
   })
 
   it('threads a valid path through to the spawn as the plain search root element', async () => {
@@ -1100,16 +1122,23 @@ describe('grep results', () => {
     const result = await call(ctx, 'grep', args)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect(subprocess.spawns).toHaveLength(0)
   })
 
   it('validates arguments (empty pattern, blank path, bad include)', async () => {
     const { ctx } = await setup()
-    expect(text(await call(ctx, 'grep', { pattern: '' }))).toContain('pattern must be a non-empty string')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', path: '  ' }))).toContain('path must be a non-empty string')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '  ' }))).toContain('include must be a non-empty glob')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '!*.ts' }))).toContain('negated patterns')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '*.ts,*.js' }))).toContain('comma-separated list')
+    for (const [args, message] of [
+      [{ pattern: '' }, 'pattern must be a non-empty string'],
+      [{ pattern: 'x', path: '  ' }, 'path must be a non-empty string'],
+      [{ pattern: 'x', include: '  ' }, 'include must be a non-empty glob'],
+      [{ pattern: 'x', include: '!*.ts' }, 'negated patterns'],
+      [{ pattern: 'x', include: '*.ts,*.js' }, 'comma-separated list'],
+    ] as const) {
+      const result = await call(ctx, 'grep', args)
+      expect(text(result)).toContain(message)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    }
   })
 
   it('accepts a whitespace-only pattern (a legitimate regex) and brace alternation in include', async () => {

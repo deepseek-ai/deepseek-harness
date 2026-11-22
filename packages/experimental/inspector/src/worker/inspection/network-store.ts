@@ -110,7 +110,7 @@ export class NetworkStore implements InspectorRecordConsumer {
       if (!this.topics.has(record.topic)) continue
       try {
         this.ingest(source, record)
-      } catch {
+      } catch (_malformedRecord) {
         // A malformed domain payload loses only that observation; later records remain independently useful.
       }
     }
@@ -334,7 +334,7 @@ export class NetworkStore implements InspectorRecordConsumer {
     for (const listener of [...this.listeners]) {
       try {
         listener(event)
-      } catch {
+      } catch (_listenerFailed) {
         // One presentation adapter cannot interrupt repository ingestion or sibling consumers.
       }
     }

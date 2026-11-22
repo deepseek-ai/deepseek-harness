@@ -70,17 +70,17 @@ kind: "package-reference"
 
 ### 共享任务板
 
-任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有其全部依赖完成后，任务才可 claim。
+任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有 pending 且全部依赖完成的任务才可 claim。认领被拒绝时，`TEAM_TASK_BLOCKED` 会指出当前非 pending 状态或依赖未完成；仍先检查所有权。
 
 成员可认领任务开始工作、完成任务、释放任务或重新打开任务。根 agent 可将任务重新分配给自身或任意可达的可继续执行后代。其他成员自行认领任务。所有变更均采用比较并交换，过期更新无法覆盖较新的工作。
 
-当两个 in-progress 任务计划触及重叠路径时，文件提示会产生警告——它们绝不阻止任何操作。已删除任务保留在历史中，但从活动列表中消失。
+pending 和 in-progress 任务会提示与其他 in-progress 任务的写入范围重叠。completed 和 deleted 任务不再返回重叠警告。警告不会阻止操作。已删除任务保留在历史中，但从活动列表中消失。
 
 ### 等待与中断
 
 标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。任务变化和 Team 模式切换不会结束等待、添加收件箱输入或启动空闲 Agent。需要 Agent 处理更新时使用 `send_message`。
 
-祖先通过标准 `interrupt_agent` 工具停止后代的当前轮次。中断保留尚未认领的排队消息，也不改变任务归属。
+当 [subagent 控制插件](../../subagent/tool-subagent-control/README.zh.md#use-this-package)启用 `config.interrupt` 时，祖先可通过 `interrupt_agent` 停止后代的当前轮次。内置配置默认关闭此工具。中断保留尚未认领的排队消息，也不改变任务归属。
 
 ### 成功与失败的表现
 
@@ -147,7 +147,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 ### 浏览器投影
 
-`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均以 `TeamError` `TEAM_STATE_CORRUPT` 报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
 [Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签显示所有者的完整名称，所有者没有名称时显示其 Session id。
 

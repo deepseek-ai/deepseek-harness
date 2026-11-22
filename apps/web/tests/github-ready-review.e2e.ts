@@ -19,7 +19,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { saveFailureShot } from './support.ts'
+import { saveFailureShot, startWithSessionPanelHidden } from './support.ts'
 
 const MODE = webSnapshotMode()
 const OVERLAY = fileURLToPath(new URL('../../../packages/experimental/webhook-github/examples/github-review/cordis.yml', import.meta.url))
@@ -107,6 +107,7 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
 
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'en-US' })
+    await startWithSessionPanelHidden(page)
     await page.addInitScript(() => { localStorage.setItem('dsh.locale', 'en') })
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -195,8 +196,11 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
 
     const workspaceRow = page.locator('[role="treeitem"]').first()
     if (await workspaceRow.getAttribute('aria-expanded') !== 'true') await workspaceRow.click()
+    await page.bringToFront()
     await page.getByText(TITLE, { exact: true }).click()
     await page.getByText(REPLY, { exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
+    const reviewRow = page.locator('[role="treeitem"]').filter({ has: page.getByText(TITLE, { exact: true }) })
+    await expect.poll(() => reviewRow.getByText('Unread', { exact: true }).count()).toBe(0)
     const tree = await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd)
     const conversation = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(EXPECTED, `${tree}\n\n---\n\n${conversation}`, MODE)

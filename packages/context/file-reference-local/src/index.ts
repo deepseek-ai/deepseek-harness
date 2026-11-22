@@ -21,15 +21,7 @@ import {
   type FileSearchConfig,
 } from './search.ts'
 
-export {
-  DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES,
-  DEFAULT_FILE_SEARCH_MAX_ENTRIES,
-  DEFAULT_FILE_SEARCH_MAX_RESULTS,
-  WorkspaceFileSearch,
-} from './search.ts'
 export type { FileSearchConfig } from './search.ts'
-export { FILE_REFERENCE_PROMPT } from '@deepseek-ai/dsh-file-reference'
-export { activeAtToken, formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 
 /** Local file-reference discovery configuration. */
 export interface Config {
@@ -72,6 +64,7 @@ export class LocalFileReferenceService extends FileReferenceService {
           name: 'context:file-reference',
           order: scope.systemPrompt.getSectionOrder('FILE_REFERENCE'),
           text: () => agent.ctx.tools.get('read', agent) === undefined ? '' : FILE_REFERENCE_PROMPT,
+          retirement: 'The instructions for context:file-reference no longer apply.',
         })
       })
       this.promptFibers.set(agent, fiber)

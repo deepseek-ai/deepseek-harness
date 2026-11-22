@@ -414,6 +414,35 @@ const HUGE = '...several KB of text...'   // large text inline in the module
 
 The bundle carries text and binary data that belong in CSS and assets, diffs carry unreadable blobs, and a theme override can no longer reach that colour.
 
+<a id="keyed-selectors"></a>
+## Selectors match through a class or attribute, not `:not`, `:empty`, or `:has`
+
+A selector's rightmost compound names the element it styles through a class, an id, an attribute, or a type; the component sets that class or attribute for the state the design needs. Chromium files each rule under the key of that compound and tests it only against elements carrying the key. A rule without a key is tested against every element whose style it recalculates, and `:not()`, `:empty`, and `:has()` are evaluated in full on each of them; a `:has()` on an ancestor makes every change inside the ancestor restyle its subtree. In a long Session one such rule turns each streamed delta or scroll frame into whole-document work, and no single diff shows it. A visual requirement such as "the gap after a non-empty row" or "the label while the row is focused" has a structural answer: the component knows the state and names it.
+
+- Judged by: [`verify-css-selectors`](../../scripts/verify-css-selectors.ts) in the hygiene gates rejects a rightmost compound without a key that matches through `:not()`, `:empty`, or `:has()` (`:empty:not([class])`, `.row > :not(.nav)`), a selector that names no class, id, or attribute anywhere (`*`, `body *`, `:hover`), and `:has()` outside the rightmost compound (`.row:has(.x) .label`). A reviewer also rejects a rule that works around the check by spelling the same condition differently.
+- Not covered: a keyed compound may use `:not()` or `:empty` (`.reasoning:empty`, `.row:not([hidden])`), because the key limits the candidates; class-scoped universal and positional selectors (`.card *`, `.list > :first-child`, `.list > * + *`) and `:has()` on the styled element itself (`.row:has(> .icon)`) are allowed. The base stylesheets the gate lists are exempt from the first two rules. [Component rules](../web-styling.md#component-rules) own the remaining selector style.
+- Exception: a rule that cannot be keyed states why in a `/* css-selector-gate: <reason> */` comment on the line directly above it, and review accepts the reason. Existing selectors are recorded in [the gate's baseline](../../scripts/css-selectors.baseline.json); it only shrinks, and a fix runs `pnpm run verify-css-selectors --prune`.
+- Fix: before writing `:not`, `:empty`, or `:has`, ask which element and which state the design means, then name both. Put a class or `data-*` attribute on the element the rule styles; derive state such as "has a status", "expanded", or "empty" in the component and render it as a class, `aria-*`, or `data-*` attribute; express "after a visible row" with a sibling combinator between keyed compounds; when a parent must restyle a child, set a custom property on the parent and read it in the child's keyed rule.
+
+The component names the state, and each rule's rightmost compound is keyed:
+
+```css
+/* The row renders data-has-status exactly when it renders the status. */
+.heading[data-has-status] .text { flex-basis: auto; }
+/* Visible members carry their key; the sibling combinator spaces them. */
+.content > [data-chat-flow-key]:not([hidden]) ~ [data-chat-flow-key]:not([hidden]) { margin-top: 4px; }
+```
+
+The rules derive the state from the DOM, so Chromium evaluates them on every restyled element and restyles subtrees on unrelated changes:
+
+```css
+.body > :empty:not([class]) { margin-bottom: -4px; }
+.heading:has(.statusText) .text { flex-basis: auto; }
+.content > :not([hidden]) ~ :not([hidden]) { margin-top: 4px; }
+```
+
+Streaming into a 240-turn history spent about 3 s of main-thread style recalculation on one such rule (Issue #8790).
+
 ## A key states what it identifies
 
 Pass a `key` only when it names which entity or instance an element represents, and state that identity — a `turnId`, for example, is unique inside one session. Most lists already have a stable business id and need no extra key. A key invented to silence a warning or to encode render order states an identity the data does not have, and an array index is never that identity, because an insert or delete shifts every following item onto a different element.

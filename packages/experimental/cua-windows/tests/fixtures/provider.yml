@@ -1,0 +1,5 @@
+- id: windows-provider
+  name: cordis:windows-provider
+  config:
+    agentPreset: false
+    helperPath: !!js process.execPath

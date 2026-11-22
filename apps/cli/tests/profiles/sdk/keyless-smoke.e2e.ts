@@ -392,7 +392,6 @@ describe('Python SDK dsh profile keyless smoke', () => {
         process.platform === 'win32' ? 'pwsh' : 'bash',
         ...(optOut ? [] : ['read_image']),
         ...(editorEnabled ? ['str_replace_editor'] : []),
-        'working_directory',
       ])
       expect(modelRequests).toHaveLength(editorEnabled ? 3 : imageEnabled ? 2 : 1)
       if (imageEnabled) {
@@ -487,6 +486,87 @@ describe('Python SDK dsh profile keyless smoke', () => {
     }
   }, 30_000)
 
+  // TZ belongs to the spawned runtime only; GMT makes ICU report "+00:00", which is not a usable zone name.
+  it.each([
+    { tz: 'America/New_York', sampled: 'Browser time zone for this request: America/New_York. Interpret otherwise-unqualified dates and times in this zone.' },
+    { tz: 'GMT', sampled: 'Browser time zone for this request: unavailable. Ask the user to clarify otherwise-unqualified dates and times.' },
+  ])('shows the model the reported or sampled prompt time zone (TZ=$tz)', async ({ tz, sampled }) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-time-zone-'))
+    onTestFinished(() => rm(root, { recursive: true, force: true }))
+    const modelRequests: string[] = []
+    const modelServer = createServer((request, response) => {
+      let body = ''
+      request.setEncoding('utf8')
+      request.on('data', (chunk: string) => { body += chunk })
+      request.on('end', () => {
+        modelRequests.push(body)
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.end(messagesResponse({ type: 'text', text: 'done' }, 'end_turn'))
+      })
+    })
+    onTestFinished(() => new Promise<void>((resolve) => { modelServer.close(() => { resolve() }) }))
+    await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve))
+    const address = modelServer.address()
+    if (address === null || typeof address === 'string') throw new Error('model server did not bind a TCP port')
+    const child = execa(launch.command, [...launch.args, '--profile', 'sdk'], {
+      cwd: repoRoot,
+      env: {
+        ...launch.env,
+        DSH_HOME: join(root, '.dsh'),
+        DSH_TELEMETRY_DISABLED: '1',
+        DEEPSEEK_API_KEY: 'keyless-smoke-no-call',
+        DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
+        TZ: tz,
+      },
+      timeout: 35_000,
+      killSignal: 'SIGKILL',
+      reject: false,
+    })
+    onTestFinished(async () => { child.kill('SIGKILL'); await child })
+    const lines: string[] = []
+    let stdoutBuffer = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuffer += chunk.toString('utf8')
+      const parts = stdoutBuffer.split('\n')
+      stdoutBuffer = parts.pop() ?? ''
+      lines.push(...parts)
+    })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
+    const send = (id: number, method: string, params?: object) => {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+      return waitForLine(lines, value => value.id === id, () => stderr)
+    }
+    const promptRequest = async (id: number, sessionId: string, timeZone?: string): Promise<string> => {
+      const requests = modelRequests.length
+      expect(await send(id, 'session/prompt', {
+        sessionId, contentBlocks: [{ type: 'text', text: 'When is noon tomorrow?' }], ...timeZone === undefined ? {} : { timeZone },
+      })).toHaveProperty('result.messageId')
+      await waitForLine(lines, (value) => {
+        const params = value.params as { sessionId?: string; event?: { type?: string } } | undefined
+        return value.method === 'session.event' && params?.sessionId === sessionId && params.event?.type === 'turn/end'
+      }, () => stderr)
+      expect(modelRequests).toHaveLength(requests + 1)
+      return modelRequests.at(-1)!
+    }
+
+    await send(1, 'initialize', { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(await promptRequest(2, 'explicit', 'US/Eastern')).toContain(
+      'Browser time zone for this request: America/New_York. Interpret otherwise-unqualified dates and times in this zone.',
+    )
+    expect(await promptRequest(3, 'sampled')).toContain(sampled)
+    expect(await send(4, 'session/prompt', {
+      sessionId: 'invalid', contentBlocks: [{ type: 'text', text: 'When is noon?' }], timeZone: 'CST',
+    })).toMatchObject({
+      error: { code: -32603, message: 'timeZone must be UTC or a valid IANA Area/Location name: "CST"' },
+    })
+    expect(modelRequests).toHaveLength(2)
+
+    await send(5, 'shutdown')
+    const exit = await child
+    expect(exit.exitCode, `signal=${String(exit.signal)}; stderr=${stderr}`).toBe(0)
+  }, 40_000)
+
   it('rejects an invalid max-token success env value', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-runtime-invalid-'))
     try {
@@ -552,7 +632,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   const requests: Record<string, unknown>[] = []
   const toolUses = [
     ...enabled ? [{ type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} } as const] : [],
-    { type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const,
+    { type: 'tool_use', id: 'office', name: 'skill', input: { name: 'office' } } as const,
   ]
   const server = createServer((request, response) => {
     let body = ''
@@ -613,14 +693,13 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   // Loading an Office skill declares the Office tools from the following request.
   expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
-  for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages)).toContain(name)
-  }
+  expect(JSON.stringify(requests[0]!.messages)).not.toMatch(/office-(?:docx|pptx|xlsx)/u)
   expect(requests).toHaveLength(toolUses.length + 1)
   const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
-  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
-  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office-docx').split(sep).join('/')
+  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office'))
+  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office').split(sep).join('/')
   expect(skill).toContain(JSON.stringify(`Base directory for this skill: ${skillDirectory}`).slice(1, -1))
+  expect(skill).toContain('# Office tasks')
   expect(skill).toContain('## Python environment')
   expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
   expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)
@@ -656,4 +735,65 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   expect(exit.signal).toBeUndefined()
   expect(exit.exitCode, stderr).toBe(0)
   await expect(readFile(join(home, 'dsh-runtimes', 'dsh-primary-runtime', 'runtime.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it.each(['standard', 'ptc'] as const)('lists and loads the packaged dsh-doc skill through the SDK profile (%s)', async (mode) => {
+  const root = await mkdtemp(join(tmpdir(), 'sdk-dsh-doc-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const requests: { tools: { name: string }[]; messages: unknown }[] = []
+  const toolUses = mode === 'standard' ? [{ type: 'tool_use', id: 'dsh-doc', name: 'skill', input: { name: 'dsh-doc' } } as const] : []
+  const server = createServer((request, response) => {
+    let body = ''
+    request.setEncoding('utf8').on('data', (chunk: string) => { body += chunk })
+    request.on('end', () => {
+      requests.push(JSON.parse(body) as { tools: { name: string }[]; messages: unknown })
+      const toolUse = toolUses[requests.length - 1]
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end(toolUse === undefined ? messagesResponse({ type: 'text', text: 'done' }, 'end_turn') : messagesResponse(toolUse, 'tool_use'))
+    })
+  })
+  onTestFinished(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
+  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
+  const launch = resolveExampleLaunch({
+    srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
+    configArgs: ['--profile', 'sdk', ...mode === 'ptc' ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []],
+    env: { DSH_HOME: join(root, 'home'), DSH_PRIMARY_RUNTIME: '', DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
+      DEEPSEEK_API_KEY: 'local-fixture', DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}` },
+  })
+  const child = execa(launch.command, launch.args, { cwd: repoRoot, env: launch.env, timeout: 60_000, reject: false })
+  onTestFinished(async () => { child.kill('SIGKILL'); await child })
+  let buffer = '', stderr = ''
+  const lines: string[] = []
+  child.stdout.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString()
+    const parts = buffer.split('\n')
+    buffer = parts.pop() ?? ''
+    lines.push(...parts)
+  })
+  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+  const send = (id: number, method: string, params?: object) => {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+    return waitForLine(lines, value => value.id === id, () => stderr)
+  }
+  expect(await send(1, 'initialize', { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' })).toHaveProperty('result')
+  await send(2, 'session/prompt', { sessionId: 'dsh-doc', contentBlocks: [{ type: 'text', text: 'How do DSH presets work?' }] })
+  await waitForLine(lines, (value) => {
+    const params = value.params as { sessionId?: string; event?: { type?: string } } | undefined
+    return value.method === 'session.event' && params?.sessionId === 'dsh-doc' && params.event?.type === 'turn/end'
+  }, () => stderr)
+  expect(requests).toHaveLength(toolUses.length + 1)
+  expect(JSON.stringify(requests[0]!.messages)).toMatch(/- `dsh-doc`: Use when a task needs facts about DeepSeek Harness/)
+  if (mode === 'ptc') expect(requests[0]!.tools.map(tool => tool.name)).toEqual(['run_code'])
+  else {
+    const messages = requests[1]!.messages as { content: { tool_use_id?: string }[] }[]
+    const loaded = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'dsh-doc'))
+    const directory = join(repoRoot, 'packages/preset/agent-preset/skills/dsh-doc').split(sep).join('/')
+    expect(loaded).toContain(JSON.stringify(`Base directory for this skill: ${directory}`).slice(1, -1))
+    expect(loaded).toContain('# DeepSeek Harness documentation')
+  }
+  await send(3, 'shutdown')
+  const exit = await child
+  expect(exit.exitCode, stderr).toBe(0)
 })

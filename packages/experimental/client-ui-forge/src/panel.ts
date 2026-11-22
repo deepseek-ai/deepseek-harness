@@ -1,7 +1,8 @@
 /** Live panel state of one followed Session, shared by all of its followers. */
 
+import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -9,7 +10,6 @@ import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import type {} from '@deepseek-ai/dsh-working-directory'
 import { gitIn, hasBranch, inspectCheckout } from './git.ts'
 import type { GitConfig, Inspection } from './git.ts'
 import { localChanges } from './local-diff.ts'
@@ -19,6 +19,7 @@ import type {
   ForgeCheckoutState, ForgeLocalChanges, ForgeMissingWorktree, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree,
   ForgeWorktreeBlocker, ForgeWorktreeState,
 } from './types.ts'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { within, WORKTREE_RECORD } from './worktree.ts'
 import type { WorktreeCreations } from './worktree.ts'
 
@@ -26,6 +27,10 @@ import type { WorktreeCreations } from './worktree.ts'
 export interface PanelConfig extends DiffConfig {
   /** Deadline in milliseconds for one provider sign-in probe. */
   readonly readinessTimeoutMs: number
+  /** Age in milliseconds past which the status of the Session's change requests is read at once when the panel starts. */
+  readonly statusMaxAgeMs: number
+  /** Prefix of generated worktree branch names, which a name the user types starts from. */
+  readonly worktreePrefix: string
 }
 
 /** The checkout's upstream branch and the remote URL its change requests are looked up at. */
@@ -36,17 +41,38 @@ interface Upstream {
   readonly branch: string
 }
 
+/** What the panel of a Session leaves when its last follower left, for the next panel of that Session to start from. */
+export interface KeptPanel {
+  /** The last published state. */
+  readonly state: ForgePanelState
+  /** The latest snapshot of each change request, by URL. */
+  readonly snapshots: ReadonlyMap<string, ChangeRequestSnapshot>
+  /** Why the last inspection found that no worktree can be created. */
+  readonly blocker: ForgeWorktreeBlocker | null
+  /** The unavailable worktree the last inspection found. */
+  readonly missing: ForgeMissingWorktree | null
+  /** Remote URL and branch of the upstream that a branch lookup covered. */
+  readonly discovered: string | null
+}
+
 /**
  * Panel state of one Session. Construction starts the first checkout
- * inspection and watches the Session's change requests. Inspections run one at
+ * inspection and watches the Session's change requests. A panel given what the
+ * previous panel of the Session kept publishes that state first, with the
+ * current bindings and worktree facts, unless the Session has moved to another
+ * directory. Inspections run one at
  * a time; a request that arrives during one runs once more after it, and a
  * result for a directory the Session has since left is dropped. A sign-in
- * probe runs when an inspection recognizes a new code host and on `refresh`;
+ * probe runs when an inspection recognizes a new code host, after the first
+ * inspection of a panel whose kept probe did not find the host ready, on
+ * `refresh`, on `revisit` while the host is not ready, and once when status
+ * reads on a host shown as ready start to be refused as unauthenticated;
  * a probe result for a host the panel no longer shows is dropped. Each change
  * request keeps the latest snapshot a poll returned while later polls fail.
  * When an inspection finds an upstream branch on a remote a provider
  * recognizes, the open change requests of that branch are bound as discovered,
- * once per remote and branch until a refresh. The
+ * once per remote and branch until a refresh, or until a panel starts or is
+ * revisited while the Session shows no change request. The
  * worktree facts follow the `forgeWorktree` projection, the live creation, and the last failed one;
  * each inspection also decides whether the Session's sandbox can write the
  * checkout and its shared Git directory, which a new worktree needs, whether
@@ -64,16 +90,22 @@ export class SessionPanel {
   private missing: ForgeMissingWorktree | null = null
   private inspection: Promise<void> | null = null
   private rerun: Promise<void> | null = null
-  /** Remote URL and branch of the upstream that the last branch lookup covered, until a refresh. */
+  /** Remote URL and branch of the upstream that the last branch lookup covered, until the next lookup is due. */
   private discovered: string | null = null
+  /** Whether the readiness the panel started with must be probed again after its first inspection. */
+  private unconfirmed = false
+  /** Whether a refused status read already started a sign-in probe, until no status read on the host is refused. */
+  private questioned = false
 
   /**
    * @param ctx - service context that provides the forge, Session, directory, and process services.
-   * @param config - Git limits and the sign-in probe deadline.
+   * @param config - Git limits, the sign-in probe deadline, and the worktree branch name prefix.
    * @param session - Session the panel describes.
    * @param worktreeStates - reads the `forgeWorktree` projection of the Session.
    * @param creations - reads the running creation and restoration, the last failed creation, and what a message of the
    * Session waits for.
+   * @param reviewRevision - reads how many review changes were announced for a change request.
+   * @param kept - what the previous panel of the Session kept, when there was one.
    * @param onIdle - called when the last follower leaves.
    */
   constructor(
@@ -82,21 +114,36 @@ export class SessionPanel {
     readonly session: Session,
     private readonly worktreeStates: ProjectionHandle<ForgeWorktreeState>,
     private readonly creations: Pick<WorktreeCreations, 'of' | 'restorationOf' | 'failureOf' | 'waitingOf'>,
+    private readonly reviewRevision: (ref: ChangeRequestRef) => number,
+    kept: KeptPanel | undefined,
     private readonly onIdle: () => void,
   ) {
-    this.current = {
-      directory: ctx.workingDirectory.get(session),
-      checkout: { state: 'pending' },
-      repository: null,
-      readiness: null,
-      changeRequests: this.entries(ctx.forgeSession.changeRequests(session)),
-      worktree: this.worktree(),
-      local: null,
+    const directory = ctx.workingDirectory.get(session)
+    const start = kept?.state.directory === directory ? kept : undefined
+    if (start !== undefined) {
+      for (const [url, snapshot] of start.snapshots) this.snapshots.set(url, snapshot)
+      this.blocker = start.blocker
+      this.missing = start.missing
+      this.unconfirmed = start.state.readiness?.state !== 'ready'
     }
-    this.stopWatching = ctx.forgeSession.watch(session, (changeRequests) => {
-      this.publish({ ...this.current, changeRequests: this.entries(changeRequests) })
-    })
+    const changeRequests = this.entries(ctx.forgeSession.changeRequests(session))
+    if (start !== undefined && changeRequests.length > 0) this.discovered = start.discovered
+    this.current = start === undefined
+      ? { directory, checkout: { state: 'pending' }, repository: null, readiness: null, changeRequests, worktree: this.worktree(), local: null }
+      : { ...start.state, changeRequests, worktree: this.worktree() }
+    this.stopWatching = ctx.forgeSession.watch(session, (latest) => {
+      this.publish({ ...this.current, changeRequests: this.entries(latest) })
+      this.confirmSignIn(latest)
+    }, { maxAgeMs: config.statusMaxAgeMs })
     void this.inspect()
+  }
+
+  /**
+   * Name what the next panel of the Session starts from.
+   * @returns the last published state and what the inspections and status polls found.
+   */
+  keep(): KeptPanel {
+    return { state: this.current, snapshots: this.snapshots, blocker: this.blocker, missing: this.missing, discovered: this.discovered }
   }
 
   /**
@@ -138,7 +185,7 @@ export class SessionPanel {
    * @param event - committed Session event.
    */
   observe(event: SessionEvent): void {
-    if (event.type === 'working-directory/change') {
+    if (event.type === 'workspace-root/change') {
       this.publish({ ...this.current, directory: event.data.cwd, checkout: { state: 'pending' }, local: null })
       void this.inspect()
     } else if (event.type === 'tool/result' || event.type === 'sandbox/mode') {
@@ -198,6 +245,29 @@ export class SessionPanel {
   }
 
   /**
+   * Bring the panel up to date after its surface showed again: reinspect the checkout, poll each bound change request
+   * whose latest poll is older than `statusMaxAgeMs`, probe sign-in again unless the last probe found the host ready,
+   * and let the inspection look the upstream branch up again while the Session shows no change request.
+   * @returns settles once the inspection and the sign-in probe have ended; each poll publishes its result when it finishes.
+   */
+  async revisit(): Promise<void> {
+    if (this.current.changeRequests.length === 0) this.discovered = null
+    const inspection = this.inspect()
+    const { repository, readiness } = this.current
+    // A null readiness has its probe in flight, or due after the inspection.
+    const probe = repository !== null && readiness !== null && readiness.state !== 'ready' ? this.probe(repository) : undefined
+    for (const entry of this.current.changeRequests) {
+      if (entry.ref !== null) this.ctx.forge.refresh(entry.ref, { maxAgeMs: this.config.statusMaxAgeMs })
+    }
+    await Promise.all([inspection, probe])
+  }
+
+  /** Publish the review revisions of the bound change requests after a review change was announced. */
+  reviewChanged(): void {
+    this.publish({ ...this.current, changeRequests: this.entries(this.ctx.forgeSession.changeRequests(this.session)) })
+  }
+
+  /**
    * Stop inspections, probes, and the change request watch, end every follower, and wait for pending work.
    * @returns settles once pending inspections and probes have ended.
    */
@@ -210,7 +280,9 @@ export class SessionPanel {
   private entries(changeRequests: readonly SessionChangeRequest[]): ForgePanelChangeRequest[] {
     return changeRequests.map((entry) => {
       if (entry.update !== null && 'snapshot' in entry.update) this.snapshots.set(entry.url, entry.update.snapshot)
-      return { ...entry, snapshot: this.snapshots.get(entry.url) ?? null }
+      const reviewRevision = entry.ref === null ? 0 : this.reviewRevision(entry.ref)
+      const forge = entry.ref === null ? null : this.ctx.forge.describe(entry.ref.repository.forge) ?? null
+      return { ...entry, forge, snapshot: this.snapshots.get(entry.url) ?? null, reviewRevision }
     })
   }
 
@@ -219,6 +291,7 @@ export class SessionPanel {
     return {
       editable: this.ctx.get('worktrees') !== undefined && !state.locked && state.created === null,
       blocker: this.blocker,
+      namePrefix: this.config.worktreePrefix,
       request: state.request,
       created: state.created,
       creation: this.creations.of(this.session),
@@ -230,6 +303,8 @@ export class SessionPanel {
   }
 
   private publish(next: ForgePanelState): void {
+    // A reinspection after a tool result usually finds the same checkout; equal states reach no follower.
+    if (isDeepStrictEqual(next, this.current)) return
     this.current = next
     for (const notify of [...this.followers]) notify()
   }
@@ -283,9 +358,9 @@ export class SessionPanel {
     }
     let missing: ForgeMissingWorktree | null = null
     try {
-      const state = this.worktreeStates.stateOf(this.session)
-      missing = await missingWorktree(this.ctx, this.config, this.session, state, directory, this.lifetime.signal)
-    } catch (_error) {
+      missing = await missingWorktree(
+        this.ctx, this.config, this.session, this.worktreeStates.stateOf(this.session), directory, this.lifetime.signal)
+    } catch (_worktreeUnreadable) {
       // Without an answer from the filesystem or Git the panel offers no restoration.
     }
     if (this.lifetime.signal.aborted || this.current.directory !== directory) return
@@ -294,7 +369,8 @@ export class SessionPanel {
     const sameHost = repository !== null && this.current.repository !== null && hostOf(repository) === hostOf(this.current.repository)
     const readiness = sameHost ? this.current.readiness : null
     this.publish({ ...this.current, checkout, repository, readiness, worktree: this.worktree(), local })
-    if (repository !== null && !sameHost) void this.probe(repository)
+    if (repository !== null && (!sameHost || this.unconfirmed)) void this.probe(repository)
+    this.unconfirmed = false
     if (upstream !== null) this.discover(upstream)
   }
 
@@ -319,10 +395,13 @@ export class SessionPanel {
     if (policy.mode === 'danger-full-access') return null
     if (policy.mode === 'read-only') return 'read-only'
     const root = this.ctx.fs.processPath(await this.ctx.fs.resolve(policy.workspaceRoot, { signal: this.lifetime.signal }))
-    return within(root, inspection.checkout.root) && within(root, inspection.commonDir) ? null : 'outside-writable-root'
+    // The Git directory of a linked checkout lies outside its root; a grant the policy carries for it counts.
+    const writable = [root, ...policy.additionalWritableRoots ?? []]
+    const granted = writable.some(directory => within(directory, inspection.commonDir))
+    return within(root, inspection.checkout.root) && granted ? null : 'outside-writable-root'
   }
 
-  /** Measure the `branch` scope; a failed measurement only hides the local changes card. */
+  /** Measure the `branch` scope; a failed measurement only hides the local changes row. */
   private async localOf(inspection: Inspection): Promise<ForgeLocalChanges | null> {
     try {
       return await localChanges(this.ctx, this.config, this.session, inspection, this.worktree().created, this.lifetime.signal)
@@ -342,6 +421,25 @@ export class SessionPanel {
     return null
   }
 
+  /**
+   * Probe sign-in again when a status read on the host the panel shows as ready was refused as unauthenticated, once
+   * until a status read on that host is no longer refused.
+   */
+  private confirmSignIn(changeRequests: readonly SessionChangeRequest[]): void {
+    const { repository, readiness } = this.current
+    if (repository === null) return
+    const refused = changeRequests.some(entry => entry.ref !== null && hostOf(entry.ref.repository) === hostOf(repository)
+      && entry.update !== null && 'failure' in entry.update && entry.update.failure.code === 'unauthenticated')
+    if (!refused) {
+      this.questioned = false
+      return
+    }
+    if (this.questioned || readiness?.state !== 'ready') return
+    this.questioned = true
+    this.publish({ ...this.current, readiness: null })
+    void this.probe(repository)
+  }
+
   /** Probe sign-in on the repository's host; resolves once the probe has ended. */
   private probe(repository: ForgeRepository): Promise<void> {
     const host = hostOf(repository)
@@ -351,7 +449,7 @@ export class SessionPanel {
         using timeout = deadline(this.lifetime.signal, this.config.readinessTimeoutMs, 'FORGE_PANEL_READINESS_TIMEOUT')
         readiness = await this.ctx.forge.readiness(repository, timeout.signal)
       } catch (error) {
-        readiness = { state: 'unavailable', message: error instanceof Error ? error.message : String(error) }
+        readiness = { state: 'unavailable', message: error instanceof Error ? error.message : String(error), signIn: null }
       }
       if (this.lifetime.signal.aborted || this.current.repository === null || hostOf(this.current.repository) !== host) return
       this.publish({ ...this.current, readiness })
@@ -396,7 +494,7 @@ export async function missingWorktree(
       const root = await ctx.fs.resolve(top.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })
       if (root.targetKey === target.targetKey) {
         const common = await git('common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'])
-        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal)(
+        const source = await gitIn(ctx, config, session, created.repositoryRoot, signal, created.repositoryRoot)(
           'common-dir', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
         )
         const actual = await ctx.fs.resolve(common.stdout.replace(/\r?\n$/, ''), { cwd: created.path, signal })

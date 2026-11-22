@@ -137,6 +137,37 @@ globalThis.__dshCache = new Map()   // shared across instances, reclaimed never
 
 反例让实例之间互相覆盖、回收时机不可控，并让状态在测试之间泄漏。
 
+<a id="plugins-do-not-read-the-cordis-root-context"></a>
+
+## 插件不读取 Cordis 根上下文
+
+插件通过自己的上下文获取服务、监听事件和注册内容，绝不经由 `ctx[Context.root]` 返回的根上下文。经由根上下文读取会跳过 `inject` 检查，因为根 fiber 没有 runtime；在根上下文上注册的监听器会跳过 scope 过滤；根上下文在根 isolate realm 中解析服务，而不是插件所在的 realm；在根上下文上注册的监听器或 accessor 不会随插件释放而移除。
+
+判定条件：为每处用法说出它替代的显式声明机制。读取服务对应一条 `inject` 条目；必须观察所有 scope 的监听器传入 `{ global: true }`；应用级的键或根级启动操作由拥有它的服务提供。边界是第一方 JavaScript 和 TypeScript（包括测试和 fixture），覆盖 `Context.root`、`symbols.root` 和 `Symbol.for('cordis.root')`，三者指向同一个符号。[verify-cordis-root.ts](../../scripts/verify-cordis-root.ts) 通过 `pnpm run verify-cordis-root` 运行，并由 `scripts/run-gates.ts` 作为 `cordis-root` 门禁运行，拒绝新增读取。例外：其 `CORDIS_ROOT_EXEMPTIONS` 中列出的文件，它们测试根上下文约定本身。`scripts/cordis-root.baseline.json` 中记录的读取是各包所有者待清理的工作，不是新代码的先例；理由见[决策记录](../../.agents/notes/implemented/process/2026-11-13-no-new-cordis-root-reads.zh.md)。
+
+```ts
+// Services come from inject; a listener that observes every scope says so.
+interface Loader { await(): Promise<void> }
+interface Context {
+  readonly loader: Loader
+  on(name: string, listener: () => void, options?: { global?: boolean }): () => void
+}
+
+export const inject = ['loader']
+
+export function apply(ctx: Context, listener: () => void): void {
+  void ctx.loader.await()
+  ctx.on('agent/inbox/inserted', listener, { global: true })
+}
+```
+
+```ts ignore-check
+void ctx[Context.root].loader.await()                   // no inject entry, no wait
+ctx[Context.root].on('agent/inbox/inserted', listener)  // escapes scope filtering and plugin disposal
+```
+
+反例让插件在依赖存在之前启动，让它观察和修改自身 scope 与 realm 之外的状态，并在插件释放后留下注册内容。
+
 <a id="a-business-capability-owns-itself"></a>
 
 ## 业务能力自己拥有自己
@@ -183,7 +214,7 @@ if (pluginName === 'ui-attachment') { /* business branch inside the manager */ }
 pnpm run test:bench
 ```
 
-包内诊断留在包旁边、用 `.perf.ts` 后缀，不进 `test:bench`。CI 门禁是 `pnpm run check:ci:bench`（作业 `node 24 / benchmarks`），产出 scaled report——该门禁只是**报警**，不是通过依据：出现退化时重跑对应场景并本地分段 profile，定位是哪一段变慢、哪次变更引入。内存留存类结论用 `pnpm run test:bench:memory 4g|8g`，它会在无 swap 的 cgroup 里以不变预算重跑其列出的文件。
+包内诊断留在包旁边、用 `.perf.ts` 后缀，不进 `test:bench`。CI 门禁是两个阶段作业 `node 24 / benchmarks 1/2` 与 `2/2`（`pnpm run check:ci:bench-prebuilt`），由 `node 24 / benchmark report` 汇总两者产出 scaled report——该门禁只是**报警**，不是通过依据：出现退化时重跑对应场景并本地分段 profile，定位是哪一段变慢、哪次变更引入。内存留存类结论用 `pnpm run test:bench:memory 4g|8g`，它会在无 swap 的 cgroup 里以不变预算重跑其列出的文件。
 
 边界：不触碰运行路径的改动——注释、文档、仅测试代码——不需要测量；生产性能代码不是可以顺手删掉的 benchmark instrumentation（`performance.now()`、`scheduler.yield()` 属于生产 decode/encode 分片调度的一部分）。架构调整确实要付出性能代价时，写明实测代价与理由，并由对应领域专家确认；「分层需要」不是自助理由。命令、数字、环境与输入规模都要落账，以便返工时重建同一基线。
 

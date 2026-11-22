@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.5/independent-action-cards/guide.md
+/:
+  en: c226e668bcaa1303
+  zh: b24fa291f2ac9165
+/action-cards-stay-available-across-turns:
+  en: 1cea03e62b94a3e2
+  zh: 6137ad5e581e0283
+/action-cards-stay-available-across-turns/change:
+  en: 7c55dcb05dc0749a
+  zh: fa96d17567d8cffb
+/action-cards-stay-available-across-turns/migration:
+  en: e261b9075be87be0
+  zh: f2b147aa33c16a97

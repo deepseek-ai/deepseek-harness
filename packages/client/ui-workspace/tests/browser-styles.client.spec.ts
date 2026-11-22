@@ -129,7 +129,7 @@ describe('WorkspaceBrowser.module.css list', () => {
     // own box, so the title's one shared margin below needs no per-view override.
     expect(rowDeclarations('.slot')?.get('width')).toBe('16px')
     expect(rowDeclarations('.slot')?.get('height')).toBe('20px')
-    expect(rowDeclarations('.sessionRow .title')?.get('margin')).toBe('0 6px 0 var(--dsh-sidebar-label-gap)')
+    expect(rowDeclarations('.sessionRow .title')?.get('margin')).toBe('0 12px 0 var(--dsh-sidebar-label-gap)')
     expect(rowDeclarations('.searchResultRow')?.get('min-height')).toBe('48px')
     expect(rowDeclarations('.searchResultTitle')?.get('margin')).toBe('0 var(--dsh-sidebar-label-gap)')
     expect(rowDeclarations('.sessionRow.selected')?.get('background-color'))
@@ -142,7 +142,7 @@ describe('WorkspaceBrowser.module.css list', () => {
       expect(rowDeclarations(selector)?.get('background-clip')).toBe('padding-box')
       expect(rowDeclarations(selector)?.get('border-inline')).toBe('var(--dsh-sidebar-paint-inset) solid transparent')
     }
-    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('13px')
+    expect(rowDeclarations('.rowActions')?.get('gap')).toBe('12px')
     expect(rowDeclarations('.iconButton')?.get('width')).toBe('24px')
     expect(rowDeclarations('.time')?.get('margin-inline-end')).toBe('-1px')
     expect(declarations('.sectionLabel')?.get('left')).toBe('-1px')
@@ -178,25 +178,16 @@ describe('WorkspaceBrowser.module.css list', () => {
     expect(declarations('.searchExpanded')?.get('width')).toBe('100%')
     expect(declarations('.searchExpanded')?.get('margin-inline')).toBe('0')
     expect(declarations('.searchExpanded .searchButton')?.get('height')).toBe('32px')
-    expect(declarations('.sectionHeader:has(.searchExpanded) .sectionLabelHidden')?.get('margin-right')).toBe('0')
+    expect(declarations('.sectionHeader .wide.sectionLabelHidden')?.get('margin-right')).toBe('0')
     expect(declarations('.list')?.get('overflow')).toBe('visible')
     expect(declarations('.listArea')?.get('min-height')).toBe('0')
   })
 
   it('marquees a clipped session title on row hover', () => {
-    // The crawl itself is scripted in Rows.tsx frame by frame, so the title
-    // declares no scroll-behavior; the stylesheet keeps the hovered cell
-    // unclipped and fades whichever edges cut text mid-travel, on the title
-    // span itself so the status slot beside it keeps its full color.
+    // The shared MarqueeText animates the travel and fades the clipping
+    // edges; the row's stylesheet sizes the cell and keeps it unclipped on hover.
     expect(rowDeclarations('.sessionRow .title')?.get('flex')).toBe('1')
-    expect(rowDeclarations('.sessionRow .title')?.get('scroll-behavior')).toBeUndefined()
     expect(rowDeclarations('.sessionRow:hover .title')?.get('text-overflow')).toBe('clip')
-    expect(rowDeclarations('.sessionRow .title[data-scrolled]')?.get('mask-image'))
-      .toBe('linear-gradient(to right, transparent, #000 12px)')
-    expect(rowDeclarations('.sessionRow .title[data-clipped]')?.get('mask-image'))
-      .toBe('linear-gradient(to left, transparent, #000 12px)')
-    expect(rowDeclarations('.sessionRow .title[data-scrolled][data-clipped]')?.get('mask-image'))
-      .toBe('linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent)')
   })
 
   it('pins both rail controls to the shared left anchor during the column slide', () => {

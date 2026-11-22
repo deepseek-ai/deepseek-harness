@@ -57,6 +57,8 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
+Returns `{ running, limit, agents }`. Capacity comes from the shared slot pool, including starting, idle resident, stopping, and external children; it excludes the root. `running` may exceed `limit` after a decrease. This observation reserves no slot and is independent of the listed members and their turn status.
+
 Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Each row carries a `name`, a `status`, and, for the root and continuable descendants, a `description`. The root is `lead` with the description `root agent`; a descendant's name is its full path from the root and its description is its creation label. A child whose catalog entry has no name, and every descendant below it, is listed by Session id. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce rows whose status is `unsupported`, `corrupt`, or `unavailable`; the status reports that the row's own descendants could not be read, while the row itself stays an addressable member. Ordinary Session forks lead separate subagent trees.
 
 -----
@@ -125,7 +127,7 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-Required `subagent:identity` runtime context identifies each agent by name. It is independent of Team mode and tool filtering. When the live root is available, identity context includes messaging and discovery instructions independently for each admitted standard tool. The root sees `You are the root agent. Your name is "lead".` followed by the same guidance. A missing live root is reported with the agent's Session id, without preventing independent work. Automatic result delivery remains owned by the subagent service. A child of the root named `reviewer`, with both tools admitted, sees:
+Required `subagent:identity` runtime context identifies each agent by name. Its identity lines are independent of Team mode and tool filtering. When the live root is available, identity context includes messaging and discovery instructions independently for each admitted standard tool. While Team mode is off, a subagent with `send_message` is also told to send a self-contained result to the agent that delegated it when it finishes, and to message any agent as soon as a finding changes what that agent should do next. The root sees `You are the root agent. Your name is "lead".` followed by the same messaging and discovery guidance. A missing live root is reported with the agent's Session id, without preventing independent work. Automatic result delivery remains owned by the subagent service. A child of the root named `reviewer`, with both tools admitted, sees:
 
 ##### Subagent identity
 
@@ -135,6 +137,7 @@ Your name is "reviewer".
 The root agent of your collaboration tree is "lead".
 
 To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+When you finish, use send_message to send a self-contained result to the agent that delegated you. Message any agent as soon as a finding changes what it should do next; sending a message does not end your turn.
 Use list_agents({}) to find your collaborator agents and their names.
 ```
 
@@ -144,7 +147,7 @@ One short context entry per agent, independent of tree size; full names lengthen
 
 #### KV Cache effect
 
-Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. When a retained snapshot's identity text differs from the current text, one current runtime-context snapshot is appended. This required context remains available with `includeRuntimeContext: false` and is restored after compaction. Team mode does not change it.
+Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. When a retained snapshot's identity text differs from the current text, one current runtime-context snapshot is appended. This required context remains available with `includeRuntimeContext: false` and is restored after compaction. Switching Team mode adds or removes the report instruction for delegated children, which appends one runtime-context snapshot on the next request.
 
 ### Interrupt result
 
@@ -178,11 +181,11 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Each row renders as `<name> [<status>] — <description>`, or `<name> [<status>]` without a description. The first row is `lead [<status>] — root agent`; continuable descendants follow, such as `reviewer/checker [inactive] — Check the diff`. Unreadable branches render as `<name> [corrupt]`, `<name> [unsupported]`, or `<name> [unavailable]`. The canonical value is an array of `{ name, status, description? }`. Status describes turn activity, not task completion, success, or failure.
+The result starts with `Subagent capacity: running=<running>, limit=<limit>`. Each member row renders as `<name> [<status>] — <description>`, or `<name> [<status>]` without a description. The first member row is `lead [<status>] — root agent`; continuable descendants follow, such as `reviewer/checker [inactive] — Check the diff`. Unreadable branches render as `<name> [corrupt]`, `<name> [unsupported]`, or `<name> [unavailable]`. The canonical value contains `running`, `limit`, and an `agents` array of `{ name, status, description? }`. Status describes turn activity, not task completion, success, or failure.
 
 #### Token effect
 
-Grows linearly with the whole subagent tree’s listed rows. There is no cursor or cap. Rows carry no parent ids or depth; a full name encodes both.
+One capacity line plus text growing linearly with the whole subagent tree’s listed rows. There is no cursor or cap. Rows carry no parent ids or depth; a full name encodes both.
 
 #### KV Cache effect
 

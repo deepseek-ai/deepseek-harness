@@ -429,6 +429,48 @@ describe('Menu', () => {
     outside.remove()
   })
 
+  it.each([false, true])('keeps child buttons and explained rows in the walk with search %s', (withSearch) => {
+    const onClose = vi.fn()
+    const onSelect = vi.fn()
+    const onRetry = vi.fn()
+    render(<Menu open autoFocus anchor={<button type="button">trigger</button>} onClose={onClose}
+      items={[{ id: 'unavailable', label: 'Unavailable', disabled: true }, { id: 'copy', label: 'Copy' }]}
+      footer={[{ id: 'add', label: 'Add workspace' }]} onSelect={onSelect}
+      search={withSearch ? { label: 'Filter actions', clearLabel: 'Clear filter', value: '', onChange: () => {} } : undefined}>
+      <button type="button" onClick={onRetry}>Retry</button>
+      <MenuItemButton disabled disabledReason="Waiting for access" onSelect={onSelect}>Locked</MenuItemButton>
+    </Menu>)
+    const trigger = screen.getByRole('button', { name: 'trigger' })
+    const copy = screen.getByRole('menuitem', { name: 'Copy' })
+    const retry = screen.getByRole('button', { name: 'Retry' })
+    const locked = screen.getByRole('menuitem', { name: 'Locked' })
+    const add = screen.getByRole('menuitem', { name: 'Add workspace' })
+    if (withSearch) expect(document.activeElement).toBe(screen.getByRole('searchbox'))
+    else expect(document.activeElement).toBe(copy)
+
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Tab' })
+    expect(document.activeElement).toBe(copy)
+    fireEvent.keyDown(copy, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(retry)
+    expect(fireEvent.keyDown(retry, { key: 'Tab' })).toBe(true)
+    fireEvent.click(retry)
+    expect(onRetry).toHaveBeenCalledOnce()
+    fireEvent.keyDown(retry, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(locked)
+    fireEvent.keyDown(locked, { key: 'Home' })
+    expect(document.activeElement).toBe(copy)
+    fireEvent.keyDown(copy, { key: 'End' })
+    expect(document.activeElement).toBe(add)
+    fireEvent.keyDown(add, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(copy)
+    act(() => { locked.focus() })
+    fireEvent.keyDown(locked, { key: 'Tab' })
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('walks the list with the arrows without autoFocus, wrapping at both ends', () => {
     const onClose = vi.fn()
     const rows = [

@@ -2,23 +2,16 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { RUN_CODE_NAME, ToolNotFoundError, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecutor, ToolModelInput, ToolPromptSection, ToolBatchInput, ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch, toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
-import { createRunCodeTool, requirePtcRuntime, type PtcSdkLanguage } from './ptc.ts'
-import { renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
-import { renderToolsSdkPy } from './py-types.ts'
+import { createRunCodeTransport, requirePtcRuntime } from './ptc.ts'
+import { renderToolsSdk } from './ts-types.ts'
 import { Config } from './config.ts'
 import { PtcCalls } from './ptc-calls.ts'
 import { CodeResetFailedError } from './errors.ts'
 
 const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.`
-
-const SDK_RENDERERS = {
-  typescript: renderToolsSdk,
-  python: renderToolsSdkPy,
-} satisfies Record<PtcSdkLanguage, (schemas: readonly ToolSdkSchema[], programFormat: PtcProgramFormat) => string>
 
 /** Runs programs whose nested tool calls use the shared guarded invocation pipeline. */
 export class PtcExecutor implements ToolExecutor {
@@ -50,8 +43,7 @@ export class PtcExecutor implements ToolExecutor {
 
   private renderSdk(tools: readonly ToolDefinition[]): string {
     const runtime = requirePtcRuntime(this.ctx)
-    const render = SDK_RENDERERS[runtime.language]
-    return render(tools.map(definition => ({
+    return renderToolsSdk(tools.map(definition => ({
       ...projectToolSchema(definition, false),
       output: definition.output.schema,
     })), runtime.programFormat)
@@ -87,17 +79,17 @@ export class PtcExecutor implements ToolExecutor {
 
   /** Keep the reserved transport outside registered capabilities and their restrictions. */
   private requirePtcTransport(): ToolDefinition {
-    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.config, this.calls)
+    this.ptcTransport ??= createRunCodeTransport(this.ctx, this.pipeline, this.config, this.calls)
     return this.ptcTransport
   }
 }
 
 export { Config } from './config.ts'
 export { CodeRunFailedError, CodeResetFailedError } from './errors.ts'
+export type { CodeRunErrorCode } from './errors.ts'
 export type { PtcDispatchLog } from './runtime-types.ts'
 export type { PtcDispatchStartEventData, PtcDispatchEventData } from './types.ts'
 export { jsonSchemaToTs, renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
-export { jsonSchemaToPy, renderToolsSdkPy } from './py-types.ts'
 
 /** Cordis plugin name. */
 export const name = 'ptc-tool-executor'
@@ -106,6 +98,7 @@ export const inject = ['tools', 'systemPrompt', 'ptcRuntime']
 
 /**
  * Select PTC execution in the mounting scope.
+ * Schema projection and execution reject unsupported runtime languages.
  * @param ctx - context owning this executor's selection and lifetime.
  * @param config - timeout-based subcall allowance and concurrency limits.
  */

@@ -1,8 +1,10 @@
 /** DeepSeek Files API transport. @module dsh-llm-deepseek/files-api */
 
+import { randomUUID } from 'node:crypto'
 import { attributionHeaders, LlmError } from '@deepseek-ai/dsh-llm'
 import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
-import { DeepSeekFileId } from './file-id.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { retryAfterMs } from './transport.ts'
 import type { DeepSeekFileId as DeepSeekFileIdType } from './file-id.ts'
 import { messagesApiRoot, MESSAGES_FILES_BETA } from './messages-api.ts'
 
@@ -44,15 +46,17 @@ export class DeepSeekFilesError extends LlmError {
    * @param message - user-readable provider failure.
    * @param status - HTTP status returned by the Files API.
    * @param detail - provider error fields joined for classification.
+   * @param headers - Files response headers carrying Retry-After.
    */
-  constructor(message: string, status: number, detail: string) {
+  constructor(message: string, status: number, detail: string, headers?: Headers) {
+    const wait = retryAfterMs(headers)
     super(message, status === 401 || status === 403
       ? 'AUTH'
       : status === 429
         ? 'RATE_LIMIT'
         : status >= 500
           ? 'SERVER'
-          : 'FILES_API', { status })
+          : 'FILES_API', { status, ...wait === undefined ? {} : { providerRetryAfterMs: wait } })
     this.name = 'DeepSeekFilesError'
     this.detail = detail
   }
@@ -106,7 +110,7 @@ function parseFileObject(value: unknown, operation: string): DeepSeekFileObject 
     throw invalidResponse(operation)
   }
   return {
-    id: DeepSeekFileId(wire.id),
+    id: brandString<DeepSeekFileIdType>(wire.id),
     bytes: wire.size_bytes,
     createdAt,
     filename: wire.filename,
@@ -127,6 +131,44 @@ function providerErrorDetail(value: unknown): { message?: string; detail: string
   }
 }
 
+/**
+ * Encode the upload as one `multipart/form-data` byte array (RFC 7578).
+ *
+ * `fetch` receives bytes instead of a `FormData`: Node's `fetch` copies a `FormData` body into the request stream from a
+ * detached task, and a request cancelled while that task runs fails it as an unhandled rejection.
+ */
+function multipartUpload(boundary: string, input: {
+  data: Uint8Array
+  mediaType: ImageMediaType
+  filename: string
+  expiresAfterSeconds: number
+}): Uint8Array<ArrayBuffer> {
+  const encoder = new TextEncoder()
+  // The escapes of the WHATWG multipart/form-data encoding keep the filename inside its quoted header value.
+  const filename = input.filename.replaceAll('"', '%22').replaceAll('\r', '%0D').replaceAll('\n', '%0A')
+  const head = encoder.encode([
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="expires_after[anchor]"',
+    '',
+    'created_at',
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="expires_after[seconds]"',
+    '',
+    String(input.expiresAfterSeconds),
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="file"; filename="${filename}"`,
+    `Content-Type: ${input.mediaType}`,
+    '',
+    '',
+  ].join('\r\n'))
+  const tail = encoder.encode(`\r\n--${boundary}--\r\n`)
+  const body = new Uint8Array(head.byteLength + input.data.byteLength + tail.byteLength)
+  body.set(head)
+  body.set(input.data, head.byteLength)
+  body.set(tail, head.byteLength + input.data.byteLength)
+  return body
+}
+
 /** Direct Files client retaining the configured URL root and refusing redirects before credentials can leave its origin. */
 export class DeepSeekFilesClient {
   private readonly baseURL: string
@@ -145,7 +187,8 @@ export class DeepSeekFilesClient {
   private async request(path: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
     let response: Response
     try {
-      const headers = new Headers(attributionHeaders())
+      const headers = new Headers(init.headers)
+      for (const [name, value] of Object.entries(attributionHeaders())) headers.set(name, value)
       for (const [name, value] of Object.entries(this.authHeaders)) headers.set(name, value)
       headers.set('anthropic-version', '2023-06-01')
       headers.set('anthropic-beta', MESSAGES_FILES_BETA)
@@ -163,7 +206,7 @@ export class DeepSeekFilesClient {
     let parsed: unknown
     try {
       parsed = await response.json()
-    } catch {
+    } catch (_nonJsonErrorBody) {
       // A status remains sufficient to report the provider failure.
     }
     const { message, detail } = providerErrorDetail(parsed)
@@ -171,6 +214,7 @@ export class DeepSeekFilesClient {
       message ?? `DeepSeek Files API error (HTTP ${response.status})`,
       response.status,
       detail,
+      response.headers,
     )
   }
 
@@ -195,11 +239,12 @@ export class DeepSeekFilesClient {
       || input.expiresAfterSeconds > MAX_FILE_EXPIRY_SECONDS) {
       throw new LlmError('DeepSeek file expiry must be between 3600 and 2592000 seconds.', 'INVALID_REQUEST')
     }
-    const form = new FormData()
-    form.set('expires_after[anchor]', 'created_at')
-    form.set('expires_after[seconds]', String(input.expiresAfterSeconds))
-    form.set('file', new Blob([Uint8Array.from(input.data).buffer], { type: input.mediaType }), input.filename)
-    const response = await this.request('/files', { method: 'POST', body: form }, input.signal)
+    const boundary = `----dsh-${randomUUID()}`
+    const response = await this.request('/files', {
+      method: 'POST',
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      body: multipartUpload(boundary, input),
+    }, input.signal)
     const file = parseFileObject(await responseJson(response, 'upload'), 'upload')
     return { ...file, expiresAt: file.createdAt + input.expiresAfterSeconds }
   }
@@ -230,8 +275,8 @@ export class DeepSeekFilesClient {
     }
     return {
       data: wire.data.map(item => parseFileObject(item, 'list')),
-      ...typeof firstId === 'string' ? { firstId: DeepSeekFileId(firstId) } : {},
-      ...typeof lastId === 'string' ? { lastId: DeepSeekFileId(lastId) } : {},
+      ...typeof firstId === 'string' ? { firstId: brandString<DeepSeekFileIdType>(firstId) } : {},
+      ...typeof lastId === 'string' ? { lastId: brandString<DeepSeekFileIdType>(lastId) } : {},
       hasMore: wire.has_more,
     }
   }

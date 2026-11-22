@@ -117,6 +117,12 @@
     - id: session-controller
       name: '@deepseek-ai/dsh-api-session-controller'
 
+    # Optional session_send_message tool; it activates targets through the
+    # Session controller above and lets an Agent message any ordinary Session.
+    - id: tool-session-control
+      name: '@deepseek-ai/dsh-tool-session-control'
+      disabled: true
+
     # One background job's observation record streamed over Typert Remote;
     # the roster rides the session control stream above.
     - id: job-controller
@@ -153,6 +159,11 @@
     - id: mcp-manager
       name: '@deepseek-ai/dsh-mcp-manager'
       inject: [credentials]
+
+    # MCP connector accounts on the Plugins page; connectors register their
+    # OAuth server with `ctx.mcpAccounts`.
+    - id: mcp-account
+      name: '@deepseek-ai/dsh-mcp-account'
 
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
@@ -193,19 +204,18 @@
 
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
-    # frontend-static fallback owner, registers the bash runtime variable,
-    # prints the URL line, and opens the canonical URL after the full Loader
-    # tree settles and the required-entry audit passes. Invocation-only values
-    # come from the webStartup provider; the advertised application URL is
+    # frontend-static fallback owner and registers the bash runtime variable.
+    # Providers contribute entry URLs; this row owns printing and browser handoff.
+    # Invocation-only values come from webStartup; the advertised URL is
     # this row's `publicUrl`, otherwise the bind-address URL.
     - id: web-runtime
       name: '@deepseek-ai/dsh-web-app'
       inject: [webStartup]
       config:
-        openBrowser: !!js ctx.webStartup.openBrowser
-        printUrl: true
         publicUrl: !!js ctx.webStartup.publicUrl
         surfaceContext: true
+        openBrowser: !!js ctx.webStartup.openBrowser
+        printUrl: true
 
     # Model context for an agent that inspects or extends the harness serving
     # this GUI: value-free prompt sections plus the current checkout and GUI
@@ -215,10 +225,11 @@
     - id: harness-dev-context
       name: '@deepseek-ai/dsh-harness-dev-context'
 
-    # The client-plugin reload chain, always mounted: it is idle until a
-    # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
-    # is a row rather than a child of web-runtime because its node half is a
-    # client-side package, which a host-side bundle cannot import.
+    # The plugin-events stream, always mounted: it delivers graph changes,
+    # synced configuration, and rebuilt bundles (the last only while a rebuild
+    # watcher such as pnpm run dev:web rewrites client bundles). It is a row
+    # rather than a child of web-runtime because its node half is a client-side
+    # package, which a host-side bundle cannot import.
     - id: client-hmr
       name: '@deepseek-ai/dsh-client-hmr'
 
@@ -243,6 +254,9 @@
         # deployment values, for example: ['app.internal', ...ctx.webStartup.trustedHosts].
         # The listener's bind IP is accepted separately from this list.
         trustedHosts: !!js ctx.webStartup.trustedHosts
+
+    - id: authentication-token
+      name: '@deepseek-ai/dsh-host-authentication-token'
 
     # Raw Blob and ReadableStream uploads run independently of Connection's
     # RPC and generation service.
@@ -275,6 +289,11 @@
 
     - id: ui-session
       name: '@deepseek-ai/dsh-client-ui-session'
+
+    # Host reading records (ctx.sessionStatus) and the Session status table behind
+    # ctx.uiSession.sessionStatus and useSessionStatus.
+    - id: ui-session-status
+      name: '@deepseek-ai/dsh-client-ui-session-status'
 
     # Unified resource model: protocol providers behind the useResource hook.
     - id: resources
@@ -332,6 +351,9 @@
     - id: ui-settings-general
       name: '@deepseek-ai/dsh-client-ui-settings-general'
 
+    - id: remote-connection
+      name: '@deepseek-ai/dsh-client-remote-connection'
+
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
@@ -341,10 +363,10 @@
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
 
-    # Read-only Plugin list tab in the Settings Plugins section; the built-in
-    # bundles the sidebar page leaves out are inspected here.
-    - id: ui-settings-plugin-inventory
-      name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+    # Connector account sections on the Plugins page; CLI app plugins and MCP
+    # connectors register their accounts with `ctx.connectorAccounts`.
+    - id: ui-connector-account
+      name: '@deepseek-ai/dsh-client-ui-connector-account'
 
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
@@ -388,6 +410,22 @@
     # snapshots; the changed-files card above renders its events.
     - id: workspace-changes
       name: '@deepseek-ai/dsh-workspace-changes'
+
+    # Personalized recommendations: one optional card below an answer that
+    # offers a new personalized page or an official plugin. The two kinds
+    # register into action-cards; its `enabled` field is the Settings switch.
+    - id: action-cards
+      name: '@deepseek-ai/dsh-action-cards'
+    - id: client-ui-action-cards
+      name: '@deepseek-ai/dsh-client-ui-action-cards'
+    - id: creation-recommendations
+      name: '@deepseek-ai/dsh-creation-recommendations'
+    - id: client-ui-creation-recommendations
+      name: '@deepseek-ai/dsh-client-ui-creation-recommendations'
+    - id: plugin-recommendations
+      name: '@deepseek-ai/dsh-plugin-recommendations'
+    - id: client-ui-plugin-recommendations
+      name: '@deepseek-ai/dsh-client-ui-plugin-recommendations'
 
 
     - id: ui-workspace
@@ -433,6 +471,11 @@
     - id: ui-schedule
       name: '@deepseek-ai/dsh-client-ui-schedule'
 
+    # Session panel: the header toggle and the floating panel over the main
+    # Conversation body, with the Environment section other plugins extend.
+    - id: ui-session-panel
+      name: '@deepseek-ai/dsh-client-ui-session-panel'
+
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal
       name: '@deepseek-ai/dsh-client-ui-goal'
@@ -462,12 +505,6 @@
 
     - id: ui-settings-session-log
       name: '@deepseek-ai/dsh-client-ui-settings-session-log'
-
-    # The Built-in plugins settings section: the navigation entry and the tab
-    # row the inventory tab registers into. The official configuration pages
-    # are the companion rows below.
-    - id: ui-settings-plugins
-      name: '@deepseek-ai/dsh-client-ui-settings-plugins'
 
     # The official settings pages: one companion package per host-plane
     # namespace, each registering its page into the Plugins page while the

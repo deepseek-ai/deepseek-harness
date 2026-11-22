@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import {
   DeepSeekHarness,
   HarnessClient,
@@ -76,6 +77,19 @@ describe('DeepSeekHarness', () => {
     expect(request).toHaveBeenCalledWith('session/prompt', { sessionId: 'literal', contentBlocks: blocks })
   })
 
+  it('sends a low-level prompt time zone as the timeZone wire field', async () => {
+    const harness = harnessWith()
+    await harness.start()
+    const request = vi.spyOn(harness.client, 'request')
+    const blocks = normalizeInput('when is noon?')
+    await harness.client.prompt('zone', blocks, { timeZone: 'UTC' })
+    await harness.client.prompt('zone', blocks, {})
+    expect(request.mock.calls.map(([method, params]) => [method, params])).toEqual([
+      ['session/prompt', { sessionId: 'zone', contentBlocks: blocks, timeZone: 'UTC' }],
+      ['session/prompt', { sessionId: 'zone', contentBlocks: blocks }],
+    ])
+  })
+
   it('returns a command result without waiting for turn or idle notifications', async () => {
     const harness = harnessWith()
     await harness.start()
@@ -86,9 +100,13 @@ describe('DeepSeekHarness', () => {
     expect(result.notifications.some(notification => notification.method === 'session.status')).toBe(false)
   })
 
-  it('returns a restored handle that can run followups on the same identity', async () => {
+  it.each([undefined, 'danger-full-access'])('restores a handle with optional permissions: %s', async (permissionMode) => {
     const harness = harnessWith()
-    const session = await harness.resumeSession('saved-session')
+    const request = vi.spyOn(harness.client, 'request')
+    const session = await harness.resumeSession('saved-session', permissionMode === undefined ? {} : { permissionMode })
+    expect(request).toHaveBeenCalledWith('session/resume', {
+      sessionId: 'saved-session', ...permissionMode === undefined ? {} : { permissionMode },
+    })
     expect(session.id).toBe('saved-session')
     expect((await session.run([{ type: 'text', text: 'continue' }])).sessionId).toBe('saved-session')
   })
@@ -314,7 +332,7 @@ describe('DeepSeekHarness', () => {
       cwd: dir,
       provider: 'custom-provider',
       model: 'custom-model',
-      reasoningEffort: ReasoningEffortId('max'),
+      reasoningEffort: brandString<ReasoningEffortId>('max'),
       maxTokens: 4096,
       approvalRequests: true,
     })

@@ -1,11 +1,11 @@
 {
-  "nodeVersion": "24.21.0",
+  "nodeVersion": "24.22.3",
   "pythonVersion": "3.12.14",
   "pythonRelease": "20260901",
   "targets": {
     "win-x64": {
       "nodeArchive": "win-x64.zip",
-      "nodeSha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+      "nodeSha256": "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f",
       "pythonTarget": "x86_64-pc-windows-msvc",
       "pythonSha256": "7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14",
       "wheels": [
@@ -29,7 +29,7 @@
     },
     "mac-arm64": {
       "nodeArchive": "darwin-arm64.tar.gz",
-      "nodeSha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+      "nodeSha256": "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd",
       "pythonTarget": "aarch64-apple-darwin",
       "pythonSha256": "81a359f1cfadd4da11766534c5913791cea55f26e1bb902cacd2a531bb1e4b2b",
       "wheels": [
@@ -53,7 +53,7 @@
     },
     "mac-x64": {
       "nodeArchive": "darwin-x64.tar.gz",
-      "nodeSha256": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097",
+      "nodeSha256": "977614af0504c81045e7fd85596dbca0e5f951b96681516dadafedcca8c447f7",
       "pythonTarget": "x86_64-apple-darwin",
       "pythonSha256": "65b195c9cedc1fef6767f044f9822069adbd1bd9204d424ece4628776fdc04bb",
       "wheels": [
@@ -77,7 +77,7 @@
     },
     "linux-x64": {
       "nodeArchive": "linux-x64.tar.gz",
-      "nodeSha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+      "nodeSha256": "061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2",
       "pythonTarget": "x86_64-unknown-linux-gnu",
       "pythonSha256": "72748da13197c1fb161e3afeef20a6a385ff24f2165e6e2758e47008e7faba4c",
       "wheels": [
@@ -101,7 +101,7 @@
     },
     "linux-arm64": {
       "nodeArchive": "linux-arm64.tar.gz",
-      "nodeSha256": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+      "nodeSha256": "261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8",
       "pythonTarget": "aarch64-unknown-linux-gnu",
       "pythonSha256": "577b4bec0793ad1ff0cbff9adbd0df078eddde38a4c41bf5d83ad381a85ee39d",
       "wheels": [
@@ -154,6 +154,10 @@
       "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"
     },
     {
+      "url": "https://files.pythonhosted.org/packages/3f/4b/77e8ad4ac42c9d93600f40541a50e9feb3a61d2bbee2d76f659346072051/pypdf-6.21.4-py3-none-any.whl",
+      "sha256": "33e4fb41ca352810eb4e9838aa0d82d6888a5f8bf682f43e99cce5faa666255c"
+    },
+    {
       "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
       "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
     },
@@ -174,6 +178,7 @@
     "Pillow": "12.3.0",
     "lxml": "6.1.3",
     "XlsxWriter": "3.2.9",
+    "pypdf": "6.21.4",
     "typing_extensions": "4.16.0",
     "et_xmlfile": "2.0.0"
   }

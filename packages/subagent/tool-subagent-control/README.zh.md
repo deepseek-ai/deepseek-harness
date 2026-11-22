@@ -57,6 +57,8 @@ kind: "package-reference"
 
 ### list_agents
 
+返回 `{ running, limit, agents }`。容量来自共享名额池，包含启动中、空闲驻留、停止中和外部子级，不包含根。调低上限后 `running` 可以超过 `limit`。该观察值不预留名额，也不由成员列表或轮次状态推算。
+
 按稳定前序列出根与所有可达的可继续后代，包括调用方。每行包含 `name`、`status`；根和可继续后代还包含 `description`。根的名称为 `lead`，描述为 `root agent`；后代的名称是其相对根的完整路径，描述是其创建标签。目录条目没有名称的子级及其下所有后代以 Session id 列出。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生状态为 `unsupported`、`corrupt` 或 `unavailable` 的行；该状态表示这一行自身的后代目录无法读取，该行本身仍可寻址。普通 Session 分叉形成独立的 subagent 树。
 
 -----
@@ -125,7 +127,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-必需的 `subagent:identity` 运行时上下文按名称标识每个 agent。该上下文独立于 Team 模式和工具过滤。活动根可用时，身份上下文会分别根据标准工具的获准情况提供通信与发现指引。根看到 `You are the root agent. Your name is "lead".`，后接相同指引。活动根缺失时，上下文使用该 agent 的 Session id 明确报告，但不阻止独立工作。自动结果交付仍由 subagent 服务负责。根的子级名为 `reviewer`、两个工具均获准时，它看到：
+必需的 `subagent:identity` 运行时上下文按名称标识每个 agent。其中的身份行独立于 Team 模式和工具过滤。活动根可用时，身份上下文会分别根据标准工具的获准情况提供通信与发现指引。Team 模式关闭时，获准 `send_message` 的 subagent 还会被要求在完成时把自包含结果发送给委派它的 agent，并在某项发现改变任一 agent 的下一步行动时立即通知该 agent。根看到 `You are the root agent. Your name is "lead".`，后接相同的通信与发现指引。活动根缺失时，上下文使用该 agent 的 Session id 明确报告，但不阻止独立工作。自动结果交付仍由 subagent 服务负责。根的子级名为 `reviewer`、两个工具均获准时，它看到：
 
 ##### Subagent 身份
 
@@ -135,6 +137,7 @@ Your name is "reviewer".
 The root agent of your collaboration tree is "lead".
 
 To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).
+When you finish, use send_message to send a self-contained result to the agent that delegated you. Message any agent as soon as a finding changes what it should do next; sending a message does not end your turn.
 Use list_agents({}) to find your collaborator agents and their names.
 ```
 
@@ -144,7 +147,7 @@ Use list_agents({}) to find your collaborator agents and their names.
 
 #### KV Cache 影响
 
-身份与通信指引作为持久记录的运行时上下文位于继承历史之后，共享系统提示词和工具定义不变。保留快照中的身份文本与当前文本不同时，会追加一份当前运行时上下文快照。设置 `includeRuntimeContext: false` 后，该必需上下文仍会提供，并会在压缩后恢复。Team 模式不会改变它。
+身份与通信指引作为持久记录的运行时上下文位于继承历史之后，共享系统提示词和工具定义不变。保留快照中的身份文本与当前文本不同时，会追加一份当前运行时上下文快照。设置 `includeRuntimeContext: false` 后，该必需上下文仍会提供，并会在压缩后恢复。切换 Team 模式会为委派子级增删汇报要求，并在下一次请求时追加一份运行时上下文快照。
 
 ### 中断结果
 
@@ -178,11 +181,11 @@ Use list_agents({}) to find your collaborator agents and their names.
 
 #### 模型看到什么
 
-每行显示为 `<name> [<status>] — <description>`；没有描述时显示为 `<name> [<status>]`。首行为 `lead [<status>] — root agent`；随后是可继续后代，例如 `reviewer/checker [inactive] — Check the diff`。不可读分支显示为 `<name> [corrupt]`、`<name> [unsupported]` 或 `<name> [unavailable]`。规范值是 `{ name, status, description? }` 数组。状态描述轮次活动，不表示任务完成、成功或失败。
+结果以 `Subagent capacity: running=<running>, limit=<limit>` 开头。每个成员行显示为 `<name> [<status>] — <description>`；没有描述时显示为 `<name> [<status>]`。首个成员行为 `lead [<status>] — root agent`；随后是可继续后代，例如 `reviewer/checker [inactive] — Check the diff`。不可读分支显示为 `<name> [corrupt]`、`<name> [unsupported]` 或 `<name> [unavailable]`。规范值包含 `running`、`limit` 和元素为 `{ name, status, description? }` 的 `agents` 数组。状态描述轮次活动，不表示任务完成、成功或失败。
 
 #### Token 影响
 
-随整棵 subagent 树列出的行数线性增长。没有游标或上限。行不携带父级 id 或深度；完整名称已包含这两项信息。
+一行容量信息，加上随整棵 subagent 树列出的行数线性增长的文本。没有游标或上限。行不携带父级 id 或深度；完整名称已包含这两项信息。
 
 #### KV Cache 影响
 

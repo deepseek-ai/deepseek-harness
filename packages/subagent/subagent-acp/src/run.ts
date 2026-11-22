@@ -276,7 +276,7 @@ function toError(value: unknown): Error {
 function reportFailure(spec: AcpRunSpec, error: unknown): void {
   try {
     spec.onError?.(toError(error), 'error')
-  } catch {
+  } catch (_diagnosticSinkFailed) {
     // Host diagnostic logging cannot replace the child failure.
   }
 }

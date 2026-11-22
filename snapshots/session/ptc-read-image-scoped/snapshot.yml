@@ -1,0 +1,13 @@
+version: 1
+scenario: ptc-read-image-scoped
+profile: headless
+composition: ptc-image
+recording: authored
+header:
+  class: ptc-image-scoped
+  pin: true
+  toolSchemasSource: ptc-turn-scoped
+platform: posix
+workspace:
+  final: true
+# Replays the ptc-read-image programs as scoped REPL statements.

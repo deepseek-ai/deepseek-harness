@@ -6,6 +6,7 @@
  * cases are the policy's own answers rather than this host's substitute for them.
  */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import {
   existsSync,
   mkdirSync,
@@ -23,8 +24,9 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionToken, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -99,6 +101,7 @@ beforeEach(async () => {
 
   ctx = new Context()
   provideWorkingDirectoryFixture(ctx, root)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -106,7 +109,7 @@ beforeEach(async () => {
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs)
 
-  const key = standInAgent(SessionId(session), root)
+  const key = standInAgent(brandString<SessionId>(session), root)
   let minted: Scope | undefined
   await ctx.plugin(Object.assign(
     (inner: Context) => { minted = createScope(inner, key) },
@@ -151,7 +154,7 @@ function call(name: string, args: unknown) {
   calls += 1
   return executeOneTool(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`observe-${String(calls)}`),
+    callId: brandString<ToolCallId>(`observe-${String(calls)}`),
     name,
     arguments: args,
     agent: shared,
@@ -297,7 +300,7 @@ describe('bounded write under the observation policy', () => {
   it('refuses an outside target with an error identified by the FS_SANDBOX_DENIED code', async () => {
     const outside = join(dirname(root), 'outside.txt')
     writeFileSync(outside, 'owner\n')
-    const callId = ToolCallId('observe-direct')
+    const callId = brandString<ToolCallId>('observe-direct')
     const run = (name: string, args: Record<string, string>): Promise<unknown> => {
       const replacement = scope.ctx.tools.get(name, scopeKey)
       if (replacement === undefined) throw new Error(`the shared Session has no ${name} tool`)

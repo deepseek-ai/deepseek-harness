@@ -7,12 +7,13 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { deriveReplayScript } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, openSettings, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME, writeComposerDraft } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/collapse-timing', import.meta.url))
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
@@ -146,7 +147,7 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     const input = page.locator('[data-composer-input]').last()
     await writeComposerDraft(page, input, prompt)
     await expectProcess(1, true)
-    const resolved = await scaffold.ctx.sessionController.resolveAgent(SessionId(SEED_ID))
+    const resolved = await scaffold.ctx.sessionController.resolveAgent(brandString<SessionId>(SEED_ID))
     if ('error' in resolved) throw resolved.error
     // Maintenance keeps the accepted message in the inbox, so its echo stays before the Turn starts.
     const release = Promise.withResolvers<undefined>()
@@ -168,7 +169,7 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), UI_WAIT).toBe(0)
     await expectProcess(1, false)
     await expectProcess(2, true)
-    const persisted = await readPersistedEvents(scaffold, SessionId(SEED_ID))
+    const persisted = await readPersistedEvents(scaffold, brandString<SessionId>(SEED_ID))
     expect(persisted.filter(event => event.type === 'turn/end').map(event => event.data)).toEqual([
       { turn: 1, reason: { kind: 'completed' } },
       { turn: 2, reason: { kind: 'completed' } },

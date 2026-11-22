@@ -1,0 +1,67 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/cli-account/README.md
+/:
+  en: 5fd470fcfb7c5e82
+  zh: 590a2e7003de0939
+/deepseek-ai-dsh-cli-account:
+  en: 7215e7ca3e2ac287
+  zh: 0a5b3ec6f8b98b1b
+/deepseek-ai-dsh-cli-account/summary:
+  en: 06235ae337d8d314
+  zh: 706065a2015fa0f1
+/deepseek-ai-dsh-cli-account/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-cli-account/use-this-package:
+  en: dda001cc17eb1cfa
+  zh: f71fdec0ad791b38
+/deepseek-ai-dsh-cli-account/use-this-package/when-to-choose-it:
+  en: 1ca13b99c440239e
+  zh: eb7c24c0dc7e5c10
+/deepseek-ai-dsh-cli-account/use-this-package/minimal-configuration:
+  en: 9e7f25e057b870b0
+  zh: a8950b9482758801
+/deepseek-ai-dsh-cli-account/use-this-package/register-a-cli-and-its-account:
+  en: 076ef7d8d0d837b1
+  zh: 5053287a6410caa2
+/deepseek-ai-dsh-cli-account/use-this-package/runtime-context:
+  en: 4f73f126b4ae0afe
+  zh: ac8123c5f2a72ea2
+/deepseek-ai-dsh-cli-account/use-this-package/commands-links-and-failures:
+  en: 626febacb5f8979a
+  zh: ac9abc5cb4f7c909
+/deepseek-ai-dsh-cli-account/understand-the-implementation:
+  en: 62d73e976167eb3d
+  zh: 834103ad492ec142
+/deepseek-ai-dsh-cli-account/further-exploration:
+  en: dcae3ea80c22988e
+  zh: ef43839ebcd2f8cc
+/deepseek-ai-dsh-cli-account/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cli-account/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-cli-account/model-experience/cli-path/what-the-model-sees:
+  en: 7200c4d790046006
+  zh: 5d7be6048a27acd3
+/deepseek-ai-dsh-cli-account/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-cli-account/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-cli-account/model-experience/cli-path/token-effect:
+  en: 209efa571e0cc967
+  zh: c8d778905ab24426
+/deepseek-ai-dsh-cli-account/model-experience/cli-path/kv-cache-effect:
+  en: d5988fd18f0b1ad2
+  zh: f896f32489e219c9
+/deepseek-ai-dsh-cli-account/known-limitations-and-deferred-work:
+  en: 84c66f42b408c05e
+  zh: 7357ae71995c3047
+/deepseek-ai-dsh-cli-account/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

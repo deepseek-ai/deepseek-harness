@@ -6,32 +6,35 @@
   en: d2c0c5bce430d1be
   zh: 124ab2656ea6d044
 /service:
-  en: a163fe605c4a8045
-  zh: 060a6f4ce086c5c2
+  en: 7a6f25d41ad5192b
+  zh: 2792165d3c31015e
 /service/service-name:
-  en: 32a75e66b17c0b79
-  zh: 0a5ff9fc45b3bea0
+  en: 1bd1a435be60580f
+  zh: cb8b96113cac2ed8
 /service/static-members:
   en: ceb197529207a8ed
   zh: 7d444c03f8be0f0d
 /service/static-members/service-init:
-  en: ade1a1c4543fac8c
-  zh: b7a4b616ee930b5b
+  en: a0740625ccc443b1
+  zh: 1efa474f255783ee
 /service/static-members/service-check:
-  en: 111351ada5972a9a
-  zh: 1537da7793a6a02c
-/service/static-members/service-config:
-  en: 93d8ff69722f9b46
-  zh: 9ba1532d164c2231
+  en: 699de9371410a4c0
+  zh: 32343701e1c3fb5a
 /service/static-members/service-invoke:
-  en: 6d87f35f8cf52b05
-  zh: 278dbce6025b2834
+  en: 24ec894223f0958f
+  zh: 81b7615fc897f318
+/service/static-members/service-metadata:
+  en: 735840e221643d61
+  zh: 1c2ce2f18786e0c6
 /service/static-members/service-extend:
-  en: 5b78b68d8de8cef9
-  zh: 6df27f37da11a104
+  en: fa797364cccc8cc3
+  zh: 8fa77ae99efee25e
 /service/static-members/service-tracker:
-  en: 52071ebded7ec026
-  zh: 4647fa3f989b5deb
-/service/static-members/service-resolveconfig:
-  en: ad62f59468d1a765
-  zh: 4a31b52f61e1af6e
+  en: f59cdcca1f9b972a
+  zh: b50793b1114cff35
+/service/static-members/service-mergeintercept:
+  en: af31055b96f4834f
+  zh: 27b22f17ba6329c0
+/service/static-members/service-resolveintercept:
+  en: 72a73af9a6c877db
+  zh: 41cf10059ebf51ee

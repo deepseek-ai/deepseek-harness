@@ -16,6 +16,12 @@
 - id: tool-executor-ptc
   disabled: false
 
+- id: ptc-runtime
+  config:
+    # Recorded programs are async function bodies.
+    executionMode: per-call
+    maxOutputBytes: 4096
+
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
@@ -31,7 +37,7 @@
     - id: computer-use
       name: '@deepseek-ai/dsh-computer-use'
     - id: cua-native
-      name: '@deepseek-ai/dsh-experimental-cua-macos'
+      name: '@deepseek-ai/dsh-cua-macos'
       config:
         agentPreset: false
         helperPath: !!js process.cwd() + '/native-helper.mjs'

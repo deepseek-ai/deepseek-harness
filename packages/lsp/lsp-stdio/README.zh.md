@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### 可观察的成功与失败
 
-成功的导航返回规范化位置，悬停返回规范化文本或无可悬停提示；空结果是成功的无结果响应。当服务器不支持该操作或临时打开／关闭同步（`LSP_UNSUPPORTED_OPERATION`）、源文件缺失、非普通文件、非 UTF-8、过大或位于规范工作区之外（在服务器启动前被拒绝），或服务器返回格式错误的载荷（`LSP_MALFORMED_RESPONSE`）时，查询会失败。被强制杀死的 harness 会让服务器继续运行直到自行退出——优雅关闭只发生在服务释放时。
+成功的导航返回规范化位置，悬停返回规范化文本或无可悬停提示；空结果是成功的无结果响应。在服务器启动前，缺失、非目录、非普通文件、非 UTF-8 或过大的工作区或源文件以其 `FsError` 错误码失败，位于规范工作区之外的源文件以 `LSP_FILE_OUTSIDE_WORKSPACE` 失败。随后，服务器不支持该操作或临时打开／关闭同步时查询以 `LSP_UNSUPPORTED_OPERATION` 失败，非 UTF-16 位置编码以 `LSP_UNSUPPORTED_ENCODING` 失败，格式错误的载荷以 `LSP_MALFORMED_RESPONSE` 失败，JSON-RPC 错误响应以 `LSP_SERVER_ERROR` 失败；进程或流失败时报告 `LSP_SPAWN_FAILED`、`LSP_SERVER_EXITED`、`LSP_PROTOCOL_ERROR` 或 `LSP_MESSAGE_TOO_LARGE`。[LSP 导航子系统](../../../docs/subsystems/lsp.zh.md#failures)给出每个错误码的含义与消费方操作。被强制杀死的 harness 会让服务器继续运行直到自行退出——优雅关闭只发生在服务释放时。
 
 ### 安全边界
 

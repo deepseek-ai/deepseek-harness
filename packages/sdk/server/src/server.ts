@@ -5,7 +5,8 @@
  * @module @deepseek-ai/dsh-sdk-jsonrpc-server/server
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-fs'
+import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { resolve } from 'node:path'
 import { QueryActivity } from './query-activity.ts'
@@ -15,13 +16,16 @@ import { queryCommandImages, queryContent } from './query-content.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-permission-presets'
 
 import type {} from '@deepseek-ai/dsh-schedule'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
   ApprovalRequestParams,
@@ -44,10 +48,34 @@ import type {
   SubagentStartedNotification,
 } from '@deepseek-ai/dsh-sdk-protocol'
 
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** SDK prompt with its canonical user time zone, when one was reported or sampled. */
+    'sdk-user': { kind: 'user'; clientTimeZone?: string }
+  }
+}
+
 interface SessionRecord {
   handle: AgentHandle
   /** Latest live failure not superseded by a subsequently committed terminal. */
   failure: { readonly error: unknown; readonly atOffset: SessionLogOffset } | undefined
+  /** When the registry dropped this Agent while the server still held its handle, and the first plugin unloading at that time. */
+  disposal: { readonly at: Date; readonly origin: string | undefined } | undefined
+}
+
+/** A process event observed by the hosting plugin entry. */
+export interface RuntimeProcessEvent {
+  /** Event name and, for a failure, the first line of its message. */
+  readonly description: string
+  readonly at: Date
+}
+
+/** What the hosting plugin entry observes about the runtime that surrounds the server. */
+export interface RuntimeObservation {
+  /** Whether disposal of the whole runtime is in progress, which ends every plugin in the process. */
+  unloading(): boolean
+  /** The last process event recorded before that disposal began; an observation, not an established cause. */
+  lastProcessEvent(): RuntimeProcessEvent | undefined
 }
 
 function encodedImage(block: SessionPromptParams['contentBlocks'][number]): block is SdkEncodedImageBlock {
@@ -70,10 +98,32 @@ async function durablePromptContent(ctx: Context, blocks: SessionPromptParams['c
     : block)
 }
 
+/**
+ * Resolve the canonical zone recorded on one SDK prompt.
+ * An explicit zone must canonicalize; an omitted zone samples this process at call time.
+ * @param requested - caller-reported zone, or undefined to sample the process zone.
+ * @returns the canonical zone, or undefined when the sampled process zone is absent or unusable.
+ * @throws TypeError naming the rejected explicit value and the accepted formats.
+ */
+function promptTimeZone(requested: string | undefined): string | undefined {
+  if (requested !== undefined) {
+    const canonical = canonicalClientTimeZone(requested)
+    if (canonical === undefined) {
+      throw new TypeError(`timeZone must be UTC or a valid IANA Area/Location name: ${JSON.stringify(requested)}`)
+    }
+    return canonical
+  }
+  // ICU reports an unknown TZ as undefined, Etc/Unknown, or an offset such as +00:00 for TZ=GMT.
+  const sampled = new Intl.DateTimeFormat().resolvedOptions().timeZone as string | undefined
+  return sampled === undefined ? undefined : canonicalClientTimeZone(sampled)
+}
+
 /** Deployment-specific status mapping for SDK turn and subagent outcomes. */
 export interface HarnessSdkJsonRpcServerOptions {
   /** Report max-token termination as an accepted result instead of an infrastructure error. */
   maxTokensAsSuccess?: boolean
+  /** Runtime state that a liveness failure reports; without it the failure makes no statement about the runtime. */
+  runtime?: RuntimeObservation
 }
 
 function successStatus(reason: string, options: HarnessSdkJsonRpcServerOptions): 'ok' | 'error' {
@@ -90,9 +140,10 @@ export class HarnessSdkJsonRpcServer {
   private cwd = process.cwd()
   private provider = 'deepseek-official'
   private model = 'deepseek-official'
-  private reasoningEffort: ReturnType<typeof ReasoningEffortId> | undefined
+  private reasoningEffort: ReasoningEffortId | undefined
   private maxTokens: number | undefined
   private llmFiber: { dispose(): Promise<void> } | undefined
+  private authFiber: { dispose(): Promise<void> } | undefined
   private readonly sessions = new Map<string, SessionRecord>()
   private readonly sessionCreations = new Map<string, Promise<SessionRecord>>()
   private readonly commandTasks = new Set<Promise<CommandExecution | undefined>>()
@@ -102,6 +153,9 @@ export class HarnessSdkJsonRpcServer {
   private readonly disposers: (() => void)[] = []
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
+  private readonly unloading = new Set<Fiber>()
+  /** Name of the plugin whose unload began while no other was in progress; overlapping unloads can make it an unrelated plugin. */
+  private unloadOrigin: string | undefined
   private initialized = false
   private approvalRequests = false
   private readonly lifetime = new AbortController()
@@ -175,6 +229,19 @@ export class HarnessSdkJsonRpcServer {
       if (record?.handle.agent !== agent) return
       record.failure = { error, atOffset: agent.session.seq }
     }))
+    this.disposers.push(ctx.on('agent/disposed', ({ agent }) => {
+      const record = this.sessions.get(agent.session.id)
+      if (record?.handle.agent === agent) record.disposal = { at: new Date(), origin: this.unloadOrigin }
+    }))
+    this.disposers.push(ctx.on('internal/status', (fiber, previous) => {
+      if (fiber.state === FiberState.UNLOADING) {
+        if (this.unloading.size === 0) this.unloadOrigin = fiber.name
+        this.unloading.add(fiber)
+      } else if (previous === FiberState.UNLOADING) {
+        this.unloading.delete(fiber)
+        if (this.unloading.size === 0) this.unloadOrigin = undefined
+      }
+    }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
     }))
@@ -229,10 +296,20 @@ export class HarnessSdkJsonRpcServer {
     const model = params.model
     const reasoningEffort = params.reasoningEffort === undefined
       ? undefined
-      : ReasoningEffortId(params.reasoningEffort)
+      : brandString<ReasoningEffortId>(params.reasoningEffort)
     if (!this.hasAdapterFor(provider)) {
       if (provider !== 'deepseek-official') throw new Error(`no adapter registered for provider "${provider}"`)
-      this.llmFiber = await this.ctx.plugin(LlmDeepSeek)
+      // The route requires the DeepSeek authentication service; a composition without one gets it with the fallback route.
+      if (this.ctx.get('deepseekAuth') === undefined) this.authFiber = await this.ctx.plugin(DeepSeekAuth)
+      try {
+        this.llmFiber = await this.ctx.plugin(LlmDeepSeek)
+      } catch (error: unknown) {
+        // Without the route nothing here uses the authentication service this call mounted.
+        const mounted = this.authFiber
+        this.authFiber = undefined
+        await mounted?.dispose()
+        throw error
+      }
     }
     // Adapter presence was read from this service above; a successful fallback mount also requires it.
     const llm = this.ctx.get('llm') as LlmRuntime
@@ -256,11 +333,14 @@ export class HarnessSdkJsonRpcServer {
 
   /**
    * Queue one identified prompt without assigning later activity to it.
-   * @param params - target session and user content.
+   * The message records the explicit or sampled canonical zone; an unusable sampled zone records none.
+   * @param params - target session, user content, and optional user time zone.
    * @returns the durable message identity.
+   * @throws TypeError before Session creation when an explicit time zone is not UTC or IANA Area/Location.
    */
   async prompt(params: SessionPromptParams): Promise<SessionPromptResult> {
     if (!this.initialized) throw new Error('SDK server is not initialized')
+    const clientTimeZone = promptTimeZone(params.timeZone)
     const rec = await this.getOrCreateSession(params.sessionId)
     this.lifetime.signal.throwIfAborted()
     // An agent-loop-only reload disposes the loop's agents while this record
@@ -274,7 +354,7 @@ export class HarnessSdkJsonRpcServer {
     this.assertLiveAgent(rec, params.sessionId)
     const message = createUserMessage({
       content,
-      source: { kind: 'user' },
+      source: clientTimeZone === undefined ? { kind: 'user' } : { kind: 'user', clientTimeZone },
     })
     rec.handle.agent.followup(message)
     return { messageId: message.id }
@@ -282,13 +362,16 @@ export class HarnessSdkJsonRpcServer {
 
   /**
    * Dispatch text as a Desktop-style input; native commands own Session state changes.
-   * @param params - ordered content blocks and receiving Session.
+   * Only the prompt branch records the time zone; native commands do not, matching Desktop command input.
+   * @param params - ordered content blocks, receiving Session, and optional prompt time zone.
    * @returns a prompt receipt or native command acknowledgment; command activity completes by notification.
+   * @throws TypeError before routing when an explicit time zone is not UTC or IANA Area/Location.
    * @throws on runtime failure; a recognized command failure never falls back to a prompt.
    */
   async query(params: SessionQueryParams): Promise<SessionQueryResult> {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    if (params.timeZone !== undefined) promptTimeZone(params.timeZone)
     const text = params.contentBlocks.find(block => block.type === 'text')
     if (text?.text.trim().startsWith('/')) {
       const commands = this.ctx.get('commands')
@@ -327,6 +410,7 @@ export class HarnessSdkJsonRpcServer {
     const receipt = await this.prompt({
       sessionId: params.sessionId,
       contentBlocks: params.contentBlocks,
+      ...params.timeZone === undefined ? {} : { timeZone: params.timeZone },
     })
     return { kind: 'prompt', ...receipt }
   }
@@ -334,6 +418,8 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Restore a persisted session and repair its interrupted final turn without sending input.
    * Uses the initialized model route while preserving the stored session identity and directory.
+   * An explicit permission preset is persisted during setup before execution; omission preserves saved permissions.
+   * Already scheduled restorations reject permission overrides because execution may have started.
    * Rejects subagent, missing, unreadable, or already owned sessions; never creates a replacement.
    * @param params - persisted session identity in the configured persistence store.
    * @returns an empty result after the Agent is ready for prompts.
@@ -344,6 +430,9 @@ export class HarnessSdkJsonRpcServer {
     const sessionId = params.sessionId
     const restoration = this.scheduledSessions.get(sessionId)
     if (restoration !== undefined) {
+      if (params.permissionMode !== undefined) {
+        throw new Error('cannot override permissions of a session already restored by a reminder; use /permission')
+      }
       this.scheduledSessions.delete(sessionId)
       const record = await restoration
       this.assertLiveAgent(record, sessionId)
@@ -352,7 +441,7 @@ export class HarnessSdkJsonRpcServer {
     if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) {
       throw new Error(`SDK session is already open or opening: ${sessionId}`)
     }
-    await this.openSession(sessionId, true)
+    await this.openSession(sessionId, true, params.permissionMode)
     return {}
   }
 
@@ -405,10 +494,27 @@ export class HarnessSdkJsonRpcServer {
     return this.sessions.get(root.session.id)?.handle.agent === root
   }
 
+  /** Reject a retained record whose Agent left the registry, naming what the server observed. */
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
-    if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) {
-      throw new Error(`session agent was disposed outside the server: ${sessionId}`)
+    // Root disposal also unloads the registry; reading it as optional keeps one failure for both stages.
+    if (this.ctx.get('agents')?.get(rec.handle.agent.id) === rec.handle.agent) return
+    throw new Error(`session agent was disposed outside the server: ${sessionId}; ${this.disposalContext(rec)}`)
+  }
+
+  private disposalContext(rec: SessionRecord): string {
+    const runtime = this.options.runtime
+    if (runtime?.unloading()) {
+      const event = runtime.lastProcessEvent()
+      return event === undefined
+        ? 'the runtime is shutting down; no process event was observed before teardown'
+        : `the runtime is shutting down; last process event before teardown: ${event.description} at ${event.at.toISOString()}`
     }
+    if (this.shuttingDown) return 'the SDK server is shutting down'
+    // Runtime disposal removes this server's listeners before the Agent leaves, so a record exists only here.
+    const at = rec.disposal === undefined ? '' : ` at ${rec.disposal.at.toISOString()}`
+    const running = runtime === undefined ? '' : ' while the runtime keeps running'
+    const origin = rec.disposal?.origin ? `; first plugin unloading at that time: "${rec.disposal.origin}"` : ''
+    return `the agent loop was unloaded${at}${running}${origin}`
   }
 
   /**
@@ -424,7 +530,7 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Change a Session's directory and queue its model-visible transition.
    * @param params - target Session and absolute or current-directory-relative path.
-   * @returns the validated absolute directory; origin and permissions are unchanged.
+   * @returns the validated absolute directory; the origin is unchanged and the workspace-write boundary follows the directory.
    */
   async setWorkingDirectory(params: SessionWorkingDirectorySetParams): Promise<SessionWorkingDirectoryResult> {
     const agent = await this.workingDirectoryAgent(params.sessionId)
@@ -478,9 +584,13 @@ export class HarnessSdkJsonRpcServer {
     const teardownResults = await Promise.allSettled([
       this.goalLifetime.dispose(),
       ...records.map(rec => Promise.resolve().then(() => rec.handle.dispose())),
-      ...(this.llmFiber === undefined ? [] : [Promise.resolve().then(() => this.llmFiber?.dispose())]),
+      ...(this.llmFiber === undefined ? [] : [Promise.resolve().then(async () => {
+        // The route requires the authentication service, so the route goes first; its failure does not keep the service.
+        try { await this.llmFiber?.dispose() } finally { await this.authFiber?.dispose() }
+      })]),
     ])
     this.llmFiber = undefined
+    this.authFiber = undefined
     failures.push(...teardownResults
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map(result => result.reason as unknown))
@@ -501,22 +611,36 @@ export class HarnessSdkJsonRpcServer {
       case 'initialize':
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
+        if (params?.timeZone !== undefined && typeof params.timeZone !== 'string') {
+          throw new TypeError('session/prompt timeZone must be a string')
+        }
         return this.prompt(params as unknown as SessionPromptParams)
       case 'session/query': {
         if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0
-          || Object.keys(params).some(key => key !== 'sessionId' && key !== 'contentBlocks')) {
-          throw new TypeError('session/query requires only a non-empty sessionId and contentBlocks')
+          || Object.keys(params).some(key => key !== 'sessionId' && key !== 'contentBlocks' && key !== 'timeZone')) {
+          throw new TypeError('session/query requires a non-empty sessionId and contentBlocks, with an optional timeZone')
+        }
+        if (params.timeZone !== undefined && typeof params.timeZone !== 'string') {
+          throw new TypeError('session/query timeZone must be a string')
         }
         return this.query({
           sessionId: brandString<SessionId>(params.sessionId), contentBlocks: queryContent(params.contentBlocks),
+          ...params.timeZone === undefined ? {} : { timeZone: params.timeZone },
         })
       }
       case 'session/resume': {
-        const sessionId = params?.sessionId
-        if (typeof sessionId !== 'string' || sessionId.length === 0) {
+        if (typeof params?.sessionId !== 'string' || params.sessionId.length === 0) {
           throw new TypeError('session/resume requires a non-empty sessionId string')
         }
-        return this.resume({ sessionId })
+        const unknownKey = Object.keys(params).find(key => key !== 'sessionId' && key !== 'permissionMode')
+        if (unknownKey !== undefined) {
+          throw new TypeError(`unknown session/resume parameter ${JSON.stringify(unknownKey)}; expected sessionId and optional permissionMode`)
+        }
+        const { sessionId, permissionMode } = params
+        if (permissionMode !== undefined && (typeof permissionMode !== 'string' || permissionMode.length === 0)) {
+          throw new TypeError('session/resume permissionMode must be a non-empty string')
+        }
+        return this.resume({ sessionId, ...permissionMode === undefined ? {} : { permissionMode } })
       }
       case 'session/wait': {
         const sessionId = params?.sessionId
@@ -551,8 +675,8 @@ export class HarnessSdkJsonRpcServer {
     return this.openSession(sessionId, false)
   }
 
-  private openSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
-    const creation = this.createSession(sessionId, resume)
+  private openSession(sessionId: string, resume: boolean, permissionMode?: string): Promise<SessionRecord> {
+    const creation = this.createSession(sessionId, resume, permissionMode)
     this.sessionCreations.set(sessionId, creation)
     void creation.then(
       () => { this.sessionCreations.delete(sessionId) },
@@ -561,7 +685,12 @@ export class HarnessSdkJsonRpcServer {
     return creation
   }
 
-  private async createSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
+  private async createSession(sessionId: string, resume: boolean, permissionMode?: string): Promise<SessionRecord> {
+    const permissions = permissionMode === undefined ? undefined : this.ctx.get('permissionPresets')
+    if (permissionMode !== undefined) {
+      if (permissions === undefined) throw new Error('session/resume permissionMode requires the permission-presets service')
+      permissions.resolve(permissionMode)
+    }
     if (resume && (await this.ctx.get('sessionPersistence')?.stat(brandString<SessionId>(sessionId)))?.header.origin === 'subagent') {
       throw new Error(`subagent session "${sessionId}" cannot be resumed directly; resume its root session instead`)
     }
@@ -575,11 +704,17 @@ export class HarnessSdkJsonRpcServer {
       ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
       ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
     }
+    // The header records the canonical spelling of the configured directory; see SessionHeader.cwd.
+    const fs = this.ctx.get('fs')
+    const cwd = fs === undefined ? this.cwd : fs.processPath(await fs.resolve(this.cwd))
     const handle = await (resume ? this.ctx.agents.resume({
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
       // The initialized route replaces the restored Session's model selection.
       setup: (_agentCtx, agent) => {
+        if (permissionMode !== undefined && permissions !== undefined) {
+          permissions.set(agent.session, permissionMode)
+        }
         const previous = agent.model.current()
         const selection = { ...agentOptions }
         if (selection.reasoningEffort === undefined && previous !== undefined
@@ -591,10 +726,10 @@ export class HarnessSdkJsonRpcServer {
       },
     }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
-      meta: { cwd: this.cwd },
+      meta: { cwd },
       agentOptions,
     }))
-    const rec: SessionRecord = { handle, failure: undefined }
+    const rec: SessionRecord = { handle, failure: undefined, disposal: undefined }
     this.sessions.set(sessionId, rec)
     return rec
   }

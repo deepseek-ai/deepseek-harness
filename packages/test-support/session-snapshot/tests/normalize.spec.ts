@@ -1081,6 +1081,21 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
+  it('preserves an independent Session directory relative to the scenario workspace', () => {
+    const workspace = '/tmp/snapshot-sessions-abc123'
+    const raw = [
+      JSON.stringify({ type: 'session', id: 'recipient', cwd: `${workspace}/recipient` }),
+      JSON.stringify({ type: 'user/message', data: { content: [{
+        type: 'text', text: `Recipient directory: ${workspace}/recipient; sender directory: ${workspace}`,
+      }] } }),
+      '',
+    ].join('\n')
+    const output = tokenizeSessionFixtureCwd(raw, workspace)
+    expect(output).toContain('"cwd":"{{cwd}}/recipient"')
+    expect(output).toContain('Recipient directory: {{cwd}}/recipient; sender directory: {{cwd}}')
+    expect(tokenizeSessionFixtureCwd(output, '{{cwd}}')).toBe(output)
+  })
+
   it('rejects a log without a session cwd', () => {
     expect(() => tokenizeSessionFixtureCwd('')).toThrow(
       'acp-snapshot: cannot tokenize a cwd without a basename',
@@ -1227,6 +1242,23 @@ describe('scrubSessionSnapshot', () => {
     expect(scrubSessionSnapshot(output)).toBe(output)
   })
 
+  it('normalizes Timeline task clocks and receipts without changing descriptions', () => {
+    const records = [
+      { type: 'session', id: 's' },
+      { type: 'plugin:timeline/tree', data: { tree: {
+        createdAt: 12, lastTaskUpdate: 15, tasks: [{ title: 'Keep 12', createdAt: 12, updatedAt: 15 }],
+      }, receipt: { at: 15, previousAt: null } } },
+      { type: 'plugin:timeline/tree', data: {} },
+      { type: 'tool/result', data: { meta: { timeline: { at: 15, previousAt: 12 }, createdAt: 12 } } },
+    ]
+    const input = records.map(record => JSON.stringify(record)).join('\n')
+    const output = scrubSessionSnapshot(input)
+    expect(output).toContain('"createdAt":0,"lastTaskUpdate":0,"tasks":[{"title":"Keep 12","createdAt":0,"updatedAt":0}]')
+    expect(output).toContain('"receipt":{"at":0,"previousAt":null}')
+    expect(output).toContain('"timeline":{"at":0,"previousAt":0},"createdAt":12')
+    expect(scrubSessionSnapshot(output)).toBe(output)
+  })
+
   it('preserves the header while projecting and scrubbing each body record', () => {
     const header = '  {"type":"session","version":0,"id":"s","createdAt":7}  '
     const system = systemMessageEvent('secret', 0)
@@ -1255,6 +1287,31 @@ describe('scrubSessionSnapshot', () => {
 })
 
 describe('scrubSystemPrompts', () => {
+  it('scrubs source and notice text while retaining separators and attribution', () => {
+    const source = { kind: 'system-prompt', sections: [
+      { name: 'workspace', order: 0, state: 'active', contentIndex: 1, noticeIndex: [0] },
+      { name: 'plugin', order: 1, state: 'retired', noticeIndex: [3] },
+    ] }
+    const record = { type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: 'Replacement notice.\n\n' },
+        { type: 'text', text: 'Workspace /volatile/path' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: 'Plugin retired.' },
+      ], source,
+    } } }
+    const normalized = scrubSystemPrompts(JSON.stringify(record))
+    expect(JSON.parse(normalized)).toEqual({ type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: '{{system}}\n\n' },
+        { type: 'text', text: '{{system}}' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: '{{system}}' },
+      ], source,
+    } } })
+    expect(scrubSystemPrompts(normalized)).toBe(normalized)
+  })
+
   it('scrubs only system/message text while keeping header tools verbatim', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,

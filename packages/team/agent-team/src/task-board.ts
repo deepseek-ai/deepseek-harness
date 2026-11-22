@@ -9,7 +9,8 @@ import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
-import { TeamTaskId } from './types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TeamTaskId } from './types.ts'
 import type {
   CreateTeamTaskRequest,
   TeamTaskSnapshot,
@@ -60,7 +61,7 @@ export class TeamTaskBoard {
       if (active >= this.maxTasks) {
         throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
       }
-      const id = TeamTaskId(`task-${state.nextTaskNumber}`)
+      const id = brandString<TeamTaskId>(`task-${state.nextTaskNumber}`)
       if (state.tasks.some(task => task.id === id)) {
         throw new TeamError('Team task id space exhausted', 'TEAM_TASK_LIMIT')
       }
@@ -143,8 +144,11 @@ export class TeamTaskBoard {
           if (current.ownerId !== undefined && current.ownerId !== caller.id) {
             throw new TeamError(`team task "${current.id}" is owned by another member`, 'TEAM_TASK_ALREADY_CLAIMED')
           }
-          if (current.status !== 'pending' || !taskReady(state, current)) {
-            throw new TeamError(`team task "${current.id}" is not ready to claim`, 'TEAM_TASK_BLOCKED')
+          if (current.status !== 'pending') {
+            throw new TeamError(`team task "${current.id}" is ${current.status}; claim requires pending`, 'TEAM_TASK_BLOCKED')
+          }
+          if (!taskReady(state, current)) {
+            throw new TeamError(`team task "${current.id}" has unfinished dependencies; complete them before claiming`, 'TEAM_TASK_BLOCKED')
           }
           const name = this.ctx.subagents.namesOf(caller).self
           next = { ...this.withoutOwner(current), status: 'in_progress', ownerId: caller.id,

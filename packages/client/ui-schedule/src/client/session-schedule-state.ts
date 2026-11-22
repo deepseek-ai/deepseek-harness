@@ -2,7 +2,7 @@
  * One Session's scheduled-task state for its header, Sidebar row mark, and hover card.
  *
  * These views project the Host catalog the page already owns — `schedule/catalog()`
- * returns every Host task with its target and involved Sessions — so N
+ * returns every Host task with its delivery target — so N
  * visible rows share one Remote read and follow one `schedule/changed`
  * invalidation instead of issuing a query per row or header.
  */
@@ -10,7 +10,6 @@
 import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
-import { taskInvolvesSession } from './task-record.ts'
 import type { CatalogSnapshot } from './catalog-source.ts'
 
 /** Selector hook the renderer binds from a slot's `hooks.catalog` observable. */
@@ -30,15 +29,11 @@ export interface SessionScheduleFacts {
 const NO_RECORDS: readonly ScheduleCatalogEntry[] = []
 
 /**
- * Project the shared Host catalog onto one Session's active tasks.
+ * Select active tasks whose fixed delivery target is this Session.
+ * A Session with only paused or ended tasks has an empty list.
  *
- * `schedule/catalog()` returns every Host task in every lifecycle state, so
- * both facts come from this one snapshot filtered to the tasks that target or
- * involve the Session with `status === 'active'`. A read that never settled
- * answers no active task; a refresh republishes `loading` over the records of
- * the last successful read, and the Host emits `schedule/changed` after every
- * delivery, so following `status` here would blank a Session's mark for each
- * roundtrip. A Session whose tasks are all paused or ended lists nothing.
+ * Refreshes use the last successful catalog so the clock stays visible
+ * while a delivery-triggered read is pending.
  * @param snapshot - shared Host catalog snapshot.
  * @param sessionId - Session whose facts are selected.
  * @returns this Session's active-task facts.
@@ -49,7 +44,7 @@ export function selectSessionScheduleFacts(
 ): SessionScheduleFacts {
   if (!snapshot.settled) return { hasActive: false, records: NO_RECORDS }
   const records = snapshot.records.filter(
-    record => taskInvolvesSession(record, sessionId) && record.status === 'active',
+    record => record.status === 'active' && record.target.kind !== 'new' && record.target.sessionId === sessionId,
   )
   return { hasActive: records.length > 0, records }
 }

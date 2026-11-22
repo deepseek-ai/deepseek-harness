@@ -8,7 +8,7 @@
  */
 
 import type { ContentBlock, TokenUsage } from '@deepseek-ai/dsh-llm'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { CompactionId } from './brand.ts'
 

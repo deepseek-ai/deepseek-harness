@@ -35,16 +35,22 @@ Example `cordis.yml`:
 
 | Field | Description |
 | --- | --- |
-| `path` | YAML or JSON file path resolved from `ctx.baseUrl`. |
+| `path` | YAML or JSON file path resolved from `ctx.baseUrl`; on Windows a drive-letter path is used as a file path. |
 | `initial` | Entry list written when the file is missing. |
 | `patches` | Runtime patches applied after reading the file. |
 | `enableLogs` | Enables loader apply, reload, and unload logs. |
 
-Patches can insert entries or override fields on entries with a matching `id`.
+Patches can insert entries or override fields on entries with a matching `id`. A patch that replaces a group's `config` brings its own child entries, which later patches can address; the children it replaces can no longer be patched.
+
+## File format and errors
+
+YAML files are parsed as YAML 1.2 under the core schema with the `yaml` package, plus the `!!js` tag for Loader expressions. Unknown tags and aliases without a preceding anchor are rejected. The file must be a top-level array whose entries, including the entries of each group, are mappings. A file that cannot be read, parsed or validated rejects with `ConfigFileError`; parse and validation errors carry `issues`, each with a message and a `file:line:column` location, and JSON files report the position of their syntax error. Include implements `getLocation(id, path)` for its entries: values written in the file resolve to the file, values supplied by a patch resolve through the parent entry to that patch, and values changed at runtime but not yet written resolve to nothing.
+
+Anonymous entries receive ids before the Loader sees them. An anonymous entry identical to one named on the previous read, under the same parent, keeps that id unless the file or an inserted patch row now uses it explicitly.
 
 ## Patch composition and persistence
 
-`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting. It clones file entries even without patches and clones inserted entry lists before indexing them, so later patches can address inserted rows without mutating those input lists. `entryListSchema` exposes Include’s YAML dialect to configuration tools. Nested entry expressions remain literal until their owning Loader entry evaluates them.
+`applyEntryPatches(data, patches, warn)` uses the same upstream algorithm as mounting and returns a `PatchResult`: the composed entries as `data`, and as `index` the owner of every entry and key, built from the patches that apply. It clones file entries even without patches and clones inserted entry lists and replaced group configs before indexing them, so later patches can address those rows without mutating the input lists. It writes generated ids for anonymous entries of a replaced group config into the patch itself, so callers that keep their patches unchanged pass clones. `parseEntryYaml(content)` and `stringifyEntryYaml(value, options)` read and write Include’s YAML dialect for configuration tools with the options Include uses for its own file, and `entryYamlErrorPosition(error)` locates a parse error. `stringifyEntryYaml` writes repeated references in full instead of as aliases; Include’s own writer may write a repeated reference as an alias. Nested entry expressions remain literal until their owning Loader entry evaluates them.
 
 Tree mutations arrive through `commit(change)` and enter a journal. Include merges them with the latest file before writing; file edits win conflicts on the same fields and produce a diagnostic. Patch-owned fields and inserted entries update the parent Include’s patches instead of the included file. Invalid, missing or read-only files leave unsaved changes in memory.
 

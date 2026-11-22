@@ -192,12 +192,13 @@ async function finish(running: SubprocessHandle) {
 async function waitForPidFile(path: string, timeoutMs = 5_000): Promise<number> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    let pid = Number.NaN
     try {
-      const pid = Number(readFileSync(path, 'utf8').trim())
-      if (Number.isSafeInteger(pid) && pid > 0) return pid
-    } catch {
+      pid = Number(readFileSync(path, 'utf8').trim())
+    } catch (_pidFileMissing) {
       // The child shell has not written the pid file yet.
     }
+    if (Number.isSafeInteger(pid) && pid > 0) return pid
     await new Promise(resolve => setTimeout(resolve, 20))
   }
   throw new Error(`pid file ${path} was not written after ${timeoutMs}ms`)
@@ -323,7 +324,7 @@ describe('spawnSubprocess', () => {
       killSpy.mockRestore()
       try {
         process.kill(helper, 'SIGKILL')
-      } catch {
+      } catch (_helperGone) {
         // taskkill already took the helper down on Windows.
       }
       await waitGone(helper)
@@ -352,7 +353,7 @@ describe('spawnSubprocess', () => {
     expect(result.signal).toBe(process.platform === 'win32' ? null : 'SIGTERM')
   })
 
-  it('throws a stable Error when already aborted before spawn', () => {
+  it('throws a stable AbortError when already aborted before spawn', () => {
     for (const [reason, message] of [
       ['too late', 'aborted before spawn: too late'],
       [null, 'aborted before spawn: aborted'],
@@ -360,7 +361,7 @@ describe('spawnSubprocess', () => {
       const controller = new AbortController()
       controller.abort(reason)
       expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-        .toThrow(new Error(message))
+        .toThrow(expect.objectContaining({ name: 'AbortError', message }))
     }
 
     const controller = new AbortController()
@@ -370,7 +371,7 @@ describe('spawnSubprocess', () => {
       },
     })
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it('rejects with a spawn error for a nonexistent cwd', async () => {
@@ -862,7 +863,7 @@ describe('windows tree semantics (injected platform)', () => {
         killed.push(pid)
         try {
           process.kill(pid, 'SIGKILL')
-        } catch {
+        } catch (_childGone) {
           // Already gone — matches taskkill's tolerated not-found status.
         }
       },
@@ -883,7 +884,7 @@ describe('windows tree semantics (injected platform)', () => {
         // Simulate the forced tree termination taskkill performs.
         try {
           process.kill(pid, 'SIGKILL')
-        } catch {
+        } catch (_childGone) {
           // Already gone — matches taskkill's tolerated not-found status.
         }
       },
@@ -1296,7 +1297,7 @@ describe('coverage seams', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(90)
     try {
       process.kill(helper, 'SIGKILL')
-    } catch {
+    } catch (_helperGone) {
       // Already gone; the drain bound is the point under test.
     }
     await waitGone(helper)
@@ -1393,8 +1394,8 @@ describe('coverage seams 2', () => {
         killedPid = pid
         try {
           process.kill(pid, 'SIGKILL')
-        } catch {
-          // Already gone.
+        } catch (_childGone) {
+          // The child already exited; taskkill tolerates a missing process the same way.
         }
       },
     })
@@ -1446,7 +1447,8 @@ describe('coverage seams 2', () => {
 
 describe('argv validation', () => {
   it('rejects an empty argv before spawning', () => {
-    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) }).toThrow(/non-empty program name/)
+    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) })
+      .toThrow(expect.objectContaining({ name: 'SubprocessError', code: 'SUBPROCESS_INVALID_ARGV' }))
   })
 
   it('rejects an empty program name before spawning', () => {
@@ -1468,7 +1470,7 @@ describe('abort edge cases', () => {
       removeEventListener() {},
     } as unknown as AbortSignal
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: bare })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it.skipIf(process.platform === 'win32')('reports the terminating signal of an externally self-killed command', async () => {

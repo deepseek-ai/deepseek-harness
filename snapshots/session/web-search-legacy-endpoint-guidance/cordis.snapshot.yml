@@ -31,10 +31,3 @@
     apiKey: snapshot-key
     # The fixture maps this recorded authority to its OS-assigned listener.
     baseURL: http://127.0.0.1:43118/anthropic/v1
-
-# The case exercises legacy Messages search, which the base no longer selects by default.
-- id: web
-  name: '@deepseek-ai/dsh-web'
-  config:
-    searchProvider: deepseek-official
-    fetchProvider: http
