@@ -194,13 +194,23 @@ private final class WindowRestoration {
         try shelf.join(pile, windowID: id, owner: owner, appScoped: !exact, foreground: (original.pid, originalFrontWindow), access: access)
         stageActionSent = true
         // Let WindowManager start the move before returning focus, which can otherwise switch stages mid-animation.
-        let returnBy = min(deadline, ContinuousClock.now + .seconds(animation))
+        let returnBy = min(deadline, ContinuousClock.now + .seconds(animation * 2))
+        var interruptedUntil: ContinuousClock.Instant?
         repeat {
             try checkTarget()
             let shown = try expanded()
             if shown != nil || ContinuousClock.now >= returnBy { try await restoreFocus(on: worker) }
             if let shown, let confirmed = try expanded(), confirmed == shown { return shown }
-            guard !userSwitched(), ContinuousClock.now < deadline - .seconds(animation) else {
+            if userSwitched() {
+                // Observe late stage transitions without taking focus back from a third application.
+                interruptedUntil = interruptedUntil ?? (ContinuousClock.now + .seconds(animation * 2))
+                if let interruptedUntil, ContinuousClock.now >= interruptedUntil {
+                    throw unavailable("The active application changed while Stage Manager was adding the window.")
+                }
+            } else {
+                interruptedUntil = nil
+            }
+            guard ContinuousClock.now < deadline - .seconds(animation) else {
                 throw unavailable("The window was not confirmed expanded in the original stage after Add Window to Stage.")
             }
             try await Task.sleep(for: .milliseconds(16))

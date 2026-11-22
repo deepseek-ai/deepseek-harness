@@ -38,33 +38,33 @@ def focus_fixture(helper, app, path, ready=lambda: True):
 
 
 def check_stage_groups(helper, make_bundle, executable, root):
-    with ExitStack() as owned:
-        def launch(name):
-            path = root / (name + '.json')
-            binary = make_bundle(name, path, stage_participant=True)
-            shutil.copy2(executable, binary)
-            handle = helper.call('getApp', {'selector': str(binary.parents[2])})['appHandle']
-            app = {'appHandle': handle}
-            helper.call('launchApp', app)
-            state = wait_for_state(path, lambda s: bool(s.get('windowId')))
-            owned.callback(stop_application, state['pid'])
-            return app, path, state['windowId']
+    def launch(name, owned):
+        path = root / (name + '.json')
+        binary = make_bundle(name, path, stage_participant=True)
+        shutil.copy2(executable, binary)
+        handle = helper.call('getApp', {'selector': str(binary.parents[2])})['appHandle']
+        app = {'appHandle': handle}
+        helper.call('launchApp', app)
+        state = wait_for_state(path, lambda s: bool(s.get('windowId')))
+        owned.callback(stop_application, state['pid'])
+        return app, path, state['windowId']
 
-        def expanded(binding):
-            app, path, window_id = binding
-            state = json.loads(path.read_text())
-            window = next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)
-            return window['isOnScreen'] and all(abs(window['bounds'][k] - actual) <= 1
-                                                for k, actual in zip(('width', 'height'), state['size']))
+    def expanded(binding):
+        app, path, window_id = binding
+        state = json.loads(path.read_text())
+        window = next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)
+        return window['isOnScreen'] and all(abs(window['bounds'][k] - actual) <= 1
+                                            for k, actual in zip(('width', 'height'), state['size']))
 
-        def focus(binding):
-            app, path, _ = binding
-            return focus_fixture(helper, app, path, lambda: expanded(binding))
+    def focus(binding):
+        app, path, _ = binding
+        return focus_fixture(helper, app, path, lambda: expanded(binding))
 
 
-        front = launch('StageFront')
-        for name, explicit in [('StageApp', False), ('StageWindow', True)]:
-            target = launch(name)
+    for name, explicit in [('StageApp', False), ('StageWindow', True)]:
+        with ExitStack() as owned:
+            front = launch(name + 'Front', owned)
+            target = launch(name, owned)
             app, path, window_id = target
             focus(target)
             focus(front)
