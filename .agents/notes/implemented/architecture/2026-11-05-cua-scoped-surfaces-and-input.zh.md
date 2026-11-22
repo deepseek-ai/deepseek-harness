@@ -14,6 +14,8 @@ Status: implemented
 
 Provider 的启动能力是静态的。平台、支持的方法、应用级辅助功能、键盘作用域、浏览器支持和坐标空间在安装 provider 时固定。原生 `getCapabilities` RPC 只报告运行时权限和会话锁定状态；`installCua` 为模型可见结果合并两层。中立的 RPC 是通用操作表示，不是能力清单；provider 指导文本说明其平台支持的动作。
 
+共享包 `packages/experimental/cua` 的类型、模型提示词和文档只描述调用方在各平台都能依赖的行为。每个平台支持哪些操作、有哪些限制、返回什么格式，由对应的平台包说明。例如，共享 API 的 `showDiff` 表示请求变化，输出如何解读由提供方说明。一个平台调整输出格式时，共享 API 和提示词无需跟着改。
+
 键盘输入把按键与修饰键分开：`pressKey(key, modifiers?)` 在按住所列修饰键时按下并释放一个键，其键盘修饰键列表是 provider 定义的普通字符串数组。`sendKeyEvent(key, direction)` 只发送一次按下或抬起，不隐式发送相反事件。因此调用方可以保持修饰键或拆分手势；两个方法都不接受组合键字符串，共享 schema 也不枚举平台按键名。
 
 在单个 API 实例内，对象门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享这份快照，包括对同一应用的重复选择。`getApp` 和 `getWindow` 只选择对象，不读取辅助功能或替换该快照；原生窗口操作会拒绝已关闭或属于其他应用的窗口。显式 `getAccessibilityTree` 读取会在分派前使上一份快照失效。门面会为元素操作自动附加最新快照 ID；调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是 provider 定义的不透明字符串。只有显式 `CuaWindow` 可以截图或发送指针输入。原生 helper 在该门面之后保留自己的应用快照和可选窗口快照；原生层与门面快照相互独立。外部运行时继续负责变量持久化和最终表达式序列化；门面不加入 evaluator。[原生对象决定](2026-09-17-experimental-cua-object-api.zh.md)负责 evaluator 独立性，[共享 helper 决定](2026-10-09-cua-shared-native-helper.zh.md)负责连接生命期。
