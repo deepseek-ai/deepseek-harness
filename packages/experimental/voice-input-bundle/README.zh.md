@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-打开 Web 侧栏的插件管理页并启用带蓝色声波图标的“语音输入”。模型需要准备时，弹窗提供“前往安装”和“稍后”选项；“前往安装”打开 Bundle 详情。缓存完整时不会提示安装。在详情中选择“下载并准备”；默认折叠的当前步骤摘要可展开为完整步骤列表。下载报告真实字节，校验和加载显示等待时间。就绪后点击模型选择器与发送按钮之间的麦克风，再点击停止以插入转写文字。Bundle 详情通过 Settings 服务保存识别器和语言。禁用 Bundle 会取消当前任务；缓存资源保留在磁盘上。
+打开 Web 侧栏的插件管理页并启用带蓝色声波图标的“语音输入”。有 DeepSeek 账号或 API Key 时，云端识别已就绪，不弹提示。两者都没有且本地模型需要准备时，弹窗提供“登录 DeepSeek”“下载本地模型”和“稍后”；“下载本地模型”打开 Bundle 详情。缓存完整时不会提示安装。在详情中选择“下载并准备”；默认折叠的当前步骤摘要可展开为完整步骤列表。下载报告真实字节，校验和加载显示等待时间。就绪后点击模型选择器与发送按钮之间的麦克风，再点击停止以插入转写文字。Bundle 详情通过 Settings 服务保存识别器和语言。禁用 Bundle 会取消当前任务；缓存资源保留在磁盘上。
 
 识别服务默认为“自动”：已登录 DeepSeek 账号或配置了 DeepSeek API Key 时使用 DeepSeek 云端 Provider，否则使用本地 SenseVoice Provider。云端 Provider 按其 [README](../speech-to-text-deepseek/README.zh.md) 所述把录音发送到 DeepSeek 服务。
 
@@ -37,7 +37,7 @@ kind: "package-bundle"
 <details>
 <summary>维护者信息 — 点击展开</summary>
 
-静态 `cordis.patch.yml` 添加四个语音条目，选择 `sensevoice-local` 作为默认识别器，并通过 `dshHomePath` 提供 Provider 缓存目录。可选 Bundle 安装使插件管理器能够发现此包，但不会在默认配置中选择它。浏览器贡献拥有其生成 Remote 的挂载；稳定 API Remotes 不导入实验性代码。
+静态 `cordis.patch.yml` 添加五个语音条目，设置 `defaultProvider: auto` 与 `autoOrder: [deepseek-asr, sensevoice-local]`，并通过 `dshHomePath` 提供本地 Provider 缓存目录。可选 Bundle 安装使插件管理器能够发现此包，但不会在默认配置中选择它。浏览器贡献拥有其生成 Remote 的挂载；稳定 API Remotes 不导入实验性代码。
 
 </details>
 
