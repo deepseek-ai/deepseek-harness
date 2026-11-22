@@ -329,18 +329,17 @@ actor AXWorker {
         switch method {
         case "show":
             let windowID = try params.optionalWindowID()
-            if let windowID { _ = try NativePlatform.ownedWindow(identity.pid, windowID) }
             let beforePID = NativePlatform.frontPID()
             let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let restored = try ax().restoreWindow(windowID, owner: identity)
+            let selected = try ax().windowForBackgroundShow(windowID, owner: identity)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
             let afterPID = NativePlatform.frontPID()
             let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
             let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
                                                        afterPID: afterPID, afterWindow: afterWindow)
-            return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
+            return .result(.object(["dispatched": .bool(false),
+                "windowId": selected.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":

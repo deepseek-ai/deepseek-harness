@@ -144,28 +144,42 @@ def main():
                 launched = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})
                 assert launched['running'] is True, launched
                 foreground = wait_for_state(foreground_path, lambda state: state['pid'] > 0)['pid']
-                subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
-                wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
-                           and not state['active'], 'foreground fixture did not take focus')
-                for number, key, target in [(signal.SIGALRM, 'hidden', owner),
-                                            (signal.SIGHUP, 'minimized', {**owner, 'windowId': window_id})]:
-                    if key == 'minimized':
-                        subprocess.run(['open', '-a', str(binary.parents[2])], check=True)
-                        wait_state(lambda state: state['active'], 'target fixture did not activate for minimization')
-                    os.kill(fixture, number)
-                    wait_state(lambda state: state[key], 'fixture did not ' + key)
-                    subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
-                    wait_state(lambda state: json.loads(foreground_path.read_text())['active'] and not state['active'],
-                               'foreground fixture did not regain focus before restoration')
-                    restored = helper.call('show', target)
-                    actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
-                    assert restored['windowId'] == window_id, restored
-                    assert restored['dispatched'], restored
-                    assert restored['foregroundChanged'] is False, restored
-                    assert not actual['active'] and json.loads(foreground_path.read_text())['active']
+                front_owner = {'appHandle': pending_foreground['appHandle']}
+                target = {**owner, 'windowId': window_id}
+
+                def focus_foreground():
+                    helper.call('activate', front_owner)
+                    return wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+
+                def check_show(before, selected, minimized=False):
+                    if minimized:
+                        failure = helper.call('show', selected, 'FOREGROUND_REQUIRED')
+                        assert 'app.activate()' in failure['message'], failure
+                    else:
+                        result = helper.call('show', selected)
+                        assert result == {'dispatched': False, 'windowId': window_id, 'foregroundChanged': False}, result
+                    after = json.loads(foreground_path.read_text())
+                    assert after['key'] and after['keyLosses'] == before['keyLosses'], after
+
+                before = focus_foreground()
+                check_show(before, target)
+                os.kill(fixture, signal.SIGALRM)
+                wait_state(lambda s: s['hidden'], 'fixture did not hide')
+                check_show(before, owner)
+                assert json.loads(state_path.read_text())['hidden']
+
+                helper.call('activate', owner)
+                wait_state(lambda s: s['active'] and s['key'], 'target did not regain keyboard focus')
+                os.kill(fixture, signal.SIGHUP)
+                state = wait_state(lambda s: s['minimizeRequested'] and (s['minimized'] or not s['active']),
+                                   'target did not minimize or leave the active Stage Manager group')
+                before = focus_foreground()
+                check_show(before, target, state['minimized'])
+                after = json.loads(state_path.read_text())
+                assert after['minimized'] == state['minimized'] and after['size'] == state['size'], after
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')
                 helper.eof()
-                print('PASS: AXless input, resize guards, fresh observation, movement and background unhide/unminimize')
+                print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
             finally:
                 run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
                             lambda: stop_application(fixture))

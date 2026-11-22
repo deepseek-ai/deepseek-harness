@@ -10,6 +10,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var hiddenAX = false
     var count = 0
     var resizeCount = 0
+    var minimizeRequested = false
+    var keyLosses = 0
     var moved = false
     var controls: [DispatchSourceSignal] = []
     var stateObserver: Timer?
@@ -43,6 +45,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 case SIGHUP:
                     self.window.collectionBehavior = []
                     self.window.miniaturize(nil)
+                    self.minimizeRequested = true
+                    self.persist()
                 case SIGALRM: NSApplication.shared.hide(nil)
                 default:
                     self.window.setFrameOrigin(NSPoint(x: 180, y: 180))
@@ -64,6 +68,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidResignActive(_ notification: Notification) { persist() }
     func applicationDidHide(_ notification: Notification) { persist() }
     func applicationDidUnhide(_ notification: Notification) { persist() }
+    func windowDidResignKey(_ notification: Notification) { keyLosses += 1; persist() }
     func windowDidMiniaturize(_ notification: Notification) { persist() }
     func windowDidDeminiaturize(_ notification: Notification) { persist() }
     func setAXHidden(_ hidden: Bool) {
@@ -83,7 +88,8 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "windowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
             "hidden": NSApplication.shared.isHidden, "minimized": window.isMiniaturized,
-            "active": NSApplication.shared.isActive,
+            "active": NSApplication.shared.isActive, "key": window.isKeyWindow, "keyLosses": keyLosses,
+            "minimizeRequested": minimizeRequested,
             "size": [window.frame.width, window.frame.height],
             "buttonPoint": [rect.midX, window.frame.height - rect.midY],
         ])
