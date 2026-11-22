@@ -59,8 +59,8 @@ private let cursor: JSONValue = .object(["location": .number(2), "length": .numb
 
 @Test func roleDependentValuesRespectTheObservedTypeAndStatelessAlternatives() throws {
     let roles = [
-        (["AXTextField", "AXTextArea", "AXStaticText"], ["string"]),
-        (["AXSlider", "AXIncrementor"], ["number", "string"]),
+        (["AXTextField", "AXTextArea", "AXComboBox", "AXStaticText"], ["string"]),
+        (["AXSlider", "AXIncrementor", "AXStepper"], ["number", "string"]),
         (["AXCheckBox", "AXRadioButton"], ["boolean", "number"]),
         (["AXProgressIndicator"], ["number"]),
     ]

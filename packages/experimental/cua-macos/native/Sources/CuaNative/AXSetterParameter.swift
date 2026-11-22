@@ -40,8 +40,8 @@ enum AXSetterParameter: Sendable {
     private static let adjustable = Self.live([.number, .string], "Use the control's numeric or string value type. Numeric limits depend on the control.")
     private static let toggle = Self.live([.boolean, .number], "Use the control's boolean or numeric state.")
     static let valueRoles: [String: Self] = [
-        "AXTextField": text, "AXTextArea": text, "AXStaticText": text,
-        "AXSlider": adjustable, "AXIncrementor": adjustable,
+        "AXTextField": text, "AXTextArea": text, "AXComboBox": text, "AXStaticText": text,
+        "AXSlider": adjustable, "AXIncrementor": adjustable, "AXStepper": adjustable,
         "AXCheckBox": toggle, "AXRadioButton": toggle,
         "AXProgressIndicator": .live([.number], "A finite value within the control's current range."),
     ]
