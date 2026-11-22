@@ -25,8 +25,8 @@ import Testing
     }
 }
 
-@Test func keepsOnlyAttributesReportedAsWritable() throws {
-    #expect(try AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
+@Test func keepsOnlyAttributesReportedAsWritable() {
+    #expect(AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
         if name == "AXValue" { return true }
         if name == "AXFocused" { return nil }
         return false

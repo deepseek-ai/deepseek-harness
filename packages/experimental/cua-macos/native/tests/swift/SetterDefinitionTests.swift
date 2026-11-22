@@ -71,8 +71,13 @@ private let cursor: JSONValue = .object(["location": .number(2), "length": .numb
         for role in roleNames {
             let rule = AXSetterParameter.resolve(role: role, attribute: "AXValue")
             let schema = try ActionSchema.parameter(action: "\(role).AXValue.Set")["properties"]["argument"]
-            if case .array(let alternatives) = schema["oneOf"] { #expect(alternatives.compactMap { $0["type"].string } == types) }
-            else { #expect([schema["type"].string] == types.map(Optional.some)) }
+            let advertised: [String]
+            if case .array(let alternatives) = schema["oneOf"] {
+                advertised = try alternatives.map { try #require($0["type"].string) }
+            } else {
+                advertised = [try #require(schema["type"].string)]
+            }
+            #expect(advertised == types)
             for (type, argument, value) in samples {
                 #expect(try rule.canList(attribute: "AXValue") { value } == types.contains(type))
                 if types.contains(type) {

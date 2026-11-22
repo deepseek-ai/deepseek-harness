@@ -5,33 +5,28 @@ import Foundation
 enum AXArgumentKind: Sendable {
     case string, boolean, number, point, size, range, ranges
 
+    private static let pointFields = AXFieldPair(
+        first: ("x", "A finite x coordinate."), second: ("y", "A finite y coordinate."), parse: finite)
+    private static let sizeFields = AXFieldPair(
+        first: ("width", "A nonnegative finite width."), second: ("height", "A nonnegative finite height."), parse: dimension)
+    private static let rangeFieldDescription = "A nonnegative integer no greater than \(Int.max)."
+    private static let rangeFields = AXFieldPair(
+        first: ("location", rangeFieldDescription), second: ("length", rangeFieldDescription),
+        description: "The sum of location and length must be no greater than \(Int.max).", parse: nonnegativeInteger)
+
     var schema: JSONValue {
         switch self {
         case .string: return SchemaBuilder.scalar("string")
         case .boolean: return SchemaBuilder.scalar("boolean")
         case .number: return SchemaBuilder.scalar("number", description: "A finite number.")
-        case .point:
-            return SchemaBuilder.object([
-                "x": SchemaBuilder.scalar("number", description: "A finite x coordinate."),
-                "y": SchemaBuilder.scalar("number", description: "A finite y coordinate."),
-            ], required: ["x", "y"])
-        case .size:
-            return SchemaBuilder.object([
-                "width": SchemaBuilder.scalar("number", description: "A nonnegative finite width."),
-                "height": SchemaBuilder.scalar("number", description: "A nonnegative finite height."),
-            ], required: ["width", "height"])
-        case .ranges:
-            return .object(["type": .string("array"), "items": Self.range.schema])
-        case .range:
-            return SchemaBuilder.object([
-                "location": SchemaBuilder.scalar("number", description: "A nonnegative integer no greater than \(Int.max)."),
-                "length": SchemaBuilder.scalar("number", description: "A nonnegative integer no greater than \(Int.max)."),
-            ], required: ["location", "length"],
-                description: "The sum of location and length must be no greater than \(Int.max).")
+        case .point: return Self.pointFields.schema
+        case .size: return Self.sizeFields.schema
+        case .range: return Self.rangeFields.schema
+        case .ranges: return .object(["type": .string("array"), "items": Self.rangeFields.schema])
         }
     }
 
-    /// Convert one direct JSON argument to the Core Foundation value expected by the attribute's live type.
+    /// Convert a direct JSON argument to this AX value type before sending it to the element.
     func encode(_ argument: JSONValue, attribute: String) throws -> CFTypeRef {
         switch self {
         case .string:
@@ -46,17 +41,15 @@ enum AXArgumentKind: Sendable {
             }
             return NSNumber(value: number)
         case .point:
-            let values = try Self.fields(argument, attribute: attribute, keys: ["x", "y"])
-            var point = CGPoint(x: try Self.finite(values["x"], name: "x", attribute: attribute),
-                                y: try Self.finite(values["y"], name: "y", attribute: attribute))
+            let (x, y) = try Self.pointFields.decode(argument, attribute: attribute)
+            var point = CGPoint(x: x, y: y)
             guard let value = AXValueCreate(.cgPoint, &point) else {
                 throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
             }
             return value
         case .size:
-            let values = try Self.fields(argument, attribute: attribute, keys: ["width", "height"])
-            var size = CGSize(width: try Self.dimension(values["width"], name: "width", attribute: attribute),
-                              height: try Self.dimension(values["height"], name: "height", attribute: attribute))
+            let (width, height) = try Self.sizeFields.decode(argument, attribute: attribute)
+            var size = CGSize(width: width, height: height)
             guard let value = AXValueCreate(.cgSize, &size) else {
                 throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
             }
@@ -79,9 +72,7 @@ enum AXArgumentKind: Sendable {
         }
     }
     private static func textRange(_ argument: JSONValue, attribute: String) throws -> CFRange {
-        let values = try fields(argument, attribute: attribute, keys: ["location", "length"])
-        let location = try nonnegativeInteger(values["location"], name: "location", attribute: attribute)
-        let length = try nonnegativeInteger(values["length"], name: "length", attribute: attribute)
+        let (location, length) = try rangeFields.decode(argument, attribute: attribute)
         guard location <= Int.max - length else { throw RequestParameters.invalid("\(attribute) range is too large") }
         return CFRange(location: location, length: length)
     }
@@ -105,12 +96,6 @@ enum AXArgumentKind: Sendable {
         }
         return nil
     }
-    private static func fields(_ argument: JSONValue, attribute: String, keys: Set<String>) throws -> [String: JSONValue] {
-        guard case .object(let values) = argument, Set(values.keys) == keys else {
-            throw RequestParameters.invalid("\(attribute) requires exactly \(keys.sorted().joined(separator: ", "))")
-        }
-        return values
-    }
     private static func finite(_ value: JSONValue?, name: String, attribute: String) throws -> Double {
         guard let value, case .number(let number) = value, number.isFinite else {
             throw RequestParameters.invalid("\(attribute) \(name) must be a finite number")
@@ -129,5 +114,28 @@ enum AXArgumentKind: Sendable {
             throw RequestParameters.invalid("\(attribute) \(name) must be a nonnegative integer")
         }
         return integer
+    }
+}
+
+/// Two required numeric fields with a shared scalar parser; the names also define the JSON object schema.
+private struct AXFieldPair<Value>: Sendable {
+    let first: (name: String, description: String)
+    let second: (name: String, description: String)
+    var description: String? = nil
+    let parse: @Sendable (JSONValue?, String, String) throws -> Value
+
+    var schema: JSONValue {
+        SchemaBuilder.object([
+            first.name: SchemaBuilder.scalar("number", description: first.description),
+            second.name: SchemaBuilder.scalar("number", description: second.description),
+        ], required: [first.name, second.name], description: description)
+    }
+
+    func decode(_ argument: JSONValue, attribute: String) throws -> (Value, Value) {
+        guard case .object(let fields) = argument, fields.count == 2,
+              let a = fields[first.name], let b = fields[second.name] else {
+            throw RequestParameters.invalid("\(attribute) requires exactly \([first.name, second.name].sorted().joined(separator: ", "))")
+        }
+        return try (parse(a, first.name, attribute), parse(b, second.name, attribute))
     }
 }
