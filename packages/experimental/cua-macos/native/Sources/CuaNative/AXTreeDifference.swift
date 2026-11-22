@@ -35,9 +35,7 @@ struct AXTreeBaseline {
     /// The snapshot's action lookup and structured element records must use the same numbers as the displayed tree.
     static func observe(_ projection: inout AXProjection, options: AXTreeReadOptions,
                         previous: AXTreeBaseline?, windowTitle: String? = nil, checkCancellation: () throws -> Void) throws -> AXTreeBaseline? {
-        guard !projection.truncated, !projection.hasUnreadableElements else { return nil }
         var lines = projection.lines
-        let full = AXTreeBaseline(options: options, lines: lines)
         let focus = lines.firstIndex(where: \.focused)
         func focusSummary(_ rows: [AXTreeLine]) -> String {
             guard let focus else { return "" }
@@ -46,7 +44,8 @@ struct AXTreeBaseline {
             return "\nThe focused UI element is \(line.id) \(line.body)"
         }
         projection.tree += focusSummary(lines)
-        guard let previous, options == previous.options else { return full }
+        guard !projection.truncated, !projection.hasUnreadableElements else { return nil }
+        guard let previous, options == previous.options else { return AXTreeBaseline(options: options, lines: lines) }
 
         let old = Dictionary(uniqueKeysWithValues: previous.lines.map { ($0.element, $0) })
         let retained = try matches(before: previous.lines, after: lines, checkCancellation: checkCancellation)

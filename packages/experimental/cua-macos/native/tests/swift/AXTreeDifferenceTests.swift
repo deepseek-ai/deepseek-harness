@@ -11,7 +11,7 @@ private func options(_ overrides: [String: JSONValue] = [:]) throws -> AXTreeRea
     return try AXTreeReadOptions(RequestParameters(NativeRequest(data: JSONEncoder().encode(request))))
 }
 
-private func tree(_ titles: [String], order: [Int]? = nil, maxElements: Int = 100, missing: Int? = nil) throws -> AXProjection {
+private func tree(_ titles: [String], order: [Int]? = nil, maxElements: Int = 100, missing: Int? = nil, focused: Int? = nil, selectedText: String? = nil) throws -> AXProjection {
     let nodes = (0...titles.count).map { AXUIElementCreateApplication(Int32($0 + 100)) }
     return try AXTreeProjection.project(roots: AXObservedChildren(entries: [nodes[0]]), focusedWindowID: nil, windowScoped: true,
         maxElements: maxElements, maxDepth: 20, includeMenus: false, details: false, numbered: true, checkCancellation: {}) { element in
@@ -20,7 +20,8 @@ private func tree(_ titles: [String], order: [Int]? = nil, maxElements: Int = 10
         let root = index == 0
         return AXReadNode(text: AXTextNode(index: nil, role: root ? "AXWindow" : "AXButton",
             title: root ? "Fixture" : titles[index - 1], value: nil, description: nil, actions: root ? [] : ["AXPress"],
-            enabled: true, valueWritable: nil, selectionWritable: nil, selected: nil, selectedRange: nil, selectedText: nil),
+            enabled: true, valueWritable: nil, selectionWritable: nil, selected: nil, selectedRange: nil,
+            selectedText: index == focused ? selectedText : nil, focused: index == focused),
             children: AXObservedChildren(entries: root ? (order ?? Array(1...titles.count)).map { nodes[$0] } : []))
     }
 }
@@ -85,6 +86,22 @@ private struct Reader {
         #expect(r.baseline == nil)
         #expect(try r.read(full).tree == full.tree)
     }
+}
+
+@Test func incompleteNumberedReadsKeepObservedFocusAndSelection() throws {
+    var r = Reader()
+    let truncated = try r.read(tree(titles, maxElements: 2, focused: 1))
+    #expect(truncated.truncated)
+    #expect(truncated.tree.hasSuffix("The focused UI element is 1 AXButton \"Control 1\""))
+    #expect(r.baseline == nil)
+
+    let unreadable = try r.read(tree(titles, missing: 2, focused: 1, selectedText: "sample"))
+    #expect(unreadable.hasUnreadableElements)
+    #expect(unreadable.tree.hasSuffix("Selected text: \"sample\""))
+    #expect(r.baseline == nil)
+
+    let outside = try r.read(tree(titles, maxElements: 2, focused: 3))
+    #expect(!outside.tree.contains("The focused UI element"))
 }
 
 @Test(arguments: [
