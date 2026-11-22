@@ -72,7 +72,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: '^24.22.3'
 
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
@@ -152,7 +152,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: '^24.22.3'
 
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile

@@ -13,7 +13,7 @@ function assertNever(value: never): never {
   throw new Error(`Unsupported PTC import decision: ${String(value)}`)
 }
 
-// Node >=24.9 supplies explicit graph linking; the installed Node declarations omit these methods.
+// Supported Node releases supply explicit graph linking; the installed Node declarations omit these methods.
 interface SourceModule extends vm.SourceTextModule {
   instantiate(): void
   linkRequests(modules: vm.Module[]): void

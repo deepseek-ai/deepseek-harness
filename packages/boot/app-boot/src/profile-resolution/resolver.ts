@@ -903,7 +903,7 @@ export function installRuntimeInterception(
   }
 
   let restoreEsm: () => void
-  /* v8 ignore else -- CI coverage runs Node 24 v2; the Node 24.0 matrix exercises the v1 adapter */
+  /* v8 ignore else -- supported Node releases use v2; the v1 adapter serves Node before 24.12, below the supported floor */
   if (modern) {
     const loader = esm as ModuleLoaderV2
     const original = Reflect.get(loader, 'resolveSync')

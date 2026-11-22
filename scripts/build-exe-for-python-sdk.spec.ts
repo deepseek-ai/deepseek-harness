@@ -177,11 +177,24 @@ describe('Python runtime executable builder CLI', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('exec pkg')
-    expect(result.stdout).toContain('--sea --compress Brotli --targets node24-macos-x64')
+    expect(result.stdout).toContain('--sea --compress Brotli --targets node24.22.3-macos-x64')
     expect(result.stdout).toContain('keep only node-pty prebuilds darwin-x64')
     expect(result.stdout).toContain(`lock optional resource downloads in ${join(root, 'dist-exe', 'macos-x64')}`)
     expect(result.stdout).not.toContain('office-skills')
     expect(result.stdout).toContain(join(root, 'dist-exe', 'macos-x64'))
+  })
+
+  it('rejects a Node range other than node24 before any build step', () => {
+    const result = run(
+      { npm_execpath: 'C:\\tools\\pnpm.cjs' },
+      '--skip-build',
+      '--dry-run',
+      '--targets=node24.20.0-linux-x64',
+    )
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('node range must be node24, got "node24.20.0"')
+    expect(result.stdout).toBe('')
   })
 
   it('rejects a Windows arm64 product before any build step', () => {
