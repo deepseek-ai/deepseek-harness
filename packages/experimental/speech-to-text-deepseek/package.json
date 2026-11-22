@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-speech-to-text-deepseek",
-  "description": "DeepSeek One-Shot cloud transcription authenticated by the DeepSeek account",
-  "version": "0.2.2-rc.1",
+  "description": "DeepSeek speech recognition through the /v1/tools/asr API, authenticated by the DeepSeek account or API key",
+  "version": "0.2.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -39,17 +39,15 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*",
     "@deepseek-ai/dsh-experimental-speech-to-text": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-credentials": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*",
     "@deepseek-ai/dsh-experimental-speech-to-text": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-deepseek-account": {
-      "optional": true
-    }
   }
 }

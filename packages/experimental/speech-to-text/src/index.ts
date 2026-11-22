@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {
   SpeechPreparationOptions, SpeechProvider, SpeechProviderId, SpeechProviderInfo, SpeechSelection, SpeechSnapshot, SpeechSelectionPatch,
-  SpeechRequest, SpeechSpec, Transcript,
+  SpeechPreparationState, SpeechRequest, SpeechSpec, Transcript,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -15,6 +15,10 @@ export { SpeechTranscriptionError } from './failure.ts'
 
 /** Preference value that follows `autoOrder`; no provider may register it as an id. */
 const AUTO = 'auto'
+/** Phases in which a recording starts without preparation. */
+const RECORDABLE: ReadonlySet<SpeechPreparationState['phase']> = new Set(['ready', 'standby', 'waking'])
+/** Phases that refuse recordings until the user acts or the failure is resolved. */
+const REFUSING: ReadonlySet<SpeechPreparationState['phase']> = new Set(['unavailable', 'failed'])
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -144,14 +148,25 @@ export default class SpeechToText extends Service {
 
   /**
    * Apply the saved preference: an explicit id is kept even while unregistered; `auto` takes the first registered
-   * `autoOrder` provider that is not unavailable, else the first registered one so its state explains the refusal.
+   * `autoOrder` provider that records without preparation, else the first one that is neither unavailable nor failed,
+   * else the first registered one so its state explains the refusal. A saved language no registered provider lists is
+   * reported as `auto`.
    */
   private selection(): SpeechSelection {
-    const language = this.config.language.get(), choice = this.config.defaultProvider.get()
+    const language = this.savedLanguage(), choice = this.config.defaultProvider.get()
     if (choice !== AUTO) return { mode: 'explicit', providerId: choice as SpeechProviderId, language }
     const registered = this.config.autoOrder.flatMap(id => this.providers.get(id as SpeechProviderId)?.provider ?? [])
-    const chosen = registered.find(provider => provider.preparation?.snapshot().phase !== 'unavailable') ?? registered[0]
+    const phase = (provider: SpeechProvider) => provider.preparation?.snapshot().phase ?? 'ready'
+    const chosen = registered.find(provider => RECORDABLE.has(phase(provider)))
+      ?? registered.find(provider => !REFUSING.has(phase(provider))) ?? registered[0]
     return { mode: 'auto', providerId: chosen?.info.id ?? this.config.autoOrder[0] as SpeechProviderId, language }
+  }
+
+  /** The saved language hint, or `auto` when no registered provider lists it, as after its provider is removed. */
+  private savedLanguage(): string {
+    const language = this.config.language.get()
+    for (const { provider } of this.providers.values()) if (provider.info.languages.includes(language)) return language
+    return AUTO
   }
 
   /**
@@ -210,9 +225,10 @@ export default class SpeechToText extends Service {
   }
 
   /**
-   * Apply the saved selection and capture the provider. Missing providers and hints no registered provider lists fail
-   * explicitly; the captured provider receives the hint when it lists it and `auto` otherwise.
-   * @param request - complete recording, optional selection and the client's UI language.
+   * Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider
+   * lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the
+   * hint when it lists it and `auto` otherwise.
+   * @param request - complete recording and optional selection.
    * @returns provider-pinned input for transcribe().
    */
   resolve(request: SpeechRequest): SpeechSpec {
@@ -220,9 +236,8 @@ export default class SpeechToText extends Service {
       throw new Error('Automatic speech provider selection requires a non-empty autoOrder')
     }
     const provider = this.registered(request.providerId ?? this.selection().providerId)
-    const language = this.knownLanguage(request.language ?? this.config.language.get())
-    return { provider, audio: request.audio, language: provider.info.languages.includes(language) ? language : AUTO,
-      ...request.locale === undefined ? {} : { locale: request.locale } }
+    const language = request.language === undefined ? this.savedLanguage() : this.knownLanguage(request.language)
+    return { provider, audio: request.audio, language: provider.info.languages.includes(language) ? language : AUTO }
   }
 
   /**
@@ -238,8 +253,7 @@ export default class SpeechToText extends Service {
     const combined = AbortSignal.any([signal, registration.lifetime.signal])
     const pending = Promise.resolve().then(() => {
       combined.throwIfAborted()
-      return spec.provider.transcribe({ audio: spec.audio, language: spec.language,
-        ...spec.locale === undefined ? {} : { locale: spec.locale } }, combined)
+      return spec.provider.transcribe({ audio: spec.audio, language: spec.language }, combined)
     })
     registration.pending.add(pending)
     try {

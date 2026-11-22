@@ -16,8 +16,6 @@ export interface TranscriptionRequest {
   readonly audioBase64: string
   readonly providerId?: SpeechProviderId
   readonly language?: string
-  /** Active UI language as a BCP 47 tag such as `zh` or `pt-BR`; cloud providers forward it to the service. */
-  readonly locale?: string
 }
 
 /** Current provider choices and audio intake limits. */

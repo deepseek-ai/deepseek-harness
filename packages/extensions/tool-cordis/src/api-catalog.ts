@@ -4282,8 +4282,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SpeechRequest): SpeechSpec',
-        description: 'Apply the saved selection and capture the provider. Missing providers and hints no registered provider lists fail explicitly; the captured provider receives the hint when it lists it and `auto` otherwise.',
-        parameters: [{ name: 'request', description: 'complete recording, optional selection and the client\'s UI language.' }],
+        description: 'Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the hint when it lists it and `auto` otherwise.',
+        parameters: [{ name: 'request', description: 'complete recording and optional selection.' }],
         returns: 'provider-pinned input for transcribe().',
       },
       {
@@ -10652,7 +10652,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechInput',
-    declaration: 'export interface SpeechInput {\n    readonly audio: Uint8Array;\n    readonly language: string;\n    readonly locale?: string | undefined;\n}',
+    declaration: 'export interface SpeechInput {\n    readonly audio: Uint8Array;\n    readonly language: string;\n}',
   },
   {
     name: 'SpeechPreparation',
@@ -10692,7 +10692,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechRequest',
-    declaration: 'export interface SpeechRequest {\n    readonly audio: Uint8Array;\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n    readonly locale?: string | undefined;\n}',
+    declaration: 'export interface SpeechRequest {\n    readonly audio: Uint8Array;\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n}',
   },
   {
     name: 'SpeechSelection',
@@ -11344,7 +11344,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TranscriptionRequest',
-    declaration: 'export interface TranscriptionRequest {\n    readonly audioBase64: string;\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n    readonly locale?: string;\n}',
+    declaration: 'export interface TranscriptionRequest {\n    readonly audioBase64: string;\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n}',
   },
   {
     name: 'TranslationProvider',

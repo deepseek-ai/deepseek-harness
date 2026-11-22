@@ -1,23 +1,26 @@
-/** Loopback double of the One-Shot endpoint and canonical WAV recordings for provider specs. */
+/** Loopback double of the DeepSeek speech recognition API and canonical WAV recordings for provider specs. */
 import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http'
 import { onTestFinished } from 'vitest'
 
 /** One request as the service received it. */
 export interface RecordedRequest {
+  readonly path: string
   readonly headers: IncomingHttpHeaders
-  readonly fields: ReadonlyMap<string, string>
+  /** Bytes of the multipart `file` field, or of the whole body for another content type. */
   readonly file: Uint8Array
+  readonly filename: string | undefined
+  readonly fileType: string | undefined
 }
 
 /** Response behavior for one request; the last reply repeats for later requests. */
 export type Reply = (request: RecordedRequest, response: ServerResponse) => void
 
 /**
- * Start a listener owned by the current test.
+ * Start a listener owned by the current test; it is closed at teardown, so its port is never released mid-test.
  * @param replies - responses in request order.
- * @returns the endpoint URL and the recorded requests.
+ * @returns the deployment base URL, the speech recognition endpoint, and the recorded requests.
  */
-export async function serviceDouble(...replies: Reply[]): Promise<{ endpoint: string; requests: RecordedRequest[] }> {
+export async function serviceDouble(...replies: Reply[]): Promise<{ baseURL: string; endpoint: string; requests: RecordedRequest[] }> {
   const requests: RecordedRequest[] = []
   const server = createServer((request, response) => {
     const chunks: Buffer[] = []
@@ -25,15 +28,12 @@ export async function serviceDouble(...replies: Reply[]): Promise<{ endpoint: st
     request.on('end', () => {
       void (async () => {
         const body = Buffer.concat(chunks), type = request.headers['content-type'] ?? ''
-        const fields = new Map<string, string>()
-        let file = new Uint8Array(body)
+        let file = new Uint8Array(body), filename: string | undefined, fileType: string | undefined
         if (type.startsWith('multipart/form-data')) {
-          for (const [name, value] of await new Response(body, { headers: { 'content-type': type } }).formData()) {
-            if (typeof value === 'string') fields.set(name, value)
-            else file = new Uint8Array(await value.arrayBuffer())
-          }
+          const value = (await new Response(body, { headers: { 'content-type': type } }).formData()).get('file')
+          if (value instanceof File) { file = new Uint8Array(await value.arrayBuffer()); filename = value.name; fileType = value.type }
         }
-        const recorded = { headers: request.headers, fields, file }
+        const recorded = { path: request.url ?? '', headers: request.headers, file, filename, fileType }
         requests.push(recorded)
         replies[Math.min(requests.length, replies.length) - 1]!(recorded, response)
       })()
@@ -43,7 +43,8 @@ export async function serviceDouble(...replies: Reply[]): Promise<{ endpoint: st
   onTestFinished(() => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => { resolve() }) }))
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('service double: missing listener address')
-  return { endpoint: `http://127.0.0.1:${address.port}/api/v0/asr/transcribe`, requests }
+  const baseURL = `http://127.0.0.1:${address.port}`
+  return { baseURL, endpoint: `${baseURL}/v1/tools/asr`, requests }
 }
 
 /**
@@ -57,15 +58,29 @@ export const json = (status: number, body: unknown): Reply => (_request, respons
 
 /**
  * @param text - recognized text.
+ * @param durationMs - audio duration the service reports.
  * @returns a successful recognition reply.
  */
-export const recognized = (text: string): Reply => json(200, { code: 0, msg: '', data: { biz_code: 0, biz_msg: '', biz_data: { text, audio_id: 'echo' } } })
+export const recognized = (text: string, durationMs?: number): Reply =>
+  json(200, { request_id: 'req-1', text, ...durationMs === undefined ? {} : { duration_ms: durationMs } })
 
 /**
- * @param code - `biz_data.code` of the failed recognition.
- * @returns a classified recognition failure reply.
+ * @param status - HTTP status of the documented error.
+ * @param message - the service's error message.
+ * @returns an error reply in the service's error format.
  */
-export const refused = (code: number): Reply => json(200, { code: 0, msg: '', data: { biz_code: 2, biz_msg: 'asr failed', biz_data: { code, toast: 'x', audio_id: 'echo' } } })
+export const failed = (status: number, message: string): Reply =>
+  json(status, { error: { message, type: 'invalid_request_error', param: null, code: 'invalid_request_error' } })
+
+/**
+ * @param status - HTTP status.
+ * @param text - raw body.
+ * @returns a reply sending the body as is.
+ */
+export const raw = (status: number, text: string): Reply => (_request, response) => { response.writeHead(status).end(text) }
+
+/** A reply that closes the connection without answering, as the service does when it rejects an upload early. */
+export const dropped: Reply = (_request, response) => { response.socket?.destroy() }
 
 /** A reply that never answers; the listener closes the socket at teardown. */
 export const silent: Reply = () => {}

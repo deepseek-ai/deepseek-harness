@@ -43,7 +43,10 @@ export interface SpeechDownloadFailure {
   readonly status?: number
 }
 
-/** Why a provider refuses recordings until the user acts; automatic selection skips it. `sign-in-required`: no stored DeepSeek account. */
+/**
+ * Why a provider refuses recordings until the user acts; automatic selection skips it. `sign-in-required`: neither a
+ * DeepSeek account sign-in nor a DeepSeek API key is available.
+ */
 export type SpeechUnavailableReason = 'sign-in-required'
 
 /** Host-owned preparation state; byte totals describe downloads, never estimated installation percentages. */
@@ -84,11 +87,12 @@ export interface SpeechSelectionPatch {
 
 /**
  * Stable recognition failure classes that Consumers localize.
- * `sign-in-required` needs a new sign-in; `rate-limited`, `timeout` and `service-error` allow a later retry;
- * `service-unavailable` and `quota-exceeded`, the exhausted daily allowance, need another provider until the service
- * recovers or the allowance resets; `invalid-audio` needs a different recording.
+ * `sign-in-required` needs a new sign-in; `api-key-invalid` needs another API key; `rate-limited`, `timeout` and
+ * `service-error` allow a later retry; `service-unavailable` and `quota-exceeded`, an exhausted balance or allowance,
+ * need another provider until the service recovers or the balance is restored; `invalid-audio` needs a different
+ * recording.
  */
-export type SpeechFailureCode = 'sign-in-required' | 'rate-limited' | 'quota-exceeded'
+export type SpeechFailureCode = 'sign-in-required' | 'api-key-invalid' | 'rate-limited' | 'quota-exceeded'
   | 'service-unavailable' | 'invalid-audio' | 'timeout' | 'service-error'
 
 /** One consistent provider roster and default-selection observation. */
@@ -123,8 +127,6 @@ export interface SpeechInput {
   readonly audio: Uint8Array
   /** A hint the provider lists in `languages`. */
   readonly language: string
-  /** UI language of the requesting client, such as `zh` or `pt-BR`; absent for clients that send none. */
-  readonly locale?: string | undefined
 }
 
 /** Final transcription; an empty string means no speech was recognized. */
@@ -152,8 +154,6 @@ export interface SpeechRequest {
   readonly audio: Uint8Array
   readonly providerId?: SpeechProviderId
   readonly language?: string
-  /** UI language of the requesting client, forwarded to the provider unchanged. */
-  readonly locale?: string | undefined
 }
 
 /** Resolved selection pins the exact registered provider, including its lifetime. */

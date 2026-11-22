@@ -39,7 +39,5 @@ export function VoiceSetupDialog({ open, kind, onDismiss, onOpenDetails, onSignI
         {t(kind === 'install' ? 'setupPrompt.open' : kind === 'install-or-sign-in' ? 'choicePrompt.download' : 'setupPrompt.details')}
       </Button>}
       {signIn && <Button variant="primary" data-modal-autofocus onClick={onSignIn}>{t('signIn')}</Button>}
-    </>}>
-    {offersSignIn && !signIn ? <p>{t('signInFromSettings')}</p> : undefined}
-  </Modal>
+    </>} />
 }

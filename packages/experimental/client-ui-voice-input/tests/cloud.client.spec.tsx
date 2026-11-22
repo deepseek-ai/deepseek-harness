@@ -28,7 +28,7 @@ function catalog(options: { cloud?: SpeechPreparationState; local?: SpeechPrepar
   const providers: SpeechProviderView[] = []
   if (options.local) providers.push({ id: LOCAL, name: 'SenseVoiceSmall (INT8)', location: 'host-local', languages: ['auto', 'zh', 'en', 'yue', 'ja', 'ko'], preparation: options.local,
     setupEstimate: { recommendedDiskBytes: 1e9, expectedMemoryBytes: 1e9, minimumMinutes: 1, maximumMinutes: 10 } })
-  if (options.cloud) providers.push({ id: CLOUD, name: 'DeepSeek', location: 'cloud', languages: ['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt', 'yue', 'ko'], preparation: options.cloud })
+  if (options.cloud) providers.push({ id: CLOUD, name: 'DeepSeek', location: 'cloud', languages: ['auto'], preparation: options.cloud })
   return { providers, maxAudioBytes: 1000, maxDurationSeconds: 120,
     selection: { mode: options.mode ?? 'auto', providerId: options.selected ?? CLOUD, language: options.language ?? 'zh' } }
 }
@@ -49,7 +49,7 @@ describe('guidance', () => {
   it('labels providers by processing location and offers every listed language in menu order', () => {
     const both = catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' } })
     expect(both.providers.map(row => providerLabel(row, t))).toEqual(['SenseVoiceSmall (INT8) 本地识别', 'DeepSeek 云端识别'])
-    expect(offeredLanguages(both, ['auto', 'zh', 'en', 'ja', 'es'])).toEqual(['auto', 'zh', 'en', 'ja', 'es', 'yue', 'ko', 'fr', 'de', 'ru', 'pt'])
+    expect(offeredLanguages(both, ['auto', 'zh', 'en', 'ja', 'es'])).toEqual(['auto', 'zh', 'en', 'ja', 'yue', 'ko'])
     expect(offeredLanguages(catalog({ local: { phase: 'ready' }, selected: LOCAL }), ['auto', 'es', 'zh'])).toEqual(['auto', 'zh', 'en', 'yue', 'ja', 'ko'])
     expect(offeredLanguages(null, ['auto'])).toEqual([])
   })
@@ -71,7 +71,7 @@ function composer(initial: SpeechCatalog, options: { signIn?: boolean; navigable
     usePluginNavigation: bindSnapshotSelector(createSnapshotStore(options.navigable ?? true)),
     useAccountSignIn: bindSnapshotSelector(createSnapshotStore(options.signIn ?? true)), signIn: vi.fn(), t }
   render(<VoiceInput {...props} />)
-  return { props, settle, transcribe, inputActions }
+  return { props, settle, transcribe, inputActions, readiness }
 }
 
 async function record(): Promise<void> {
@@ -89,6 +89,9 @@ describe('composer', () => {
     expect(screen.queryByText('云端')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: zh.stop }))
     expect(await screen.findByText(zh.transcribingCloud)).toBeTruthy()
+    // The status follows the provider this recording was sent to, not a selection that changed meanwhile.
+    act(() => { b.readiness.set({ connected: true, error: null, catalog: catalog({ cloud: signedOut, local: { phase: 'ready' }, selected: LOCAL }) }) })
+    expect(screen.getByText(zh.transcribingCloud)).toBeTruthy()
     const [sent] = b.transcribe.mock.calls[0]!
     expect(Object.keys(sent).sort()).toEqual(['audioBase64', 'language', 'providerId'])
     expect([sent.providerId, sent.language]).toEqual([CLOUD, 'zh'])
@@ -122,6 +125,25 @@ describe('composer', () => {
     const plain = composer(catalog({ cloud: { phase: 'ready' } }))
     await fail(plain, undefined)
     expect(await screen.findByText('语音识别失败：HTTP 503')).toBeTruthy()
+  })
+
+  it('reports a rejected API key without a recovery action', async () => {
+    const b = composer(catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' } }))
+    await fail(b, 'api-key-invalid')
+    expect(await screen.findByText(zh['failure.api-key-invalid'])).toBeTruthy()
+    expect(screen.queryByRole('button', { name: zh.signIn })).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.useLocal })).toBeNull()
+  })
+
+  it('keeps the microphone from recording until the switch to local recognition reaches the catalog', async () => {
+    const b = composer(catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' } }))
+    await fail(b, 'service-unavailable')
+    fireEvent.click(await screen.findByRole('button', { name: zh.useLocal }))
+    await waitFor(() => { expect(b.props.configure).toHaveBeenCalledWith({ providerId: LOCAL }) })
+    expect(screen.queryByRole('button', { name: zh.start })).toBeNull()
+    expect(screen.getByRole('button', { name: zh['setupPrompt.trigger'] })).toBeTruthy()
+    act(() => { b.readiness.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: LOCAL }) }) })
+    expect(await screen.findByRole('button', { name: zh.start })).toBeTruthy()
   })
 
   it('switches to local recognition after a cloud outage and opens setup for an unprepared model', async () => {
@@ -178,11 +200,11 @@ describe('composer', () => {
     expect(b.transcribe).not.toHaveBeenCalled()
   })
 
-  it('points to Settings when no sign-in entry exists and offers both paths for automatic selection', () => {
+  it('omits the sign-in button without a sign-in entry and offers both paths for automatic selection', () => {
     composer(catalog({ cloud: signedOut, mode: 'explicit' }), { signIn: false })
     fireEvent.click(screen.getByRole('button', { name: zh['setupPrompt.trigger'] }))
     let dialog = screen.getByRole('dialog', { name: zh['signInPrompt.title'] })
-    expect(within(dialog).getByText(zh.signInFromSettings)).toBeTruthy()
+    expect(within(dialog).getByText(zh['signInPrompt.body'])).toBeTruthy()
     expect(within(dialog).queryByRole('button', { name: zh.signIn })).toBeNull()
     fireEvent.click(within(dialog).getByRole('button', { name: zh['setupPrompt.later'] }))
     cleanup()
@@ -206,14 +228,16 @@ function preferences(initial: SpeechCatalog, signIn = true) {
 
 describe('preferences', () => {
   const cardIds = (): (string | null)[] => [...document.querySelectorAll('[data-speech-provider]')].map(card => card.getAttribute('data-speech-provider'))
-  it('offers the automatic preference and explains its current choice and account state', async () => {
+  it('offers the automatic preference and explains its current choice, cost, and guide', async () => {
     const b = preferences(catalog({ cloud: signedOut, local: { phase: 'unprepared' }, selected: LOCAL }))
     const service = screen.getByLabelText<HTMLSelectElement>(zh.provider)
     expect(service.value).toBe('auto')
     expect(within(service).getAllByRole('option').map(option => option.textContent))
       .toEqual([zh.providerAuto, 'SenseVoiceSmall (INT8) 本地识别', 'DeepSeek 云端识别'])
     expect(screen.getByText('当前使用：SenseVoiceSmall (INT8) 本地识别')).toBeTruthy()
-    expect(screen.getByText(zh['selection.signedOut'])).toBeTruthy()
+    expect(screen.getByText(zh.cloudBilling)).toBeTruthy()
+    const guide = screen.getByRole<HTMLAnchorElement>('link', { name: zh.cloudGuide })
+    expect([guide.href, guide.target, guide.rel]).toEqual(['https://api-docs.deepseek.com/zh-cn/guides/asr', '_blank', 'noopener noreferrer'])
     expect(screen.getByText(zh['selection.autoHelp'])).toBeTruthy()
     expect(screen.getAllByText(/本地识别$/).length).toBeGreaterThan(0)
     // Automatic lists cloud before local regardless of which one is in use.
@@ -227,27 +251,27 @@ describe('preferences', () => {
     await waitFor(() => { expect(b.props.configure).toHaveBeenCalledWith({ providerId: 'auto' }) })
   })
 
-  it('offers every recognized language and explains when the active provider detects instead', async () => {
-    const b = preferences(catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, language: 'es' }))
+  it('offers the languages some provider lists and notes that cloud recognition detects the language', async () => {
+    const b = preferences(catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, language: 'zh' }))
     const language = screen.getByLabelText<HTMLSelectElement>(zh.language)
     expect(language.disabled).toBe(false)
-    expect(language.value).toBe('es')
-    expect(within(language).getAllByRole('option').map(option => option.getAttribute('value')))
-      .toEqual(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt', 'yue', 'ko'])
-    expect(within(language).getAllByRole('option').map(option => option.textContent).slice(0, 5))
-      .toEqual([zh.auto, zh.zh, zh.en, zh.ja, zh.es])
-    expect(screen.queryByText(/将自动识别/)).toBeNull()
-    expect(screen.getByText(zh['selection.signedIn'])).toBeTruthy()
-    fireEvent.change(language, { target: { value: 'fr' } })
-    await waitFor(() => { expect(b.props.configure).toHaveBeenCalledWith({ language: 'fr' }) })
+    expect(language.value).toBe('zh')
+    expect(within(language).getAllByRole('option').map(option => option.getAttribute('value'))).toEqual(['auto', 'zh', 'en', 'ja', 'yue', 'ko'])
+    expect(within(language).getAllByRole('option').map(option => option.textContent).slice(0, 3)).toEqual([zh.auto, zh.zh, zh.en])
+    expect(screen.getByText(zh['languageFallback.cloud'])).toBeTruthy()
+    fireEvent.change(language, { target: { value: 'en' } })
+    await waitFor(() => { expect(b.props.configure).toHaveBeenCalledWith({ language: 'en' }) })
     expect(cardIds()).toEqual([CLOUD, LOCAL])
     expect(screen.getByText(zh.cloudReady)).toBeTruthy()
-    act(() => { b.store.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: LOCAL, language: 'es' }) }) })
-    expect(screen.getByLabelText<HTMLSelectElement>(zh.language).value).toBe('es')
-    expect(screen.getByText('本地识别不支持西班牙语，将自动识别')).toBeTruthy()
-    expect(screen.queryByText(zh['selection.signedIn'])).toBeNull()
+    act(() => { b.store.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: LOCAL, language: 'zh' }) }) })
+    expect(screen.queryByText(zh['languageFallback.cloud'])).toBeNull()
+    expect(screen.queryByText(zh.cloudBilling)).toBeNull()
     expect(cardIds()).toEqual([LOCAL])
-    act(() => { b.store.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: CLOUD }) }) })
+    act(() => { b.store.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: LOCAL, language: 'es' }) }) })
+    expect(screen.getByText('本地识别不支持西班牙语，将自动识别')).toBeTruthy()
+    act(() => { b.store.set({ connected: true, error: null, catalog: catalog({ cloud: { phase: 'ready' }, local: { phase: 'ready' }, mode: 'explicit', selected: CLOUD, language: 'auto' }) }) })
+    expect(screen.queryByText(zh['languageFallback.cloud'])).toBeNull()
+    expect(screen.getByText(zh.cloudBilling)).toBeTruthy()
     expect(cardIds()).toEqual([CLOUD])
   })
 

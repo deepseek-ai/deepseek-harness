@@ -1,36 +1,33 @@
-/** Registration, account-driven readiness and authentication, retries, and disposal of the cloud recognizer. */
+/** Registration, credential order and readiness through `ctx.deepseekAuth`, failure classes, and disposal. */
 import { Context } from '@deepseek-ai/cordis'
+import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
-import type { AccountUpdate, AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import SpeechToText, { SpeechTranscriptionError } from '@deepseek-ai/dsh-experimental-speech-to-text'
 import type { SpeechPreparationState, SpeechProviderId } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import * as Provider from '../src/index.ts'
-import { json, recognized, refused, serviceDouble, wave, type Reply } from './service-double.ts'
+import { failed, recognized, serviceDouble, silent, wave } from './service-double.ts'
 
 const id = 'deepseek-asr' as SpeechProviderId
+const KEY = credentialRef('DEEPSEEK_API_KEY')
 
-/** Account service double whose stored-account state the test switches. */
-function account(initial: AccountView['status'], token: string | null = 'fixture-account-token') {
-  let status = initial
-  const wake = new Set<() => void>()
+/** Account service stand-in whose sign-in the test switches. */
+function account(signedIn: boolean) {
+  let current = signedIn, revoked = new AbortController()
   const rejected: string[] = []
   const service = {
-    async *watch(signal: AbortSignal): AsyncIterable<AccountUpdate> {
-      while (!signal.aborted) {
-        yield { type: 'snapshot', state: { status, links: { usageUrl: '', topUpUrl: '' }, attempt: null } }
-        await new Promise<void>((resolve) => { wake.add(resolve); signal.addEventListener('abort', () => { resolve() }, { once: true }) })
-      }
+    resolveRequestCredential: async (url: string) => {
+      if (!current) return undefined
+      return { headers: { 'x-dsh-auth-token': 'account-token' }, revoked: revoked.signal,
+        reject: async () => { rejected.push(url); current = false } }
     },
-    resolveToken: vi.fn(async () => status === 'credential-stored' ? token ?? undefined : undefined),
-    rejectToken: vi.fn(async (value: string) => { rejected.push(value); set('signed-out') }),
   }
-  function set(next: AccountView['status']): void {
-    status = next
-    for (const resolve of wake) resolve()
-    wake.clear()
+  return {
+    service: service as Partial<DeepSeekAccount> as DeepSeekAccount, rejected,
+    signIn: () => { current = true },
+    signOut: () => { current = false; revoked.abort(); revoked = new AbortController() },
   }
-  return { service: service as Partial<DeepSeekAccount> as DeepSeekAccount, rejectToken: service.rejectToken, rejected, set }
 }
 
 /** Await a classified recognition failure so its code and diagnostic can be checked separately. */
@@ -42,188 +39,168 @@ async function rejection(pending: Promise<unknown>): Promise<SpeechTranscription
   throw new Error('expected a classified recognition failure')
 }
 
-async function host(setup: { account?: DeepSeekAccount } = {}) {
+interface Setup {
+  /** Deployment both kinds are connected to. */
+  readonly baseURL: string
+  readonly account?: DeepSeekAccount
+  /** Stored API keys by reference. */
+  readonly stored?: Record<string, string>
+  /** Settings of the connected account route; a throw marks the kind unresolved. */
+  readonly accountConnection?: () => { baseURL: string }
+  /** Credential store failure on every read. */
+  readonly storeFailure?: Error
+}
+
+async function host(setup: Setup) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(SpeechToText, { defaultProvider: 'auto', autoOrder: [id], language: 'zh' })
-  const removeAccount = setup.account === undefined ? undefined : ctx.provide('deepseekAccount', setup.account)
+  await ctx.plugin(SpeechToText, { defaultProvider: 'auto', autoOrder: [id], language: 'auto' })
+  const stored = new Map(Object.entries(setup.stored ?? {}))
+  const read = <T>(value: T): Promise<T> => setup.storeFailure === undefined ? Promise.resolve(value) : Promise.reject(setup.storeFailure)
+  ctx.provide('credentials', {
+    resolve: (ref: string) => read(stored.has(ref) ? { value: stored.get(ref) } : undefined),
+    describe: (ref: string) => read({ configured: (stored.get(ref)?.length ?? 0) > 0 }),
+  } as never)
+  if (setup.account !== undefined) ctx.provide('deepseekAccount', setup.account)
+  await ctx.plugin(DeepSeekAuth)
+  ctx.deepseekAuth.connect('account', 'deepseek-account', setup.accountConnection ?? (() => ({ baseURL: setup.baseURL })))
+  ctx.deepseekAuth.connect('api-key', 'deepseek-official', () => ({ baseURL: setup.baseURL, reference: KEY }))
+  const fiber = ctx.plugin(Provider, {})
+  await fiber
   const speech = ctx.get('speechToText')!
   const state = (): SpeechPreparationState | undefined => speech.snapshot().providers.find(row => row.id === id)?.preparation
-  return { ctx, speech, state, removeAccount }
+  const dictate = (audio = wave(64)) => speech.transcribe(speech.resolve({ audio }), new AbortController().signal)
+  return { ctx, speech, state, dictate, stored, fiber }
 }
 
-async function mount(ctx: Context, endpoint: string, config: object = {}) {
-  const fiber = ctx.plugin(Provider, { endpoint, allowLoopbackHttp: true, ...config })
-  await fiber
-  return fiber
-}
-
-async function dictate(speech: SpeechToText, pcmBytes = 100) {
-  return await speech.transcribe(speech.resolve({ audio: wave(pcmBytes) }), new AbortController().signal)
-}
-
-it('sends aligned PCM with the account token once a DeepSeek account is stored', async () => {
-  const { endpoint, requests } = await serviceDouble(recognized('你好'))
-  const { ctx, speech, state } = await host({ account: account('credential-stored').service })
-  await mount(ctx, endpoint)
+it('sends the WAV to /v1/tools/asr with the account sign-in first and reports the service duration', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('你好', 2000))
+  const { speech, state, dictate } = await host({ baseURL, account: account(true).service, stored: { [KEY]: 'sk-key' } })
   await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  expect(speech.snapshot().providers[0]).toMatchObject({ name: 'DeepSeek', location: 'cloud',
-    languages: ['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt', 'yue', 'ko'] })
-  expect(await dictate(speech)).toMatchObject({ text: '你好', audioSeconds: 100 / 32_000 })
-  const [sent] = requests
-  expect(sent!.headers['x-dsh-auth-token']).toBe('fixture-account-token')
-  expect(sent!.headers.cookie).toBeUndefined()
-  expect(sent!.headers['x-client-locale']).toBeUndefined()
-  expect(sent!.fields.get('format')).toBe('pcm')
-  expect(sent!.fields.get('audio_id')).toMatch(/^[0-9a-f-]{36}$/)
-  expect(sent!.fields.get('preferred_language')).toBe('zh')
-  expect(sent!.file.byteLength).toBe(128)
-})
-
-it('sends the preferred language and the client locale in the service spelling', async () => {
-  const { endpoint, requests } = await serviceDouble(recognized('ok'))
-  const { ctx, speech, state } = await host({ account: account('credential-stored').service })
-  await mount(ctx, endpoint, { languages: ['auto', 'es', 'es'] })
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  expect(speech.snapshot().providers[0]!.languages).toEqual(['auto', 'es'])
-  for (const [language, locale] of [['es', 'zh'], ['auto', 'pt-BR'], ['es', 'zh-Hant'], ['es', 'en'], ['es', 'pt'], ['es', 'ja']] as const) {
-    await speech.transcribe(speech.resolve({ audio: wave(64), language, locale }), new AbortController().signal)
-  }
-  expect(requests.map(request => [request.fields.get('preferred_language') ?? null, request.headers['x-client-locale']])).toEqual([
-    ['es', 'zh_CN'], [null, 'pt_BR'], ['es', 'zh_Hant'], ['es', 'en_US'], ['es', 'pt_BR'], ['es', 'ja'],
-  ])
+  expect(speech.snapshot().providers[0]).toMatchObject({ name: 'DeepSeek', location: 'cloud', languages: ['auto'] })
   expect(() => speech.resolve({ audio: wave(64), language: 'zh' })).toThrow('No registered speech provider supports language: zh')
+  const recording = wave(64)
+  expect(await dictate(recording)).toMatchObject({ text: '你好', audioSeconds: 2 })
+  const [sent] = requests
+  expect(sent!.path).toBe('/v1/tools/asr')
+  expect(sent!.headers['x-dsh-auth-token']).toBe('account-token')
+  expect(sent!.headers.authorization).toBeUndefined()
+  expect([sent!.filename, sent!.fileType]).toEqual(['recording.wav', 'audio/wav'])
+  expect(sent!.file).toEqual(recording)
 })
 
-it('follows sign-in without contacting the service and offers nothing to prepare', async () => {
-  const { endpoint, requests } = await serviceDouble(recognized('ok'))
-  const user = account('signed-out')
-  const { ctx, speech, state } = await host({ account: user.service })
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
-  await expect(dictate(speech)).rejects.toMatchObject({ code: 'sign-in-required' })
-  user.set('credential-stored')
+it('falls back to the API key without a signed-in account', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('key'))
+  const { state, dictate } = await host({ baseURL, account: account(false).service, stored: { [KEY]: 'sk-key' } })
   await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  speech.prepare(id)
-  await speech.cancelPreparation(id)
-  expect(state()).toEqual({ phase: 'ready' })
+  expect(await dictate(wave(3200))).toMatchObject({ text: 'key', audioSeconds: 0.1 })
+  expect(requests[0]!.headers.authorization).toBe('Bearer sk-key')
+  expect(requests[0]!.headers['x-dsh-auth-token']).toBeUndefined()
+})
+
+it('waits for a credential without contacting the service and follows credential and account-service changes', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('ok'))
+  const user = account(false)
+  const { ctx, state, dictate, stored } = await host({ baseURL })
+  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
+  expect((await rejection(dictate())).code).toBe('sign-in-required')
+  stored.set(KEY, 'sk-key')
+  ctx.emit('credentials/reference-updated', KEY)
+  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
+  stored.delete(KEY)
+  ctx.provide('unrelated', {})
+  ctx.provide('deepseekAccount', user.service)
+  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
+  user.signIn()
+  ctx.emit('credentials/record-updated', credentialKey('deepseek-account-platform', 'default'))
+  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
   expect(requests).toHaveLength(0)
 })
 
-it('resubmits the same audio_id once after a service failure and classifies the final outcome', async () => {
-  const unavailable: Reply = json(503, {})
-  const { endpoint, requests } = await serviceDouble(unavailable, recognized('retried'))
-  const { ctx, speech, state } = await host({ account: account('credential-stored').service })
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  expect((await dictate(speech)).text).toBe('retried')
-  expect(requests.map(request => request.fields.get('audio_id'))).toEqual([requests[0]!.fields.get('audio_id'), requests[0]!.fields.get('audio_id')])
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const again = await serviceDouble(unavailable)
-  const second = await host({ account: account('credential-stored').service })
-  await mount(second.ctx, again.endpoint)
-  await vi.waitFor(() => { expect(second.state()).toEqual({ phase: 'ready' }) })
-  await expect(dictate(second.speech)).rejects.toMatchObject({ code: 'service-error', message: 'Cloud recognition failed: HTTP 503' })
-  expect(again.requests).toHaveLength(2)
-  expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', '/api/v0/asr/transcribe failed (service-error): HTTP 503')
-  errors.mockRestore()
+it('stops at an account deployment whose settings do not resolve', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('ok'))
+  let failure: unknown = new Error('bad account settings')
+  const { speech, state, dictate } = await host({ baseURL, account: account(true).service, stored: { [KEY]: 'sk-key' },
+    accountConnection: () => { throw failure } })
+  await vi.waitFor(() => {
+    expect(state()).toEqual({ phase: 'failed', message: 'The DeepSeek account connection does not resolve: bad account settings' })
+  })
+  const unresolved = await rejection(dictate())
+  expect([unresolved.code, unresolved.message]).toEqual(['service-error', 'The DeepSeek account connection does not resolve: bad account settings'])
+  failure = 'settings offline'
+  speech.prepare(id)
+  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'failed', message: 'The DeepSeek account connection does not resolve: settings offline' }) })
+  expect(requests).toHaveLength(0)
 })
 
-it('does not retry classified failures and rejects oversized requests before sending', async () => {
+it('reports an unusable API key and propagates credential store failures', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('ok'))
+  const blank = await host({ baseURL, stored: { [KEY]: '   ' } })
+  await vi.waitFor(() => { expect(blank.state()).toEqual({ phase: 'ready' }) })
+  const unusable = await rejection(blank.dictate())
+  expect(unusable.code).toBe('api-key-invalid')
+  expect(unusable.message).toContain('DEEPSEEK_API_KEY is blank')
+  const locked = await host({ baseURL, storeFailure: new Error('keychain locked') })
+  await vi.waitFor(() => { expect(locked.state()).toEqual({ phase: 'failed', message: 'keychain locked' }) })
+  await expect(locked.dictate()).rejects.toThrow('keychain locked')
+  expect(requests).toHaveLength(0)
+})
+
+it('invalidates a rejected account sign-in and reports a rejected API key', async () => {
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
   onTestFinished(() => { errors.mockRestore() })
-  const { endpoint, requests } = await serviceDouble(refused(2))
-  const { ctx, speech, state } = await host({ account: account('credential-stored').service })
-  await mount(ctx, endpoint, { maxRequestBytes: 1000 })
+  const { baseURL, endpoint } = await serviceDouble(failed(401, 'Authentication Fails (invalid dsh token)'))
+  const user = account(true)
+  const signedIn = await host({ baseURL, account: user.service })
+  await vi.waitFor(() => { expect(signedIn.state()).toEqual({ phase: 'ready' }) })
+  const expired = await rejection(signedIn.dictate())
+  expect([expired.code, expired.message]).toEqual(['sign-in-required', 'The DeepSeek account sign-in was rejected (HTTP 401)'])
+  expect(user.rejected).toEqual([endpoint])
+  expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', '/v1/tools/asr rejected the account credential: HTTP 401')
+  const keyed = await host({ baseURL, stored: { [KEY]: 'sk-wrong' } })
+  await vi.waitFor(() => { expect(keyed.state()).toEqual({ phase: 'ready' }) })
+  const wrongKey = await rejection(keyed.dictate())
+  expect([wrongKey.code, wrongKey.message]).toEqual(['api-key-invalid', 'The DeepSeek API key was rejected (HTTP 401)'])
+  expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', '/v1/tools/asr rejected the api-key credential: HTTP 401')
+})
+
+it('ends a recognition when the account signs out and classifies service failures without retrying', async () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { errors.mockRestore() })
+  const hanging = await serviceDouble(silent)
+  const user = account(true)
+  const signedIn = await host({ baseURL: hanging.baseURL, account: user.service })
+  await vi.waitFor(() => { expect(signedIn.state()).toEqual({ phase: 'ready' }) })
+  const pending = rejection(signedIn.dictate())
+  await vi.waitFor(() => { expect(hanging.requests).toHaveLength(1) })
+  user.signOut()
+  expect(await pending).toMatchObject({ code: 'sign-in-required', message: 'The DeepSeek account signed out during recognition' })
+  const busy = await serviceDouble(failed(503, 'busy'))
+  const keyed = await host({ baseURL: busy.baseURL, stored: { [KEY]: 'sk-key' } })
+  await vi.waitFor(() => { expect(keyed.state()).toEqual({ phase: 'ready' }) })
+  expect(await rejection(keyed.dictate())).toMatchObject({ code: 'rate-limited', message: 'Cloud recognition failed: HTTP 503: busy' })
+  expect(busy.requests).toHaveLength(1)
+  expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', '/v1/tools/asr failed (rate-limited): HTTP 503: busy')
+})
+
+it('rejects malformed and oversized recordings before reading a credential', async () => {
+  const { baseURL, requests } = await serviceDouble(recognized('ok'))
+  const { ctx, speech, state } = await host({ baseURL, account: account(true).service })
   await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  await expect(dictate(speech)).rejects.toMatchObject({ code: 'rate-limited' })
-  expect(requests).toHaveLength(1)
-  const oversized = await rejection(dictate(speech, 2000))
-  expect(oversized.code).toBe('invalid-audio')
-  expect(oversized.message).toContain('the service accepts 1000')
   await expect(speech.transcribe(speech.resolve({ audio: new Uint8Array(8) }), new AbortController().signal))
     .rejects.toMatchObject({ code: 'invalid-audio' })
-  expect(requests).toHaveLength(1)
-})
-
-it('authenticates with the account token and invalidates exactly that token when the service rejects it', async () => {
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  onTestFinished(() => { errors.mockRestore() })
-  const { endpoint } = await serviceDouble(recognized('账号'), json(200, { code: 40003, msg: 'INVALID_TOKEN', data: null }))
-  const user = account('credential-stored')
-  const { ctx, speech, state } = await host({ account: user.service })
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  expect((await dictate(speech)).text).toBe('账号')
-  const expired = await rejection(dictate(speech))
-  expect(expired.code).toBe('sign-in-required')
-  expect(expired.message).toContain('code 40003')
-  expect(user.rejected).toEqual(['fixture-account-token'])
-  expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', '/api/v0/asr/transcribe rejected the account token: code 40003')
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
-  await expect(dictate(speech)).rejects.toMatchObject({ code: 'sign-in-required' })
-})
-
-it('keeps the service rejection when invalidating the account token fails', async () => {
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  onTestFinished(() => { errors.mockRestore() })
-  const { endpoint } = await serviceDouble(json(401, {}))
-  const user = account('credential-stored')
-  user.rejectToken.mockRejectedValueOnce(new Error('keychain locked'))
-  const { ctx, speech, state } = await host({ account: user.service })
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  await expect(dictate(speech)).rejects.toMatchObject({ code: 'sign-in-required' })
-})
-
-it('fails readiness and refuses recordings when a stored account does not authorize the endpoint origin', async () => {
-  const { endpoint, requests } = await serviceDouble(recognized('ok'))
-  const { ctx, speech, state } = await host({ account: account('credential-stored', null).service })
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => {
-    expect(state()).toEqual({ phase: 'failed', message: `The DeepSeek account does not release a token for ${new URL(endpoint).origin}` })
-  })
-  await expect(speech.transcribe(speech.resolve({ audio: wave(64), providerId: id }), new AbortController().signal))
-    .rejects.toMatchObject({ code: 'sign-in-required' })
+  const small = ctx.plugin(Provider, { providerId: 'deepseek-small', maxRequestBytes: 100 })
+  await small
+  await expect(speech.transcribe(speech.resolve({ audio: wave(64), providerId: 'deepseek-small' as SpeechProviderId }),
+    new AbortController().signal)).rejects.toMatchObject({ code: 'invalid-audio', message: 'Recording is 108 bytes; the service accepts 100' })
   expect(requests).toHaveLength(0)
-})
-
-it('requires sign-in without an account service and recovers when one appears or fails', async () => {
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  onTestFinished(() => { errors.mockRestore() })
-  const { endpoint } = await serviceDouble(recognized('ok'))
-  const { ctx, state } = await host()
-  await mount(ctx, endpoint)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
-  const removeAccount = ctx.provide('deepseekAccount', account('credential-stored').service)
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
-  removeAccount()
-  await vi.waitFor(() => { expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' }) })
-  let watched = 0
-  const failing = (failure: unknown) => ({ watch: (signal: AbortSignal) => (watched++, { [Symbol.asyncIterator]: () => ({
-    next: () => failure === undefined
-      ? new Promise<IteratorResult<AccountUpdate>>((_resolve, reject) => { signal.addEventListener('abort', () => { reject(new Error('aborted')) }) })
-      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- covers an account stream rejecting with a non-Error reason
-      : Promise.reject(failure),
-  }) }) }) as Partial<DeepSeekAccount> as DeepSeekAccount
-  const removeHanging = ctx.provide('deepseekAccount', failing(undefined))
-  await vi.waitFor(() => { expect(watched).toBe(1) })
-  removeHanging()
-  for (const [failure, message] of [[new Error('stream closed'), 'stream closed'], ['socket reset', 'socket reset']] as const) {
-    const remove = ctx.provide('deepseekAccount', failing(failure))
-    await vi.waitFor(() => { expect(errors).toHaveBeenCalledWith('[speech-to-text-deepseek]', 'account observation failed:', message) })
-    expect(state()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' })
-    remove()
-  }
-  expect(errors).toHaveBeenCalledTimes(2)
 })
 
 it('withdraws the registration and stops publishing when the plugin unloads', async () => {
-  const { endpoint } = await serviceDouble(recognized('ok'))
-  const { ctx, speech } = await host({ account: account('credential-stored').service })
-  const fiber = await mount(ctx, endpoint)
+  const { baseURL } = await serviceDouble(recognized('ok'))
+  const { speech, fiber, dictate } = await host({ baseURL, account: account(true).service })
   expect(speech.listProviders().map(row => row.id)).toEqual([id])
   await fiber.dispose()
   expect(speech.listProviders()).toEqual([])
-  expect(() => speech.resolve({ audio: wave(100) })).toThrow('unavailable')
+  expect(() => dictate()).toThrow('unavailable')
 })

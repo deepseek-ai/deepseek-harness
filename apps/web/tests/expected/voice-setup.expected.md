@@ -1,7 +1,7 @@
 - dialog "Prepare speech recognition":
   - heading "Prepare speech recognition" [level=2]
   - button "Cancel"
-  - paragraph: Sign in to DeepSeek to use cloud recognition without downloading models. You can also download a local model so recordings stay on the machine running DSH.
+  - paragraph: Sign in to DeepSeek or configure an API key to use cloud recognition without downloading models. You can also download a local model so recordings stay on the machine running DSH.
   - button "Later"
   - button "Download local model"
   - button "Sign in to DeepSeek"

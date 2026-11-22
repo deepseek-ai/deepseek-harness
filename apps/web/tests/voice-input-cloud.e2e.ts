@@ -1,6 +1,7 @@
 // Real-composition acceptance for cloud dictation. The scaffold boots the shipped Web Loader tree with the voice
-// bundle; one loopback double plays the DeepSeek Platform for sign-in and the One-Shot recognition endpoint, so the
-// real account provider, speech service, cloud recognizer, Remote and browser UI run end to end.
+// bundle; one loopback double plays the DeepSeek Platform for sign-in and the account deployment's `/v1/tools/asr`,
+// so the real account service, DeepSeek authentication, speech service, cloud recognizer, Remote and browser UI run
+// end to end.
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,11 +24,10 @@ const TEXT = 'Summarize the latest pull request'
 /** One recognition request as the double received it. */
 interface RecognitionRequest {
   readonly token: string | undefined
-  readonly format: string | undefined
-  readonly audioId: string | undefined
-  readonly language: string | undefined
-  readonly locale: string | undefined
-  readonly pcmBytes: number
+  readonly authorization: string | undefined
+  readonly fields: readonly string[]
+  readonly header: string
+  readonly bytes: number
 }
 
 /** Loopback Platform and recognition double; `rejectNext` makes the next recognition reject the account token. */
@@ -66,15 +66,18 @@ async function mockServices() {
           reply({ token: TOKEN, authorized_url: `${origin}/dsh/authorized` })
           return
         }
-        if (req.method === 'POST' && url.pathname === '/api/v0/asr/transcribe') {
+        if (req.method === 'POST' && url.pathname === '/v1/tools/asr') {
           const form = await new Response(body, { headers: { 'content-type': req.headers['content-type'] ?? '' } }).formData()
-          const file = form.get('file'), format = form.get('format'), audioId = form.get('audio_id'), language = form.get('preferred_language')
-          const token = req.headers['x-dsh-auth-token'], locale = req.headers['x-client-locale']
-          recognitions.push({ token: typeof token === 'string' ? token : undefined, format: typeof format === 'string' ? format : undefined,
-            audioId: typeof audioId === 'string' ? audioId : undefined, language: typeof language === 'string' ? language : undefined,
-            locale: typeof locale === 'string' ? locale : undefined, pcmBytes: file instanceof File ? file.size : -1 })
-          if (control.rejectNext) { control.rejectNext = false; reply(null, 40003); return }
-          reply({ text: TEXT, audio_id: audioId })
+          const file = form.get('file')
+          const audio = file instanceof File ? Buffer.from(await file.arrayBuffer()) : Buffer.alloc(0)
+          const token = req.headers['x-dsh-auth-token']
+          recognitions.push({ token: typeof token === 'string' ? token : undefined, authorization: req.headers.authorization,
+            fields: [...form.keys()], header: audio.toString('ascii', 0, 4), bytes: audio.length })
+          res.writeHead(control.rejectNext ? 401 : 200, { 'content-type': 'application/json' })
+          if (control.rejectNext) {
+            control.rejectNext = false
+            res.end(JSON.stringify({ error: { message: 'Authentication Fails (invalid dsh token)', type: 'authentication_error' } }))
+          } else res.end(JSON.stringify({ request_id: 'cloud', text: TEXT, duration_ms: 300 }))
           return
         }
         if (req.headers['x-dsh-auth-token'] !== TOKEN) { res.writeHead(401).end(); return }
@@ -126,7 +129,7 @@ describe.skipIf(MODE === 'record')('web e2e: cloud dictation after DeepSeek sign
     const input = page.locator('[data-composer-input]')
 
     await page.getByRole('button', { name: 'Open voice input setup', exact: true }).click()
-    const prompt = page.getByRole('dialog', { name: 'Cloud recognition requires a DeepSeek account', exact: true })
+    const prompt = page.getByRole('dialog', { name: 'Cloud recognition requires a DeepSeek account or API key', exact: true })
     await prompt.waitFor()
     await compareOrRefreshGolden(SIGN_IN_EXPECTED, await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), MODE)
     const tab = context.waitForEvent('page')
@@ -150,11 +153,9 @@ describe.skipIf(MODE === 'record')('web e2e: cloud dictation after DeepSeek sign
     await expect.poll(() => input.innerText(), { timeout: 30_000 }).toBe(TEXT)
     expect(services.recognitions).toHaveLength(1)
     const [first] = services.recognitions
-    // The default automatic language sends no preference; the English UI is sent as the service's locale.
-    expect(first).toMatchObject({ token: TOKEN, format: 'pcm', language: undefined, locale: 'en_US' })
-    expect(first!.audioId).toMatch(/^[0-9a-f-]{36}$/)
-    expect(first!.pcmBytes % 32).toBe(0)
-    expect(first!.pcmBytes).toBeGreaterThan(0)
+    // The account sign-in authenticates the request, and the recording travels unchanged as the only form field.
+    expect(first).toMatchObject({ token: TOKEN, authorization: undefined, fields: ['file'], header: 'RIFF' })
+    expect(first!.bytes).toBeGreaterThan(44)
 
     services.control.rejectNext = true
     await mic.click()

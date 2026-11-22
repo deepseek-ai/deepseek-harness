@@ -151,7 +151,8 @@ export function VoicePreparation({ useSpeechReadiness, useAccountSignIn, signIn,
   }
   const selected = selectedProvider(catalog)
   const cloud = catalog?.providers.find(provider => provider.location === 'cloud')
-  const signedIn = cloud !== undefined && cloud.preparation.phase !== 'unavailable'
+  // Automatic can pick the cloud provider, so its cost and guide show with Automatic as with an explicit cloud choice.
+  const cloudBilled = cloud !== undefined && (catalog?.selection.mode === 'auto' || selected?.location === 'cloud')
   // Key order is the menu order: automatic detection, the UI languages, then the remaining recognition languages.
   const languageNames: Readonly<Record<string, string>> = {
     auto: props.t('auto'), zh: props.t('zh'), en: props.t('en'), ja: props.t('ja'), es: props.t('es'), fr: props.t('fr'), de: props.t('de'), ru: props.t('ru'), pt: props.t('pt'), yue: props.t('yue'), ko: props.t('ko'),
@@ -174,8 +175,10 @@ export function VoicePreparation({ useSpeechReadiness, useAccountSignIn, signIn,
       </select></label>
       {selected && <p className={css.selectionHint} role="status">
         <span>{props.t('selection.current', { name: providerLabel(selected, props.t) })}</span>
-        {catalog.selection.mode === 'auto' && cloud !== undefined
-          && <span className={css.metric}>{props.t(signedIn ? 'selection.signedIn' : 'selection.signedOut')}</span>}
+      </p>}
+      {cloudBilled && <p className={css.billing}>
+        <span>{props.t('cloudBilling')}</span>
+        <a className={css.link} href={props.t('cloudGuideUrl')} target="_blank" rel="noopener noreferrer">{props.t('cloudGuide')}</a>
       </p>}
       <label>{props.t('language')}<select value={catalog.selection.language} disabled={!readiness.connected || saving}
         onChange={(event) => { void configure({ language: event.target.value }) }}>

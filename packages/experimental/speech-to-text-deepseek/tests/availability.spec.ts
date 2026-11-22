@@ -23,11 +23,15 @@ it('publishes only the latest inspection and nothing after disposal', async () =
   expect(readiness.snapshot()).toEqual({ phase: 'unavailable', reason: 'sign-in-required' })
 })
 
-it('publishes inspection failures as failed readiness', async () => {
+it('publishes inspection failures as failed readiness and re-inspects on prepare', async () => {
   const errors = [new Error('credential store locked'), 'store offline']
-  const readiness = new CloudReadiness(async () => { throw errors.shift() })
-  await readiness.account(true)
-  expect(readiness.snapshot()).toEqual({ phase: 'failed', message: 'credential store locked' })
+  let inspections = 0
+  const readiness = new CloudReadiness(async () => { inspections++; throw errors.shift() })
   await readiness.refresh()
+  expect(readiness.snapshot()).toEqual({ phase: 'failed', message: 'credential store locked' })
+  readiness.prepare()
+  await readiness.cancel()
+  await Promise.resolve()
+  expect(inspections).toBe(2)
   expect(readiness.snapshot()).toEqual({ phase: 'failed', message: 'store offline' })
 })

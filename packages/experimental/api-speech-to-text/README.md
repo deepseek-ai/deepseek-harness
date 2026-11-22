@@ -27,7 +27,7 @@ The `speech` Remote connects browser recordings to `ctx.speechToText`. It expose
 
 Compose with the speech Service Definition and Typert. `maxAudioBytes` and `maxDurationSeconds` limit accepted recordings. The browser UI mounts this package’s generated `/remote` contribution when enabled.
 
-A provider failure becomes `speech/transcription-failed`; when the provider throws `SpeechTranscriptionError`, the details carry its `SpeechFailureCode` as `code`, and `reason` keeps the Host diagnostic. An optional `locale` carries the Client's UI language; a value that is not a language tag fails as `gateway/bad-request` before recognition.
+A provider failure becomes `speech/transcription-failed`; when the provider throws `SpeechTranscriptionError`, the details carry its `SpeechFailureCode` as `code`, and `reason` keeps the Host diagnostic.
 
 `prepare(providerId, { downloadSource })` forwards one advertised source to the provider; omission keeps its configured policy. The catalog carries `downloadSources` for the picker. The provider rejects unavailable choices and changes to an active task’s source.
 

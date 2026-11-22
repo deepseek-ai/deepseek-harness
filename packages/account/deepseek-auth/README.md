@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-deepseek-auth` authenticates requests to DeepSeek APIs through `ctx.deepseekAuth`. A consumer names the credential kinds its API accepts, the API key, the account sign-in, or both, and the billing its settings choose. The service orders the kinds, binds each to the deployment its credential belongs to, and releases the headers of the first kind that has a credential. The DeepSeek model routes, the Search and Fetch APIs, and Messages search use it. It stores nothing: keys come from the credential store or the launch environment, and the sign-in from the account service.
+`dsh-deepseek-auth` authenticates requests to DeepSeek APIs through `ctx.deepseekAuth`. A consumer names the credential kinds its API accepts, the API key, the account sign-in, or both, and the billing its settings choose. The service orders the kinds, binds each to the deployment its credential belongs to, and releases the headers of the first kind that has a credential. The DeepSeek model routes, the Search and Fetch APIs, Messages search, and the experimental speech recognition provider use it. It stores nothing: keys come from the credential store or the launch environment, and the sign-in from the account service.
 
 ## Table of Contents
 

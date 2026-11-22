@@ -53,7 +53,7 @@ function registerUi(ctx: Context): void {
       return recording
     },
     transcribe: async (request, signal) =>
-      await ctx.remote.speech.transcribe({ ...request, locale: ctx.locale.getSnapshot().active }, signal),
+      await ctx.remote.speech.transcribe(request, signal),
     configure: async (patch) => { const result = await ctx.remote.speech.configure(patch); if (!result.ok) throw result.error },
     prepare: async (providerId, options) => {
       const result = await ctx.remote.speech.prepare(providerId, options); if (!result.ok) throw result.error

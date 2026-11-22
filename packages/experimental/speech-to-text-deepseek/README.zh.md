@@ -1,5 +1,5 @@
 ---
-description: "使用 DeepSeek One-Shot 云端服务识别完整录音。"
+description: "使用 DeepSeek 语音识别接口识别完整录音，以 DeepSeek 账号或 API Key 鉴权。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-此 Provider 向 `speech-to-text` 注册 `deepseek-asr`，把每段完整录音以 16 kHz 单声道 PCM16 裸数据发送到 DeepSeek One-Shot 转写接口。它使用已登录的 DeepSeek 账号鉴权，只有存在已保存的账号时才接受录音。启用时不访问识别服务。
+此 Provider 向 `speech-to-text` 注册 `deepseek-asr`，把每段完整录音发送到 DeepSeek 语音识别接口 `/v1/tools/asr`。[`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 为每次请求提供鉴权：优先使用 DeepSeek 账号登录，没有登录时使用 DeepSeek API Key，因此只要配置了其中一种就接受录音。启用时不访问任何服务。
 
 ## 目录
 
@@ -25,9 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-[语音输入 Bundle](../voice-input-bundle/README.zh.md) 启用这一行。`endpoint` 是完整的转写 URL，默认为 `https://harness.deepseek.com/api/v0/asr/transcribe`。必须使用 HTTPS；`allowLoopbackHttp: true` 只允许以明文 HTTP 访问本机回环地址上的服务替身。endpoint 不能包含凭据、query 或 fragment。`timeoutMs`（30,000 毫秒）、`maxRequestBytes`（3,932,160）、`maxDurationSeconds`（120）和 `maxResponseBytes`（65,536）限制单次请求。
+[语音输入 Bundle](../voice-input-bundle/README.zh.md) 启用这一行，不需要配置：endpoint 与凭据都来自 `ctx.deepseekAuth`，所有挂载了 DeepSeek 模型路由的组合都会挂载它。`timeoutMs`（30,000 毫秒）限制包括响应正文在内的整次请求；`maxRequestBytes`（8 MiB）、`maxDurationSeconds`（120）和 `maxResponseBytes`（65,536）限制单次请求。
 
-与账号模型路由相同，每次请求都把 DeepSeek 账号服务为 `endpoint` 发放的令牌作为 `x-dsh-auth-token` 发送。账号服务只为它允许的 origin 发放令牌，其中包括它的 `harnessOrigin`，默认是 `https://harness.deepseek.com`；因此自定义 `endpoint` 需要配置相应的 `harnessOrigin`；已保存账号却拿不到该 endpoint 的令牌时，就绪状态报告失败，而不是要求登录。服务拒绝令牌（HTTP 401、code 40002 或 40003）时，只作废被拒绝的那个令牌，账号随之退出登录，失败提示用户重新登录。
+Provider 先向 `ctx.deepseekAuth` 请求账号登录凭据，再请求 API Key，两者都绑定到该凭据所属部署 origin 下的 `/v1/tools/asr`：账号路由的 base URL 及账号服务为它发放的 token，或 API Key 路由的 base URL 与 key；没有 API Key 路由时为发往 `https://api.deepseek.com` 的 `DEEPSEEK_API_KEY`。配置了任一种凭据时处于就绪状态，两者都没有时处于带 `sign-in-required` 的 `unavailable`。部署的 base URL 指向没有 `/v1/tools/asr` 的服务时，每次录音都以 `service-unavailable` 失败。这一计费顺序与 Search、Fetch 接口不同，后两者在对话之外先用 API Key。
+
+云端识别按音频时长向完成鉴权的凭据计费；Bundle 详情按界面语言链接 DeepSeek 的语音识别指南。
 
 -----
 
@@ -37,11 +39,11 @@ kind: "package-reference"
 <details>
 <summary>维护者信息 — 点击展开</summary>
 
-就绪状态跟随账号服务的 `watch()` 流；以最新一次检查为准，卸载后不再发布。没有账号服务或没有已保存账号时，Provider 处于带 `sign-in-required` 的 `unavailable`，自动选择会跳过它。`prepare()` 只重新检查；没有需要下载或取消的资源。
+凭据记录或引用变化、账号服务挂载或移除、调用 `prepare()` 时都会重新检查就绪状态；以最新一次检查为准，卸载后不再发布。某种凭据的路由配置无法解析时发布 `failed`，录音也在此停止并报告 `service-error`，与 `authorize()` 一致。没有需要下载或取消的资源。
 
-录音先按规范 WAV 校验，去掉 44 字节头，再补零到 32 字节的整数倍（最多 1 毫秒静音），因为服务拒绝其他长度的裸 PCM。multipart 请求体包含 `file`、`format=pcm` 和新生成的 `audio_id`；发送前检查完整长度。`languages`（默认 `auto`、`zh`、`en`、`ja`、`es`、`fr`、`de`、`ru`、`pt`、`yue`、`ko`）列出服务的语言代码，必须包含 `auto`。`auto` 以外的已列出提示作为 `preferred_language` 发送；`auto` 不发送。客户端的界面语言按服务的写法作为 `x-client-locale` 发送：连字符换成下划线，单独的 `zh`、`en`、`pt` 补上地区 `CN`、`US`、`BR`。服务综合这两个值匹配语言。请求拒绝重定向，令牌不会随重定向转发。
+录音先按规范 WAV 校验，确认时长不超过 `maxDurationSeconds`、大小不超过 `maxRequestBytes`，再原样作为唯一的 multipart 字段 `file` 发送。请求体按字节编码而不使用 `FormData`，因为上传被提前取消时，undici 的 `FormData` 写入流程会产生未处理的 rejection。服务自动判断语言，所以 Provider 只声明 `auto`。请求拒绝重定向。
 
-服务按 `audio_id` 去重，因此在没有收到响应、HTTP 5xx 或 `biz_code 3` 时，原样重新提交一次。其他结果都是最终结果：`biz_data.code` 6 和 10 返回空文本；1、2、4、7、8 分别映射为 `service-unavailable`、`rate-limited`、`invalid-audio` 和 `timeout`；11（`daily_limit_reached`，当日识别时长额度已用完）映射为 `quota-exceeded`；HTTP 429 映射为 `rate-limited`；其他状态码、code 和格式错误的响应映射为 `service-error`。失败时抛出 `SpeechTranscriptionError`，并以 `[speech-to-text-deepseek]` 前缀记录 endpoint 路径、状态码和返回码，从不记录音频、令牌或响应正文。
+服务没有幂等键且按时长计费，所以任何请求都不重试。HTTP 401 只按状态码分类，不依赖读取响应正文：账号登录凭据通过授权的 `reject()` 作废，失败为 `sign-in-required`；API Key 失败为 `api-key-invalid`，配置的 key 无法使用时同样如此。400 与 413 映射为 `invalid-audio`，402 为 `quota-exceeded`，404 及没有收到响应的请求为 `service-unavailable`，408 与 504 为 `timeout`，429 与 503 为 `rate-limited`，其他状态码或格式错误的正文为 `service-error`。请求期间账号退出登录时，请求以 `sign-in-required` 结束。失败时抛出 `SpeechTranscriptionError`，并以 `[speech-to-text-deepseek]` 前缀记录 endpoint 路径、状态码和服务返回的消息，从不记录音频或凭据。
 
 </details>
 
@@ -67,7 +69,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只支持对完整录音做 One-Shot 转写，不使用 WebSocket 流式接口和 `fetch_cached`。录音不能超过 120 秒。
+- 只支持对完整录音做一次性识别，不支持流式识别，也不能指定语言。录音不能超过 120 秒或 8 MiB。服务拒绝账号登录凭据时，会在读完整段录音之前断开连接，因此这次拒绝表现为 `service-unavailable`，登录凭据要等模型请求或较短的请求收到 HTTP 401 后才会作废。
 
 -----
 
@@ -77,6 +79,6 @@ kind: "package-reference"
 <details>
 <summary>维护者信息 — 点击展开</summary>
 
-测试都使用本机回环服务替身：Provider 测试使用 `tests/service-double.ts`，`apps/web/tests/voice-input-cloud.e2e.ts` 在发布的组合中验证浏览器登录与听写。没有测试访问生产接口，因为其账号令牌只能通过交互式浏览器登录获得。
+测试都使用本机回环服务替身：Provider 测试用 `tests/service-double.ts` 配合真实的 `DeepSeekAuth`，`apps/web/tests/voice-input-cloud.e2e.ts` 在发布的组合中验证浏览器登录与听写。没有测试访问生产接口，因为其账号令牌只能通过交互式浏览器登录获得。
 
 </details>

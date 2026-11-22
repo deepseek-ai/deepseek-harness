@@ -1179,7 +1179,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-api-speech-to-text`
 
 - `inject`: `speechToText` · `typert`
-- `source`: [`packages/experimental/api-speech-to-text/src/index.ts:23`](../packages/experimental/api-speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/api-speech-to-text/src/index.ts:20`](../packages/experimental/api-speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Limits applied before decoding or calling a provider. */
@@ -1578,7 +1578,7 @@ export interface InspectorOptions {
 ## `@deepseek-ai/dsh-experimental-speech-to-text`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/speech-to-text/src/index.ts:27`](../packages/experimental/speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/speech-to-text/src/index.ts:31`](../packages/experimental/speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Live selection read before a transcription starts; `configure()` writes it through the profile. */
@@ -3896,28 +3896,22 @@ export type PythonEnvironment = 'workspace-dependencies' | 'user'
 
 ## `@deepseek-ai/dsh-speech-to-text-deepseek`
 
-- `inject`: `speechToText`
+- `inject`: `speechToText` · `deepseekAuth`
 - `source`: [`packages/experimental/speech-to-text-deepseek/src/config.ts:7`](../packages/experimental/speech-to-text-deepseek/src/config.ts)
 
 ```ts config-catalog
-/** Endpoint and service limits; requests authenticate with the DeepSeek account token released for the endpoint. */
+/** Registration id and the limits of one recognition request; `ctx.deepseekAuth` supplies the endpoint and credential. */
 export interface Config {
   /** Unique registration id; `speech-to-text` selects this exact id. */
   providerId: string
-  /** Complete One-Shot transcription URL. */
-  endpoint: string
-  /** Permit plain HTTP to a loopback endpoint, for local service doubles. */
-  allowLoopbackHttp: boolean
-  /** Deadline for one request attempt, including its response body. */
+  /** Deadline for the request, including its response body. */
   timeoutMs: number
-  /** Maximum multipart request bytes the service accepts. */
+  /** Largest recording, in bytes, sent to the service; the service rejects files over 8 MiB. */
   maxRequestBytes: number
-  /** Maximum recording duration the service accepts. */
+  /** Longest recording, in seconds, sent to the service; the service rejects recordings over 120 seconds. */
   maxDurationSeconds: number
   /** Maximum response body bytes read from the service. */
   maxResponseBytes: number
-  /** Language codes the service recognizes, sent as `preferred_language`; `auto` sends none and must be listed. */
-  languages: string[]
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->

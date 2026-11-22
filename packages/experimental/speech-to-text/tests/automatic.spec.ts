@@ -1,4 +1,4 @@
-/** Automatic provider preference, availability-driven routing, and the auto-only language rule. */
+/** Automatic provider preference, readiness-driven routing, and the language rules. */
 import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import SpeechToText from '../src/index.ts'
@@ -49,7 +49,8 @@ it('routes automatic selection to the first available provider and follows avail
   const ctx = new Context()
   try {
     const { speech } = await mounted(ctx, { defaultProvider: 'auto', autoOrder: ['cloud', 'local'], language: 'zh' })
-    expect(speech.snapshot().selection).toEqual({ mode: 'auto', providerId: 'cloud', language: 'zh' })
+    // No registered provider lists the saved hint yet, so it is reported as automatic detection.
+    expect(speech.snapshot().selection).toEqual({ mode: 'auto', providerId: 'cloud', language: 'auto' })
     const cloud = provider('cloud', ['auto'], { phase: 'unavailable', reason: 'sign-in-required' })
     const local = provider('local', ['auto', 'zh'], { phase: 'unprepared' })
     speech.register(cloud.value)
@@ -69,6 +70,24 @@ it('routes automatic selection to the first available provider and follows avail
   } finally { await ctx.fiber.dispose() }
 })
 
+it('prefers a provider that records now over an earlier one that needs preparation, and skips failed ones', async () => {
+  const ctx = new Context()
+  try {
+    const { speech } = await mounted(ctx, { defaultProvider: 'auto', autoOrder: ['local', 'cloud'], language: 'auto' })
+    const local = provider('local', ['auto'], { phase: 'unprepared' }), cloud = provider('cloud', ['auto'], { phase: 'ready' })
+    speech.register(local.value); speech.register(cloud.value)
+    expect(speech.snapshot().selection.providerId).toBe('cloud')
+    cloud.set({ phase: 'failed', message: 'settings do not resolve' })
+    expect(speech.snapshot().selection.providerId).toBe('local')
+    local.set({ phase: 'failed', message: 'download failed' })
+    expect(speech.snapshot().selection.providerId).toBe('local')
+    for (const phase of ['standby', 'waking'] as const) {
+      cloud.set(phase === 'standby' ? { phase } : { phase, startedAt: 0 })
+      expect(speech.snapshot().selection.providerId).toBe('cloud')
+    }
+  } finally { await ctx.fiber.dispose() }
+})
+
 it('saves any language some provider lists and gives each provider auto for hints it does not list', async () => {
   const ctx = new Context()
   try {
@@ -78,16 +97,40 @@ it('saves any language some provider lists and gives each provider auto for hint
     await expect(speech.configure({ providerId: 'auto', language: 'fr' })).rejects.toThrow('No registered speech provider supports language: fr')
     await speech.configure({ providerId: 'auto', language: 'es' })
     expect(speech.snapshot().selection).toEqual({ mode: 'auto', providerId: 'cloud', language: 'es' })
-    expect(speech.resolve({ audio, locale: 'pt-BR' })).toEqual({ provider: cloud.value, audio, language: 'es', locale: 'pt-BR' })
+    expect(speech.resolve({ audio })).toEqual({ provider: cloud.value, audio, language: 'es' })
     expect(speech.resolve({ audio, providerId: local.value.info.id })).toEqual({ provider: local.value, audio, language: 'auto' })
     expect(() => speech.resolve({ audio, language: 'fr' })).toThrow('No registered speech provider supports language: fr')
-    await speech.transcribe(speech.resolve({ audio, locale: 'ja' }), new AbortController().signal)
-    expect(cloud.transcribe).toHaveBeenLastCalledWith({ audio, language: 'es', locale: 'ja' }, expect.any(AbortSignal))
+    await speech.transcribe(speech.resolve({ audio }), new AbortController().signal)
+    expect(cloud.transcribe).toHaveBeenLastCalledWith({ audio, language: 'es' }, expect.any(AbortSignal))
     await speech.transcribe(speech.resolve({ audio, providerId: local.value.info.id }), new AbortController().signal)
     expect(local.transcribe).toHaveBeenLastCalledWith({ audio, language: 'auto' }, expect.any(AbortSignal))
     await speech.configure({ providerId: 'local' as SpeechProviderId })
     expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'local', language: 'es' })
     expect(writes).toEqual([{ defaultProvider: 'auto', language: 'es' }, { defaultProvider: 'local' }])
+  } finally { await ctx.fiber.dispose() }
+})
+
+it('treats a provider without preparation as ready to record', async () => {
+  const ctx = new Context()
+  try {
+    const { speech } = await mounted(ctx, { defaultProvider: 'auto', autoOrder: ['local', 'plain'], language: 'auto' })
+    speech.register(provider('local', ['auto'], { phase: 'unprepared' }).value)
+    speech.register({ info: { id: 'plain' as SpeechProviderId, name: 'plain', location: 'host-local', languages: ['auto'] }, transcribe: async () => result })
+    expect(speech.snapshot().selection.providerId).toBe('plain')
+  } finally { await ctx.fiber.dispose() }
+})
+
+it('falls back to automatic detection for a saved hint no registered provider lists', async () => {
+  const ctx = new Context()
+  try {
+    const { speech } = await mounted(ctx, { defaultProvider: 'local', autoOrder: ['local'], language: 'es' })
+    const cloud = provider('cloud', ['auto', 'es']), local = provider('local', ['auto', 'zh'])
+    const removeCloud = speech.register(cloud.value)
+    speech.register(local.value)
+    expect(speech.snapshot().selection.language).toBe('es')
+    await removeCloud()
+    expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'local', language: 'auto' })
+    expect(speech.resolve({ audio })).toEqual({ provider: local.value, audio, language: 'auto' })
   } finally { await ctx.fiber.dispose() }
 })
 

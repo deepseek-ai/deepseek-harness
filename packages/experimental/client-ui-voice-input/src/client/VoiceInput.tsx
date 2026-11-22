@@ -58,6 +58,8 @@ interface ActiveRecording {
   readonly abort: AbortController
   readonly span: TokenSpan
   readonly selection: SpeechSelection
+  /** Whether the provider this recording was sent to processes audio in the cloud, fixed when recording starts. */
+  readonly cloud: boolean
   readonly maxDurationSeconds: number
   readonly maxAudioBytes: number
   phase: 'requesting' | 'recording' | 'transcribing'
@@ -77,7 +79,12 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange, cr
   const navigable = usePluginNavigation(present => present)
   const signInPresent = useAccountSignIn(present => present)
   const provider = selectedProvider(catalog), local = localProvider(catalog)
-  const usable = readiness.connected && canRecord(provider)
+  // A provider switch blocks recording until the catalog shows the new selection, so no recording reaches the old one.
+  const [switching, setSwitching] = useState<SpeechProviderId>()
+  useEffect(() => {
+    if (switching !== undefined && catalog?.selection.providerId === switching) setSwitching(undefined)
+  }, [switching, catalog])
+  const usable = readiness.connected && canRecord(provider) && switching === undefined
   const cloud = provider?.location === 'cloud'
   const [phase, setPhase] = useState<Phase>('idle'), [message, setMessage] = useState(''), [pending, setPending] = useState('')
   const [action, setAction] = useState<FeedbackAction>()
@@ -149,7 +156,7 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange, cr
     if (!catalog || !usable || locked || current.current) return
     const run = ++generation.current
     const active: ActiveRecording = { capture: createRecording(), abort: new AbortController(),
-      span: inputActions.captureInsertion(), selection: catalog.selection,
+      span: inputActions.captureInsertion(), selection: catalog.selection, cloud,
       maxDurationSeconds: catalog.maxDurationSeconds, maxAudioBytes: catalog.maxAudioBytes, phase: 'requesting' }
     current.current = active
     setMessage(''); setPending(''); setAction(undefined); setPhase('requesting')
@@ -171,10 +178,10 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange, cr
   }
   const guidance = voiceGuidance(catalog, readiness.connected)
   const useLocal = (target: SpeechProviderView): void => {
-    setSetupOpen(false); setAction(undefined); setPhase('idle')
+    setSetupOpen(false); setAction(undefined); setPhase('idle'); setSwitching(target.id)
     void configure({ providerId: target.id }).then(() => {
       if (target.preparation.phase === 'unprepared' && navigable) openSettings()
-    }, (failure: unknown) => { feedback(failureText(failure, t)) })
+    }, (failure: unknown) => { setSwitching(undefined); feedback(failureText(failure, t)) })
   }
   const requestSignIn = (): void => { setSetupOpen(false); setAction(undefined); setPhase('idle'); signIn() }
   if (!expanded) return <>
@@ -196,7 +203,7 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange, cr
       : <span className={css.activityMessage} role="status" title={pending || message}>
         {(phase === 'requesting' || phase === 'transcribing') && <StateDot state="ongoing" />}
         {phase === 'feedback' ? message : t(phase === 'requesting' ? 'requesting'
-          : provider?.preparation.phase === 'waking' ? 'wakingShort' : cloud ? 'transcribingCloud' : 'transcribingShort')}</span>}
+          : provider?.preparation.phase === 'waking' ? 'wakingShort' : current.current?.cloud === true ? 'transcribingCloud' : 'transcribingShort')}</span>}
     {phase === 'recording' && <Button type="button" className={css.roundButton} size="sm" aria-label={t('stop')}
       onClick={() => { void finish() }}><IconStopFillRegular size={14} /></Button>}
     {phase === 'feedback' && action !== undefined && <Button className={css.inlineAction} size="sm" type="button"

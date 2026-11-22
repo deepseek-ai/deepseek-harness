@@ -147,7 +147,7 @@ it('withdraws its Remote, localized slot and microphone captures on disposal', a
     const request = { providerId: 'local' as SpeechProviderId, audioBase64: '' }, signal = new AbortController().signal
     await actions.transcribe(request, signal)
     expect(b.configure).toHaveBeenCalledTimes(2)
-    expect(b.transcribe).toHaveBeenCalledWith({ ...request, locale: b.ctx.locale.getSnapshot().active }, signal)
+    expect(b.transcribe).toHaveBeenCalledWith(request, signal)
     await fiber.dispose()
     expect(dispose).toHaveBeenCalledOnce()
     expect(b.ctx.slots.entries('conversation.input.activity')).toHaveLength(0)

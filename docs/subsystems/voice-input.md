@@ -8,7 +8,7 @@ Experimental speech recognition has three roles: the [Service Definition](../../
 
 `SpeechProviderId` brands the registration identity. `SpeechProviderInfo` carries a display name, accepted `languages` hints and `host-local` or `cloud` processing location. `SpeechRequest` contains WAV bytes and optional provider/language selection; `resolve()` produces `SpeechSpec` with one captured provider instance. A missing provider or unsupported language fails; replacement or withdrawal invalidates resolved work. Audio never falls back to a different provider.
 
-`defaultProvider: auto` selects, before recording, the first registered `autoOrder` provider whose state is not `unavailable`. The bundle orders the [DeepSeek cloud provider](../../packages/experimental/speech-to-text-deepseek/README.md) before SenseVoice, so a signed-in DeepSeek account uses cloud recognition. The cloud provider stays `unavailable` with `sign-in-required` until an account is stored, authenticates like the account model route, and sends the saved language and the UI language to the service. A provider that does not list the saved language receives `auto`. Expected failures carry a `SpeechFailureCode` through the Remote for localized recovery.
+`defaultProvider: auto` selects, before recording, the first registered `autoOrder` provider that records without preparation, otherwise the first that is neither `unavailable` nor `failed`. The bundle orders the [DeepSeek cloud provider](../../packages/experimental/speech-to-text-deepseek/README.md) before SenseVoice, so a signed-in DeepSeek account or a configured DeepSeek API key uses cloud recognition. The cloud provider sends recordings to `/v1/tools/asr` with the credential `ctx.deepseekAuth` releases, the account sign-in before the API key, and stays `unavailable` with `sign-in-required` while neither is configured. The service detects the language itself, so the cloud provider lists only `auto`; a provider that does not list the saved language receives `auto`. Expected failures carry a `SpeechFailureCode` through the Remote for localized recovery.
 
 `SpeechProvider.transcribe()` accepts one complete `SpeechInput` and an `AbortSignal`. `Transcript` returns plain `text`, `audioSeconds` and `inferenceSeconds`. Providers honor cancellation and settle their work before deregistration completes. The local provider serializes calls, bounds its queue and manages its worker lifetime independently of Sessions.
 
@@ -148,9 +148,10 @@ prepare(id: SpeechProviderId, options?: SpeechPreparationOptions): void
 async cancelPreparation(id: SpeechProviderId): Promise<void>
 
 /**
- * Apply the saved selection and capture the provider. Missing providers and hints no registered provider lists fail
- * explicitly; the captured provider receives the hint when it lists it and `auto` otherwise.
- * @param request - complete recording, optional selection and the client's UI language.
+ * Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider
+ * lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the
+ * hint when it lists it and `auto` otherwise.
+ * @param request - complete recording and optional selection.
  * @returns provider-pinned input for transcribe().
  */
 resolve(request: SpeechRequest): SpeechSpec

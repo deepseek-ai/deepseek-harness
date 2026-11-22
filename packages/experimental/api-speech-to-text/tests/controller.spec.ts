@@ -65,18 +65,6 @@ it('rejects oversized, noncanonical, malformed and overlong audio without infere
   expect(recognize).not.toHaveBeenCalled()
 })
 
-it('forwards a well-formed client locale and rejects malformed tags before recognition', async () => {
-  const { api, recognize } = fixture()
-  await api.transcribe({ audioBase64: recording(), locale: 'pt-BR' }, new AbortController().signal)
-  const [input] = recognize.mock.lastCall!
-  expect([input.language, input.locale]).toEqual(['auto', 'pt-BR'])
-  for (const locale of ['zh\r\nx-injected: 1', '', 'chinese-simplified-script-x-y']) {
-    await expect(api.transcribe({ audioBase64: recording(), locale }, new AbortController().signal))
-      .rejects.toMatchObject({ code: 'gateway/bad-request' })
-  }
-  expect(recognize).toHaveBeenCalledOnce()
-})
-
 it('preserves cancellation and reports recognizer failures', async () => {
   const { api, recognize } = fixture()
   await expect(api.configure({ language: 'zh' })).rejects.toThrow('settings service')
