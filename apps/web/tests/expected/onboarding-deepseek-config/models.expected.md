@@ -19,7 +19,7 @@
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: dsh_onboa•••••••••••••••••••••••••••••••test
-      - paragraph: 使用已保存的 API key。
+      - paragraph: 已保存 API 密钥。输入或粘贴新密钥即可替换
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

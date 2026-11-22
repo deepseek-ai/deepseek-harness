@@ -9,7 +9,8 @@ const EYE_PATH = `${EYE_CONTOUR}M10 8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8C6 6.9 
 const EYE_OFF_PATH = `${EYE_CONTOUR}M2.5 2.5L13.5 13.5`
 
 /** Input attributes and section copy for the current credential draft. */
-interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'type' | 'className' | 'autoComplete'> {
+interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'type' | 'className' | 'autoComplete' | 'onFocus' | 'onBlur'> {
   /** Unsaved input; stored credentials are never read into this field. */
   readonly value: string
   /** Server-masked preview and actions; the full stored credential stays on the Host. */
@@ -23,22 +24,28 @@ interface ApiKeyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
 
 /**
  * Reveal only a nonempty draft. Saved keys allow whole replacement or deletion.
+ * Focusing the saved-key preview shows the prompt for a replacement.
  * @param props - current draft, input attributes, and translated control labels.
  * @returns a password input with an optional reveal button.
  */
 export function ApiKeyInput({ value, saved, t, ...props }: ApiKeyInputProps): ReactNode {
+  const [focused, setFocused] = useState(false)
   const [revealedValue, setRevealedValue] = useState<string | undefined>()
   const canReveal = saved === undefined && value.length > 0 && props.disabled !== true
   const revealed = canReveal && revealedValue === value
+  const placeholder = saved === undefined ? props.placeholder
+    : focused ? t('keyReplacementPlaceholder') : saved.masked
   return (
-    <div className={`${styles['keyInput']} ${saved === undefined ? '' : styles['savedKeyInput']}`}>
+    <div className={styles['keyInput']}>
       <input
         {...props}
         className={`${styles['input']} ${canReveal ? styles['keyInputFilled'] : ''}`}
         type={revealed ? 'text' : 'password'}
         autoComplete="new-password"
         value={value}
-        placeholder={saved === undefined ? props.placeholder : saved.masked}
+        placeholder={placeholder}
+        onFocus={() => { setFocused(true) }}
+        onBlur={() => { setFocused(false) }}
         onCopy={(event) => { if (saved !== undefined) event.preventDefault() }}
         onCut={(event) => { if (saved !== undefined) event.preventDefault() }}
         onKeyDown={(event) => {
