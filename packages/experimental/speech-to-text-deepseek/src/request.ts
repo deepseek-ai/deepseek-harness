@@ -73,21 +73,14 @@ function describe(error: unknown): string {
   return cause === undefined ? error.message : `${error.message} (${cause})`
 }
 
-/** Read the body up to `limit` bytes, cancelling it once the limit is exceeded. */
+/** Read the body up to `limit` bytes; throwing out of the loop returns the stream iterator, which cancels the body. */
 async function readBounded(response: Response, limit: number): Promise<string> {
-  const reader = response.body?.getReader()
-  if (reader === undefined) return ''
   const chunks: Uint8Array[] = []
   let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > limit) {
-      await reader.cancel()
-      throw new ResponseTooLarge(`response exceeds ${limit} bytes`)
-    }
-    chunks.push(value)
+  for await (const chunk of response.body ?? []) {
+    total += chunk.byteLength
+    if (total > limit) throw new ResponseTooLarge(`response exceeds ${limit} bytes`)
+    chunks.push(chunk)
   }
   return Buffer.concat(chunks).toString('utf8')
 }
